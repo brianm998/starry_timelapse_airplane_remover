@@ -35,11 +35,14 @@ extension OperationType {
     var memoryMultiplier: UInt64 {
         switch self {
         case .preview:             return 2
-        // Fallbacks only — FrameGraphBuilder passes config.horizonMemoryMultiplier
-        // explicitly.  Kept in step with that default (7: the first horizon op of a real
-        // 24MP run grew the process 756MB against the old 2x charge of 274MB).
-        case .horizon:             return 7
-        case .mergedHorizon:       return 7
+        // Fallbacks only — FrameGraphBuilder passes config.effectiveHorizonMemoryMultiplier()
+        // explicitly.  Not 7, the config default: that default is only honest at 24MP and
+        // up, because a horizon op's cost is mostly fixed rather than per-pixel and the
+        // config applies a byte floor (horizonReservationFloorMB) to cover the small end.
+        // A fallback cannot see the frame size, so it cannot apply a floor, and takes the
+        // worst measured ratio instead — 12.3x, at 6MP, rounded up.
+        case .horizon:             return 13
+        case .mergedHorizon:       return 13
         // Fallback only — FrameGraphBuilder always passes config.keypointMemoryMultiplier
         // explicitly when building KeypointOps.  Kept in step with that default (42,
         // measured) so this cannot become a stale second opinion.
@@ -246,7 +249,7 @@ public final actor FrameGraphBuilder {
                         let horizonOp = HorizonDetectionOp(
                           frame: frame,
                           rawImageBytes: rawImageBytes,
-                          memoryMultiplier: UInt64(config.horizonMemoryMultiplier)
+                          memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier())
                         ) { errorString in
                             Task { await errors.append(errorString) }
                             errorClosure(errorString)
@@ -291,7 +294,7 @@ public final actor FrameGraphBuilder {
                             let horizonOp = HorizonMergeOp(
                               frame: frame,
                               rawImageBytes: rawImageBytes,
-                              memoryMultiplier: UInt64(config.horizonMemoryMultiplier)
+                              memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier())
                             ) { errorString in
                                 Task { await errors.append(errorString) }
                                 errorClosure(errorString)
@@ -327,7 +330,7 @@ public final actor FrameGraphBuilder {
                 let horizonOp = HorizonMergeOp(
                   frame: frame,
                   rawImageBytes: rawImageBytes,
-                  memoryMultiplier: UInt64(config.horizonMemoryMultiplier)
+                  memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier())
                 ) { errorString in
                     Task { await errors.append(errorString) }
                     errorClosure(errorString)
@@ -635,7 +638,7 @@ public final actor FrameGraphBuilder {
             let op = HorizonRefinementOp(
               frame: frame,
               rawImageBytes: rawImageBytes,
-              memoryMultiplier: UInt64(config.horizonMemoryMultiplier),
+              memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier()),
               errorClosure: { errorString in
                   Task { await errors.append(errorString) }
                   errorClosure(errorString)

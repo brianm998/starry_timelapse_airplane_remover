@@ -458,11 +458,55 @@ public struct Config: Codable, Sendable {
     ///     several seconds. Reading those as the steady-state cost would argue for
     ///     lowering this value, and the concurrent figures show that would be wrong.
     ///
-    /// What this wants is a floor in bytes rather than a larger multiplier — the measured
-    /// need is roughly `155MB + 350MB + 11MB/MP` per op, so ~600MB covers 6MP where 7x
-    /// gives 240MB. Left as-is deliberately: changing the shape of a reservation is not a
-    /// documentation change, and at these sizes the budget is not what binds anyway.
+    /// What this wants is a floor in bytes rather than a larger multiplier, which is what
+    /// `horizonReservationFloorMB` below now supplies. Do not raise this multiplier to
+    /// cover the small end: 12.3x would be needed at 6MP, and that same 12.3x at 42MP
+    /// would reserve 2966MB against a measured 966MB.
     public var horizonMemoryMultiplier: Int = 7
+
+    /// Floor, in megabytes, under which one horizon op's reservation must not fall.
+    ///
+    /// A horizon op's cost is mostly fixed, not per-pixel — see the measurements on
+    /// `horizonMemoryMultiplier`. The detector runs Otsu/DP/SIOX at
+    /// `CombinedHorizonDetector.Params.baseWorkingSize` (512) and caps the Random Walker
+    /// at `rwMaxWorkingWidth` (4096), so shrinking the input frame barely shrinks the
+    /// work: 424MB at 6MP against 966MB at 42MP, for 7x the pixels. Expressed as a
+    /// multiple of the frame that inverts, and the multiplier is short exactly where the
+    /// frame is small — 176% of its reservation at 6MP, 132% at 12MP, both measured.
+    ///
+    /// 900MB. The cost fits `~505MB + 11MB/MP`, and the floor only binds below ~17MP,
+    /// where `horizonMemoryMultiplier` overtakes it — so the worst case it has to cover
+    /// is that crossover, ~700MB, and 900 leaves ~29% for the machine-to-machine and
+    /// build-to-build variance in the fixed part. It is deliberately under the 961MB that
+    /// 7x already gives at 24MP, so this changes nothing at or above the size the
+    /// multiplier was calibrated on.
+    ///
+    /// 0 disables the floor.
+    public var horizonReservationFloorMB: Int = 900
+
+    /// `horizonMemoryMultiplier`, raised if needed so the reservation clears
+    /// `horizonReservationFloorMB`.
+    ///
+    /// A multiplier rather than a byte count because that is the only unit
+    /// `AsyncOperation` takes, and keeping the floor here means every horizon op picks it
+    /// up without each call site doing its own arithmetic. Rounds the floor UP to a whole
+    /// multiple, so the reservation covers the floor rather than landing just under it.
+    ///
+    /// Applies to every horizon op, not just `HorizonDetectionOp`: the merge and
+    /// refinement ops reach `loadOrCreateFinalHorizonMask`, which falls back to
+    /// `loadOrCreateHorizonMask` — the detector — whenever there is no merged mask to
+    /// load. Any of them can therefore be the one that pays this.
+    public func effectiveHorizonMemoryMultiplier() -> Int {
+        let working = workingFrameBytes
+        // 0 means the frame size is not known yet, which already disables gating
+        // entirely (reservation = 0 x anything). Do not invent a reservation here.
+        guard working > 0, horizonReservationFloorMB > 0 else {
+            return horizonMemoryMultiplier
+        }
+        let floorBytes = UInt64(horizonReservationFloorMB) * 1024 * 1024
+        let floorMultiplier = (floorBytes + working - 1) / working   // round up
+        return max(horizonMemoryMultiplier, Int(floorMultiplier))
+    }
 
     // used by updatable log
     public var progressBarLength = 35
@@ -819,6 +863,7 @@ public struct Config: Codable, Sendable {
         self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
         self.keypointCacheMaxMB = try c.decodeIfPresent(Int.self, forKey: .keypointCacheMaxMB) ?? self.keypointCacheMaxMB
         self.horizonMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .horizonMemoryMultiplier) ?? self.horizonMemoryMultiplier
+        self.horizonReservationFloorMB = try c.decodeIfPresent(Int.self, forKey: .horizonReservationFloorMB) ?? self.horizonReservationFloorMB
         
 
         self.starVersion = try c.decodeIfPresent(String.self, forKey: .starVersion) ?? self.starVersion
