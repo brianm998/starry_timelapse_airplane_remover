@@ -240,6 +240,8 @@ enum Mapping {
         out.alignmentSkyHorizonExtension = Int32(c.alignmentSkyHorizonExtension)
         out.alignmentBaseImageDilateSize = Int32(c.alignmentBaseImageDilateSize)
         out.alignmentBaseImageThresholdValue = Int32(c.alignmentBaseImageThresholdValue)
+        out.horizonMemoryMultiplier = Int32(c.horizonMemoryMultiplier)
+        out.horizonReservationFloorMb = Int32(c.horizonReservationFloorMB)
         return out
     }
 
@@ -275,6 +277,10 @@ enum Mapping {
         if p.hasAlignmentSkyHorizonExtension { c.alignmentSkyHorizonExtension = Int(p.alignmentSkyHorizonExtension) }
         if p.hasAlignmentBaseImageDilateSize { c.alignmentBaseImageDilateSize = Int(p.alignmentBaseImageDilateSize) }
         if p.hasAlignmentBaseImageThresholdValue { c.alignmentBaseImageThresholdValue = Int(p.alignmentBaseImageThresholdValue) }
+        if p.hasHorizonMemoryMultiplier { c.horizonMemoryMultiplier = Int(p.horizonMemoryMultiplier) }
+        // A present 0 is meaningful here — it means "no floor, use the multiplier alone" —
+        // so this must stay `optional` in the proto rather than relying on a zero default.
+        if p.hasHorizonReservationFloorMb { c.horizonReservationFloorMB = Int(p.horizonReservationFloorMb) }
     }
 
     // Build a VideoInfo from Swift Config's video fields (for use in Export.Video fallback).

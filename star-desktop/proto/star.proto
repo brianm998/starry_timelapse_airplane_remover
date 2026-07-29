@@ -131,6 +131,11 @@ message Config {
   optional int32  alignment_sky_horizon_extension                      = 42;
   optional int32  alignment_base_image_dilate_size                     = 43;
   optional int32  alignment_base_image_threshold_value                 = 44;
+  optional int32  horizon_memory_multiplier                            = 45;
+  // Least bytes to reserve for one horizon op, whatever the multiplier works out to.
+  // A horizon op's cost is mostly fixed rather than per-pixel, so the multiplier alone
+  // under-reserves on small frames. 0 = no floor.
+  optional int32  horizon_reservation_floor_mb                         = 46;
 }
 
 enum CleanMethod {

@@ -1407,6 +1407,27 @@ public struct Star_V1_Config: @unchecked Sendable {
   /// Clears the value of `alignmentBaseImageThresholdValue`. Subsequent reads from it will return its default value.
   public mutating func clearAlignmentBaseImageThresholdValue() {_uniqueStorage()._alignmentBaseImageThresholdValue = nil}
 
+  public var horizonMemoryMultiplier: Int32 {
+    get {_storage._horizonMemoryMultiplier ?? 0}
+    set {_uniqueStorage()._horizonMemoryMultiplier = newValue}
+  }
+  /// Returns true if `horizonMemoryMultiplier` has been explicitly set.
+  public var hasHorizonMemoryMultiplier: Bool {_storage._horizonMemoryMultiplier != nil}
+  /// Clears the value of `horizonMemoryMultiplier`. Subsequent reads from it will return its default value.
+  public mutating func clearHorizonMemoryMultiplier() {_uniqueStorage()._horizonMemoryMultiplier = nil}
+
+  /// Least bytes to reserve for one horizon op, whatever the multiplier works out to.
+  /// A horizon op's cost is mostly fixed rather than per-pixel, so the multiplier alone
+  /// under-reserves on small frames. 0 = no floor.
+  public var horizonReservationFloorMb: Int32 {
+    get {_storage._horizonReservationFloorMb ?? 0}
+    set {_uniqueStorage()._horizonReservationFloorMb = newValue}
+  }
+  /// Returns true if `horizonReservationFloorMb` has been explicitly set.
+  public var hasHorizonReservationFloorMb: Bool {_storage._horizonReservationFloorMb != nil}
+  /// Clears the value of `horizonReservationFloorMb`. Subsequent reads from it will return its default value.
+  public mutating func clearHorizonReservationFloorMb() {_uniqueStorage()._horizonReservationFloorMb = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3392,7 +3413,7 @@ extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{3}horizon_strip_width\0\u{3}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{3}horizon_vertical_shift_amount\0\u{3}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{3}horizon_strip_width\0\u{3}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{3}horizon_vertical_shift_amount\0\u{3}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -3439,6 +3460,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _alignmentSkyHorizonExtension: Int32? = nil
     var _alignmentBaseImageDilateSize: Int32? = nil
     var _alignmentBaseImageThresholdValue: Int32? = nil
+    var _horizonMemoryMultiplier: Int32? = nil
+    var _horizonReservationFloorMb: Int32? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -3493,6 +3516,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _alignmentSkyHorizonExtension = source._alignmentSkyHorizonExtension
       _alignmentBaseImageDilateSize = source._alignmentBaseImageDilateSize
       _alignmentBaseImageThresholdValue = source._alignmentBaseImageThresholdValue
+      _horizonMemoryMultiplier = source._horizonMemoryMultiplier
+      _horizonReservationFloorMb = source._horizonReservationFloorMb
     }
   }
 
@@ -3555,6 +3580,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 42: try { try decoder.decodeSingularInt32Field(value: &_storage._alignmentSkyHorizonExtension) }()
         case 43: try { try decoder.decodeSingularInt32Field(value: &_storage._alignmentBaseImageDilateSize) }()
         case 44: try { try decoder.decodeSingularInt32Field(value: &_storage._alignmentBaseImageThresholdValue) }()
+        case 45: try { try decoder.decodeSingularInt32Field(value: &_storage._horizonMemoryMultiplier) }()
+        case 46: try { try decoder.decodeSingularInt32Field(value: &_storage._horizonReservationFloorMb) }()
         default: break
         }
       }
@@ -3699,6 +3726,12 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       try { if let v = _storage._alignmentBaseImageThresholdValue {
         try visitor.visitSingularInt32Field(value: v, fieldNumber: 44)
       } }()
+      try { if let v = _storage._horizonMemoryMultiplier {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 45)
+      } }()
+      try { if let v = _storage._horizonReservationFloorMb {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 46)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -3752,6 +3785,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._alignmentSkyHorizonExtension != rhs_storage._alignmentSkyHorizonExtension {return false}
         if _storage._alignmentBaseImageDilateSize != rhs_storage._alignmentBaseImageDilateSize {return false}
         if _storage._alignmentBaseImageThresholdValue != rhs_storage._alignmentBaseImageThresholdValue {return false}
+        if _storage._horizonMemoryMultiplier != rhs_storage._horizonMemoryMultiplier {return false}
+        if _storage._horizonReservationFloorMb != rhs_storage._horizonReservationFloorMb {return false}
         return true
       }
       if !storagesAreEqual {return false}
