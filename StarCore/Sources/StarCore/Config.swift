@@ -424,8 +424,44 @@ public struct Config: Codable, Sendable {
     ///
     /// Over-reserving is close to free here: at 7x even a 16GB machine admits 14
     /// concurrent horizon ops, so `numberOfFramesToProcessConcurrently` binds long before
-    /// the budget does. Pinning the fixed part down properly needs one horizon op measured
-    /// in a fresh process, which is the one thing a whole-pipeline run cannot give you.
+    /// the budget does.
+    ///
+    /// That fresh-process measurement has since been done — `CombinedHorizonDetector`
+    /// called directly, one detection per cold process. It confirms the "wrong shape"
+    /// suspicion above, gives it a mechanism, and shows the multiplier is genuinely short
+    /// below 24MP. First detection in a cold process:
+    ///
+    ///     frame  working  peak    xframe  % of 7x
+    ///      6MP     34MB   424MB   12.3x    176%   <- under-reserved
+    ///     12MP     69MB   633MB    9.2x    132%   <- under-reserved
+    ///     24MP    137MB   723MB    5.3x     75%
+    ///     42MP    241MB   966MB    4.0x     57%
+    ///
+    /// The cost barely moves with frame size — 424MB to 966MB while pixels grow 7x —
+    /// because the detector does almost all its work at FIXED internal resolution:
+    /// `Params.baseWorkingSize` is 512 for Otsu/DP/SIOX, and `rwMaxWorkingWidth` caps
+    /// the Random Walker at 4096. Only loading and scaling the frame track its real
+    /// size. Fitting the rows above: about 350MB of fixed detector workspace plus
+    /// ~11MB per megapixel. A multiple of the frame cannot express that, which is why
+    /// this reads as 4x where it was calibrated and 12.3x at 6MP.
+    ///
+    /// The start-up/work split, which the in-run numbers could not separate:
+    ///   - genuinely one-time per process is only ~155MB (the footprint still held after
+    ///     the first detection settles: 157, 153, 173 and 152MB at 6, 12, 24 and 42MP —
+    ///     flat, as a runtime/OpenCV init cost should be).
+    ///   - the rest is per-op transient, and it does NOT amortise across concurrent ops.
+    ///     At 24MP, K cold detections at once peak at 723MB (K=1), 1295MB (K=2) and
+    ///     2273MB (K=4) — about 150MB fixed plus 530-570MB for every op in flight. So
+    ///     the per-op reservation is the right idea even though its unit is wrong.
+    ///   - sequential ops in a warm process report +0 to +51MB, which is the `MemoryProbe`
+    ///     artifact, not cheap work: each still produces a full mask, and still takes its
+    ///     several seconds. Reading those as the steady-state cost would argue for
+    ///     lowering this value, and the concurrent figures show that would be wrong.
+    ///
+    /// What this wants is a floor in bytes rather than a larger multiplier — the measured
+    /// need is roughly `155MB + 350MB + 11MB/MP` per op, so ~600MB covers 6MP where 7x
+    /// gives 240MB. Left as-is deliberately: changing the shape of a reservation is not a
+    /// documentation change, and at these sizes the budget is not what binds anyway.
     public var horizonMemoryMultiplier: Int = 7
 
     // used by updatable log
