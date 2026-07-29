@@ -40,6 +40,8 @@ enum FocusedField: Hashable {
     case maxConcurrentKeypointOps
     case outlierMemoryMultiplier
     case mergeMemoryMultiplier
+    case horizonMemoryMultiplier
+    case horizonReservationFloorMB
     case memoryBudgetFraction
 }
 

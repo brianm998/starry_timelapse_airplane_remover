@@ -225,6 +225,19 @@ struct StarCli: AsyncParsableCommand {
         """)
     var maxKeypointOps: Int?
 
+    @Option(name: [.customLong("horizon-reservation-floor-mb")], help:"""
+        Least memory, in megabytes, to reserve for one horizon operation.
+        A horizon op's cost is mostly fixed rather than per frame size, because the
+        detector works at a fixed internal resolution, so a plain multiple of the
+        frame under-reserves on small frames: measured in a fresh process, the
+        horizon multiplier covered only 57% of what one op needed at 6 megapixels
+        and 76% at 12, against 133% at 24 and 175% at 42.  This floor covers the
+        small end without inflating the large end.  Default 900, which stops
+        binding at about 17 megapixels, where the multiplier overtakes it.
+        Set to 0 to use the multiplier alone.
+        """)
+    var horizonReservationFloorMB: Int?
+
     @Flag(name: [.customLong("log-op-memory")], help:"""
         Log each operation's actual peak memory against what it reserved.
         Use with --num-concurrent-renders 1 so the process footprint delta is
@@ -396,6 +409,9 @@ struct StarCli: AsyncParsableCommand {
                 }
                 if let maxKeypointOps {
                     config.maxConcurrentKeypointOps = maxKeypointOps
+                }
+                if let horizonReservationFloorMB {
+                    config.horizonReservationFloorMB = horizonReservationFloorMB
                 }
                 logOperationMemory = logOpMemory
                 config.numberOfFramesToProcessConcurrently = Int(numConcurrentRenders)

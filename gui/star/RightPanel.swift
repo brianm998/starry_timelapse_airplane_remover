@@ -855,6 +855,39 @@ struct MemoryMultiplierView: View {
                     viewModel.mergeMemoryMultiplier = newVal
                 }
             )
+            EditableNumberView(
+                value: $viewModel.horizonMemoryMultiplier,
+                minValue: 1,
+                maxValue: 50,
+                fullTextProvider: { "horizon mem ×\($0)" },
+                prefixText: "horizon mem ×",
+                suffixTextProvider: { _ in "" },
+                textColor: textColor,
+                focusedField: focusedField,
+                focusField: .horizonMemoryMultiplier,
+                alwaysOpen: alwaysOpen,
+                commitAction: { newVal in
+                    viewModel.horizonMemoryMultiplier = newVal
+                }
+            )
+            // Paired with horizon mem on purpose, and the more useful of the two: a
+            // horizon op's cost barely tracks the frame size, so the multiplier alone
+            // under-reserves on small frames and this is what covers them.  0 = no floor.
+            EditableNumberView(
+                value: $viewModel.horizonReservationFloorMB,
+                minValue: 0,
+                maxValue: 16384,
+                fullTextProvider: { $0 == 0 ? "horizon floor: none" : "horizon floor \($0)MB" },
+                prefixText: "horizon floor ",
+                suffixTextProvider: { _ in "MB" },
+                textColor: textColor,
+                focusedField: focusedField,
+                focusField: .horizonReservationFloorMB,
+                alwaysOpen: alwaysOpen,
+                commitAction: { newVal in
+                    viewModel.horizonReservationFloorMB = newVal
+                }
+            )
         }
     }
 }

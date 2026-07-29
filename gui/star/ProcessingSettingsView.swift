@@ -216,6 +216,8 @@ struct ProcessingSettingsView: View {
     @State private var showKeypointMultiplierInfo = false
     @State private var showOutlierMultiplierInfo = false
     @State private var showMergeMultiplierInfo = false
+    @State private var showHorizonMultiplierInfo = false
+    @State private var showHorizonFloorInfo = false
 
 
     private var addSpacer: Bool {
@@ -253,7 +255,9 @@ struct ProcessingSettingsView: View {
         showMemoryBudgetFractionInfo ||
         showKeypointMultiplierInfo ||
         showOutlierMultiplierInfo ||
-        showMergeMultiplierInfo
+        showMergeMultiplierInfo ||
+        showHorizonMultiplierInfo ||
+        showHorizonFloorInfo
     }
     
     private func showAll() {
@@ -301,6 +305,8 @@ struct ProcessingSettingsView: View {
         showKeypointMultiplierInfo = true
         showOutlierMultiplierInfo = true
         showMergeMultiplierInfo = true
+        showHorizonMultiplierInfo = true
+        showHorizonFloorInfo = true
     }
 
     private func hideAll() {
@@ -348,6 +354,8 @@ struct ProcessingSettingsView: View {
         showKeypointMultiplierInfo = false
         showOutlierMultiplierInfo = false
         showMergeMultiplierInfo = false
+        showHorizonMultiplierInfo = false
+        showHorizonFloorInfo = false
     }
     
     @FocusState private var focusedField: FocusedField?
@@ -515,6 +523,10 @@ struct ProcessingSettingsView: View {
                                   self.outlierMultiplierView
                                   Divider()
                                   self.mergeMultiplierView
+                                  Divider()
+                                  self.horizonMultiplierView
+                                  Divider()
+                                  self.horizonFloorView
                               }
                           } label: {
                               Text("Memory Settings")
@@ -1840,7 +1852,9 @@ extension ProcessingSettingsView {
 
             Raise this value if your system thrashes during keypoint detection — it reduces the number \
             of concurrent operations allowed. Lower it if you have abundant RAM and want more throughput.
-            Default: 35.
+            Default: 42, measured one operation at a time in a fresh process: 38x the frame at \
+            12 megapixels, 38x at 24 and 40x at 42, so 42 leaves only a little room to spare \
+            at the largest sizes. Not a value to lower.
             """
         ) {
             HStack {
@@ -1879,13 +1893,19 @@ extension ProcessingSettingsView {
             How many times the raw frame size (in bytes) to reserve per outlier-detection operation.
 
             Outlier detection subtracts the star-aligned frame from the original and blobs the \
-            difference. The blobber is the bulk of it: the original, the subtraction image, a \
-            copy of that image's pixels and an 8-byte-per-pixel grid, all live at once. It also \
-            builds the aligned frame if that is not on disk yet.
+            difference. The blobber is the bulk of it, and unlike the other steps its cost \
+            depends on the picture, not just its size: it keeps one record per bright pixel, so \
+            a frame with a lot of residual left after alignment costs much more than a clean one. \
+            Measured one operation at a time in a fresh process, the blobber alone ran 1.3x the \
+            frame with nothing bright in it, 5.4x at a tenth of a percent of pixels bright, and \
+            7x at the worst density tried. The original and a copy of the subtraction image's \
+            pixels sit on top of that throughout. It also builds the aligned frame if that is \
+            not on disk yet.
 
-            Raise this if you see heavy swap usage during the outlier phase. Default: 9, plus the \
-            neighbor count of any merge inside the op that is small enough to keep all of its \
-            source frames in memory (see the merge streaming threshold).
+            Raise this if you see heavy swap usage during the outlier phase, especially on hazy \
+            sequences or ones that align poorly. Default: 9, plus the neighbor count of any merge \
+            inside the op that is small enough to keep all of its source frames in memory (see \
+            the merge streaming threshold).
             """
         ) {
             HStack {
@@ -1952,6 +1972,102 @@ extension ProcessingSettingsView {
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .mergeMemoryMultiplier,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var horizonMultiplierView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showHorizonMultiplierInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            How many times the frame size (in bytes) to reserve per horizon-detection operation.
+
+            Unlike the other multipliers, this one is a poor fit for the work it describes. \
+            Horizon detection runs its base methods on a 512-pixel-wide copy of the frame and \
+            caps the refinement step at 4096 wide, so its cost barely changes with the size of \
+            the frame you give it — measured one op at a time in a fresh process, 424MB at 6 \
+            megapixels against 966MB at 42, for seven times the pixels.
+
+            Because of that, the small end is covered by the horizon reservation floor below \
+            rather than by raising this. Raising it to cover 6 megapixels would need 13x, and \
+            13x at 42 megapixels would reserve close to 3GB for an operation that needs 1GB. \
+            Default: 7, calibrated at 24 megapixels.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Horizon Mem ×:")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.horizonMemoryMultiplier,
+                      minValue: 1,
+                      maxValue: 50,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .horizonMemoryMultiplier,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var horizonFloorView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showHorizonFloorInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            The least memory, in megabytes, to reserve for one horizon-detection operation, \
+            whatever the horizon multiplier above works out to.
+
+            This exists because a horizon operation costs about the same no matter how big the \
+            frame is, so a plain multiple of the frame comes out too small on small frames. \
+            Measured one operation at a time in a fresh process, the multiplier alone covered \
+            only 57% of what one operation needed at 6 megapixels and 76% at 12, while covering \
+            133% at 24 and 175% at 42. Under-reserving is the harmful direction: it lets too \
+            many operations run at once and the machine runs out of memory.
+
+            Default: 900MB, which stops mattering at about 17 megapixels, where the multiplier \
+            grows past it — so this only affects smaller frames, and changes nothing at the size \
+            the multiplier was calibrated on. Raise it if a small-frame sequence still thrashes \
+            during the horizon phase. Set it to 0 to use the multiplier alone.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text("Horizon Floor (MB):")
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.horizonReservationFloorMB,
+                      minValue: 0,
+                      maxValue: 16384,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .horizonReservationFloorMB,
                       alwaysOpen: true
                     )
                     Spacer()

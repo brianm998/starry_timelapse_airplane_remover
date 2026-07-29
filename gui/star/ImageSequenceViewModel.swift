@@ -1126,6 +1126,25 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var horizonMemoryMultiplier: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.horizonMemoryMultiplier = horizonMemoryMultiplier
+            config.update(realConfig)
+        }
+    }
+
+    /// Least bytes to reserve for one horizon op, whatever the multiplier works out to.
+    /// A horizon op's cost is mostly fixed rather than per pixel, so the multiplier alone
+    /// under-reserves on small frames.  0 = no floor, multiplier only.
+    var horizonReservationFloorMB: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.horizonReservationFloorMB = horizonReservationFloorMB
+            config.update(realConfig)
+        }
+    }
+
     var homographySmoothingEpsilon: Double {
         didSet {
             var realConfig = config.config()
@@ -1333,6 +1352,8 @@ public final class ImageSequenceViewModel {
         self.maxConcurrentKeypointOps = config.maxConcurrentKeypointOps
         self.outlierMemoryMultiplier = config.outlierMemoryMultiplier
         self.mergeMemoryMultiplier = config.mergeMemoryMultiplier
+        self.horizonMemoryMultiplier = config.horizonMemoryMultiplier
+        self.horizonReservationFloorMB = config.horizonReservationFloorMB
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
         self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment
