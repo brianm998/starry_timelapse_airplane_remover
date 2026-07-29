@@ -844,6 +844,23 @@ public struct Config: Codable, Sendable {
         self.fileExtension = imageInfo.fileExtension
     }
 
+    /// Decode a config.json, tolerating keys it does not contain.
+    ///
+    /// This cannot be left to the synthesized `Decodable` conformance, which requires every
+    /// key to be present and ignores inline default values entirely: a
+    /// `struct S: Codable { var a: Int = 5 }` still throws `keyNotFound` when handed `{}`
+    /// (verified on Swift 6.2). Since a config.json written by an older star lacks whatever
+    /// has been added since, the synthesized decoder would fail every such resume outright
+    /// rather than default the missing fields. Hence the hand-written pass.
+    ///
+    /// The invariant, and the whole hazard of writing it by hand: **encoding is synthesized,
+    /// so every stored property is written — therefore every stored property must be read
+    /// back here.** A property added to the struct and not added below round-trips to its
+    /// default, which then gets persisted over the real value by the next
+    /// `ConfigManager.save()`. That had happened to 16 of 93 properties, `finalOutputDir`
+    /// among them. `ConfigRoundTripTests` enumerates the properties with `Mirror` and fails
+    /// on any that does not survive an encode/decode, so a missed one is a test failure
+    /// rather than a silently reverted setting.
     public init(from decoder: Decoder) throws {
         // start with all your initializer defaults
         self = Config()
@@ -864,6 +881,7 @@ public struct Config: Codable, Sendable {
         self.imageSequencePath = try c.decodeIfPresent(String.self, forKey: .imageSequencePath) ?? self.imageSequencePath
 
         self.writeOutlierGroupFiles = try c.decodeIfPresent(Bool.self, forKey: .writeOutlierGroupFiles) ?? self.writeOutlierGroupFiles
+        self.writeOutlierClassificationValues = try c.decodeIfPresent(Bool.self, forKey: .writeOutlierClassificationValues) ?? self.writeOutlierClassificationValues
         self.writeFramePreviewFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFramePreviewFiles) ?? self.writeFramePreviewFiles
         self.writeFrameProcessedPreviewFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameProcessedPreviewFiles) ?? self.writeFrameProcessedPreviewFiles
         self.writeFrameThumbnailFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameThumbnailFiles) ?? self.writeFrameThumbnailFiles
@@ -926,6 +944,7 @@ public struct Config: Codable, Sendable {
         self.numberFinalProcessingNeighborsNeeded = try c.decodeIfPresent(Int.self, forKey: .numberFinalProcessingNeighborsNeeded) ?? self.numberFinalProcessingNeighborsNeeded
         self.numberAlignedNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberAlignedNeighborFrames) ?? self.numberAlignedNeighborFrames
         self.numberStaticNeighborFrames = try c.decodeIfPresent(Int.self, forKey: .numberStaticNeighborFrames) ?? self.numberStaticNeighborFrames        
+        self.homographySmoothingEpsilon = try c.decodeIfPresent(Double.self, forKey: .homographySmoothingEpsilon) ?? self.homographySmoothingEpsilon
         self.supportedImageFileTypes = try c.decodeIfPresent([String].self, forKey: .supportedImageFileTypes) ?? self.supportedImageFileTypes
 
         self.horizonSearchSize = try c.decodeIfPresent([Int].self, forKey: .horizonSearchSize) ?? self.horizonSearchSize
@@ -944,6 +963,33 @@ public struct Config: Codable, Sendable {
         self.keypointMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .keypointMemoryMultiplier) ?? self.keypointMemoryMultiplier
         self.outlierMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .outlierMemoryMultiplier) ?? self.outlierMemoryMultiplier
         self.mergeMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .mergeMemoryMultiplier) ?? self.mergeMemoryMultiplier
+
+        // Where the finals go. Undecoded until now, which was the worst of the omissions:
+        // encoding writes it, so `star <seq> <outputDir>` recorded it and the resume then
+        // decoded nil and fell through to `outputSequenceDirname`'s `<outputPath>/<basename>`
+        // branch. The resume therefore wrote its finals into a second, freshly created dir,
+        // did not find the existing ones where `.final` is looked for (so every merge re-ran),
+        // and `configManager.update` persisted the loss back into config.json.
+        self.finalOutputDir = try c.decodeIfPresent(String.self, forKey: .finalOutputDir) ?? self.finalOutputDir
+
+        self.progressBarLength = try c.decodeIfPresent(Int.self, forKey: .progressBarLength) ?? self.progressBarLength
+        self.previewWidth = try c.decodeIfPresent(Int.self, forKey: .previewWidth) ?? self.previewWidth
+        self.previewHeight = try c.decodeIfPresent(Int.self, forKey: .previewHeight) ?? self.previewHeight
+        self.thumbnailWidth = try c.decodeIfPresent(Int.self, forKey: .thumbnailWidth) ?? self.thumbnailWidth
+        self.thumbnailHeight = try c.decodeIfPresent(Int.self, forKey: .thumbnailHeight) ?? self.thumbnailHeight
+        self.outlierGroupPaintBorderPixels = try c.decodeIfPresent(Double.self, forKey: .outlierGroupPaintBorderPixels) ?? self.outlierGroupPaintBorderPixels
+        self.outlierGroupPaintBorderInnerWallPixels = try c.decodeIfPresent(Double.self, forKey: .outlierGroupPaintBorderInnerWallPixels) ?? self.outlierGroupPaintBorderInnerWallPixels
+        self.referenceHorizonNeighborhoodSize = try c.decodeIfPresent(Int.self, forKey: .referenceHorizonNeighborhoodSize) ?? self.referenceHorizonNeighborhoodSize
+
+        // `Processor.init` overwrites these from the sequence's first frame via
+        // `set(imageInfo:)`, so leaving them undecoded was benign for the cli. Decoded
+        // anyway: nothing guarantees every consumer of a config.json runs that path, and
+        // "encoded but not decoded" is the property this whole initializer has to hold.
+        self.imageWidth = try c.decodeIfPresent(Int.self, forKey: .imageWidth) ?? self.imageWidth
+        self.imageHeight = try c.decodeIfPresent(Int.self, forKey: .imageHeight) ?? self.imageHeight
+        self.imageBytesPerPixel = try c.decodeIfPresent(Int.self, forKey: .imageBytesPerPixel) ?? self.imageBytesPerPixel
+        self.imageBitsPerComponent = try c.decodeIfPresent(Int.self, forKey: .imageBitsPerComponent) ?? self.imageBitsPerComponent
+        self.fileExtension = try c.decodeIfPresent(String.self, forKey: .fileExtension) ?? self.fileExtension
     }
 
     /// Expand a [min, max] range and a step count into an array of evenly-spaced values.
