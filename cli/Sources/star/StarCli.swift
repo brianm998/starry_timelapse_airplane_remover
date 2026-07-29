@@ -173,9 +173,11 @@ struct StarCli: AsyncParsableCommand {
     var terminalLogLevel: Log.Level?/* = .info*/
 
     @Option(name: [.customShort("c"), .customLong("clean-method")], help:"""
-        The clean mode to use for this image sequence
+        The clean mode to use for this image sequence.
+        Defaults to automatic for a new sequence, and to whatever a saved config
+        already holds when resuming one.
         """)
-    var cleanMethod: CleanMethod = .automatic(false)
+    var cleanMethod: CleanMethod?
 
     @Flag(name: [.customLong("no-horizon")], help:"""
         This video does not contain a horizon (horizon is assumed by default)
@@ -267,17 +269,18 @@ struct StarCli: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: """
         Max Number of frames to process at once.
         May need to be reduced to a lower value if to consume less ram on some machines.
+        Defaults to three quarters of the cpu count for a new sequence, and to whatever
+        a saved config already holds when resuming one.
         """)
-    var numConcurrentRenders: UInt = TaskRunner.maxConcurrentTasks
+    var numConcurrentRenders: UInt?
 
     @Option(name: .shortAndLong, help: "Detection Types")
-    var detectionType: DetectionType = .strong
-    
+    var detectionType: DetectionType?
+
     @Option(name: .shortAndLong, help: """
         When set, outlier groups closer to the bottom of the screen than this are ignored.
         This can be helpful to reduce the number of outlier groups on the ground.
         """)
-    // XXX this isn't respected when loading from a config
     var ignoreLowerPixels: Int?
 
     @Flag(name: [.customShort("w"), .customLong("write-outlier-group-files")],
@@ -310,11 +313,36 @@ struct StarCli: AsyncParsableCommand {
         """)
     var finalOutputDirname: String? = nil
 
+    /// The flags above in the single form both input paths apply — see `ConfigOverrides`
+    /// for why a `@Flag` becomes `true` or nil here, and never `false`.
+    var configOverrides: ConfigOverrides {
+        ConfigOverrides(
+          cleanMethod: cleanMethod,
+          detectionType: detectionType,
+          finalOutputDir: finalOutputDirname,
+          writeOutlierGroupFiles: shouldWriteOutlierGroupFiles ? true : nil,
+          writeOutlierClassificationValues: shouldWriteOutlierClassificationValues ? true : nil,
+          horizonDetectionEnabled: noHorizon ? false : nil,
+          tripodHeadWasMoving: movingCamera ? true : nil,
+          alignmentHalfResolutionKeypoints: halfResKeypoints ? true : nil,
+          mergeStreamingThresholdMB: mergeStreamingThresholdMB,
+          maxConcurrentKeypointOps: maxKeypointOps,
+          horizonReservationFloorMB: horizonReservationFloorMB,
+          numberOfFramesToProcessConcurrently: numConcurrentRenders.map { Int($0) },
+          ignoreLowerPixels: ignoreLowerPixels
+        )
+    }
+
     mutating func run() async throws {
 
         var configManager: ConfigManager = await ConfigManager()
 
-        TaskRunner.maxConcurrentTasks = numConcurrentRenders
+        // process globals rather than config fields, so they are set the same way on
+        // both input paths, before either of them runs
+        if let numConcurrentRenders {
+            TaskRunner.maxConcurrentTasks = numConcurrentRenders
+        }
+        logOperationMemory = logOpMemory
 
         var callbacks = Callbacks()
 
@@ -344,14 +372,18 @@ struct StarCli: AsyncParsableCommand {
                 // here we are reading a previously saved config
                 inputImageSequencePath = inputImageSequenceDirname
 
-                let fuck = inputImageSequenceDirname
-
                 do {
-                    configManager = try await ConfigManager(configFilename: fuck)
-                    var config = await configManager.config() 
-                    config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
+                    configManager =
+                      try await ConfigManager(configFilename: inputImageSequenceDirname)
+                    var config = await configManager.config()
+                    // the saved config supplies the defaults, the command line overrides
+                    // them — the same overrides the image sequence path below applies
+                    configOverrides.apply(to: &config)
+                    // update() saves, as it always has here, so an override is written
+                    // back into the config file and a later resume without the flag
+                    // keeps it
                     await configManager.update(config)
-                    // overwrite global constants constant 
+                    // overwrite global constants constant
                     // not really thread safe,
                     // but we only do it here before starting any other threads.
                     await constants.set(detectionType: config.detectionType)
@@ -394,39 +426,20 @@ struct StarCli: AsyncParsableCommand {
                     _outputPath = inputImageSequencePath
                 }
 
+                // only what the sequence itself determines goes in here; every flag
+                // arrives through configOverrides below, so that the config file path
+                // above applies the identical set
                 var config = Config(
                   outputPath: _outputPath,
-                  cleanMethod: cleanMethod,
-                  detectionType: detectionType,
                   imageSequenceName: inputImageSequenceName,
                   imageSequencePath: inputImageSequencePath,
-                  writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
-                  // maybe make a separate command line parameter for these VVV? 
-                  writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
-                  writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
-                  writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles
+                  writeOutlierGroupFiles: false,
+                  writeFramePreviewFiles: false,
+                  writeFrameProcessedPreviewFiles: false,
+                  writeFrameThumbnailFiles: false
                 )
 
-                config.horizonDetectionEnabled = !noHorizon
-                config.finalOutputDir = finalOutputDirname
-                config.tripodHeadWasMoving = movingCamera
-                config.alignmentHalfResolutionKeypoints = halfResKeypoints
-                if let mergeStreamingThresholdMB {
-                    config.mergeStreamingThresholdMB = mergeStreamingThresholdMB
-                }
-                if let maxKeypointOps {
-                    config.maxConcurrentKeypointOps = maxKeypointOps
-                }
-                if let horizonReservationFloorMB {
-                    config.horizonReservationFloorMB = horizonReservationFloorMB
-                }
-                logOperationMemory = logOpMemory
-                config.numberOfFramesToProcessConcurrently = Int(numConcurrentRenders)
-                config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
-                
-                if let ignoreLowerPixels {
-                    config.ignoreLowerPixels = ignoreLowerPixels
-                }
+                configOverrides.apply(to: &config)
 
                 // ConfigManager holds a copy of this struct, so all mutations
                 // to config must happen before it is constructed here

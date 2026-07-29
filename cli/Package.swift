@@ -62,6 +62,24 @@ let package = Package(
             ]),
         .testTarget(
             name: "starTests",
-            dependencies: ["star"]),
+            dependencies: ["star"],
+            // `@testable import star` pulls in star's own `import StarDecisionTrees`,
+            // and the test bundle links star's objects, so the tests need the same
+            // include path and the same pre-compiled archive the executable does.
+            // Joined `-I<path>`, not `-I <path>`: SwiftPM appends `-plugin-path` for the
+            // testing library right after a test target's unsafeFlags, and a trailing
+            // `-I` swallows it, leaving the plugin dir as a stray input file.
+            swiftSettings: [
+              .unsafeFlags([
+                             "-I\(dtIncludeDebug)"
+                           ]),
+            ],
+            linkerSettings: [
+              .unsafeFlags([
+                             "-L\(dtLibDebug)",
+                             "-Xlinker", dtLibDebugFile
+                           ]),
+              .linkedLibrary("StarDecisionTrees")
+            ]),
     ]
 )
