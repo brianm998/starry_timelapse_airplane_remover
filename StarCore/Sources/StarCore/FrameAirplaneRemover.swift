@@ -1600,7 +1600,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try await imageAccessor.linkFinals(
               frameIndex: frameIndex,
               as: .autoProcessed,
-              atSizes: [.original, .preview]
+              atSizes: outputSizes
             )
             return
         }
