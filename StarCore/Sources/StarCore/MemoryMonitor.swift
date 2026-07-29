@@ -97,9 +97,12 @@ public actor MemoryMonitor {
     /// that "fits the ledger" is no help if the machine is already thrashing.
     private var systemFloorBytes: UInt64 = 2 * 1024 * 1024 * 1024
 
-    /// Set by the OS memory-pressure source.
+    /// Set by the OS memory-pressure source. Stays false where there is no such source
+    /// to set it — see `startPressureMonitoringIfNeeded`.
     private var underMemoryPressure = false
+    #if canImport(Darwin)
     private var pressureSources: [DispatchSourceMemoryPressure] = []
+    #endif
 
     /// Count of admissions the reality brake has held back, for `stats()`.
     private var realityHolds: Int = 0
@@ -305,11 +308,22 @@ public actor MemoryMonitor {
 
     /// Start listening for OS memory-pressure notifications. Idempotent.
     ///
+    /// Darwin only, and a no-op elsewhere: memory-pressure sources are part of Dispatch's
+    /// Darwin overlay, not of swift-corelibs-libdispatch, so `DispatchSourceMemoryPressure`
+    /// and `makeMemoryPressureSource` do not exist on Linux or Windows. Referring to them
+    /// unconditionally is what broke the Windows build.
+    ///
+    /// Losing this costs the third of the reality brake's three signals. The other two —
+    /// the process footprint against its reservations, and the system-available floor —
+    /// are implemented for every platform in `memory_monitor.c` and still apply, so the
+    /// brake degrades rather than disappearing. `underMemoryPressure` simply stays false.
+    ///
     /// One source per state rather than one source reading `.data`: the event handler is
     /// a `sending` closure, and capturing the source in order to read `.data` off it
     /// would pull a non-Sendable value into that closure. Splitting by mask means each
     /// handler captures only a `Bool`.
     private func startPressureMonitoringIfNeeded() {
+        #if canImport(Darwin)
         guard pressureSources.isEmpty else { return }
         let states: [(DispatchSource.MemoryPressureEvent, Bool)] = [
             ([.warning, .critical], true),
@@ -328,6 +342,7 @@ public actor MemoryMonitor {
             source.activate()
             pressureSources.append(source)
         }
+        #endif
     }
 
     private func pressureChanged(pressured: Bool) {

@@ -74,6 +74,10 @@ uint64_t star_process_footprint(void) {
 #elif defined(__linux__)
 
 #include <stdio.h>
+// getpagesize(). The include above this file's __APPLE__ branch does not reach here, so
+// without this the call is an implicit declaration — an error under C99 and later, which
+// is what broke the Linux build.
+#include <unistd.h>
 
 uint64_t star_process_footprint(void) {
     // statm field 2 is resident pages.

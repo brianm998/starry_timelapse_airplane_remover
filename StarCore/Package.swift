@@ -28,7 +28,14 @@ let package = Package(
         ),
         .target(
             name: "StarCoreC",
-            path: "Sources/StarCoreC"
+            path: "Sources/StarCoreC",
+            linkerSettings: [
+              // star_process_footprint's _WIN32 branch calls GetProcessMemoryInfo, which
+              // lives in psapi. Windows CI has not reached the link step yet — it was
+              // still failing to compile — so this is ahead of the error rather than
+              // after it.
+              .linkedLibrary("psapi", .when(platforms: [.windows])),
+            ]
         ),
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
