@@ -106,7 +106,10 @@ public class Processor {
               atIndex: frameIndex,
               outputFilename: "\(config.outputPath)/\(config.basename)",
               baseName: basename,
-              writeOutputFiles: true,
+              // false is --skip-output-files: finishAuto/finishSelective write the
+              // outlier data and then return before rendering.  The gui passes a literal
+              // true instead, since it has no such flag and exists to produce output.
+              writeOutputFiles: config.writeOutputFiles,
               imageAccessor: imageAccessor
             )
             Log.d("loaded frame at frameIndex \(frameIndex)")

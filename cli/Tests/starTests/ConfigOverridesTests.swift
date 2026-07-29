@@ -35,6 +35,7 @@ final class ConfigOverridesTests: XCTestCase {
         c.writeFrameProcessedPreviewFiles = true
         c.writeFrameThumbnailFiles = true
         c.writeOutlierClassificationValues = true
+        c.writeOutputFiles = false
         c.horizonDetectionEnabled = false
         c.tripodHeadWasMoving = true
         c.alignmentHalfResolutionKeypoints = true
@@ -48,11 +49,16 @@ final class ConfigOverridesTests: XCTestCase {
 
     /// Every flag `ConfigOverrides` carries, each with a value distinct from both the
     /// StarCore default and the `savedConfig()` value above.
+    ///
+    /// `-s` appears in its `--no-` form because it is the one flag whose config field is a
+    /// `Bool` the saved config already holds the opposite of: `savedConfig()` skips output
+    /// files, so the override that has to be visible here is the one turning them back on.
     private static let everyFlag = [
       "--clean-method", "selective",
       "--detection-type", "mild",
       "--write-outlier-group-files",
       "--write-outlier-classification-values",
+      "--no-skip-output-files",
       "--no-horizon",
       "--moving-camera",
       "--half-res-keypoints",
@@ -77,6 +83,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.finalOutputDir, "/some/final/out")
         XCTAssertEqual(c.writeOutlierGroupFiles, true)
         XCTAssertEqual(c.writeOutlierClassificationValues, true)
+        XCTAssertEqual(c.writeOutputFiles, true, "--no-skip-output-files turns rendering on")
         XCTAssertEqual(c.horizonDetectionEnabled, false, "--no-horizon turns it off")
         XCTAssertEqual(c.tripodHeadWasMoving, true)
         XCTAssertEqual(c.alignmentHalfResolutionKeypoints, true)
@@ -122,6 +129,9 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.writeOutlierClassificationValues, true,
                        "-W absent means the user said nothing, not that a config which "
                        + "asked for classification values should stop writing them")
+        XCTAssertEqual(c.writeOutputFiles, false,
+                       "neither -s nor --no-skip-output-files was typed, so the saved "
+                       + "outlier-data-only setting stands")
         XCTAssertEqual(c.horizonDetectionEnabled, false)
         XCTAssertEqual(c.tripodHeadWasMoving, true)
         XCTAssertEqual(c.alignmentHalfResolutionKeypoints, true,
@@ -169,6 +179,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.tripodHeadWasMoving, false)
         XCTAssertEqual(c.alignmentHalfResolutionKeypoints, false)
         XCTAssertEqual(c.writeOutlierGroupFiles, false)
+        XCTAssertEqual(c.writeOutputFiles, true, "a plain run renders")
         XCTAssertNil(c.finalOutputDir)
     }
 
@@ -184,6 +195,55 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertTrue(c.writeFrameThumbnailFiles)
     }
 
+    // MARK: - -s, and the flag that was deleted instead
+
+    /// `-s` was declared and never read, so it silently did nothing. It now drives
+    /// `Config.writeOutputFiles`, which `FrameAirplaneRemover` has always honoured.
+    ///
+    /// It is the only flag here with three states, and it needs all three. `-s` is the one
+    /// flag that takes output away, and the override is saved into config.json like every
+    /// other one, so if absence meant "render" then no config could keep the setting
+    /// across a resume, and if absence meant "skip" then nothing could ever undo it.
+    func testSkipOutputFilesHasThreeStatesAndNeedsAllOfThem() throws {
+        var skipped = Config()
+        XCTAssertTrue(skipped.writeOutputFiles, "rendering is the default")
+        try StarCli.parse(["-s", "/some/seq"]).configOverrides.apply(to: &skipped)
+        XCTAssertFalse(skipped.writeOutputFiles, "-s means outlier data only")
+
+        var unmentioned = Config()
+        unmentioned.writeOutputFiles = false
+        try StarCli.parse(["/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &unmentioned)
+        XCTAssertFalse(unmentioned.writeOutputFiles,
+                       "a resume that repeats no flags keeps what the config holds")
+
+        var renderedAgain = Config()
+        renderedAgain.writeOutputFiles = false
+        try StarCli.parse(["--no-skip-output-files", "/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &renderedAgain)
+        XCTAssertTrue(renderedAgain.writeOutputFiles, "and the --no- form is the way back")
+    }
+
+    /// `-s` only does anything because `Processor` hands the config field to every frame.
+    /// Checking `run()`/`process()` for real needs an image sequence on disk and then
+    /// processes it, so this is the syntactic property instead — the same approach the
+    /// branch tests below take, and it fails if that line goes back to a literal `true`.
+    func testProcessorPassesTheConfigsWriteOutputFilesToEachFrame() throws {
+        let source = try cliSource(named: "Processor.swift")
+        XCTAssertTrue(source.contains("class Processor"), "did not find Processor.swift itself")
+        XCTAssertTrue(source.contains("writeOutputFiles: config.writeOutputFiles"),
+                      "Processor no longer passes the config's writeOutputFiles to "
+                      + "FrameAirplaneRemover, so --skip-output-files does nothing")
+    }
+
+    // `-L`/`--last-frame` was the other flag declared and never read.  It was deleted here
+    // rather than implemented, because `FrameGraphBuilder.build`'s `startIndex`/`endIndex`
+    // was honored by the horizon and keypoint stages only, and this file asserted that it
+    // was rejected so it could not come back as a no-op.  `FrameGraphRange` fixed the
+    // range, the flag is implemented, and that assertion is now `LastFrameTests` — which
+    // covers the same concern by pinning the wiring itself rather than the flag's absence.
+    // `testTheLastFrameFlagIsNotAConfigOverride` below is the half that belongs here.
+
     // MARK: - through an actual config.json
 
     /// The same thing end to end over the file a resume really reads, so that a config
@@ -194,6 +254,7 @@ final class ConfigOverridesTests: XCTestCase {
         saved.alignmentHalfResolutionKeypoints = true
         saved.mergeStreamingThresholdMB = 1024
         saved.ignoreLowerPixels = 700
+        saved.writeOutputFiles = false
 
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("star-config-overrides-\(UUID().uuidString)")
@@ -207,15 +268,21 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertTrue(untouched.alignmentHalfResolutionKeypoints)
         XCTAssertEqual(untouched.mergeStreamingThresholdMB, 1024)
         XCTAssertEqual(untouched.ignoreLowerPixels, 700)
+        XCTAssertFalse(untouched.writeOutputFiles,
+                       "Config has to decode writeOutputFiles, or -s survives only until "
+                       + "the config is written back out and read again")
         XCTAssertEqual(untouched.horizonReservationFloorMB, Config().horizonReservationFloorMB,
                        "a field the saved config never mentioned keeps StarCore's default")
 
         var overridden = try Config.read(fromJsonFilename: file.path)
         try StarCli.parse(["--merge-streaming-threshold-mb", "0",
                            "--ignore-lower-pixels", "42",
+                           "--no-skip-output-files",
                            file.path]).configOverrides.apply(to: &overridden)
         XCTAssertEqual(overridden.mergeStreamingThresholdMB, 0)
         XCTAssertEqual(overridden.ignoreLowerPixels, 42)
+        XCTAssertTrue(overridden.writeOutputFiles,
+                      "a config saved with -s has to be renderable again")
         XCTAssertTrue(overridden.alignmentHalfResolutionKeypoints,
                       "still untouched by a command line that did not mention it")
     }
@@ -229,7 +296,7 @@ final class ConfigOverridesTests: XCTestCase {
         let overrides = try StarCli.parse(Self.everyFlag).configOverrides
         let fields = Mirror(reflecting: overrides).children
 
-        XCTAssertGreaterThanOrEqual(fields.count, 13,
+        XCTAssertGreaterThanOrEqual(fields.count, 14,
                                     "only found \(fields.count) overrides; if the struct "
                                     + "shrank, the tests above are checking less than "
                                     + "they look like they are")
@@ -287,14 +354,18 @@ final class ConfigOverridesTests: XCTestCase {
     // is. The bug was one branch of an if/else quietly doing less than the other; what
     // has to hold is that neither branch touches a Config field on its own.
 
-    private func starCliSource() throws -> String {
-        // cli/Tests/starTests/ConfigOverridesTests.swift -> cli/Sources/star/StarCli.swift
+    private func cliSource(named filename: String) throws -> String {
+        // cli/Tests/starTests/ConfigOverridesTests.swift -> cli/Sources/star/<filename>
         let cliDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let source = try String(contentsOf: cliDir.appendingPathComponent("Sources/star/StarCli.swift"),
-                                encoding: .utf8)
+        let file = cliDir.appendingPathComponent("Sources/star").appendingPathComponent(filename)
+        return try String(contentsOf: file, encoding: .utf8)
+    }
+
+    private func starCliSource() throws -> String {
+        let source = try cliSource(named: "StarCli.swift")
         XCTAssertTrue(source.contains("struct StarCli"), "did not find StarCli.swift itself")
         return source
     }
