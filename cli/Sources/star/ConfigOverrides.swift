@@ -32,6 +32,12 @@ You should have received a copy of the GNU General Public License along with sta
 /// did not type this flag" would overwrite a saved config's `true`, which is the same
 /// bug pointed the other way.
 ///
+/// `writeOutputFiles` is the one flag that does arrive as either. `-s` is the only flag
+/// that takes output away rather than adding some, so a saved `false` that no flag can
+/// clear would be a config that never renders again; it is declared `Bool?` with a
+/// `--no-` form so that "off", "on" and "unmentioned" are three different things rather
+/// than two.
+///
 /// Note that `writeOutlierClassificationValues` changes behaviour on the config file
 /// path because of this: it used to be assigned unconditionally there, so resuming a
 /// config that had it set, without passing `-W`, turned it back off. It now survives.
@@ -47,6 +53,8 @@ struct ConfigOverrides {
     /// `-w`, which drives four config fields rather than one.
     var writeOutlierGroupFiles: Bool?
     var writeOutlierClassificationValues: Bool?
+    /// `-s`, inverted: the flag turns writing the output images off.
+    var writeOutputFiles: Bool?
     /// `--no-horizon`, inverted: the flag turns horizon detection off.
     var horizonDetectionEnabled: Bool?
     var tripodHeadWasMoving: Bool?
@@ -72,6 +80,7 @@ struct ConfigOverrides {
         if let writeOutlierClassificationValues {
             config.writeOutlierClassificationValues = writeOutlierClassificationValues
         }
+        if let writeOutputFiles { config.writeOutputFiles = writeOutputFiles }
         if let horizonDetectionEnabled {
             config.horizonDetectionEnabled = horizonDetectionEnabled
         }

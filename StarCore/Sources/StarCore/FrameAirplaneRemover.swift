@@ -1733,8 +1733,21 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
         } else if !autoAlreadyDone {
+            // The same gate the useOutliers branch above applies, and the reason it is
+            // repeated rather than hoisted to the top of the method: writing the outlier
+            // data is what --skip-output-files keeps, so the check has to sit after those
+            // writes, and they only happen under useOutliers.  Without it here, a clean
+            // method of .automatic(false) — star's default — wrote its output image
+            // anyway and the flag silently did nothing.
+            if !self.writeOutputFiles {
+                Log.d("frame \(self.frameIndex) not writing output files")
+                self.set(state: .complete)
+                if let completion { await completion() }
+                return
+            }
+
             // if not using outliers, then save the auto processed image as
-            // complete 
+            // complete
             self.set(state: .loadingImages1)
             try await imageAccessor.save(
               autoProcessedImage, 
