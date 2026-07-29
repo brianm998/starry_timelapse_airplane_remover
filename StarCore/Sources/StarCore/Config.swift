@@ -281,6 +281,24 @@ public struct Config: Codable, Sendable {
     /// the ratio holds across resolutions (36.5x measured at 12MP for the detector
     /// alone). It is therefore NOT true that bigger images need a bigger multiplier.
     ///
+    /// Re-confirmed since, one op per fresh process against the real
+    /// `ia_find_features` — the only way to size this downward, per `MemoryProbe`.
+    /// Whole-op peak (load included), as a multiple of `workingFrameBytes`:
+    ///
+    ///     12MP sky   2672MB  38.9x   93% of the reservation
+    ///     24MP sky   5189MB  37.8x   90%   (5187-5214MB over four runs)
+    ///     42MP sky   9666MB  40.0x   95%   (9664-9669MB over three runs)
+    ///     24MP earth 2817MB  20.5x   49%
+    ///     42MP earth 4511MB  18.7x   45%
+    ///
+    /// Two things follow. Sky (SIFT) is the binding case: earth (AKAZE) costs about
+    /// half, so the shared multiplier covers it with room to spare. And there is only
+    /// ~5% headroom at 42MP, so this is not a value to shave — the ratio drifts up
+    /// slightly with frame size, and 42MP is where the machine already hurts.
+    ///
+    /// A mask changes nothing (37.8x unmasked vs 38.0x masked at 24MP): the scale space
+    /// is built over the whole frame either way, and the mask only filters what is kept.
+    ///
     /// This value is only the memory estimate. It used to double as the sole way to
     /// limit keypoint concurrency — the limiter divides the budget by it — so raising
     /// it to calm a large sequence also silently inflated every reservation, and

@@ -34,6 +34,13 @@ import logging
 ///     so a pair figure has to be read against two reservations, not one. The
 ///     multipliers in `Config` were derived that way, and cross-checked against
 ///     single-op runs of a standalone harness.
+///   - **A paired delta will read as "OVER RESERVATION" when nothing is over.** Two
+///     concurrent 24MP keypoint ops each logged +7013MB against a 5767MB reservation —
+///     122%, which reads like an under-reservation and is not one: it is one process
+///     growth billed twice. `--max-keypoint-ops 1` is the fix for keypoint ops
+///     specifically — it serialises them without stalling the run the way
+///     `--num-concurrent-renders 1` does, and the same sequence then logged 77% with no
+///     marker. Against a fresh-process measurement of the same op: 90%.
 ///   - `phys_footprint` is what the OS charges the process, so it includes allocator
 ///     fragmentation the op is not really "using". That is the right conservative
 ///     choice for sizing a reservation.
