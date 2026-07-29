@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.engine.EngineStatus
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.components.GlyphButton
 import com.star.desktop.ui.theme.StarColors
@@ -124,9 +125,12 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
 
             ToggleRow(if (showExpert) "Hide Expert Settings" else "Show Expert Settings", showExpert) { showExpert = it }
             if (showExpert) {
-                ExpertGroup("Alignment", ALIGNMENT_FIELDS, cfg, boolEdits, textEdits)
-                ExpertGroup("Horizon", HORIZON_FIELDS, cfg, boolEdits, textEdits)
-                ExpertGroup("Memory", MEMORY_FIELDS, cfg, boolEdits, textEdits)
+                // Only to word the "needs a newer engine" note; whether a field is supported
+                // is decided by its presence in the config the daemon sent, not by this.
+                val daemonVersion = (app.engineStatus.value as? EngineStatus.Connected)?.daemonVersion
+                ExpertGroup("Alignment", ALIGNMENT_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
+                ExpertGroup("Horizon", HORIZON_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
+                ExpertGroup("Memory", MEMORY_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
             }
 
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
@@ -140,7 +144,10 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                             .setTripodHeadWasMoving(tripod)
                             .setNumberOfFramesToProcessConcurrently(concurrency)
                         // Apply expert edits (cfg already carries current values; only changed ones differ).
-                        (ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS).forEach { f ->
+                        // Unsupported fields are skipped: they render as read-only so there
+                        // should be no edit to apply, and sending one to a daemon that does
+                        // not know the field would be a silent no-op at best.
+                        (ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS).filter { it.has(cfg) }.forEach { f ->
                             when (f) {
                                 is BoolField -> boolEdits[f.label]?.let { f.set(b, it) }
                                 is IntField -> textEdits[f.label]?.toIntOrNull()?.let { f.set(b, it.coerceIn(f.min, f.max)) }
@@ -194,46 +201,61 @@ private fun ToggleRow(label: String, value: Boolean, onChange: (Boolean) -> Unit
 
 // ---- Expert settings (StarCore Config expert fields, data-driven) ----
 
-private sealed interface ExpertField { val label: String }
-private class IntField(override val label: String, val get: (Config) -> Int, val set: (Config.Builder, Int) -> Config.Builder, val min: Int, val max: Int) : ExpertField
-private class DoubleField(override val label: String, val get: (Config) -> Double, val set: (Config.Builder, Double) -> Config.Builder) : ExpertField
-private class BoolField(override val label: String, val get: (Config) -> Boolean, val set: (Config.Builder, Boolean) -> Config.Builder) : ExpertField
+/// `has` answers "did the daemon send this field?".
+///
+/// Every expert field is `optional` in the proto, and a current daemon fills all of them
+/// on the way out, so an absent field means the daemon predates it. Without this check the
+/// row would render the proto3 default — 0 — and read as a real setting. That is actively
+/// misleading for the fields where 0 means something: 0 merge streaming MB reads as "never
+/// stream", 0 horizon floor as "no floor".
+///
+/// Presence rather than comparing `daemonVersion` against a table of which version added
+/// which field: it is exact, it is per field, and it needs no maintenance as fields are
+/// added. The version string is only used to word the message. (Reflection would be the
+/// other option, but the client uses protobuf-lite, which has no descriptors.)
+private sealed interface ExpertField {
+    val label: String
+    val has: (Config) -> Boolean
+}
+private class IntField(override val label: String, val get: (Config) -> Int, val set: (Config.Builder, Int) -> Config.Builder, val min: Int, val max: Int, override val has: (Config) -> Boolean) : ExpertField
+private class DoubleField(override val label: String, val get: (Config) -> Double, val set: (Config.Builder, Double) -> Config.Builder, override val has: (Config) -> Boolean) : ExpertField
+private class BoolField(override val label: String, val get: (Config) -> Boolean, val set: (Config.Builder, Boolean) -> Config.Builder, override val has: (Config) -> Boolean) : ExpertField
 
 private val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
-    IntField("Neighbor frames", { it.numberAlignedNeighborFrames }, { b, v -> b.setNumberAlignedNeighborFrames(v) }, 1, 1000),
-    IntField("Static neighbor frames", { it.numberStaticNeighborFrames }, { b, v -> b.setNumberStaticNeighborFrames(v) }, 1, 1000),
-    IntField("Max keypoints", { it.alignmentMaxKeypoints }, { b, v -> b.setAlignmentMaxKeypoints(v) }, 4, 10000),
-    IntField("Ground horizon extension", { it.alignmentGroundHorizonExtension }, { b, v -> b.setAlignmentGroundHorizonExtension(v) }, 0, 10000),
-    IntField("Sky horizon extension", { it.alignmentSkyHorizonExtension }, { b, v -> b.setAlignmentSkyHorizonExtension(v) }, 0, 10000),
-    IntField("Base image dilate size", { it.alignmentBaseImageDilateSize }, { b, v -> b.setAlignmentBaseImageDilateSize(v) }, 4, 10000),
-    IntField("Base image threshold", { it.alignmentBaseImageThresholdValue }, { b, v -> b.setAlignmentBaseImageThresholdValue(v) }, 1, 255),
-    DoubleField("Homography smoothing ε", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }),
-    BoolField("Allow earth alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }),
+    IntField("Neighbor frames", { it.numberAlignedNeighborFrames }, { b, v -> b.setNumberAlignedNeighborFrames(v) }, 1, 1000, { it.hasNumberAlignedNeighborFrames() }),
+    IntField("Static neighbor frames", { it.numberStaticNeighborFrames }, { b, v -> b.setNumberStaticNeighborFrames(v) }, 1, 1000, { it.hasNumberStaticNeighborFrames() }),
+    IntField("Max keypoints", { it.alignmentMaxKeypoints }, { b, v -> b.setAlignmentMaxKeypoints(v) }, 4, 10000, { it.hasAlignmentMaxKeypoints() }),
+    IntField("Ground horizon extension", { it.alignmentGroundHorizonExtension }, { b, v -> b.setAlignmentGroundHorizonExtension(v) }, 0, 10000, { it.hasAlignmentGroundHorizonExtension() }),
+    IntField("Sky horizon extension", { it.alignmentSkyHorizonExtension }, { b, v -> b.setAlignmentSkyHorizonExtension(v) }, 0, 10000, { it.hasAlignmentSkyHorizonExtension() }),
+    IntField("Base image dilate size", { it.alignmentBaseImageDilateSize }, { b, v -> b.setAlignmentBaseImageDilateSize(v) }, 4, 10000, { it.hasAlignmentBaseImageDilateSize() }),
+    IntField("Base image threshold", { it.alignmentBaseImageThresholdValue }, { b, v -> b.setAlignmentBaseImageThresholdValue(v) }, 1, 255, { it.hasAlignmentBaseImageThresholdValue() }),
+    DoubleField("Homography smoothing ε", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }, { it.hasHomographySmoothingEpsilon() }),
+    BoolField("Allow earth alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }, { it.hasAllowEarthAlignment() }),
     // Detect on a half-size copy of each frame.  Keypoint detection is the most memory
     // hungry step and its cost is per pixel, so this cuts it by about 4x, at some cost in
     // alignment quality.  Keypoint files are kept separately per setting, so switching
     // back and forth does not mix the two.
-    BoolField("Half resolution keypoints", { it.alignmentHalfResolutionKeypoints }, { b, v -> b.setAlignmentHalfResolutionKeypoints(v) }),
-    BoolField("Write debug images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }),
+    BoolField("Half resolution keypoints", { it.alignmentHalfResolutionKeypoints }, { b, v -> b.setAlignmentHalfResolutionKeypoints(v) }, { it.hasAlignmentHalfResolutionKeypoints() }),
+    BoolField("Write debug images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }, { it.hasAlignmentWriteDebugImages() }),
 )
 
 private val HORIZON_FIELDS: List<ExpertField> = listOf(
-    IntField("Strip width", { it.horizonStripWidth }, { b, v -> b.setHorizonStripWidth(v) }, 1, 8000),
-    BoolField("Canny edge detection", { it.useCannyForHorizonDetection }, { b, v -> b.setUseCannyForHorizonDetection(v) }),
-    DoubleField("Canny min threshold", { it.cannyMinThreshold }, { b, v -> b.setCannyMinThreshold(v) }),
-    DoubleField("Canny max threshold", { it.cannyMaxThreshold }, { b, v -> b.setCannyMaxThreshold(v) }),
-    BoolField("Canny L2 gradient", { it.cannyUseL2Gradient }, { b, v -> b.setCannyUseL2Gradient(v) }),
-    IntField("Horizon shift", { it.horizonVerticalShiftAmount }, { b, v -> b.setHorizonVerticalShiftAmount(v) }, 0, 300),
-    BoolField("Reference horizon smoothing", { it.useReferenceHorizonSmoothing }, { b, v -> b.setUseReferenceHorizonSmoothing(v) }),
-    IntField("Smoothing max distance", { it.referenceHorizonSmoothingMaxDistance }, { b, v -> b.setReferenceHorizonSmoothingMaxDistance(v) }, 1, 10000),
-    BoolField("Brightness refinement", { it.useReferenceHorizonBrightnessRefinement }, { b, v -> b.setUseReferenceHorizonBrightnessRefinement(v) }),
-    IntField("Refinement search radius", { it.referenceHorizonBrightnessRefinementSearchRadius }, { b, v -> b.setReferenceHorizonBrightnessRefinementSearchRadius(v) }, 1, 10000),
-    IntField("Refinement hist buckets", { it.referenceHorizonBrightnessRefinementHistBuckets }, { b, v -> b.setReferenceHorizonBrightnessRefinementHistBuckets(v) }, 2, 65536),
-    IntField("Neighborhood size", { it.referenceHorizonNeighborhoodSize }, { b, v -> b.setReferenceHorizonNeighborhoodSize(v) }, 1, 99),
-    BoolField("Spike removal", { it.horizonSpikeRemovalEnabled }, { b, v -> b.setHorizonSpikeRemovalEnabled(v) }),
-    IntField("Spike max width", { it.horizonSpikeMaxWidth }, { b, v -> b.setHorizonSpikeMaxWidth(v) }, 1, 500),
-    DoubleField("Spike max deviation", { it.horizonSpikeMaxDeviationFraction }, { b, v -> b.setHorizonSpikeMaxDeviationFraction(v) }),
-    IntField("Spike window half", { it.horizonSpikeWindowHalf }, { b, v -> b.setHorizonSpikeWindowHalf(v) }, 10, 2000),
+    IntField("Strip width", { it.horizonStripWidth }, { b, v -> b.setHorizonStripWidth(v) }, 1, 8000, { it.hasHorizonStripWidth() }),
+    BoolField("Canny edge detection", { it.useCannyForHorizonDetection }, { b, v -> b.setUseCannyForHorizonDetection(v) }, { it.hasUseCannyForHorizonDetection() }),
+    DoubleField("Canny min threshold", { it.cannyMinThreshold }, { b, v -> b.setCannyMinThreshold(v) }, { it.hasCannyMinThreshold() }),
+    DoubleField("Canny max threshold", { it.cannyMaxThreshold }, { b, v -> b.setCannyMaxThreshold(v) }, { it.hasCannyMaxThreshold() }),
+    BoolField("Canny L2 gradient", { it.cannyUseL2Gradient }, { b, v -> b.setCannyUseL2Gradient(v) }, { it.hasCannyUseL2Gradient() }),
+    IntField("Horizon shift", { it.horizonVerticalShiftAmount }, { b, v -> b.setHorizonVerticalShiftAmount(v) }, 0, 300, { it.hasHorizonVerticalShiftAmount() }),
+    BoolField("Reference horizon smoothing", { it.useReferenceHorizonSmoothing }, { b, v -> b.setUseReferenceHorizonSmoothing(v) }, { it.hasUseReferenceHorizonSmoothing() }),
+    IntField("Smoothing max distance", { it.referenceHorizonSmoothingMaxDistance }, { b, v -> b.setReferenceHorizonSmoothingMaxDistance(v) }, 1, 10000, { it.hasReferenceHorizonSmoothingMaxDistance() }),
+    BoolField("Brightness refinement", { it.useReferenceHorizonBrightnessRefinement }, { b, v -> b.setUseReferenceHorizonBrightnessRefinement(v) }, { it.hasUseReferenceHorizonBrightnessRefinement() }),
+    IntField("Refinement search radius", { it.referenceHorizonBrightnessRefinementSearchRadius }, { b, v -> b.setReferenceHorizonBrightnessRefinementSearchRadius(v) }, 1, 10000, { it.hasReferenceHorizonBrightnessRefinementSearchRadius() }),
+    IntField("Refinement hist buckets", { it.referenceHorizonBrightnessRefinementHistBuckets }, { b, v -> b.setReferenceHorizonBrightnessRefinementHistBuckets(v) }, 2, 65536, { it.hasReferenceHorizonBrightnessRefinementHistBuckets() }),
+    IntField("Neighborhood size", { it.referenceHorizonNeighborhoodSize }, { b, v -> b.setReferenceHorizonNeighborhoodSize(v) }, 1, 99, { it.hasReferenceHorizonNeighborhoodSize() }),
+    BoolField("Spike removal", { it.horizonSpikeRemovalEnabled }, { b, v -> b.setHorizonSpikeRemovalEnabled(v) }, { it.hasHorizonSpikeRemovalEnabled() }),
+    IntField("Spike max width", { it.horizonSpikeMaxWidth }, { b, v -> b.setHorizonSpikeMaxWidth(v) }, 1, 500, { it.hasHorizonSpikeMaxWidth() }),
+    DoubleField("Spike max deviation", { it.horizonSpikeMaxDeviationFraction }, { b, v -> b.setHorizonSpikeMaxDeviationFraction(v) }, { it.hasHorizonSpikeMaxDeviationFraction() }),
+    IntField("Spike window half", { it.horizonSpikeWindowHalf }, { b, v -> b.setHorizonSpikeWindowHalf(v) }, 10, 2000, { it.hasHorizonSpikeWindowHalf() }),
 )
 
 // NOTE: labels are the keys of the edit maps, so they have to stay unique across all
@@ -244,18 +266,18 @@ private val HORIZON_FIELDS: List<ExpertField> = listOf(
 // no floor, no explicit cap, and never stream. 0 has to be reachable, and the daemon
 // honours a present 0 rather than substituting its default.
 private val MEMORY_FIELDS: List<ExpertField> = listOf(
-    IntField("Keypoint mem ×", { it.keypointMemoryMultiplier }, { b, v -> b.setKeypointMemoryMultiplier(v) }, 1, 200),
-    IntField("Outlier mem ×", { it.outlierMemoryMultiplier }, { b, v -> b.setOutlierMemoryMultiplier(v) }, 1, 50),
-    IntField("Merge mem ×", { it.mergeMemoryMultiplier }, { b, v -> b.setMergeMemoryMultiplier(v) }, 1, 50),
-    IntField("Horizon mem ×", { it.horizonMemoryMultiplier }, { b, v -> b.setHorizonMemoryMultiplier(v) }, 1, 50),
+    IntField("Keypoint mem ×", { it.keypointMemoryMultiplier }, { b, v -> b.setKeypointMemoryMultiplier(v) }, 1, 200, { it.hasKeypointMemoryMultiplier() }),
+    IntField("Outlier mem ×", { it.outlierMemoryMultiplier }, { b, v -> b.setOutlierMemoryMultiplier(v) }, 1, 50, { it.hasOutlierMemoryMultiplier() }),
+    IntField("Merge mem ×", { it.mergeMemoryMultiplier }, { b, v -> b.setMergeMemoryMultiplier(v) }, 1, 50, { it.hasMergeMemoryMultiplier() }),
+    IntField("Horizon mem ×", { it.horizonMemoryMultiplier }, { b, v -> b.setHorizonMemoryMultiplier(v) }, 1, 50, { it.hasHorizonMemoryMultiplier() }),
     // Horizon detection costs about the same whatever the frame size, so the multiplier
     // above under-reserves on small frames.  This floor is what covers them; it stops
     // mattering around 17MP.  0 = no floor.
-    IntField("Horizon floor MB", { it.horizonReservationFloorMb }, { b, v -> b.setHorizonReservationFloorMb(v) }, 0, 16384),
+    IntField("Horizon floor MB", { it.horizonReservationFloorMb }, { b, v -> b.setHorizonReservationFloorMb(v) }, 0, 16384, { it.hasHorizonReservationFloorMb() }),
     // 0 = no explicit cap; the memory budget decides.
-    IntField("Max keypoint ops", { it.maxConcurrentKeypointOps }, { b, v -> b.setMaxConcurrentKeypointOps(v) }, 0, 256),
+    IntField("Max keypoint ops", { it.maxConcurrentKeypointOps }, { b, v -> b.setMaxConcurrentKeypointOps(v) }, 0, 256, { it.hasMaxConcurrentKeypointOps() }),
     // 0 = never stream, keep every source frame resident.
-    IntField("Merge streaming MB", { it.mergeStreamingThresholdMb }, { b, v -> b.setMergeStreamingThresholdMb(v) }, 0, 65536),
+    IntField("Merge streaming MB", { it.mergeStreamingThresholdMb }, { b, v -> b.setMergeStreamingThresholdMb(v) }, 0, 65536, { it.hasMergeStreamingThresholdMb() }),
 )
 
 @Composable
@@ -265,9 +287,17 @@ private fun ExpertGroup(
     cfg: Config,
     boolEdits: SnapshotStateMap<String, Boolean>,
     textEdits: SnapshotStateMap<String, String>,
+    daemonVersion: String?,
 ) {
     SettingGroup(title) {
         fields.forEach { f ->
+            if (!f.has(cfg)) {
+                // Shown rather than hidden, so it is clear the setting exists and what is
+                // missing. Deliberately not editable: there is nothing on the other end to
+                // apply it.
+                UnsupportedRow(f.label, daemonVersion)
+                return@forEach
+            }
             when (f) {
                 is BoolField -> ToggleRow(f.label, boolEdits[f.label] ?: f.get(cfg)) { boolEdits[f.label] = it }
                 is IntField -> NumberRow(f.label, textEdits[f.label] ?: f.get(cfg).toString()) {
@@ -278,6 +308,17 @@ private fun ExpertGroup(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun UnsupportedRow(label: String, daemonVersion: String?) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, color = StarColors.textDisabled, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        Text(
+            if (daemonVersion == null) "needs a newer engine" else "needs an engine newer than $daemonVersion",
+            color = StarColors.textDisabled, fontSize = 10.sp,
+        )
     }
 }
 
