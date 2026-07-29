@@ -250,6 +250,30 @@ final class ConfigOverridesTests: XCTestCase {
         }
     }
 
+    /// `--last-frame` is deliberately not an override: it limits one run rather than
+    /// describing the sequence, so it must not reach the `Config` that gets saved, where
+    /// no `--no-` form could ever clear it again.  See `LastFrameTests` for the wiring it
+    /// does have.
+    func testTheLastFrameFlagIsNotAConfigOverride() throws {
+        let cli = try StarCli.parse(["--last-frame", "9", "/some/star_temp_seq/config.json"])
+        XCTAssertEqual(cli.lastFrameIndex, 9, "the flag itself parsed")
+
+        for field in Mirror(reflecting: cli.configOverrides).children {
+            XCTAssertTrue(isNil(field.value),
+                          "\(field.label ?? "?") has a value from a command line whose only "
+                          + "flag was --last-frame")
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        var c = savedConfig()
+        let before = try encoder.encode(c)
+        cli.configOverrides.apply(to: &c)
+        XCTAssertEqual(try encoder.encode(c), before,
+                       "--last-frame changed a config field; it would then be written back "
+                       + "into config.json and cap every later resume")
+    }
+
     private func isNil(_ value: Any) -> Bool {
         let mirror = Mirror(reflecting: value)
         guard mirror.displayStyle == .optional else { return false }
