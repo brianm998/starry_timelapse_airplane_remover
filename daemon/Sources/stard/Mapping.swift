@@ -242,6 +242,9 @@ enum Mapping {
         out.alignmentBaseImageThresholdValue = Int32(c.alignmentBaseImageThresholdValue)
         out.horizonMemoryMultiplier = Int32(c.horizonMemoryMultiplier)
         out.horizonReservationFloorMb = Int32(c.horizonReservationFloorMB)
+        out.alignmentHalfResolutionKeypoints = c.alignmentHalfResolutionKeypoints
+        out.maxConcurrentKeypointOps = Int32(c.maxConcurrentKeypointOps)
+        out.mergeStreamingThresholdMb = Int32(c.mergeStreamingThresholdMB)
         return out
     }
 
@@ -278,9 +281,20 @@ enum Mapping {
         if p.hasAlignmentBaseImageDilateSize { c.alignmentBaseImageDilateSize = Int(p.alignmentBaseImageDilateSize) }
         if p.hasAlignmentBaseImageThresholdValue { c.alignmentBaseImageThresholdValue = Int(p.alignmentBaseImageThresholdValue) }
         if p.hasHorizonMemoryMultiplier { c.horizonMemoryMultiplier = Int(p.horizonMemoryMultiplier) }
-        // A present 0 is meaningful here — it means "no floor, use the multiplier alone" —
-        // so this must stay `optional` in the proto rather than relying on a zero default.
+        if p.hasAlignmentHalfResolutionKeypoints {
+            c.alignmentHalfResolutionKeypoints = p.alignmentHalfResolutionKeypoints
+        }
+        // These three all have a meaningful 0, which is why they are `optional` in the
+        // proto and read through `has…` here rather than relying on a proto3 zero:
+        //   horizonReservationFloorMB  0 = no floor, use the multiplier alone
+        //   maxConcurrentKeypointOps   0 = no explicit cap, the budget decides
+        //   mergeStreamingThresholdMB  0 = never stream, always keep every source resident
+        // Under implicit presence each of those requests would be indistinguishable from
+        // an unset field, and StarCore's default (900, 0, 2048) would win instead — which
+        // for the threshold means quietly streaming when the client asked not to.
         if p.hasHorizonReservationFloorMb { c.horizonReservationFloorMB = Int(p.horizonReservationFloorMb) }
+        if p.hasMaxConcurrentKeypointOps { c.maxConcurrentKeypointOps = Int(p.maxConcurrentKeypointOps) }
+        if p.hasMergeStreamingThresholdMb { c.mergeStreamingThresholdMB = Int(p.mergeStreamingThresholdMb) }
     }
 
     // Build a VideoInfo from Swift Config's video fields (for use in Export.Video fallback).

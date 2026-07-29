@@ -136,6 +136,16 @@ message Config {
   // A horizon op's cost is mostly fixed rather than per-pixel, so the multiplier alone
   // under-reserves on small frames. 0 = no floor.
   optional int32  horizon_reservation_floor_mb                         = 46;
+  // Detect keypoints on a half-size copy of each frame. Cuts the most memory-hungry
+  // step by about 4x, at some cost in alignment quality.
+  optional bool   alignment_half_resolution_keypoints                  = 47;
+  // Explicit cap on concurrent keypoint ops. A cap, so it can only lower the limit the
+  // memory budget already implies, never raise it. 0 = no explicit cap.
+  optional int32  max_concurrent_keypoint_ops                          = 48;
+  // Above this many megabytes of source frames, a median merge streams them from
+  // scratch files instead of holding them all. Output is identical either way.
+  // 0 = always keep everything resident.
+  optional int32  merge_streaming_threshold_mb                         = 49;
 }
 
 enum CleanMethod {
