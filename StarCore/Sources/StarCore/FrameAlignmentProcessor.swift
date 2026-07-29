@@ -950,7 +950,7 @@ final public actor FrameAlignmentProcessor {
               image,
               frameIndex: frameIndex,
               as: type,
-              atSizes: [.original, .preview],
+              atSizes: await self.outputSizes,
               overwrite: true
             )
         }
