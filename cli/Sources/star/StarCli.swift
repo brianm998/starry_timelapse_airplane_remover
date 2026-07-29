@@ -287,10 +287,6 @@ struct StarCli: AsyncParsableCommand {
           help:"Write individual outlier group image files")
     var shouldWriteOutlierGroupFiles = false
 
-    @Option(name: [.customShort("L"), .customLong("last-frame")],
-            help:"don't process past this frame number")
-    var lastFrameNumber: Int? = nil
-    
     @Flag(name: [.customShort("W"), .customLong("write-outlier-classification-values")],
           help:"Write individual outlier group classification values")
     var shouldWriteOutlierClassificationValues = false
@@ -298,8 +294,23 @@ struct StarCli: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help:"Show version number")
     var version = false
 
-    @Flag(name: .shortAndLong, help:"only write out outlier data, not images")
-    var skipOutputFiles = false
+    @Flag(name: .shortAndLong,
+          inversion: .prefixedNo,
+          help:"""
+        Only write out outlier data, not images.
+        Each frame detects its outliers and writes their remove reasons, plus the
+        classification values if -W is given, and then stops before writing any image.
+        Useful for gathering classifier training data from a sequence you have no
+        intention of rendering.  Note that the alignment and merge still run, since the
+        outliers are found by subtracting the merged frame — what this saves is the
+        airplane replacement and every image write, not the expensive part.
+        Only meaningful with a clean method that uses outliers, so --clean-method
+        selective or automatic:true; under plain automatic there are no outliers to write
+        and a run produces nothing at all.
+        Saved into the config like every other flag here, so a resume that does not repeat
+        it still skips them; --no-skip-output-files turns rendering back on.
+        """)
+    var skipOutputFiles: Bool?
 
     @Argument(help: """
         Image sequence dirname to process. 
@@ -322,6 +333,8 @@ struct StarCli: AsyncParsableCommand {
           finalOutputDir: finalOutputDirname,
           writeOutlierGroupFiles: shouldWriteOutlierGroupFiles ? true : nil,
           writeOutlierClassificationValues: shouldWriteOutlierClassificationValues ? true : nil,
+          // -s is the tri-state one: nil when neither it nor its --no- form was typed
+          writeOutputFiles: skipOutputFiles.map { !$0 },
           horizonDetectionEnabled: noHorizon ? false : nil,
           tripodHeadWasMoving: movingCamera ? true : nil,
           alignmentHalfResolutionKeypoints: halfResKeypoints ? true : nil,

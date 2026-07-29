@@ -243,6 +243,26 @@ public struct Config: Codable, Sendable {
     // write out a small thumbnail preview file for each frame
     public var writeFrameThumbnailFiles: Bool
 
+    /// Write each frame's output image, rather than only its outlier data.
+    ///
+    /// False is star's "analyse but do not render" mode, driven by the cli's
+    /// `--skip-output-files`: `FrameAirplaneRemover.finishAuto` and `finishSelective`
+    /// both write the outlier remove reasons and, if asked, the classification value
+    /// CSV, and then return before writing any image.  Useful for gathering classifier
+    /// training data over a sequence there is no intention of rendering.
+    ///
+    /// It saves the image writes rather than the work behind them: the outliers come out
+    /// of subtracting the merged frame, so the alignment and the merge still run.  It is
+    /// also only meaningful for a `cleanMethod` where `usesOutliers` is true — under
+    /// `.automatic(false)` there is no outlier data, so a run writes nothing whatsoever.
+    ///
+    /// Like every other config field the command line can set, this is saved into
+    /// config.json, so a resume that does not repeat `--skip-output-files` still skips
+    /// them.  That is why that flag, unlike star's other `@Flag`s, has a `--no-` form:
+    /// without one, a single `-s` run would leave a config that could never render again.
+    /// The gui always renders and ignores this.
+    public var writeOutputFiles: Bool = true
+
     // how far in each direction do we go when doing final processing?
     // used for OutlierGroupFeature data
     public var numberFinalProcessingNeighborsNeeded = 2 // in each direction
@@ -847,6 +867,7 @@ public struct Config: Codable, Sendable {
         self.writeFramePreviewFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFramePreviewFiles) ?? self.writeFramePreviewFiles
         self.writeFrameProcessedPreviewFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameProcessedPreviewFiles) ?? self.writeFrameProcessedPreviewFiles
         self.writeFrameThumbnailFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameThumbnailFiles) ?? self.writeFrameThumbnailFiles
+        self.writeOutputFiles = try c.decodeIfPresent(Bool.self, forKey: .writeOutputFiles) ?? self.writeOutputFiles
 
         self.ignoreLowerPixels = try c.decodeIfPresent(Int.self, forKey: .ignoreLowerPixels) ?? self.ignoreLowerPixels
 
