@@ -60,7 +60,10 @@ public class Processor {
         }
     }
     
-    public func process() async throws {
+    /// - Parameter endIndex: the last frame index to write output for, inclusive; nil
+    ///   processes the whole sequence.  Frames past it are still aligned where a
+    ///   processed frame needs them as a neighbour — see `FrameGraphRange`.
+    public func process(endIndex: Int? = nil) async throws {
         await frameGraphBuilder.set(configManager: configManager)
 
         let filenames = await imageSequence.filenames
@@ -118,7 +121,8 @@ public class Processor {
         let semaphore = AsyncSemaphore(value: 0) 
         
         await frameGraphBuilder.build(
-          frames: frames
+          frames: frames,
+          endIndex: endIndex
         ) { errorList in
             if errorList.count == 0 {
                 // success

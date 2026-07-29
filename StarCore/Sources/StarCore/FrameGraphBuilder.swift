@@ -191,6 +191,9 @@ public final actor FrameGraphBuilder {
           config.tripodHeadWasMoving // keypoints not used when stationary
 
         var mergedHorizonOps: [Int: Operation] = [:]
+        // The static case runs exactly one horizon merge for the whole sequence, so it
+        // is held on its own rather than in the per-frame map above.
+        var staticMergedHorizonOp: Operation? = nil
         var homographyOps: [Operation] = []
         var mergeOps: [Operation] = []
 
@@ -208,16 +211,69 @@ public final actor FrameGraphBuilder {
           uniqueKeysWithValues: frames.map { ($0.frameIndex, $0) }
         )
 
-        // The frame-index range to process.  `endIndex` (if given) is a frame
-        // index, so cap at the largest frame index we actually have, not at
-        // `frames.count - 1`.
-        let maxFrameIndex = frames.map(\.frameIndex).max() ?? (startIndex - 1)
-        var lastIndex = maxFrameIndex
-        if let endIndex { lastIndex = min(endIndex, maxFrameIndex) }
+        // Each frame's neighbour structure, gathered up front: it decides both which
+        // frames the alignment stages have to reach outside the requested range (see
+        // FrameGraphRange) and which keypoint ops each homography op depends on, and
+        // those two must agree or a homography waits on an op that was never built.
+        var alignmentNeighbours: [Int: [Int]] = [:]
+        var horizonMergeNeighbours: [Int: [Int]] = [:]
+        for frame in frames {
+            alignmentNeighbours[frame.frameIndex] = await frame.getAlignmentFrameIndices()
+            // Only a moving sequence merges each frame's horizon from a named set of
+            // neighbours.  A static one has a single merge op that votes over the whole
+            // sequence and loads any mask it was not handed from disk, so there is
+            // nothing for the horizon stage to widen to.
+            if config.tripodHeadWasMoving {
+                horizonMergeNeighbours[frame.frameIndex] = await frame.getHorizonMergeIndices()
+            }
+        }
+
+        // Which frames each stage runs on.  Only `range.output` gets outlier and merge
+        // ops — those are what write a frame's output image — while the alignment
+        // stages reach past the range for the neighbours those frames align against.
+        let range = FrameGraphRange(
+          sequenceIndices: frames.map(\.frameIndex),
+          startIndex: startIndex,
+          endIndex: endIndex,
+          alignmentNeighbours: alignmentNeighbours,
+          horizonMergeNeighbours: horizonMergeNeighbours
+        )
+
+        guard !range.isEmpty,
+              let firstOutputIndex = range.output.first,
+              let lastOutputIndex = range.output.last
+        else {
+            // An empty sequence, a startIndex past the end of it, or an endIndex below
+            // startIndex.  Reported rather than ignored, and reported through both
+            // closures so a caller waiting on the completion one does not hang.
+            let requested = endIndex.map { "\(startIndex) to \($0)" } ?? "\(startIndex) to end"
+            let sequenceIndices = frames.map(\.frameIndex)
+            let held = if let low = sequenceIndices.min(), let high = sequenceIndices.max() {
+                "\(low) to \(high)"
+            } else {
+                "none"
+            }
+            let msg = "no frames to process: requested frameIndex \(requested), " +
+              "sequence holds frameIndex \(held)"
+            Log.e(msg)
+            errorClosure(msg)
+            closure([msg])
+            return
+        }
+
+        // The largest frame index in the sequence, not in the range: the horizon
+        // accumulator is indexed by frame index over the whole sequence, and neighbour
+        // lookups clamp against the sequence, not against what we were asked to write.
+        let maxFrameIndex = frames.map(\.frameIndex).max() ?? lastOutputIndex
+
+        // The frames we will write output for, in frame-index order.
+        let outputFrames = range.output.compactMap { framesByIndex[$0] }
 
         var allOps: [Operation] = []
 
-        Log.d("processing from frameIndex \(startIndex) to \(lastIndex)")
+        Log.i("processing frameIndex \(firstOutputIndex) to \(lastOutputIndex): " +
+              "\(range.output.count) frame(s) to write, \(range.keypoint.count) to align, " +
+              "\(range.horizon.count) to detect a horizon for")
 
         // For static sequences without a reference horizon, create a shared accumulator
         // so that HorizonDetectionOps feed their results in as they complete, avoiding
@@ -227,12 +283,15 @@ public final actor FrameGraphBuilder {
             // indexes it directly by frameIndex, so it must cover up through
             // the largest frame index in the sequence.
             let accumulator = HorizonAccumulator(frameCount: maxFrameIndex + 1)
-            for frameIndex in startIndex...lastIndex {
+            // Registered on exactly the frames that will run a HorizonDetectionOp, so
+            // every mask this graph computes is folded in as it completes and only the
+            // rest are reloaded from disk at finalize time.
+            for frameIndex in range.horizon {
                 if let frame = framesByIndex[frameIndex] {
                     await frame.setHorizonAccumulator(accumulator)
                 }
             }
-            Log.i("created HorizonAccumulator for \(frames.count) frames")
+            Log.i("created HorizonAccumulator for \(range.horizon.count) frames")
         }
 
         // First assemble initial horizon operations,
@@ -241,7 +300,7 @@ public final actor FrameGraphBuilder {
         let horizonOps = await withTaskGroup(
           of: HorizonDetectionOp?.self
         ) { taskGroup in
-            for frameIndex in startIndex...lastIndex {
+            for frameIndex in range.horizon {
                 guard let frame = framesByIndex[frameIndex] else { continue }
                 taskGroup.addTask() {
                     // 1. Horizon
@@ -288,7 +347,9 @@ public final actor FrameGraphBuilder {
                 mergedHorizonOps = await withTaskGroup(
                   of: HorizonMergeOp.self
                 ) { taskGroup in
-                    for frameIndex in startIndex...lastIndex {
+                    // Every frame we detect keypoints for needs a merged mask to mask
+                    // them with, which is wider than the frames we write output for.
+                    for frameIndex in range.keypoint {
                         guard let frame = framesByIndex[frameIndex] else { continue }
                         taskGroup.addTask {
                             let horizonOp = HorizonMergeOp(
@@ -323,8 +384,17 @@ public final actor FrameGraphBuilder {
                  execute just one horizon merge op that
                  depends upon all other horizon operations
                  */
-                guard let frame = framesByIndex[startIndex] else {
-                    Log.e("no frame at startIndex \(startIndex), cannot create static HorizonMergeOp")
+                // Anchored on the first frame that needs a merged mask rather than on
+                // `startIndex`, which the caller need not have passed us a frame for.
+                // Which frame runs it does not matter: the mask is a vote over the whole
+                // sequence and gets linked to every frame in it.
+                guard let anchorIndex = range.keypoint.first,
+                      let frame = framesByIndex[anchorIndex]
+                else {
+                    let msg = "no frame to anchor the static HorizonMergeOp on"
+                    Log.e(msg)
+                    errorClosure(msg)
+                    closure([msg])
                     return
                 }
                 let horizonOp = HorizonMergeOp(
@@ -337,7 +407,7 @@ public final actor FrameGraphBuilder {
                 }
                 horizonOp.queuePriority = .normal
                 horizonOp.qualityOfService = .userInteractive
-                mergedHorizonOps[startIndex] = horizonOp
+                staticMergedHorizonOp = horizonOp
                 for op in horizonOps.values {
                     horizonOp.addDependency(op)
                 }
@@ -348,8 +418,12 @@ public final actor FrameGraphBuilder {
         skyKeypointOps = await withTaskGroup(
           of: KeypointOp.self
         ) { taskGroup in
-            // Keypoints depend upon the merged horizon mask for their index
-            for frameIndex in startIndex...lastIndex {
+            // Keypoints depend upon the merged horizon mask for their index.
+            // Wider than the frames we write output for: each of those aligns against
+            // neighbours whose keypoints have to exist for its homography to be built
+            // here, instead of being detected inline by the homography op outside the
+            // KeypointLimiter's memory gate.
+            for frameIndex in range.keypoint {
                 guard let frame = framesByIndex[frameIndex] else { continue }
                 taskGroup.addTask {
                     // 2. Keypoints (always sky)
@@ -382,7 +456,7 @@ public final actor FrameGraphBuilder {
                         }
                     } else {
                         // static video, single merged horizon op
-                        if let horizonOp = mergedHorizonOps[startIndex] {
+                        if let horizonOp = staticMergedHorizonOp {
                             op.addDependency(horizonOp)
                         }
                     }
@@ -403,7 +477,7 @@ public final actor FrameGraphBuilder {
               of: KeypointOp.self
             ) { taskGroup in
                 // Keypoints depend upon the merged horizon mask for their index
-                for frameIndex in startIndex...lastIndex {
+                for frameIndex in range.keypoint {
                     guard let frame = framesByIndex[frameIndex] else { continue }
                     taskGroup.addTask {
                         // 2b. Earth keypoints (optional)
@@ -441,7 +515,10 @@ public final actor FrameGraphBuilder {
 
         // next assemble homography operations that depend upon the keyframes from above
         // these depend upon an array of self + neighbor keypoints
-        for frame in frames {
+        //
+        // Only for the frames we write output for: a merge warps its neighbours onto
+        // itself with its own homography, so a frame outside the range needs none.
+        for frame in outputFrames {
             // 3. Homographies
             let skyH = HomographyOp(
               forStars: true,
@@ -460,8 +537,11 @@ public final actor FrameGraphBuilder {
                 skyH.addDependency(selfKP)
             }
 
-            // Depends on neighbors' sky keypoints
-            for neighborIndex in await frame.getAlignmentFrameIndices() {
+            // Depends on neighbors' sky keypoints.  Read from the same map that decided
+            // `range.keypoint`, so every neighbour named here has an op above.
+            let neighbourIndices = alignmentNeighbours[frame.frameIndex] ?? []
+
+            for neighborIndex in neighbourIndices {
                 if let neighborKP = skyKeypointOps[neighborIndex] {
                     skyH.addDependency(neighborKP)
                 }
@@ -487,7 +567,7 @@ public final actor FrameGraphBuilder {
                 earthH.qualityOfService = .userInteractive
                 earthH.addDependency(selfEarthKP)
 
-                for neighborIndex in await frame.getAlignmentFrameIndices() {
+                for neighborIndex in neighbourIndices {
                     if let neighborKP = earthKeypointOps[neighborIndex] {
                         earthH.addDependency(neighborKP)
                     }
@@ -502,8 +582,14 @@ public final actor FrameGraphBuilder {
         // depends upon everything above it
         // knowing all computed neighbor homographies for all frames allows
         // them to be corrected where necessary.
+        //
+        // Given the frames we built a homography op for, and no others.  Both
+        // validation paths write a corrected homography back to every frame they are
+        // handed, and a frame outside the range has no computed homography to validate
+        // — including it would only overwrite its stored one from a median taken
+        // without it.
         let validationOp = AlignmentValidationOp(
-          frames: frames,
+          frames: outputFrames,
           configManager: configManager
         ) { errorString in
             Task { await errors.append(errorString) }
@@ -514,12 +600,13 @@ public final actor FrameGraphBuilder {
         homographyOps.forEach { validationOp.addDependency($0) }
         allOps.append(validationOp)
 
-        // how many in each direction for final outlier classification
-        let numOutlierNeighbors = config.numberFinalProcessingNeighborsNeeded
+        // how many in each direction for final outlier classification.  Clamped at 0:
+        // it is a radius, and a negative one would invert the neighbour range below.
+        let numOutlierNeighbors = max(0, config.numberFinalProcessingNeighborsNeeded)
 
-        for frame in frames {
+        for frame in outputFrames {
             // Outlier operations for selective and auto selective
-            // all frames get an op, but it may be a nop for auto only
+            // every frame in the range gets an op, but it may be a nop for auto only
             if await frame.usesOutliers {
                 // Actual neighbour counts, not the configured ones: calculateNeighborIndices
                 // clamps to the sequence bounds, so a frame near either end has fewer —
@@ -546,7 +633,9 @@ public final actor FrameGraphBuilder {
         }
 
         // 5. Merge (depends on global validation later)
-        for frame in frames {
+        // This is the stage that writes each frame's output image, so it runs on
+        // exactly the frames that were asked for and no others.
+        for frame in outputFrames {
 
             let aligned = await frame.numberOfAlignedFrames
             let statics = await frame.getStaticNeighborFrames().count
@@ -569,6 +658,11 @@ public final actor FrameGraphBuilder {
             // if this frame doesn't use outliers.  These are frame-index
             // values, not array indices — clamp against the actual largest
             // frame index in the sequence.
+            //
+            // A neighbour outside the requested range has no outlier op, so nothing is
+            // waited on for it: the frames at the edge of a partial range see the same
+            // absent-neighbour decision tree features that the first and last frames of
+            // a full sequence already do.
             var startOutlierFrameIndex = frame.frameIndex - numOutlierNeighbors
             var endOutlierFrameIndex = frame.frameIndex + numOutlierNeighbors
             if startOutlierFrameIndex < 0 { startOutlierFrameIndex = 0 }
@@ -585,6 +679,9 @@ public final actor FrameGraphBuilder {
         }
 
         // 6. runs after all have finished
+        // Its dependencies are the merge ops, which now exist only for the requested
+        // range, so a partial run reports completion when that range is written rather
+        // than waiting on frames it never built an op for.
         let completionOp = GraphCompletionOp {
             Log.i("Frame graph fully finished")
             Log.i(await MemoryMonitor.shared.stats())

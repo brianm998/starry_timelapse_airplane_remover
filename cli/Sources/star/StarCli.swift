@@ -287,6 +287,19 @@ struct StarCli: AsyncParsableCommand {
           help:"Write individual outlier group image files")
     var shouldWriteOutlierGroupFiles = false
 
+    @Option(name: [.customShort("L"), .customLong("last-frame")], help:"""
+        Stop after this frame, leaving the rest of the sequence unprocessed.
+        A zero based frame index, counted the way the logs count frames, and
+        inclusive: --last-frame 9 processes the first ten frames.
+        Frames past it are still read and aligned where a processed frame needs
+        them as a neighbour, but no output is written for them.
+        A limit on this run only: it is not saved into the config, so resuming
+        without the flag processes the whole sequence.  Pair it with
+        --keep-temp-files to keep the outlier data and the horizon, keypoint and
+        alignment caches this run built, all of which are deleted otherwise.
+        """)
+    var lastFrameIndex: Int? = nil
+
     @Flag(name: [.customShort("W"), .customLong("write-outlier-classification-values")],
           help:"Write individual outlier group classification values")
     var shouldWriteOutlierClassificationValues = false
@@ -344,6 +357,17 @@ struct StarCli: AsyncParsableCommand {
           numberOfFramesToProcessConcurrently: numConcurrentRenders.map { Int($0) },
           ignoreLowerPixels: ignoreLowerPixels
         )
+    }
+
+    func validate() throws {
+        // A negative last frame selects nothing at all.  FrameGraphBuilder reports that
+        // and exits cleanly, but by then it has loaded the whole sequence, so say it
+        // here as the usage error it is.
+        if let lastFrameIndex, lastFrameIndex < 0 {
+            throw ValidationError(
+              "--last-frame must be a frame index of 0 or more, not \(lastFrameIndex)"
+            )
+        }
     }
 
     mutating func run() async throws {
@@ -559,7 +583,11 @@ struct StarCli: AsyncParsableCommand {
                     }
                 }
                 
-                try await processor.process()
+                // --last-frame is an argument to this one call rather than a Config
+                // field, which is both why it reaches whichever input path ran above —
+                // there is only one call — and why it does not persist into the saved
+                // config.json the way an override would.
+                try await processor.process(endIndex: lastFrameIndex)
 
                 Log.i("done")
 

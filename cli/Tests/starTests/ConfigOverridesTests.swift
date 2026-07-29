@@ -236,21 +236,13 @@ final class ConfigOverridesTests: XCTestCase {
                       + "FrameAirplaneRemover, so --skip-output-files does nothing")
     }
 
-    /// `-L`/`--last-frame` was the other flag declared and never read, and it was deleted
-    /// rather than implemented: StarCore has no working frame range limit to hook it onto.
-    /// `FrameGraphBuilder.build` takes a `startIndex`/`endIndex` pair, but only the horizon
-    /// and keypoint stages honour it — the homography, outlier and merge ops are built for
-    /// every frame passed in, and merge is what writes the output — so wiring the flag to
-    /// `endIndex` would still have processed and written the whole sequence.
-    ///
-    /// This test is here so that it fails loudly if the flag comes back as a no-op again,
-    /// rather than being accepted in silence for another few years.
-    func testTheFrameLimitFlagIsRejectedRatherThanIgnored() throws {
-        XCTAssertThrowsError(try StarCli.parse(["--last-frame", "10", "/some/seq"]),
-                             "--last-frame is back; if it is implemented now this test "
-                             + "should assert what it does instead")
-        XCTAssertThrowsError(try StarCli.parse(["-L", "10", "/some/seq"]))
-    }
+    // `-L`/`--last-frame` was the other flag declared and never read.  It was deleted here
+    // rather than implemented, because `FrameGraphBuilder.build`'s `startIndex`/`endIndex`
+    // was honored by the horizon and keypoint stages only, and this file asserted that it
+    // was rejected so it could not come back as a no-op.  `FrameGraphRange` fixed the
+    // range, the flag is implemented, and that assertion is now `LastFrameTests` — which
+    // covers the same concern by pinning the wiring itself rather than the flag's absence.
+    // `testTheLastFrameFlagIsNotAConfigOverride` below is the half that belongs here.
 
     // MARK: - through an actual config.json
 
@@ -323,6 +315,30 @@ final class ConfigOverridesTests: XCTestCase {
                           "\(field.label ?? "?") has a value from a bare command line, so "
                           + "it will overwrite whatever the saved config holds")
         }
+    }
+
+    /// `--last-frame` is deliberately not an override: it limits one run rather than
+    /// describing the sequence, so it must not reach the `Config` that gets saved, where
+    /// no `--no-` form could ever clear it again.  See `LastFrameTests` for the wiring it
+    /// does have.
+    func testTheLastFrameFlagIsNotAConfigOverride() throws {
+        let cli = try StarCli.parse(["--last-frame", "9", "/some/star_temp_seq/config.json"])
+        XCTAssertEqual(cli.lastFrameIndex, 9, "the flag itself parsed")
+
+        for field in Mirror(reflecting: cli.configOverrides).children {
+            XCTAssertTrue(isNil(field.value),
+                          "\(field.label ?? "?") has a value from a command line whose only "
+                          + "flag was --last-frame")
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        var c = savedConfig()
+        let before = try encoder.encode(c)
+        cli.configOverrides.apply(to: &c)
+        XCTAssertEqual(try encoder.encode(c), before,
+                       "--last-frame changed a config field; it would then be written back "
+                       + "into config.json and cap every later resume")
     }
 
     private func isNil(_ value: Any) -> Bool {
