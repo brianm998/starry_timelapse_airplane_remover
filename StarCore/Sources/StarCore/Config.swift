@@ -1132,6 +1132,26 @@ public struct Config: Codable, Sendable {
         "\(self.tempOutputPath)/outliers"
     }
     
+    /// Where `writeJson(named:)` puts `filename`.
+    ///
+    /// A filename carrying a directory component already says where it goes.  That is how
+    /// the cli hands a saved config path back in on resume, and how stard names its
+    /// session dir.  A bare filename lives under tempOutputPath, which is how a fresh
+    /// image sequence run passes plain "config.json".
+    ///
+    /// This used to ask whether filename had tempOutputPath as a prefix, which only
+    /// recognised the absolute-and-identical case: a relative resume path like
+    /// 'star_temp_foo/config.json' got appended to the absolute tempOutputPath read out
+    /// of that same file, doubling the dirname.
+    ///
+    /// The cli's post-run cleanup resolves the same path to decide what to spare, so this
+    /// stays the one answer to where the config file lands.
+    public func jsonPath(named filename: String) -> String {
+        var dirname = (filename as NSString).deletingLastPathComponent
+        if dirname.isEmpty { dirname = self.tempOutputPath }
+        return "\(dirname)/\((filename as NSString).lastPathComponent)"
+    }
+
     public func writeJson(named filename: String, overwrite: Bool = false) {
         
         // write to config json
@@ -1142,18 +1162,8 @@ public struct Config: Codable, Sendable {
         do {
             let jsonData = try encoder.encode(self)
 
-            // a filename carrying a directory component already says where it goes.
-            // that is how the cli hands a saved config path back in on resume, and how
-            // stard names its session dir.  a bare filename lives under tempOutputPath,
-            // which is how a fresh image sequence run passes plain "config.json".
-            //
-            // this used to ask whether filename had tempOutputPath as a prefix, which
-            // only recognised the absolute-and-identical case: a relative resume path
-            // like 'star_temp_foo/config.json' got appended to the absolute
-            // tempOutputPath read out of that same file, doubling the dirname.
-            var dirname = (filename as NSString).deletingLastPathComponent
-            if dirname.isEmpty { dirname = self.tempOutputPath }
-            let fullPath = "\(dirname)/\((filename as NSString).lastPathComponent)"
+            let fullPath = self.jsonPath(named: filename)
+            let dirname = (fullPath as NSString).deletingLastPathComponent
 
             if FileManager.default.fileExists(atPath: fullPath),
                !overwrite

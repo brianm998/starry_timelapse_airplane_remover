@@ -186,6 +186,11 @@ struct StarCli: AsyncParsableCommand {
 
     @Flag(name: [.customLong("keep-temp-files")], help:"""
         Do not remove temporary files after processing is completed.
+        The saved config.json is kept either way, so a completed run can always be
+        resumed with `star star_temp_<sequence>/config.json`; this flag additionally
+        keeps the outlier data and the horizon, keypoint and alignment caches, which
+        is what makes such a resume pick up where this run left off instead of
+        rebuilding them.
         """)
     var keepTempFiles: Bool = false
 
@@ -604,8 +609,14 @@ struct StarCli: AsyncParsableCommand {
                 }
 
                 if !self.keepTempFiles {
-                    // rm temp  unless told not to 
-                    try? removeDirectory(at: config.tempOutputPath)
+                    // rm temp unless told not to, but leave the saved config behind:
+                    // it is the only thing under there that a later
+                    // `star <temp>/config.json` needs, and deleting it made a run that
+                    // completed normally the one kind of run that could not be resumed.
+                    try? removeTempFiles(at: config.tempOutputPath,
+                                         sparing: config.jsonPath(
+                                           named: await configManager.jsonFilename()
+                                         ))
                 }
                 
             } catch {
@@ -687,13 +698,39 @@ private func registerTracking(
     }
 }
 
-func removeDirectory(at path: String) throws {
-    let url = URL(fileURLWithPath: path)
+/// Remove a finished run's temp working files, keeping `sparedPath`.
+///
+/// Everything under the temp dir is regenerable except the saved config, which is what
+/// `star <temp>/config.json` resumes from — so that one file outlives the working files
+/// it was written alongside and the emptied dir stays behind to hold it.
+///
+/// `sparedPath` need not be under `path` at all: stard names an absolute session dir
+/// elsewhere, and for that the whole temp dir goes, as it always did.
+func removeTempFiles(at path: String, sparing sparedPath: String) throws {
+    let fileManager = FileManager.default
+    let tempURL = URL(fileURLWithPath: path)
 
-    guard FileManager.default.fileExists(atPath: url.path) else {
+    guard fileManager.fileExists(atPath: tempURL.path) else {
         print("Directory does not exist.")
         return
     }
 
-    try FileManager.default.removeItem(at: url)
+    // both sides through URL so a relative temp path and the resolved config path — which
+    // is relative whenever the resume argument was — compare as the same absolute path
+    let spared = URL(fileURLWithPath: sparedPath).standardizedFileURL.path
+
+    var sparedAnything = false
+    for child in try fileManager.contentsOfDirectory(at: tempURL,
+                                                    includingPropertiesForKeys: nil)
+    {
+        if child.standardizedFileURL.path == spared {
+            sparedAnything = true
+            continue
+        }
+        try fileManager.removeItem(at: child)
+    }
+
+    if !sparedAnything {
+        try fileManager.removeItem(at: tempURL)
+    }
 }
