@@ -1096,26 +1096,36 @@ public struct Config: Codable, Sendable {
         do {
             let jsonData = try encoder.encode(self)
 
-            var fullPath = ""
-            if filename.hasPrefix(self.tempOutputPath) {
-                fullPath = filename
-            } else {
-                fullPath = "\(self.tempOutputPath)/\(filename)"
+            // a filename carrying a directory component already says where it goes.
+            // that is how the cli hands a saved config path back in on resume, and how
+            // stard names its session dir.  a bare filename lives under tempOutputPath,
+            // which is how a fresh image sequence run passes plain "config.json".
+            //
+            // this used to ask whether filename had tempOutputPath as a prefix, which
+            // only recognised the absolute-and-identical case: a relative resume path
+            // like 'star_temp_foo/config.json' got appended to the absolute
+            // tempOutputPath read out of that same file, doubling the dirname.
+            var dirname = (filename as NSString).deletingLastPathComponent
+            if dirname.isEmpty { dirname = self.tempOutputPath }
+            let fullPath = "\(dirname)/\((filename as NSString).lastPathComponent)"
+
+            if FileManager.default.fileExists(atPath: fullPath),
+               !overwrite
+            {
+                Log.w("cannot write to \(fullPath), it already exists")
+                return
             }
-            
-            if FileManager.default.fileExists(atPath: fullPath) {
-                if overwrite {
-                    try? FileManager.default.removeItem(atPath: fullPath)
-                    _ = FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
-                } else {
-                    Log.w("cannot write to \(fullPath), it already exists")
-                }
-            } else {
-                Log.i("creating \(fullPath)")                      
-                _ = FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
-            }
+
+            // the dir may not exist yet.  on a fresh image sequence run this is the
+            // first thing written under tempOutputPath, well before any ImageAccessor
+            // has built the temp dir tree — and createFile() only returned false in
+            // that case, so the write failed silently.
+            mkdir(dirname)
+
+            try jsonData.write(to: URL(fileURLWithPath: fullPath))
+            Log.i("wrote \(fullPath)")
         } catch {
-            Log.e("\(error)")
+            Log.e("could not write \(filename): \(error)")
         }
     }
 
