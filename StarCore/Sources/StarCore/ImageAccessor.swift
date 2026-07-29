@@ -337,6 +337,20 @@ public struct ImageAccessor: Sendable {
             atSize: size
            )
         {
+            // Only the original is required output.  A preview is written when the
+            // config asks for one — the cli leaves writeFramePreviewFiles and
+            // writeFrameProcessedPreviewFiles false, and the gui forces only the
+            // former — so there is often nothing to link from, and then neither the
+            // hard link nor the copy fallback can succeed.  That is not a failure of
+            // this frame, so skip it rather than throwing out through finishAuto into
+            // MergeOp, which reported it per frame on every resume.  A missing
+            // original is still an error, and still throws below.
+            if size != .original,
+               !FileManager.default.fileExists(atPath: fromName)
+            {
+                Log.d("frame \(frameIndex) has no \(type) at size \(size) to link to .final, skipping")
+                return
+            }
             do {
                 try createHardLinkReplacingDestination(
                   from: fromName,
