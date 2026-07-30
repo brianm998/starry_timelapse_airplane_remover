@@ -216,51 +216,48 @@ public struct BoundingBox: Codable,
         }
 
 
-        let boxesOverlap = self.overlaps(otherBox)
-        
-        //Log.d("self \(self) edge distance to \(otherBox) boxesOverlap \(boxesOverlap)")
         let selfCenter = self.centerDouble
         let otherCenter = otherBox.centerDouble
 
         //Log.d("selfCenter \(selfCenter) otherCenter \(otherCenter)")
-        
+
         let line = StandardLine(point1: selfCenter, point2: otherCenter)
 
         // floating point math can have small errors
         let mathErrorBuffer = 3.0
-        
+
         let centerDistance = selfCenter.distance(to: otherCenter)
         let selfIntersections = self.intersections(with: line)
         let otherIntersections = otherBox.intersections(with: line)
-        
+
+        // On each box, take the intersection point on the side facing the other box — the one
+        // no further from the other box's centre than the centres are from each other.  For
+        // boxes with a gap between them those are the facing edges, so the distance between
+        // them is the gap.  For overlapping boxes the two points cross over each other, so the
+        // distance between them is the depth of the overlap, which the sign test below then
+        // negates.  Either way it is the quantity this method documents.
+        //
+        // There used to be a second branch here, taken when `overlaps(_:)` said the boxes
+        // overlapped, that picked the *far* side of each box instead — giving the span of the
+        // union rather than the depth of the overlap.  It was unreachable, because `overlaps`
+        // could not return true (see that method), and it is not what the doc comment above
+        // describes, so it is gone rather than newly enabled.
         var selfClosest: DoubleCoord?
         var otherClosest: DoubleCoord?
-        
+
         for point in selfIntersections {
             let distance = point.distance(to: otherCenter)
             //Log.d("self intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
-            if boxesOverlap {
-                if Int(distance) >= Int(centerDistance-mathErrorBuffer) { // XXX this fails when one is inside the other
-                    selfClosest = point
-                }
-            } else {
-                if Int(distance) <= Int(centerDistance+mathErrorBuffer) { // XXX this fails when one is inside the other
-                    selfClosest = point
-                }
+            if Int(distance) <= Int(centerDistance+mathErrorBuffer) { // XXX this fails when one is inside the other
+                selfClosest = point
             }
         }
-        
+
         for point in otherIntersections {
             let distance = point.distance(to: selfCenter)
             //Log.d("other intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
-            if boxesOverlap {
-                if Int(distance) >= Int(centerDistance-mathErrorBuffer) { // XXX this fails when one is inside the other
-                    otherClosest = point
-                }
-            } else {
-                if Int(distance) <= Int(centerDistance+mathErrorBuffer) { // XXX fails when one is inside the other
-                    otherClosest = point
-                }
+            if Int(distance) <= Int(centerDistance+mathErrorBuffer) { // XXX fails when one is inside the other
+                otherClosest = point
             }
         }
 
@@ -308,16 +305,21 @@ public struct BoundingBox: Codable,
         self.contains(coord: DoubleCoord(other.min)) && self.contains(coord: DoubleCoord(other.max))
     }
     
+    // true if this BoundingBox shares any area with the other.
+    //
+    // This is the cheap boolean form of overlap(with:) and agrees with it exactly:
+    // overlaps(x) is true iff overlap(with: x) is non-nil.  Like that method it compares
+    // strictly, so boxes that merely touch along an edge do not count as overlapping.
+    //
+    // The previous implementation asked for `self.min.x <= other.min.x && self.min.x >=
+    // other.max.x`, which needs other.max.x <= other.min.x and so could not hold for any box
+    // wider than a single column.  It therefore answered false for every real pair — see
+    // BoundingBoxTests.testOverlapsAgreesWithOverlapWith.
     public func overlaps(_ other: BoundingBox) -> Bool {
-        let overlapInX =
-          (self.min.x <= other.min.x && self.min.x >= other.max.x) ||
-          (self.max.x <= other.min.x && self.max.x >= other.max.x)
-
-        let overlapInY =
-          (self.min.y <= other.min.y && self.min.y >= other.max.y) ||
-          (self.max.y <= other.min.y && self.max.y >= other.max.y)
-        
-        return overlapInX && overlapInY
+        self.min.x < other.max.x &&
+        self.min.y < other.max.y &&
+        other.min.x < self.max.x &&
+        other.min.y < self.max.y
     }
     
     public func contains(coord: DoubleCoord) -> Bool {

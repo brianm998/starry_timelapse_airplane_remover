@@ -20,6 +20,10 @@ let package = Package(
         .target(
             name: "logging",
             dependencies: []
-        )
+        ),
+        .testTarget(
+            name: "loggingTests",
+            dependencies: ["logging"]
+        ),
     ]
 )

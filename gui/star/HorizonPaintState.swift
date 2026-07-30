@@ -472,8 +472,11 @@ final class HorizonPaintState {
     func resetForNewFrame() {
         let savedIsErasing = isErasing
         clear()              // clears everything including isErasing; brushRadius is untouched
-        isErasing = savedIsErasing
         phase = .computing   // override bandSelection set by clear()
+        // Restore *after* the phase, not before: isErasing's didSet forces the value back to
+        // false while the phase is still .bandSelection, which is what clear() just set it to.
+        // Assigning it first therefore lost the toggle on every frame advance.
+        isErasing = savedIsErasing
     }
 
     /// Remove all recorded strokes and reset to the band-selection phase.

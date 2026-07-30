@@ -194,6 +194,16 @@ let package = Package(
                 ],
                 path: "Sources/StarCppBridge"
         ),
+        // The geometry in StarCppBridge (Line, StandardLine, DoubleCoord) is pure Swift
+        // and every horizon/blob decision downstream is built on it, so it is worth
+        // pinning independently of the OpenCV code it sits next to.  platformLinkerSettings
+        // is repeated here because the test bundle links OpenCV itself: `kht` carries
+        // those settings for the library link, but a test target gets its own link step.
+        .testTarget(name: "StarCppBridgeTests",
+                    dependencies: ["StarCppBridge"],
+                    path: "Tests/StarCppBridgeTests",
+                    linkerSettings: platformLinkerSettings
+        ),
     ],
     cxxLanguageStandard: .cxx2b
 )

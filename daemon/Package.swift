@@ -55,11 +55,25 @@ let package = Package(
         .testTarget(
             name: "StarDaemonTests",
             dependencies: [
+                // Depending on stard itself is what lets the tests exercise the real
+                // Mapping/Dispatcher/SessionManager rather than hand-copied shims of them.
+                // The shims in EnumParityTests predate this and could drift from
+                // Mapping.swift without anything noticing.  cli/Package.swift already
+                // takes this shape for the `star` executable target.
+                "stard",
                 "StarDaemonMessages",
                 .product(name: "StarCore", package: "StarCore"),
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ],
             path: "Tests/StarDaemonTests",
+            // `@testable import stard` pulls in stard's own `import StarDecisionTrees`, so
+            // the test bundle needs the same include path and archive the executable does.
+            // Joined `-I<path>`, not `-I <path>`: SwiftPM appends `-plugin-path` for the
+            // testing library right after a test target's unsafeFlags, and a trailing `-I`
+            // would swallow it.
+            swiftSettings: [
+                .unsafeFlags(["-I\(dtInclude)"]),
+            ],
             linkerSettings: [
                 .unsafeFlags(["-L\(dtLib)", "-Xlinker", dtLibFile]),
                 .linkedLibrary("StarDecisionTrees"),
