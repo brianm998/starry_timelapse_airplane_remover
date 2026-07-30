@@ -900,6 +900,8 @@ struct ProcessingSettingsView: View {
             What you pay for it is sharpness, and it is worth knowing why.  Keypoints never touch the output pixels — they only produce the alignment.  Detecting on a smaller copy makes each keypoint's position less precise, which leaves each neighbouring frame warped very slightly wrong, and the merge then averages stars that sit a fraction of a pixel apart.  That reads as softness in the final frame.  The error falls roughly in step with the divisor, so 1.5 gives back about half the softness of 2 while still skipping more than half the work.
 
             1 by default.  Worth trying 1.5 on high resolution sequences, and comparing against a full resolution run.  Keypoint files are stored separately for each divisor, so changing it does not mix descriptors found at different scales.
+
+            If you find this already set to 1.5 without having touched it, the startup prompt did that: when a sequence's frames are larger than this machine can detect on at full resolution without the memory budget throttling concurrency, it offers the setting up front and pre-selects 1.5.  Changing it here overrides that for the rest of this run.
             """
         ) {
             HStack {

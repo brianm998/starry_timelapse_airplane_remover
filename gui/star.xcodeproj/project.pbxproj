@@ -29,6 +29,7 @@
 		D332F6FF29B63DA2009E2796 /* InitialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F6FE29B63DA2009E2796 /* InitialView.swift */; };
 		D332F70529B64004009E2796 /* ShrinkingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70429B64004009E2796 /* ShrinkingButton.swift */; };
 		D333BC0B2E23FF7000569A78 /* EditableNumberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D333BC0A2E23FF7000569A78 /* EditableNumberView.swift */; };
+		D3A1C0DE000600060006AAA5 /* KeypointDivisorStartupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A1C0DE000500050005AAA4 /* KeypointDivisorStartupView.swift */; };
 		D33B93102FA1C2F10059D875 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33B930F2FA1C2F10059D875 /* AppDelegate.swift */; };
 		D33FFC112A2CF92900F38194 /* SystemButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC0F2A2CF92900F38194 /* SystemButton.swift */; };
 		D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC102A2CF92900F38194 /* VideoPlaybackButtons.swift */; };
@@ -154,6 +155,7 @@
 		D332F6FE29B63DA2009E2796 /* InitialView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InitialView.swift; sourceTree = "<group>"; };
 		D332F70429B64004009E2796 /* ShrinkingButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShrinkingButton.swift; sourceTree = "<group>"; };
 		D333BC0A2E23FF7000569A78 /* EditableNumberView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditableNumberView.swift; sourceTree = "<group>"; };
+		D3A1C0DE000500050005AAA4 /* KeypointDivisorStartupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypointDivisorStartupView.swift; sourceTree = "<group>"; };
 		D33B930F2FA1C2F10059D875 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		D33FFC0F2A2CF92900F38194 /* SystemButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SystemButton.swift; sourceTree = "<group>"; };
 		D33FFC102A2CF92900F38194 /* VideoPlaybackButtons.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoPlaybackButtons.swift; sourceTree = "<group>"; };
@@ -323,6 +325,7 @@
 				D3A1C0DE000100010001AAA0 /* PreProcessingRenderPromptView.swift */,
 				D3A1C0DE000300030003AAA2 /* PostProcessingRenderPromptView.swift */,
 				D333BC0A2E23FF7000569A78 /* EditableNumberView.swift */,
+				D3A1C0DE000500050005AAA4 /* KeypointDivisorStartupView.swift */,
 				D392EB6C2E16C6940020E16A /* Space.swift */,
 				D392EB672E1395CB0020E16A /* DebugView.swift */,
 				D392EB1A2E104D410020E16A /* ChangeToolButton.swift */,
@@ -618,6 +621,7 @@
 				D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */,
 				D33FFC232A2D48F300F38194 /* FrameView.swift in Sources */,
 				D333BC0B2E23FF7000569A78 /* EditableNumberView.swift in Sources */,
+				D3A1C0DE000600060006AAA5 /* KeypointDivisorStartupView.swift in Sources */,
 				D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */,
 				D33FFC1E2A2D39BA00F38194 /* ProgressBars.swift in Sources */,
 				D3FBFA272CEAC0FF00A23FC6 /* InfoDialogView.swift in Sources */,

@@ -1336,10 +1336,24 @@ public struct Config: Codable, Sendable {
     /// component (working depth 3), and guessing the first would double every
     /// reservation for any config that happens not to carry the field.
     public var workingFrameBytes: UInt64 {
+        let perPixel = workingBytesPerPixel
+        guard perPixel > 0 else { return rawImageBytes }
+        return UInt64(imageWidth) * UInt64(imageHeight) * UInt64(perPixel)
+    }
+
+    /// The per-pixel half of `workingFrameBytes` — see there for why the source depth is
+    /// floored at the 16-bit working depth.
+    ///
+    /// Separate from `workingFrameBytes` because the resolution advice in
+    /// `keypointDivisorAdvice` needs the per-pixel cost without a resolution baked into
+    /// it: it divides a memory budget by it to get back a pixel count.
+    ///
+    /// 0 when the component depth is unknown, the same condition under which
+    /// `workingFrameBytes` falls back to `rawImageBytes`.
+    public var workingBytesPerPixel: Int {
         let components = componentsPerPixel
-        guard components > 0 else { return rawImageBytes }
-        let workingBytesPerPixel = max(max(imageBytesPerPixel, 1), 2 * components)
-        return UInt64(imageWidth) * UInt64(imageHeight) * UInt64(workingBytesPerPixel)
+        guard components > 0 else { return 0 }
+        return max(max(imageBytesPerPixel, 1), 2 * components)
     }
 
     /// Whether a merge of `sourceCount` frames streams its sources to scratch at this
@@ -1488,6 +1502,92 @@ public struct Config: Codable, Sendable {
                                    bytesPerOp: bytesPerOp,
                                    budget: budget,
                                    binding: binding)
+    }
+
+    /// The divisor to suggest when full resolution does not fit the machine.
+    ///
+    /// 1.5 rather than 2: it recovers 2.25x of the 4x that 2 does, and on 42MP frames the
+    /// two outputs were compared side by side and 1.5 was indistinguishable from 1.0 while
+    /// 2 was visibly softer. Shared with the GUI so the up-front prompt and any test
+    /// asserting on it cannot drift apart.
+    public static let recommendedReducedKeypointDivisor: Double = 1.5
+
+    /// Whether this machine can keep its cores busy detecting keypoints on this
+    /// sequence at full resolution, and what to suggest when it cannot.
+    ///
+    /// See `keypointDivisorAdvice(physicalMemory:)`.
+    public struct KeypointDivisorAdvice: Sendable, Equatable {
+        /// True when the memory budget, not the core count, is what limits full
+        /// resolution keypoint concurrency for this sequence on this machine.
+        public let reduceRecommended: Bool
+        /// `Config.recommendedReducedKeypointDivisor` when `reduceRecommended`, else 1.0.
+        public let recommendedDivisor: Double
+        /// The largest frame, in pixels, this machine can detect on at full resolution
+        /// without the budget throttling concurrency. `reduceRecommended` is exactly
+        /// `imagePixels > thresholdPixels`.
+        public let thresholdPixels: Int
+        /// This sequence's frame, in pixels.
+        public let imagePixels: Int
+        /// How many keypoint ops actually run at once at full resolution...
+        public let fullResolutionConcurrency: Int
+        /// ...against how many the pipeline would run if memory were free.
+        public let frameConcurrency: Int
+    }
+
+    /// Where the up-front keypoint divisor prompt should kick in, for this sequence on
+    /// this machine.
+    ///
+    /// Not a new heuristic — it is `keypointConcurrency(physicalMemory:)` solved for the
+    /// resolution at which its two terms cross. Below the crossover the core count is
+    /// binding, so a divisor buys a little per-op speed and no concurrency; at or above
+    /// it the memory budget is binding, so the divisor buys concurrency directly and is
+    /// the difference between a machine that is busy and one that is waiting on RAM.
+    /// That crossover is also the observable the user reports: on a 128GB 18-core
+    /// (36 logical) iMac Pro, 12MP frames run full resolution comfortably and 42MP ones
+    /// throttle to 10 of 36 concurrent ops, and the arithmetic below puts the boundary at
+    /// 12.9MP with no fitting.
+    ///
+    ///     thresholdPixels = physicalMemory x maxMatMemoryFraction
+    ///                       / (numberOfFramesToProcessConcurrently
+    ///                          x workingBytesPerPixel x keypointMemoryMultiplier)
+    ///
+    /// Deliberately `keypointMemoryMultiplier` and not
+    /// `effectiveKeypointMemoryMultiplier()`: the question is what full resolution would
+    /// cost, so the answer must not move once a divisor is already set.
+    ///
+    /// It scales with every term for a reason. Physical memory and the working depth are
+    /// the machine and the footage. `numberOfFramesToProcessConcurrently` is in there
+    /// because a machine with more cores wants more ops in flight to fill them, so it runs
+    /// out of memory at a *smaller* frame — a 16GB 8-core laptop crosses over around 7MP,
+    /// a 192GB Ultra around 29MP.
+    ///
+    /// `nil` when `set(imageInfo:)` has not run: without dimensions and depth there is no
+    /// resolution to compare and no per-pixel cost to compare it against. Callers should
+    /// treat that as "say nothing", not as "recommend a divisor".
+    public func keypointDivisorAdvice(physicalMemory: UInt64) -> KeypointDivisorAdvice? {
+        let perPixel = workingBytesPerPixel
+        let pixels = imageWidth * imageHeight
+        guard perPixel > 0, pixels > 0, physicalMemory > 0 else { return nil }
+
+        let frameConcurrency = max(1, numberOfFramesToProcessConcurrently)
+        let bytesPerPixelPerOp = perPixel * max(keypointMemoryMultiplier, 1)
+        let budget = Double(physicalMemory) * maxMatMemoryFraction
+
+        // The largest frame that still fits frameConcurrency ops in the budget.
+        let threshold = Int(budget / Double(frameConcurrency * bytesPerPixelPerOp))
+
+        // How many fit at this frame size. floor(x) < n is exactly x < n for integer n,
+        // so this is `> threshold` and the two can never disagree at the boundary.
+        let fits = max(1, Int(budget / Double(pixels * bytesPerPixelPerOp)))
+        let reduce = fits < frameConcurrency
+
+        return KeypointDivisorAdvice(
+          reduceRecommended: reduce,
+          recommendedDivisor: reduce ? Self.recommendedReducedKeypointDivisor : 1.0,
+          thresholdPixels: max(threshold, 1),
+          imagePixels: pixels,
+          fullResolutionConcurrency: min(fits, frameConcurrency),
+          frameConcurrency: frameConcurrency)
     }
 
     public var dirForKeypointData: String {

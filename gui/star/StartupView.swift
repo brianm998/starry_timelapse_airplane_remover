@@ -331,6 +331,10 @@ struct RemovalView: View {
     @State private var removeSatellites: Bool = true
     @State private var removeMeteors: Bool = true
 
+    /// Owned here rather than inside `KeypointDivisorStartupView` so that view can set the
+    /// initial state from the machine's advice and still be collapsed by the user.
+    @State private var showKeypointDivisor: Bool = false
+
     private var cleanMethod: CleanMethod {
         if removeAirplanes {
             if removeSatellites {
@@ -419,7 +423,14 @@ struct RemovalView: View {
             Text(self.descriptionText)
               .font(.body)
               .foregroundColor(.white)
-            
+
+            Space(height: 14)
+            Divider()
+            Space(height: 10)
+            KeypointDivisorStartupView(isExpanded: $showKeypointDivisor)
+            Space(height: 10)
+            Divider()
+
             Space(height: 10)
             HStack {
                 Spacer()
