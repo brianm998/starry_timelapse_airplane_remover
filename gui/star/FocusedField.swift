@@ -7,6 +7,7 @@ enum FocusedField: Hashable {
     case numberOfFramesToProcess
     case numberOfFramesToProcessConcurrently
     case numberOfNeighborFrames
+    case alignmentKeypointDivisor
     case pixelThreshold
     case maxZoomLevel
     case horizonStripWidth

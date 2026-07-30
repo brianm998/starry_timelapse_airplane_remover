@@ -200,15 +200,21 @@ struct StarCli: AsyncParsableCommand {
         """)
     var movingCamera: Bool = false
 
-    @Flag(name: [.customLong("half-res-keypoints")], help:"""
-        Detect keypoints on a half size copy of each frame.
-        Cuts the peak memory of the keypoint step by around 3.5x (measured
-        9921MB -> 2824MB at 42 megapixels) and runs about 4x faster, at the cost
-        of finding fewer and slightly less precise keypoints.  May reduce
-        alignment quality on some sequences, so compare against a full
-        resolution run.  Keypoint files are stored separately per setting.
+    @Option(name: [.customLong("keypoint-divisor")], help:"""
+        Divide each frame's dimensions by this before detecting keypoints on it.
+        1 detects at full resolution, 2 on a half size copy, 1.5 on a two thirds
+        copy.  Replaces --half-res-keypoints, which was 2 with no way to sit
+        between.
+        Detection time and peak memory both fall as 1/divisor squared, so 4x at
+        2 but 2.25x at 1.5.  What you pay is alignment precision: keypoints only
+        produce the homography, and detecting on a smaller copy makes their
+        localisation coarser, which leaves neighbours warped slightly wrong and
+        reads as softness in the merged result.  The error falls roughly
+        linearly with the divisor, so 1.5 is the middle ground worth trying.
+        Values of 1 or less mean full resolution.  Feature files are keyed by
+        this value, so changing it does not reuse the previous run's keypoints.
         """)
-    var halfResKeypoints: Bool = false
+    var keypointDivisor: Double?
 
     @Option(name: [.customLong("merge-streaming-threshold-mb")], help:"""
         When a median merge would need to hold more than this many megabytes of
@@ -355,7 +361,7 @@ struct StarCli: AsyncParsableCommand {
           writeOutputFiles: skipOutputFiles.map { !$0 },
           horizonDetectionEnabled: noHorizon ? false : nil,
           tripodHeadWasMoving: movingCamera ? true : nil,
-          alignmentHalfResolutionKeypoints: halfResKeypoints ? true : nil,
+          alignmentKeypointDetectionDivisor: keypointDivisor,
           mergeStreamingThresholdMB: mergeStreamingThresholdMB,
           maxConcurrentKeypointOps: maxKeypointOps,
           horizonReservationFloorMB: horizonReservationFloorMB,
@@ -371,6 +377,15 @@ struct StarCli: AsyncParsableCommand {
         if let lastFrameIndex, lastFrameIndex < 0 {
             throw ValidationError(
               "--last-frame must be a frame index of 0 or more, not \(lastFrameIndex)"
+            )
+        }
+        // Config clamps a divisor below 1 to full resolution rather than honouring it,
+        // and the C++ would silently do the same, so a typo like 0.5 would run at full
+        // size and look like the flag did nothing.  Say so instead.
+        if let keypointDivisor, keypointDivisor < 1 {
+            throw ValidationError(
+              "--keypoint-divisor divides the frame size, so it must be 1 or more, not "
+              + "\(keypointDivisor). Use 2 for half size, 1.5 for two thirds."
             )
         }
     }

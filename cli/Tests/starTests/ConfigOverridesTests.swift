@@ -6,7 +6,7 @@ import StarCore
 /// `config.json`, and those used to be two separate wirings of the command line onto a
 /// `Config`. Only the sequence one was complete. The config file branch loaded the
 /// config, applied `writeOutlierClassificationValues`, and dropped everything else on
-/// the floor without a word — so `star --log-op-memory --half-res-keypoints
+/// the floor without a word — so `star --log-op-memory --keypoint-divisor 2
 /// foo/config.json` ran at full resolution and logged no op memory at all. That is how
 /// it was found: `--log-op-memory` produced no output while measuring a merge.
 ///
@@ -19,7 +19,7 @@ import StarCore
 /// The second is the one with teeth. The `@Flag`s are non-optional `Bool`s defaulting to
 /// false with no `--no-` form, so "false" and "the user did not type it" are the same
 /// value; assigning them unconditionally would silently turn off a saved config's
-/// `alignmentHalfResolutionKeypoints` on every resume that forgot to repeat the flag.
+/// `alignmentKeypointDetectionDivisor` on every resume that forgot to repeat the flag.
 final class ConfigOverridesTests: XCTestCase {
 
     /// A stand-in for a saved config: every field an override can touch, set to
@@ -38,7 +38,7 @@ final class ConfigOverridesTests: XCTestCase {
         c.writeOutputFiles = false
         c.horizonDetectionEnabled = false
         c.tripodHeadWasMoving = true
-        c.alignmentHalfResolutionKeypoints = true
+        c.alignmentKeypointDetectionDivisor = 2.0
         c.mergeStreamingThresholdMB = 1024
         c.maxConcurrentKeypointOps = 3
         c.horizonReservationFloorMB = 1200
@@ -61,7 +61,7 @@ final class ConfigOverridesTests: XCTestCase {
       "--no-skip-output-files",
       "--no-horizon",
       "--moving-camera",
-      "--half-res-keypoints",
+      "--keypoint-divisor", "1.5",
       "--merge-streaming-threshold-mb", "2048",
       "--max-keypoint-ops", "7",
       "--horizon-reservation-floor-mb", "450",
@@ -86,7 +86,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.writeOutputFiles, true, "--no-skip-output-files turns rendering on")
         XCTAssertEqual(c.horizonDetectionEnabled, false, "--no-horizon turns it off")
         XCTAssertEqual(c.tripodHeadWasMoving, true)
-        XCTAssertEqual(c.alignmentHalfResolutionKeypoints, true)
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.5)
         XCTAssertEqual(c.mergeStreamingThresholdMB, 2048)
         XCTAssertEqual(c.maxConcurrentKeypointOps, 7)
         XCTAssertEqual(c.horizonReservationFloorMB, 450)
@@ -98,12 +98,12 @@ final class ConfigOverridesTests: XCTestCase {
     /// have to be visible in the config the run is about to use.
     func testTheFlagsFromTheBugReportReachADefaultConfig() throws {
         let cli = try StarCli.parse(["--log-op-memory",
-                                     "--half-res-keypoints",
+                                     "--keypoint-divisor", "2",
                                      "/some/star_temp_seq/config.json"])
         var c = Config()
-        XCTAssertFalse(c.alignmentHalfResolutionKeypoints)
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.0)
         cli.configOverrides.apply(to: &c)
-        XCTAssertTrue(c.alignmentHalfResolutionKeypoints)
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 2.0)
 
         // --log-op-memory is a process global rather than a config field, so all the
         // parse can show is that it was seen; that it is applied on both paths is
@@ -134,7 +134,7 @@ final class ConfigOverridesTests: XCTestCase {
                        + "outlier-data-only setting stands")
         XCTAssertEqual(c.horizonDetectionEnabled, false)
         XCTAssertEqual(c.tripodHeadWasMoving, true)
-        XCTAssertEqual(c.alignmentHalfResolutionKeypoints, true,
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 2.0,
                        "a bool @Flag defaults to false, which is indistinguishable from "
                        + "absent — applying it would undo the saved setting")
         XCTAssertEqual(c.mergeStreamingThresholdMB, 1024)
@@ -177,7 +177,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.detectionType, .strong)
         XCTAssertEqual(c.horizonDetectionEnabled, true)
         XCTAssertEqual(c.tripodHeadWasMoving, false)
-        XCTAssertEqual(c.alignmentHalfResolutionKeypoints, false)
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.0)
         XCTAssertEqual(c.writeOutlierGroupFiles, false)
         XCTAssertEqual(c.writeOutputFiles, true, "a plain run renders")
         XCTAssertNil(c.finalOutputDir)
@@ -251,7 +251,7 @@ final class ConfigOverridesTests: XCTestCase {
     /// that does keeps its own.
     func testOverridesLandOnAConfigDecodedFromDisk() throws {
         var saved = Config()
-        saved.alignmentHalfResolutionKeypoints = true
+        saved.alignmentKeypointDetectionDivisor = 2.0
         saved.mergeStreamingThresholdMB = 1024
         saved.ignoreLowerPixels = 700
         saved.writeOutputFiles = false
@@ -265,7 +265,7 @@ final class ConfigOverridesTests: XCTestCase {
 
         var untouched = try Config.read(fromJsonFilename: file.path)
         try StarCli.parse([file.path]).configOverrides.apply(to: &untouched)
-        XCTAssertTrue(untouched.alignmentHalfResolutionKeypoints)
+        XCTAssertEqual(untouched.alignmentKeypointDetectionDivisor, 2.0)
         XCTAssertEqual(untouched.mergeStreamingThresholdMB, 1024)
         XCTAssertEqual(untouched.ignoreLowerPixels, 700)
         XCTAssertFalse(untouched.writeOutputFiles,
@@ -283,7 +283,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(overridden.ignoreLowerPixels, 42)
         XCTAssertTrue(overridden.writeOutputFiles,
                       "a config saved with -s has to be renderable again")
-        XCTAssertTrue(overridden.alignmentHalfResolutionKeypoints,
+        XCTAssertEqual(overridden.alignmentKeypointDetectionDivisor, 2.0,
                       "still untouched by a command line that did not mention it")
     }
 

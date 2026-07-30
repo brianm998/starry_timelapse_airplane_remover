@@ -43,7 +43,7 @@ extension OperationType {
         // worst measured ratio instead — 12.3x, at 6MP, rounded up.
         case .horizon:             return 13
         case .mergedHorizon:       return 13
-        // Fallback only — FrameGraphBuilder always passes config.keypointMemoryMultiplier
+        // Fallback only — FrameGraphBuilder always passes effectiveKeypointMemoryMultiplier()
         // explicitly when building KeypointOps.  Kept in step with that default (42,
         // measured) so this cannot become a stale second opinion.
         case .starKeypoints:       return 42
@@ -142,7 +142,8 @@ public final actor FrameGraphBuilder {
         Log.i("KeypointLimiter[\(context)]: \(kc.limit) concurrent keypoint ops — " +
               "budget fits \(budgetLimit) " +
               "(image \(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B, " +
-              "working frame \(config.workingFrameBytes/(1024*1024))MB × \(config.keypointMemoryMultiplier) = " +
+              "working frame \(config.workingFrameBytes/(1024*1024))MB × \(config.effectiveKeypointMemoryMultiplier()) " +
+              "(divisor \(config.quantizedKeypointDivisor)) = " +
               "\(kc.bytesPerOp/(1024*1024))MB/op of \(kc.budget/(1024*1024))MB budget), " +
               "frames cap \(config.numberOfFramesToProcessConcurrently)\(explicit) " +
               "→ bound by \(kc.binding)")
@@ -433,7 +434,7 @@ public final actor FrameGraphBuilder {
                       mode: .starAligned,
                       limiter: self.keypointLimiter,
                       rawImageBytes: rawImageBytes,
-                      memoryMultiplier: UInt64(config.keypointMemoryMultiplier)
+                      memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier())
                     ) { errorString in
                         Task { await errors.append(errorString) }
                         errorClosure(errorString)
@@ -487,7 +488,7 @@ public final actor FrameGraphBuilder {
                           mode: .earthAligned,
                           limiter: self.keypointLimiter,
                           rawImageBytes: rawImageBytes,
-                          memoryMultiplier: UInt64(config.keypointMemoryMultiplier)
+                          memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier())
                         ) { errorString in
                             Task { await errors.append(errorString) }
                             errorClosure(errorString)

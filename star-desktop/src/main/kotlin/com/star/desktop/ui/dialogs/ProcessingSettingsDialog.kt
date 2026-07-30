@@ -235,7 +235,10 @@ internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
     // hungry step and its cost is per pixel, so this cuts it by about 4x, at some cost in
     // alignment quality.  Keypoint files are kept separately per setting, so switching
     // back and forth does not mix the two.
-    BoolField("Half resolution keypoints", { it.alignmentHalfResolutionKeypoints }, { b, v -> b.setAlignmentHalfResolutionKeypoints(v) }, { it.hasAlignmentHalfResolutionKeypoints() }),
+    // Replaced the "Half resolution keypoints" switch. DoubleField has no min/max, unlike
+    // IntField, so a value under 1 is reachable from here; StarCore clamps anything <= 1 to
+    // full resolution rather than honouring it, so that is harmless but not meaningful.
+    DoubleField("Keypoint detection divisor", { it.alignmentKeypointDetectionDivisor }, { b, v -> b.setAlignmentKeypointDetectionDivisor(v) }, { it.hasAlignmentKeypointDetectionDivisor() }),
     BoolField("Write debug images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }, { it.hasAlignmentWriteDebugImages() }),
 )
 

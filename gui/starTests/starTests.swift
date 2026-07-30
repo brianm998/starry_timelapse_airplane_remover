@@ -157,7 +157,7 @@ final class SettingsWiringTests: XCTestCase {
           "mergeMemoryMultiplier",
           "horizonMemoryMultiplier",
           "horizonReservationFloorMB",
-          "alignmentHalfResolutionKeypoints",
+          "alignmentKeypointDetectionDivisor",
         ]
         for name in expected {
             XCTAssertTrue(settings.contains("viewModel.\(name)"),

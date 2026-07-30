@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License along with sta
 /// built from scratch, or a previously saved `config.json`, where it is decoded from
 /// disk. The flags below used to be applied only on the first path: the config file
 /// branch loaded the config and applied nothing but `writeOutlierClassificationValues`,
-/// so `star --half-res-keypoints --log-op-memory foo/config.json` ran with neither in
+/// so `star --keypoint-divisor 2 --log-op-memory foo/config.json` ran with neither in
 /// effect and said nothing about it. Every flag now goes through here, which is the
 /// point of the type — a new flag wired into one branch and forgotten in the other is no
 /// longer possible, because there is only one branch to wire it into.
@@ -58,7 +58,10 @@ struct ConfigOverrides {
     /// `--no-horizon`, inverted: the flag turns horizon detection off.
     var horizonDetectionEnabled: Bool?
     var tripodHeadWasMoving: Bool?
-    var alignmentHalfResolutionKeypoints: Bool?
+    /// `--keypoint-divisor`. A Double @Option rather than the @Flag it replaced, so
+    /// "not typed" is nil for free instead of needing the `x ? true : nil` laundering the
+    /// bool flags above still require.
+    var alignmentKeypointDetectionDivisor: Double?
     var mergeStreamingThresholdMB: Int?
     var maxConcurrentKeypointOps: Int?
     var horizonReservationFloorMB: Int?
@@ -85,8 +88,8 @@ struct ConfigOverrides {
             config.horizonDetectionEnabled = horizonDetectionEnabled
         }
         if let tripodHeadWasMoving { config.tripodHeadWasMoving = tripodHeadWasMoving }
-        if let alignmentHalfResolutionKeypoints {
-            config.alignmentHalfResolutionKeypoints = alignmentHalfResolutionKeypoints
+        if let alignmentKeypointDetectionDivisor {
+            config.alignmentKeypointDetectionDivisor = alignmentKeypointDetectionDivisor
         }
         if let mergeStreamingThresholdMB {
             config.mergeStreamingThresholdMB = mergeStreamingThresholdMB

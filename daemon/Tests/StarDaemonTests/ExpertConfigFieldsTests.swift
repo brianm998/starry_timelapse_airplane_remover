@@ -52,28 +52,43 @@ final class ExpertConfigFieldsTests: XCTestCase {
         XCTAssertEqual(back.mergeStreamingThresholdMb, 0)
     }
 
-    /// A false bool has the same hazard in principle. It is harmless today only because
-    /// StarCore's default happens to be false too — this test is what would catch it if
-    /// that default ever flipped.
-    func testAPresentFalseHalfResStaysPresent() throws {
+    /// The keypoint divisor's hazard is the mirror of the ones above. proto3's implicit
+    /// default for a double is 0, StarCore's is 1.0, and 0 is not a value the pipeline can
+    /// honour — Config clamps anything <= 1 to full resolution. So presence is what keeps a
+    /// deliberate "detect at full resolution" distinguishable from a client that never
+    /// mentioned the field, and keeps a 0 arriving from the Kotlin client's unclamped
+    /// DoubleField from reading as a real request.
+    func testAPresentFullResolutionDivisorStaysPresent() throws {
         var c = Star_V1_Config()
-        c.alignmentHalfResolutionKeypoints = false
+        c.alignmentKeypointDetectionDivisor = 1.0
 
         let back = try Star_V1_Config(serializedBytes: try c.serializedData())
-        XCTAssertTrue(back.hasAlignmentHalfResolutionKeypoints)
-        XCTAssertFalse(back.alignmentHalfResolutionKeypoints)
+        XCTAssertTrue(back.hasAlignmentKeypointDetectionDivisor)
+        XCTAssertEqual(back.alignmentKeypointDetectionDivisor, 1.0)
     }
 
-    func testHalfResAndCapsRoundTrip() throws {
+    func testKeypointDivisorAndCapsRoundTrip() throws {
         var c = Star_V1_Config()
-        c.alignmentHalfResolutionKeypoints = true
+        c.alignmentKeypointDetectionDivisor = 2.0
         c.maxConcurrentKeypointOps = 3
         c.mergeStreamingThresholdMb = 1024
 
         let back = try Star_V1_Config(serializedBytes: try c.serializedData())
-        XCTAssertTrue(back.alignmentHalfResolutionKeypoints)
+        XCTAssertEqual(back.alignmentKeypointDetectionDivisor, 2.0)
         XCTAssertEqual(back.maxConcurrentKeypointOps, 3)
         XCTAssertEqual(back.mergeStreamingThresholdMb, 1024)
+    }
+
+    /// The value the change exists for: a divisor between the two the bool could express.
+    func testANonIntegerDivisorSurvivesTheWire() throws {
+        var c = Star_V1_Config()
+        c.alignmentKeypointDetectionDivisor = 1.5
+
+        let back = try Star_V1_Config(serializedBytes: try c.serializedData())
+        XCTAssertTrue(back.hasAlignmentKeypointDetectionDivisor)
+        XCTAssertEqual(back.alignmentKeypointDetectionDivisor, 1.5, accuracy: 1e-12,
+                       "a double field, not the int the other memory knobs use — 1.5 has "
+                       + "to arrive as 1.5 and not be truncated to 1")
     }
 
     func testUnsetHorizonFieldsStayAbsent() throws {
@@ -82,7 +97,7 @@ final class ExpertConfigFieldsTests: XCTestCase {
         XCTAssertFalse(back.hasHorizonMemoryMultiplier)
         XCTAssertFalse(back.hasHorizonReservationFloorMb,
                        "an untouched field must stay absent so StarCore's default survives")
-        XCTAssertFalse(back.hasAlignmentHalfResolutionKeypoints)
+        XCTAssertFalse(back.hasAlignmentKeypointDetectionDivisor)
         XCTAssertFalse(back.hasMaxConcurrentKeypointOps)
         XCTAssertFalse(back.hasMergeStreamingThresholdMb)
     }
@@ -92,7 +107,7 @@ final class ExpertConfigFieldsTests: XCTestCase {
         let c = Config()
         XCTAssertEqual(c.horizonMemoryMultiplier, 7)
         XCTAssertEqual(c.horizonReservationFloorMB, 900)
-        XCTAssertEqual(c.alignmentHalfResolutionKeypoints, false)
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.0)
         XCTAssertEqual(c.maxConcurrentKeypointOps, 0)
         XCTAssertEqual(c.mergeStreamingThresholdMB, 8192)
         // And the floor is the binding one below ~17MP, which is the whole reason it exists.

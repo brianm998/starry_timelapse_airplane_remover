@@ -192,7 +192,7 @@ struct ProcessingSettingsView: View {
     @State private var showAlignmentNeighborDilateSizeInfo = false
     @State private var showAlignmentNeighborThresholdValueInfo = false
 
-    @State private var showAlignmentHalfResolutionKeypointsInfo = false
+    @State private var showAlignmentKeypointDivisorInfo = false
     @State private var showAlignmentWriteDebugImagesInfo = false
     @State private var showAlignmentAllowEarthAlignmentInfo = false
     @State private var showUseReferenceHorizonSmoothingInfo = false
@@ -235,7 +235,7 @@ struct ProcessingSettingsView: View {
         showAlignmentBaseImageThresholdValueInfo ||
         showAlignmentNeighborDilateSizeInfo ||
         showAlignmentNeighborThresholdValueInfo ||
-        showAlignmentHalfResolutionKeypointsInfo ||
+        showAlignmentKeypointDivisorInfo ||
         showAlignmentWriteDebugImagesInfo ||
         showAlignmentAllowEarthAlignmentInfo ||
         showUseReferenceHorizonSmoothingInfo ||
@@ -284,7 +284,7 @@ struct ProcessingSettingsView: View {
         showAlignmentBaseImageThresholdValueInfo = true
         showAlignmentNeighborDilateSizeInfo = true
         showAlignmentNeighborThresholdValueInfo = true
-        showAlignmentHalfResolutionKeypointsInfo = true
+        showAlignmentKeypointDivisorInfo = true
         showAlignmentWriteDebugImagesInfo = true
         showAlignmentAllowEarthAlignmentInfo = true
         showUseReferenceHorizonSmoothingInfo = true
@@ -333,7 +333,7 @@ struct ProcessingSettingsView: View {
         showAlignmentBaseImageThresholdValueInfo = false
         showAlignmentNeighborDilateSizeInfo = false
         showAlignmentNeighborThresholdValueInfo = false
-        showAlignmentHalfResolutionKeypointsInfo = false
+        showAlignmentKeypointDivisorInfo = false
         showAlignmentWriteDebugImagesInfo = false
         showAlignmentAllowEarthAlignmentInfo = false
         showUseReferenceHorizonSmoothingInfo = false
@@ -456,7 +456,7 @@ struct ProcessingSettingsView: View {
                                   Divider()
                                   self.alignmentAllowEarthAlignmentView
                                   Divider()
-                                  self.alignmentHalfResolutionKeypointsView
+                                  self.alignmentKeypointDivisorView
                                   Divider()
                                   self.alignmentWriteDebugImagesViewValueView
                                   Divider()
@@ -887,34 +887,44 @@ struct ProcessingSettingsView: View {
         }
     }
 
-    private var alignmentHalfResolutionKeypointsView: some View {
+    private var alignmentKeypointDivisorView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(
-          showInfo: $showAlignmentHalfResolutionKeypointsInfo,
+          showInfo: $showAlignmentKeypointDivisorInfo,
           addSpacer: { addSpacer },
           infoText: """
-            Detect keypoints on a half-size copy of each frame instead of the full image.
+            Divide each frame's dimensions by this before detecting keypoints on it.  1 detects at full resolution, 2 on a half size copy, 1.5 on a two thirds copy.
 
-            Keypoint detection is by far the most memory hungry step, and its cost scales with the number of pixels it is given — about 210 bytes per pixel, or roughly 38x the size of the frame itself.  Halving each dimension quarters the pixel count, which cuts peak memory for this step by around 4x.  On a 42 megapixel sequence that is the difference between about 9GB and about 2GB per frame in flight, which is usually what decides whether a large sequence runs smoothly or thrashes the machine.
+            Keypoint detection is by far the most memory hungry and slowest step, and its cost scales with the number of pixels it is given — about 210 bytes per pixel, or roughly 38x the size of the frame itself.  Both time and peak memory fall as 1 over the divisor squared, so 4x at a divisor of 2 but 2.25x at 1.5.  On a 42 megapixel sequence a divisor of 2 is the difference between about 9GB and about 2GB per frame in flight.
 
-            The tradeoff is quality: fewer stars are found, and their positions are less precise, so alignment can be worse on some sequences.  Coordinates are scaled back up to full resolution so everything downstream still works, but the detail lost at half size cannot be recovered.
+            What you pay for it is sharpness, and it is worth knowing why.  Keypoints never touch the output pixels — they only produce the alignment.  Detecting on a smaller copy makes each keypoint's position less precise, which leaves each neighbouring frame warped very slightly wrong, and the merge then averages stars that sit a fraction of a pixel apart.  That reads as softness in the final frame.  The error falls roughly in step with the divisor, so 1.5 gives back about half the softness of 2 while still skipping more than half the work.
 
-            Off by default.  Worth trying on high resolution sequences that struggle, and comparing the result against a full resolution run.  Keypoint files are stored separately for each setting, so switching back and forth does not mix the two.
+            1 by default.  Worth trying 1.5 on high resolution sequences, and comparing against a full resolution run.  Keypoint files are stored separately for each divisor, so changing it does not mix descriptors found at different scales.
             """
         ) {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Half Resolution Keypoints:")
+                    Text("Keypoint Divisor:")
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
                 }
                 HStack {
                     Space(width: 10)
-                    Toggle(isOn: $viewModel.alignmentHalfResolutionKeypoints) {
-                        Text("")
-                    }
+                    EditableNumberView(
+                      value: $viewModel.alignmentKeypointDetectionDivisor,
+                      minValue: 1,
+                      maxValue: 8,
+                      allowDecimal: true,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .alignmentKeypointDivisor,
+                      alwaysOpen: true
+                    )
                     Spacer()
                 }
             }

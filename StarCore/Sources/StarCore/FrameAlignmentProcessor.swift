@@ -593,7 +593,11 @@ final public actor FrameAlignmentProcessor {
              groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension),
              baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
              baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue),
-             detectionScale: config.alignmentHalfResolutionKeypoints ? 0.5 : 1.0
+             // A scale, not the divisor — `ia_find_features` treats anything >= 1.0 as
+             // full resolution and says nothing, so handing it 1.5 would silently detect
+             // at full size while keypointFilename named a reduced-scale cache file.
+             // Config does the conversion and the clamping in one place.
+             detectionScale: config.keypointDetectionScale
            )
         {
             Log.d("frame \(frameIndex) got \(results.keypointCount) keypoints")

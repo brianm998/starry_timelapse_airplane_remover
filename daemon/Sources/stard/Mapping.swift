@@ -242,7 +242,7 @@ enum Mapping {
         out.alignmentBaseImageThresholdValue = Int32(c.alignmentBaseImageThresholdValue)
         out.horizonMemoryMultiplier = Int32(c.horizonMemoryMultiplier)
         out.horizonReservationFloorMb = Int32(c.horizonReservationFloorMB)
-        out.alignmentHalfResolutionKeypoints = c.alignmentHalfResolutionKeypoints
+        out.alignmentKeypointDetectionDivisor = c.alignmentKeypointDetectionDivisor
         out.maxConcurrentKeypointOps = Int32(c.maxConcurrentKeypointOps)
         out.mergeStreamingThresholdMb = Int32(c.mergeStreamingThresholdMB)
         return out
@@ -281,8 +281,12 @@ enum Mapping {
         if p.hasAlignmentBaseImageDilateSize { c.alignmentBaseImageDilateSize = Int(p.alignmentBaseImageDilateSize) }
         if p.hasAlignmentBaseImageThresholdValue { c.alignmentBaseImageThresholdValue = Int(p.alignmentBaseImageThresholdValue) }
         if p.hasHorizonMemoryMultiplier { c.horizonMemoryMultiplier = Int(p.horizonMemoryMultiplier) }
-        if p.hasAlignmentHalfResolutionKeypoints {
-            c.alignmentHalfResolutionKeypoints = p.alignmentHalfResolutionKeypoints
+        // A divisor of 0 is not a request, it is a client with no min on its text box —
+        // the Kotlin DoubleField has none. Config clamps anything <= 1 to full resolution
+        // rather than honouring it, so an out-of-range value is harmless here, but do not
+        // let it through as if it meant something.
+        if p.hasAlignmentKeypointDetectionDivisor {
+            c.alignmentKeypointDetectionDivisor = p.alignmentKeypointDetectionDivisor
         }
         // These three all have a meaningful 0, which is why they are `optional` in the
         // proto and read through `has…` here rather than relying on a proto3 zero:

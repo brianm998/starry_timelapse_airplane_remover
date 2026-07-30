@@ -134,9 +134,16 @@ message Config {
   // A horizon op's cost is mostly fixed rather than per-pixel, so the multiplier alone
   // under-reserves on small frames. 0 = no floor.
   optional int32  horizon_reservation_floor_mb                         = 46;
-  // Detect keypoints on a half-size copy of each frame. Cuts the most memory-hungry
-  // step by about 4x, at some cost in alignment quality.
-  optional bool   alignment_half_resolution_keypoints                  = 47;
+  // 47 was alignment_half_resolution_keypoints, a bool that could only express a
+  // divisor of 1 or 2. Replaced by alignment_keypoint_detection_divisor below; the
+  // number stays reserved so no future field can reuse it and be misread by a client
+  // built against the old schema.
+  reserved 47;
+  // Divide each frame's dimensions by this before detecting keypoints. 1 = full
+  // resolution, 2 = half size, 1.5 = two thirds. Detection time and peak memory both
+  // fall as 1/divisor^2; what it costs is keypoint localisation precision, which shows
+  // up as softness in the merged result. Values <= 1 mean full resolution.
+  optional double alignment_keypoint_detection_divisor                 = 50;
   // Explicit cap on concurrent keypoint ops. A cap, so it can only lower the limit the
   // memory budget already implies, never raise it. 0 = no explicit cap.
   optional int32  max_concurrent_keypoint_ops                          = 48;

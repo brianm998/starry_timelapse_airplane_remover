@@ -326,6 +326,40 @@ public struct Config: Codable, Sendable {
     /// `maxConcurrentKeypointOps` to bound concurrency directly instead.
     public var keypointMemoryMultiplier: Int = 42
 
+    /// What one keypoint op should reserve, as a multiple of the working frame, given the
+    /// detection divisor.
+    ///
+    /// `keypointMemoryMultiplier` was measured entirely at full resolution, and until this
+    /// existed nothing reduced it when detection ran on a smaller copy — so a half-res run
+    /// reserved 42x for work that peaks near a quarter of that, and got the concurrency of
+    /// a full-res run for no reason. That is pure lost throughput on exactly the setting
+    /// someone reaches for when they are short of memory.
+    ///
+    /// Split rather than scaled whole, because only part of the peak is the detector. Of
+    /// the measured 42x, ~38x is SIFT's scale space at a near-constant ~210 bytes per
+    /// pixel of the image it is handed, which falls as `1/divisor²`; the remaining ~4x is
+    /// the original frame, its gray copy and the mask, which do not shrink because the
+    /// downscale happens after them.
+    ///
+    ///     divisor   scale space   fixed   total    independently measured
+    ///     1.0            38         4      42      41.1x at 42MP
+    ///     1.5            17         4      21      not yet measured
+    ///     2.0           9.5         4      14      9.5-12x (two runs: 4.43x and 3.5x
+    ///                                              reductions from 42x)
+    ///
+    /// The 2.0 row is deliberately the conservative end of those two measurements: 14
+    /// over-reserves against both rather than splitting them, because under-reserving
+    /// costs the machine while over-reserving only costs concurrency.
+    public func effectiveKeypointMemoryMultiplier() -> Int {
+        let divisor = quantizedKeypointDivisor
+        guard divisor > 1.0 else { return keypointMemoryMultiplier }
+
+        let fixed = 4
+        let scaleSpace = max(keypointMemoryMultiplier - fixed, 0)
+        let scaled = Int((Double(scaleSpace) / (divisor * divisor)).rounded(.up))
+        return max(fixed + scaled, 1)
+    }
+
     /// Explicit cap on how many keypoint ops may run at once. 0 means "no explicit
     /// cap": the limit comes from the memory budget and
     /// `numberOfFramesToProcessConcurrently` alone.
@@ -744,20 +778,62 @@ public struct Config: Codable, Sendable {
     public var alignmentBaseImageDilateSize: Int = 20
     public var alignmentBaseImageThresholdValue: Int = 100
 
-    /// Detect keypoints on a half-size copy of each frame instead of the full image.
+    /// Divide each frame's dimensions by this before detecting keypoints on it.
+    /// 1.0 detects at full resolution, 2.0 on a half-size copy, 1.5 on a two-thirds copy.
     ///
-    /// SIFT's scale space costs a near-constant ~210 bytes per pixel of whatever image
-    /// it is handed — measured at 38.4x the raw frame at 42MP — so halving each
-    /// dimension cuts the detector's peak memory by roughly 4x (9256MB -> 2090MB at
-    /// 42MP). Keypoint coordinates are scaled back to full resolution, so homographies
-    /// stay in full-frame space, but fewer and slightly less precise keypoints are
-    /// found. Whether that costs alignment quality depends on the sequence, so this is
-    /// off by default and worth A/B-ing per sequence.
+    /// Replaces the `alignmentHalfResolutionKeypoints` bool, which only offered 1.0 and
+    /// 2.0 and left no way to sit between them. Old configs carrying that key still
+    /// load: see `init(from:)`, which maps true to 2.0.
     ///
-    /// Feature files are keyed by detection scale (`<n>.sky.half.yaml` vs
-    /// `<n>.sky.yaml`), so toggling this does not mix descriptors computed at
-    /// different scales.
-    public var alignmentHalfResolutionKeypoints: Bool = false
+    /// Detection cost and peak memory both scale with the PIXEL COUNT handed to the
+    /// detector, so with the area term they fall as `1/divisor²` — 4x at 2.0 but 2.25x
+    /// at 1.5. SIFT's scale space is a near-constant ~210 bytes per pixel of the image
+    /// it is given, measured at 38.4x the raw frame at 42MP, which is what
+    /// `effectiveKeypointMemoryMultiplier()` scales.
+    ///
+    /// What you trade for it is alignment precision, and the mechanism is worth being
+    /// precise about because it is not resampling: keypoints never touch output pixels,
+    /// they only produce the homography. Detecting on a smaller copy makes keypoint
+    /// LOCALISATION coarser — SIFT's subpixel refinement happens at detection scale, so
+    /// its error is multiplied by the divisor on the way back to full-frame coordinates.
+    /// A slightly wrong homography warps each neighbour slightly wrong, and the median
+    /// merge then averages stars that are a fraction of a pixel apart, which reads as
+    /// softness in the final frame. Observed at 2.0 on a 42MP sequence, side by side
+    /// against 1.0. The error should fall roughly linearly with the divisor, which is
+    /// the whole reason for allowing values between 1.0 and 2.0.
+    ///
+    /// Below 1.0 is meaningless and is clamped, not honoured — see
+    /// `keypointDetectionScale`. The C++ takes a scale rather than a divisor and treats
+    /// anything >= 1.0 as full resolution silently, so an unclamped divisor under 1.0
+    /// would detect at full size while the cache filename claimed otherwise.
+    ///
+    /// Feature files are keyed by this value (see `keypointFilename`), because a
+    /// descriptor describes the patch at the resolution it was computed at and sets from
+    /// two different divisors must never be matched against each other.
+    public var alignmentKeypointDetectionDivisor: Double = 1.0
+
+    /// The fraction of full resolution to hand the detector, which is what the C++ wants.
+    ///
+    /// One conversion site for the whole pipeline, and it clamps rather than trusting the
+    /// caller: every surface that can set the divisor (the CLI, the macOS settings, the
+    /// protobuf wire, a hand-edited config.json) can put a nonsense value in, and the
+    /// Kotlin client's `DoubleField` has no min/max at all. `ia_find_features` would
+    /// accept a scale >= 1.0 without complaint and detect at full size.
+    public var keypointDetectionScale: Double {
+        guard alignmentKeypointDetectionDivisor > 1.0 else { return 1.0 }
+        return 1.0 / alignmentKeypointDetectionDivisor
+    }
+
+    /// The divisor rounded to the precision the cache filename encodes, so that the value
+    /// deciding the work and the value naming the file cannot disagree.
+    ///
+    /// Two decimals: enough for the 1.5 and 1.25 cases worth trying, and it keeps float
+    /// drift out of a filename. Without quantising, a divisor that arrived as
+    /// 1.4999999999999998 would write a feature file no later run could find.
+    public var quantizedKeypointDivisor: Double {
+        guard alignmentKeypointDetectionDivisor > 1.0 else { return 1.0 }
+        return (alignmentKeypointDetectionDivisor * 100).rounded() / 100
+    }
 
     /// Above this many bytes of would-be-resident sources, a median merge streams
     /// from scratch files instead of holding every frame in memory.
@@ -861,6 +937,18 @@ public struct Config: Codable, Sendable {
     /// among them. `ConfigRoundTripTests` enumerates the properties with `Mirror` and fails
     /// on any that does not survive an encode/decode, so a missed one is a test failure
     /// rather than a silently reverted setting.
+    /// Keys that no longer exist as stored properties but still appear in config.json
+    /// files written by older versions.
+    ///
+    /// `CodingKeys` is synthesized from the stored property names, so a renamed property
+    /// takes its old JSON key with it and there is no case left to read the old name
+    /// through. Rather than hand-write all 93 cases to keep one alias, the legacy names
+    /// live here and get their own container off the same decoder.
+    private enum LegacyCodingKeys: String, CodingKey {
+        /// Replaced by `alignmentKeypointDetectionDivisor`; true meant a divisor of 2.0.
+        case alignmentHalfResolutionKeypoints
+    }
+
     public init(from decoder: Decoder) throws {
         // start with all your initializer defaults
         self = Config()
@@ -931,7 +1019,24 @@ public struct Config: Codable, Sendable {
         self.alignmentSkyHorizonExtension = try c.decodeIfPresent(Int.self, forKey: .alignmentSkyHorizonExtension) ?? self.alignmentSkyHorizonExtension
         self.alignmentBaseImageDilateSize = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageDilateSize) ?? self.alignmentBaseImageDilateSize
         self.alignmentBaseImageThresholdValue = try c.decodeIfPresent(Int.self, forKey: .alignmentBaseImageThresholdValue) ?? self.alignmentBaseImageThresholdValue
-        self.alignmentHalfResolutionKeypoints = try c.decodeIfPresent(Bool.self, forKey: .alignmentHalfResolutionKeypoints) ?? self.alignmentHalfResolutionKeypoints
+        // The divisor, or the bool it replaced. `try?` on both reads rather than `try`:
+        // an old config.json holds `alignmentHalfResolutionKeypoints: true`, and
+        // decodeIfPresent(Double.self) against a JSON bool THROWS typeMismatch rather
+        // than returning nil — so a plain `try` here would fail the whole decode and
+        // every resume of an existing sequence would die on it.
+        // `try?` flattens the double optional, so nil here covers both "key absent" and
+        // "key present but not a number" — and both should fall through to the legacy
+        // read, so there is nothing to distinguish.
+        if let divisor = try? c.decodeIfPresent(Double.self,
+                                                forKey: .alignmentKeypointDetectionDivisor) {
+            self.alignmentKeypointDetectionDivisor = divisor
+        } else if let legacy = try? decoder.container(keyedBy: LegacyCodingKeys.self)
+                    .decodeIfPresent(Bool.self, forKey: .alignmentHalfResolutionKeypoints) {
+            // CodingKeys is synthesized from the stored property names, so renaming the
+            // property renamed the on-disk key and the old one is no longer a case. A
+            // second container keyed by its own enum is how the old name stays readable.
+            self.alignmentKeypointDetectionDivisor = legacy ? 2.0 : 1.0
+        }
         self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
         self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
         self.keypointCacheMaxMB = try c.decodeIfPresent(Int.self, forKey: .keypointCacheMaxMB) ?? self.keypointCacheMaxMB
@@ -1334,7 +1439,7 @@ public struct Config: Codable, Sendable {
         /// How many `bytesPerOp` reservations fit in `budget`, or nil when image
         /// dimensions are unknown and the budget term cannot be computed at all.
         public let budgetLimit: Int?
-        /// `rawImageBytes × keypointMemoryMultiplier`.
+        /// `workingFrameBytes × effectiveKeypointMemoryMultiplier()`.
         public let bytesPerOp: UInt64
         /// `physicalMemory × maxMatMemoryFraction`.
         public let budget: UInt64
@@ -1346,7 +1451,7 @@ public struct Config: Codable, Sendable {
     /// How many keypoint ops may run concurrently, and which limit is binding.
     ///
     /// Three independent terms, smallest wins:
-    ///   - the memory budget: `budget / (rawImageBytes × keypointMemoryMultiplier)`
+    ///   - the memory budget: `budget / (workingFrameBytes × effectiveKeypointMemoryMultiplier())`
     ///   - `numberOfFramesToProcessConcurrently`, the pipeline-wide concurrency
     ///   - `maxConcurrentKeypointOps`, an explicit keypoint-only cap when non-zero
     ///
@@ -1356,7 +1461,7 @@ public struct Config: Codable, Sendable {
     /// 12MP and everything at 42MP.
     public func keypointConcurrency(physicalMemory: UInt64) -> KeypointConcurrency {
         let budget = UInt64(Double(physicalMemory) * maxMatMemoryFraction)
-        let bytesPerOp = workingFrameBytes * UInt64(max(keypointMemoryMultiplier, 1))
+        let bytesPerOp = workingFrameBytes * UInt64(max(effectiveKeypointMemoryMultiplier(), 1))
 
         var limit = max(1, numberOfFramesToProcessConcurrently)
         var binding = "numberOfFramesToProcessConcurrently"
@@ -1392,15 +1497,32 @@ public struct Config: Codable, Sendable {
     /// Filename of a frame's persisted OpenCV feature set, within `dirForKeypointData`.
     ///
     /// Keyed by detection scale, because a descriptor describes the image patch at the
-    /// resolution it was detected at. A feature set found at half res must never be
-    /// matched against one found at full res, so the two scales live in separate files
-    /// (`3.sky.half.yaml` vs `3.sky.yaml`) and toggling
-    /// `alignmentHalfResolutionKeypoints` cannot pick up the wrong one.
+    /// resolution it was detected at. A feature set found at one divisor must never be
+    /// matched against one found at another, so each divisor gets its own file
+    /// (`3.sky.yaml`, `3.sky.half.yaml`, `3.sky.div1.50.yaml`) and changing
+    /// `alignmentKeypointDetectionDivisor` cannot pick up the wrong one.
+    ///
+    /// The two names the bool era wrote are kept exactly — no suffix at 1.0 and `.half`
+    /// at 2.0 — so feature files already on disk stay valid instead of being orphaned.
+    /// Nothing prunes `dirForKeypointData`, so an orphan is silent waste rather than an
+    /// error, but there is no reason to create it.
+    ///
+    /// Everything else is `.div<divisor>` to two decimals, from
+    /// `quantizedKeypointDivisor` rather than the raw value, so the name is stable across
+    /// runs and float formatting can never produce `.div1.4999999999999998`.
     ///
     /// Build the name here rather than at each call site: the base frame and each of its
     /// neighbours are loaded from different places, and they must all agree.
     public func keypointFilename(frameIndex: Int, ofType type: FrameViewMode) -> String? {
-        let scaleSuffix = self.alignmentHalfResolutionKeypoints ? ".half" : ""
+        let divisor = self.quantizedKeypointDivisor
+        let scaleSuffix: String
+        if divisor <= 1.0 {
+            scaleSuffix = ""
+        } else if divisor == 2.0 {
+            scaleSuffix = ".half"
+        } else {
+            scaleSuffix = String(format: ".div%.2f", divisor)
+        }
         switch type {
         case .starAligned:  return "\(frameIndex).sky\(scaleSuffix).yaml"
         case .earthAligned: return "\(frameIndex).earth\(scaleSuffix).yaml"

@@ -1034,10 +1034,10 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    public var alignmentHalfResolutionKeypoints: Bool {
+    public var alignmentKeypointDetectionDivisor: Double {
         didSet {
             var realConfig = config.config()
-            realConfig.alignmentHalfResolutionKeypoints = alignmentHalfResolutionKeypoints
+            realConfig.alignmentKeypointDetectionDivisor = alignmentKeypointDetectionDivisor
             config.update(realConfig)
         }
     }
@@ -1375,7 +1375,7 @@ public final class ImageSequenceViewModel {
         self.alignmentBaseImageThresholdValue = config.alignmentBaseImageThresholdValue
         //
         self.alignmentWriteDebugImages = config.alignmentWriteDebugImages
-        self.alignmentHalfResolutionKeypoints = config.alignmentHalfResolutionKeypoints
+        self.alignmentKeypointDetectionDivisor = config.alignmentKeypointDetectionDivisor
         //
         
         self.config = configManager
