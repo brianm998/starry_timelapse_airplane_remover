@@ -90,28 +90,50 @@ public class BunchCalculator {
 
     public func calculateBunches() -> [Set<SortablePixel>] {
         var ret: [Set<SortablePixel>] = []
-        for pixel in pixelSet {
+
+        // Seed the flood fills in row major order rather than in `pixelSet`'s hash order.
+        // Which pixel a bunch is discovered from does not change the partition — the
+        // neighbourhood below is symmetric, so this is a plain connected components pass —
+        // but it does decide the order of the returned array, and Set iteration order is not
+        // guaranteed to be stable between processes.  bunchCount, medianBunchSize and
+        // maxBunchSize are all decision-tree features, so a run has to be reproducible.
+        let seeds = pixelSet.sorted { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
+
+        for pixel in seeds {
             if !handledPixels.contains(pixel) {
                 handledPixels.update(with: pixel)
 
                 var newBunch: Set<SortablePixel> = []
-                
+
                 var nearbyPixels: [SortablePixel] = [pixel]
 
                 while nearbyPixels.count > 0 {
                     let nextPixel = nearbyPixels.removeFirst()
                     newBunch.update(with: nextPixel)
 
+                    // Every pixel within maxPixelDistance+1 in either direction joins this
+                    // bunch, so maxPixelDistance is the number of empty pixels tolerated
+                    // between two members and the default of 0 means the eight touching
+                    // neighbours.
+                    //
+                    // The upper bounds are +2 because the loops below are half open: the
+                    // furthest index reached is maxX-1, so maxX has to be one past the
+                    // pixel we mean to include.  They used to be +1, which made the window
+                    // reach maxPixelDistance+1 backwards but only maxPixelDistance forwards.
+                    // A gap of exactly maxPixelDistance+1 then merged or not depending on
+                    // which end the flood fill happened to start from, and with the seed
+                    // order coming from a Set that made the three bunch features
+                    // non-deterministic between runs of the same frame.
                     var minX = nextPixel.x - bounds.min.x - maxPixelDistance - 1
                     if minX < 0 { minX = 0 }
 
-                    var maxX = nextPixel.x - bounds.min.x + maxPixelDistance + 1
+                    var maxX = nextPixel.x - bounds.min.x + maxPixelDistance + 2
                     if maxX > bounds.width { maxX = bounds.width }
 
                     var minY = nextPixel.y - bounds.min.y - maxPixelDistance - 1
                     if minY < 0 { minY = 0 }
 
-                    var maxY = nextPixel.y - bounds.min.y + maxPixelDistance + 1
+                    var maxY = nextPixel.y - bounds.min.y + maxPixelDistance + 2
                     if maxY > bounds.height { maxY = bounds.height }
 
                     for x in minX..<maxX {

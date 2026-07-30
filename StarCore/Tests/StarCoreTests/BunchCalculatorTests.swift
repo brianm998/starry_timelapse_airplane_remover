@@ -99,15 +99,16 @@ final class BunchCalculatorTests: XCTestCase {
 
     // MARK: - maxPixelDistance
 
-    /// The neighbourhood `calculateBunches` scans is not symmetric.  For a pixel at local x and
-    /// a tolerance of `d` it scans `(x - d - 1) ..< (x + d + 1)`, so it reaches `d + 1` pixels
-    /// backwards but only `d` forwards.  Combined with the `handledPixels` skip and `Set`'s
-    /// unspecified iteration order, a gap of exactly `d + 1` merges or not depending on which
-    /// end the flood fill happens to start from — the result is genuinely non-deterministic
-    /// between runs.
+    /// `maxPixelDistance` is the number of empty pixels tolerated between two members, so the
+    /// scan window reaches `maxPixelDistance + 1` in every direction and the default of 0 means
+    /// the eight touching neighbours.
     ///
-    /// Every gap in these tests is therefore chosen to be unambiguous: `gap <= d` always merges,
-    /// `gap > d + 1` never does.  Nothing here sits on `gap == d + 1`.
+    /// This was the source of a real non-determinism: the window used to reach `d + 1` backwards
+    /// but only `d` forwards, because the loops are half open and the upper bound was not
+    /// adjusted for that.  A gap of exactly `d + 1` then merged or not depending on which end the
+    /// flood fill started from, and since the seeds came out of a `Set` the answer could differ
+    /// between runs of the same frame.  At production's `maxBunchDistance` of 2 that was a gap of
+    /// 3: forward seeding gave 2 bunches, reverse gave 1.
     ///
     /// Raising the tolerance bridges gaps, which is the knob's whole purpose.
     func testRaisingTheToleranceMergesClustersAcrossAGap() {
@@ -118,6 +119,133 @@ final class BunchCalculatorTests: XCTestCase {
                        "a gap of 3 is past the reach of a tolerance of 1")
         XCTAssertEqual(bunches(coords, maxPixelDistance: 3).count, 1,
                        "a tolerance of 3 reaches a gap of 3 in either direction")
+    }
+
+    /// The threshold, stated exactly: a gap of `d + 1` merges and a gap of `d + 2` does not.
+    /// Both sides of it have to be sharp, or the boundary is ambiguous again.
+    func testTheMergeThresholdIsExactlyOnePastTheTolerance() {
+        for tolerance in 0...4 {
+            let merging = [(0, 0), (1, 0)]
+                        + [(1 + tolerance + 1, 0), (2 + tolerance + 1, 0)]
+            XCTAssertEqual(bunches(merging, maxPixelDistance: tolerance).count, 1,
+                           "tolerance \(tolerance) should bridge a gap of \(tolerance + 1)")
+
+            let separating = [(0, 0), (1, 0)]
+                           + [(1 + tolerance + 2, 0), (2 + tolerance + 2, 0)]
+            XCTAssertEqual(bunches(separating, maxPixelDistance: tolerance).count, 2,
+                           "tolerance \(tolerance) should not bridge a gap of \(tolerance + 2)")
+        }
+    }
+
+    /// The window has to reach equally far in both directions.  When it did not, whether two
+    /// pixels joined depended on which of them the flood fill reached first.
+    func testTheNeighbourhoodReachesEquallyFarInEveryDirection() {
+        // a centre pixel with one neighbour at the threshold distance on each of the four sides,
+        // each tested on its own so nothing else can bridge it
+        let gap = 3          // the ambiguous distance at maxPixelDistance 2
+        let centre = (10, 10)
+        let neighbours: [(String, (Int, Int))] = [
+          ("left",  (10 - gap - 1, 10)),
+          ("right", (10 + gap + 1, 10)),
+          ("above", (10, 10 - gap - 1)),
+          ("below", (10, 10 + gap + 1)),
+        ]
+        for (direction, neighbour) in neighbours {
+            let result = bunches([centre, neighbour], maxPixelDistance: gap)
+            XCTAssertEqual(result.count, 1,
+                           "a neighbour \(gap + 1) pixels to the \(direction) did not join")
+        }
+    }
+
+    func testTheNeighbourhoodReachesDiagonallyToo() {
+        let gap = 2
+        let centre = (10, 10)
+        for dx in [-(gap + 1), gap + 1] {
+            for dy in [-(gap + 1), gap + 1] {
+                let result = bunches([centre, (10 + dx, 10 + dy)], maxPixelDistance: gap)
+                XCTAssertEqual(result.count, 1,
+                               "a diagonal neighbour at \(dx),\(dy) did not join")
+            }
+        }
+    }
+
+    // MARK: - determinism
+
+    /// The three bunch values are decision-tree features, so the same pixels have to give the
+    /// same answer every time.  A `Set` was being iterated to pick the seeds, and Set order is
+    /// not guaranteed stable between processes.
+    func testRepeatedRunsOverTheSamePixelsAgree() {
+        let coords = [(0, 0), (1, 0), (2, 1), (5, 1), (6, 2), (7, 2),
+                      (20, 20), (21, 21), (24, 22),
+                      (40, 5), (43, 5), (46, 5),
+                      (60, 60)]
+
+        let first = bunches(coords, maxPixelDistance: maxBunchDistance)
+        let fingerprint = { (result: [Set<SortablePixel>]) -> [[String]] in
+            result.map { $0.map(\.description).sorted() }
+        }
+        let expected = fingerprint(first)
+
+        for run in 1...25 {
+            let again = bunches(coords, maxPixelDistance: maxBunchDistance)
+            XCTAssertEqual(fingerprint(again), expected,
+                           "run \(run) partitioned the same pixels differently")
+        }
+    }
+
+    /// The same, phrased as the features actually consumed: count, median and max.
+    func testTheBunchFeaturesAreStableAcrossRuns() {
+        let coords = [(0, 0), (1, 0), (4, 0), (7, 0), (30, 30), (31, 30), (34, 33)]
+        let group = OutlierGroup(id: 1, size: UInt(coords.count), brightness: 1000,
+                                 bounds: bounds(coords), frameIndex: 0, pixels: [],
+                                 pixelSet: pixels(coords))
+
+        let expected = calculateBunchData(from: group, maxPixelDistance: maxBunchDistance)
+        for run in 1...25 {
+            let again = calculateBunchData(from: group, maxPixelDistance: maxBunchDistance)
+            XCTAssertEqual(again.0, expected.0, "run \(run): bunchCount moved")
+            XCTAssertEqual(again.1, expected.1, "run \(run): medianBunchSize moved")
+            XCTAssertEqual(again.2, expected.2, "run \(run): maxBunchSize moved")
+        }
+    }
+
+    /// Insertion order into the `Set` must not matter either — it is what decides hash order
+    /// within a single process, and the old code seeded straight off it.
+    func testTheInsertionOrderOfThePixelsDoesNotMatter() {
+        let coords = [(0, 0), (1, 0), (4, 0), (7, 0), (30, 30), (31, 30), (34, 33), (50, 1)]
+        let boundingBox = bounds(coords)
+
+        func partition(_ ordered: [(Int, Int)]) -> [[String]] {
+            var set: Set<SortablePixel> = []
+            for c in ordered {
+                set.insert(SortablePixel(x: c.0, y: c.1, value: .sixteenBit(1000)))
+            }
+            let result = BunchCalculator(from: set, with: boundingBox,
+                                         maxPixelDistance: maxBunchDistance).calculateBunches()
+            return result.map { $0.map(\.description).sorted() }.sorted { ($0.first ?? "") < ($1.first ?? "") }
+        }
+
+        let forward = partition(coords)
+        XCTAssertEqual(partition(coords.reversed()), forward,
+                       "reversing the insertion order changed the partition")
+        XCTAssertEqual(partition(coords.sorted { $0.1 < $1.1 }), forward)
+        XCTAssertEqual(partition(coords.shuffled()), forward)
+    }
+
+    /// Bunches come back seeded in row major order, which is what makes the array itself — not
+    /// just the partition — reproducible.
+    func testBunchesComeBackInRowMajorSeedOrder() {
+        // three well separated clusters, listed out of order
+        let coords = [(50, 50), (51, 50),
+                      (0, 0), (1, 0),
+                      (20, 25), (21, 25)]
+        let result = bunches(coords, maxPixelDistance: 1)
+        XCTAssertEqual(result.count, 3)
+
+        // the first bunch found should be the one containing the topmost, leftmost pixel
+        let firstSeedRow = result.map { $0.map(\.y).min()! }
+        XCTAssertEqual(firstSeedRow, [0, 25, 50],
+                       "bunches should be discovered top to bottom")
     }
 
     func testTheBunchCountFallsAsToleranceRises() {
