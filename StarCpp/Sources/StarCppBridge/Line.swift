@@ -88,119 +88,73 @@ public func polarCoords(point1: DoubleCoord,
             return (270, -rho)
         }
     } else {
+        /*
+         Both theta and rho are read off the foot of the perpendicular — the point on the
+         line closest to the origin.  rho is its distance from the origin and theta is its
+         direction, so the two are consistent with each other by construction.
+
+         This used to be done the other way around: theta was guessed first from the angle
+         the line rises at, corrected by a pair of sign heuristics, and rho was then found by
+         intersecting.  The heuristics only covered lines sloping the same way in x and y —
+         the other branch was a bare `90 - line_theta` with no sign correction at all — so a
+         line whose closest approach to the origin lay in the negative quadrant came back
+         with theta pointing 180 degrees the wrong way.  rho, being a distance, could not
+         carry the sign either, and the pair then described the line's mirror image through
+         the origin.  14% of point pairs drawn from a grid spanning negative and positive
+         coordinates were affected, off by as much as 73 pixels.
+
+         That matters beyond the obvious: OutlierGroup.originZeroLine feeds twoPoints back
+         through here after offsetting by bounds.min, and the result drives the
+         averageLineVariance / medianLineVariance features, which are measured with
+         standardLine.distanceTo against the group's own pixels.  Against a mirrored line
+         those distances are meaningless.
+         */
         let x_diff = dx1-dx2
         let y_diff = dy1-dy2
 
-        var isPositiveInBothDirections = false
-        
-        if dx1 < dx2,
-           dy1 < dy2
-        {
-            isPositiveInBothDirections = true 
-            //Log.d("case 1")
-        } else if dx1 > dx2,
-                  dy1 > dy2
-        {
-            isPositiveInBothDirections = true 
-            //Log.d("case 2")
-        } else {
-            //Log.d("case 3")
-        }
-
         //Log.d("x_diff \(x_diff) y_diff \(y_diff)")
-        
-        let distance_between_points = sqrt(x_diff*x_diff + y_diff*y_diff)
 
-        //Log.d("distance_between_points \(distance_between_points)")
-        
-        // calculate the angle of the line
-        let line_theta_radians = acos(abs(x_diff/distance_between_points))
-
-        // the angle the line rises from the x axis, regardless of
-        // in which direction
-        var line_theta = line_theta_radians*RADIANS_TO_DEGREES
-
-        //Log.d("line_theta \(line_theta)")
-
-        var theta: Double = 0.0
-        if isPositiveInBothDirections {
-            let standardLine = point1.standardLine(with: point2)
-            /* check y value at x = 0
-               if negative, use line_theta - 90
-               if positive, use line_theta + 90
-
-               positive rho in both cases
-             */
-
-            let yAtZeroX = standardLine.y(forX: 0)
-            //Log.d("yAtZeroX \(yAtZeroX)")
-            if yAtZeroX < 0 {
-                theta = line_theta - 90
-            } else {
-                theta = line_theta + 90
-            }
-        } else {
-            theta = 90-line_theta
-        }
-
-        /*
-         after handling directly vertical and horiontal lines as sepecial cases above,
-         all lines we are left with fall into one of two categories,
-         sloping up, or down.  If the line slops up in y,
-         then the theta calculated is what we want.
-         If the line slops down in y however,
-         we're going in the other direction, and neeed to account for that.
-         */
-        
-        var needFlip = false
-        if dx1 < dx2 {
-            if dy2 < dy1 {
-                needFlip = true
-            }
-        } else {
-            if dy1 < dy2 {
-                needFlip = true
-            }
-        }
-        
-        // in this orientation, the angle is moving in the reverse direction,
-        // so make it negative, and keep it between 0..<360
-        if needFlip { line_theta = 360 - line_theta }
-        
-        //Log.d("theta \(theta)")
-
-        // next get rho
-
-        // start with the stardard line definition for the line we were given
+        // the line we were given, in a*x + b*y + c = 0 form
         let origStandardLine = point1.standardLine(with: point2)
 
-        // our intersection line passes through the origin at 0, 0
+        // rho travels along the perpendicular to the line, through the origin.  The line
+        // runs along (x_diff, y_diff), so (-y_diff, x_diff) is at a right angle to it.
+        // Neither component can be zero here: the vertical and horizontal cases were
+        // handled above, so x_diff and y_diff are both non-zero.
+        let perpendicularLength = sqrt(x_diff*x_diff + y_diff*y_diff)
+        let hypo = 100.0        // arbitrary distance from the origin, scale does not matter
+        let perpendicular = DoubleCoord(x: -y_diff/perpendicularLength * hypo,
+                                        y:  x_diff/perpendicularLength * hypo)
+
+        // the perpendicular line through the origin.  Only its direction matters, so it is
+        // the same line whichever of the two ways round the perpendicular vector points —
+        // which is exactly why the meeting point below can be trusted to settle the sign.
         let origin = DoubleCoord(x: 0, y: 0)
+        let perpendicularStandardLine = origin.standardLine(with: perpendicular)
 
-        // next find another point at an arbitrary distance from the origin,
-        // on the line with the same theta
-        
-        let hypo = 100.0         // arbitrary distance value
-
-        // find points hypo pixels from the origin on this line
-        let parallel_x = hypo * cos(theta*DEGREES_TO_RADIANS)
-        let parallel_y = hypo * sin(theta*DEGREES_TO_RADIANS)
-        
-        // this point is on the line that rho travels on, at
-        // an arbitrary distance from the origin.  
-        let parallelCoord = DoubleCoord(x: parallel_x, y: parallel_y)
-
-        // use the new point to get the standard line definition for
-        // the line between the origin and the right angle intersection with
-        // the passed line
-        let parallelStandardLine = origin.standardLine(with: parallelCoord)
-
-        // get the intersection point between the two lines
-        // rho is between this line and the origin
-        let meetPoint = parallelStandardLine.intersection(with: origStandardLine)
+        // where the perpendicular meets the line: the closest point on it to the origin
+        let meetPoint = perpendicularStandardLine.intersection(with: origStandardLine)
 
         // rho is the hypotenuse of the meeting point x, y
         let rho = sqrt(meetPoint.x*meetPoint.x+meetPoint.y*meetPoint.y)
+
+        // theta is the direction of that same point, which is what keeps it in step with
+        // rho.  A line through the origin has rho 0 and so no direction to read off; fall
+        // back to the perpendicular's own direction, which is still well defined.  (Such a
+        // line cannot be rebuilt from its polar form regardless, since twoPoints scales
+        // both of its points by rho — see LineTests.)
+        var theta: Double
+        if rho > 0 {
+            theta = atan2(meetPoint.y, meetPoint.x)*RADIANS_TO_DEGREES
+        } else {
+            theta = atan2(perpendicular.y, perpendicular.x)*RADIANS_TO_DEGREES
+        }
+
+        // keep theta in 0..<360, matching the vertical and horizontal cases above, which
+        // answer 0, 90, 180 and 270
+        if theta < 0 { theta += 360 }
+
+        //Log.d("theta \(theta) rho \(rho)")
 
         return (theta, rho)
     }

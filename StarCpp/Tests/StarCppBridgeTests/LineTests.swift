@@ -97,12 +97,17 @@ final class LineTests: XCTestCase {
         assertPolarFormDescribes(DoubleCoord(x: 30, y: 12), DoubleCoord(x: 4000, y: 700))
     }
 
-    /// Lines through the third quadrant work too, as long as the *foot of the
-    /// perpendicular* is not on the far side of the origin from where theta points — see
-    /// the limitation tests below for the case that is not covered.
-    func testLinesWithTheirClosestApproachInThePositiveQuadrantWork() {
+    /// Negative coordinates are not merely hypothetical here: `OutlierGroup.originZeroLine`
+    /// offsets `twoPoints` by `bounds.min` and feeds the result back through `polarCoords`,
+    /// and `twoPoints` can sit either side of the origin.  Lines with their closest approach
+    /// in any of the four quadrants have to work.
+    func testLinesInEveryQuadrantAreDescribedCorrectly() {
         assertPolarFormDescribes(DoubleCoord(x: -2, y: -3), DoubleCoord(x: -9, y: -17))
         assertPolarFormDescribes(DoubleCoord(x: 2, y: -3), DoubleCoord(x: 9, y: -17))
+        assertPolarFormDescribes(DoubleCoord(x: -2, y: 3), DoubleCoord(x: -9, y: 17))
+        assertPolarFormDescribes(DoubleCoord(x: -40, y: -12), DoubleCoord(x: -12, y: -40))
+        assertPolarFormDescribes(DoubleCoord(x: -100, y: 50), DoubleCoord(x: 50, y: -100))
+        assertPolarFormDescribes(DoubleCoord(x: -1, y: 640), DoubleCoord(x: 17, y: -40))
     }
 
     // MARK: - known limitations
@@ -121,7 +126,11 @@ final class LineTests: XCTestCase {
         let throughOrigin = Line(point1: DoubleCoord(x: 0, y: 0), point2: DoubleCoord(x: 100, y: 40))
 
         XCTAssertEqual(throughOrigin.rho, 0, "rho is the distance from the origin, so it is 0")
-        XCTAssertFalse(throughOrigin.theta.isNaN, "theta is computed correctly")
+        // theta falls back to the perpendicular's own direction, which is still meaningful —
+        // the line is at right angles to it — so it is finite and in range
+        XCTAssertFalse(throughOrigin.theta.isNaN)
+        XCTAssertGreaterThanOrEqual(throughOrigin.theta, 0)
+        XCTAssertLessThan(throughOrigin.theta, 360)
 
         // but both of twoPoints collapse onto the origin
         let (p1, p2) = throughOrigin.twoPoints
@@ -156,35 +165,112 @@ final class LineTests: XCTestCase {
         XCTAssertEqual(hTheta, 270)
     }
 
-    /// A negative-slope line whose closest approach to the origin is in the *negative*
-    /// quadrant gets the same (theta, rho) as its mirror image through the origin.  The
-    /// `isPositiveInBothDirections` branch corrects theta's sign using the line's y
-    /// intercept; the other branch (`theta = 90 - line_theta`) has no such correction, so
-    /// the sign is dropped and rho — being a distance — cannot carry it.
-    ///
-    /// Again a limitation rather than an intended property.  It is out of reach of real
-    /// frames, whose pixels are all non-negative, but it is exactly the sort of thing that
-    /// bites when this code is reused on centred or offset coordinates.
-    func testALineOnTheNegativeSideOfTheOriginIsMirroredOntoThePositiveSide() {
-        // 2x + y + 1 = 0, closest approach at [-0.4, -0.2]
+    /// A line and its mirror image through the origin are the same distance away, so rho
+    /// cannot tell them apart — only theta can, by pointing at one or the other.  This is a
+    /// regression test: theta used to be guessed from the angle the line rises at and then
+    /// sign-corrected only for lines sloping the same way in x and y.  The other branch was a
+    /// bare `90 - line_theta`, so a line whose closest approach lay in the negative quadrant
+    /// came back pointing 180 degrees the wrong way and the pair described its mirror image.
+    func testALineAndItsMirrorThroughTheOriginAreToldApartByTheta() {
+        // 2x + y + 1 = 0, closest approach at [-0.4, -0.2] — down and left of the origin
         let negativeSide = Line(point1: DoubleCoord(x: -2, y: 3), point2: DoubleCoord(x: -9, y: 17))
         // 2x + y - 1 = 0, closest approach at [0.4, 0.2] — the mirror image
         let positiveSide = Line(point1: DoubleCoord(x: 2, y: -3), point2: DoubleCoord(x: 9, y: -17))
 
-        XCTAssertEqual(negativeSide.theta, positiveSide.theta, accuracy: 1e-9)
+        // same distance from the origin...
         XCTAssertEqual(negativeSide.rho, positiveSide.rho, accuracy: 1e-9)
+        // ...opposite directions from it
+        XCTAssertEqual(positiveSide.theta, 26.565051177078, accuracy: 1e-9)
+        XCTAssertEqual(negativeSide.theta, 206.565051177078, accuracy: 1e-9)
+        XCTAssertEqual(abs(negativeSide.theta - positiveSide.theta), 180, accuracy: 1e-9)
 
-        // rho is still the right *distance*, so anything that only asks how far the line is
-        // from the origin gets a correct answer
-        let direct = DoubleCoord(x: -2, y: 3).standardLine(with: DoubleCoord(x: -9, y: 17))
-        XCTAssertEqual(negativeSide.rho,
-                       direct.distanceTo(DoubleCoord(x: 0, y: 0)),
-                       accuracy: 1e-9)
+        // and each rebuilds to the line it actually came from
+        assertPolarFormDescribes(DoubleCoord(x: -2, y: 3), DoubleCoord(x: -9, y: 17))
+        assertPolarFormDescribes(DoubleCoord(x: 2, y: -3), DoubleCoord(x: 9, y: -17))
+    }
 
-        // but rebuilding a line from it lands on the mirror image, twice rho away
-        let rebuilt = negativeSide.standardLine
-        XCTAssertEqual(rebuilt.distanceTo(DoubleCoord(x: -2, y: 3)),
-                       2 * negativeSide.rho, accuracy: 1e-6)
+    /// The invariant that makes theta and rho a matched pair: stepping rho pixels from the
+    /// origin along theta lands *on* the line.  Getting the sign wrong put that point twice
+    /// rho away instead, on the far side of the origin.
+    func testSteppingRhoAlongThetaLandsOnTheLine() {
+        let pairs: [(DoubleCoord, DoubleCoord)] = [
+          (DoubleCoord(x: -2, y: 3),   DoubleCoord(x: -9, y: 17)),
+          (DoubleCoord(x: 2, y: -3),   DoubleCoord(x: 9, y: -17)),
+          (DoubleCoord(x: -40, y: -12), DoubleCoord(x: -12, y: -40)),
+          (DoubleCoord(x: -1, y: 100), DoubleCoord(x: 17, y: -40)),
+          (DoubleCoord(x: 3, y: 17),   DoubleCoord(x: 640, y: 0.5)),
+        ]
+        for (p1, p2) in pairs {
+            let line = Line(point1: p1, point2: p2)
+            let foot = DoubleCoord(x: line.rho * cos(line.theta*DEGREES_TO_RADIANS),
+                                   y: line.rho * sin(line.theta*DEGREES_TO_RADIANS))
+            XCTAssertEqual(p1.standardLine(with: p2).distanceTo(foot), 0, accuracy: 1e-6,
+                           "rho along theta missed the line through \(p1) and \(p2)")
+        }
+    }
+
+    /// A sweep over a grid spanning both signs, which is what caught the mirroring in the
+    /// first place: 434 of these 3080 pairs used to fail, off by as much as 73 pixels.
+    func testEveryPointPairOnASignedGridRoundTrips() {
+        let coords: [Double] = [-40, -12, -1, 0.5, 3, 17, 100, 640]
+        var checked = 0
+        for x1 in coords {
+            for y1 in coords {
+                for x2 in coords where x2 != x1 {
+                    for y2 in coords where y2 != y1 {
+                        let p1 = DoubleCoord(x: x1, y: y1), p2 = DoubleCoord(x: x2, y: y2)
+                        let line = Line(point1: p1, point2: p2)
+                        // a line through the origin has no direction to recover — separately
+                        // covered by testALineThroughTheOriginLosesItsSlope
+                        guard line.rho > 0 else { continue }
+
+                        let rebuilt = line.standardLine
+                        XCTAssertEqual(rebuilt.distanceTo(p1), 0, accuracy: 1e-6,
+                                       "\(p1) fell off the line rebuilt from \(p1)/\(p2)")
+                        XCTAssertEqual(rebuilt.distanceTo(p2), 0, accuracy: 1e-6,
+                                       "\(p2) fell off the line rebuilt from \(p1)/\(p2)")
+                        checked += 1
+                    }
+                }
+            }
+        }
+        XCTAssertGreaterThan(checked, 3000, "the sweep stopped covering what it used to")
+    }
+
+    /// theta stays in 0..<360, matching the axis-aligned cases which answer 0, 90, 180, 270.
+    /// It used to be able to come back negative (the `line_theta - 90` branch could reach -90).
+    func testThetaIsAlwaysInTheZeroToThreeSixtyRange() {
+        let coords: [Double] = [-40, -1, 3, 100]
+        for x1 in coords {
+            for y1 in coords {
+                for x2 in coords where x2 != x1 {
+                    for y2 in coords where y2 != y1 {
+                        let line = Line(point1: DoubleCoord(x: x1, y: y1),
+                                        point2: DoubleCoord(x: x2, y: y2))
+                        XCTAssertGreaterThanOrEqual(line.theta, 0,
+                                                    "theta \(line.theta) for [\(x1),\(y1)]->[\(x2),\(y2)]")
+                        XCTAssertLessThan(line.theta, 360,
+                                          "theta \(line.theta) for [\(x1),\(y1)]->[\(x2),\(y2)]")
+                    }
+                }
+            }
+        }
+    }
+
+    /// rho is a distance, so it is never negative regardless of where the line sits.
+    func testRhoIsNeverNegative() {
+        let coords: [Double] = [-40, -1, 3, 100]
+        for x1 in coords {
+            for y1 in coords {
+                for x2 in coords where x2 != x1 {
+                    for y2 in coords where y2 != y1 {
+                        let line = Line(point1: DoubleCoord(x: x1, y: y1),
+                                        point2: DoubleCoord(x: x2, y: y2))
+                        XCTAssertGreaterThanOrEqual(line.rho, 0)
+                    }
+                }
+            }
+        }
     }
 
     /// The two points are given in whichever order the caller found them; the line they
