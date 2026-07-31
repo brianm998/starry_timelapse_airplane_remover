@@ -608,7 +608,16 @@ public struct Config: Codable, Sendable {
     public var encoder: FFmpegEncoder = .prores
 
     // the pixelformat of the incoming and outgoing video
-    public var pixelFormat: FFmpegPixelFormat = .yuv422p14le
+    //
+    // Has to be one the default encoder above can actually emit.  This was yuv422p14le, which
+    // none of the four prores encoders supports — prores is a 10 bit codec, and only ffvhuff,
+    // ffv1 and libopenjpeg take a 14 bit format.  yuv422p10le is what ProRes 422 really uses.
+    //
+    // The gui never showed the problem because RenderVideoSheetView substitutes
+    // encoder.pixelFormats[0] whenever the config's format is missing from the encoder's list.
+    // The daemon's export has no such guard: ExportHandlers passes this straight through as
+    // `-pix_fmt`, so an export with untouched settings handed ffmpeg a combination it rejects.
+    public var pixelFormat: FFmpegPixelFormat = .yuv422p10le
 
     // the muxer (container) of the incoming and outgoing video
     public var muxer: FFmpegMuxer = .mov
