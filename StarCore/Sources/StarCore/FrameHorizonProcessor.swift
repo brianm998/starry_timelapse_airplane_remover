@@ -347,6 +347,7 @@ final public actor FrameHorizonProcessor {
                         let referencePath = referenceDir
                             .appendingPathComponent("reference.tiff").path
                         cleanedToSave.writeTIFFEncoding(toFilename: referencePath)
+                        await horizonReferenceMaskCache.invalidate(path: referencePath)
                         Log.i("frame \(frameIndex) saved median horizon as global reference \(referencePath)")
                     } catch {
                         Log.w("frame \(frameIndex) could not save global reference horizon: \(error)")
@@ -946,7 +947,8 @@ final public actor FrameHorizonProcessor {
             .deletingLastPathComponent()    // …/output (tempOutputPath)
             .appendingPathComponent("horizonReference")
 
-        // 1. Per-frame reference
+        // 1. Per-frame reference.  Read straight from disk: this file belongs to this
+        // frame alone, so there is no second reader to share a cached copy with.
         let frameRefURL = referenceDir.appendingPathComponent(frameFileName)
         if FileManager.default.fileExists(atPath: frameRefURL.path),
            let refImage = PixelatedImage(filename: frameRefURL.path)?.asHorizonMask
@@ -955,13 +957,13 @@ final public actor FrameHorizonProcessor {
             return HorizonMask(refImage)
         }
 
-        // 2. Global reference
+        // 2. Global reference.  Every frame in a static sequence resolves to this one
+        // file, so it goes through the shared cache — decoding it per frame was 1,108
+        // reads of the same 42MP TIFF in a single run.
         let globalRefURL = referenceDir.appendingPathComponent("reference.tiff")
-        if FileManager.default.fileExists(atPath: globalRefURL.path),
-           let refImage = PixelatedImage(filename: globalRefURL.path)?.asHorizonMask
-        {
+        if let mask = await horizonReferenceMaskCache.mask(atPath: globalRefURL.path) {
             Log.d("frame \(frameIndex) loadHorizonReferenceMask: found global reference")
-            return HorizonMask(refImage)
+            return mask
         }
 
         return nil
@@ -2079,6 +2081,10 @@ final public actor FrameHorizonProcessor {
         let savePath = referenceDir.appendingPathComponent(saveName).path
 
         maskPixelated.writeTIFFEncoding(toFilename: savePath)
+        // A repaint must be visible on the next load.  The cache would notice via the
+        // file stamp regardless; dropping it here means no frame can read the old mask
+        // in the window before that check.
+        await horizonReferenceMaskCache.invalidate(path: savePath)
         Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved \(savePath)")
 
         // For static sequences, also write a per-frame marker so this specific frame
