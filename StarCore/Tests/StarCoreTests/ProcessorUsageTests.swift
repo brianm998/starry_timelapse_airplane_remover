@@ -49,6 +49,63 @@ final class ProcessorUsageTests: XCTestCase {
         XCTAssertNil(ProcessorUsage(from: "CPU usage: % user, % sys, % idle"))
     }
 
+    // MARK: - malformed input returns nil rather than trapping
+
+    /// The parser indexes `parts[1]`, `foobar[1]` and `foobar[2]`.  Those subscripts used to be
+    /// unguarded, so a line without a colon — or with fewer than three comma separated fields
+    /// after it — trapped instead of returning nil.  These could not be written before that was
+    /// fixed: a Swift trap takes the whole test process down rather than failing one case.
+    ///
+    /// It mattered because a trap cannot be recovered from, and the `ObjC.catchException` wrapped
+    /// around the caller catches ObjC exceptions, not Swift traps.  A change to `top`'s output on
+    /// some future macOS would have taken star down instead of leaving it on the previous sample.
+    func testALineWithNoColonIsNilRatherThanATrap() {
+        XCTAssertNil(ProcessorUsage(from: "CPU usage 3.44% user, 3.81% sys, 92.74% idle"))
+        XCTAssertNil(ProcessorUsage(from: ""))
+        XCTAssertNil(ProcessorUsage(from: "nonsense"))
+    }
+
+    func testALineWithTooFewFieldsIsNilRatherThanATrap() {
+        XCTAssertNil(ProcessorUsage(from: "CPU usage:"))
+        XCTAssertNil(ProcessorUsage(from: "CPU usage: 3.44% user"))
+        XCTAssertNil(ProcessorUsage(from: "CPU usage: 3.44% user, 3.81% sys"))
+    }
+
+    /// The shape the caller guarantees — a line starting "CPU usage:" — with the numbers missing.
+    /// Structurally fine, so it reaches the number parse and fails there.
+    func testAWellShapedLineWithNoNumbersIsNil() {
+        XCTAssertNil(ProcessorUsage(from: "CPU usage: a, b, c"))
+        XCTAssertNil(ProcessorUsage(from: "CPU usage: , , "))
+    }
+
+    /// Only the text after the *first* colon is read, so the percentages have to follow the first
+    /// one.  A line with anything colon-bearing in front of "CPU usage:" — a timestamp, say — does
+    /// not parse.  That is fine for the caller, which filters on `starts(with: "CPU usage:")`, and
+    /// the point here is that it now declines rather than trapping.
+    func testAColonBeforeTheUsageFieldsMeansTheLineDoesNotParse() {
+        XCTAssertNil(ProcessorUsage(from: "12:34:56 CPU usage: 1.0% user, 2.0% sys, 97.0% idle"))
+    }
+
+    /// A colon *after* the fields is harmless, since only the first split matters.
+    func testAColonAfterTheFieldsIsHarmless() throws {
+        let usage = try XCTUnwrap(
+          ProcessorUsage(from: "CPU usage: 1.0% user, 2.0% sys, 97.0% idle : extra"))
+        XCTAssertEqual(usage.user, 1, accuracy: 1e-9)
+    }
+
+    /// A run of assorted junk, none of which may trap.
+    func testNoMalformedLineTraps() {
+        let junk = [
+          "", ":", "::", ",", "%", "CPU usage:,", "CPU usage:,,", "CPU usage: ,,",
+          "CPU usage: %,%,%", "CPU usage: 1%,2%", ": , ,", "CPU usage: 1% user,, 3% idle",
+          "\n", "CPU usage: 🚩% user, 🚩% sys, 🚩% idle",
+        ]
+        for line in junk {
+            // the assertion is simply that this returns at all
+            _ = ProcessorUsage(from: line)
+        }
+    }
+
     /// Each field is read up to its `%`, so trailing text after the last one is ignored.
     func testTrailingTextAfterTheLastFieldIsIgnored() throws {
         let usage = try XCTUnwrap(

@@ -65,9 +65,24 @@ public struct ProcessorUsage {
         // a regex would be cleaner,
         // but swift regexes are a breaking change,
         // which right now is a PITA.
-        
+
+        // Check the shape before indexing into it.  This is a failable initializer and it
+        // already returns nil when the three numbers do not parse, but it used to subscript
+        // parts[1], foobar[1] and foobar[2] unguarded — so a line with no colon, or with fewer
+        // than three comma separated fields after it, trapped instead of returning nil.
+        //
+        // The caller only feeds it lines starting "CPU usage:", which guarantees the colon and
+        // in practice supplies all three fields, so this was unreachable as long as top's output
+        // keeps its present shape.  It is worth fixing anyway: a trap here cannot be recovered
+        // from, and the ObjC.catchException around the caller does not catch Swift traps, so a
+        // change to top's format on some future macOS would take star down rather than leave it
+        // reusing the previous sample.
         let parts = line.components(separatedBy: ":")
+        guard parts.count >= 2 else { return nil }
+
         let foobar = parts[1].components(separatedBy: ",")
+        guard foobar.count >= 3 else { return nil }
+
         let user = foobar[0].components(separatedBy: "%")
         let sys = foobar[1].components(separatedBy: "%")
         let idle = foobar[2].components(separatedBy: "%")
