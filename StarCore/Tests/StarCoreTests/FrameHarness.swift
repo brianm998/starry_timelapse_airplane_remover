@@ -184,6 +184,66 @@ final class FrameHarness {
         try? FileManager.default.removeItem(at: root)
     }
 
+    /// Mutate the managed config, as the gui does when the user changes a setting.
+    ///
+    /// `save: false` because the harness's json path is inside the scratch tree and nothing reads it
+    /// back — `ConfigManager.save()` resolves unprefixed names against `tempOutputPath`, which would
+    /// write somewhere unhelpful.
+    func updateConfig(_ mutate: @escaping @Sendable (inout Config) -> Void) async {
+        // hoisted so the closure captures the manager rather than the whole harness, which is not
+        // Sendable
+        let manager = configManager
+        await MainActor.run {
+            var updated = manager.config()
+            mutate(&updated)
+            manager.update(updated, save: false)
+        }
+    }
+
+    /// The `horizonReference/` directory the horizon code derives from the merged-horizon path, and
+    /// the filename it uses for this frame.  Tests need both to plant or inspect reference masks.
+    func horizonReferenceDirectory(frameIndex: Int = 0) -> (directory: URL, frameFileName: String)? {
+        guard let mergedPath = imageAccessor.nameForImage(frameIndex: frameIndex,
+                                                         ofType: .mergedHorizon,
+                                                         atSize: .original)
+        else { return nil }
+        let mergedURL = URL(fileURLWithPath: mergedPath)
+        return (mergedURL.deletingLastPathComponent()
+                         .deletingLastPathComponent()
+                         .appendingPathComponent("horizonReference"),
+                mergedURL.lastPathComponent)
+    }
+
+    /// Plant a horizon mask where the reference loader will find it.  `perFrame: false` writes the
+    /// global `reference.tiff` a static sequence uses; true writes this frame's own file.
+    @discardableResult
+    func plantReferenceMask(_ image: PixelatedImage,
+                            perFrame: Bool,
+                            frameIndex: Int = 0) throws -> String {
+        guard let (directory, frameFileName) = horizonReferenceDirectory(frameIndex: frameIndex)
+        else { throw "could not derive the horizonReference directory" }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let name = perFrame ? frameFileName : "reference.tiff"
+        let path = directory.appendingPathComponent(name).path
+        image.writeTIFFEncoding(toFilename: path)
+        return path
+    }
+
+    /// Plant an image where `ImageAccessor` will load it for the given type — used to stand in for a
+    /// cached `mergedHorizon` or raw `horizon` without running detection.
+    @discardableResult
+    func plantImage(_ image: PixelatedImage,
+                    ofType type: FrameViewMode,
+                    frameIndex: Int = 0) throws -> String {
+        guard let path = imageAccessor.nameForImage(frameIndex: frameIndex,
+                                                    ofType: type,
+                                                    atSize: .original)
+        else { throw "could not derive a path for \(type)" }
+        try ensureParentDirectoriesExist(for: path)
+        image.writeTIFFEncoding(toFilename: path)
+        return path
+    }
+
     // MARK: - synthetic images
 
     /// A night-sky-ish 16-bit three-channel frame: a bright, gently textured sky above `horizonRow`,

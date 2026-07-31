@@ -525,7 +525,7 @@ final public actor FrameHorizonProcessor {
     /// For each column the result is the Y position the horizon is *expected* to occupy,
     /// based on the user's manually-specified neighboring horizons.  This is the per-column
     /// prior used by the smoothing filter and the brightness-refinement Y-position term.
-    private func interpolatedExpectedYPerColumn(
+    func interpolatedExpectedYPerColumn(
       from stats: [ReferenceHorizonFrameStats],
       width: Int
     ) -> [Int?]? {
@@ -745,7 +745,7 @@ final public actor FrameHorizonProcessor {
     /// the corrected horizon Y is set to sky (255), everything at or below is ground (0).
     ///
     /// Returns `nil` if nothing changed.
-    private func despikeHorizonY(
+    func despikeHorizonY(
       _ bytes: [UInt8],
       width w: Int,
       height h: Int,
@@ -1585,7 +1585,7 @@ final public actor FrameHorizonProcessor {
 
     /// Fill nil values at the leading and trailing edges of an array with
     /// nearest-neighbour extrapolation.  Interior nil runs are left unchanged.
-    private static func fillEdgeNils(_ arr: [Int?]) -> [Int?] {
+    static func fillEdgeNils(_ arr: [Int?]) -> [Int?] {
         var result = arr
         if let first = result.first(where: { $0 != nil }) {
             for i in result.indices { if result[i] != nil { break }; result[i] = first }
