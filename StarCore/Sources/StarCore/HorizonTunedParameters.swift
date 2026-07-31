@@ -85,6 +85,40 @@ public struct HorizonTunedParameters: Codable, Sendable {
 
     public init() {}
 
+    /// Decode key by key, falling back to each property's declared default when a key is absent.
+    ///
+    /// The synthesised `Decodable` requires every non-optional key to be present — a property's
+    /// default value in its declaration does not make its key optional to the decoder.  So a
+    /// `tuned_parameters.json` written before any of these fields existed failed to decode at all,
+    /// and `load(fromDirectory:)` turned that into a nil: a sequence lost its whole tuning the first
+    /// time a parameter was added, silently and with a warning in the log at most.
+    ///
+    /// Same failure mode as `Config`'s hand-written decoder, for the same reason.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = HorizonTunedParameters()
+
+        func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
+            (try? container.decodeIfPresent(T.self, forKey: key)) .flatMap { $0 } ?? fallback
+        }
+
+        self.smoothingRadius = value(.smoothingRadius, defaults.smoothingRadius)
+        self.errorSearchRange = value(.errorSearchRange, defaults.errorSearchRange)
+        self.errorBlurRadius = value(.errorBlurRadius, defaults.errorBlurRadius)
+        self.errorThresholdFactor = value(.errorThresholdFactor, defaults.errorThresholdFactor)
+        self.errorSampleHalfWidth = value(.errorSampleHalfWidth, defaults.errorSampleHalfWidth)
+        self.errorOutlierSigma = value(.errorOutlierSigma, defaults.errorOutlierSigma)
+        self.maxDownwardExtension = value(.maxDownwardExtension, defaults.maxDownwardExtension)
+        self.cannySnapRadius = value(.cannySnapRadius, defaults.cannySnapRadius)
+        self.cannyMinThreshold = value(.cannyMinThreshold, defaults.cannyMinThreshold)
+        self.cannyMaxThreshold = value(.cannyMaxThreshold, defaults.cannyMaxThreshold)
+        self.cannyFirstDetectedProximityRadius =
+          value(.cannyFirstDetectedProximityRadius, defaults.cannyFirstDetectedProximityRadius)
+        self.tuningMeanAbsoluteError =
+          (try? container.decodeIfPresent(Double.self, forKey: .tuningMeanAbsoluteError)) ?? nil
+        self.tuningFrameCount = value(.tuningFrameCount, defaults.tuningFrameCount)
+    }
+
     // MARK: - Persistence
 
     /// Load from `{directory}/tuned_parameters.json`.
