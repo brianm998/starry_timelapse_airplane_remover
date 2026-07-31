@@ -483,7 +483,7 @@ public enum HorizonScoring {
         if let boundaryY = cropBoundaryY {
             cropBoundary = cropBoundaryScore(horizonY: horizonY, cropBoundaryY: boundaryY)
         } else {
-            cropBoundary = 0.999 // no penalty when boundary is unknown
+            cropBoundary = 1.0 // no penalty when boundary is unknown
         }
 
         return HorizonScore(
@@ -519,7 +519,7 @@ public enum HorizonScoring {
         if let boundaryY = cropBoundaryY {
             cropBoundary = cropBoundaryScore(horizonY: horizonY, cropBoundaryY: boundaryY)
         } else {
-            cropBoundary = 0.99 // no penalty when boundary is unknown
+            cropBoundary = 1.0 // no penalty when boundary is unknown
         }
 
         return HorizonScore(
