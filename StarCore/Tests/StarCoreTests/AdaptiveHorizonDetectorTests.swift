@@ -108,13 +108,16 @@ final class AdaptiveHorizonDetectorTests: XCTestCase {
     ///
     /// This follows from where the curve peaks (see the next test): the flatness term is still
     /// suppressing anything with a derivative spread below ~1px far harder than the roughness term
-    /// suppresses a spread of 60px.  So "smoothness" is not measuring what its name says over the
-    /// range real horizons occupy.
+    /// suppresses a spread of 60px.
     ///
-    /// Not changed here.  Reshaping this curve moves the winning candidate on every frame, and there
-    /// is no way to tell whether the result is better without re-running against the reference
-    /// horizon masks — that is a tuning decision, and the reference sequences are the only evidence
-    /// that could settle it.
+    /// **Measured, and deliberately not changed.**  `HorizonScoringMeasurement` reran the real
+    /// candidate search against the ground-truth `horizon.tiff`, comparing the shipped curve against
+    /// two replacements with opposite preferences in the region real candidates occupy.  All three
+    /// land within 0.07 full pixels of each other — reshaping the curve is a measured no-op, because
+    /// real Otsu candidates all sit at a derivative stddev of ~0.5 where the inversion above is
+    /// unreachable, and where the stddev is uncorrelated with the actual error anyway.  Removing the
+    /// term outright is slightly *worse*, since it is the only thing breaking ties between otherwise
+    /// identically-scored candidates.  See that file for the numbers.
     func testAJaggedSawtoothOutScoresAGentleHorizon() {
         let gentle = naturalHorizon(width: 128, around: 40, amplitude: 5)
         let jagged: [Int?] = (0..<128).map { x in 40 + (x % 2 == 0 ? -30 : 30) }
@@ -135,10 +138,13 @@ final class AdaptiveHorizonDetectorTests: XCTestCase {
     /// That ceiling is the part that matters.  `totalScore` weights smoothness at 0.30, the same as
     /// edge alignment, but edge alignment, coverage and local consistency can all reach 1.0 while
     /// smoothness can never exceed ~0.125.  So smoothness contributes at most 0.0375 of the total —
-    /// it is effectively weighted about an eighth of what the weights say.
+    /// it is effectively weighted about an eighth of what the weights say.  On real candidates it is
+    /// far smaller still: `HorizonScoringMeasurement` observes 0.0029 of a possible 0.30.
     ///
-    /// Left alone: raising it would change the winning candidate on real sequences, and the
-    /// thresholds around it were tuned against these numbers.
+    /// Left alone, and now for a measured reason rather than caution — see
+    /// `testAJaggedSawtoothOutScoresAGentleHorizon`.  The tiny contribution turns out to be load
+    /// bearing: among viable candidates every other component saturates at exactly 1.0, so this term
+    /// is the only tie-breaker there is.
     func testSmoothnessCanNeverReachOneAndPeaksNearFiveNotThree() {
         // sweep stddev by building lines with a known column-to-column derivative spread
         var best = (stddev: 0.0, score: 0.0)
