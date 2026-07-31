@@ -275,6 +275,23 @@ final class FrameHarness {
         syntheticMask(width: width, height: height) { _ in horizonRow }
     }
 
+    /// A single-channel 8-bit image, black except for the rows named in `rows`, which are filled to
+    /// the given value.  Used to stand in for a Canny edge result: white rows are edges.
+    static func grayImage(width: Int, height: Int, rows: [Int: UInt8]) -> PixelatedImage {
+        let data = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height)
+        for y in 0..<height {
+            let value = rows[y] ?? 0
+            for x in 0..<width { data[y * width + x] = value }
+        }
+        let mat = MatWrapper(width: width, height: height,
+                            cvType: MatWrapper.cvType(forBitsPerComponent: 8,
+                                                      componentsPerPixel: 1),
+                            bytesPerRow: width,
+                            data: UnsafeMutableRawPointer(data),
+                            takeOwnership: true)
+        return PixelatedImage(mat: mat)!
+    }
+
     // MARK: - writing fixtures into the harness tree
 
     /// Write an image to a scratch path under `root` and return the path, for the APIs that take
