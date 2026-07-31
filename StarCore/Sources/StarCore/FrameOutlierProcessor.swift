@@ -1069,7 +1069,8 @@ fileprivate func foreachOutlier(in outliers: [OutlierGroup],
                 taskGroup.addTask() {
                     var didChange = false
                     for group in chunk {
-                        if await closure(group, true) { didChange = true }
+                        // false: these are members, not trash.  The trash loop below passes true.
+                        if await closure(group, false) { didChange = true }
                     }
                     return didChange
                 }
