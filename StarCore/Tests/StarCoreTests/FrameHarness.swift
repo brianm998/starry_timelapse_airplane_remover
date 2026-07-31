@@ -275,6 +275,27 @@ final class FrameHarness {
         syntheticMask(width: width, height: height) { _ in horizonRow }
     }
 
+    /// A 16-bit single-channel binary mask: 65535 above `horizonRow` is sky, 0 below is ground.
+    ///
+    /// Needed to exercise the 16-bit branches of the mask readers, which threshold at 32767 — a
+    /// 16-bit *frame* will not do, because a night sky's values sit well below half scale and would
+    /// read as ground.
+    static func sixteenBitMask(width: Int, height: Int, at horizonRow: Int) -> PixelatedImage {
+        let data = UnsafeMutablePointer<UInt16>.allocate(capacity: width * height)
+        for y in 0..<height {
+            for x in 0..<width {
+                data[y * width + x] = y < horizonRow ? 65535 : 0
+            }
+        }
+        let mat = MatWrapper(width: width, height: height,
+                            cvType: MatWrapper.cvType(forBitsPerComponent: 16,
+                                                      componentsPerPixel: 1),
+                            bytesPerRow: width * 2,
+                            data: UnsafeMutableRawPointer(data),
+                            takeOwnership: true)
+        return PixelatedImage(mat: mat)!
+    }
+
     /// A single-channel 8-bit image, black except for the rows named in `rows`, which are filled to
     /// the given value.  Used to stand in for a Canny edge result: white rows are edges.
     static func grayImage(width: Int, height: Int, rows: [Int: UInt8]) -> PixelatedImage {

@@ -1014,7 +1014,7 @@ public enum CombinedHorizonDetector {
 
     /// Compute a confidence score for a horizon Y array: smoothness × coverage × plausibility.
     /// Returns a value in [0, 1] where higher = more confident.
-    private static func horizonConfidence(_ horizonY: [Int?], imageHeight: Int) -> Double {
+    static func horizonConfidence(_ horizonY: [Int?], imageHeight: Int) -> Double {
         let defined = horizonY.compactMap { $0 }
         guard defined.count > horizonY.count / 20 else { return 0 }
 
@@ -1050,7 +1050,7 @@ public enum CombinedHorizonDetector {
     /// Each column gets a weight in (0, 1] based on how stable (non-spiky) the
     /// detector is in a local window around that column. A detector that makes a
     /// sudden jump at column X gets a low weight at X regardless of its global score.
-    private static func perColumnLocalWeights(
+    static func perColumnLocalWeights(
         _ horizonY: [Int?],
         imageHeight: Int,
         windowHalf: Int = 20
@@ -1075,7 +1075,7 @@ public enum CombinedHorizonDetector {
     }
 
     /// Median-filter a sparse [Int?] horizon array to remove residual spike columns.
-    private static func medianFilterHorizonY(_ horizonY: [Int?], windowHalf: Int) -> [Int?] {
+    static func medianFilterHorizonY(_ horizonY: [Int?], windowHalf: Int) -> [Int?] {
         let n = horizonY.count
         var result = horizonY
         for x in 0..<n {
@@ -1096,7 +1096,7 @@ public enum CombinedHorizonDetector {
     /// each method's contribution by its global confidence × per-column local
     /// smoothness. This prevents a noisy detector from raising the noise floor at
     /// columns where it makes a sudden spike, even if it's globally smooth.
-    private static func confidenceWeightedCombine(
+    static func confidenceWeightedCombine(
         _ methodsAndWeights: [([Int?], Double)],
         outlierThreshold: Int,
         imageHeight: Int
@@ -1206,7 +1206,7 @@ public enum CombinedHorizonDetector {
     }
 
     /// Simple pixel intensity reader for fallback.
-    private static func pixelIntensity8(_ img: PixelatedImage, x: Int, y: Int) -> UInt8 {
+    static func pixelIntensity8(_ img: PixelatedImage, x: Int, y: Int) -> UInt8 {
         switch img.imageData {
         case .eightBit(let buf):
             let cpp = img.componentsPerPixel
@@ -1224,7 +1224,7 @@ public enum CombinedHorizonDetector {
     }
 
     /// Threshold a potentially anti-aliased mask to pure binary.
-    private static func thresholdToBinary(_ image: PixelatedImage) -> PixelatedImage {
+    static func thresholdToBinary(_ image: PixelatedImage) -> PixelatedImage {
         let w = image.width
         let h = image.height
         let horizonY = extractHorizonY(from: image)
@@ -1235,7 +1235,7 @@ public enum CombinedHorizonDetector {
     }
 
     /// Self-score a mask without a reference: smoothness + coverage + plausibility.
-    private static func selfScore(mask: PixelatedImage, imageHeight: Int) -> Double {
+    static func selfScore(mask: PixelatedImage, imageHeight: Int) -> Double {
         let horizonY = extractHorizonY(from: mask)
         let defined = horizonY.compactMap { $0 }
         guard !defined.isEmpty else { return 0 }
@@ -1259,7 +1259,7 @@ public enum CombinedHorizonDetector {
 
     /// Check if a horizon Y array is plausible: mean Y within 10-90% of height,
     /// stddev < 15% of height, and reasonable coverage.
-    private static func isPlausibleHorizon(_ horizonY: [Int?], imageHeight: Int) -> Bool {
+    static func isPlausibleHorizon(_ horizonY: [Int?], imageHeight: Int) -> Bool {
         let defined = horizonY.compactMap { $0 }
         guard defined.count > horizonY.count / 10 else { return false } // <10% coverage
 
@@ -1278,7 +1278,7 @@ public enum CombinedHorizonDetector {
     }
 
     /// Scale image for processing.
-    private static func scaleForProcessing(
+    static func scaleForProcessing(
         _ image: PixelatedImage,
         maxDim: Int
     ) -> (image: PixelatedImage, scaleX: Double, scaleY: Double) {
@@ -1299,7 +1299,7 @@ public enum CombinedHorizonDetector {
     }
 
     /// Scale horizon Y from one resolution to another.
-    private static func scaleHorizonY(
+    static func scaleHorizonY(
         _ horizonY: [Int?],
         fromWidth: Int,
         toWidth: Int,
