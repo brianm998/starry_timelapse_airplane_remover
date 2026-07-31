@@ -916,9 +916,17 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
         }
     }
 
+    // The lower bounds are inclusive: a tile owns the column at its own x and the row at its own y.
+    //
+    // These were `>` rather than `>=`, so every tile disowned its first row and column.  That was
+    // not cosmetic: `intensity(atX:andY:)` is gated on this, and HoughLineMatrixBlobConnector reads
+    // blob ids through it while walking a hough line across a tile.  Blob ids sitting on a tile's
+    // top or left edge were therefore invisible to it, and since the tiles cover the frame that
+    // left a one pixel grid of blind lines across the whole image where a line crossing there
+    // could not connect the blobs on either side.
     public func contains(x: Int, y: Int) -> Bool {
-        x > self.x &&
-        y > self.y &&
+        x >= self.x &&
+        y >= self.y &&
         x < self.x + width &&
         y < self.y + height
     }
@@ -928,9 +936,13 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
            lhs.width == rhs.width && lhs.height == rhs.height
     }
 
+    // BoundingBox is inclusive — its width is max - min + 1 — so the far corner is one short of
+    // x + width.  It used to be x + width, which made bounds.width one greater than the tile's own
+    // width and had the box overlap its neighbour by a column.  HoughLineMatrixBlobConnector walks
+    // `bounds.intersections(with:)` across the tile, so the walk ran a pixel past the edge.
     public var bounds: BoundingBox {
         BoundingBox(min: Coord(x: x, y: y),
-                    max: Coord(x: x+width, y: y+height))
+                    max: Coord(x: x+width-1, y: y+height-1))
     }
     
     public func hash(into hasher: inout Hasher) {
