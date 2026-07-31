@@ -203,7 +203,7 @@ public enum CombinedHorizonDetector {
     // MARK: - Base methods
 
     /// Run Otsu at multiple crop percentages and return per-column horizon Y at full resolution.
-    private static func runOtsu(
+    static func runOtsu(
         scaled: PixelatedImage,
         image: PixelatedImage
     ) async -> [Int?]? {
@@ -254,7 +254,7 @@ public enum CombinedHorizonDetector {
     }
 
     /// Run DP with grid search and return per-column horizon Y at full resolution.
-    private static func runDP(
+    static func runDP(
         scaled: PixelatedImage,
         image: PixelatedImage,
         params: Params
@@ -308,7 +308,7 @@ public enum CombinedHorizonDetector {
     }
 
     /// Run standalone SIOX horizon detection and return per-column horizon Y at full resolution.
-    private static func runSIOX(
+    static func runSIOX(
         scaled: PixelatedImage,
         image: PixelatedImage,
         params: Params
@@ -531,7 +531,7 @@ public enum CombinedHorizonDetector {
     /// For each column, finds the strongest sustained vertical gradient transition
     /// in a smoothed brightness profile — the sky→ground boundary.
     /// Complementary to color-based methods because it relies purely on edge structure.
-    private static func runGradProfile(
+    static func runGradProfile(
         scaled: PixelatedImage,
         image: PixelatedImage,
         searchTopFraction: Double = 0.05,
@@ -657,7 +657,7 @@ public enum CombinedHorizonDetector {
     /// Run texture-based horizon detection via local variance transition.
     /// Sky has low texture variance; ground has high variance. The horizon is
     /// where variance transitions from low to high.
-    private static func runTexture(
+    static func runTexture(
         scaled: PixelatedImage,
         image: PixelatedImage,
         searchTopFraction: Double = 0.05,

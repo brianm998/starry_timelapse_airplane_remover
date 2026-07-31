@@ -236,6 +236,12 @@ final class AdaptiveHorizonDetectorTests: XCTestCase {
     /// at row 0 and returns 0.  That is the more useful answer here (`coverageScore` sees an average
     /// Y near the top and penalises it as degenerate, which an all-nil column would not trigger),
     /// but any caller taking the comment at face value would be wrong.
+    ///
+    /// **Measured: the case does not arise on real data.**  `HorizonScoringMeasurement` counted
+    /// all-ground columns across 80 real Otsu candidate masks and found zero, which is structural —
+    /// the crop step fills the top of the frame white, so row 0 is sky by construction.  The
+    /// user-painted reference mask has none either (384 of 384 columns carry a real horizon).
+    /// Rescoring every candidate with all-ground columns nilled picks the identical mask.
     func testAnAllGroundColumnIsZeroNotNil() {
         let mask = FrameHarness.syntheticMask(width: 8, height: 16) { x in
             x == 5 ? 0 : 8       // column 5 is ground all the way up
@@ -375,8 +381,11 @@ final class AdaptiveHorizonDetectorTests: XCTestCase {
     /// The implementation is a plain fraction** of columns at least `tolerancePixels` from the
     /// boundary — no ramp, no 0.05 floor, and distance beyond the tolerance makes no difference.
     ///
-    /// The behaviour is defensible on its own terms, and it is what the tuned thresholds were fitted
-    /// against, so it is the comment that is stale.
+    /// **Measured: the two forms pick identically.**  `HorizonScoringMeasurement` implemented the
+    /// documented sigmoid and ran it against the reference sequence; both give exactly 1.000 for every
+    /// viable candidate and differ only on candidates already being rejected on other grounds (0.250
+    /// vs 0.810 on one, 0.989 vs 0.896 on another), so the mean error of the chosen mask is unchanged
+    /// at 0.94 shrunk rows.  The comment is stale; the behaviour does not matter.
     func testTheScoreIsAPlainFractionOfColumnsClearOfTheBoundary() {
         // every column right at the boundary
         let atBoundary = flatHorizon(width: 64, at: 40)

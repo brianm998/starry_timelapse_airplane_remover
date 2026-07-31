@@ -235,15 +235,18 @@ final class CombinedHorizonDetectorTests: XCTestCase {
     /// **The smoothness term measures differences across the *compacted* array, so a nil gap is
     /// bridged: columns 10 and 90 become adjacent and produce a large fake step.**  The comment says
     /// "column-to-column diff", which is what `HorizonScoring.smoothnessScore` does properly by
-    /// requiring both neighbours to be defined.
+    /// requiring both neighbours to be defined.  This test constructs the gap by hand to show the
+    /// mechanism is real.
     ///
-    /// The consequence is that a method with genuine gaps — SIOX searches only a band, so it has them
-    /// — is penalised for the gap rather than for any real roughness, lowering its weight in the
-    /// merge and possibly dropping it below the 0.05 inclusion gate.  Dense methods are unaffected,
-    /// since compacting changes nothing there.
+    /// **Measured, and it never fires in production.**  `CombinedConfidenceMeasurement` ran all five
+    /// base methods that `detect` merges on real frames: every one returns a *fully dense* array —
+    /// 4240 of 4240 columns defined, zero nils — so the shipped confidence and one computed with
+    /// properly adjacent differences agree to 0.000000, and no inclusion decision can flip.  Density
+    /// is structural rather than lucky: each method ends in `scaleHorizonY`, which emits a value for
+    /// every output column whenever its source column had one.
     ///
-    /// Not changed here: it alters the merge weights, hence the horizon, on any frame where a method
-    /// has gaps.  That needs the reference masks to adjudicate.
+    /// An earlier version of this comment asserted that SIOX has gaps because it searches only a
+    /// band.  That was wrong — SIOX returns a dense array like the rest.
     func testGapsAreBridgedAndCountAsRoughness() {
         // two flat runs at the same Y with a gap between them: genuinely perfectly smooth
         var gapped = [Int?](repeating: nil, count: 100)

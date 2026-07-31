@@ -22,9 +22,30 @@ import Foundation
 ///   current                      0.89          6.5
 ///   gaussian                     0.89          6.5     <- peak moved to ~3.4, normalised to 1.0
 ///   smoother                     0.88          6.5     <- opposite preference in the live region
-///   none                         0.95          7.0     <- term removed, other weights renormalised
+///   none                         0.95          7.0     <- smoothness removed, weights renormalised
+///   cropDoc                      0.89          6.5     <- cropBoundaryScore as documented
+///   nilGround                    0.89          6.5     <- all-ground columns nilled before scoring
 ///   oracle                       0.76          5.6
 /// ```
+///
+/// (`current`/`gaussian`/`smoother`/`cropDoc`/`nilGround` are 0.94 over the committed 5 frames and
+/// 0.89 over 15; the ordering is identical either way.)
+///
+/// **Three of the four pinned findings are inert, each for its own structural reason.**  All three are
+/// genuine doc/implementation mismatches, and none of them changes the mask that gets chosen:
+///
+///  - `cropBoundaryScore` is a plain column fraction, not the documented sigmoid from 0.05.  Both
+///    forms return exactly 1.000 for every *viable* candidate and diverge only on candidates already
+///    being rejected on other grounds (0.250 vs 0.810 on one, 0.989 vs 0.896 on another).
+///  - `extractHorizonYPerColumn` returns 0 rather than nil for an all-ground column.  Across 80 real
+///    candidate masks there are **zero** all-ground columns, which is structural: the crop step fills
+///    the top of the frame white, so row 0 is sky by construction.  The user-painted reference has
+///    none either.
+///  - `horizonConfidence` bridges nil gaps — measured separately in `CombinedConfidenceMeasurement`,
+///    where all five base methods turn out fully dense, so the delta is 0.000000.
+///
+/// The fourth, `smoothnessScore`'s shape, is inert for the *selection* it drives but load bearing as a
+/// tie-breaker; see below.
 ///
 /// **Reshaping `smoothnessScore` is a measured no-op.**  Three curves with different shapes — and
 /// opposite preferences at the derivative stddev real candidates actually occupy — pick masks within
@@ -148,6 +169,68 @@ final class HorizonScoringMeasurement: XCTestCase {
         return additive * score.cropBoundaryScore
     }
 
+    /// The four additive terms with the shipped weights, without the crop-boundary multiplier — so a
+    /// different multiplier can be substituted.
+    private func additive(_ score: HorizonScore) -> Double {
+        score.smoothnessScore * 0.30
+          + score.edgeAlignmentScore * 0.30
+          + score.coverageScore * 0.15
+          + score.localConsistencyScore * 0.25
+    }
+
+    /// `cropBoundaryScore` as its doc comment describes it, rather than as it is implemented: a
+    /// penalty on the distance from the **average** horizon Y to the boundary, ramping smoothly from
+    /// 0.05 at one tolerance to 1.0 at three tolerances.
+    ///
+    /// The shipped version instead counts the *fraction of columns* at least one tolerance clear, with
+    /// no ramp and no floor.
+    private func documentedCropBoundaryScore(horizonY: [Int?],
+                                             cropBoundaryY: Int,
+                                             tolerancePixels: Double = 8) -> Double {
+        let defined = horizonY.compactMap { $0 }
+        guard !defined.isEmpty else { return 1.0 }
+        let average = Double(defined.reduce(0, +)) / Double(defined.count)
+        let distance = abs(average - Double(cropBoundaryY))
+        if distance <= tolerancePixels { return 0.05 }
+        if distance >= 3 * tolerancePixels { return 1.0 }
+        let u = (distance - tolerancePixels) / (2 * tolerancePixels)   // 0...1
+        let smoothstep = u * u * (3 - 2 * u)
+        return 0.05 + smoothstep * 0.95
+    }
+
+
+    /// Rescore a mask as if `extractHorizonYPerColumn` returned nil for an all-ground column instead
+    /// of 0.  A column is all-ground when its very first row is already ground, so the scan finds the
+    /// "horizon" at row 0 — which is not a horizon at all, it is a column with no sky in it.
+    private func rescoreWithAllGroundColumnsNilled(_ candidate: Candidate,
+                                                   edgeImage: PixelatedImage?,
+                                                   imageHeight: Int) -> (score: HorizonScore,
+                                                                         allGroundColumns: Int) {
+        let shipped = HorizonScoring.extractHorizonYPerColumn(from: candidate.mask.image)
+        var corrected = shipped
+        var allGround = 0
+        for x in 0..<corrected.count where corrected[x] == 0 {
+            corrected[x] = nil
+            allGround += 1
+        }
+        let edge: Double
+        if let edgeImage {
+            edge = HorizonScoring.edgeAlignmentScore(horizonY: corrected, edgeImage: edgeImage,
+                                                    tolerance: 3)
+        } else {
+            edge = 0.5
+        }
+        let score = HorizonScore(
+          smoothnessScore: HorizonScoring.smoothnessScore(horizonY: corrected),
+          edgeAlignmentScore: edge,
+          coverageScore: HorizonScoring.coverageScore(horizonY: corrected,
+                                                      imageHeight: imageHeight),
+          localConsistencyScore: HorizonScoring.localConsistencyScore(horizonY: corrected),
+          cropBoundaryScore: HorizonScoring.cropBoundaryScore(horizonY: corrected,
+                                                              cropBoundaryY: candidate.cropBoundaryY))
+        return (score, allGround)
+    }
+
     // MARK: - the measurement
 
     private struct Candidate {
@@ -155,6 +238,9 @@ final class HorizonScoringMeasurement: XCTestCase {
         let truthMAE: Double          // in shrunk rows
         let score: HorizonScore
         let stddev: Double?
+        let horizonY: [Int?]
+        let cropBoundaryY: Int
+        let mask: HorizonMask
     }
 
     func testWhichScoringVariantPicksTheCandidateClosestToTheReference() async throws {
@@ -189,8 +275,19 @@ final class HorizonScoringMeasurement: XCTestCase {
                         .map { String(format: "%.0f", $0) }.joined(separator: ","))
         """)
 
+        // The reference mask is user-painted, so unlike an Otsu candidate it *could* contain a column
+        // with no sky — a building or tree touching the top of the frame.  That is the only way the
+        // 0-vs-nil convention can bite.
+        let referenceViaScoring = HorizonScoring.extractHorizonYPerColumn(from: referenceShrunk)
+        let referenceAllGround = referenceViaScoring.filter { $0 == 0 }.count
+        let referenceNil = referenceViaScoring.filter { $0 == nil }.count
+        print("""
+          reference mask: \(referenceAllGround) all-ground columns, \(referenceNil) all-sky columns, \
+        \(referenceViaScoring.count - referenceAllGround - referenceNil) with a real horizon
+        """)
+
         var picks: [String: [Double]] = ["current": [], "gaussian": [], "smoother": [],
-                                         "none": [], "oracle": []]
+                                         "none": [], "cropDoc": [], "nilGround": [], "oracle": []]
 
         for frameURL in frames {
             guard let original = PixelatedImage(filename: frameURL.path) else {
@@ -235,7 +332,10 @@ final class HorizonScoringMeasurement: XCTestCase {
                 candidates.append(Candidate(cropAmount: crop,
                                             truthMAE: mae,
                                             score: score,
-                                            stddev: derivativeStddev(candidateY)))
+                                            stddev: derivativeStddev(candidateY),
+                                            horizonY: candidateY,
+                                            cropBoundaryY: cropBoundaryY,
+                                            mask: mask))
             }
 
             guard !candidates.isEmpty else {
@@ -263,6 +363,16 @@ final class HorizonScoringMeasurement: XCTestCase {
                 return self.total(candidate.score, smoothness: smoothness)
             }
             let none = pick("none") { self.totalWithoutSmoothness($0.score) }
+            let nilGround = pick("nilGround") { candidate in
+                self.rescoreWithAllGroundColumnsNilled(candidate, edgeImage: edges,
+                                                       imageHeight: Int(self.workingSize))
+                  .score.totalScore
+            }
+            let cropDoc = pick("cropDoc") { candidate in
+                self.additive(candidate.score)
+                  * self.documentedCropBoundaryScore(horizonY: candidate.horizonY,
+                                                     cropBoundaryY: candidate.cropBoundaryY)
+            }
             let oracle = candidates.min { $0.truthMAE < $1.truthMAE }!
             picks["oracle"]!.append(oracle.truthMAE)
 
@@ -282,6 +392,12 @@ final class HorizonScoringMeasurement: XCTestCase {
               none       \(String(format: "%4.0f", none.cropAmount))   \
             \(String(format: "%8.2f", none.truthMAE))   \
             \(String(format: "%8.1f", none.truthMAE * rowScale))
+              cropDoc    \(String(format: "%4.0f", cropDoc.cropAmount))   \
+            \(String(format: "%8.2f", cropDoc.truthMAE))   \
+            \(String(format: "%8.1f", cropDoc.truthMAE * rowScale))
+              nilGround  \(String(format: "%4.0f", nilGround.cropAmount))   \
+            \(String(format: "%8.2f", nilGround.truthMAE))   \
+            \(String(format: "%8.1f", nilGround.truthMAE * rowScale))
               oracle     \(String(format: "%4.0f", oracle.cropAmount))   \
             \(String(format: "%8.2f", oracle.truthMAE))   \
             \(String(format: "%8.1f", oracle.truthMAE * rowScale))
@@ -295,6 +411,19 @@ final class HorizonScoringMeasurement: XCTestCase {
                 (contributes \(String(format: "%.4f", currentSmoothness(s) * 0.30)) of a possible 0.30)
                 """)
             }
+
+            // How many columns the shipped extraction reports as "horizon at row 0" — columns with
+            // no sky at all, which the doc says should be nil.  Zero here makes the question moot.
+            let allGroundCounts = candidates.map {
+                self.rescoreWithAllGroundColumnsNilled($0, edgeImage: edges,
+                                                       imageHeight: Int(self.workingSize))
+                  .allGroundColumns
+            }
+            print("""
+              all-ground columns (of \(workingSize)): min \(allGroundCounts.min() ?? -1), \
+            max \(allGroundCounts.max() ?? -1), candidates with any: \
+            \(allGroundCounts.filter { $0 > 0 }.count)/\(allGroundCounts.count)
+            """)
 
             // The two things that decide whether reshaping the curve could matter at all:
             // how much the candidates' MAE actually varies, and what stddev range they occupy.
@@ -313,20 +442,23 @@ final class HorizonScoringMeasurement: XCTestCase {
             // full table for the first frame, so the shape of the search is on the record
             if frameURL == frames.first {
                 print("  full candidate table:")
-                print("    crop   MAE   stddev   smooth   edge   cover  consist  cropBnd    total")
+                print("    crop   MAE   stddev   smooth   edge   cover  consist  cropBnd  cropDoc    total")
                 for c in candidates.sorted(by: { $0.cropAmount < $1.cropAmount }) {
                     print(String(format:
-                      "    %4.0f  %5.2f   %6.2f   %6.4f  %5.3f  %5.3f    %5.3f    %5.3f  %7.4f",
+                      "    %4.0f  %5.2f   %6.2f   %6.4f  %5.3f  %5.3f    %5.3f    %5.3f    %5.3f  %7.4f",
                       c.cropAmount, c.truthMAE, c.stddev ?? -1,
                       c.score.smoothnessScore, c.score.edgeAlignmentScore,
                       c.score.coverageScore, c.score.localConsistencyScore,
-                      c.score.cropBoundaryScore, c.score.totalScore))
+                      c.score.cropBoundaryScore,
+                      self.documentedCropBoundaryScore(horizonY: c.horizonY,
+                                                       cropBoundaryY: c.cropBoundaryY),
+                      c.score.totalScore))
                 }
             }
         }
 
         print("\n================ summary over \(picks["current"]!.count) frames ================")
-        for key in ["current", "gaussian", "smoother", "none", "oracle"] {
+        for key in ["current", "gaussian", "smoother", "none", "cropDoc", "nilGround", "oracle"] {
             let values = picks[key]!
             guard !values.isEmpty else { continue }
             let mean = values.reduce(0, +) / Double(values.count)
@@ -337,7 +469,7 @@ final class HorizonScoringMeasurement: XCTestCase {
 
         // The measurement's own sanity check: the oracle cannot be worse than any picker.
         let oracleMean = picks["oracle"]!.reduce(0, +) / Double(max(1, picks["oracle"]!.count))
-        for key in ["current", "gaussian", "smoother", "none"] {
+        for key in ["current", "gaussian", "smoother", "none", "cropDoc", "nilGround"] {
             let values = picks[key]!
             guard !values.isEmpty else { continue }
             let mean = values.reduce(0, +) / Double(values.count)
