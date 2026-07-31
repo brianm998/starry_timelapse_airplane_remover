@@ -975,9 +975,16 @@ public actor LogGremlin {
         repeat { await logNext() } while pendingLogCount() > 0
     }
 
-    fileprivate func logNext() async {
-        if let log = await gremlin.nextLog() {
-            for handler in await gremlin.getHandlers().values {
+    // `self`, not the global `gremlin`.  This used to reach for the global on both lines, which
+    // made every instance other than the singleton parasitic: its drain loop pulled lines off
+    // the global queue and handed them to the global's handlers, while `finishLogging` below
+    // checked `self.pendingLogCount()` — so a non-global gremlin holding queued lines would spin
+    // there forever.  Identical behaviour for the singleton, since there self *is* the global.
+    // internal rather than fileprivate so the tests can drive one drain step directly; going
+    // through finishLogging() instead would cost its 100ms poll on every case.
+    func logNext() async {
+        if let log = nextLog() {
+            for handler in getHandlers().values {
                 if log.logLevel <= handler.level {
                     handler.log(message: log.message,
                                 at: log.fileLocation,
@@ -989,7 +996,12 @@ public actor LogGremlin {
         }
     }
     
-    public init() {
+    /// - Parameter selfDraining: whether to start the background loop that hands queued lines to
+    ///   the handlers.  Always true in production — the global `gremlin` below relies on it.
+    ///   Passing false gives a gremlin that only moves when `logNext()` is called explicitly,
+    ///   which is the only way to inspect the queue without racing the loop that empties it.
+    public init(selfDraining: Bool = true) {
+        guard selfDraining else { return }
         Task {
             while(await self.isRunning()) {
                 await self.logNext()
