@@ -137,6 +137,27 @@ MatWrapperRef pib_filter_connected_components(MatWrapperRef image, int64_t n) {
     return nullptr;
 }
 
+// Both of the functions below threshold at 127 and then hand the result to
+// cv::connectedComponentsWithStats, which requires CV_8UC1 — it throws on anything else.  Neither
+// used to convert the depth, so a 16 bit mask (what a reference horizon loaded straight off a tiff
+// is) made them throw, get caught below, and return nullptr.
+//
+// In production this was latent: both callers pass a HorizonMask's image, which asHorizonMask has
+// already normalised to 8 bit, and both wrap the call in `(try? ...) ?? original` anyway.  It still
+// meant these could not be used on the project's own reference masks, which are 16 bit.
+static cv::Mat pib_as_eight_bit_gray(const cv::Mat &input) {
+    if (input.depth() == CV_8U) return input;
+
+    cv::Mat converted;
+    switch (input.depth()) {
+        case CV_16U: input.convertTo(converted, CV_8U, 255.0 / 65535.0); break;
+        case CV_32F:
+        case CV_64F: input.convertTo(converted, CV_8U, 255.0); break;
+        default:     input.convertTo(converted, CV_8U); break;
+    }
+    return converted;
+}
+
 MatWrapperRef pib_ground_only(MatWrapperRef image) {
     if (!image) return nullptr;
     try {
@@ -145,6 +166,7 @@ MatWrapperRef pib_ground_only(MatWrapperRef image) {
             owned = image->mat.clone();
             cv::cvtColor(owned, owned, cv::COLOR_BGR2GRAY);
         }
+        owned = pib_as_eight_bit_gray(owned);
 
         cv::Mat bin;
         cv::threshold(owned, bin, 127, 255, cv::THRESH_BINARY);
@@ -184,6 +206,7 @@ MatWrapperRef pib_sky_only(MatWrapperRef image) {
             owned = image->mat.clone();
             cv::cvtColor(owned, owned, cv::COLOR_BGR2GRAY);
         }
+        owned = pib_as_eight_bit_gray(owned);
 
         cv::Mat bin;
         cv::threshold(owned, bin, 127, 255, cv::THRESH_BINARY);
