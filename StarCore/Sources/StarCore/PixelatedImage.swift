@@ -958,7 +958,14 @@ public class ImageMatrixElement: @unchecked Sendable, Hashable, CustomStringConv
 extension PixelatedImage {
     // reassemble an image from matrix elements
     public convenience init?(from matrixElements: [ImageMatrixElement]) {
-        precondition(!matrixElements.isEmpty, "Matrix must contain at least one element")
+        // Return nil rather than trapping.  This is a failable initializer, and no elements is
+        // exactly the case a caller would expect nil for — `MatWrapper.combine(from:)` below
+        // already answers nil for an empty list.  It used to be a `precondition`, which cannot be
+        // recovered from.  Nothing in the tree calls this today, so the trap was unreachable.
+        guard !matrixElements.isEmpty else {
+            Log.w("cannot combine an image from no matrix elements")
+            return nil
+        }
         Log.d("combine from \(matrixElements)")
         let tiles = matrixElements.map { e in
             MatTileElement(x: e.x, y: e.y, width: e.width, height: e.height, image: e.image.mat)
