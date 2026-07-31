@@ -1228,10 +1228,12 @@ public struct Config: Codable, Sendable {
     //        lots more
     // 0.11.1 use github actions for release
     //        windows cli support
+    // 0.11.2 lots of memory and speed improvements
+    //        more unit tests and bug fixes
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.11.1"
+    public static let latestVersion = "0.11.2"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
