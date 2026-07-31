@@ -236,11 +236,17 @@ public enum HorizonScoring {
       horizonY: [Int?],
       naturalStddev: Double = 3.0
     ) -> Double {
-        // Compute column-to-column differences where both neighbors are non-nil
+        // Compute column-to-column differences where both neighbors are non-nil.
+        //
+        // The `horizonY.count > 0` guard is load-bearing, not defensive: with an empty array
+        // `1..<0` is an invalid range and traps.  The "not enough data points" guard below was
+        // clearly meant to cover this, but it only runs after the loop.
         var diffs: [Double] = []
-        for i in 1..<horizonY.count {
-            if let prev = horizonY[i - 1], let curr = horizonY[i] {
-                diffs.append(Double(curr - prev))
+        if horizonY.count > 0 {
+            for i in 1..<horizonY.count {
+                if let prev = horizonY[i - 1], let curr = horizonY[i] {
+                    diffs.append(Double(curr - prev))
+                }
             }
         }
 
