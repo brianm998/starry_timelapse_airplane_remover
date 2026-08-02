@@ -7,6 +7,10 @@
 #include <io.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <process.h>
+// _S_IREAD / _S_IWRITE — the pmode _open wants — live here, not in <io.h> or <fcntl.h>.
+// Their absence is what broke the first Windows build of this file.
+#include <sys/stat.h>
 #define STAR_OPEN(path, flags)  _open((path), (flags), _S_IREAD | _S_IWRITE)
 #define STAR_WRITE(fd, b, n)    _write((fd), (b), (unsigned int)(n))
 #define STAR_CLOSE(fd)          _close(fd)

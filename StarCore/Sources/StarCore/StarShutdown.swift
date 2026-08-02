@@ -85,7 +85,14 @@ public enum StarShutdown {
     ///   - onShutdown: client-specific work — closing a session, stopping a server. Runs
     ///     inside the grace period, before the log queue is drained.
     ///
-    /// Idempotent. A no-op on Windows, which has no signals to install.
+    /// Idempotent.
+    ///
+    /// A no-op on Windows, which has no POSIX signals and would need `SetConsoleCtrlHandler`
+    /// instead. The consequence there is worth knowing: Ctrl-C still kills the process
+    /// outright, so it leaves a run marker behind, and since `RunMarkerStore.processIsAlive`
+    /// cannot check liveness on Windows either, that marker is eventually reported as an
+    /// unexpected stop once its heartbeat goes stale. Accurate, if noisier than it needs to
+    /// be — the run really did stop without finishing.
     public static func install(clientName: String = "star",
                                quiet: Bool = false,
                                onShutdown: (@Sendable () async -> Void)? = nil)
@@ -146,6 +153,12 @@ public enum StarShutdown {
     private static func tell(_ message: String) {
         FileHandle.standardError.write(Data(message.utf8))
     }
+
+    // Everything below is gated for Windows, which installs no sources above and so can never
+    // reach it. Not merely dead code there — it would not compile: the exits below come from
+    // Darwin or Glibc, and on Windows neither is imported, so the symbols do not resolve.
+    // (The Linux job compiles this happily via Glibc, which is why only Windows caught it.)
+    #if !os(Windows)
 
     private static func received(_ signo: Int32) {
         state.lock.lock()
@@ -220,4 +233,6 @@ public enum StarShutdown {
 
         exit(128 + signo)
     }
+
+    #endif   // !os(Windows)
 }
