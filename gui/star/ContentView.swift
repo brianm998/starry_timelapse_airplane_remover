@@ -31,6 +31,7 @@ struct ContentView: View {
             // these may show on top
             if viewModel.showInfoDialog { InfoDialogView() }
             if viewModel.showErrorAlert { self.errorAlert }
+            if viewModel.showWarningAlert { self.warningAlert }
             if viewModel.showCloseConfirmation { self.closeConfirmationAlert }
         }
         .sheet(isPresented: $bindableViewModel.showUserPreferencesSheet) {
@@ -70,6 +71,50 @@ struct ContentView: View {
               .frame(maxWidth: 480)
               .background(.regularMaterial)
               .cornerRadius(16)
+        }
+    }
+
+    /// Shown for critical `StarWarning`s: the machine is about to stop this run, or a
+    /// previous run was already stopped.
+    ///
+    /// Deliberately not the red `errorAlert` below — nothing has gone wrong with the user's
+    /// images or with star, and calling it an ERROR would send them looking for a fault that
+    /// isn't there.  Orange, with the suggestion given its own line, because unlike an error
+    /// there is usually something the user can actually do.
+    var warningAlert: some View {
+        ZStack {
+            Rectangle()
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .background(.gray)
+              .opacity(0.5)
+
+            VStack(spacing: 0) {
+                Text(viewModel.warningTitle)
+                  .font(.headline)
+                  .padding(.bottom, 20)
+
+                Text(viewModel.warningMessage)
+                  .multilineTextAlignment(.center)
+                  .fixedSize(horizontal: false, vertical: true)
+
+                if let suggestion = viewModel.warningSuggestion {
+                    Text(suggestion)
+                      .multilineTextAlignment(.center)
+                      .fixedSize(horizontal: false, vertical: true)
+                      .padding(.top, 16)
+                }
+
+                Button {
+                    viewModel.showWarningAlert = false
+                } label: {
+                    Text("OK")
+                }
+                  .padding(.top, 28)
+            }
+              .padding(40)
+              .frame(maxWidth: 520)
+              .background(.orange)
+              .cornerRadius(20)
         }
     }
 

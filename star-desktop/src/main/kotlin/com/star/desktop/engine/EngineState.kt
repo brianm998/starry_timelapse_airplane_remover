@@ -2,12 +2,19 @@ package com.star.desktop.engine
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import com.star.proto.Warning
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Connection lifecycle status surfaced to the UI. */
 sealed interface EngineStatus {
@@ -34,6 +41,20 @@ class EngineState(
 ) {
     private val _status = MutableStateFlow<EngineStatus>(EngineStatus.Disconnected)
     val status: StateFlow<EngineStatus> = _status.asStateFlow()
+
+    /**
+     * Warnings the daemon pushed — memory pressure, output it could not write, a disk with no
+     * room for the run.
+     *
+     * Owned here rather than exposed straight off [StdioConnection] because the connection is
+     * replaced on every restart, and a collector bound to one instance would go quiet the
+     * first time the engine came back. Callers subscribe once and keep receiving.
+     */
+    private val _warnings = MutableSharedFlow<Warning>(
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val warnings: SharedFlow<Warning> = _warnings.asSharedFlow()
 
     private var process: DaemonProcess? = null
     private var connection: StdioConnection? = null
@@ -62,11 +83,32 @@ class EngineState(
             client = cli
             _status.value = EngineStatus.Connected(hello.daemonVersion, hello.scratchDir)
 
+            // Forward this connection's warnings onto the long-lived flow above.
+            scope.launch { conn.warnings.collect { _warnings.tryEmit(it) } }
+
             // Monitor death in its own coroutine (does not block start()).
             scope.launch {
                 val cause = conn.closed.await()
                 client = null
-                _status.value = EngineStatus.Failed(cause?.message ?: "engine stopped")
+
+                // Prefer what the process itself says over what the broken pipe says. A
+                // connection that closes because the daemon was killed reports something
+                // generic like "connection closed"; the exit status says *why*, and 137 in
+                // particular means the system killed it for memory. Give the process a moment
+                // to be reaped — the pipe closes fractionally before the exit status lands.
+                var death = proc.deathDescription()
+                if (death == null) {
+                    withTimeoutOrNull(2_000) {
+                        while (death == null) {
+                            delay(50)
+                            death = proc.deathDescription()
+                        }
+                    }
+                }
+
+                _status.value = EngineStatus.Failed(
+                    death ?: cause?.message ?: "the engine stopped unexpectedly",
+                )
             }
             true
         } catch (e: Throwable) {

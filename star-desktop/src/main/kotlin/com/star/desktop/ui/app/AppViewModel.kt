@@ -184,6 +184,16 @@ class AppViewModel(
     val versionWarning: StateFlow<String?> = _versionWarning.asStateFlow()
     fun dismissVersionWarning() { _versionWarning.value = null }
 
+    // ---- engine warnings pushed by the daemon ----
+    //
+    // Memory pressure, output it could not write, a disk with no room. Before the daemon could
+    // push these they went only to its stderr, which this client drains into a sink that in a
+    // packaged app goes nowhere a user can read — so a run walking into an out-of-memory kill
+    // looked completely normal right up until the engine died.
+    private val _engineWarning = MutableStateFlow<com.star.proto.Warning?>(null)
+    val engineWarning: StateFlow<com.star.proto.Warning?> = _engineWarning.asStateFlow()
+    fun dismissEngineWarning() { _engineWarning.value = null }
+
     // ---- new-source startup prompts (macOS StartupView) ----
     private val _startupStep = MutableStateFlow<StartupStep?>(null) // null = not showing
     val startupStep: StateFlow<StartupStep?> = _startupStep.asStateFlow()
@@ -304,6 +314,11 @@ class AppViewModel(
 
     init {
         scope.launch { engine.start() }
+        scope.launch {
+            // Latest wins: these describe the machine's current state, so an older one being
+            // replaced by a newer is right. The user can dismiss, and the next one re-raises.
+            engine.warnings.collect { _engineWarning.value = it }
+        }
         scope.launch {
             engine.status.collect { st ->
                 // Engine died while a session was open: offer Restart (don't tear the session down yet —

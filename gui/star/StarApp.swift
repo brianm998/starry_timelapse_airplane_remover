@@ -178,12 +178,56 @@ struct StarApp: App {
 
         // sets the prefix for log filenames
         Log.name = "Star-logs"
-        
+
         // XXX make this for debug builds only
         #if DEBUG
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
         #endif
+
+        // Always on, before anything else can go wrong. A release gui used to produce no
+        // record of itself at all — file logging is off by default and the console handler
+        // above is debug-only — so an app that died left the user with nothing to send and
+        // nothing to read. Separate from the user's own file log, which still works as before.
+        let diagnosticLogPath = DiagnosticLog.enable()
+
         Log.i("Starting Up")
+
+        // Synchronously, before the Task below and before any window exists: a crash during
+        // startup is still a crash, and the gui is where an unreported one hurts most —
+        // there is no terminal it could have left a message in.
+        // Pointed at the diagnostic log, so a fatal signal writes its final line into the
+        // file the user will actually be asked for.
+        StarCrashHandler.install(logPath: diagnosticLogPath)
+
+        // SIGTERM reaches a gui app too — `killall Star`, or a force-quit escalating — and
+        // AppKit does not turn it into applicationWillTerminate, so without this the marker
+        // survives and the next launch calls it a crash. Quiet, because the gui's stderr goes
+        // to the system log rather than anywhere a user reads: clearing the marker is the
+        // whole point here, not the message.
+        StarShutdown.install(clientName: "Star", quiet: true)
+
+        let viewModel = self.viewModel
+        Task {
+            // Machine-level warnings reach the user through the same path as a previous
+            // run's crash report — `RunMarker.asWarning` — so there is one handler and one
+            // piece of UI rather than two of each.
+            var callbacks = Callbacks()
+            callbacks.warningCallback = { warning in
+                Task { @MainActor in viewModel.report(warning: warning) }
+            }
+            await callbacks.installWarningHandler()
+
+            // A run that never cleared its marker was killed.  The gui is where this matters
+            // most: it has no terminal to have left a message in, and file logging is off by
+            // default, so before this a user whose app was killed mid-run had nothing at all.
+            for marker in await RunMarkerStore.shared.abandonedRuns() {
+                Log.w("previous run did not finish: \(marker.report)")
+                await MainActor.run { viewModel.report(warning: marker.asWarning) }
+            }
+            await RunMarkerStore.shared.clearAbandoned()
+
+            await RunMarkerStore.shared.begin(client: "Star", logPath: diagnosticLogPath)
+        }
     }
 
     func enableGUILogs() {
@@ -202,6 +246,10 @@ struct StarApp: App {
         } else {
             Log.removeHandler(for: .file)
         }
+        // Deliberately does not touch the crash handler's log path. That points at the
+        // always-on diagnostic log, which is the file a crash report should name — routing it
+        // here instead would mean the crash line landed in whichever log the user happened to
+        // have switched on, or in no log at all.
     }
     
     let loggingViewModel = LoggingViewModel()

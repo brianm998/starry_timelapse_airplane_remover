@@ -133,6 +133,21 @@ public final actor FrameGraphBuilder {
                   "Call config.set(imageInfo:) before building the frame graph. " +
                   "Every operation will reserve 0 bytes and the keypoint limiter is " +
                   "capped only by numberOfFramesToProcessConcurrently (\(kc.limit)).")
+            // Also a user-facing warning, not only a log line: this is the exact defect
+            // that shipped in 0.11.1 and got a user's cli killed on a high-resolution
+            // sequence. A run in this state has no memory gating at all, so if it is going
+            // to die it will, and the user should hear about it before it does.
+            Task {
+                await StarWarnings.shared.post(StarWarning(
+                  kind: .memoryGatingDisabled,
+                  severity: .critical,
+                  message: "star could not determine this sequence's image size, so its memory " +
+                           "limits are inactive for this run. On high-resolution footage the " +
+                           "system may stop it.",
+                  suggestion: "Please report this — it is a bug in star, not a problem with " +
+                              "your images."
+                ))
+            }
             return
         }
 

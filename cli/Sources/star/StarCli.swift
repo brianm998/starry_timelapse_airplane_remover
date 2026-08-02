@@ -403,6 +403,18 @@ struct StarCli: AsyncParsableCommand {
 
         var callbacks = Callbacks()
 
+        // Before anything else that could crash. A fatal signal during argument handling or
+        // sequence resolution is exactly as worth reporting as one during processing, and
+        // arming this early costs nothing. The log path is not known yet — it is handed over
+        // below, once the file log handler exists.
+        StarCrashHandler.install()
+
+        // Ctrl-C, `kill`, or a closed terminal now stop the run in an orderly way: cancel
+        // outstanding work, print how to resume, clear the run marker, and drain the log queue
+        // — rather than dying instantly, losing whatever the gremlin had queued, and leaving a
+        // marker behind for the next launch to report as a crash.
+        StarShutdown.install(clientName: "star")
+
         // gui has to do this too
         await StarCore.currentClassifier.set(for: .all) {
             OutlierGroupForestClassifier_2436760d()
@@ -515,6 +527,16 @@ struct StarCli: AsyncParsableCommand {
 
             Log.name = "star-log"
 
+            // Read and print any previous run's crash report *before* the block below,
+            // because without --terminal-log-level that block installs `UpdatableLog`, which
+            // owns the terminal and redraws with cursor-relative escapes.  A multi-line
+            // report printed after that gets scribbled over.  The `Log.w` counterpart is
+            // deferred to just after the handlers exist, so the report also lands in this
+            // run's log file — reporting it in one place would mean losing either the
+            // terminal copy or the logged one.
+            let abandonedRuns = await RunMarkerStore.shared.abandonedRuns()
+            printReports(for: abandonedRuns)
+
             if let terminalLogLevel = terminalLogLevel {
                 // use console logging
                 Log.add(handler: ConsoleLogHandler(at: terminalLogLevel),
@@ -541,36 +563,118 @@ struct StarCli: AsyncParsableCommand {
                 }
             }
 
+            // Kept so the run marker can name it: when a run is killed, the single most
+            // useful thing a crash report can tell the user is where its log went.
+            var fileLogPath: String?
             if let fileLogLevel = fileLogLevel {
                 Log.i("enabling file logging")
                 do {
-                    Log.add(handler: try FileLogHandler(at: fileLogLevel),
-                            for: .file)
+                    let fileLogHandler = try FileLogHandler(at: fileLogLevel)
+                    fileLogPath = fileLogHandler.full_log_path
+                    Log.add(handler: fileLogHandler, for: .file)
+                    // So a fatal signal appends a line saying so to this very file. Without
+                    // it, a log a user sends in just stops mid-sentence — which is precisely
+                    // the report that started all of this.
+                    StarCrashHandler.setLogPath(fileLogPath)
                 } catch {
                     Log.e("\(error)")
                 }
             }
-            
+
             setupKHTLogging()
 
-            // SIGKILL doesn't exist in the Windows C runtime (which only
-            // exposes SIGABRT/SIGFPE/SIGILL/SIGINT/SIGSEGV/SIGTERM), so
-            // gate this for non-Windows. Note that on POSIX this is also
-            // a no-op — SIGKILL is uncatchable, so signal() returns
-            // SIG_ERR and the closure is never invoked.
-            #if !os(Windows)
-            signal(SIGKILL) { foo in
-                print("caught SIGKILL \(foo)")
+            // Put machine-level warnings — memory pressure, a footprint past budget —
+            // where the user can see them.  Until this existed the OS's memory-pressure
+            // notification only throttled the admission gate, so a run walked into an
+            // out-of-memory kill behind a normal-looking progress display.
+            //
+            // Note this must happen before Processor is constructed: Processor copies
+            // `callbacks` at init and hands that copy to every frame, so anything assigned
+            // to `callbacks` afterwards never reaches them.
+            let warningLog = callbacks.updatable
+            callbacks.warningCallback = { warning in
+                if let warningLog {
+                    Task {
+                        await warningLog.log(
+                          name: "warning-\(warning.kind.rawValue)",
+                          message: "⚠️  \(warning.oneLineDescription)",
+                          // Above the "star is processing..." header at -1, because a
+                          // warning the user scrolls past is a warning wasted.
+                          value: -2
+                        )
+                    }
+                } else {
+                    // Straight to fd 2, not `print`. stdout is block-buffered when it is not a
+                    // terminal, and these warnings are precisely the ones issued shortly
+                    // before the process may be killed — by the OOM killer, or by a second
+                    // interrupt taking the `_exit` path, neither of which flushes stdio. A
+                    // warning that only exists in a buffer is not a warning. Observed: a
+                    // low-disk warning vanished entirely from a redirected run that was later
+                    // signalled.
+                    FileHandle.standardError.write(
+                      Data("⚠️  \(warning.oneLineDescription)\n".utf8))
+                }
             }
-            #endif
-            
+            await callbacks.installWarningHandler()
+
+            // Count frames reaching their terminal state, so a crash report can say how far
+            // the run got.  Assigned here rather than in the `updatable` branch below for
+            // the copy-semantics reason above.
+            callbacks.frameStateChangeCallback = { frame, state in
+                Task {
+                    await RunMarkerStore.shared.note(
+                      phase: "\(state)",
+                      frameCompleted: state == .complete ? frame.frameIndex : nil
+                    )
+                }
+            }
+
+            // The logged half of the report above, now that there are handlers to receive it.
+            for marker in abandonedRuns {
+                Log.w("previous run did not finish: \(marker.summary)")
+            }
+            await RunMarkerStore.shared.clearAbandoned()
+
+            await RunMarkerStore.shared.begin(
+              client: "star",
+              sequenceName: inputImageSequenceName,
+              sequencePath: inputImageSequencePath,
+              logPath: fileLogPath
+            )
+
+            // (Signal handling used to be attempted here with signal(SIGKILL), which could
+            // never fire — SIGKILL is uncatchable, so signal() just returns SIG_ERR. What it
+            // was reaching for is now real, and installed near the top of run(): fatal signals
+            // via StarCrashHandler, interruptions via StarShutdown. An out-of-memory SIGKILL
+            // is still uncatchable, and is covered after the fact by RunMarker.)
+
             Log.i("looking for files to processes in \(inputImageSequenceDirname)")
+
+            // How the run ended, decided here and acted on after the cleanup below, so that a
+            // failure still gets its marker cleared and its logs drained before the process
+            // exits non-zero.
+            var thrownFailure: Error?
+            var frameErrors: [String] = []
+
             do {
                 
                 let processor = try await Processor(
                   with: configManager,
                   callbacks: callbacks,
                   maxResidentImages: 40 // XXX
+                )
+
+                // Processor.init is what calls Config.set(imageInfo:), so this is the first
+                // point at which the run's shape is known.  Also the resume path, so a
+                // crash report can print a command the user can run.
+                await RunMarkerStore.shared.update(
+                  frameCount: await processor.frameCount,
+                  resumeConfigPath: await configManager.config().jsonPath(
+                    named: await configManager.jsonFilename()
+                  ),
+                  imageWidth: await configManager.config().imageWidth,
+                  imageHeight: await configManager.config().imageHeight,
+                  imageBytesPerPixel: await configManager.config().imageBytesPerPixel
                 )
 
                 if let _ = callbacks.updatable {
@@ -589,7 +693,13 @@ struct StarCli: AsyncParsableCommand {
                         }
                     }
                     
+                    // Chain rather than replace.  This assignment currently has no effect —
+                    // Processor already copied `callbacks` at init — but if that is ever
+                    // fixed, overwriting the field here would silently take the run marker's
+                    // progress tracking with it.
+                    let previousStateChange = callbacks.frameStateChangeCallback
                     callbacks.frameStateChangeCallback = { frame, state in
+                        previousStateChange?(frame, state)
                         // XXX make sure to wait for this
                         print("frame \(frame) state change to \(state)")
                         Task(priority: .userInitiated) {
@@ -607,12 +717,12 @@ struct StarCli: AsyncParsableCommand {
                 // field, which is both why it reaches whichever input path ran above —
                 // there is only one call — and why it does not persist into the saved
                 // config.json the way an override would.
-                try await processor.process(endIndex: lastFrameIndex)
+                frameErrors = try await processor.process(endIndex: lastFrameIndex)
 
                 Log.i("done")
 
-                let config = await configManager.config() 
-                if let updatable = callbacks.updatable {
+                let config = await configManager.config()
+                if frameErrors.isEmpty, let updatable = callbacks.updatable {
                     let message = "star processing was successful, output sequence is in \(config.outputSequenceDirname)"
                     Task {
                         await updatable.log(
@@ -623,7 +733,12 @@ struct StarCli: AsyncParsableCommand {
                     }
                 }
 
-                if !self.keepTempFiles {
+                // A run with frame errors keeps its temp directory whatever the flag says.
+                // Deleting it is only safe for a run that produced everything it was going
+                // to: the temp dir is what `star <temp>/config.json` resumes from, and
+                // removing it after a partial failure destroys the one thing that would let
+                // the user finish the frames that did not make it.
+                if !self.keepTempFiles, frameErrors.isEmpty {
                     // rm temp unless told not to, but leave the saved config behind:
                     // it is the only thing under there that a later
                     // `star <temp>/config.json` needs, and deleting it made a run that
@@ -633,16 +748,83 @@ struct StarCli: AsyncParsableCommand {
                                            named: await configManager.jsonFilename()
                                          ))
                 }
-                
+
             } catch {
                 Log.e("\(error)")
+                thrownFailure = error
             }
+
+            // Reached whether the run succeeded or threw: a failure that got as far as being
+            // caught and logged is not a crash, and leaving the marker behind would have the
+            // next launch report it as one.
+            await RunMarkerStore.shared.finish()
+
+            // Say it on stderr, not only through Log. Without a --console-log-level there is
+            // no console handler at all, so a run whose only record of failure was a Log.e
+            // could finish with the progress display still showing and nothing to say it had
+            // gone wrong.
+            if let thrownFailure {
+                FileHandle.standardError.write(Data("\nstar: failed: \(thrownFailure)\n".utf8))
+            } else if !frameErrors.isEmpty {
+                let config = await configManager.config()
+                let resumePath = config.jsonPath(named: await configManager.jsonFilename())
+                FileHandle.standardError.write(
+                  Data(frameErrorSummary(frameErrors, resumePath: resumePath).utf8))
+            }
+
+            await TaskWaiter.shared.finish()
+            await logging.gremlin.finishLogging() // XXX broken on swift6 :(
+
+            // Exit non-zero so anything scripting star can tell the difference. `ExitCode`
+            // rather than rethrowing the original error: ArgumentParser prints what it is
+            // given, and this one has already been reported above and in the log — throwing
+            // it again would say the same thing twice in two different formats.
+            if thrownFailure != nil || !frameErrors.isEmpty {
+                throw ExitCode.failure
+            }
+            return
 
         } else {
             throw ValidationError("need to provide input")
         }
-        await TaskWaiter.shared.finish()
-        await logging.gremlin.finishLogging() // XXX broken on swift6 :(
+    }
+}
+
+/// What a run that finished with per-frame errors tells the user.
+///
+/// Written to stderr rather than through `Log`: without `--console-log-level` there is no
+/// console handler at all, so a run whose only record of failure was a `Log.e` would end with
+/// the progress display still on screen and nothing to say anything had gone wrong.
+///
+/// Truncated, because a sequence where every frame failed would otherwise print hundreds of
+/// near-identical lines and push the one actionable thing — the resume command — off the top
+/// of the terminal.
+func frameErrorSummary(_ errors: [String], resumePath: String) -> String {
+    let shown = 10
+    var message = "\nstar: finished with \(errors.count) " +
+                  "error\(errors.count == 1 ? "" : "s"); output is incomplete.\n"
+    for error in errors.prefix(shown) { message += "  \(error)\n" }
+    if errors.count > shown {
+        message += "  ... and \(errors.count - shown) more\n"
+    }
+    message += "star: the temp directory has been kept — resume with:\n"
+    message += "  star \(resumePath)\n"
+    return message
+}
+
+/// Print the crash report for each run that ended without clearing its marker.
+///
+/// Printed rather than only logged: the whole point is that the run this is about produced no
+/// error message of its own, so a user who has just been dumped back at a shell prompt with
+/// nothing to go on needs to see it without being told to go looking for a log.
+func printReports(for markers: [RunMarker]) {
+    guard !markers.isEmpty else { return }
+    for marker in markers {
+        print("")
+        print("────────────────────────────────────────────────────────────────────────")
+        print(marker.report)
+        print("────────────────────────────────────────────────────────────────────────")
+        print("")
     }
 }
 

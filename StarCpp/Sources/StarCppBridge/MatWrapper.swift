@@ -52,11 +52,18 @@ public final class MatWrapper: @unchecked Sendable {
         MatWrapper(ref: mat_wrapper_clone(ref))
     }
 
-    public func write(to filename: String) {
+    /// Write to `filename`. Returns whether the file is now on disk.
+    ///
+    /// `@discardableResult` because plenty of callers write debug and preview images where a
+    /// failure genuinely does not matter — but the ones writing the user's output frames must
+    /// check it, or a full disk produces a run that reports success with frames missing.
+    @discardableResult
+    public func write(to filename: String) -> Bool {
         mat_wrapper_write_to(ref, filename)
     }
 
-    public func saveJpeg(quality: UInt32, filename: String) {
+    @discardableResult
+    public func saveJpeg(quality: UInt32, filename: String) -> Bool {
         mat_wrapper_save_jpeg(ref, quality, filename)
     }
 

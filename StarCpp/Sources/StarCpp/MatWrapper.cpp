@@ -134,8 +134,8 @@ bool mat_wrapper_owns_data(MatWrapperRef ref) {
 
 // --- Operations ---
 
-void mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
-    if (!ref) return;
+bool mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
+    if (!ref) return false;
     try {
         Log_d("writeTo: %s", filename);
         std::string fname(filename);
@@ -155,10 +155,19 @@ void mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
 
         if (ref->mat.empty()) {
             Log_w("not writing empty mat to %s", filename);
-            return;
+            return false;
         }
 
-        cv::imwrite(tmp, ref->mat);
+        // imwrite returns false rather than throwing for some failures (an unsupported
+        // extension, an encoder that could not be initialised), so the return value has to
+        // be checked as well as the exception caught. A full disk usually throws, but not
+        // always — and either way the caller has to be told.
+        if (!cv::imwrite(tmp, ref->mat)) {
+            Log_e("writeTo: imwrite failed for %s", filename);
+            std::error_code ignored;
+            std::filesystem::remove(tmp, ignored);
+            return false;
+        }
 
         int fd = open(tmp.c_str(), O_RDONLY);
         if (fd >= 0) { fsync(fd); close(fd); }
@@ -173,21 +182,35 @@ void mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
         std::filesystem::rename(tmp, fname, ec);
         if (ec) {
             Log_e("writeTo: rename failed for %s: %s", filename, ec.message().c_str());
+            std::error_code ignored;
+            std::filesystem::remove(tmp, ignored);
+            return false;
         }
+        return true;
     } catch (const cv::Exception &e) {
+        // Where a full disk usually lands: libtiff fails to write, OpenCV turns that into
+        // a cv::Exception. Caught and logged here since it must not cross the extern "C"
+        // boundary — but until this returned a value, that log line was the only trace and
+        // the Swift caller carried on as though the frame had been written.
         Log_e("writeTo: %s OpenCV Exception: %s", filename, e.what());
     } catch (...) {
         Log_e("writeTo: %s unknown exception", filename);
     }
+    return false;
 }
 
-void mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality, const char *filename) {
-    if (!ref) return;
+bool mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality, const char *filename) {
+    if (!ref) return false;
     try {
         cv::Mat eightBit = ensure8U(ref->mat);
         std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, (int)quality};
-        cv::imwrite(std::string(filename), eightBit, params);
+        if (!cv::imwrite(std::string(filename), eightBit, params)) {
+            Log_e("saveJpeg: imwrite failed for %s", filename);
+            return false;
+        }
+        return true;
     } KHT_CATCH_LOG("mat_wrapper_save_jpeg")
+    return false;
 }
 
 MatWrapperRef mat_wrapper_bottom_crop(MatWrapperRef ref, int n) {

@@ -71,9 +71,36 @@ public final class ViewModel {
         self.showErrorAlert = true
         self.errorMessage = "\(error)"
     }
-    
+
     var showErrorAlert = false
     var errorMessage: String = ""
+
+    // MARK: - Machine warnings
+
+    /// The most recent `StarWarning` of any severity, so a status area can show that
+    /// something is off without interrupting the user.
+    var latestWarning: StarWarning?
+
+    var showWarningAlert = false
+    var warningTitle: String = ""
+    var warningMessage: String = ""
+    var warningSuggestion: String?
+
+    /// Route a warning to the user.
+    ///
+    /// Only `critical` interrupts.  A `warning` — star pausing work because the machine is
+    /// busy — is something the user may want to know but does not need to act on, and a
+    /// modal for it would train them to dismiss the modal that matters.  The critical ones
+    /// are memory pressure (the last notice before the system kills the app) and the report
+    /// of a previous run that was killed.
+    func report(warning: StarWarning) {
+        self.latestWarning = warning
+        guard warning.severity == .critical else { return }
+        self.warningTitle = warning.title
+        self.warningMessage = warning.message
+        self.warningSuggestion = warning.suggestion
+        self.showWarningAlert = true
+    }
 
     var showCloseConfirmation = false
     var closeConfirmationMessage: String = ""

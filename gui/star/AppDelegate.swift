@@ -31,6 +31,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return .terminateNow
     }
 
+    /// Clear the run marker on a normal quit, so the next launch does not report this as a
+    /// crash.
+    ///
+    /// `finishWithoutWaiting()` rather than the actor's `finish()`: this hook is synchronous
+    /// and the app is already on its way out, so there is no async context to await from and
+    /// blocking the main thread here risks the work not completing at all.
+    func applicationWillTerminate(_ notification: Notification) {
+        RunMarkerStore.finishWithoutWaiting()
+    }
+
     // Closing the main window goes through here so it mirrors Cmd-Q:
     // confirm if work is in progress, and unload the sequence so the
     // next time the window opens it starts from the initial view.

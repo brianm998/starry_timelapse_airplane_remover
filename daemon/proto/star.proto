@@ -30,6 +30,26 @@ message HelloResponse { string daemon_version = 1; string scratch_dir = 2; }
 message ShutdownRequest {}
 message ShutdownResponse {}
 
+// ---- Notifications (daemon → client, unsolicited) ----
+
+// A machine-level condition the user should know about before it becomes a failure: memory
+// pressure, a process footprint past its budget, output that could not be written, a disk
+// with no room for the run. Mirrors StarCore.StarWarning.
+//
+// Sent as an Envelope with kind = NOTIFICATION and method = "Star.Warning". There is no
+// request, no id to correlate and no response — the daemon originates it whenever it notices
+// something. A client that ignores NOTIFICATION is still correct, it just says less.
+//
+// Before this the daemon's warnings went only to stderr, which the desktop client drains into
+// a sink that in a packaged app goes nowhere a user can read.
+message Warning {
+  string kind       = 1;  // StarWarning.Kind rawValue, e.g. "memoryPressure"
+  string severity   = 2;  // "warning" | "critical"
+  string title      = 3;  // short heading, e.g. "Low Memory"
+  string message    = 4;  // what happened, in a sentence
+  string suggestion = 5;  // what to do about it, may be empty
+}
+
 // ---- Session ----
 
 message OpenVideoRequest    { string video_path = 1; Config initial_config = 2; }

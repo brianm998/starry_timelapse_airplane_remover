@@ -69,6 +69,15 @@ fun StarApp(vm: AppViewModel) {
             val showPost by vm.showPostRenderPrompt.collectAsState()
             if (showPost && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PostProcessingRenderPrompt(vm)
 
+            val engineWarning by vm.engineWarning.collectAsState()
+            engineWarning?.let { w ->
+                // Not gated on being in a Sequence screen, unlike the version banner below: an
+                // engine that is about to be killed for memory is worth saying wherever the
+                // user happens to be.
+                EngineWarningBanner(w, onDismiss = vm::dismissEngineWarning,
+                                    modifier = Modifier.align(Alignment.TopCenter))
+            }
+
             val versionWarning by vm.versionWarning.collectAsState()
             if (versionWarning != null && screen is AppScreen.Sequence) {
                 VersionWarningBanner(versionWarning!!, onDismiss = vm::dismissVersionWarning, modifier = Modifier.align(Alignment.TopCenter))
@@ -110,6 +119,42 @@ private fun EngineDownOverlay(message: String, onRestart: () -> Unit, onClose: (
     }
 }
 
+/**
+ * A warning the daemon pushed about the machine — memory pressure, output it could not write,
+ * a disk with no room.
+ *
+ * Red for `critical`, which for memory pressure means the OS is about to start killing things
+ * and the user has seconds to close something; yellow otherwise. Dismissible, because a
+ * warning the user cannot get rid of is one they will learn to ignore — and the next one
+ * raises it again anyway.
+ */
+@Composable
+private fun EngineWarningBanner(
+    warning: com.star.proto.Warning,
+    onDismiss: () -> Unit,
+    modifier: Modifier,
+) {
+    val background = if (warning.severity == "critical") StarColors.red else StarColors.yellow
+    androidx.compose.foundation.layout.Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .padding(8.dp)
+            .widthIn(max = 640.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(background.copy(alpha = 0.94f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Column(Modifier.weight(1f, fill = false)) {
+            Text("⚠  ${warning.title}", color = Color.Black, fontSize = 12.sp)
+            Text(warning.message, color = Color.Black, fontSize = 11.sp)
+            if (warning.suggestion.isNotEmpty()) {
+                Text(warning.suggestion, color = Color.Black.copy(alpha = 0.75f), fontSize = 11.sp)
+            }
+        }
+        androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Dismiss", fontSize = 12.sp) }
+    }
+}
+
 @Composable
 private fun VersionWarningBanner(message: String, onDismiss: () -> Unit, modifier: Modifier) {
     androidx.compose.foundation.layout.Row(
@@ -125,6 +170,21 @@ private fun VersionWarningBanner(message: String, onDismiss: () -> Unit, modifie
     }
 }
 
+/**
+ * The engine-failure reason condensed to fit a badge.
+ *
+ * [DaemonProcess.deathDescription] returns a full sentence plus, where there was one, the
+ * daemon's last meaningful stderr line. That belongs in the overlay; the badge needs three or
+ * four words, and the distinction that matters most at a glance is "killed" versus "stopped".
+ */
+internal fun shortEngineFailure(message: String): String = when {
+    message.contains("out of memory") -> "engine killed: out of memory"
+    message.contains("SIGKILL") -> "engine killed"
+    message.contains("crashed") -> "engine crashed"
+    message.contains("exited normally") -> "engine exited"
+    else -> "engine stopped"
+}
+
 @Composable
 fun EngineBadge(vm: AppViewModel, modifier: Modifier = Modifier) {
     val status by vm.engineStatus.collectAsState()
@@ -132,7 +192,11 @@ fun EngineBadge(vm: AppViewModel, modifier: Modifier = Modifier) {
         is EngineStatus.Connected -> StarColors.green to "engine ${s.daemonVersion}"
         EngineStatus.Connecting -> StarColors.yellow to "connecting…"
         EngineStatus.Disconnected -> StarColors.gray to "disconnected"
-        is EngineStatus.Failed -> StarColors.red to "engine stopped"
+        // The badge has room for a few words, not a sentence, so it stays short — but the
+        // reason is no longer thrown away: it is in the tooltip here and in full in the
+        // engine-down overlay. Discarding `s.message` for a literal was why a daemon killed
+        // for memory and one that quit cleanly looked identical.
+        is EngineStatus.Failed -> StarColors.red to shortEngineFailure(s.message)
     }
     androidx.compose.foundation.layout.Row(
         verticalAlignment = Alignment.CenterVertically,

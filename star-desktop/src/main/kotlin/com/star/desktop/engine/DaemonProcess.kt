@@ -29,6 +29,10 @@ class DaemonProcess(
     private var process: Process? = null
     private var stderrJob: Job? = null
 
+    /** The last few stderr lines, kept so a death can be explained rather than just reported. */
+    private val recentStderr = ArrayDeque<String>()
+    private val stderrLock = Any()
+
     val stdin: OutputStream get() = process?.outputStream ?: error("daemon not started")
     val stdout: InputStream get() = process?.inputStream ?: error("daemon not started")
 
@@ -41,7 +45,13 @@ class DaemonProcess(
         // Insurance against an orphaned daemon if the JVM exits abnormally (stdin-EOF is the normal path).
         Runtime.getRuntime().addShutdownHook(Thread { if (proc.isAlive) proc.destroy() })
         stderrJob = logScope.launch(Dispatchers.IO) {
-            proc.errorStream.bufferedReader().forEachLine(onStderrLine)
+            proc.errorStream.bufferedReader().forEachLine { line ->
+                synchronized(stderrLock) {
+                    recentStderr.addLast(line)
+                    while (recentStderr.size > STDERR_TAIL) recentStderr.removeFirst()
+                }
+                onStderrLine(line)
+            }
         }
     }
 
@@ -53,6 +63,43 @@ class DaemonProcess(
         null // still running
     }
 
+    /** The last stderr lines the daemon produced, oldest first. */
+    fun stderrTail(): List<String> = synchronized(stderrLock) { recentStderr.toList() }
+
+    /**
+     * Why the daemon is gone, in a sentence, or null if it is still running.
+     *
+     * The exit status is the useful part and was being thrown away: `exitValueOrNull()` existed
+     * but nothing ever called it, so a daemon killed by the OS and a daemon that quit normally
+     * were reported to the user identically, as "engine stopped". On Unix a process killed by
+     * signal N exits with 128+N, so 137 is SIGKILL — which for stard almost always means the
+     * system ran out of memory, exactly the failure the whole crash-reporting effort is about.
+     */
+    fun deathDescription(): String? {
+        val code = exitValueOrNull() ?: return null
+
+        val cause = when (code) {
+            0 -> "the engine exited normally"
+            137 -> "the engine was killed by the system (SIGKILL) — most likely out of memory"
+            143 -> "the engine was asked to stop (SIGTERM)"
+            139 -> "the engine crashed (SIGSEGV)"
+            134 -> "the engine crashed (SIGABRT)"
+            138 -> "the engine crashed (SIGBUS)"
+            133 -> "the engine crashed (SIGTRAP)"
+            in 129..192 -> "the engine was killed by signal ${code - 128}"
+            else -> "the engine exited with status $code"
+        }
+
+        // The daemon's own last words, when it managed any. Its crash handler writes a
+        // "*** star has crashed ***" block to stderr, and StarWarnings writes memory-pressure
+        // warnings there too, so the tail usually says more than the exit code alone.
+        val detail = stderrTail()
+            .filter { it.isNotBlank() }
+            .lastOrNull { it.contains("STAR-WARNING") || it.contains("ERROR") || it.contains("crashed") }
+
+        return if (detail != null) "$cause — $detail" else cause
+    }
+
     fun destroy() {
         stderrJob?.cancel()
         runCatching { process?.outputStream?.close() } // close stdin → daemon gets EOF (clean-exit backstop, design §2.1)
@@ -61,6 +108,9 @@ class DaemonProcess(
     }
 
     companion object {
+        /** How many stderr lines to keep for [deathDescription]. */
+        private const val STDERR_TAIL = 50
+
         /**
          * Resolve the `stard` binary. Precedence:
          *  1. `-Dstar.stard.path=...` system property (dev override),

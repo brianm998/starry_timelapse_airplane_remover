@@ -502,8 +502,17 @@ extension PixelatedImage {
     }
     #endif
 
-    // write out the base image data
-    public func writeTIFFEncoding(toFilename imageFilename: String) {
+    /// Write out the base image data. Returns whether the file is now on disk.
+    ///
+    /// (The name is historical — the format comes from the filename extension, not from
+    /// anything TIFF-specific here.)
+    ///
+    /// `@discardableResult` so the many debug, mask and preview writers are unaffected, but
+    /// the result is real and the output-frame path checks it: before this the whole chain
+    /// down to `cv::imwrite` returned void, so a failed write was logged in C++ and invisible
+    /// to Swift.
+    @discardableResult
+    public func writeTIFFEncoding(toFilename imageFilename: String) -> Bool {
         self.mat.write(to: imageFilename)
     }
 
@@ -1160,9 +1169,11 @@ extension PixelatedImage {
         return PixelatedImage(mat: scaled)
     }
 
-    public func saveJpeg(withQuality quality: UInt, filename: String) {
+    /// Save as a JPEG. Returns whether the file is now on disk.
+    @discardableResult
+    public func saveJpeg(withQuality quality: UInt, filename: String) -> Bool {
         try? ensureParentDirectoriesExist(for: filename)
-        self.mat.saveJpeg(quality: UInt32(quality), filename: filename)
+        return self.mat.saveJpeg(quality: UInt32(quality), filename: filename)
     }
 
     public var description: String { "PixelatedImage: \(self.mat)" }

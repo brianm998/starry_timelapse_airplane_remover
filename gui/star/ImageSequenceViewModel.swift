@@ -1410,6 +1410,27 @@ public final class ImageSequenceViewModel {
         self.imageSequenceSize = await imageSequence.filenames.count
         Log.d("loaded \(imageSequenceSize) images")
         self.set(numberOfFrames: imageSequenceSize)
+
+        // Tell the run marker what is being worked on, so if the app is killed the next
+        // launch can name the sequence and offer to resume it.  Done after the config has
+        // had `set(imageInfo:)` applied above, so the dimensions are real.
+        // Write failures are per-sequence, and the gui keeps one process across many. Without
+        // this the "could not write output" warning fires once ever, so a failure on the
+        // second sequence a user opens would be recorded silently.
+        await OutputWriteFailures.shared.reset()
+
+        let markerConfig = self.config.config()
+        await RunMarkerStore.shared.describe(
+          sequenceName: markerConfig.imageSequenceDirname,
+          sequencePath: markerConfig.imageSequencePath
+        )
+        await RunMarkerStore.shared.update(
+          frameCount: imageSequenceSize,
+          resumeConfigPath: markerConfig.jsonPath(named: "config.json"),
+          imageWidth: markerConfig.imageWidth,
+          imageHeight: markerConfig.imageHeight,
+          imageBytesPerPixel: markerConfig.imageBytesPerPixel
+        )
         
         Log.d("loaded imageInfo \(imageInfo)")
 
@@ -1654,6 +1675,14 @@ public final class ImageSequenceViewModel {
         
         callbacks.frameStateChangeCallback = { [weak self] frame, newState in
             guard let self else { return }
+            // Progress into the run marker, so a crash report can say how far the run got.
+            // Outside the MainActor hop below because it does not touch view state.
+            Task {
+                await RunMarkerStore.shared.note(
+                  phase: "\(newState)",
+                  frameCompleted: newState == .complete ? frame.frameIndex : nil
+                )
+            }
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let previousState = self.frames[frame.frameIndex].frameState

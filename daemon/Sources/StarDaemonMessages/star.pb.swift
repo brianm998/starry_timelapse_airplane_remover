@@ -790,6 +790,41 @@ public struct Star_V1_ShutdownResponse: Sendable {
   public init() {}
 }
 
+/// A machine-level condition the user should know about before it becomes a failure: memory
+/// pressure, a process footprint past its budget, output that could not be written, a disk
+/// with no room for the run. Mirrors StarCore.StarWarning.
+///
+/// Sent as an Envelope with kind = NOTIFICATION and method = "Star.Warning". There is no
+/// request, no id to correlate and no response — the daemon originates it whenever it notices
+/// something. A client that ignores NOTIFICATION is still correct, it just says less.
+///
+/// Before this the daemon's warnings went only to stderr, which the desktop client drains into
+/// a sink that in a packaged app goes nowhere a user can read.
+public struct Star_V1_Warning: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// StarWarning.Kind rawValue, e.g. "memoryPressure"
+  public var kind: String = String()
+
+  /// "warning" | "critical"
+  public var severity: String = String()
+
+  /// short heading, e.g. "Low Memory"
+  public var title: String = String()
+
+  /// what happened, in a sentence
+  public var message: String = String()
+
+  /// what to do about it, may be empty
+  public var suggestion: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct Star_V1_OpenVideoRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2942,6 +2977,56 @@ extension Star_V1_ShutdownResponse: SwiftProtobuf.Message, SwiftProtobuf._Messag
   }
 
   public static func ==(lhs: Star_V1_ShutdownResponse, rhs: Star_V1_ShutdownResponse) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_Warning: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Warning"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}severity\0\u{1}title\0\u{1}message\0\u{1}suggestion\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.severity) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.suggestion) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.severity.isEmpty {
+      try visitor.visitSingularStringField(value: self.severity, fieldNumber: 2)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 3)
+    }
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 4)
+    }
+    if !self.suggestion.isEmpty {
+      try visitor.visitSingularStringField(value: self.suggestion, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_Warning, rhs: Star_V1_Warning) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.severity != rhs.severity {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.message != rhs.message {return false}
+    if lhs.suggestion != rhs.suggestion {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

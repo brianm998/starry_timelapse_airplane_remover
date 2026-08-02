@@ -24,6 +24,10 @@ enum DaemonHandlers {
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }
+        // An explicit shutdown is the daemon's other clean exit besides stdin EOF, so it
+        // has to clear the run marker too — otherwise every normal quit would have the
+        // next daemon report a crash that never happened.
+        await RunMarkerStore.shared.finish()
         // Give the response time to flush, then exit.
         try? await Task.sleep(nanoseconds: 100_000_000)
         Foundation.exit(0)

@@ -1873,8 +1873,37 @@ public struct Callbacks: Sendable {
     public var frameCheckClosure: (@Sendable (FrameAirplaneRemover) -> ())?
 
     public var frameOutliersLoadedCallback: (@Sendable (Int, OutlierLoadingState) -> Void)?
-    
+
+    /// Called when star notices something about the machine that the user should know
+    /// before it becomes a crash — memory pressure, a footprint past its budget, a
+    /// previous run that died.  See `StarWarning`.
+    ///
+    /// Setting this is not enough on its own: the things that notice these conditions are
+    /// process-wide singletons, so call `installWarningHandler()` once after building the
+    /// callbacks.  Kept as a field here rather than only as a `StarWarnings` call so that
+    /// warnings live alongside every other client hook instead of in a separate mechanism
+    /// a client has to know to go looking for.
+    public var warningCallback: (@Sendable (StarWarning) -> ())?
+
     public init() { }
+
+    /// Route `StarWarnings` to `warningCallback`, and record every warning into the current
+    /// `RunMarker` so a run that gets killed leaves behind the last thing star noticed.
+    ///
+    /// Call once per client at startup.  Calling it again replaces the handler, which is
+    /// what the gui needs when it opens a different sequence.
+    public func installWarningHandler() async {
+        let callback = self.warningCallback
+        await StarWarnings.shared.set { warning in
+            Task { await RunMarkerStore.shared.note(warning: warning) }
+            callback?(warning)
+        }
+        // Installing the handler is also what turns on the source of the most important
+        // warning.  Doing it here means a client cannot end up with a handler wired to
+        // nothing, which is what happened while memory-pressure monitoring started lazily
+        // inside `reserve()`.
+        await MemoryMonitor.shared.startMonitoring()
+    }
 }
 
 

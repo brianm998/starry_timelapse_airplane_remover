@@ -2,14 +2,20 @@ package com.star.desktop.engine
 
 import com.google.protobuf.ByteString
 import com.star.proto.Envelope
+import com.star.desktop.util.Log
+import com.star.proto.Warning
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import java.io.InputStream
@@ -56,6 +62,21 @@ class StdioConnection(
 
     /** Completes when the connection closes; value is the cause (null = clean EOF). */
     val closed = CompletableDeferred<Throwable?>()
+
+    /**
+     * Unsolicited warnings the daemon pushed: memory pressure, output it could not write, a
+     * disk with no room. See `Warning` in star.proto.
+     *
+     * `extraBufferCapacity` with [BufferOverflow.DROP_OLDEST] so emitting never suspends the
+     * reader loop — the protocol stream must not be able to stall behind the UI collecting
+     * these. Dropping the oldest is right for warnings specifically: if they are arriving
+     * faster than the UI reads them, the newest describes the current state.
+     */
+    private val _warnings = MutableSharedFlow<Warning>(
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val warnings: SharedFlow<Warning> = _warnings.asSharedFlow()
 
     val isClosed: Boolean get() = closedFlag.get()
 
@@ -111,7 +132,20 @@ class StdioConnection(
             // Unbounded channel → trySend only fails if the stream was already torn down; safe to drop then.
             Envelope.Kind.STREAM_ITEM -> pendingStreams[id]?.trySend(env)
             Envelope.Kind.STREAM_END -> pendingStreams.remove(id)?.close()
-            // The daemon never originates REQUEST/CANCEL; NOTIFICATION is reserved/unused in v1.
+            // Unsolicited, no id, no response. `tryEmit` rather than `emit`: this runs on the
+            // single reader coroutine, and suspending here would stall every multiplexed
+            // stream behind whatever is collecting warnings.
+            Envelope.Kind.NOTIFICATION -> {
+                if (env.method == "Star.Warning") {
+                    runCatching { Warning.parseFrom(env.payload) }
+                        .onSuccess { _warnings.tryEmit(it) }
+                        .onFailure { Log.w("Engine") { "unparseable Star.Warning notification" } }
+                }
+                // Any other notification method is ignored on purpose — a client that does not
+                // understand a notification must keep working, which is what let this be added
+                // without a protocol version bump.
+            }
+            // The daemon never originates REQUEST/CANCEL.
             else -> Unit
         }
     }

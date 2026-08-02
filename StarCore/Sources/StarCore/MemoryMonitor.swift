@@ -184,9 +184,16 @@ public actor MemoryMonitor {
         // every waiter that remains queued *can* eventually fit.
         if bytes > budget {
             reservedBytes += bytes
-            Log.e("MemoryMonitor: a single reservation of \(bytes / (1024*1024))MB exceeds " +
-                  "the entire \(budget / (1024*1024))MB budget — proceeding ungated. " +
-                  "Check the op's memoryMultiplier and maxMatMemoryFraction.")
+            postWarning(StarWarning(
+              kind: .oversizedReservation,
+              severity: .critical,
+              message: "A single step of this run needs \(bytes / (1024*1024))MB, which is more " +
+                       "than the \(budget / (1024*1024))MB star is allowed to use on this " +
+                       "machine, so it is running without a memory limit and could be stopped " +
+                       "by the system.",
+              suggestion: "Reduce the resolution star works at (--keypoint-divisor 1.5) or " +
+                          "raise --max-mat-memory-fraction if this machine has memory to spare."
+            ))
             return
         }
 
@@ -294,16 +301,42 @@ public actor MemoryMonitor {
         }
         let footprint = reality.processFootprint()
         if footprint > 0, footprint >= budget {
+            postWarning(StarWarning(
+              kind: .footprintOverBudget,
+              severity: .warning,
+              message: "star is using \(footprint / (1024*1024))MB, which is past the " +
+                       "\(budget / (1024*1024))MB it budgeted for this machine. It is pausing " +
+                       "work rather than allocating more.",
+              suggestion: "The run should still finish, more slowly. If it is stopped by the " +
+                          "system, resume it with --keypoint-divisor 1.5."
+            ))
             return "process footprint \(footprint / (1024*1024))MB is already at or past " +
                    "the \(budget / (1024*1024))MB budget — the ledger is under-counting " +
                    "by at least \(footprint > reservedBytes ? (footprint - reservedBytes) / (1024*1024) : 0)MB"
         }
         let available = reality.systemAvailable()
         if available > 0, available < systemFloorBytes {
+            postWarning(StarWarning(
+              kind: .lowSystemMemory,
+              severity: .warning,
+              message: "This machine has only \(available / (1024*1024))MB of memory free. " +
+                       "star is pausing work rather than making it worse.",
+              suggestion: "Closing other applications will let the run continue at full speed."
+            ))
             return "only \(available / (1024*1024))MB available system-wide, floor is " +
                    "\(systemFloorBytes / (1024*1024))MB"
         }
         return nil
+    }
+
+    /// Begin watching the machine, independently of whether anything has reserved yet.
+    ///
+    /// `reserve()` also calls this, but lazily is not soon enough: until the first
+    /// reservation the process is deaf to memory pressure, and the phases before it —
+    /// loading a sequence, probing a video, generating previews — are perfectly capable of
+    /// filling memory.  Clients call this at startup via `Callbacks.installWarningHandler()`.
+    public func startMonitoring() {
+        startPressureMonitoringIfNeeded()
     }
 
     /// Start listening for OS memory-pressure notifications. Idempotent.
@@ -349,13 +382,39 @@ public actor MemoryMonitor {
         guard pressured != underMemoryPressure else { return }
         underMemoryPressure = pressured
         if pressured {
-            Log.w("MemoryMonitor: OS memory pressure — holding new reservations " +
+            // Detail at info, because the user-facing sentence below is posted as a
+            // warning and logs itself — two WARN lines saying the same thing is noise.
+            Log.i("MemoryMonitor: OS memory pressure — holding new reservations " +
                   "(reserved \(reservedBytes / (1024*1024))MB, footprint " +
                   "\(reality.processFootprint() / (1024*1024))MB)")
+            // The most important warning star can issue.  On Darwin this notification is
+            // the last thing the system says before jetsam begins killing processes, and
+            // the kill itself arrives as an uncatchable SIGKILL — so this is the only
+            // moment at which an out-of-memory death can be announced while it is still
+            // in the future.
+            postWarning(StarWarning(
+              kind: .memoryPressure,
+              severity: .critical,
+              message: "The system is low on memory and may stop star to reclaim it. " +
+                       "star is holding \(reality.processFootprint() / (1024*1024))MB.",
+              suggestion: "Closing other applications now may let this run finish. If it is " +
+                          "stopped, resume it and add --keypoint-divisor 1.5 to use less memory."
+            ))
         } else {
             Log.i("MemoryMonitor: memory pressure cleared, resuming admissions")
             drainReadyWaiters()
         }
+    }
+
+    /// Hand a warning to `StarWarnings` without making the caller async.
+    ///
+    /// `realityBlock()` and `drainReadyWaiters()` are synchronous and are called from the
+    /// release path and the poll loop; awaiting another actor from them would put the
+    /// admission gate behind the warning system, which is backwards.  `StarWarning` is
+    /// `Sendable`, so handing it off costs nothing.  Dedup lives in `StarWarnings`, which
+    /// matters here: `realityBlock()` is evaluated on every drain pass.
+    private func postWarning(_ warning: StarWarning) {
+        Task { await StarWarnings.shared.post(warning) }
     }
 
     // MARK: - Internal

@@ -431,7 +431,13 @@ public struct ImageAccessor: Sendable {
             {
                 switch size {
                 case .original:
-                    image.writeTIFFEncoding(toFilename: filename)
+                    // The user's actual product. A failure here is recorded rather than
+                    // discarded — before the write path could report one, a full disk meant
+                    // star worked through the whole sequence, wrote nothing, and exited 0.
+                    if !image.writeTIFFEncoding(toFilename: filename) {
+                        await OutputWriteFailures.shared.record(path: filename,
+                                                                frameIndex: frameIndex)
+                    }
                 default:
                     // everything but originals gets downscaled and saved as a jpeg
                     if let smallSize = sizeOf(size),

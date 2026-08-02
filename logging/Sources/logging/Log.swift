@@ -149,6 +149,14 @@ public class Log {
         case file
         case alert
         case gui
+
+        /// The always-on log that exists so a crash leaves evidence.
+        ///
+        /// Distinct from `.file`, which is the user-facing opt-in log: handlers are keyed by
+        /// output type, so sharing one slot would mean a user turning their own file log on
+        /// or off silently replaced or removed the diagnostic one. See
+        /// `StarCore.DiagnosticLog`.
+        case diagnostic
     }
 
     public nonisolated(unsafe) static var name: String = "log"

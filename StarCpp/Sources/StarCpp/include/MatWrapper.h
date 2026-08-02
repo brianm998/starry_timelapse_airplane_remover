@@ -44,8 +44,20 @@ int64_t    mat_wrapper_bits_per_component(MatWrapperRef ref);
 bool       mat_wrapper_owns_data(MatWrapperRef ref);
 
 // --- Operations ---
-void          mat_wrapper_write_to(MatWrapperRef ref, const char *filename);
-void          mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality,
+
+/// Write the mat to `filename`, via a temp file and an atomic rename.
+///
+/// Returns whether the file is now on disk at `filename`. False covers a null or empty mat,
+/// an imwrite that failed or threw (a full disk lands here), and a rename that failed; in
+/// every one of those cases the temp file is cleaned up and nothing is left at `filename`.
+///
+/// The result matters: this used to return void, so a write that failed was logged in C++
+/// and the Swift caller had no way to know the frame had not been written. On a full disk a
+/// run would report success with output frames missing.
+bool          mat_wrapper_write_to(MatWrapperRef ref, const char *filename);
+
+/// Write the mat as a JPEG at `quality`. Returns whether it was written.
+bool          mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality,
                                     const char *filename);
 MatWrapperRef mat_wrapper_bottom_crop(MatWrapperRef ref, int n);
 MatWrapperRef mat_wrapper_up_scale(MatWrapperRef ref, uint64_t width, uint64_t height);

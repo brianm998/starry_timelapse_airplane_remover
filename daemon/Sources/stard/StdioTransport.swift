@@ -1,4 +1,5 @@
 import Foundation
+import StarCore
 import StarDaemonMessages
 import SwiftProtobuf
 import logging
@@ -145,6 +146,29 @@ actor StdioTransport {
         var env = Star_V1_Envelope()
         env.id = id
         env.kind = .streamEnd
+        send(env)
+    }
+
+    /// Push an unsolicited warning to the client.
+    ///
+    /// The one message the daemon originates on its own: no id to correlate, no response
+    /// expected. A client that ignores NOTIFICATION frames is still correct — which is what
+    /// made this safe to add without a protocol version bump, since the v1 client already
+    /// dropped unknown envelope kinds.
+    func sendWarning(_ warning: StarWarning) {
+        var payload = Star_V1_Warning()
+        payload.kind = warning.kind.rawValue
+        payload.severity = warning.severity.rawValue
+        payload.title = warning.title
+        payload.message = warning.message
+        payload.suggestion = warning.suggestion ?? ""
+
+        guard let data = try? payload.serializedData() else { return }
+
+        var env = Star_V1_Envelope()
+        env.kind = .notification
+        env.method = "Star.Warning"
+        env.payload = data
         send(env)
     }
 
