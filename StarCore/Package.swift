@@ -65,6 +65,14 @@ let package = Package(
               //   xcrun coremlc compile tile_classifier.mlpackage \
               //       StarCore/Sources/StarCore/Resources/
               .copy("Resources/tile_classifier.mlmodelc"),
+
+              // Every user-visible string in every client, one JSON table per language,
+              // plus languages.json listing what we ship. `.copy` rather than `.process`
+              // so the directory keeps its shape and StarLocalization can find a table by
+              // name; and plain JSON rather than .xcstrings because SwiftPM does not
+              // compile string catalogs — it copies them in and every lookup then returns
+              // the key. star and stard ship on Linux and Windows, so that matters.
+              .copy("Resources/Localizations"),
             ]
         ),
         .testTarget(

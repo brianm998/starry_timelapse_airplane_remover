@@ -43,6 +43,7 @@ import com.star.proto.CleanMethod
 import com.star.proto.Config
 import com.star.proto.DetectionType
 import kotlinx.coroutines.launch
+import com.star.desktop.i18n.localized
 
 /**
  * Processing settings sheet (macOS `ProcessingSettingsView`). Edits the config fields the daemon's
@@ -65,11 +66,11 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Processing Settings", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            Text(localized("ui.processing_settings"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
 
             val cfg = loaded
             if (cfg == null) {
-                Text("Loading…", color = StarColors.textSecondary, fontSize = 13.sp)
+                Text(localized("ui.loading"), color = StarColors.textSecondary, fontSize = 13.sp)
                 return@Column
             }
 
@@ -94,7 +95,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                     onSelect = { clean = it },
                 )
                 Text(
-                    "Selective / Auto-Selective detect outlier groups you can review & edit. Automatic does not.",
+                    localized("ui.selective_auto_selective_detect_outlier"),
                     color = StarColors.textDisabled, fontSize = 10.sp,
                 )
             }
@@ -134,7 +135,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             }
 
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                OutlinedButton(onClick = app::closeSettings) { Text("Cancel") }
+                OutlinedButton(onClick = app::closeSettings) { Text(localized("ui.cancel")) }
                 Button(
                     onClick = {
                         val b = cfg.toBuilder()
@@ -161,7 +162,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text("Save") }
+                ) { Text(localized("ui.save")) }
             }
         }
     }

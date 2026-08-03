@@ -79,20 +79,20 @@ struct FilmstripImageView: View {
                         AutoSelectiveIcon()
                           .padding(2)
                           .shadow(radius: 1)
-                          .help("This frame uses Auto Select")
+                          .help(localized("ui.this_frame_uses_auto_select"))
                           .foregroundColor(self.processingColor)
                     } else {
                         AutoIcon()
                           .padding(2)
                           .shadow(radius: 1)
-                          .help("This frame uses Automatic mode")
+                          .help(localized("ui.this_frame_uses_automatic_mode"))
                           .foregroundColor(self.processingColor)
                     }
                 case .selective:
                     SelectiveIcon()
                       .padding(2)
                       .shadow(radius: 1)
-                      .help("This frame uses Selective mode")
+                      .help(localized("ui.this_frame_uses_selective_mode"))
                       .foregroundColor(self.processingColor)
                 }
                 
@@ -215,7 +215,7 @@ struct FilmstripImageView: View {
             let count = viewModel.isMultiSelecting
                 ? viewModel.selectedFrameIndices.count
                 : 1
-            let label = count == 1 ? "1 Frame" : "\(count) Frames"
+            let label = count == 1 ? localized("ui.one_frame") : localized("ui.n_frames_capitalised", count)
 
             Text(label)
                 .font(.headline)
@@ -233,19 +233,19 @@ struct FilmstripImageView: View {
             Button {
                 viewModel.processSelectedFrames(with: .alignment)
             } label: {
-                Label("Re-Process Alignment", systemImage: "arrow.triangle.2.circlepath")
+                Label(localized("ui.re_process_alignment"), systemImage: "arrow.triangle.2.circlepath")
             }
 
             Button {
                 viewModel.processSelectedFrames(with: .outliers)
             } label: {
-                Label("Re-Process Outliers", systemImage: "line.diagonal")
+                Label(localized("ui.re_process_outliers"), systemImage: "line.diagonal")
             }
 
             Button {
                 viewModel.processSelectedFrames(with: .horizons)
             } label: {
-                Label("Re-Process Horizons", systemImage: "mountain.2")
+                Label(localized("ui.re_process_horizons"), systemImage: "mountain.2")
             }
 
             Divider()
@@ -253,7 +253,7 @@ struct FilmstripImageView: View {
             Button(role: .destructive) {
                 viewModel.processSelectedFrames(with: .everything)
             } label: {
-                Label("Re-Process Everything", systemImage: "arrow.clockwise.circle")
+                Label(localized("ui.re_process_everything"), systemImage: "arrow.clockwise.circle")
             }
         }
     }

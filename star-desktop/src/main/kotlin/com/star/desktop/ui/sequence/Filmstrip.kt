@@ -40,6 +40,7 @@ import com.star.desktop.ui.sequence.grid.CleanMethodIcon
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameInfo
 import com.star.proto.FrameProcessingState
+import com.star.desktop.i18n.localized
 
 /** Filmstrip cell width (macOS thumbnailWidth + an 8pt cell margin so flush cells leave a thumbnail gutter). */
 private val CELL_WIDTH = 116.dp
@@ -144,7 +145,7 @@ private fun FilmstripCell(
                 if (t != null) {
                     Image(
                         bitmap = t,
-                        contentDescription = "Frame $index",
+                        contentDescription = localized("ui.frame_n", index),
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )

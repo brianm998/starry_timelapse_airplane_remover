@@ -9,8 +9,8 @@ public enum MultiSelectionType: String, Equatable, CaseIterable {
     case someAfter = "this frame and some after"
     case someBefore = "some previous frames ending here"
     
-    var localizedName: LocalizedStringKey {
-        LocalizedStringKey(rawValue)
+    var localizedName: String {
+        localized("multi_selection.\(rawValue)")
     }
 }
 
@@ -20,8 +20,8 @@ public enum MultiSelectionRemovalType: String, Equatable, CaseIterable {
     case removeOverlaps
     case keepOverlaps
 
-    var localizedName: LocalizedStringKey {
-        LocalizedStringKey(rawValue)
+    var localizedName: String {
+        localized("multi_removal.\(rawValue)")
     }
 }
 
@@ -41,7 +41,7 @@ struct MultiSelectSheetView: View {
         VStack {
             Spacer()
               .frame(minWidth: 300)
-            Text("Change removing in the selected area across more than one frame.")
+            Text(localized("ui.change_removing_in_the_selected_area_across"))
 
             Picker("", selection: $multiSelectionRemovalType) {
                 ForEach(MultiSelectionRemovalType.allCases, id: \.self) { value in
@@ -51,7 +51,7 @@ struct MultiSelectSheetView: View {
               .pickerStyle(.segmented)
               .frame(maxWidth: 120)
             
-            Text("What frames should we modify?")
+            Text(localized("ui.what_frames_should_we_modify"))
             Picker("", selection: $multiSelectionType) {
                 ForEach(MultiSelectionType.allCases, id: \.self) { value in
                     Text(value.localizedName).tag(value)
@@ -64,26 +64,26 @@ struct MultiSelectSheetView: View {
             case .all:
                 switch multiSelectionRemovalType {
                 case .remove:
-                    Text("Remove outliers in this area in all \(frames.count) frames")
+                    Text(localized("ui.area.remove.all", frames.count))
                 case .keep:
-                    Text("Keep outliers in this area in all \(frames.count) frames")
+                    Text(localized("ui.area.keep.all", frames.count))
                 case .removeOverlaps:
-                    Text("Remove overlaying outliers in this area in all \(frames.count) frames")
+                    Text(localized("ui.area.remove_overlaps.all", frames.count))
                 case .keepOverlaps:
-                    Text("Keep overlaying outliers in this area in all \(frames.count) frames")
+                    Text(localized("ui.area.keep_overlaps.all", frames.count))
                 }
                 
             case .allAfter:
                 let numFrames = frames.count - currentIndex + 1
                 switch multiSelectionRemovalType {
                 case .remove:
-                    Text("Remove outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
+                    Text(localized("ui.area.remove.after", numFrames, currentIndex))
                 case .keep:
-                    Text("Keep outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
+                    Text(localized("ui.area.keep.after", numFrames, currentIndex))
                 case .removeOverlaps:
-                    Text("Remove overlaying outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
+                    Text(localized("ui.area.remove_overlaps.after", numFrames, currentIndex))
                 case .keepOverlaps:
-                    Text("Keep overlaying outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
+                    Text(localized("ui.area.keep_overlaps.after", numFrames, currentIndex))
 
                 }
                     
@@ -91,13 +91,13 @@ struct MultiSelectSheetView: View {
                 let numFrames = currentIndex + 1
                 switch multiSelectionRemovalType {
                 case .remove:
-                    Text("Remove outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                    Text(localized("ui.area.remove.before", numFrames, currentIndex))
                 case .keep:
-                    Text("Keep outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                    Text(localized("ui.area.keep.before", numFrames, currentIndex))
                 case .removeOverlaps:
-                    Text("Remove overlaying outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                    Text(localized("ui.area.remove_overlaps.before", numFrames, currentIndex))
                 case .keepOverlaps:
-                    Text("Keep overlaying outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                    Text(localized("ui.area.keep_overlaps.before", numFrames, currentIndex))
                 }
 
            case .someAfter:
@@ -107,12 +107,12 @@ struct MultiSelectSheetView: View {
             }
             
             HStack {
-                Button("Cancel") {
+                Button(localized("ui.cancel")) {
                     self.isVisible = false
                 }
                 switch multiSelectionType {
                 case .all:
-                    Button("Modify") {
+                    Button(localized("ui.modify")) {
                         switch multiSelectionRemovalType {
                         case .remove:
                             self.updateFrames(shouldRemove: true)
@@ -127,7 +127,7 @@ struct MultiSelectSheetView: View {
                     }
 
                 case .allAfter:
-                    Button("Modify") {
+                    Button(localized("ui.modify")) {
 
                         switch multiSelectionRemovalType {
                         case .remove:
@@ -147,7 +147,7 @@ struct MultiSelectSheetView: View {
                     }
                     
                 case .allBefore:
-                    Button("Modify") {
+                    Button(localized("ui.modify")) {
 
                         switch multiSelectionRemovalType {
                         case .remove:
@@ -172,7 +172,7 @@ struct MultiSelectSheetView: View {
                     }
                 case .someAfter:
                     HStack {
-                        Button("Modify") {
+                        Button(localized("ui.modify")) {
 
 
                             switch multiSelectionRemovalType {
@@ -197,14 +197,14 @@ struct MultiSelectSheetView: View {
                             
                             self.isVisible = false
                         }
-                        Text("the next")
+                        Text(localized("ui.the_next"))
                         TextField("", value: $number_of_frames, format: .number)
                           .frame(maxWidth: 40)
-                        Text("frames")
+                        Text(localized("ui.frames"))
                     }
                 case .someBefore:
                     HStack {
-                        Button("Modify") {
+                        Button(localized("ui.modify")) {
                             switch multiSelectionRemovalType {
                             case .remove:
                                 self.updateFrames(shouldRemove: true,
@@ -227,10 +227,10 @@ struct MultiSelectSheetView: View {
                             
                             self.isVisible = false
                         }
-                        Text("the previous")
+                        Text(localized("ui.the_previous"))
                         TextField("", value: $number_of_frames, format: .number)
                           .frame(maxWidth: 40)
-                        Text("frames")
+                        Text(localized("ui.frames"))
                     }
                 }
             }
@@ -267,7 +267,7 @@ struct MultiSelectSheetView: View {
                             do {
                                 try await viewModel.render(frame: frame, now: false)
                             } catch {
-                                await viewModel.report(error: "Render failed: \(error)")
+                                await viewModel.report(error: localized("ui.render_failed", error))
                             }
                         }
 
@@ -317,7 +317,7 @@ struct MultiSelectSheetView: View {
                                 do {
                                     try await viewModel.render(frame: frame, now: false, ever: false)
                                 } catch {
-                                    await viewModel.report(error: "Render failed: \(error)")
+                                    await viewModel.report(error: localized("ui.render_failed", error))
                                 }
                             }
                             

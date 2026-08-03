@@ -189,9 +189,36 @@ public struct RunMarker: Codable, Sendable, Equatable {
         let total = Int(max(0, seconds))
         let hours = total / 3600
         let minutes = (total % 3600) / 60
-        if hours > 0 { return "\(hours)h \(minutes)m" }
-        if minutes > 0 { return "\(minutes)m" }
-        return "\(total)s"
+        if hours > 0 { return localized("duration.hours_minutes", hours, minutes) }
+        if minutes > 0 { return localized("duration.minutes", minutes) }
+        return localized("duration.seconds", total)
+    }
+
+    /// The keys of the labels down the left of `report`, in the order they can appear.
+    ///
+    /// Listed here rather than at each use so the column width can be computed from the
+    /// longest one *in the current language*: a fixed 17-column indent is an English
+    /// measurement, and "last warning" is `letzte Warnung` in German and `последнее
+    /// предупреждение` in Russian. Alignment is by character count, which is right for the
+    /// Latin and Cyrillic scripts and approximate for CJK — acceptable in a diagnostic dump.
+    private static let reportLabelKeys = [
+      "run_marker.label.sequence",
+      "run_marker.label.started",
+      "run_marker.label.last_seen",
+      "run_marker.label.doing",
+      "run_marker.label.version",
+      "run_marker.label.memory",
+      "run_marker.label.signal",
+      "run_marker.label.last_warning",
+      "run_marker.label.log",
+    ]
+
+    /// `"  sequence:      my-timelapse"` — one report row, padded to the language's own width.
+    private static func reportLine(_ labelKey: String, _ value: String) -> String {
+        let width = reportLabelKeys.map { localized($0).count }.max() ?? 0
+        let label = localized(labelKey)
+        let padding = String(repeating: " ", count: max(1, width - label.count + 2))
+        return "  \(label):\(padding)\(value)"
     }
 
     private static let stamp: DateFormatter = {
@@ -203,16 +230,25 @@ public struct RunMarker: Codable, Sendable, Equatable {
     /// One sentence naming the run and what probably happened to it.  This is the headline
     /// — the cli prints it, the gui puts it in an alert title area, the daemon logs it.
     public var summary: String {
-        let what = sequenceName.map { "run of \($0)" } ?? "run"
         let when = RunMarker.stamp.string(from: heartbeatAt)
-        switch diagnosis {
-        case .crashed(let signal):
-            return "\(client)'s previous \(what) crashed at \(when) (\(signal))."
-        case .likelyOutOfMemory:
-            return "\(client)'s previous \(what) stopped unexpectedly at \(when), " +
-                   "most likely because the system ran out of memory."
-        case .unknown:
-            return "\(client)'s previous \(what) stopped unexpectedly at \(when)."
+
+        // Named and unnamed are separate keys rather than one key with an interpolated
+        // "run of X" fragment. A fragment cannot be translated: languages decline the noun
+        // differently depending on what follows it, and several need the sequence name in a
+        // different position in the sentence entirely.
+        switch (diagnosis, sequenceName) {
+        case (.crashed(let signal), .some(let name)):
+            return localized("run_marker.summary.crashed.named", client, name, when, signal)
+        case (.crashed(let signal), .none):
+            return localized("run_marker.summary.crashed.unnamed", client, when, signal)
+        case (.likelyOutOfMemory, .some(let name)):
+            return localized("run_marker.summary.out_of_memory.named", client, name, when)
+        case (.likelyOutOfMemory, .none):
+            return localized("run_marker.summary.out_of_memory.unnamed", client, when)
+        case (.unknown, .some(let name)):
+            return localized("run_marker.summary.unknown.named", client, name, when)
+        case (.unknown, .none):
+            return localized("run_marker.summary.unknown.unnamed", client, when)
         }
     }
 
@@ -224,68 +260,81 @@ public struct RunMarker: Codable, Sendable, Equatable {
         var lines: [String] = [summary, ""]
 
         if let sequenceName {
-            var detail = "  sequence:      \(sequenceName)"
-            if let frameCount {
-                detail += " (\(frameCount) frames"
-                if let imageWidth, let imageHeight, imageWidth > 0, imageHeight > 0 {
-                    detail += ", \(imageWidth)×\(imageHeight)"
-                }
-                detail += ")"
+            let detail: String
+            if let frameCount, let imageWidth, let imageHeight, imageWidth > 0, imageHeight > 0 {
+                detail = localized("run_marker.sequence.frames_and_size",
+                                   sequenceName, frameCount, imageWidth, imageHeight)
+            } else if let frameCount {
+                detail = localized("run_marker.sequence.frames", sequenceName, frameCount)
+            } else {
+                detail = sequenceName
             }
-            lines.append(detail)
+            lines.append(RunMarker.reportLine("run_marker.label.sequence", detail))
         }
 
-        lines.append("  started:       \(RunMarker.stamp.string(from: startedAt))")
+        lines.append(RunMarker.reportLine("run_marker.label.started",
+                                          RunMarker.stamp.string(from: startedAt)))
 
-        var lastSeen = "  last seen:     \(RunMarker.stamp.string(from: heartbeatAt))" +
-                       " (after \(RunMarker.duration(heartbeatAt.timeIntervalSince(startedAt)))"
+        let seenAt = RunMarker.stamp.string(from: heartbeatAt)
+        let elapsed = RunMarker.duration(heartbeatAt.timeIntervalSince(startedAt))
+        let lastSeen: String
         if let frameCount, frameCount > 0 {
-            lastSeen += ", at frame \(framesCompleted) of \(frameCount)"
+            lastSeen = localized("run_marker.last_seen.after_at_frame",
+                                 seenAt, elapsed, framesCompleted, frameCount)
+        } else {
+            lastSeen = localized("run_marker.last_seen.after", seenAt, elapsed)
         }
-        lastSeen += ")"
-        lines.append(lastSeen)
+        lines.append(RunMarker.reportLine("run_marker.label.last_seen", lastSeen))
 
         if let currentPhase {
-            lines.append("  doing:         \(currentPhase)")
+            lines.append(RunMarker.reportLine("run_marker.label.doing", currentPhase))
         }
 
-        lines.append("  version:       \(client) \(starVersion) (pid \(pid))")
+        lines.append(RunMarker.reportLine("run_marker.label.version",
+                                          localized("run_marker.version.value",
+                                                    client, starVersion, pid)))
 
         if hostPhysicalMemoryBytes > 0 {
-            var memory = "  memory:        "
-            if peakFootprintBytes > 0 {
-                memory += "peaked at \(RunMarker.gb(peakFootprintBytes)) of " +
-                          "\(RunMarker.gb(hostPhysicalMemoryBytes))"
-                if let fraction = peakMemoryFraction {
-                    memory += String(format: " (%.0f%%)", fraction * 100)
-                }
+            let memory: String
+            if peakFootprintBytes > 0, let fraction = peakMemoryFraction {
+                memory = localized("run_marker.memory.peaked_fraction",
+                                   RunMarker.gb(peakFootprintBytes),
+                                   RunMarker.gb(hostPhysicalMemoryBytes),
+                                   String(format: "%.0f", fraction * 100))
+            } else if peakFootprintBytes > 0 {
+                memory = localized("run_marker.memory.peaked",
+                                   RunMarker.gb(peakFootprintBytes),
+                                   RunMarker.gb(hostPhysicalMemoryBytes))
             } else {
-                memory += "\(RunMarker.gb(hostPhysicalMemoryBytes)) on this machine"
+                memory = localized("run_marker.memory.machine_total",
+                                   RunMarker.gb(hostPhysicalMemoryBytes))
             }
-            lines.append(memory)
+            lines.append(RunMarker.reportLine("run_marker.label.memory", memory))
         }
 
         if let fatalSignal {
-            lines.append("  signal:        \(fatalSignal)")
+            lines.append(RunMarker.reportLine("run_marker.label.signal", fatalSignal))
         }
 
         if let lastWarning {
-            lines.append("  last warning:  [\(lastWarning.severity.rawValue)] \(lastWarning.message)")
+            let severity = localized("severity.\(lastWarning.severity.rawValue)")
+            lines.append(RunMarker.reportLine(
+                           "run_marker.label.last_warning",
+                           localized("run_marker.last_warning.value",
+                                     severity, lastWarning.message)))
         }
 
         if let logPath {
-            lines.append("  log:           \(logPath)")
+            lines.append(RunMarker.reportLine("run_marker.label.log", logPath))
         }
 
         lines.append("")
 
         switch diagnosis {
         case .crashed(let signal):
-            lines.append("star caught \(signal) and stopped. This is a bug in star, not a " +
-                         "problem with your images — please report it.")
+            lines.append(localized("run_marker.advice.crashed", signal))
             lines.append("")
-            lines.append("The operating system also wrote its own crash report, which has the " +
-                         "backtrace. On macOS it is the newest file for this program in:")
+            lines.append(localized("run_marker.advice.crashed.os_report"))
             lines.append("  ~/Library/Logs/DiagnosticReports/")
             // Only when there is memory evidence as well. A crash under memory pressure is
             // often an allocation that failed rather than a logic error, and in that case the
@@ -295,28 +344,33 @@ public struct RunMarker: Codable, Sendable, Equatable {
                fraction >= RunMarker.outOfMemoryFootprintFraction
             {
                 lines.append("")
-                lines.append("Memory was also very high when this happened " +
-                             String(format: "(%.0f%% of this machine)", fraction * 100) +
-                             ", so the crash may have been a failed allocation. Retrying with " +
-                             "--keypoint-divisor 1.5 is worth trying as well as reporting it.")
+                lines.append(localized("run_marker.advice.crashed.memory_too",
+                                       String(format: "%.0f", fraction * 100)))
             }
         case .likelyOutOfMemory:
-            lines.append("An out-of-memory kill cannot be caught and reported as it happens — " +
-                         "the system stops the process outright — which is why this is being " +
-                         "reported now rather than at the time.")
+            lines.append(localized("run_marker.advice.out_of_memory"))
             lines.append("")
-            lines.append("To use less memory on the next attempt:")
-            lines.append("  --keypoint-divisor 1.5      detect keypoints at reduced resolution")
-            lines.append("  --num-concurrent-renders N  process fewer frames at once")
-            lines.append("  --max-keypoint-ops 1        serialise the most expensive step")
+            lines.append(localized("run_marker.advice.out_of_memory.header"))
+            // The flags themselves are not translated — they are what the user has to type —
+            // so only the explanation after each one is. Padded to a common column so the
+            // explanations line up whatever length the translations turn out to be.
+            let flags = [
+              ("--keypoint-divisor 1.5", "run_marker.advice.out_of_memory.keypoint_divisor"),
+              ("--num-concurrent-renders N", "run_marker.advice.out_of_memory.concurrent_renders"),
+              ("--max-keypoint-ops 1", "run_marker.advice.out_of_memory.max_keypoint_ops"),
+            ]
+            let flagWidth = flags.map(\.0.count).max() ?? 0
+            for (flag, explanationKey) in flags {
+                let padding = String(repeating: " ", count: flagWidth - flag.count + 2)
+                lines.append("  \(flag)\(padding)\(localized(explanationKey))")
+            }
         case .unknown:
-            lines.append("Nothing in the record points at a cause. If there is a log above, " +
-                         "its last lines are the best evidence.")
+            lines.append(localized("run_marker.advice.unknown"))
         }
 
         if let resumeConfigPath {
             lines.append("")
-            lines.append("To resume this run where it stopped:")
+            lines.append(localized("run_marker.resume.header"))
             lines.append("  star \(resumeConfigPath)")
         }
 
@@ -329,14 +383,14 @@ public struct RunMarker: Codable, Sendable, Equatable {
         var text = summary
         switch diagnosis {
         case .crashed:
-            text += " This is a bug in star — please report it."
+            text += " " + localized("run_marker.brief.crashed")
         case .likelyOutOfMemory:
-            text += " Try --keypoint-divisor 1.5, or fewer concurrent renders."
+            text += " " + localized("run_marker.brief.out_of_memory")
         case .unknown:
             break
         }
         if let resumeConfigPath {
-            text += " Resume with: star \(resumeConfigPath)"
+            text += " " + localized("run_marker.brief.resume", resumeConfigPath)
         }
         return text
     }

@@ -24,12 +24,27 @@ class LocalPreferences {
     var skipRenderPromptAfterProcessing: Boolean = false
         private set
 
+    /**
+     * The language the user picked, or null to follow the system.
+     *
+     * Same key and same file as the macOS app's `UserPreferences.language`, so a machine with
+     * both installed only has to be told once.
+     */
+    @Volatile
+    var language: String? = null
+        private set
+
     init {
         load()
     }
 
     fun setSkipRenderPrompt(value: Boolean) {
         skipRenderPromptAfterProcessing = value
+        save()
+    }
+
+    fun setLanguage(value: String?) {
+        language = value
         save()
     }
 
@@ -64,6 +79,7 @@ class LocalPreferences {
                 raw.forEach { (k, v) -> recent[k] = (v as? Double)?.toLong() ?: 0L }
             }
             skipRenderPromptAfterProcessing = map["skipRenderPromptAfterProcessing"] as? Boolean ?: false
+            language = (map["language"] as? String)?.takeIf { it.isNotEmpty() }
             synchronized(others) {
                 others.clear()
                 map.forEach { (k, v) -> if (k !in MANAGED_KEYS) others[k] = v }
@@ -78,6 +94,9 @@ class LocalPreferences {
             val out = LinkedHashMap<String, Any?>(synchronized(others) { LinkedHashMap(others) })
             out["recentlyOpenedSequencelist"] = synchronized(recent) { LinkedHashMap(recent) }
             out["skipRenderPromptAfterProcessing"] = skipRenderPromptAfterProcessing
+            // Written only when set: absent means "follow the system", and the Swift side
+            // decodes a missing key to nil the same way.
+            language?.let { out["language"] = it }
             prefsFile.writeText(gson.toJson(out))
         } catch (e: Exception) {
             Log.w("Prefs") { "failed to write $prefsFile: ${e.message}" }
@@ -85,6 +104,6 @@ class LocalPreferences {
     }
 
     private companion object {
-        val MANAGED_KEYS = setOf("recentlyOpenedSequencelist", "skipRenderPromptAfterProcessing")
+        val MANAGED_KEYS = setOf("recentlyOpenedSequencelist", "skipRenderPromptAfterProcessing", "language")
     }
 }

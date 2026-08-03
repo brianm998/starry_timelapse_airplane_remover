@@ -49,6 +49,27 @@ public final class ViewModel {
 
     var userPreferences: UserPreferences = UserPreferences()
 
+    /// The language every window is currently drawn in.
+    ///
+    /// Observable so that changing it redraws the UI immediately, with no relaunch. The
+    /// strings themselves come from `localized(...)`, which is a plain function call and so
+    /// invisible to SwiftUI's dependency tracking — the window roots hang `.id(languageCode)`
+    /// off this instead, which rebuilds them wholesale. Blunt, but a language change is a rare
+    /// event and this way no view can forget to observe it.
+    var languageCode: String = StarLocalization.shared.currentCode
+
+    /// Every language the Language menu offers.
+    var availableLanguages: [StarLanguage] { StarLocalization.shared.languages }
+
+    /// True when the user has not picked a language and star is following the system.
+    var isFollowingSystemLanguage: Bool { userPreferences.language == nil }
+
+    /// Switch languages. `nil` means "go back to following the system".
+    func setLanguage(_ language: StarLanguage?) {
+        userPreferences.language = language?.code     // persists, and sets the override
+        languageCode = StarLocalization.shared.currentCode
+    }
+
     init() {
         if let newPrefs = UserPreferences.initialize() {
             userPreferences = newPrefs
@@ -109,7 +130,7 @@ public final class ViewModel {
     var showInfoDialog = false
     var currentInfoType: InfoType = .about
 
-    var labelText: String = "Started"
+    var labelText: String = localized("ui.started")
 
     var isLoadingImageSequence = false
     var isProbingImageSequence = false

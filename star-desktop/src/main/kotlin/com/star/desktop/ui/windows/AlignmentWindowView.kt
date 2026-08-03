@@ -33,6 +33,7 @@ import com.star.desktop.ui.theme.StarColors
 import com.star.proto.AlignmentInfo
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.star.desktop.i18n.localized
 
 /**
  * Alignment diagnostics window (macOS `AlignmentWindowView`): per-frame star-alignment deviation
@@ -49,12 +50,12 @@ fun AlignmentWindowView(app: AppViewModel, svm: SequenceViewModel) {
     val count = svm.frameCount
 
     Column(Modifier.fillMaxSize().background(StarColors.appBackground).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Alignment", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        Text(localized("ui.alignment_2"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
 
         val frames = seq
         if (frames == null || frames.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No alignment data — process the sequence first.", color = StarColors.textDisabled, fontSize = 12.sp)
+                Text(localized("ui.no_alignment_data_process_the_sequence_first"), color = StarColors.textDisabled, fontSize = 12.sp)
             }
             return@Column
         }
@@ -72,12 +73,12 @@ fun AlignmentWindowView(app: AppViewModel, svm: SequenceViewModel) {
             }
         }
 
-        Text("Star alignment deviation (per neighbor offset)", color = StarColors.textSecondary, fontSize = 11.sp)
+        Text(localized("ui.star_alignment_deviation_per_neighbor_offset"), color = StarColors.textSecondary, fontSize = 11.sp)
         DeviationChart(byOffset, maxAbsDev, count, current) { svm.setCurrentIndex(it) }
 
         OffsetLegend(byOffset.keys.toList())
 
-        Text("Sky keypoints", color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        Text(localized("ui.sky_keypoints"), color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
         KeypointChart(frames, count, current) { svm.setCurrentIndex(it) }
     }
 }

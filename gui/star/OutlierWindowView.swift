@@ -21,30 +21,30 @@ struct OutlierWindowView: View {
                 Spacer()
                 // put view for hough lines here
                 if outlierWindowViewModel.selectedOutliers.count == 0 {
-                    Text("Select some outliers") 
+                    Text(localized("ui.select_some_outliers")) 
                 } else if outlierWindowViewModel.selectedOutliers.count == 1 {
                     VStack {
-                        Text("Hough Lines for the selected outlier")
-                        Text("select a line to see it on the main window,")
-                        Text("or update the line parameters to see any potential differences.")
+                        Text(localized("ui.hough_lines_for_the_selected_outlier"))
+                        Text(localized("ui.select_a_line_to_see_it_on_the_main_window"))
+                        Text(localized("ui.or_update_the_line_parameters_to_see_any"))
 
                         HoughLinesTableView()
                           .environment(outlierWindowViewModel)
                     }
                 } else {
-                    Text("\(outlierWindowViewModel.selectedOutliers.count) outliers selected") 
+                    Text(localized("ui.n_outliers_selected", outlierWindowViewModel.selectedOutliers.count)) 
                 }
                 Spacer()
                 houghLineArgs
             }
         }
-          .navigationTitle("Star Outlier Info Window")
+          .navigationTitle(localized("ui.star_outlier_info_window"))
     }
 
     var houghLineArgs: some View {
         Group {
             if let houghLineFinderArgs = outlierWindowViewModel.houghLineFinderArgs {
-                ArgableView(title: "Hough Line Arguments",
+                ArgableView(title: localized("ui.hough_line_arguments"),
                             description: """
                               Arguments for the hough line finder.
                               Updating values here will generate new lines with the new values.
@@ -53,7 +53,7 @@ struct OutlierWindowView: View {
                             array: HoughLineFinder.Args.ArgType.allCases)
                   .environment(outlierWindowViewModel)
             } else {
-                Text("Loading Args")
+                Text(localized("ui.loading_args"))
             }
         }
     }
@@ -100,60 +100,60 @@ struct OutlierWindowView: View {
                       .buttonStyle(PlainButtonStyle())
 
                     
-                    Text("Select which columns to show")
+                    Text(localized("ui.select_which_columns_to_show"))
                 }
                 HStack {
                     Button() {
                         outlierWindowViewModel.selectAll()
                     } label: {
-                        Text("Select All")
+                        Text(localized("ui.select_all"))
                           .buttonStyle(ShrinkingButton())
                     }
 
                     Button() {
                         outlierWindowViewModel.clearAll()
                     } label: {
-                        Text("Clear All")
+                        Text(localized("ui.clear_all"))
                           .buttonStyle(ShrinkingButton())
                     }
                 }
                 
-                Toggle("Name", isOn: $outlierWindowViewModel.showName)
-                Toggle("CenterX", isOn: $outlierWindowViewModel.showCenterX)
-                Toggle("CenterY", isOn: $outlierWindowViewModel.showCenterY)
-                Toggle("Width", isOn: $outlierWindowViewModel.showWidth)
-                Toggle("Height", isOn: $outlierWindowViewModel.showHeight)
-                Toggle("MinX", isOn: $outlierWindowViewModel.showMinX)
-                Toggle("MinY", isOn: $outlierWindowViewModel.showMinY)
-                Toggle("MaxX", isOn: $outlierWindowViewModel.showMaxX)
-                Toggle("MaxY", isOn: $outlierWindowViewModel.showMaxY)
-                Toggle("Hypotenuse", isOn: $outlierWindowViewModel.showHypotenuse)
-                Toggle("AspectRatio", isOn: $outlierWindowViewModel.showAspectRatio)
-                Toggle("FillAmount", isOn: $outlierWindowViewModel.showFillAmount)
-                Toggle("SurfaceAreaRatio", isOn: $outlierWindowViewModel.showSurfaceAreaRatio)
-                Toggle("Averagebrightness", isOn: $outlierWindowViewModel.showAveragebrightness)
-                Toggle("MedianBrightness", isOn: $outlierWindowViewModel.showMedianBrightness)
-                Toggle("MaxBrightness", isOn: $outlierWindowViewModel.showMaxBrightness)
-                Toggle("NumberOfNearbyOutliersInSameFrame",
+                Toggle(localized("ui.name"), isOn: $outlierWindowViewModel.showName)
+                Toggle(localized("ui.centerx"), isOn: $outlierWindowViewModel.showCenterX)
+                Toggle(localized("ui.centery"), isOn: $outlierWindowViewModel.showCenterY)
+                Toggle(localized("ui.width"), isOn: $outlierWindowViewModel.showWidth)
+                Toggle(localized("ui.height"), isOn: $outlierWindowViewModel.showHeight)
+                Toggle(localized("ui.minx"), isOn: $outlierWindowViewModel.showMinX)
+                Toggle(localized("ui.miny"), isOn: $outlierWindowViewModel.showMinY)
+                Toggle(localized("ui.maxx"), isOn: $outlierWindowViewModel.showMaxX)
+                Toggle(localized("ui.maxy"), isOn: $outlierWindowViewModel.showMaxY)
+                Toggle(localized("ui.hypotenuse"), isOn: $outlierWindowViewModel.showHypotenuse)
+                Toggle(localized("ui.aspectratio"), isOn: $outlierWindowViewModel.showAspectRatio)
+                Toggle(localized("ui.fillamount"), isOn: $outlierWindowViewModel.showFillAmount)
+                Toggle(localized("ui.surfacearearatio"), isOn: $outlierWindowViewModel.showSurfaceAreaRatio)
+                Toggle(localized("ui.averagebrightness"), isOn: $outlierWindowViewModel.showAveragebrightness)
+                Toggle(localized("ui.medianbrightness"), isOn: $outlierWindowViewModel.showMedianBrightness)
+                Toggle(localized("ui.maxbrightness"), isOn: $outlierWindowViewModel.showMaxBrightness)
+                Toggle(localized("ui.numberofnearbyoutliersinsameframe"),
                        isOn: $outlierWindowViewModel.showNumberOfNearbyOutliersInSameFrame)
-                Toggle("MaxHoughTransformCount", isOn: $outlierWindowViewModel.showMaxHoughTransformCount)
-                Toggle("PixelBorderAmount", isOn: $outlierWindowViewModel.showPixelBorderAmount)
-                Toggle("AverageLineVariance", isOn: $outlierWindowViewModel.showAverageLineVariance)
-                Toggle("LineLength", isOn: $outlierWindowViewModel.showLineLength)
-                Toggle("NearbyDirectOverlapScore", isOn: $outlierWindowViewModel.showNearbyDirectOverlapScore)
-                Toggle("BoundingBoxOverlapScore", isOn: $outlierWindowViewModel.showBoundingBoxOverlapScore)
-                Toggle("LineIntensityScore", isOn: $outlierWindowViewModel.showLineIntensityScore)
-                Toggle("LinePixelScore", isOn: $outlierWindowViewModel.showLinePixelScore)
-                Toggle("BorderBrightness", isOn: $outlierWindowViewModel.showBorderBrightness)
-                Toggle("BunchCount", isOn: $outlierWindowViewModel.showBunchCount)
-                Toggle("MedianBunchSize", isOn: $outlierWindowViewModel.showMedianBunchSize)
-                Toggle("MaxBunchSize", isOn: $outlierWindowViewModel.showMaxBunchSize)
-                Toggle("NeighborLineThetaScore", isOn: $outlierWindowViewModel.showNeighborLineThetaScore)
-                Toggle("NeighborLineRhoScore", isOn: $outlierWindowViewModel.showNeighborLineRhoScore)
-                Toggle("NeighborLineSizeScore", isOn: $outlierWindowViewModel.showNeighborLineSizeScore)
-                Toggle("NeighborLineBrightnessScore", isOn: $outlierWindowViewModel.showNeighborLineBrightnessScore)
-                Toggle("NeighborLineDistanceScore", isOn: $outlierWindowViewModel.showNeighborLineDistanceScore)
-                Toggle("NeighborLineDistanceScore", isOn: $outlierWindowViewModel.showClassificationScore)
+                Toggle(localized("ui.maxhoughtransformcount"), isOn: $outlierWindowViewModel.showMaxHoughTransformCount)
+                Toggle(localized("ui.pixelborderamount"), isOn: $outlierWindowViewModel.showPixelBorderAmount)
+                Toggle(localized("ui.averagelinevariance"), isOn: $outlierWindowViewModel.showAverageLineVariance)
+                Toggle(localized("ui.linelength"), isOn: $outlierWindowViewModel.showLineLength)
+                Toggle(localized("ui.nearbydirectoverlapscore"), isOn: $outlierWindowViewModel.showNearbyDirectOverlapScore)
+                Toggle(localized("ui.boundingboxoverlapscore"), isOn: $outlierWindowViewModel.showBoundingBoxOverlapScore)
+                Toggle(localized("ui.lineintensityscore"), isOn: $outlierWindowViewModel.showLineIntensityScore)
+                Toggle(localized("ui.linepixelscore"), isOn: $outlierWindowViewModel.showLinePixelScore)
+                Toggle(localized("ui.borderbrightness"), isOn: $outlierWindowViewModel.showBorderBrightness)
+                Toggle(localized("ui.bunchcount"), isOn: $outlierWindowViewModel.showBunchCount)
+                Toggle(localized("ui.medianbunchsize"), isOn: $outlierWindowViewModel.showMedianBunchSize)
+                Toggle(localized("ui.maxbunchsize"), isOn: $outlierWindowViewModel.showMaxBunchSize)
+                Toggle(localized("ui.neighborlinethetascore"), isOn: $outlierWindowViewModel.showNeighborLineThetaScore)
+                Toggle(localized("ui.neighborlinerhoscore"), isOn: $outlierWindowViewModel.showNeighborLineRhoScore)
+                Toggle(localized("ui.neighborlinesizescore"), isOn: $outlierWindowViewModel.showNeighborLineSizeScore)
+                Toggle(localized("ui.neighborlinebrightnessscore"), isOn: $outlierWindowViewModel.showNeighborLineBrightnessScore)
+                Toggle(localized("ui.neighborlinedistancescore"), isOn: $outlierWindowViewModel.showNeighborLineDistanceScore)
+                Toggle(localized("ui.neighborlinedistancescore"), isOn: $outlierWindowViewModel.showClassificationScore)
             }
         }
     }
@@ -189,14 +189,14 @@ struct ArgableView<T: Hashable>: View {
                 Text(description)
                 Spacer()
                   .frame(maxHeight: 10)
-                Text("Parameters which can affect how this step operates:")
+                Text(localized("ui.parameters_which_can_affect_how_this_step"))
                 Grid(alignment: .topLeading) {
                     GridRow {
-                        Text("Name")
+                        Text(localized("ui.name"))
                           .foregroundColor(.black)
-                        Text("Value")
+                        Text(localized("ui.value"))
                           .foregroundColor(.black)
-                        Text("Description")
+                        Text(localized("ui.description"))
                           .foregroundColor(.black)
                     }
                       .padding(.vertical, 2)
@@ -315,27 +315,27 @@ struct HoughLinesTableView: View {
         Group {
             if outlierWindowViewModel.selectedOutliers.count == 1 {
 
-                Text("Information about \(outlierWindowViewModel.lineInfo.count) lines")
+                Text(localized("ui.info_about_n_lines", outlierWindowViewModel.lineInfo.count))
                 Table(outlierWindowViewModel.lineInfo,
                       selection: $outlierWindowViewModel.selectedLines,
                       sortOrder: $sortOrder)
                 {
-                    TableColumn("IntensityScore", value: \.intensityScore) { row in
+                    TableColumn(localized("ui.intensity_score"), value: \.intensityScore) { row in
                         Text(String(format: "%.2f", row.intensityScore))
                     }
-                    TableColumn("PixelScore", value: \.pixelScore) { row in
+                    TableColumn(localized("ui.pixel_score"), value: \.pixelScore) { row in
                         Text(String(format: "%.2f", row.pixelScore))
                     }
-                    TableColumn("Theta", value: \.line.theta) { row in
+                    TableColumn(localized("ui.theta"), value: \.line.theta) { row in
                         Text(String(format: "%.2f", row.line.theta))
                     }
-                    TableColumn("Rho", value: \.line.rho) { row in
+                    TableColumn(localized("ui.rho"), value: \.line.rho) { row in
                         Text(String(format: "%.2f", row.line.rho))
                     }
-                    TableColumn("Votes", value: \.line.votes) { row in
+                    TableColumn(localized("ui.votes"), value: \.line.votes) { row in
                         Text(String(row.line.votes))
                     }
-                    TableColumn("Border", value: \.border) { row in
+                    TableColumn(localized("ui.border"), value: \.border) { row in
                         Text(String(row.border))
                     }
                 }
@@ -347,7 +347,7 @@ struct HoughLinesTableView: View {
                   }
 
             } else {
-                Text("Please select a single group above to see its lines here")
+                Text(localized("ui.please_select_a_single_group_above_to_see"))
             }
         }
     }

@@ -1,6 +1,7 @@
 import SwiftUI
 import logging
 
+import StarCore
 /*
   add number of images in cache
   allow sorting data by time
@@ -59,7 +60,7 @@ struct DebugView: View {
                 }
             }
         }
-          .navigationTitle("Star Debug")
+          .navigationTitle(localized("ui.star_debug"))
     }
 
 
@@ -73,7 +74,7 @@ struct DebugView: View {
         return HStack {
             Spacer()
 
-            Picker("Log Level", selection: $loggingViewModel.level) {
+            Picker(localized("ui.log_level"), selection: $loggingViewModel.level) {
                 ForEach(Log.Level.allCases, id: \.self) { level in
                     Text("\(level.emo) \(level.rawValue)")
                 }
@@ -81,7 +82,7 @@ struct DebugView: View {
               .pickerStyle(.menu)
               .fixedSize(horizontal: true, vertical: false)
 
-            Picker("Show", selection: $filterLevel) {
+            Picker(localized("ui.show"), selection: $filterLevel) {
                 ForEach(Log.Level.allCases, id: \.self) { level in
                     Text("\(level.emo) \(level.rawValue)")
                 }
@@ -89,7 +90,7 @@ struct DebugView: View {
               .pickerStyle(.menu)
               .fixedSize(horizontal: true, vertical: false)
 
-            Text("Max Log Lines") 
+            Text(localized("ui.max_log_lines")) 
             TextField("\(loggingViewModel.maxGUILogLines)",
                       text: $loggingViewModel.maxGUILogLinesString)
 
@@ -115,7 +116,7 @@ struct DebugView: View {
             Button {
                 copyToClipboard(string: loggingViewModel.rawLogs)
             } label: {
-                Text("Copy to Clipboard")
+                Text(localized("ui.copy_to_clipboard"))
             }
             
             Button {
@@ -126,14 +127,14 @@ struct DebugView: View {
                     }
                 }
             } label: {
-                Text("Scroll to Bottom")
+                Text(localized("ui.scroll_to_bottom"))
             }
               .disabled(isPinnedToBottom)
 
             Button {
                 loggingViewModel.clearLogs()
             } label: {
-                Text("Clear")
+                Text(localized("ui.clear"))
             }
 
             Divider()
@@ -151,7 +152,7 @@ struct DebugView: View {
                         Text("\(level.emo) \(level.rawValue)")
                     }
                 } label: {
-                    Text("Log to file at level")
+                    Text(localized("ui.log_to_file_at_level"))
                       .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
                 }
                   .pickerStyle(.menu)

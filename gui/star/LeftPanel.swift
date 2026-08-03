@@ -27,19 +27,19 @@ struct LeftPanel: View {
     func string(for byteCount: Int) -> String {
         //Log.d("string(for: byteCount \(byteCount))")
         if byteCount < 0 {
-            return "0 bytes"    // can go negative because of temporarily mismatched data
+            return localized("ui.bytes_zero")    // can go negative because of temporarily mismatched data
         } else if byteCount < 1024 {
-            return "\(byteCount) bytes"
+            return localized("ui.bytes", byteCount)
         } else if byteCount < (1024*1024) {
-            return "\(byteCount/1024) kb"
+            return localized("ui.kilobytes", byteCount/1024)
         } else if byteCount < (1024*1024*1024) {
-            return "\(byteCount/(1024*1024)) mb"
+            return localized("ui.megabytes", byteCount/(1024*1024))
         } else if byteCount < (1024*1024*1024*1024) {
             let str = String(format: "%.1f", Double(byteCount)/(1024*1024*1024))
-            return "\(str) gb"
+            return localized("ui.gigabytes", str)
         } else {// if byteCount < 1024^5 {
             let str = String(format: "%.2f", Double(byteCount)/(1024*1024*1024*1024))
-            return "\(str) tb"
+            return localized("ui.terabytes", str)
         }
     }
     
@@ -182,7 +182,7 @@ struct LeftPanel: View {
             Button() {
                 viewModel.shouldShowProcessingSettings = true
             } label: {
-                Text("Process frames")
+                Text(localized("ui.process_frames"))
             }
               .disabled(processButtonDisabled)
               .if(!processButtonDisabled) { 
@@ -199,7 +199,7 @@ struct LeftPanel: View {
                   await viewModel.processAll()
                 }
             } label: {
-                Text("Update \(userModified) frames")
+                Text(localized("ui.update_n_frames", userModified))
             }
               .disabled(updateButtonDisabled)
               .if(!updateButtonDisabled) { view in
@@ -229,7 +229,7 @@ struct LeftPanel: View {
                 viewModel.isRenderingVideo = false
                 
             } label: {
-                Text("render video from \(viewModel.frames.count) frames")
+                Text(localized("ui.render_video_from_n_frames_lower", viewModel.frames.count))
             }
               .disabled(renderButtonDisabled)
               .if(!renderButtonDisabled) { view in
@@ -288,7 +288,7 @@ struct LeftPanel: View {
                 Grid(alignment: .trailing) {
                     GridRow {
                         HStack {
-                            Text("step")
+                            Text(localized("ui.step"))
                               .foregroundColor(.white)
                             Spacer()
                         }
@@ -354,7 +354,7 @@ struct LeftPanel: View {
     var imageCacheView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
-            Text("Non Cached Image stats")
+            Text(localized("ui.non_cached_image_stats"))
               .foregroundColor(.white)
             Space(height: 4)
 
@@ -362,27 +362,27 @@ struct LeftPanel: View {
 
             let memoryString = string(for: memoryBytesUsed)
             
-            Text("\(string(for: viewModel.totalMatBytes-memoryBytesUsed)) used by \(viewModel.totalMatInstances - imageCount) images")
+            Text(localized("ui.memory_used_by_images_other", string(for: viewModel.totalMatBytes-memoryBytesUsed), viewModel.totalMatInstances - imageCount))
               .foregroundColor(viewModel.totalMatInstances == 0 ? .gray : .green)
             Space(height: 6)
             
-            Text("Cached Image stats")
+            Text(localized("ui.cached_image_stats"))
               .foregroundColor(.white)
             Space(height: 4)
 
             if viewModel.showAllImageCacheStats {
                 // show all image cache stats
-                Text("\(memoryString) used by \(imageCount) images")
+                Text(localized("ui.memory_used_by_images", memoryString, imageCount))
                   .foregroundColor(imageCount == 0 ? .gray : .green)
 
-                Text("\(imageCacheHits) cache hits")
+                Text(localized("ui.n_cache_hits", imageCacheHits))
                   .foregroundColor(imageCacheHits == 0 ? .gray : .green)
-                Text("\(imageCacheMisses) cache misses")
+                Text(localized("ui.n_cache_misses", imageCacheMisses))
                   .foregroundColor(imageCacheMisses == 0 ? .gray : .red)
                 ForEach(imageCacheMap.keys.sorted { $0 > $1 }, id: \.self) { key in
                     let sizeString = string(for: key)
                     if let count = imageCacheMap[key] {
-                        Text("\(count) \(sizeString) images")
+                        Text(localized("ui.n_sized_images", count, sizeString))
                           .foregroundColor(.yellow)
                     }
                 }
@@ -390,7 +390,7 @@ struct LeftPanel: View {
                 // XXX add more here
             } else {
                 // not all stats, just basics
-                Text("\(memoryString) used by \(imageCount) images")
+                Text(localized("ui.memory_used_by_images", memoryString, imageCount))
                   .foregroundColor(.gray)
             }
             
@@ -404,7 +404,7 @@ struct LeftPanel: View {
     var processingStateView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
-            Text("Processing stats")
+            Text(localized("ui.processing_stats"))
               .foregroundColor(.white)
             Spacer()
               .frame(maxHeight: 4)
@@ -436,7 +436,7 @@ struct LeftPanel: View {
                         let color: Color = viewModel.numberOfFramesProcessingNow == 0 ? .gray : .white
                         Text("\(viewModel.numberOfFramesProcessingNow)")
                           .foregroundColor(color)
-                        Text("processing")
+                        Text(localized("ui.processing_2"))
                           .foregroundColor(color)
                     }
 
@@ -461,7 +461,7 @@ struct LeftPanel: View {
     var frameModeView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
-            Text("Show:")
+            Text(localized("ui.show_2"))
               .foregroundColor(.white)
             
             VerticalLimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in

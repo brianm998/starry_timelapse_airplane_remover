@@ -8,9 +8,9 @@ struct ProcessAllFramesButton: View {
     var body: some View {
         Group {
             Button(action: buttonPress) {
-                Text("Process all frames")
+                Text(localized("ui.process_all_frames"))
             }
-              .help("Process all frames")
+              .help(localized("ui.process_all_frames"))
         }
     }
 

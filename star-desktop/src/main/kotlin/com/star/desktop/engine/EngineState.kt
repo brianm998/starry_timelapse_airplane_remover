@@ -1,5 +1,6 @@
 package com.star.desktop.engine
 
+import com.star.desktop.i18n.Strings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import com.star.proto.Warning
@@ -76,7 +77,7 @@ class EngineState(
             conn.start()
             val cli = StarClient(conn)
 
-            val hello = cli.hello(clientVersion)
+            val hello = cli.hello(clientVersion, Strings.currentCode)
 
             process = proc
             connection = conn

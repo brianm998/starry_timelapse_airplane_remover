@@ -3,6 +3,7 @@ package com.star.desktop.ui.app
 import com.star.desktop.data.FrameRepository
 import com.star.desktop.data.ImageCache
 import com.star.desktop.data.LocalPreferences
+import com.star.desktop.i18n.Strings
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.data.SessionRepository
@@ -65,6 +66,22 @@ class AppViewModel(
 
     val engine = EngineState(scope)
     val prefs = LocalPreferences()
+
+    init {
+        // Before any window is composed, so the first frame the user sees is already in their
+        // language rather than flashing English. Also before the engine connects, so the
+        // locale sent on Daemon.Hello is the one the UI is actually showing.
+        Strings.setOverride(prefs.language)
+    }
+
+    /** Every language the Language menu offers. */
+    val availableLanguages get() = Strings.languages
+
+    /** Switch languages, and remember it. `null` goes back to following the system. */
+    fun setLanguage(code: String?) {
+        prefs.setLanguage(code)
+        Strings.setOverride(code)
+    }
     val imageCache = ImageCache()
     val sessions = SessionRepository { engine.client }
 

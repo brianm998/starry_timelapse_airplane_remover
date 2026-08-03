@@ -562,7 +562,7 @@ struct HorizonPainterStartupInstructionsView: View {
     var body: some View {
         if !isDismissed && (viewModel.userPreferences.showHorizonPainterInstructions ?? true) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Selecting the horizon with Star is easy.")
+                Text(localized("ui.selecting_the_horizon_with_star_is_easy"))
                   .font(.headline)
                   .foregroundColor(.white)
 
@@ -597,10 +597,10 @@ If the selection of the sky isn't exactly right, use the brush to either add or 
                 }
 
                 HStack(spacing: 16) {
-                    Toggle("Don't show again", isOn: $dontShowAgain)
+                    Toggle(localized("ui.don_t_show_again"), isOn: $dontShowAgain)
                       .foregroundColor(.white)
 
-                    Button("Got it") {
+                    Button(localized("ui.got_it")) {
                         if dontShowAgain {
                             viewModel.userPreferences.showHorizonPainterInstructions = false
                         }

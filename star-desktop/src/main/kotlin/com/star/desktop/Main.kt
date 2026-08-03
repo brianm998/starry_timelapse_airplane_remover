@@ -15,6 +15,7 @@ import com.star.desktop.ui.app.handleGlobalKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import com.star.desktop.i18n.localized
 
 /**
  * Compose application entry point. The headless engine smoke harness lives in
@@ -48,7 +49,7 @@ fun main(args: Array<String>) = application {
     if (showOutlier && svm != null) {
         Window(
             onCloseRequest = vm::closeOutlierWindow,
-            title = "Outliers",
+            title = localized("ui.outliers"),
             state = rememberWindowState(size = DpSize(560.dp, 480.dp)),
         ) {
             com.star.desktop.ui.theme.StarTheme {
@@ -62,7 +63,7 @@ fun main(args: Array<String>) = application {
     if (showAlign && svm != null) {
         Window(
             onCloseRequest = vm::closeAlignmentWindow,
-            title = "Alignment",
+            title = localized("ui.alignment_2"),
             state = rememberWindowState(size = DpSize(720.dp, 560.dp)),
         ) {
             com.star.desktop.ui.theme.StarTheme {

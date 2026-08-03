@@ -247,6 +247,31 @@ tasks.matching { it.name == "createDistributable" || it.name == "createReleaseDi
 // package*/dmg/msi/deb wrap the .app into an installer — they must run AFTER the fixup, not race the finalizer.
 tasks.matching { it.name.startsWith("package") }.configureEach { mustRunAfter("fixBundledBinaries") }
 
+// ---------------------------------------------------------------------------
+// Single localization source of truth.
+//
+// StarCore/Sources/StarCore/Resources/Localizations is authoritative for every user-visible
+// string in every client — the Swift side loads it from its SwiftPM resource bundle, and we
+// copy the same JSON tables into this jar at /i18n/ rather than keeping a second copy in git.
+// Same reasoning as syncProto below: two copies of a contract drift, one does not.
+//
+// A checkout without StarCore (the Kotlin client can be built standalone) just gets no tables
+// and falls back to showing keys, which is loud enough to notice and not a build failure.
+// ---------------------------------------------------------------------------
+val localizationsDir = rootProject.file("../StarCore/Sources/StarCore/Resources/Localizations")
+
+tasks.named<ProcessResources>("processResources") {
+    if (localizationsDir.isDirectory) {
+        from(localizationsDir) {
+            into("i18n")
+            include("*.json")
+        }
+    } else {
+        logger.warn("processResources: no localization tables at $localizationsDir — " +
+                        "the UI will render string keys instead of text")
+    }
+}
+
 tasks.test {
     useJUnitPlatform()
     // Forward integration-test opt-ins to the test JVM (InteropIntegrationTest no-ops without them).

@@ -94,8 +94,8 @@ struct ImageSequenceView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
-          .alert("Error", isPresented: $viewModel.showErrorAlert) {
-              Button("OK") {}
+          .alert(localized("ui.error"), isPresented: $viewModel.showErrorAlert) {
+              Button(localized("ui.ok")) {}
           } message: {
               Text(viewModel.errorMessage)
           }

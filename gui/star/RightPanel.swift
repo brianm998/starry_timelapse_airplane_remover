@@ -9,8 +9,8 @@ public enum FastAdvancementType: String, Equatable, CaseIterable {
     case toNextNegative
     case toNextUnknown
     
-    var localizedName: LocalizedStringKey {
-        LocalizedStringKey(rawValue)
+    var localizedName: String {
+        localized("fast_advancement.\(rawValue)")
     }
 }
 
@@ -33,7 +33,7 @@ struct RightPanel: View {
                     ScrollView {
                         VStack(alignment: .leading) {
 
-                            Text("Fast Advancement Type")
+                            Text(localized("ui.fast_advancement_type"))
                               .foregroundColor(.white)
 
                             Picker("", selection: $viewModel.fastAdvancementType) {
@@ -54,24 +54,24 @@ struct RightPanel: View {
 
                             switch viewModel.fastAdvancementType {
                             case .normal:
-                                Text("Fast Forward and Reverse move by \(viewModel.fastSkipAmount) frames")
+                                Text(localized("ui.fast_skip_n_frames", viewModel.fastSkipAmount))
                                   .frame(maxWidth: 140)
                                   .multilineTextAlignment(.leading)
                                   .foregroundColor(.white)
                             case .skipEmpties:
-                                Text("Skip all frames without outliers")
+                                Text(localized("ui.skip_all_frames_without_outliers"))
                                   .frame(maxWidth: 140)
                                   .foregroundColor(.white)
                             case .toNextPositive:
-                                Text("Skip to next frame with a positive outlier")
+                                Text(localized("ui.skip_to_next_frame_with_a_positive_outlier"))
                                   .frame(maxWidth: 140)
                                   .foregroundColor(.white)
                             case .toNextNegative:
-                                Text("Skip to next frame with a negative outlier")
+                                Text(localized("ui.skip_to_next_frame_with_a_negative_outlier"))
                                   .frame(maxWidth: 140)
                                   .foregroundColor(.white)
                             case .toNextUnknown:
-                                Text("Skip to next frame with a unknown outlier")
+                                Text(localized("ui.skip_to_next_frame_with_a_unknown_outlier"))
                                   .frame(maxWidth: 140)
                                   .foregroundColor(.white)
                             }
@@ -84,16 +84,16 @@ struct RightPanel: View {
                     // XXX add advance to has not paintable
                     
                             if viewModel.fastAdvancementType == .normal {
-                                Text("Fast Skip")
+                                Text(localized("ui.fast_skip"))
                                   .foregroundColor(.white)
                                 Picker("", selection: $viewModel.fastSkipAmount) {
                                     ForEach(0 ..< 51) {
-                                        Text("\($0) frames")
+                                        Text(localized("ui.n_frames_lower", $0))
                                     }
                                 }.frame(maxWidth: 140)
                             }
 
-                            VerticalStarPicker("Tool", selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
+                            VerticalStarPicker(localized("ui.tool"), selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
                                 HStack {
                                     if isEnabled {
                                         Image(value.iconName)
@@ -124,7 +124,7 @@ struct RightPanel: View {
                                       """)      // XXX does this work here?
 
 
-                            Toggle("multi choice", isOn: $viewModel.multiChoice)
+                            Toggle(localized("ui.multi_choice"), isOn: $viewModel.multiChoice)
                               .foregroundColor(.white)
    
                             // ── Horizon painting ───────────────────────
@@ -133,8 +133,8 @@ struct RightPanel: View {
                             } label: {
                                 Label(
                                     viewModel.isShowingHorizonPainter
-                                        ? "Close Horizon Painter"
-                                        : "Paint Horizon Reference",
+                                        ? localized("ui.close_horizon_painter")
+                                        : localized("ui.paint_horizon_reference"),
                                     systemImage: viewModel.isShowingHorizonPainter
                                         ? "xmark.circle"
                                         : "mountain.2"
@@ -152,18 +152,18 @@ struct RightPanel: View {
                             Button {
                                 viewModel.reprocessHorizonsForUpdatedReferences()
                             } label: {
-                                Label("Re-run Horizon Refinement", systemImage: "wand.and.stars")
+                                Label(localized("ui.re_run_horizon_refinement"), systemImage: "wand.and.stars")
                             }
                             .buttonStyle(.bordered)
                             .tint(.orange)
-                            .help("Re-run brightness+position refinement for all frames affected by updated reference horizons.")
+                            .help(localized("ui.re_run_brightness_position_refinement_for"))
                             .disabled(viewModel.affectedHorizonRefinementFrameIndices.isEmpty)
 
-                            Toggle("Show Trash", isOn: $viewModel.shouldShowTrash)
+                            Toggle(localized("ui.show_trash"), isOn: $viewModel.shouldShowTrash)
                               .foregroundColor(.white)
                               .disabled(!viewModel.currentFrameUsesOutliers)
 
-                            Toggle("Show Horizon Line", isOn: Binding(
+                            Toggle(localized("ui.show_horizon_line"), isOn: Binding(
                                 get: { viewModel.userPreferences.showHorizonOnMainView ?? false },
                                 set: { viewModel.userPreferences.showHorizonOnMainView = $0 }
                             ))
@@ -173,7 +173,7 @@ struct RightPanel: View {
                              XXX for some unknown reason, these grab focus and refuse
                              XXX to let it go :(
                              
-                            Text("Trash Level")
+                            Text(localized("ui.trash_level"))
                               .foregroundColor(.yellow)
                             TextField("\(viewModel.trashLevel)",
                                       text: $viewModel.trashLevelString)
@@ -191,7 +191,7 @@ struct RightPanel: View {
                                   self.focusedField = nil
                               }
 
-                              Text("Small Trash Max")
+                              Text(localized("ui.small_trash_max"))
                               .foregroundColor(.yellow)
                             TextField("\(viewModel.smallTrashMax)",
                                       text: $viewModel.smallTrashMaxString)
@@ -205,7 +205,7 @@ struct RightPanel: View {
                                   }
                                   self.focusedField = nil
                               }
-                            Text("Minimum Classification Size")
+                            Text(localized("ui.minimum_classification_size"))
                               .foregroundColor(.orange)
                             TextField("\(viewModel.minimumClassificationSize)",
                                       text: $viewModel.minimumClassificationSizeString)
@@ -224,38 +224,37 @@ struct RightPanel: View {
 
                              */
                             
-                            Toggle(
-                              "Only Unclassified",
+                            Toggle(localized("ui.only_unclassified"),
                               isOn: $viewModel.classifyOnlyUnclassified
                             )
                               .foregroundColor(.orange)
                             
                             // frame rate 
                             let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]
-                            Text("Frame Rate")
+                            Text(localized("ui.frame_rate"))
                               .foregroundColor(.white)
                             Picker("", selection: $viewModel.videoPlaybackFramerate) {
                                 ForEach(frame_rates, id: \.self) {
-                                    Text("\($0) fps")
+                                    Text(localized("ui.n_fps", $0))
                                 }
                             }.frame(maxWidth: 100)
 
 
                             VStack(alignment: .leading) {
                                 // outlier opacity slider
-                                Text("Outlier Group Opacity")
+                                Text(localized("ui.outlier_group_opacity"))
                                   .foregroundColor(.white)
                                 
                                 Slider(value: $viewModel.outlierOpacity, in : 0...1)
                                   .frame(maxWidth: 140, alignment: .bottom)
                                 
-                                Text("Trash Opacity")
+                                Text(localized("ui.trash_opacity"))
                                   .foregroundColor(.white)
                                 
                                 Slider(value: $viewModel.trashOpacity, in : 0...1)
                                   .frame(maxWidth: 140, alignment: .bottom)
                                 
-                                Text("Frame Opacity")
+                                Text(localized("ui.frame_opacity"))
                                   .foregroundColor(.white)
                                 
                                 Slider(value: $viewModel.frameOpacity, in : 0...1)
@@ -265,7 +264,7 @@ struct RightPanel: View {
 
 
                             HStack {
-                                Text("Zoom")
+                                Text(localized("ui.zoom"))
                                   .foregroundColor(.white)
                                 Spacer()
                                 // Editable max zoom here
@@ -280,7 +279,7 @@ struct RightPanel: View {
                                    in: viewModel.minZoomScale...viewModel.maxZoomScale)
                               .frame(maxWidth: 140, alignment: .bottom)
                             
-                            Toggle("show full resolution", isOn: $viewModel.showFullResolution)
+                            Toggle(localized("ui.show_full_resolution"), isOn: $viewModel.showFullResolution)
                               .foregroundColor(.white)
 
                             self.pixelReplacementModeView
@@ -309,7 +308,7 @@ struct RightPanel: View {
                               alwaysOpen: false
                             )
 
-                            Picker("redo", selection: $viewModel.reprocessingType) {
+                            Picker(localized("ui.redo"), selection: $viewModel.reprocessingType) {
                                 ForEach(FrameReprocessingType.allCases, id: \.self) { value in
                                     Text(value.rawValue).tag(value)
                                 }
@@ -331,11 +330,11 @@ struct RightPanel: View {
                             } label: {
                                 switch viewModel.reprocessingType {
                                 case .none:
-                                    Text("Process the next")
+                                    Text(localized("ui.process_the_next"))
                                 case .allHorizons:
-                                    Text("Re-Process All Horizons")
+                                    Text(localized("ui.re_process_all_horizons"))
                                 default:
-                                    Text("Re-Process the next")
+                                    Text(localized("ui.re_process_the_next"))
                                 }
                             }
                               .disabled(viewModel.renderingCurrentFrame)
@@ -370,11 +369,11 @@ struct RightPanel: View {
                                             try await viewModel.render(frame: frame, now: true)
                                         }
                                     } catch {
-                                        viewModel.report(error: "Render failed: \(error)")
+                                        viewModel.report(error: localized("ui.render_failed", error))
                                     }
                                 }
                             } label: {
-                                Text("Render Updates")
+                                Text(localized("ui.render_updates"))
                             }
                               .disabled(frameView.outlierViews == nil ||
                                           viewModel.renderingCurrentFrame)
@@ -386,7 +385,7 @@ struct RightPanel: View {
                                    await frameGraphBuilder.debugPrint()
                                 }
                             } label: {
-                                Text("Log Operation Queue")
+                                Text(localized("ui.log_operation_queue"))
                             }
   */                          
                             // enable logging
@@ -395,7 +394,7 @@ struct RightPanel: View {
                                     Text("")
                                       .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
                                 }
-                                Text("Log to file at level:")
+                                Text(localized("ui.log_to_file_at_level_2"))
                                   .foregroundColor(loggingViewModel.fileLogEnabled ? .green : .white)
                             }
                             Picker(selection: $loggingViewModel.fileLogLevel) {
@@ -450,13 +449,13 @@ struct RightPanel: View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
             if viewModel.currentFrameHasOverriddenCleanMethod {
-                Text("Custom")
+                Text(localized("ui.custom"))
                   .foregroundColor(.white)
             } else {
-                Text("Default")
+                Text(localized("ui.default"))
                   .foregroundColor(.white)
             }
-            Picker("Clean:",
+            Picker(localized("ui.clean"),
                    selection: $viewModel.currentFrameHighLevelCleanMethod)
             {
                 ForEach(HighLevelCleanMethod.allCases, id: \.id) { value in
@@ -465,13 +464,13 @@ struct RightPanel: View {
                         case .automatic:
                             AutoIcon()
                               .foregroundColor(.white)
-                            Text("Automatic")
+                            Text(localized("ui.automatic"))
                               .foregroundColor(.white)
                             
                         case .selective:
                             SelectiveIcon()
                               .foregroundColor(.white)
-                            Text("Selective")
+                            Text(localized("ui.selective"))
                               .foregroundColor(.white)
                         }
                     }
@@ -482,7 +481,7 @@ struct RightPanel: View {
 
 //            Text(AutoPreservationMode.topTitle)
 //              .foregroundColor(.white)
-            Picker("Auto Select",
+            Picker(localized("ui.auto_select"),
                    selection: $viewModel.currentFrameAutoPreservationMode)
             {
                 ForEach(AutoPreservationMode.allCases, id: \.id) { value in
@@ -523,8 +522,8 @@ struct EditableMaxZoomView: View {
           value: $zoomDouble,
           minValue: Double(viewModel.minZoomScale),
           maxValue: 10,
-          fullTextProvider: { "Max: \($0)" },
-          prefixText: "Max: ",
+          fullTextProvider: { localized("ui.slider.max_zoom", $0) },
+          prefixText: localized("ui.slider.max_zoom_prefix"),
           suffixTextProvider: { _ in "" },
           textColor: textColor,
           focusedField: focusedField,
@@ -560,8 +559,8 @@ struct EditablePixelThresholdView: View {
           value: $viewModel.pixelThreshold,
           minValue: 0.001,
           maxValue: 10,
-          fullTextProvider: { "Pixel threshold: \($0)" },
-          prefixText: "Pixel threshold: ",
+          fullTextProvider: { localized("ui.slider.pixel_threshold", $0) },
+          prefixText: localized("ui.slider.pixel_threshold_prefix"),
           suffixTextProvider: { _ in "" },
           textColor: textColor,
           focusedField: focusedField,
@@ -585,9 +584,9 @@ struct EditableNumberOfNeighborFrames: View {
           value: $viewModel.numberOfAlignedNeighborFrames,
           minValue: 1,
           maxValue: viewModel.imageSequenceSize,
-          fullTextProvider: { "align with \($0) neighbor frames" },
-          prefixText: "process with",
-          suffixTextProvider: { _ in "neighbor frames" },
+          fullTextProvider: { localized("ui.slider.align_neighbors", $0) },
+          prefixText: localized("ui.slider.process_with"),
+          suffixTextProvider: { _ in localized("ui.slider.neighbor_frames") },
           textColor: textColor,
           focusedField: focusedField,
           focusField: .numberOfNeighborFrames,
@@ -610,9 +609,9 @@ struct EditableNumberOfFramesToProcessView: View {
             value: $viewModel.numberOfFramesToProcess,
             minValue: 1,
             maxValue: viewModel.imageSequenceSize+1,
-            fullTextProvider: { "\($0) frames as" },
+            fullTextProvider: { localized("ui.slider.n_frames_as", $0) },
             // no prefix, so TextField is first
-            suffixTextProvider: { $0 == 1 ? "frame as" : "frames as" },
+            suffixTextProvider: { $0 == 1 ? localized("ui.slider.frame_as") : localized("ui.slider.frames_as") },
             textColor: textColor,
             focusedField: focusedField,
             focusField: .numberOfFramesToProcess,
@@ -638,17 +637,17 @@ struct AlignedNeighborFrameOverrideView: View {
             HStack(spacing: 4) {
                 /*
                 if viewModel.currentFrameHasAlignedNeighborOverride {
-                    Text("Custom")
+                    Text(localized("ui.custom"))
                       .foregroundColor(.yellow)
                       .font(.caption)
                 } else {
-                    Text("Default")
+                    Text(localized("ui.default"))
                       .foregroundColor(.white)
                       .font(.caption)
                 }
                 Spacer()*/
                 if viewModel.currentFrameHasAlignedNeighborOverride {
-                    Button("Reset") {
+                    Button(localized("ui.reset")) {
                         viewModel.clearAlignedNeighborFrameOverride(forFrame: viewModel.currentIndex)
                     }
                     .font(.caption)
@@ -660,9 +659,9 @@ struct AlignedNeighborFrameOverrideView: View {
               value: $localCount,
               minValue: 1,
               maxValue: viewModel.imageSequenceSize,
-              fullTextProvider: { "align with \($0) neighbor frames" },
-              prefixText: "align with",
-              suffixTextProvider: { _ in "neighbor frames" },
+              fullTextProvider: { localized("ui.slider.align_neighbors", $0) },
+              prefixText: localized("ui.slider.align_with"),
+              suffixTextProvider: { _ in localized("ui.slider.neighbor_frames") },
               textColor: viewModel.currentFrameHasAlignedNeighborOverride ? .yellow : .white,
               focusedField: focusedField,
               focusField: .frameAlignedNeighborFrames,
@@ -706,17 +705,17 @@ struct StaticNeighborFrameOverrideView: View {
             HStack(spacing: 4) {
                 /*
                 if viewModel.currentFrameHasStaticNeighborOverride {
-                    Text("Custom")
+                    Text(localized("ui.custom"))
                       .foregroundColor(.yellow)
                       .font(.caption)
                 } else {
-                    Text("Default")
+                    Text(localized("ui.default"))
                       .foregroundColor(.white)
                       .font(.caption)
                 }*/
 //                Spacer()
                 if viewModel.currentFrameHasStaticNeighborOverride {
-                    Button("Reset") {
+                    Button(localized("ui.reset")) {
                         viewModel.clearStaticNeighborFrameOverride(forFrame: viewModel.currentIndex)
                     }
                     .font(.caption)
@@ -728,9 +727,9 @@ struct StaticNeighborFrameOverrideView: View {
               value: $localCount,
               minValue: 1,
               maxValue: viewModel.imageSequenceSize,
-              fullTextProvider: { "merge with \($0) static neighbors" },
-              prefixText: "static merge",
-              suffixTextProvider: { _ in "neighbors" },
+              fullTextProvider: { localized("ui.slider.merge_static", $0) },
+              prefixText: localized("ui.slider.static_merge"),
+              suffixTextProvider: { _ in localized("ui.slider.neighbors") },
               textColor: viewModel.currentFrameHasStaticNeighborOverride ? .yellow : .white,
               focusedField: focusedField,
               focusField: .frameStaticNeighborFrames,
@@ -768,9 +767,9 @@ struct EditableNumberOfFramesToProcessConcurrentlyView: View {
             value: $viewModel.numberOfFramesToProcessConcurrently,
             minValue: 1,
             maxValue: ProcessInfo.processInfo.processorCount,
-            fullTextProvider: { "process \($0) frames at once" },
-            prefixText: "process",
-            suffixTextProvider: { _ in "frames at once" },
+            fullTextProvider: { localized("ui.slider.process_at_once", $0) },
+            prefixText: localized("ui.slider.process"),
+            suffixTextProvider: { _ in localized("ui.slider.frames_at_once") },
             textColor: textColor,
             focusedField: focusedField,
             focusField: .numberOfFramesToProcessConcurrently,
@@ -795,8 +794,8 @@ struct MemoryMultiplierView: View {
                 value: $viewModel.keypointMemoryMultiplier,
                 minValue: 1,
                 maxValue: 200,
-                fullTextProvider: { "kp mem ×\($0)" },
-                prefixText: "kp mem ×",
+                fullTextProvider: { localized("ui.slider.kp_mem", $0) },
+                prefixText: localized("ui.slider.kp_mem_prefix"),
                 suffixTextProvider: { _ in "" },
                 textColor: textColor,
                 focusedField: focusedField,
@@ -814,8 +813,8 @@ struct MemoryMultiplierView: View {
                 value: $viewModel.maxConcurrentKeypointOps,
                 minValue: 0,
                 maxValue: 256,
-                fullTextProvider: { $0 == 0 ? "max kp ops: auto" : "max kp ops \($0)" },
-                prefixText: "max kp ops ",
+                fullTextProvider: { $0 == 0 ? localized("ui.slider.max_kp_ops_auto") : localized("ui.slider.max_kp_ops", $0) },
+                prefixText: localized("ui.slider.max_kp_ops_prefix"),
                 suffixTextProvider: { _ in "" },
                 textColor: textColor,
                 focusedField: focusedField,
@@ -829,8 +828,8 @@ struct MemoryMultiplierView: View {
                 value: $viewModel.outlierMemoryMultiplier,
                 minValue: 1,
                 maxValue: 50,
-                fullTextProvider: { "outlier mem ×\($0)" },
-                prefixText: "outlier mem ×",
+                fullTextProvider: { localized("ui.slider.outlier_mem", $0) },
+                prefixText: localized("ui.slider.outlier_mem_prefix"),
                 suffixTextProvider: { _ in "" },
                 textColor: textColor,
                 focusedField: focusedField,
@@ -844,8 +843,8 @@ struct MemoryMultiplierView: View {
                 value: $viewModel.mergeMemoryMultiplier,
                 minValue: 1,
                 maxValue: 50,
-                fullTextProvider: { "merge mem ×\($0)" },
-                prefixText: "merge mem ×",
+                fullTextProvider: { localized("ui.slider.merge_mem", $0) },
+                prefixText: localized("ui.slider.merge_mem_prefix"),
                 suffixTextProvider: { _ in "" },
                 textColor: textColor,
                 focusedField: focusedField,
@@ -859,8 +858,8 @@ struct MemoryMultiplierView: View {
                 value: $viewModel.horizonMemoryMultiplier,
                 minValue: 1,
                 maxValue: 50,
-                fullTextProvider: { "horizon mem ×\($0)" },
-                prefixText: "horizon mem ×",
+                fullTextProvider: { localized("ui.slider.horizon_mem", $0) },
+                prefixText: localized("ui.slider.horizon_mem_prefix"),
                 suffixTextProvider: { _ in "" },
                 textColor: textColor,
                 focusedField: focusedField,
@@ -877,8 +876,8 @@ struct MemoryMultiplierView: View {
                 value: $viewModel.horizonReservationFloorMB,
                 minValue: 0,
                 maxValue: 16384,
-                fullTextProvider: { $0 == 0 ? "horizon floor: none" : "horizon floor \($0)MB" },
-                prefixText: "horizon floor ",
+                fullTextProvider: { $0 == 0 ? localized("ui.slider.horizon_floor_none") : localized("ui.slider.horizon_floor", $0) },
+                prefixText: localized("ui.slider.horizon_floor_prefix"),
                 suffixTextProvider: { _ in "MB" },
                 textColor: textColor,
                 focusedField: focusedField,

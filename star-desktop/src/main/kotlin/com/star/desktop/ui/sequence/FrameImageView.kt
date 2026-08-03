@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameState
 import com.star.desktop.ui.theme.StarColors
+import com.star.desktop.i18n.localized
 
 /**
  * The center frame display: shows the current frame's preview image (aspect-fit). Until processing
@@ -38,7 +39,7 @@ fun FrameImageView(vm: SequenceViewModel, background: Color = StarColors.appBack
         if (current != null) {
             Image(
                 bitmap = current,
-                contentDescription = "Frame $idx",
+                contentDescription = localized("ui.frame_n", idx),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,
             )
@@ -47,13 +48,13 @@ fun FrameImageView(vm: SequenceViewModel, background: Color = StarColors.appBack
                 if (processing) CircularProgressIndicator(color = StarColors.accent)
                 val state = states[idx]
                 val label = when {
-                    !available && state != null -> "Frame $idx — ${FrameState.shortString(state)}"
-                    !available -> "Frame $idx — not processed yet"
+                    !available && state != null -> localized("ui.frame_n_state", idx, FrameState.shortString(state))
+                    !available -> localized("ui.frame_n_unprocessed", idx)
                     else -> "Loading frame $idx…"
                 }
                 Text(label, color = StarColors.textSecondary, fontSize = 13.sp)
                 if (!available && !processing) {
-                    Text("Run processing to generate previews", color = StarColors.textDisabled, fontSize = 11.sp)
+                    Text(localized("ui.run_processing_to_generate_previews"), color = StarColors.textDisabled, fontSize = 11.sp)
                 }
             }
         }

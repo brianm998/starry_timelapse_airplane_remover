@@ -216,8 +216,8 @@ struct OutlierGroupTable: View {
                 //let displayDtSizeColumn = true
             } else {
                 VStack {
-                    Text("No Image sequence loaded.")
-                    Text("Load an image sequence in the main star window, and then select details for some outlier groups to see their data here.")
+                    Text(localized("ui.no_image_sequence_loaded"))
+                    Text(localized("ui.load_an_image_sequence_in_the_main_star_3"))
                 }
             }
         }
@@ -229,7 +229,7 @@ struct OutlierGroupTable: View {
             Spacer()
             VStack {
                 Spacer()
-                Text("Information about \(viewModel.outlierGroupTableRows.count) outlier groups")
+                Text(localized("ui.info_about_n_outlier_groups", viewModel.outlierGroupTableRows.count))
                 Table(viewModel.outlierGroupTableRows,
                       selection: $viewModel.selectedOutliers,
                       sortOrder: $sortOrder)
@@ -483,7 +483,7 @@ struct OutlierGroupTable: View {
             Spacer()
         }.navigationTitle(viewModel.outlierGroupWindowFrame == nil ?
                                   OTHER_WINDOW_TITLE :
-                                  "\(OUTLIER_WINDOW_PREFIX) for frame \(viewModel.outlierGroupWindowFrame!.frameIndex)")
+                                  localized("ui.outliers_for_frame", viewModel.outlierGroupWindowFrame!.frameIndex))
     }
 
 }

@@ -24,27 +24,28 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
+import com.star.desktop.i18n.localized
 
 /** Pre-processing prompt (macOS `PreProcessingRenderPromptView`): auto-render after processing? */
 @Composable
 fun PreProcessingRenderPrompt(app: AppViewModel) {
     PromptCard(onScrimClick = app::dismissPreRenderPrompt) {
-        Text("Render video after processing?", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        Text(localized("ui.render_video_after_processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
         Text(
-            "Once frame processing finishes, would you like the video rendered automatically?",
+            localized("ui.once_frame_processing_finishes_would_you"),
             color = StarColors.textSecondary, fontSize = 13.sp,
         )
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { app.confirmStartProcessing(autoRender = false, dontAskAgain = true) }) {
-                Text("Don't ask me again")
+                Text(localized("ui.don_t_ask_me_again"))
             }
             Box(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = { app.confirmStartProcessing(autoRender = false, dontAskAgain = false) }) { Text("No") }
+                OutlinedButton(onClick = { app.confirmStartProcessing(autoRender = false, dontAskAgain = false) }) { Text(localized("ui.no")) }
                 Button(
                     onClick = { app.confirmStartProcessing(autoRender = true, dontAskAgain = false) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text("Yes") }
+                ) { Text(localized("ui.yes")) }
             }
         }
     }
@@ -54,17 +55,17 @@ fun PreProcessingRenderPrompt(app: AppViewModel) {
 @Composable
 fun PostProcessingRenderPrompt(app: AppViewModel) {
     PromptCard(onScrimClick = app::dismissPostRenderPrompt) {
-        Text("Processing complete", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-        Text("Render video now?", color = StarColors.textSecondary, fontSize = 15.sp)
+        Text(localized("ui.processing_complete"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        Text(localized("ui.render_video_now"), color = StarColors.textSecondary, fontSize = 15.sp)
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = app::dismissPostRenderPrompt) { Text("Cancel") }
+            OutlinedButton(onClick = app::dismissPostRenderPrompt) { Text(localized("ui.cancel")) }
             Box(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = app::previewFinalFrames) { Text("Preview first") }
+                OutlinedButton(onClick = app::previewFinalFrames) { Text(localized("ui.preview_first")) }
                 Button(
                     onClick = app::confirmRenderAfterProcessing,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text("Yes") }
+                ) { Text(localized("ui.yes")) }
             }
         }
     }

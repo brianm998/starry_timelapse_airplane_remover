@@ -8,9 +8,9 @@ struct ProcessRemainingFramesButton: View {
     var body: some View {
         Group {
             Button(action: buttonPress) {
-                Text("Process frames from here to the end")
+                Text(localized("ui.process_frames_from_here_to_the_end"))
             }
-              .help("Process frames from here to the end")
+              .help(localized("ui.process_frames_from_here_to_the_end"))
         }
     }
 

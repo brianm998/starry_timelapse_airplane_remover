@@ -6,8 +6,8 @@ public enum MultiChoicePaintType: String, Equatable, CaseIterable {
     case remove
     case keep
 
-    var localizedName: LocalizedStringKey {
-        LocalizedStringKey(rawValue)
+    var localizedName: String {
+        localized("multi_paint.\(rawValue)")
     }
 }
 
@@ -25,7 +25,7 @@ struct MultiChoiceSheetView: View {
             Spacer()
             VStack {
                 Spacer()
-                Text("Change all overlapping outliers in other frames to:")
+                Text(localized("ui.change_all_overlapping_outliers_in_other"))
                 
                 Picker("", selection: $multiChoicePaintType) {
                     ForEach(MultiChoicePaintType.allCases, id: \.self) { value in
@@ -35,7 +35,7 @@ struct MultiChoiceSheetView: View {
                   .pickerStyle(.segmented)
                   .frame(maxWidth: 120)
 
-                Text("What frames should we modify?")
+                Text(localized("ui.what_frames_should_we_modify"))
                 Picker("", selection: $multiChoiceType) {
                     ForEach(MultiSelectionType.allCases, id: \.self) { value in
                         Text(value.localizedName).tag(value)
@@ -49,27 +49,27 @@ struct MultiChoiceSheetView: View {
                 case .all:
                     switch multiChoicePaintType {
                     case .remove:
-                        Text("Paint overlapping outliers in all \(frames.count) frames")
+                        Text(localized("ui.overlap.paint.all", frames.count))
                     case .keep:
-                        Text("Clear overlapping outliers in all \(frames.count) frames")
+                        Text(localized("ui.overlap.clear.all", frames.count))
                     }
 
                 case .allAfter:
                     let numFrames = frames.count - currentIndex + 1
                     switch multiChoicePaintType {
                     case .remove:
-                        Text("Paint overlapping outliers in \(numFrames) frames from frame \(currentIndex) to the end")
+                        Text(localized("ui.overlap.paint.after", numFrames, currentIndex))
                     case .keep:
-                        Text("Clear overlapping outliers in \(numFrames) frames from frame \(currentIndex) to the end")
+                        Text(localized("ui.overlap.clear.after", numFrames, currentIndex))
                     }
 
                 case .allBefore:
                     let numFrames = currentIndex + 1
                     switch multiChoicePaintType {
                     case .remove:
-                        Text("Paint overlapping outliers in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                        Text(localized("ui.overlap.paint.before", numFrames, currentIndex))
                     case .keep:
-                        Text("Clear overlapping outliers in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                        Text(localized("ui.overlap.clear.before", numFrames, currentIndex))
                     }
 
                 case .someAfter:
@@ -85,13 +85,13 @@ struct MultiChoiceSheetView: View {
                     case .all:
                         switch multiChoicePaintType {
                         case .remove:
-                            Button("Remove") {
+                            Button(localized("ui.remove")) {
                                 // paint all overapping outliers
                                 self.updateFrames(shouldRemove: true)
                                 self.isVisible = false
                             }
                         case .keep:
-                            Button("Keep") {
+                            Button(localized("ui.keep")) {
                                 // XXX clear all overapping outliers
                                 self.updateFrames(shouldRemove: false)
                                 self.isVisible = false
@@ -100,7 +100,7 @@ struct MultiChoiceSheetView: View {
                     case .allAfter:
                         switch multiChoicePaintType {
                         case .remove:
-                            Button("Remove") {
+                            Button(localized("ui.remove")) {
                                 // paint all overapping outliers
                                 // after and including currentIndex
                                 self.updateFrames(shouldRemove: true,
@@ -108,7 +108,7 @@ struct MultiChoiceSheetView: View {
                                 self.isVisible = false
                             }
                         case .keep:
-                            Button("Keep") {
+                            Button(localized("ui.keep")) {
                                 // clear all overapping outliers
                                 // after and including currentIndex
                                 self.updateFrames(shouldRemove: false,
@@ -119,7 +119,7 @@ struct MultiChoiceSheetView: View {
                     case .allBefore:
                         switch multiChoicePaintType {
                         case .remove:
-                            Button("Remove") {
+                            Button(localized("ui.remove")) {
                                 // paint all overapping outliers
                                 // before and including currentIndex
                                 self.updateFrames(shouldRemove: true,
@@ -128,7 +128,7 @@ struct MultiChoiceSheetView: View {
                                 self.isVisible = false
                             }
                         case .keep:
-                            Button("Keep") {
+                            Button(localized("ui.keep")) {
                                 // clear all overapping outliers
                                 // before and including currentIndex
                                 self.updateFrames(shouldRemove: false,
@@ -142,7 +142,7 @@ struct MultiChoiceSheetView: View {
                         HStack {
                             switch multiChoicePaintType {
                             case .remove:
-                                Button("Remove") {
+                                Button(localized("ui.remove")) {
                                     // paint overapping outliers in
                                     // currentIndex and number_of_frames after
                                     self.updateFrames(shouldRemove: true,
@@ -151,7 +151,7 @@ struct MultiChoiceSheetView: View {
                                     self.isVisible = false
                                 }
                             case .keep:
-                                Button("Keep") {
+                                Button(localized("ui.keep")) {
                                     // clear overapping outliers in
                                     // currentIndex and number_of_frames after
                                     self.updateFrames(shouldRemove: false,
@@ -160,16 +160,16 @@ struct MultiChoiceSheetView: View {
                                     self.isVisible = false
                                 }
                             }
-                            Text("the next")
+                            Text(localized("ui.the_next"))
                             TextField("", value: $number_of_frames, format: .number)
                               .frame(maxWidth: 40)
-                            Text("frames")
+                            Text(localized("ui.frames"))
                         }
                     case .someBefore:
                         HStack {
                             switch multiChoicePaintType {
                             case .remove:
-                                Button("Remove") {
+                                Button(localized("ui.remove")) {
                                     // paint overapping outliers in
                                     // currentIndex and number_of_frames before
                                     self.updateFrames(shouldRemove: true,
@@ -178,7 +178,7 @@ struct MultiChoiceSheetView: View {
                                     self.isVisible = false
                                 }
                             case .keep:
-                                Button("Keep") {
+                                Button(localized("ui.keep")) {
                                     // clear overapping outliers in
                                     // currentIndex and number_of_frames before
                                     self.updateFrames(shouldRemove: false,
@@ -187,13 +187,13 @@ struct MultiChoiceSheetView: View {
                                     self.isVisible = false
                                 }
                             }
-                            Text("the previous")
+                            Text(localized("ui.the_previous"))
                             TextField("", value: $number_of_frames, format: .number)
                               .frame(maxWidth: 40)
-                            Text("frames")
+                            Text(localized("ui.frames"))
                         }
                     }
-                    Button("Cancel") {
+                    Button(localized("ui.cancel")) {
                         self.isVisible = false
                     }
                 }

@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.theme.StarColors
+import com.star.desktop.i18n.localized
 
 // Verbatim from gui/star/InfoDialogView.swift (InfoType.infoText).
 private val ABOUT_TEXT = """
@@ -131,7 +132,7 @@ fun InfoDialog(onClose: () -> Unit) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Information about Star", color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 24.sp)
+            Text(localized("ui.information_about_star"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 24.sp)
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 com.star.desktop.ui.components.VerticalStarPicker(
                     options = InfoType.entries.toList(),
@@ -148,7 +149,7 @@ fun InfoDialog(onClose: () -> Unit) {
                 )
             }
             Button(onClick = onClose, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
-                Text("Close")
+                Text(localized("ui.close"))
             }
         }
     }

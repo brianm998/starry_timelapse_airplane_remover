@@ -10,8 +10,8 @@ struct ClearUndecidedButton: View {
         Button(action: {
             viewModel.setUndecidedFrameOutliers(to: false, renderImmediately: false)
         }) {
-            Text("Clear Undecided")
+            Text(localized("ui.clear_undecided"))
         }
-          .help("don't paint any of the undecided outlier groups in the frame")
+          .help(localized("ui.don_t_paint_any_of_the_undecided_outlier"))
     }
 }

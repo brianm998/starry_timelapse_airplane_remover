@@ -6,26 +6,26 @@ struct PreProcessingRenderPromptView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Render video after processing?")
+            Text(localized("ui.render_video_after_processing"))
               .font(.title)
 
-            Text("Once frame processing finishes, would you like the video rendered automatically?")
+            Text(localized("ui.once_frame_processing_finishes_would_you"))
               .lineLimit(nil)
               .fixedSize(horizontal: false, vertical: true)
 
             HStack {
-                Button("Don't ask me again") {
+                Button(localized("ui.don_t_ask_me_again")) {
                     viewModel.confirmStartProcessing(autoRender: false, dontAskAgain: true)
                 }
-                  .help("Start processing now and stop showing render prompts. You can still render manually.")
+                  .help(localized("ui.start_processing_now_and_stop_showing_render"))
 
                 Spacer()
 
-                Button("No") {
+                Button(localized("ui.no")) {
                     viewModel.confirmStartProcessing(autoRender: false, dontAskAgain: false)
                 }
 
-                Button("Yes") {
+                Button(localized("ui.yes")) {
                     viewModel.confirmStartProcessing(autoRender: true, dontAskAgain: false)
                 }
                   .keyboardShortcut(.defaultAction)

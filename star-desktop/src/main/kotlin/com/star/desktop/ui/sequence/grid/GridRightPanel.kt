@@ -32,6 +32,7 @@ import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.CleanMethod
 import com.star.proto.FrameInfo
+import com.star.desktop.i18n.localized
 
 /** Grid-mode right panel (macOS `GridRightPanel`): thumbnail-size slider, display toggles, frame info. */
 @Composable
@@ -59,11 +60,11 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 SectionTitle("Display")
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Switch(checked = showFilmstrip, onCheckedChange = { vm.toggleFilmstrip() })
-                    Text("Show Filmstrip", color = StarColors.white, fontSize = 11.sp)
+                    Text(localized("ui.show_filmstrip"), color = StarColors.white, fontSize = 11.sp)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Switch(checked = showHorizon, onCheckedChange = { vm.toggleHorizonOnGrid() })
-                    Text("Show Horizon Lines", color = StarColors.white, fontSize = 11.sp)
+                    Text(localized("ui.show_horizon_lines"), color = StarColors.white, fontSize = 11.sp)
                 }
             }
 
@@ -86,7 +87,7 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     InfoRow("Mode", cleanMethodName(fi.cleanMethod))
                 }
             }
-            Text("Double-click a thumbnail to edit", color = StarColors.textDisabled, fontSize = 10.sp)
+            Text(localized("ui.double_click_a_thumbnail_to_edit"), color = StarColors.textDisabled, fontSize = 10.sp)
         }
         PanelChevron("»", { vm.setRightPanel(false) }, Modifier.padding(6.dp))
     }

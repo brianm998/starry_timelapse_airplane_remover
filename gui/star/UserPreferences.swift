@@ -108,6 +108,18 @@ struct UserPreferences: Codable, Sendable {
         didSet { self.save() }
     }
 
+    /// The language the user picked from the Language menu, or nil to follow the system.
+    ///
+    /// A BCP-47 tag rather than an index, so the file survives languages being added or
+    /// reordered. Shared with the Kotlin client, which reads and writes the same key in the
+    /// same `~/.star.userprefs.json` — pick Japanese in one and the other opens in Japanese.
+    var language: String? {
+        didSet {
+            self.save()
+            StarLocalization.shared.languageOverride = language
+        }
+    }
+
     mutating func justOpened(filename: String) {
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }
@@ -130,6 +142,10 @@ struct UserPreferences: Codable, Sendable {
             if let processingType = instance?.processingType {
                 Task { await constants.set(detectionType: processingType) }
             }
+
+            // Before any window is built, so the first frame the user sees is already in
+            // their language rather than flashing English and then re-rendering.
+            StarLocalization.shared.languageOverride = instance?.language
         } catch {
             Log.e("\(error)")
         }

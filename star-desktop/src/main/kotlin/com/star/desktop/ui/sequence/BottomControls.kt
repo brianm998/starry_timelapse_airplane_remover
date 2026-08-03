@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.components.GlyphButton
 import com.star.desktop.ui.theme.StarColors
+import com.star.desktop.i18n.localized
 
 /** Bottom transport bar: playback buttons, editable frame number, fps, filmstrip toggle. */
 @Composable
@@ -67,7 +68,7 @@ fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 
         // fps + filmstrip toggle
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("fps", color = StarColors.textDisabled, fontSize = 10.sp)
+            Text(localized("ui.fps"), color = StarColors.textDisabled, fontSize = 10.sp)
             GlyphButton("−", "Slower", { vm.setPlaybackFps(fps - 1) }, size = 22, fontSize = 14)
             Text("$fps", color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.width(24.dp))
             GlyphButton("+", "Faster", { vm.setPlaybackFps(fps + 1) }, size = 22, fontSize = 14)

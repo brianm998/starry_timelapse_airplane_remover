@@ -141,11 +141,8 @@ public final actor FrameGraphBuilder {
                 await StarWarnings.shared.post(StarWarning(
                   kind: .memoryGatingDisabled,
                   severity: .critical,
-                  message: "star could not determine this sequence's image size, so its memory " +
-                           "limits are inactive for this run. On high-resolution footage the " +
-                           "system may stop it.",
-                  suggestion: "Please report this — it is a bug in star, not a problem with " +
-                              "your images."
+                  message: localized("warning.memory_gating_disabled.message"),
+                  suggestion: localized("warning.memory_gating_disabled.suggestion")
                 ))
             }
             return

@@ -10,8 +10,8 @@ struct RemoveAllButton: View {
         Button(action: {
             viewModel.setAllCurrentFrameOutliers(to: true, renderImmediately: false)
         }) {
-            Text("Remove All")
+            Text(localized("ui.remove_all"))
         }
-          .help("remove all of the outlier groups in the frame")
+          .help(localized("ui.remove_all_of_the_outlier_groups_in_the"))
     }
 }

@@ -33,6 +33,7 @@ import com.star.desktop.domain.MultiFrameRange
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
+import com.star.desktop.i18n.localized
 
 /** An action a sheet can apply: keep/remove, optionally to outliers *overlapping* those in the area. */
 private data class MultiAction(val label: String, val shouldRemove: Boolean, val overlapping: Boolean, val accent: Color)
@@ -45,7 +46,7 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
         MultiAction("Keep", false, false, StarColors.green),
     )
     MultiFrameSheet(
-        title = "Change overlapping outliers in other frames to:",
+        title = localized("ui.change_overlapping_outliers_in_other_frames"),
         actions = actions,
         defaultIndex = if (target.currentlyRemoves) 1 else 0,   // pre-select the opposite of the clicked group
         actionButtonLabel = { it.label },
@@ -64,7 +65,7 @@ fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: S
         MultiAction("Keep overlapping", false, true, StarColors.green),
     )
     MultiFrameSheet(
-        title = "Change outliers in the selected area across frames:",
+        title = localized("ui.change_outliers_in_the_selected_area_across"),
         actions = actions,
         defaultIndex = 0,
         actionButtonLabel = { "Modify" },
@@ -104,7 +105,7 @@ private fun MultiFrameSheet(
                     Pill(a.label, selected = i == actionIdx, accent = a.accent) { actionIdx = i }
                 }
             }
-            Text("What frames should we modify?", color = StarColors.textSecondary, fontSize = 12.sp)
+            Text(localized("ui.what_frames_should_we_modify"), color = StarColors.textSecondary, fontSize = 12.sp)
             MultiFrameRange.entries.forEach { r ->
                 RadioRow(r.label, selected = r == range) { range = r }
             }
@@ -112,13 +113,13 @@ private fun MultiFrameSheet(
                 OutlinedTextField(
                     value = nText,
                     onValueChange = { nText = it.filter(Char::isDigit) },
-                    label = { Text("Number of frames") },
+                    label = { Text(localized("ui.number_of_frames")) },
                     singleLine = true,
                     modifier = Modifier.width(180.dp),
                 )
             }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                OutlinedButton(onClick = onCancel) { Text("Cancel") }
+                OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
                 Button(
                     onClick = { onApply(action, range, nText.toIntOrNull() ?: 5) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),

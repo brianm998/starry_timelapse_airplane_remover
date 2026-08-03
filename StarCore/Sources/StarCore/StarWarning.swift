@@ -119,14 +119,14 @@ public struct StarWarning: Sendable, Codable, Equatable {
     /// two different things.
     public var title: String {
         switch kind {
-        case .memoryPressure:       return "Low Memory"
-        case .lowSystemMemory:      return "Low Memory"
-        case .footprintOverBudget:  return "High Memory Use"
-        case .oversizedReservation: return "Memory Limit Exceeded"
-        case .memoryGatingDisabled: return "Memory Limits Inactive"
-        case .previousRunDied:      return "Previous Run Stopped"
-        case .outputWriteFailed:    return "Could Not Write Output"
-        case .lowDiskSpace:         return "Not Enough Disk Space"
+        case .memoryPressure:       return localized("warning.title.memory_pressure")
+        case .lowSystemMemory:      return localized("warning.title.low_system_memory")
+        case .footprintOverBudget:  return localized("warning.title.footprint_over_budget")
+        case .oversizedReservation: return localized("warning.title.oversized_reservation")
+        case .memoryGatingDisabled: return localized("warning.title.memory_gating_disabled")
+        case .previousRunDied:      return localized("warning.title.previous_run_died")
+        case .outputWriteFailed:    return localized("warning.title.output_write_failed")
+        case .lowDiskSpace:         return localized("warning.title.low_disk_space")
         }
     }
 

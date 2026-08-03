@@ -6,29 +6,29 @@ struct PostProcessingRenderPromptView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Processing complete")
+            Text(localized("ui.processing_complete"))
               .font(.title)
 
-            Text("Render video now?")
+            Text(localized("ui.render_video_now"))
               .font(.title2)
 
             HStack {
-                Button("Cancel") {
+                Button(localized("ui.cancel")) {
                     viewModel.postProcessingRenderPromptShowing = false
                 }
 
                 Spacer()
 
-                Button("Preview first") {
+                Button(localized("ui.preview_first")) {
                     viewModel.playFinalFrames()
                 }
-                  .help("Play the final processed frames from the beginning.")
+                  .help(localized("ui.play_the_final_processed_frames_from_the"))
 
-                Button("Yes") {
+                Button(localized("ui.yes")) {
                     viewModel.confirmRenderAfterProcessing(autoStart: true)
                 }
                   .keyboardShortcut(.defaultAction)
-                  .help("Render now using the current settings.")
+                  .help(localized("ui.render_now_using_the_current_settings"))
             }
         }
           .padding(20)

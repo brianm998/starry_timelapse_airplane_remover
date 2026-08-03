@@ -1,5 +1,6 @@
 import SwiftUI
 
+import StarCore
 struct InfoDialogView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
     
@@ -19,7 +20,7 @@ struct InfoDialogView: View {
                     Spacer()
                       .frame(maxWidth: 200)
                     VStack {
-                        Text("Information about Star")
+                        Text(localized("ui.information_about_star"))
                           .font(.largeTitle)
                           .foregroundColor(.white)
                         
@@ -42,7 +43,7 @@ struct InfoDialogView: View {
                         Button() {
                             viewModel.showInfoDialog = false
                         } label: {
-                            Text("Close")
+                            Text(localized("ui.close"))
                               .buttonStyle(ShrinkingButton())
                         }
                     }
@@ -71,11 +72,11 @@ public enum InfoType: CaseIterable {
     var shortName: String {
         switch self {
         case .about:
-            return "About"
+            return localized("ui.about")
         case .howTo:
-            return "How To"
+            return localized("ui.how_to")
         case .detailed:
-            return "Detailed"
+            return localized("ui.detailed")
         }
     }
 

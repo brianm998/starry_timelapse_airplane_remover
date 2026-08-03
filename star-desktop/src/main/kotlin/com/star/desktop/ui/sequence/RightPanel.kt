@@ -32,6 +32,7 @@ import com.star.desktop.domain.ToolType
 import com.star.desktop.ui.components.toolPainter
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.CleanMethod
+import com.star.desktop.i18n.localized
 
 /**
  * Right panel (macOS `RightPanel`): the editing tool picker. Tool *paint* behavior is wired in
@@ -57,7 +58,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("Tools", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         ToolType.selectable.forEachIndexed { i, t ->
             ToolRow(t, number = i + 1, selected = t == tool, onClick = { vm.setTool(t) })
         }
@@ -67,7 +68,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         val remove = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == true }
         val keep = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == false }
         val undecided = groups.size - remove - keep
-        Text("Outliers (${groups.size})", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Text(localized("ui.outliers_count", groups.size), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("✕$remove", color = StarColors.red, fontSize = 11.sp)
             Text("✓$keep", color = StarColors.green, fontSize = 11.sp)
@@ -78,10 +79,10 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         BulkButton("Clear Undecided", StarColors.gray) { fvm.clearUndecided() }
         BulkButton("Apply Decision Tree", StarColors.blue) { fvm.applyDecisionTree(overwrite = true) }
         BulkButton("Apply Tree (All Frames)", StarColors.blue) { vm.applyDecisionTreeAll() }
-        selected?.let { Text("Selected #$it", color = StarColors.orange, fontSize = 10.sp) }
+        selected?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
-        Text("Clean Method", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Text(localized("ui.clean_method"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         val activeMethod = info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE
         val cmLabels = CLEAN_METHODS.toMap()
         com.star.desktop.ui.components.VerticalStarPicker(
@@ -93,7 +94,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         )
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
-        Text("Fast Skip (z / x)", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Text(localized("ui.fast_skip_z_x"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         val fastLabels = FAST_MODES.toMap()
         com.star.desktop.ui.components.VerticalStarPicker(
             options = FAST_MODES.map { it.first },

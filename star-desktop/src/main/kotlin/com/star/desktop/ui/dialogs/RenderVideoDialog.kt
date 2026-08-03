@@ -44,6 +44,7 @@ import com.star.proto.ProgressEvent
 import com.star.proto.VideoCapabilities
 import com.star.proto.VideoEncodeSettings
 import kotlinx.coroutines.launch
+import com.star.desktop.i18n.localized
 
 /**
  * Render Video sheet (macOS `RenderVideoSheetView`): cascading pickers driven by
@@ -66,11 +67,11 @@ fun RenderVideoDialog(app: AppViewModel) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Render Video", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            Text(localized("ui.render_video"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
 
             val c = caps
             if (c == null) {
-                Text("Loading codecs…", color = StarColors.textSecondary, fontSize = 13.sp)
+                Text(localized("ui.loading_codecs"), color = StarColors.textSecondary, fontSize = 13.sp)
                 return@Column
             }
 
@@ -131,12 +132,12 @@ fun RenderVideoDialog(app: AppViewModel) {
             if (rendering) LinearProgressIndicator(progress = { progress ?: 0f }, modifier = Modifier.fillMaxWidth(), color = StarColors.accent)
 
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                OutlinedButton(onClick = app::closeRenderVideo, enabled = !rendering) { Text("Cancel") }
+                OutlinedButton(onClick = app::closeRenderVideo, enabled = !rendering) { Text(localized("ui.cancel")) }
                 Button(
                     enabled = !rendering && encoder.isNotEmpty(),
                     onClick = { doRender() },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text("Render") }
+                ) { Text(localized("ui.render")) }
             }
         }
     }

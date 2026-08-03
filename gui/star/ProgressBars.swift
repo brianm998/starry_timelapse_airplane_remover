@@ -10,7 +10,7 @@ struct ProgressBars: View {
         VStack {
             if viewModel.loadingOutliers {
                 HStack {
-                    Text("Loading Outliers for this frame")
+                    Text(localized("ui.loading_outliers_for_this_frame"))
                       .foregroundColor(.white)
                     Spacer()
                     ProgressView()
@@ -22,7 +22,7 @@ struct ProgressBars: View {
 
             if viewModel.loadingAllOutliers {
                 HStack {
-                    Text("Loading Outlier Groups")
+                    Text(localized("ui.loading_outlier_groups"))
                       .foregroundColor(.white)
                     Spacer()
                     ProgressView(value: viewModel.outlierLoadingProgress)

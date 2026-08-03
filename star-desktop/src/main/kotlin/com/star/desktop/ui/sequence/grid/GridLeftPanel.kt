@@ -21,6 +21,7 @@ import com.star.desktop.ui.components.PanelChevron
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameViewMode
+import com.star.desktop.i18n.localized
 
 /** Grid-mode left panel (macOS `GridLeftPanel`): the "Show" view-mode picker driving every thumbnail. */
 @Composable
@@ -31,7 +32,7 @@ fun GridLeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Show", color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text(localized("ui.show"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             val labels = SHOW_MODES.toMap()
             com.star.desktop.ui.components.VerticalStarPicker(
                 options = SHOW_MODES.map { it.first },

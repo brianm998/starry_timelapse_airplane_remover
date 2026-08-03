@@ -1,0 +1,28 @@
+{
+  "comment": "Languages star ships translations for. `code` is BCP-47 and names the <code>.json table in this directory. The order here is the order every client's language picker shows. Add a language by adding a row here AND a <code>.json table; LocalizationTests fails the build if the two disagree.",
+  "sourceLanguage": "en",
+  "languages": [
+    { "code": "en",      "nativeName": "English",             "englishName": "English",              "rightToLeft": false },
+    { "code": "ar",      "nativeName": "العربية",              "englishName": "Arabic",               "rightToLeft": true  },
+    { "code": "bn",      "nativeName": "বাংলা",                 "englishName": "Bangla",               "rightToLeft": false },
+    { "code": "cs",      "nativeName": "Čeština",             "englishName": "Czech",                "rightToLeft": false },
+    { "code": "de",      "nativeName": "Deutsch",             "englishName": "German",               "rightToLeft": false },
+    { "code": "es",      "nativeName": "Español",             "englishName": "Spanish",              "rightToLeft": false },
+    { "code": "fr",      "nativeName": "Français",            "englishName": "French",               "rightToLeft": false },
+    { "code": "hi",      "nativeName": "हिन्दी",                  "englishName": "Hindi",                "rightToLeft": false },
+    { "code": "id",      "nativeName": "Bahasa Indonesia",    "englishName": "Indonesian",           "rightToLeft": false },
+    { "code": "it",      "nativeName": "Italiano",            "englishName": "Italian",              "rightToLeft": false },
+    { "code": "ja",      "nativeName": "日本語",                "englishName": "Japanese",             "rightToLeft": false },
+    { "code": "ko",      "nativeName": "한국어",                "englishName": "Korean",               "rightToLeft": false },
+    { "code": "nl",      "nativeName": "Nederlands",          "englishName": "Dutch",                "rightToLeft": false },
+    { "code": "pl",      "nativeName": "Polski",              "englishName": "Polish",               "rightToLeft": false },
+    { "code": "pt-BR",   "nativeName": "Português (Brasil)",  "englishName": "Portuguese (Brazil)",  "rightToLeft": false },
+    { "code": "ru",      "nativeName": "Русский",             "englishName": "Russian",              "rightToLeft": false },
+    { "code": "th",      "nativeName": "ไทย",                  "englishName": "Thai",                 "rightToLeft": false },
+    { "code": "tr",      "nativeName": "Türkçe",              "englishName": "Turkish",              "rightToLeft": false },
+    { "code": "uk",      "nativeName": "Українська",          "englishName": "Ukrainian",            "rightToLeft": false },
+    { "code": "ur",      "nativeName": "اردو",                 "englishName": "Urdu",                 "rightToLeft": true  },
+    { "code": "vi",      "nativeName": "Tiếng Việt",          "englishName": "Vietnamese",           "rightToLeft": false },
+    { "code": "zh-Hans", "nativeName": "简体中文",              "englishName": "Chinese (Simplified)", "rightToLeft": false }
+  ]
+}

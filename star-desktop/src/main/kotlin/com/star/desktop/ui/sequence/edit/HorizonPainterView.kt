@@ -68,6 +68,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import com.star.desktop.i18n.localized
 
 /**
  * Reference-horizon painter (macOS `HorizonPainterView` + `HorizonPainterToolbarView`). The user
@@ -383,7 +384,7 @@ private fun HorizonInstructionTip(isMoving: Boolean, modifier: Modifier = Modifi
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Selecting the horizon with Star is easy.", color = Color.White, fontSize = 15.sp)
+        Text(localized("ui.selecting_the_horizon_with_star_is_easy"), color = Color.White, fontSize = 15.sp)
         Text(
             (if (isMoving) {
                 "For a moving video like this, define the horizon on several evenly-spaced frames; Star uses " +
@@ -401,7 +402,7 @@ private fun HorizonInstructionTip(isMoving: Boolean, modifier: Modifier = Modifi
             color = StarColors.textSecondary, fontSize = 12.sp,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            OutlinedButton(onClick = { dismissed = true }) { Text("Got it") }
+            OutlinedButton(onClick = { dismissed = true }) { Text(localized("ui.got_it")) }
         }
     }
 }
@@ -444,7 +445,7 @@ private fun HorizonControlBar(
 
         if (phase == HorizonPhase.COMPUTING) {
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = StarColors.accent)
-            Text("Computing horizon…", color = StarColors.textSecondary, fontSize = 12.sp)
+            Text(localized("ui.computing_horizon"), color = StarColors.textSecondary, fontSize = 12.sp)
             Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = onCancel) { Text(if (startup) "Cancel" else "Done") }
             return@Row
@@ -457,16 +458,16 @@ private fun HorizonControlBar(
             SkyGroundToggle(state)
         } else {
             DividerDot()
-            Text("Paint across the horizon — $coverage%", color = StarColors.yellow, fontSize = 12.sp)
+            Text(localized("ui.paint_across_horizon", coverage), color = StarColors.yellow, fontSize = 12.sp)
         }
 
-        OutlinedButton(onClick = onReset) { Text("Reset") }
+        OutlinedButton(onClick = onReset) { Text(localized("ui.reset")) }
 
         Spacer(Modifier.weight(1f))
 
         if (refining > 0) {
             CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = StarColors.accent)
-            Text("Detecting…", color = StarColors.textSecondary, fontSize = 11.sp)
+            Text(localized("ui.detecting"), color = StarColors.textSecondary, fontSize = 11.sp)
         }
         errorText?.let { Text(it, color = StarColors.red, fontSize = 11.sp) }
 
@@ -478,12 +479,12 @@ private fun HorizonControlBar(
                     onClick = onContinue,
                 ) { Text(if (hasMore) "Next" else "Continue") }
             } else {
-                OutlinedButton(enabled = hasHorizon && refining == 0, onClick = { onSave(false) }) { Text("Save") }
+                OutlinedButton(enabled = hasHorizon && refining == 0, onClick = { onSave(false) }) { Text(localized("ui.save")) }
                 Button(
                     enabled = hasHorizon && refining == 0,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     onClick = { onSave(true) },
-                ) { Text("Save & Reprocess") }
+                ) { Text(localized("ui.save_reprocess")) }
             }
         }
 
@@ -512,11 +513,11 @@ private fun BrushSizeControl(state: HorizonPaintState) {
 private fun SkyGroundToggle(state: HorizonPaintState) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         if (!state.isErasing) {
-            Button(onClick = { state.isErasing = false }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.green)) { Text("Sky", color = Color.White) }
-            OutlinedButton(onClick = { state.isErasing = true }) { Text("Ground") }
+            Button(onClick = { state.isErasing = false }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.green)) { Text(localized("ui.sky"), color = Color.White) }
+            OutlinedButton(onClick = { state.isErasing = true }) { Text(localized("ui.ground")) }
         } else {
-            OutlinedButton(onClick = { state.isErasing = false }) { Text("Sky") }
-            Button(onClick = { state.isErasing = true }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.red)) { Text("Ground", color = Color.White) }
+            OutlinedButton(onClick = { state.isErasing = false }) { Text(localized("ui.sky")) }
+            Button(onClick = { state.isErasing = true }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.red)) { Text(localized("ui.ground"), color = Color.White) }
         }
     }
 }

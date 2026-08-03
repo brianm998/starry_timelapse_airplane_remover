@@ -15,7 +15,7 @@ struct EditableFrameNumberView: View {
         let frameNumberString = String(format: "%d", viewModel.currentIndex)
         if self.editFrameNumberMode {
             HStack {
-                Text("frame")
+                Text(localized("ui.frame_2"))
                   .foregroundColor(.white)
                 TextField("\(frameNumberString)",
                           text: $editFrameNumberModeString)
@@ -35,7 +35,7 @@ struct EditableFrameNumberView: View {
                   }
             }
         } else {
-            Text("frame \(frameNumberString)")
+            Text(localized("ui.frame_n_lower", frameNumberString))
               .foregroundColor(.white)
               .cursor(.iBeam)
               .onTapGesture(count: 1) {

@@ -34,41 +34,41 @@ struct BottomRightView: View {
                    classificationTime > 0
                 {
                     VStack {
-                        Text("\(outlierCount) outliers")
+                        Text(localized("ui.n_outliers", outlierCount))
                           .foregroundColor(.orange)
-                        Text("from \(frameCount) frames")
+                        Text(localized("ui.from_n_frames", frameCount))
                           .foregroundColor(.orange)
                     }
                     VStack {
                         let featureString = String(format: "%d", Int(featureTime))
-                        Text("featureTime \(featureString)s")
+                        Text(localized("ui.feature_time", featureString))
                           .foregroundColor(.orange)
                         let classificationString = String(format: "%d", Int(classificationTime))
-                        Text("classificationTime \(classificationString)s")
+                        Text(localized("ui.classification_time", classificationString))
                           .foregroundColor(.orange)
                     }
                 }
                 
                 if harvesterCount > 0 {
                     VStack {
-                        Text("\(harvesterCount) data harvesters running")
+                        Text(localized("ui.n_harvesters_running", harvesterCount))
                           .foregroundColor(.orange)
                         HStack {
                             if allOutlierGroupCount > 0 {
                                 VStack {
-                                    Text("\(allOutlierGroupCount) groups processed")
+                                    Text(localized("ui.n_groups_processed", allOutlierGroupCount))
                                       .foregroundColor(.orange)
                                     let formatString = String(format: "%.2f", allTotalOutlierProcessingTime/Double(allOutlierGroupCount))
-                                    Text("averaging \(formatString) secs")
+                                    Text(localized("ui.averaging_secs", formatString))
                                       .foregroundColor(.orange)
                                 }
                             }
                             if isolatedOutlierGroupCount > 0 {
                                 VStack {
-                                    Text("\(isolatedOutlierGroupCount) groups processed")
+                                    Text(localized("ui.n_groups_processed_isolated", isolatedOutlierGroupCount))
                                       .foregroundColor(.orange)
                                     let formatString = String(format: "%.2f", isolatedTotalOutlierProcessingTime/Double(isolatedOutlierGroupCount))
-                                    Text("averaging \(formatString) secs")
+                                    Text(localized("ui.averaging_secs", formatString))
                                       .foregroundColor(.orange)
                                 }
                             }
@@ -81,19 +81,19 @@ struct BottomRightView: View {
                 VStack(alignment: .trailing) {
                     let numPurgatory = viewModel.frameSaveQueue.purgatoryCount
                     if numPurgatory > 0 {
-                        Text("\(numPurgatory) frames in purgatory")
+                        Text(localized("ui.n_frames_in_purgatory", numPurgatory))
                           .foregroundColor(.purple)
                     }
 
                     let numPending = viewModel.frameSaveQueue.pendingSavingCount
                     if numPending > 0 {
-                        Text("\(numPending) frames waiting to save")
+                        Text(localized("ui.n_frames_waiting_to_save", numPending))
                           .foregroundColor(.yellow)
                     }
                     
                     let numSaving = viewModel.frameSaveQueue.savingCount
                     if numSaving > 0 {
-                        Text("saving \(numSaving) frames")
+                        Text(localized("ui.saving_n_frames", numSaving))
                           .foregroundColor(.green)
                     }
                 }
@@ -101,13 +101,13 @@ struct BottomRightView: View {
                 if viewModel.isProcessingFrames {
                     ProgressView()
                       .colorScheme(.dark)
-                    Text("\(frameGraphViewModel.numberOfFramesProcessingNow) frames processing")
+                    Text(localized("ui.n_frames_processing", frameGraphViewModel.numberOfFramesProcessingNow))
                       .foregroundColor(.white)
                     Button {
                         viewModel.cancelProcessing()
                         Task { await frameGraphBuilder.cancelAllOperations() }
                     } label: {
-                        Text("Stop")
+                        Text(localized("ui.stop"))
                           .foregroundColor(.white)
                           .padding(.horizontal, 8)
                           .padding(.vertical, 4)
@@ -115,7 +115,7 @@ struct BottomRightView: View {
                           .cornerRadius(6)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .help("Cancel all pending processing operations")
+                    .help(localized("ui.cancel_all_pending_processing_operations"))
                 }
 
                 switch viewModel.sequenceProcessingState {
@@ -125,10 +125,10 @@ struct BottomRightView: View {
                     ProgressView()
                       .colorScheme(.dark)
                     VStack {
-                        Text("Detecting Horizons")
+                        Text(localized("ui.detecting_horizons"))
                           .foregroundColor(.white)
                         let remaining = viewModel.frames.count - viewModel.count(for: .horizonDetected)
-                        Text("\(remaining) frames left")
+                        Text(localized("ui.n_frames_left", remaining))
                           .foregroundColor(.white)
                     }
                 case .starKeypoints:
@@ -138,9 +138,9 @@ struct BottomRightView: View {
                       - viewModel.count(for: .complete)
                       - viewModel.count(for: .starKeypointsFound)
                     VStack {
-                        Text("Star Keypoints")
+                        Text(localized("ui.star_keypoints"))
                           .foregroundColor(.white)
-                        Text("\(remaining) frames left")
+                        Text(localized("ui.n_frames_left", remaining))
                           .foregroundColor(.white)
                     }
                 case .earthKeypoints:
@@ -150,45 +150,45 @@ struct BottomRightView: View {
                       - viewModel.count(for: .complete)
                       - viewModel.count(for: .earthKeypointsFound)
                     VStack {
-                        Text("Earth Keypoints")
+                        Text(localized("ui.earth_keypoints"))
                           .foregroundColor(.white)
-                        Text("\(remaining) frames left")
+                        Text(localized("ui.n_frames_left", remaining))
                           .foregroundColor(.white)
                     }
                 case .firstAlignment:
                     ProgressView()
                       .colorScheme(.dark)
                     VStack {
-                        Text("First Alignment")
+                        Text(localized("ui.first_alignment"))
                           .foregroundColor(.white)
                         let remaining = viewModel.frames.count
                           - viewModel.count(for: .complete)
                           - viewModel.count(for: .starAlignmentFailed)
-                        Text("\(remaining) frames left")
+                        Text(localized("ui.n_frames_left", remaining))
                           .foregroundColor(.white)
                     }
                 case .secondAlignment:
                     ProgressView()
                       .colorScheme(.dark)
                     VStack {
-                        Text("Second Alignment")
+                        Text(localized("ui.second_alignment"))
                           .foregroundColor(.white)
                         let remaining = viewModel.frames.count - viewModel.count(for: .complete)
-                        Text("\(remaining) frames left")
+                        Text(localized("ui.n_frames_left", remaining))
                           .foregroundColor(.white)
                     }
                 case .done:
-                    Text("Alignment Done")
+                    Text(localized("ui.alignment_done"))
                       .foregroundColor(.green)
 
                 case .error(let errorString):
-                    Text("Alignment Error: \(errorString)")
+                    Text(localized("ui.alignment_error", errorString))
                       .foregroundColor(.red)
                 }
 
                 if let frameState = frameView.frameState {
 
-                    Text("frame is \(frameState.message)")
+                    Text(localized("ui.frame_is_state", frameState.message))
                       .foregroundColor(frameState.color)
 
                     Spacer()
@@ -197,11 +197,11 @@ struct BottomRightView: View {
 
                 VStack {
                     if frameView.loadingOutlierViews {
-                        Text("loading outlier views")
+                        Text(localized("ui.loading_outlier_views"))
                           .foregroundColor(.green)
                     }
                     if frameView.loadingTrashViews {
-                        Text("loading outlier trash views")
+                        Text(localized("ui.loading_outlier_trash_views"))
                           .foregroundColor(.orange)
                     }
                 }
@@ -213,17 +213,17 @@ struct BottomRightView: View {
                 if frameView.frameObserver.starAlignmentResults != nil ||
                    frameView.frameObserver.earthAlignmentResults != nil
                 {
-                    Text("alignment")
+                    Text(localized("ui.alignment"))
                       .foregroundColor(.white)
                 }
                 
                 VStack(alignment: .trailing) {
                     if let results = frameView.frameObserver.starAlignmentResults {
-                        Text("star \(results.numberAligned.count)/\(results.total)")
+                        Text(localized("ui.star_aligned_ratio", results.numberAligned.count, results.total))
                         .foregroundColor(results.numberAligned.count == results.total ? .white : .red)
                     }
                     if let results = frameView.frameObserver.earthAlignmentResults {
-                        Text("earth \(results.numberAligned.count)/\(results.total)")
+                        Text(localized("ui.earth_aligned_ratio", results.numberAligned.count, results.total))
                         .foregroundColor(results.numberAligned.count == results.total ? .white : .red)
                     }
                 }
@@ -233,23 +233,23 @@ struct BottomRightView: View {
                     if let _ = frameView.outlierViews {
                         
                         if let numPositive = frameView.frameObserver.numberOfPositiveOutliers {
-                            Text("\(numPositive) will remove")
+                            Text(localized("ui.n_will_remove", numPositive))
                               .foregroundColor(numPositive == 0 ? .white : .red)
                         }
                         if let numNegative = frameView.frameObserver.numberOfNegativeOutliers {
-                            Text("\(numNegative) will keep")
+                            Text(localized("ui.n_will_keep", numNegative))
                               .foregroundColor(numNegative == 0 ? .white : .green)
                         }
                         if let numUndecided = frameView.frameObserver.numberOfUndecidedOutliers,
                            numUndecided > 0
                         {
-                            Text("\(numUndecided) undecided")
+                            Text(localized("ui.n_undecided", numUndecided))
                               .foregroundColor(.orange)
                         }
                         if let numTrash = frameView.frameObserver.numberOfTrashOutliers,
                            numTrash > 0
                         {
-                            Text("\(numTrash) in trash")
+                            Text(localized("ui.n_in_trash", numTrash))
                               .foregroundColor(.yellow)
                         }
                     }
@@ -268,7 +268,7 @@ struct BottomRightView: View {
                     Text("⚙")
                       .font(.system(size: 60))
                       .foregroundColor(.white)
-                      .help("Show Settings")
+                      .help(localized("ui.show_settings"))
                 }
                   .buttonStyle(PlainButtonStyle())
 
@@ -329,13 +329,13 @@ struct BottomRightView: View {
                     if viewModel.isProcessingFrames {
                         ProgressView()
                           .colorScheme(.dark)
-                        Text("processing \(viewModel.frames.count - viewModel.numberOfFramesProcessed) more frames")
+                        Text(localized("ui.processing_n_more_frames", viewModel.frames.count - viewModel.numberOfFramesProcessed))
                           .foregroundColor(.white)
                         Button {
                             viewModel.cancelProcessing()
                             Task { await frameGraphBuilder.cancelAllOperations() }
                         } label: {
-                            Text("Stop")
+                            Text(localized("ui.stop"))
                               .foregroundColor(.white)
                               .padding(.horizontal, 8)
                               .padding(.vertical, 4)
@@ -343,7 +343,7 @@ struct BottomRightView: View {
                               .cornerRadius(6)
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .help("Cancel all pending processing operations")
+                        .help(localized("ui.cancel_all_pending_processing_operations"))
                     }
 
 

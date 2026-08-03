@@ -12,6 +12,8 @@ import com.star.desktop.domain.ToolType
 import com.star.desktop.ui.initial.OpenKind
 import com.star.desktop.ui.initial.chooseDirectory
 import com.star.desktop.ui.initial.chooseFile
+import com.star.desktop.i18n.Strings
+import com.star.desktop.i18n.localized
 
 /**
  * The application menu bar (macOS `StarCommands`) — mounted on the window (the v1 client defined a
@@ -25,69 +27,92 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
     val hasSession = svm != null
 
     MenuBar {
-        Menu("File", mnemonic = 'F') {
-            Item("Open Image Sequence…", shortcut = primaryShortcut(Key.O)) {
+        Menu(localized("ui.file"), mnemonic = 'F') {
+            Item(localized("ui.open_image_sequence"), shortcut = primaryShortcut(Key.O)) {
                 chooseDirectory()?.let { app.openSequence(it) }
             }
-            Item("Open Video…") {
-                chooseFile("Open Video")?.let { app.openVideo(it) }
+            Item(localized("ui.open_video")) {
+                chooseFile(localized("ui.open_video_title"))?.let { app.openVideo(it) }
             }
-            Item("Resume from config.json…") {
-                chooseFile("Resume from config.json")?.let { app.openConfig(it) }
+            Item(localized("ui.resume_from_config_json")) {
+                chooseFile(localized("ui.resume_from_config_title"))?.let { app.openConfig(it) }
             }
             Separator()
-            Item("Close Session", enabled = hasSession, shortcut = primaryShortcut(Key.W)) {
+            Item(localized("ui.close_session"), enabled = hasSession, shortcut = primaryShortcut(Key.W)) {
                 app.closeSession()
             }
         }
 
-        Menu("View", mnemonic = 'V') {
-            Item("Edit Mode", enabled = hasSession, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
-            Item("Scrub Mode", enabled = hasSession, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
-            Item("Grid Mode", enabled = hasSession, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
+        Menu(localized("ui.view"), mnemonic = 'V') {
+            Item(localized("ui.edit_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
+            Item(localized("ui.scrub_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
+            Item(localized("ui.grid_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
             Separator()
-            Item("Toggle Filmstrip", enabled = hasSession) { svm?.toggleFilmstrip() }
-            Item("Play / Pause", enabled = hasSession, shortcut = KeyShortcut(Key.Spacebar)) { svm?.togglePlayback() }
+            Item(localized("ui.toggle_filmstrip"), enabled = hasSession) { svm?.toggleFilmstrip() }
+            Item(localized("ui.play_pause"), enabled = hasSession, shortcut = KeyShortcut(Key.Spacebar)) { svm?.togglePlayback() }
         }
 
-        Menu("Process", mnemonic = 'P') {
-            Item("Process All Frames", enabled = hasSession) { svm?.processAll() }
-            Item("Process Remaining", enabled = hasSession) { svm?.processRemaining() }
-            Item("Process Current Frame", enabled = hasSession) { svm?.processCurrent() }
+        Menu(localized("ui.process"), mnemonic = 'P') {
+            Item(localized("ui.process_all_frames_2"), enabled = hasSession) { svm?.processAll() }
+            Item(localized("ui.process_remaining"), enabled = hasSession) { svm?.processRemaining() }
+            Item(localized("ui.process_current_frame"), enabled = hasSession) { svm?.processCurrent() }
             Separator()
-            Item("Cancel Processing", enabled = hasSession) { svm?.cancelProcessing() }
+            Item(localized("ui.cancel_processing"), enabled = hasSession) { svm?.cancelProcessing() }
             Separator()
-            Item("Processing Settings…", enabled = hasSession, shortcut = primaryShortcut(Key.Comma)) { app.openSettings() }
+            Item(localized("ui.processing_settings_2"), enabled = hasSession, shortcut = primaryShortcut(Key.Comma)) { app.openSettings() }
         }
 
-        Menu("Export", mnemonic = 'E') {
-            Item("Render Video…", enabled = hasSession) { app.openRenderVideo() }
+        Menu(localized("ui.export"), mnemonic = 'E') {
+            Item(localized("ui.render_video_2"), enabled = hasSession) { app.openRenderVideo() }
         }
 
-        Menu("Window", mnemonic = 'W') {
-            Item("Outlier Table", enabled = hasSession, shortcut = primaryShortcut(Key.X, alt = true)) { app.toggleOutlierWindow() }
-            Item("Alignment", enabled = hasSession, shortcut = primaryShortcut(Key.A, alt = true)) { app.toggleAlignmentWindow() }
+        Menu(localized("ui.window"), mnemonic = 'W') {
+            Item(localized("ui.outlier_table"), enabled = hasSession, shortcut = primaryShortcut(Key.X, alt = true)) { app.toggleOutlierWindow() }
+            Item(localized("ui.alignment_2"), enabled = hasSession, shortcut = primaryShortcut(Key.A, alt = true)) { app.toggleAlignmentWindow() }
             Separator()
-            Item("Paint Reference Horizon", enabled = hasSession, shortcut = KeyShortcut(Key.H)) {
+            Item(localized("ui.paint_reference_horizon"), enabled = hasSession, shortcut = KeyShortcut(Key.H)) {
                 svm?.let { if (it.mode.value != InteractionMode.EDIT) it.setMode(InteractionMode.EDIT); it.toggleHorizonPaint() }
             }
         }
 
-        Menu("Outliers", mnemonic = 'O') {
+        // Window ▸ Language ▸ …. The macOS app puts this in its app menu, which is where a
+        // Mac user looks; Compose Desktop has no app menu on Windows or Linux, and this menu
+        // bar is shared across all three, so it goes in the last menu instead of somewhere
+        // that only exists on one platform.
+        //
+        // Every language is listed in its own script on purpose: someone who has landed in a
+        // language they cannot read finds their way back by recognising their own name for it.
+        Menu(localized("language.menu"), mnemonic = 'L') {
+            RadioButtonItem(
+                localized("language.follow_system"),
+                selected = Strings.isFollowingSystem,
+            ) { app.setLanguage(null) }
+
+            Separator()
+
+            for (language in app.availableLanguages) {
+                RadioButtonItem(
+                    language.nativeName,
+                    selected = !Strings.isFollowingSystem && Strings.currentCode == language.code,
+                ) { app.setLanguage(language.code) }
+            }
+        }
+
+        Menu(localized("ui.outliers"), mnemonic = 'O') {
             // Accelerators per the authoritative Swift source (StarCommands.swift): 'a' removes all,
             // 'k' keeps all, 'u' clears undecided. (KOTLIN_CLIENT_SPEC §5.8's prose had a/k swapped.)
-            Item("Keep All", enabled = hasSession, shortcut = KeyShortcut(Key.K)) {
+            Item(localized("ui.keep_all"), enabled = hasSession, shortcut = KeyShortcut(Key.K)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).keepAll() }
             }
-            Item("Remove All", enabled = hasSession, shortcut = KeyShortcut(Key.A)) {
+            Item(localized("ui.remove_all"), enabled = hasSession, shortcut = KeyShortcut(Key.A)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).removeAll() }
             }
-            Item("Clear Undecided", enabled = hasSession, shortcut = KeyShortcut(Key.U)) {
+            Item(localized("ui.clear_undecided"), enabled = hasSession, shortcut = KeyShortcut(Key.U)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).clearUndecided() }
             }
             Separator()
             ToolType.selectable.forEachIndexed { i, t ->
-                Item("Tool: ${t.displayName} (${i + 1})", enabled = hasSession) { svm?.setTool(t) }
+                Item(localized("ui.tool_n", t.displayName, i + 1), enabled = hasSession) { svm?.setTool(t) }
             }
         }
     }

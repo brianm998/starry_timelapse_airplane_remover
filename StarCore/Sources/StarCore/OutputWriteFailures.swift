@@ -67,10 +67,8 @@ public actor OutputWriteFailures {
         await StarWarnings.shared.post(StarWarning(
           kind: .outputWriteFailed,
           severity: .critical,
-          message: "star could not write its output. The first frame it failed on was " +
-                   "\(path).",
-          suggestion: "The disk is most likely full, or the output folder is not writable. " +
-                      "Free some space and resume the run — nothing already written is lost."
+          message: localized("warning.output_write_failed.message", path),
+          suggestion: localized("warning.output_write_failed.suggestion")
         ))
     }
 

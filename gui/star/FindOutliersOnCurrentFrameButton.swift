@@ -19,9 +19,9 @@ struct FindOutliersOnCurrentFrameButton: View {
             }
             
             return Button(action: action) {
-                Text("Find Outliers for this frame")
+                Text(localized("ui.find_outliers_for_this_frame"))
             }
-              .help("Find Outliers for this frame")
+              .help(localized("ui.find_outliers_for_this_frame"))
         }
     }
 }

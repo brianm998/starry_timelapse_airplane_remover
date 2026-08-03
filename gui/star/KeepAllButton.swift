@@ -10,8 +10,8 @@ struct KeepAllButton: View {
         Button(action: {
             viewModel.setAllCurrentFrameOutliers(to: false, renderImmediately: false)
         }) {
-            Text("Keep All")
+            Text(localized("ui.keep_all"))
         }
-          .help("keep all of the outlier groups in the frame")
+          .help(localized("ui.keep_all_of_the_outlier_groups_in_the_frame"))
     }
 }

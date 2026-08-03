@@ -27,8 +27,8 @@ public enum ToolType: String, Equatable, CaseIterable {
     case information
     case none
     
-    var localizedName: LocalizedStringKey {
-        LocalizedStringKey(rawValue)
+    var localizedName: String {
+        localized("tool.\(rawValue)")
     }
 
     public static var allCases: [ToolType] {
@@ -70,23 +70,23 @@ public enum ToolType: String, Equatable, CaseIterable {
     var displayName: String {
         switch self {
         case .remove:
-            return "Remove"
+            return localized("tool.remove")
         case .keep:
-            return "Keep"
+            return localized("tool.keep")
         case .razor:
-            return "Razor"
+            return localized("tool.razor")
         case .shovel:
-            return "Shovel"
+            return localized("tool.shovel")
         case .trash:
-            return "Trash"
+            return localized("tool.trash")
         case .removeFromTrash:
-            return "Get from Trash"
+            return localized("tool.removeFromTrash")
         case .multi:
-            return "Multi"
+            return localized("tool.multi")
         case .information:
-            return "Information"
+            return localized("tool.information")
         case .none:
-            return "None"
+            return localized("tool.none")
         }
     }
 }
@@ -96,8 +96,8 @@ public enum InteractionMode: String, Equatable, CaseIterable {
     case scrub
     case grid
 
-    var localizedName: LocalizedStringKey {
-        LocalizedStringKey(rawValue)
+    var localizedName: String {
+        localized("interaction_mode.\(rawValue)")
     }
 }
 
@@ -147,7 +147,7 @@ public final class ImageSequenceViewModel {
     var muxer: FFmpegMuxer = .mov
     var hasAudio = false
     
-    var noImageExplainationText: String = "Loading..."
+    var noImageExplainationText: String = localized("ui.loading_ellipsis")
 
     var backgroundColor = ViewModel.defaultBackgroundColor
 
@@ -271,10 +271,14 @@ public final class ImageSequenceViewModel {
 
     var pendingWorkDescription: String {
         var parts: [String] = []
-        if isProcessingFrames { parts.append("processing frames") }
-        if isRenderingVideo { parts.append("rendering video") }
+        if isProcessingFrames { parts.append(localized("ui.pending.processing_frames")) }
+        if isRenderingVideo { parts.append(localized("ui.pending.rendering_video")) }
         let saving = frameSaveQueue.savingCount + frameSaveQueue.pendingSavingCount + frameSaveQueue.purgatoryCount
-        if saving > 0 { parts.append("saving \(saving) frame\(saving == 1 ? "" : "s")") }
+        if saving > 0 {
+            parts.append(saving == 1
+                           ? localized("ui.pending.saving_frame_one")
+                           : localized("ui.pending.saving_frames_many", saving))
+        }
         return parts.joined(separator: ", ")
     }
     
@@ -1742,7 +1746,7 @@ public final class ImageSequenceViewModel {
 
     var windowTitle: String {
         let sequenceDirname = self.config.config().imageSequenceDirname
-        return "Star - \(sequenceDirname)"
+        return localized("ui.window_title", sequenceDirname)
     }
     
     var selectionColor: Color {
@@ -2353,7 +2357,7 @@ public final class ImageSequenceViewModel {
                 }
             } catch {
                 Log.e("error finding outliers for frame \(frame.frameIndex): \(error)")
-                await self.report(error: "Error processing frame \(frame.frameIndex): \(error)")
+                await self.report(error: localized("ui.error_processing_frame", frame.frameIndex, error))
             }
         }
     }

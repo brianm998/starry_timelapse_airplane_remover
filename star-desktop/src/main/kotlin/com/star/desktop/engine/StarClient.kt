@@ -101,8 +101,15 @@ class StarClient(private val conn: StdioConnection) {
 
     // ---- Daemon ----
 
-    suspend fun hello(clientVersion: String): HelloResponse =
-        call("Daemon.Hello", HelloRequest.newBuilder().setClientVersion(clientVersion).build(), HelloResponse.parser())
+    /**
+     * [locale] is the BCP-47 tag this client's UI is showing. The daemon adopts it for every
+     * user-visible string it originates (warnings, error text), so the engine cannot end up
+     * answering in a different language than the window it is answering into.
+     */
+    suspend fun hello(clientVersion: String, locale: String): HelloResponse =
+        call("Daemon.Hello",
+             HelloRequest.newBuilder().setClientVersion(clientVersion).setLocale(locale).build(),
+             HelloResponse.parser())
 
     suspend fun shutdown(): ShutdownResponse =
         call("Daemon.Shutdown", ShutdownRequest.getDefaultInstance(), ShutdownResponse.parser())

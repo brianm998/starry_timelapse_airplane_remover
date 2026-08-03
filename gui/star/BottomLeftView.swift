@@ -37,7 +37,7 @@ struct BottomLeftView: View {
                               and editing an individual frame.
                               """)
                     Spacer().frame(maxWidth: 6, maxHeight: 10)
-                    Text("with")
+                    Text(localized("ui.with"))
                       .foregroundColor(.white)
                     
                     LimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
@@ -61,7 +61,7 @@ struct BottomLeftView: View {
                     .background(Color(red: foobar, green: foobar, blue: foobar2))
                     .cornerRadius(5)
 
-                    Text("frames")
+                    Text(localized("ui.frames"))
                       .foregroundColor(.white)
                     
                 }

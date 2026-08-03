@@ -45,7 +45,7 @@ struct HorizonView: View {
 
     var body: some View {
         VStack {
-            Text("Does this video include a horizon?")
+            Text(localized("ui.does_this_video_include_a_horizon"))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 10)
@@ -55,7 +55,7 @@ struct HorizonView: View {
                     self.state = .moving
                     viewModel.horizonDetectionEnabled = false
                 } label: {
-                    Text("No")
+                    Text(localized("ui.no"))
                       .font(.title)
                       .foregroundColor(.black)
                       .padding(10)
@@ -73,7 +73,7 @@ struct HorizonView: View {
                     self.state = .moving
                     viewModel.horizonDetectionEnabled = true
                 } label: {
-                    Text("Yes")
+                    Text(localized("ui.yes"))
                       .font(.title)
                       .foregroundColor(.white)
                       .padding(10)
@@ -98,8 +98,8 @@ struct HorizonView: View {
                           .font(.system(size: 40))
                           .foregroundColor(.white)
                           .opacity(0.8)
-                          .help("Show Advanced Settings")
-                        Text("Advanced")
+                          .help(localized("ui.show_advanced_settings"))
+                        Text(localized("ui.advanced"))
                           .foregroundColor(.white)
                           .opacity(0.8)
                     }
@@ -116,15 +116,15 @@ struct MovingView: View {
 
     var body: some View {
         VStack {
-            Text("Was the camera moving during this video")
+            Text(localized("ui.was_the_camera_moving_during_this_video"))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 5)
-            Text("or")
+            Text(localized("ui.or"))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 5)
-            Text("was it stationary on a tripod the entire time?")
+            Text(localized("ui.was_it_stationary_on_a_tripod_the_entire"))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 10)
@@ -139,7 +139,7 @@ struct MovingView: View {
                         self.state = .removal
                     }
                 } label: {
-                    Text("Static")
+                    Text(localized("ui.static"))
                       .font(.title)
                       .foregroundColor(.black)
                       .padding(10)
@@ -161,7 +161,7 @@ struct MovingView: View {
                         self.state = .removal
                     }
                 } label: {
-                    Text("Moving")
+                    Text(localized("ui.moving"))
                       .font(.title)
                       .foregroundColor(.white)
                       .padding(10)
@@ -185,8 +185,8 @@ struct MovingView: View {
                           .font(.system(size: 40))
                           .foregroundColor(.white)
                           .opacity(0.8)
-                          .help("Show Advanced Settings")
-                        Text("Advanced")
+                          .help(localized("ui.show_advanced_settings"))
+                        Text(localized("ui.advanced"))
                           .foregroundColor(.white)
                           .opacity(0.8)
                     }
@@ -207,11 +207,11 @@ struct SelectMovingHorizonsView: View {
 
     var body: some View {
         VStack {
-            Text("Do you want to select the horizons yourself?")
+            Text(localized("ui.do_you_want_to_select_the_horizons_yourself"))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 10)
-            Text("Star allows you to tell it where the horizon is for specific frames of this moving video.  If you define horizons on evenly-spaced frames now, you will speed up Star's processing and make sure there are no errors with horizon detection.  Star will use these painted frames as references for all frames in the sequence.")
+            Text(localized("ui.star_allows_you_to_tell_it_where_the_horizon_2"))
               .font(.body)
               .foregroundColor(.white)
             Space(height: 10)
@@ -220,7 +220,7 @@ struct SelectMovingHorizonsView: View {
                 Button {
                     self.state = .removal
                 } label: {
-                    Text("No")
+                    Text(localized("ui.no"))
                       .font(.title)
                       .foregroundColor(.black)
                       .padding(10)
@@ -236,7 +236,9 @@ struct SelectMovingHorizonsView: View {
 
                 VStack(spacing: 10) {
                     Stepper(
-                        "Define \(horizonCount) horizon\(horizonCount == 1 ? "" : "s")",
+                        horizonCount == 1
+                          ? localized("ui.define_n_horizons_one")
+                          : localized("ui.define_n_horizons", horizonCount),
                         value: $horizonCount,
                         in: 1...maxCount
                     )
@@ -246,7 +248,9 @@ struct SelectMovingHorizonsView: View {
                     Button {
                         viewModel.startMovingHorizonStartupFlow(count: horizonCount)
                     } label: {
-                        Text("Yes, select \(horizonCount) horizon\(horizonCount == 1 ? "" : "s")")
+                        Text(horizonCount == 1
+                               ? localized("ui.select_n_horizons_one")
+                               : localized("ui.select_n_horizons", horizonCount))
                           .font(.title)
                           .foregroundColor(.white)
                           .padding(10)
@@ -274,11 +278,11 @@ struct SelectHorizonView: View {
 
     var body: some View {
         VStack {
-            Text("Do you want to select the horizon yourself?")
+            Text(localized("ui.do_you_want_to_select_the_horizon_yourself"))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 10)
-            Text("Star allows you to tell it where the horizon is for any frame.  If you spend 1-2 minutes to select and refine the horizon on this static video yourself now, you will speed up Star's processing, and make sure there are no errors with horizon detection.")
+            Text(localized("ui.star_allows_you_to_tell_it_where_the_horizon"))
               .font(.body)
               .foregroundColor(.white)
             Space(height: 10)
@@ -287,7 +291,7 @@ struct SelectHorizonView: View {
                 Button {
                     self.state = .removal
                 } label: {
-                    Text("No")
+                    Text(localized("ui.no"))
                       .font(.title)
                       .foregroundColor(.black)
                       .padding(10)
@@ -306,7 +310,7 @@ struct SelectHorizonView: View {
                     viewModel.shouldShowInitialInstructions = false
                     viewModel.isShowingHorizonPainter = true
                 } label: {
-                    Text("Yes")
+                    Text(localized("ui.yes"))
                       .font(.title)
                       .foregroundColor(.white)
                       .padding(10)
@@ -380,40 +384,40 @@ struct RemovalView: View {
         switch cleanMethod {
         case .automatic(let usesOutliers):
             if usesOutliers {
-                "Star will run in auto mode, replacing all bad pixels.  It will then do further processing on every frame to then allow users to select removed pixels to return to their original state.  You will have to go into each frame and select any signals you want to keep, Star cannot currently tell the difference between airplanes satellites and meteors"
+                localized("ui.mode_desc_auto_selective")
             } else {
-                "Star will run in automatic mode, replacing all bad pixels.  If everything goes well Star will not require any user attention per frame."
+                localized("ui.mode_desc_automatic")
             }
         case .selective:
-            "Star will run in selective mode, where it will analyze each frame to see what looks like bad signals, and then attempt to automatically categorize them.  The initial results may need some frame by frame attention."
+            localized("ui.mode_desc_selective")
         }
     }
     
     var body: some View {
         VStack {
-            Text("What do you want Star to remove?")
+            Text(localized("ui.what_do_you_want_star_to_remove"))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 10)
-            Text("Star can remove some or all of these things from this video for you.  The choice here is the default for all frames of this video, and can later be changed on a frame by frame basis as desired.")
+            Text(localized("ui.star_can_remove_some_or_all_of_these_things"))
               .font(.body)
               .foregroundColor(.white)
 
             Space(height: 10)
             Divider()
             HStack {
-                Text("Star should remove")
+                Text(localized("ui.star_should_remove"))
                   .font(.title)
                   .foregroundColor(.white)
                 
                 VStack(alignment: .leading) {
-                    Toggle("Airplanes", isOn: $removeAirplanes)
+                    Toggle(localized("ui.airplanes"), isOn: $removeAirplanes)
                       .font(.title)
                       .foregroundColor(.white)
-                    Toggle("Satellites", isOn: $removeSatellites)
+                    Toggle(localized("ui.satellites"), isOn: $removeSatellites)
                       .font(.title)
                       .foregroundColor(.white)
-                    Toggle("Meteors", isOn: $removeMeteors)
+                    Toggle(localized("ui.meteors"), isOn: $removeMeteors)
                       .font(.title)
                       .foregroundColor(.white)
                 }
@@ -439,7 +443,7 @@ struct RemovalView: View {
                         viewModel.shouldShowInitialInstructions = false
                     }
                 } label: {
-                    Text("Close")
+                    Text(localized("ui.close"))
                       .font(.title)
                       .foregroundColor(.black)
                       .padding(10)
@@ -460,7 +464,7 @@ struct RemovalView: View {
                         viewModel.processAll()
                     }
                 } label: {
-                    Text("Start Processing")
+                    Text(localized("ui.start_processing"))
                       .font(.title)
                       .foregroundColor(.white)
                       .padding(10)
@@ -485,8 +489,8 @@ struct RemovalView: View {
                           .font(.system(size: 40))
                           .foregroundColor(.white)
                           .opacity(0.8)
-                          .help("Show Advanced Settings")
-                        Text("Advanced")
+                          .help(localized("ui.show_advanced_settings"))
+                        Text(localized("ui.advanced"))
                           .foregroundColor(.white)
                           .opacity(0.8)
                     }

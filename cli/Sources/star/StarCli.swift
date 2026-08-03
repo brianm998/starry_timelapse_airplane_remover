@@ -164,188 +164,100 @@ You should have received a copy of the GNU General Public License along with sta
  */
 
 
+/// The real entry point, ahead of `StarCli` itself.
+///
+/// `--language` has to be applied before `swift-argument-parser` gets the command line at all.
+/// The parser builds its help by instantiating `StarCli`, which evaluates every
+/// `localized(...)` in a `help:` argument as it goes — so a language read from the *parsed*
+/// value would arrive one step too late and `star --language ja --help` would print English.
+/// Scanning raw argv here costs nothing and gets the ordering right.
 @main
+enum StarMain {
+    static func main() async {
+        StarLocalization.applyEarlyLanguageSelection()
+        await StarCli.main()
+    }
+}
+
 struct StarCli: AsyncParsableCommand {
 
-    @Option(name: [.customShort("l"), .customLong("console-log-level")], help:"""
-        The logging level that star will output directly to the terminal.
-        """)
+    @Option(name: [.customShort("l"), .customLong("console-log-level")], help: ArgumentHelp(localized("cli.help.terminal_log_level")))
     var terminalLogLevel: Log.Level?/* = .info*/
 
-    @Option(name: [.customShort("c"), .customLong("clean-method")], help:"""
-        The clean mode to use for this image sequence.
-        Defaults to automatic for a new sequence, and to whatever a saved config
-        already holds when resuming one.
-        """)
+    @Option(name: [.customShort("c"), .customLong("clean-method")], help: ArgumentHelp(localized("cli.help.clean_method")))
     var cleanMethod: CleanMethod?
 
-    @Flag(name: [.customLong("no-horizon")], help:"""
-        This video does not contain a horizon (horizon is assumed by default)
-        """)
+    @Flag(name: [.customLong("no-horizon")], help: ArgumentHelp(localized("cli.help.no_horizon")))
     var noHorizon: Bool = false
 
-    @Flag(name: [.customLong("keep-temp-files")], help:"""
-        Do not remove temporary files after processing is completed.
-        The saved config.json is kept either way, so a completed run can always be
-        resumed with `star star_temp_<sequence>/config.json`; this flag additionally
-        keeps the outlier data and the horizon, keypoint and alignment caches, which
-        is what makes such a resume pick up where this run left off instead of
-        rebuilding them.
-        """)
+    @Flag(name: [.customLong("keep-temp-files")], help: ArgumentHelp(localized("cli.help.keep_temp_files")))
     var keepTempFiles: Bool = false
 
-    @Flag(name: [.customLong("moving-camera")], help:"""
-        This video was shot with a moving camera.
-        By default star assumes the video was shot on a stationary tripod head.
-        """)
+    @Flag(name: [.customLong("moving-camera")], help: ArgumentHelp(localized("cli.help.moving_camera")))
     var movingCamera: Bool = false
 
-    @Option(name: [.customLong("keypoint-divisor")], help:"""
-        Divide each frame's dimensions by this before detecting keypoints on it.
-        1 detects at full resolution, 2 on a half size copy, 1.5 on a two thirds
-        copy.  Replaces --half-res-keypoints, which was 2 with no way to sit
-        between.
-        Detection time and peak memory both fall as 1/divisor squared, so 4x at
-        2 but 2.25x at 1.5.  What you pay is alignment precision: keypoints only
-        produce the homography, and detecting on a smaller copy makes their
-        localisation coarser, which leaves neighbours warped slightly wrong and
-        reads as softness in the merged result.  The error falls roughly
-        linearly with the divisor, so 1.5 is the middle ground worth trying.
-        Values of 1 or less mean full resolution.  Feature files are keyed by
-        this value, so changing it does not reuse the previous run's keypoints.
-        """)
+    @Option(name: [.customLong("keypoint-divisor")], help: ArgumentHelp(localized("cli.help.keypoint_divisor")))
     var keypointDivisor: Double?
 
-    @Option(name: [.customLong("merge-streaming-threshold-mb")], help:"""
-        When a median merge would need to hold more than this many megabytes of
-        source frames at once, stream them from scratch files instead of keeping
-        them all in memory.  Applies both to the static earth merge and to building
-        each star aligned frame from its warped neighbours.  The output is bit
-        identical either way; streaming trades disk io for ram.  Measured at 42
-        megapixels: 17 static sources 4354MB resident vs 779MB streaming, 9 aligned
-        sources 2178MB vs 728MB.
-        Those are per merge in isolation.  End to end, streaming is roughly twice as
-        slow at 42 megapixels and saves no peak memory at all, because the peak of a
-        run is set by the keypoint phase rather than by any merge — which is why the
-        default is 8192 rather than the 2048 that made a 42 megapixel run stream every
-        merge.  Lower it if you are memory bound rather than time bound, or if you run
-        with half resolution keypoints, which drops the keypoint peak far enough that
-        a merge can become the largest thing in the run.
-        Set to 0 to always keep every source in memory.
-        """)
+    @Option(name: [.customLong("merge-streaming-threshold-mb")], help: ArgumentHelp(localized("cli.help.merge_streaming_threshold_mb")))
     var mergeStreamingThresholdMB: Int?
 
-    @Option(name: [.customLong("max-keypoint-ops")], help:"""
-        Cap how many keypoint detection ops run at once.
-        Independent of the memory estimate: use this to be more conservative than
-        the budget math instead of raising the keypoint memory multiplier, which
-        also inflates every keypoint op's reservation.
-        This is a cap, so it can only lower the limit, never raise it above what
-        the memory budget allows.  Omit or 0 for no explicit cap.
-        """)
+    @Option(name: [.customLong("max-keypoint-ops")], help: ArgumentHelp(localized("cli.help.max_keypoint_ops")))
     var maxKeypointOps: Int?
 
-    @Option(name: [.customLong("horizon-reservation-floor-mb")], help:"""
-        Least memory, in megabytes, to reserve for one horizon operation.
-        A horizon op's cost is mostly fixed rather than per frame size, because the
-        detector works at a fixed internal resolution, so a plain multiple of the
-        frame under-reserves on small frames: measured in a fresh process, the
-        horizon multiplier covered only 57% of what one op needed at 6 megapixels
-        and 76% at 12, against 133% at 24 and 175% at 42.  This floor covers the
-        small end without inflating the large end.  Default 900, which stops
-        binding at about 17 megapixels, where the multiplier overtakes it.
-        Set to 0 to use the multiplier alone.
-        """)
+    @Option(name: [.customLong("horizon-reservation-floor-mb")], help: ArgumentHelp(localized("cli.help.horizon_reservation_floor_mb")))
     var horizonReservationFloorMB: Int?
 
-    @Flag(name: [.customLong("log-op-memory")], help:"""
-        Log each operation's actual peak memory against what it reserved.
-        Use with --num-concurrent-renders 1 so the process footprint delta is
-        attributable to a single operation.  This is how the per-op memory
-        multipliers are derived from measurement rather than guessed.
-        """)
+    @Flag(name: [.customLong("log-op-memory")], help: ArgumentHelp(localized("cli.help.log_op_memory")))
     var logOpMemory: Bool = false
     
-    @Option(name: [.short, .customLong("file-log-level")], help:"""
-        If present, star will output a file log at the given level.
-        """)
+    @Option(name: [.short, .customLong("file-log-level")], help: ArgumentHelp(localized("cli.help.file_log_level")))
     var fileLogLevel: Log.Level?
 
-    @Option(name: [.short, .customLong("output-path")], help:"""
-        The filesystem location under which star will create output dir(s).
-        Defaults to creating output dir(s) alongside input sequence dir
-        """)
+    @Option(name: [.short, .customLong("output-path")], help: ArgumentHelp(localized("cli.help.output_path")))
     var outputPath: String?
     
-    @Option(name: .shortAndLong, help: """
-        Max Number of frames to process at once.
-        May need to be reduced to a lower value if to consume less ram on some machines.
-        Defaults to three quarters of the cpu count for a new sequence, and to whatever
-        a saved config already holds when resuming one.
-        """)
+    @Option(name: .shortAndLong, help: ArgumentHelp(localized("cli.help.num_concurrent_renders")))
     var numConcurrentRenders: UInt?
 
-    @Option(name: .shortAndLong, help: "Detection Types")
+    @Option(name: .shortAndLong, help: ArgumentHelp(localized("cli.help.detection_type")))
     var detectionType: DetectionType?
 
-    @Option(name: .shortAndLong, help: """
-        When set, outlier groups closer to the bottom of the screen than this are ignored.
-        This can be helpful to reduce the number of outlier groups on the ground.
-        """)
+    @Option(name: .shortAndLong, help: ArgumentHelp(localized("cli.help.ignore_lower_pixels")))
     var ignoreLowerPixels: Int?
 
     @Flag(name: [.customShort("w"), .customLong("write-outlier-group-files")],
-          help:"Write individual outlier group image files")
+          help: ArgumentHelp(localized("cli.help.should_write_outlier_group_files")))
     var shouldWriteOutlierGroupFiles = false
 
-    @Option(name: [.customShort("L"), .customLong("last-frame")], help:"""
-        Stop after this frame, leaving the rest of the sequence unprocessed.
-        A zero based frame index, counted the way the logs count frames, and
-        inclusive: --last-frame 9 processes the first ten frames.
-        Frames past it are still read and aligned where a processed frame needs
-        them as a neighbour, but no output is written for them.
-        A limit on this run only: it is not saved into the config, so resuming
-        without the flag processes the whole sequence.  Pair it with
-        --keep-temp-files to keep the outlier data and the horizon, keypoint and
-        alignment caches this run built, all of which are deleted otherwise.
-        """)
+    @Option(name: [.customShort("L"), .customLong("last-frame")], help: ArgumentHelp(localized("cli.help.last_frame_index")))
     var lastFrameIndex: Int? = nil
 
     @Flag(name: [.customShort("W"), .customLong("write-outlier-classification-values")],
-          help:"Write individual outlier group classification values")
+          help: ArgumentHelp(localized("cli.help.should_write_outlier_classification_values")))
     var shouldWriteOutlierClassificationValues = false
 
-    @Flag(name: .shortAndLong, help:"Show version number")
+    @Flag(name: .shortAndLong, help: ArgumentHelp(localized("cli.help.version")))
     var version = false
+
+    /// Declared so it appears in `--help` and so an unknown `--language` is still a parse
+    /// error rather than being silently swallowed. The value is *not* read from here: it has
+    /// already been applied by `StarMain` before the parser ran — see the comment there.
+    @Option(name: [.customLong("language")], help: ArgumentHelp(localized("cli.help.language")))
+    var language: String?
+
+    @Flag(name: [.customLong("list-languages")], help: ArgumentHelp(localized("cli.help.list_languages")))
+    var listLanguages = false
 
     @Flag(name: .shortAndLong,
           inversion: .prefixedNo,
-          help:"""
-        Only write out outlier data, not images.
-        Each frame detects its outliers and writes their remove reasons, plus the
-        classification values if -W is given, and then stops before writing any image.
-        Useful for gathering classifier training data from a sequence you have no
-        intention of rendering.  Note that the alignment and merge still run, since the
-        outliers are found by subtracting the merged frame — what this saves is the
-        airplane replacement and every image write, not the expensive part.
-        Only meaningful with a clean method that uses outliers, so --clean-method
-        selective or automatic:true; under plain automatic there are no outliers to write
-        and a run produces nothing at all.
-        Saved into the config like every other flag here, so a resume that does not repeat
-        it still skips them; --no-skip-output-files turns rendering back on.
-        """)
+          help: ArgumentHelp(localized("cli.help.skip_output_files")))
     var skipOutputFiles: Bool?
 
-    @Argument(help: """
-        Image sequence dirname to process. 
-        Should include a sequence of 8 or 16 bit image files, sortable by name.
-        """)
+    @Argument(help: ArgumentHelp(localized("cli.help.image_sequence_dirname")))
     var imageSequenceDirname: String?
 
-    @Argument(help: """
-        Final destination for output files
-        defaults to <image-sequence-dirname>-star-version if not set
-        """)
+    @Argument(help: ArgumentHelp(localized("cli.help.final_output_dirname")))
     var finalOutputDirname: String? = nil
 
     /// The flags above in the single form both input paths apply — see `ConfigOverrides`
@@ -423,10 +335,13 @@ struct StarCli: AsyncParsableCommand {
             OutlierGroupForestClassifier_f9f52500()
         }
 
+        if listLanguages {
+            print(StarLocalization.shared.languageListing())
+            return
+        }
+
         if version {
-            print("""
-                  Starry Timelapse Airplane Remover (star) version \(Config.latestVersion)
-                  """)
+            print(localized("cli.version", Config.latestVersion))
             return
         }
         
@@ -701,7 +616,7 @@ struct StarCli: AsyncParsableCommand {
                     callbacks.frameStateChangeCallback = { frame, state in
                         previousStateChange?(frame, state)
                         // XXX make sure to wait for this
-                        print("frame \(frame) state change to \(state)")
+                        print(localized("cli.frame_state_change", frame, state))
                         Task(priority: .userInitiated) {
                             await updatableProgressMonitor.stateChange(for: frame, to: state)
                         }
@@ -801,13 +716,14 @@ struct StarCli: AsyncParsableCommand {
 /// of the terminal.
 func frameErrorSummary(_ errors: [String], resumePath: String) -> String {
     let shown = 10
-    var message = "\nstar: finished with \(errors.count) " +
-                  "error\(errors.count == 1 ? "" : "s"); output is incomplete.\n"
+    var message = "\n" + (errors.count == 1
+                            ? localized("cli.errors.finished_one")
+                            : localized("cli.errors.finished_many", errors.count)) + "\n"
     for error in errors.prefix(shown) { message += "  \(error)\n" }
     if errors.count > shown {
-        message += "  ... and \(errors.count - shown) more\n"
+        message += "  " + localized("cli.errors.and_more", errors.count - shown) + "\n"
     }
-    message += "star: the temp directory has been kept — resume with:\n"
+    message += localized("cli.errors.resume_header") + "\n"
     message += "  star \(resumePath)\n"
     return message
 }
@@ -908,7 +824,7 @@ func removeTempFiles(at path: String, sparing sparedPath: String) throws {
     let tempURL = URL(fileURLWithPath: path)
 
     guard fileManager.fileExists(atPath: tempURL.path) else {
-        print("Directory does not exist.")
+        print(localized("cli.directory_does_not_exist"))
         return
     }
 

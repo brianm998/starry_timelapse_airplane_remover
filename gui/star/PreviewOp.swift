@@ -58,7 +58,7 @@ final class PreviewOp: AsyncOperation, @unchecked Sendable {
 
             Log.d("frame \(frameIndex) done")
         } catch {
-            let str = "frame \(frameIndex) error preview creation: \(error)"
+            let str = localized("ui.preview_creation_error", frameIndex, error)
             Log.e(str)
             errorClosure(str)
         }

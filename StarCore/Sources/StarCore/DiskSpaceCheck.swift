@@ -150,13 +150,11 @@ public enum DiskSpaceCheck {
             await StarWarnings.shared.post(StarWarning(
               kind: .lowDiskSpace,
               severity: .critical,
-              message: "This run is estimated to need about " +
-                       "\(gb(estimate.estimatedPeakBytes)) of disk space, and only " +
-                       "\(gb(availableBytes)) is free. It will probably run out before it " +
-                       "finishes.",
-              suggestion: "Free about \(gb(estimate.shortfallBytes)) and start again, or send " +
-                          "the output somewhere with more room. The estimate covers both the " +
-                          "output and the temporary working files, which exist at the same time."
+              message: localized("warning.low_disk_space.message",
+                                 gb(estimate.estimatedPeakBytes),
+                                 gb(availableBytes)),
+              suggestion: localized("warning.low_disk_space.suggestion",
+                                    gb(estimate.shortfallBytes))
             ))
         }
 

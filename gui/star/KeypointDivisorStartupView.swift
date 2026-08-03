@@ -42,23 +42,17 @@ struct KeypointDivisorStartupView: View {
 
     /// The three offered values. 1.5 comes from `Config` rather than being written here so
     /// the recommendation and the preset cannot drift apart.
-    private static let presets: [Preset] = [
+    private static var presets: [Preset] { [
         Preset(divisor: 1.0,
-               name: "Best quality",
-               blurb: "Lines the video up from your frames at their full size.  The "
-                    + "sharpest result, the slowest to finish, and the hardest on your "
-                    + "computer."),
+               name: localized("ui.preset_best_quality"),
+               blurb: localized("ui.preset_best_quality_blurb")),
         Preset(divisor: Config.recommendedReducedKeypointDivisor,
-               name: "Best balance",
-               blurb: "Lines the video up from two thirds size copies.  Cuts the slowest "
-                    + "step to under half, and on large videos the finished result is "
-                    + "very hard to tell apart."),
+               name: localized("ui.preset_best_balance"),
+               blurb: localized("ui.preset_best_balance_blurb")),
         Preset(divisor: 2.0,
-               name: "Fastest",
-               blurb: "Lines the video up from half size copies.  Cuts the slowest step "
-                    + "to a quarter and is much easier on your computer.  Fine detail can "
-                    + "end up looking a little soft."),
-    ]
+               name: localized("ui.preset_fastest"),
+               blurb: localized("ui.preset_fastest_blurb")),
+    ] }
 
     /// Above this, say so. Not a limit — the value is still accepted, because someone
     /// desperate for speed on a machine this footage does not fit may want it anyway.
@@ -112,11 +106,11 @@ struct KeypointDivisorStartupView: View {
                   .font(.body)
                   .foregroundColor(.white)
                   .opacity(0.7)
-                Text("Speed vs. Sharpness")
+                Text(localized("ui.speed_vs_sharpness"))
                   .font(.title2)
                   .foregroundColor(.white)
                 if !isExpanded {
-                    Text("— \(currentChoiceName)")
+                    Text(localized("ui.current_choice_suffix", currentChoiceName))
                       .font(.title3)
                       .foregroundColor(.white)
                       .opacity(0.7)
@@ -125,7 +119,7 @@ struct KeypointDivisorStartupView: View {
             }
         }
           .buttonStyle(PlainButtonStyle())
-          .help(isExpanded ? "Hide speed settings" : "Show speed settings")
+          .help(isExpanded ? localized("ui.hide_speed_settings") : localized("ui.show_speed_settings"))
     }
 
     /// What the collapsed title says is in effect. A custom value has no preset name, so
@@ -134,7 +128,7 @@ struct KeypointDivisorStartupView: View {
         if let preset = Self.presets.first(where: { matches($0.divisor) }) {
             return preset.name
         }
-        return "divide by \(Self.format(divisor))"
+        return localized("ui.divide_by", Self.format(divisor))
     }
 
     private var explanation: some View {
@@ -149,39 +143,25 @@ struct KeypointDivisorStartupView: View {
     /// this is the setting that decides how the run goes, and the numbers explaining why
     /// are the machine's own.
     private var explanationText: String {
-        let intro = "Before Star can spot what to remove, it has to line up the stars in "
-                  + "every frame.  Doing that from smaller copies of your frames is a lot "
-                  + "faster and uses far less memory, and it costs you a little sharpness "
-                  + "in the finished video."
+        let intro = localized("ui.keypoint_intro")
 
         guard let advice else {
             // No dimensions yet, so no honest numbers to quote. Describe the trade only.
-            return intro + "\n\nBest quality is the default.  Try Best balance if a large "
-                 + "video is taking too long."
+            return intro + "\n\n" + localized("ui.keypoint_no_numbers")
         }
 
         let frames = Self.megapixels(advice.imagePixels)
         let ram = Self.memoryDescription
 
         if advice.reduceRecommended {
-            return intro + "\n\nYour frames are \(frames) megapixels.  At full size this "
-                 + "\(ram) computer can only line up \(advice.fullResolutionConcurrency) "
-                 + "of them at a time instead of \(advice.frameConcurrency), because that "
-                 + "is all the memory it has — anything over about "
-                 + "\(Self.megapixels(advice.thresholdPixels)) megapixels runs into this.  "
-                 + "That is why large videos crawl and the rest of your computer feels "
-                 + "sluggish while Star is working.\n\nBest balance is the one to pick "
-                 + "here.  It cuts that slowest step to under half, it lets Star line up "
-                 + "far more frames at once, and on frames this large the difference is "
-                 + "very hard to see.  You can always run it again at Best quality and "
-                 + "compare."
+            return intro + "\n\n" + localized("ui.keypoint_reduce_recommended",
+                                                    frames, ram,
+                                                    advice.fullResolutionConcurrency,
+                                                    advice.frameConcurrency,
+                                                    Self.megapixels(advice.thresholdPixels))
         }
 
-        return intro + "\n\nYour frames are \(frames) megapixels, and this \(ram) computer "
-             + "handles that at full size comfortably, so there is nothing here you need "
-             + "to change — Best quality is already about as fast as Star will go on this "
-             + "video.\n\nChange it anyway if you are in a hurry, or if you want to see "
-             + "the difference for yourself."
+        return intro + "\n\n" + localized("ui.keypoint_no_change_needed", frames, ram)
     }
 
     private var presetRows: some View {
@@ -198,7 +178,7 @@ struct KeypointDivisorStartupView: View {
                               .foregroundColor(.white)
                               .opacity(0.6)
                             if isRecommended(preset.divisor) {
-                                Text("recommended")
+                                Text(localized("ui.recommended"))
                                   .font(.caption)
                                   .foregroundColor(.white)
                                   .padding(.horizontal, 6)
@@ -223,7 +203,7 @@ struct KeypointDivisorStartupView: View {
 
     private var customRow: some View {
         HStack(spacing: 8) {
-            Text("Or use:")
+            Text(localized("ui.or_use"))
               .font(.title3)
               .foregroundColor(.white)
               .opacity(0.8)
@@ -232,7 +212,7 @@ struct KeypointDivisorStartupView: View {
               .frame(width: 70)
               .cursor(.arrow)
               .onSubmit { applyCustomTextIfValid() }
-            Text("any number from 1 to 8 — 1 is full size, 2 is half size")
+            Text(localized("ui.any_number_from_1_to_8_1_is_full_size_2_is"))
               .font(.caption)
               .foregroundColor(.white)
               .opacity(0.6)
@@ -241,9 +221,7 @@ struct KeypointDivisorStartupView: View {
     }
 
     private var tooHighWarning: some View {
-        Text("Dividing by \(Self.format(divisor)) is probably too much.  Star may not be "
-           + "able to line the video up at all, and where it does the result can look "
-           + "obviously soft.")
+        Text(localized("ui.keypoint_too_high", Self.format(divisor)))
           .font(.body)
           .foregroundColor(.yellow)
           .fixedSize(horizontal: false, vertical: true)

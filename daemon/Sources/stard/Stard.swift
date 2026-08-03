@@ -22,6 +22,15 @@ struct Stard: AsyncParsableCommand {
     @Option(name: [.customShort("l"), .customLong("log-level")], help: "Log level (debug/info/warn/error)")
     var logLevel: Log.Level = .info
 
+    /// Starting language for user-visible text the daemon originates.
+    ///
+    /// Normally unnecessary — `Daemon.Hello` carries the client's locale and overrides this
+    /// as soon as the connection opens. It matters for the window before Hello (a warning
+    /// posted during startup, a crash report from a previous run) and for driving `stard`
+    /// by hand.
+    @Option(name: [.customLong("language")], help: "Language for user-visible messages (BCP-47, e.g. pt-BR)")
+    var language: String?
+
     mutating func run() async throws {
         // FIRST, before any I/O or logging: move the protocol onto private FDs and redirect the
         // process-wide stdout→stderr / stdin→/dev/null, so no stray write/read can corrupt the
@@ -33,6 +42,9 @@ struct Stard: AsyncParsableCommand {
         // can no longer reach the protocol.
         Log.name = "stard"
         Log.add(handler: StderrLogHandler(at: logLevel), for: .console)
+
+        // Before the abandoned-run reports below, which are user-visible prose.
+        if let language { StarLocalization.shared.languageOverride = language }
 
         // Always on, and the only durable record the daemon has. stderr is drained by whatever
         // launched it, and the desktop client's default sink is System.err.println — which in

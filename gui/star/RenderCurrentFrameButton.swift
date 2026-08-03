@@ -12,14 +12,14 @@ struct RenderCurrentFrameButton: View {
                         try await viewModel.render(frame: frame, closure: nil)
                     }
                 } catch {
-                    viewModel.report(error: "Render failed: \(error)")
+                    viewModel.report(error: localized("ui.render_failed", error))
                 }
             }
         }
         
         return Button(action: action) {
-            Text("Render This Frame")
+            Text(localized("ui.render_this_frame"))
         }
-          .help("Render the active frame with current settings")
+          .help(localized("ui.render_the_active_frame_with_current"))
     }    
 }

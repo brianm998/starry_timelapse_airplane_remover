@@ -48,6 +48,7 @@ import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import java.awt.datatransfer.DataFlavor
 import java.io.File
+import com.star.desktop.i18n.localized
 
 /** The startup screen (macOS `StartupView`/`InitialView`): open actions, a drop zone, recent files. */
 @Composable
@@ -61,8 +62,8 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
             modifier = Modifier.widthIn(max = 560.dp).padding(40.dp),
         ) {
             Text("Star", color = StarColors.textPrimary, fontSize = 40.sp, fontWeight = FontWeight.Light)
-            Text("Nighttime Timelapse Airplane Remover", color = StarColors.textSecondary, fontSize = 13.sp)
-            OutlinedButton(onClick = vm::openInfoDialog) { Text("ⓘ  About Star") }
+            Text(localized("ui.nighttime_timelapse_airplane_remover"), color = StarColors.textSecondary, fontSize = 13.sp)
+            OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.about_star")) }
 
             DropZone(vm = vm, onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
 
@@ -70,14 +71,14 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
                 Button(
                     onClick = { open(vm, OpenKind.SEQUENCE) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text("Open Image Sequence…") }
-                OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { Text("Open Video…") }
-                OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { Text("Resume…") }
+                ) { Text(localized("ui.open_image_sequence")) }
+                OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { Text(localized("ui.open_video")) }
+                OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { Text(localized("ui.resume")) }
             }
 
             if (recent.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                Text("Recent", color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                Text(localized("ui.recent"), color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
                 RecentFilesList(
                     recent = recent,
                     onOpen = { path -> openPath(vm, path) },
@@ -123,7 +124,7 @@ private fun DropZone(vm: AppViewModel, onOpenSequence: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            "Drop an image sequence folder, video, or config.json here\n(or click to choose a folder)",
+            localized("ui.drop_an_image_sequence_folder_video_or"),
             color = StarColors.textSecondary,
             fontSize = 13.sp,
         )
@@ -191,8 +192,8 @@ private fun RecentFilesList(recent: List<String>, onOpen: (String) -> Unit, onRe
 private fun open(vm: AppViewModel, kind: OpenKind) {
     val path = when (kind) {
         OpenKind.SEQUENCE -> chooseDirectory()
-        OpenKind.VIDEO -> chooseFile("Open Video")
-        OpenKind.CONFIG -> chooseFile("Resume from config.json")
+        OpenKind.VIDEO -> chooseFile(localized("ui.open_video_title"))
+        OpenKind.CONFIG -> chooseFile(localized("ui.resume_from_config_title"))
     } ?: return
     when (kind) {
         OpenKind.SEQUENCE -> vm.openSequence(path)

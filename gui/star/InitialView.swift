@@ -58,11 +58,11 @@ struct InitialView: View {
         @Bindable var viewModel = viewModel
         return VStack {
             Space(height: 40)
-            Text("Welcome to Star v\(Config.latestVersion)")
+            Text(localized("ui.welcome_to_star", Config.latestVersion))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 20)
-            Text("The Starry Timelapse Airplane Remover")
+            Text(localized("ui.the_starry_timelapse_airplane_remover"))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 20)
@@ -70,10 +70,10 @@ struct InitialView: View {
             Button() {
                 viewModel.showInfoDialog = true
             } label: {
-                Text("Learn about Star").font(.largeTitle)
+                Text(localized("ui.learn_about_star")).font(.largeTitle)
             }
               .buttonStyle(ShrinkingButton(.clear))
-              .help("Tell me how to us this software") 
+              .help(localized("ui.tell_me_how_to_us_this_software")) 
             Spacer()
 
             FinderStyleDropZone() { providers in
@@ -87,26 +87,26 @@ struct InitialView: View {
 
                 Spacer()
                 Button(action: self.loadVideoToProcess) {
-                    Text("Load Video").font(.largeTitle)
+                    Text(localized("ui.load_video")).font(.largeTitle)
                 }.buttonStyle(ShrinkingButton(.clear))
-                  .help("Load a video to process.  Make sure lots of free space is available next to the video for intermediate files.")
+                  .help(localized("ui.load_a_video_to_process_make_sure_lots_of"))
                 
                 Spacer()
                 Button(action: self.loadImageSequence) {
-                    Text("Load Image Sequence").font(.largeTitle)
+                    Text(localized("ui.load_image_sequence")).font(.largeTitle)
                 }.buttonStyle(ShrinkingButton(.clear))
-                  .help("Load an image sequence yet to be processed by star")
+                  .help(localized("ui.load_an_image_sequence_yet_to_be_processed"))
                 Spacer()
                 Button(action: self.loadConfig) {
-                    Text("Load Config").font(.largeTitle)
+                    Text(localized("ui.load_config")).font(.largeTitle)
                 }.buttonStyle(ShrinkingButton(.clear))
-                  .help("Load a json config file from a previous run of star")
+                  .help(localized("ui.load_a_json_config_file_from_a_previous_run"))
                 if viewModel.userPreferences.recentlyOpenedSequencelist.count > 0 {
 
                     Button(action: self.loadRecent) {
-                        Text("Open Recent").font(.largeTitle)
+                        Text(localized("ui.open_recent")).font(.largeTitle)
                     }.buttonStyle(ShrinkingButton(.clear))
-                      .help("open a recently processed sequence")
+                      .help(localized("ui.open_a_recently_processed_sequence"))
                     Picker("\u{27F6}", selection: $previously_opened_sheet_showing_item) {
                         let array = viewModel.userPreferences.sortedSequenceList
                         ForEach(array, id: \.self) { option in
@@ -197,7 +197,7 @@ struct InitialView: View {
                             }
                         } else {
                             Task { @MainActor in
-                                self.handle(error: "File does not exist: \(url.path)")
+                                self.handle(error: localized("ui.file_does_not_exist", url.path))
                             }
                         }
                     }

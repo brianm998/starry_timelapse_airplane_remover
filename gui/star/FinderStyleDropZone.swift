@@ -1,5 +1,6 @@
 import SwiftUI
 
+import StarCore
 struct FinderStyleDropZone: View {
     @State private var isTargeted = false
     var onDropAction: ([NSItemProvider]) -> Void
@@ -21,7 +22,7 @@ struct FinderStyleDropZone: View {
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 32))
                     .foregroundColor(.white)
-                Text("Drop a video, an image sequence or an existing config file here")
+                Text(localized("ui.drop_a_video_an_image_sequence_or_an"))
                   .foregroundColor(.white)
                     .font(.headline)
             }

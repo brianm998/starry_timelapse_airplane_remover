@@ -744,6 +744,10 @@ public struct Star_V1_Envelope: Sendable {
   public init() {}
 }
 
+/// `locale` is the BCP-47 tag the client's UI is showing (e.g. "pt-BR"), or empty to let the
+/// daemon follow its own machine. The daemon localizes everything it sends back — Warning
+/// text, error strings — into it, so the two processes cannot end up speaking different
+/// languages at the same user. One client per daemon, so this is process-wide.
 public struct Star_V1_HelloRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -751,11 +755,16 @@ public struct Star_V1_HelloRequest: Sendable {
 
   public var clientVersion: String = String()
 
+  public var locale: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
+/// `locale` echoes back the language the daemon actually resolved to, which may not be the
+/// one asked for: the client can request a language star has no translation for, and this is
+/// how it finds out it got the fallback.
 public struct Star_V1_HelloResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -764,6 +773,8 @@ public struct Star_V1_HelloResponse: Sendable {
   public var daemonVersion: String = String()
 
   public var scratchDir: String = String()
+
+  public var locale: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2881,7 +2892,7 @@ extension Star_V1_Envelope.Kind: SwiftProtobuf._ProtoNameProviding {
 
 extension Star_V1_HelloRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HelloRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}client_version\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}client_version\0\u{1}locale\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2890,6 +2901,7 @@ extension Star_V1_HelloRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.clientVersion) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.locale) }()
       default: break
       }
     }
@@ -2899,11 +2911,15 @@ extension Star_V1_HelloRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
     if !self.clientVersion.isEmpty {
       try visitor.visitSingularStringField(value: self.clientVersion, fieldNumber: 1)
     }
+    if !self.locale.isEmpty {
+      try visitor.visitSingularStringField(value: self.locale, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_HelloRequest, rhs: Star_V1_HelloRequest) -> Bool {
     if lhs.clientVersion != rhs.clientVersion {return false}
+    if lhs.locale != rhs.locale {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2911,7 +2927,7 @@ extension Star_V1_HelloRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
 
 extension Star_V1_HelloResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HelloResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}daemon_version\0\u{3}scratch_dir\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}daemon_version\0\u{3}scratch_dir\0\u{1}locale\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2921,6 +2937,7 @@ extension Star_V1_HelloResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.daemonVersion) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.scratchDir) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.locale) }()
       default: break
       }
     }
@@ -2933,12 +2950,16 @@ extension Star_V1_HelloResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     if !self.scratchDir.isEmpty {
       try visitor.visitSingularStringField(value: self.scratchDir, fieldNumber: 2)
     }
+    if !self.locale.isEmpty {
+      try visitor.visitSingularStringField(value: self.locale, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_HelloResponse, rhs: Star_V1_HelloResponse) -> Bool {
     if lhs.daemonVersion != rhs.daemonVersion {return false}
     if lhs.scratchDir != rhs.scratchDir {return false}
+    if lhs.locale != rhs.locale {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

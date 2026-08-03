@@ -37,6 +37,7 @@ import com.star.desktop.ui.app.StartupStep
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.CleanMethod
+import com.star.desktop.i18n.localized
 
 /**
  * New-source startup prompts (macOS `StartupView`): a small state machine asking about the
@@ -155,7 +156,7 @@ private fun RemovalPrompt(app: AppViewModel) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Star should remove", color = StarColors.textPrimary, fontSize = 15.sp)
+        Text(localized("ui.star_should_remove"), color = StarColors.textPrimary, fontSize = 15.sp)
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             ToggleRow("Airplanes", airplanes) { airplanes = it }
             ToggleRow("Satellites", satellites) { satellites = it }
@@ -221,7 +222,7 @@ private fun AdvancedButton(onClick: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("⚙", color = StarColors.textSecondary, fontSize = 30.sp)
-        Text("Advanced", color = StarColors.textSecondary, fontSize = 11.sp)
+        Text(localized("ui.advanced"), color = StarColors.textSecondary, fontSize = 11.sp)
     }
 }
 

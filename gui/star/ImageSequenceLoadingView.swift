@@ -1,5 +1,6 @@
 import SwiftUI
 
+import StarCore
 // displayed when loading an image sequence
 @available(macOS 13.0, *) 
 struct ImageSequenceLoadingView: View {
@@ -13,7 +14,7 @@ struct ImageSequenceLoadingView: View {
         VStack {
             Spacer()
             if let text = viewModel.loadingImageSequenceFilename {
-                Text("Loading \(text)")
+                Text(localized("ui.loading_x", text))
                   .font(.title)
                   .foregroundColor(.white)
             }
@@ -21,7 +22,7 @@ struct ImageSequenceLoadingView: View {
             ZStack {
                 if viewModel.isProbingImageSequence {
                     VStack {
-                        Text("Examining Video")
+                        Text(localized("ui.examining_video"))
                           .font(.title)
                           .foregroundColor(.white)
                         ProgressView()
@@ -34,13 +35,13 @@ struct ImageSequenceLoadingView: View {
                       .frame(maxHeight: 50)
                     if viewModel.amountExtracted == 1.0 {
                         VStack {
-                            Text("All \(viewModel.numberExtracted) frames extracted")
+                            Text(localized("ui.all_n_frames_extracted", viewModel.numberExtracted))
                               .foregroundColor(.green)
                             ProgressView()
                               .colorScheme(.dark)
                         }
                     } else {
-                      Text("\(viewModel.numberExtracted) frames extracted")
+                      Text(localized("ui.n_frames_extracted", viewModel.numberExtracted))
                           .foregroundColor(.white)
                     }
                 } else {
@@ -50,13 +51,13 @@ struct ImageSequenceLoadingView: View {
                       .frame(maxHeight: 50)
                     if viewModel.amountLoaded == 1.0 {
                         VStack {
-                            Text("All \(viewModel.numberLoaded) frames loaded")
+                            Text(localized("ui.all_n_frames_loaded", viewModel.numberLoaded))
                               .foregroundColor(.green)
                             ProgressView()
                               .colorScheme(.dark)
                         }
                     } else {
-                        Text("\(viewModel.numberLoaded) frames loaded")
+                        Text(localized("ui.n_frames_loaded", viewModel.numberLoaded))
                           .foregroundColor(.white)
                     }
                 }
@@ -66,7 +67,7 @@ struct ImageSequenceLoadingView: View {
                 viewModel.isLoadingImageSequence = false
                 viewModel.imageSequence = nil
             } label: {
-                Text("Cancel")
+                Text(localized("ui.cancel"))
                   .font(.largeTitle)
             }
               .buttonStyle(ShrinkingButton())

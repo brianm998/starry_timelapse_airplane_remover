@@ -27,6 +27,7 @@ import com.star.desktop.ui.sequence.SequenceScreen
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.desktop.ui.theme.StarTheme
+import com.star.desktop.i18n.localized
 
 /** Root composable: routes between Initial / Loading / Sequence, with an engine badge and error overlay. */
 @Composable
@@ -102,18 +103,18 @@ private fun EngineDownOverlay(message: String, onRestart: () -> Unit, onClose: (
                 .background(StarColors.prefsCard)
                 .padding(32.dp),
         ) {
-            Text("Engine stopped", color = StarColors.red, fontSize = 16.sp)
+            Text(localized("ui.engine_stopped"), color = StarColors.red, fontSize = 16.sp)
             Text(message, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             Text(
-                "Restart re-opens this session from its saved config.",
+                localized("ui.restart_re_opens_this_session_from_its_saved"),
                 color = StarColors.textDisabled, fontSize = 11.sp, modifier = Modifier.padding(top = 12.dp),
             )
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier.padding(top = 20.dp),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
             ) {
-                androidx.compose.material3.OutlinedButton(onClick = onClose) { Text("Close Session") }
-                Button(onClick = onRestart) { Text("Restart Engine") }
+                androidx.compose.material3.OutlinedButton(onClick = onClose) { Text(localized("ui.close_session")) }
+                Button(onClick = onRestart) { Text(localized("ui.restart_engine")) }
             }
         }
     }
@@ -145,13 +146,13 @@ private fun EngineWarningBanner(
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Column(Modifier.weight(1f, fill = false)) {
-            Text("⚠  ${warning.title}", color = Color.Black, fontSize = 12.sp)
+            Text(localized("ui.warning_banner", warning.title), color = Color.Black, fontSize = 12.sp)
             Text(warning.message, color = Color.Black, fontSize = 11.sp)
             if (warning.suggestion.isNotEmpty()) {
                 Text(warning.suggestion, color = Color.Black.copy(alpha = 0.75f), fontSize = 11.sp)
             }
         }
-        androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Dismiss", fontSize = 12.sp) }
+        androidx.compose.material3.TextButton(onClick = onDismiss) { Text(localized("ui.dismiss"), fontSize = 12.sp) }
     }
 }
 
@@ -165,8 +166,8 @@ private fun VersionWarningBanner(message: String, onDismiss: () -> Unit, modifie
             .background(StarColors.yellow.copy(alpha = 0.92f))
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
-        Text("⚠  $message", color = Color.Black, fontSize = 12.sp)
-        androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Dismiss", fontSize = 12.sp) }
+        Text(localized("ui.warning_banner", message), color = Color.Black, fontSize = 12.sp)
+        androidx.compose.material3.TextButton(onClick = onDismiss) { Text(localized("ui.dismiss"), fontSize = 12.sp) }
     }
 }
 
@@ -206,7 +207,7 @@ fun EngineBadge(vm: AppViewModel, modifier: Modifier = Modifier) {
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(color))
-        Text("  $label", color = StarColors.textSecondary, fontSize = 10.sp)
+        Text("  " + label, color = StarColors.textSecondary, fontSize = 10.sp)
     }
 }
 
@@ -222,7 +223,7 @@ private fun ErrorOverlay(message: String, onDismiss: () -> Unit) {
                 .padding(40.dp),
         ) {
             Text(message, color = Color.White, fontSize = 14.sp)
-            Button(onClick = onDismiss, modifier = Modifier.padding(top = 20.dp)) { Text("Dismiss") }
+            Button(onClick = onDismiss, modifier = Modifier.padding(top = 20.dp)) { Text(localized("ui.dismiss")) }
         }
     }
 }

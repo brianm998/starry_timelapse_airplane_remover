@@ -25,6 +25,7 @@ import com.star.desktop.domain.OutlierDecisions
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.RemoveReason
+import com.star.desktop.i18n.localized
 
 /**
  * The Outlier table (macOS `OutlierGroupTable` / `OutlierWindowView`), shown as a secondary window.
@@ -43,7 +44,7 @@ fun OutlierWindowView(vm: SequenceViewModel) {
             Modifier.fillMaxWidth().background(StarColors.sidePanel).padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            HeaderCell("Frame ${current + 1}", 1.2f)
+            HeaderCell(localized("ui.frame_n", current + 1), 1.2f)
             HeaderCell("size", 0.8f)
             HeaderCell("bounds", 2f)
             HeaderCell("score", 0.8f)
@@ -51,7 +52,7 @@ fun OutlierWindowView(vm: SequenceViewModel) {
         }
         if (groups.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No outlier groups (process in Selective mode)", color = StarColors.textDisabled, fontSize = 12.sp)
+                Text(localized("ui.no_outlier_groups_process_in_selective_mode"), color = StarColors.textDisabled, fontSize = 12.sp)
             }
         } else {
             LazyColumn(Modifier.fillMaxSize()) {

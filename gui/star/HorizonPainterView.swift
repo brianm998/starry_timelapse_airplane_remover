@@ -145,20 +145,20 @@ struct HorizonPainterView: View {
         switch paintState.phase {
         case .bandSelection:
             color = .yellow
-            label = "Select an area that contains the horizon"
+            label = localized("ui.select_area_with_horizon")
         case .computing:
             color = .gray
-            label = "Calculating..."
+            label = localized("ui.calculating")
         case .refinement:
             if paintState.isExpanding {
                 color = .gray
-                label = "Calculating..."
+                label = localized("ui.calculating")
             } else if paintState.isErasing {
                 color = .red
-                label = "select ground"
+                label = localized("ui.select_ground")
             } else {
                 color = .green
-                label = "select sky"
+                label = localized("ui.select_sky")
             }
         }
 
@@ -644,7 +644,7 @@ struct HorizonPainterToolbarView: View {
         Divider().frame(height: 24)
 
         let pct = Int(paintState.bandCoverage * 100)
-        Label("Paint across the horizon — \(pct)%",
+        Label(localized("ui.paint_across_horizon", pct),
               systemImage: "mountain.2")
             .foregroundColor(.yellow)
             .font(.caption)
@@ -654,14 +654,14 @@ struct HorizonPainterToolbarView: View {
         Button {
             paintState.clear()
         } label: {
-            Label("Reset", systemImage: "arrow.counterclockwise")
+            Label(localized("ui.reset"), systemImage: "arrow.counterclockwise")
         }
         .buttonStyle(.bordered)
         .disabled(!paintState.hasStrokes)
-        .help("Reset and start over (R)")
+        .help(localized("ui.reset_and_start_over_r"))
 
-        Button("Cancel") { handleCancel() }
-        .help("Discard and close (Esc)")
+        Button(localized("ui.cancel")) { handleCancel() }
+        .help(localized("ui.discard_and_close_esc"))
     }
 
     // MARK: Computing toolbar
@@ -671,13 +671,13 @@ struct HorizonPainterToolbarView: View {
         Spacer()
         HStack(spacing: 6) {
             ProgressView().controlSize(.small)
-            Text("Computing horizon…")
+            Text(localized("ui.computing_horizon"))
                 .foregroundColor(.secondary)
                 .font(.caption)
         }
         Spacer()
-        Button("Cancel") { handleCancel() }
-        .help("Discard and close (Esc)")
+        Button(localized("ui.cancel")) { handleCancel() }
+        .help(localized("ui.discard_and_close_esc"))
     }
 
     // MARK: Refinement toolbar
@@ -695,10 +695,10 @@ struct HorizonPainterToolbarView: View {
         Button {
             paintState.clear()
         } label: {
-            Label("Reset", systemImage: "arrow.counterclockwise")
+            Label(localized("ui.reset"), systemImage: "arrow.counterclockwise")
         }
         .buttonStyle(.bordered)
-        .help("Reset and start over from band selection (R)")
+        .help(localized("ui.reset_and_start_over_from_band_selection_r"))
 
         Divider().frame(height: 24)
 
@@ -706,17 +706,17 @@ struct HorizonPainterToolbarView: View {
 
         Divider().frame(height: 24)
 
-        Toggle("Apply to nearby frames", isOn: $applyToNearbyFrames)
+        Toggle(localized("ui.apply_to_nearby_frames"), isOn: $applyToNearbyFrames)
             .toggleStyle(.switch)
             .font(.caption)
-            .help("When on, saving this reference will trigger reprocessing of nearby interpolated frames")
+            .help(localized("ui.when_on_saving_this_reference_will_trigger"))
 
         Spacer()
 
         if paintState.isExpanding {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("Detecting…")
+                Text(localized("ui.detecting"))
                     .foregroundColor(.secondary)
                     .font(.caption)
             }
@@ -740,7 +740,7 @@ struct HorizonPainterToolbarView: View {
             if isSaving {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
-                    Text("Saving…")
+                    Text(localized("ui.saving"))
                 }
             } else if viewModel.horizonPainterMode == .startup {
                 let indices = viewModel.horizonPainterStartupFrameIndices
@@ -748,17 +748,17 @@ struct HorizonPainterToolbarView: View {
                 let hasMore = !indices.isEmpty && pos + 1 < indices.count
                 Label(hasMore ? "Next" : "Continue", systemImage: "checkmark.circle.fill")
             } else {
-                Label("Save Reference Horizon", systemImage: "checkmark.circle.fill")
+                Label(localized("ui.save_reference_horizon"), systemImage: "checkmark.circle.fill")
             }
         }
         .buttonStyle(.borderedProminent)
         .disabled(paintState.lastHorizonY == nil || isSaving || paintState.isExpanding)
         .help(viewModel.horizonPainterMode == .startup
-              ? "Save horizon and continue (Return)"
-              : "Save the horizon reference (Return)")
+              ? localized("ui.save_horizon_continue")
+              : localized("ui.save_horizon_reference"))
 
-        Button("Cancel") { handleCancel() }
-        .help("Discard and close (Esc)")
+        Button(localized("ui.cancel")) { handleCancel() }
+        .help(localized("ui.discard_and_close_esc"))
     }
 
     // MARK: - Paint / Erase buttons
@@ -773,37 +773,37 @@ struct HorizonPainterToolbarView: View {
                 paintState.isErasing = false
                 viewModel.horizonPainterIsErasing = false
             } label: {
-                Label("Sky", systemImage: "paintbrush.fill")
+                Label(localized("ui.sky"), systemImage: "paintbrush.fill")
             }
             .buttonStyle(.bordered)
-            .help("Paint sky — adds to the selection (P)")
+            .help(localized("ui.paint_sky_adds_to_the_selection_p"))
 
             Button {
                 paintState.isErasing = true
                 viewModel.horizonPainterIsErasing = true
             } label: {
-                Label("Ground", systemImage: "eraser.fill")
+                Label(localized("ui.ground"), systemImage: "eraser.fill")
             }
             .buttonStyle(.borderedProminent)
-            .help("Erase sky — removes from the selection (E)")
+            .help(localized("ui.erase_sky_removes_from_the_selection_e"))
         } else {
             Button {
                 paintState.isErasing = false
                 viewModel.horizonPainterIsErasing = false
             } label: {
-                Label("Sky", systemImage: "paintbrush.fill")
+                Label(localized("ui.sky"), systemImage: "paintbrush.fill")
             }
             .buttonStyle(.borderedProminent)
-            .help("Paint sky — adds to the selection (P)")
+            .help(localized("ui.paint_sky_adds_to_the_selection_p"))
 
             Button {
                 paintState.isErasing = true
                 viewModel.horizonPainterIsErasing = true
             } label: {
-                Label("Ground", systemImage: "eraser.fill")
+                Label(localized("ui.ground"), systemImage: "eraser.fill")
             }
             .buttonStyle(.bordered)
-            .help("Erase sky — removes from the selection (E)")
+            .help(localized("ui.erase_sky_removes_from_the_selection_e"))
         }
     }
 
@@ -818,7 +818,7 @@ struct HorizonPainterToolbarView: View {
                 Image(systemName: "minus.circle")
             }
             .buttonStyle(.bordered)
-            .help("Shrink brush ([)")
+            .help(localized("ui.shrink_brush"))
 
             Text("\(Int(paintState.brushRadius))px")
                 .font(.system(.caption, design: .monospaced))
@@ -831,7 +831,7 @@ struct HorizonPainterToolbarView: View {
                 Image(systemName: "plus.circle")
             }
             .buttonStyle(.bordered)
-            .help("Grow brush (])")
+            .help(localized("ui.grow_brush"))
         }
     }
 
@@ -846,14 +846,14 @@ struct HorizonPainterToolbarView: View {
                 Image(systemName: "minus.circle")
             }
             .buttonStyle(.bordered)
-            .help("Decrease max downward extension by 10px")
+            .help(localized("ui.decrease_max_downward_extension_by_10px"))
             .disabled(tunedParams.maxDownwardExtension <= 0)
 
             Text("↓\(tunedParams.maxDownwardExtension)px")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(minWidth: 52, alignment: .center)
-                .help("Max pixels the refined horizon may go below the merged horizon baseline (0 = disabled)")
+                .help(localized("ui.max_pixels_the_refined_horizon_may_go_below"))
 
             Button {
                 adjustMaxDownwardExtension(by: 10)
@@ -861,7 +861,7 @@ struct HorizonPainterToolbarView: View {
                 Image(systemName: "plus.circle")
             }
             .buttonStyle(.bordered)
-            .help("Increase max downward extension by 10px")
+            .help(localized("ui.increase_max_downward_extension_by_10px"))
         }
     }
 
@@ -927,7 +927,7 @@ struct HorizonPainterToolbarView: View {
         // was loaded from an existing reference (lastHorizonY set, strokes empty).
         guard paintState.hasStrokes || paintState.lastHorizonY != nil else { return }
         guard let frame = viewModel.currentFrameView.frame else {
-            saveError = "No frame available"
+            saveError = localized("ui.no_frame_available")
             return
         }
         isSaving  = true

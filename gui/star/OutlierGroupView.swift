@@ -206,7 +206,7 @@ struct OutlierGroupView: View {
                   .opacity(0.5)
 
                 if self.groupViewModel.lineIsLoading {
-                    Text("calculating line ...")
+                    Text(localized("ui.calculating_line"))
                       .foregroundColor(.white)
                 }
                 
@@ -221,7 +221,7 @@ struct OutlierGroupView: View {
                 } else if !self.groupViewModel.lineIsLoading,
                           !self.groupViewModel.hasLine
                 {
-                    Text("No Line")
+                    Text(localized("ui.no_line"))
                       .foregroundColor(.red)
                 }
                 

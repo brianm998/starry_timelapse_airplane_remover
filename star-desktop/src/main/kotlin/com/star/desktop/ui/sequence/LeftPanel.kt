@@ -30,6 +30,7 @@ import com.star.desktop.ui.components.VerticalStarPicker
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameProcessingState
 import com.star.proto.FrameViewMode
+import com.star.desktop.i18n.localized
 
 /** Left panel (macOS `LeftPanel`): processing controls, progress, and current-frame state. */
 @Composable
@@ -54,23 +55,23 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Processing", color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        Text(localized("ui.processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 
         Button(
             onClick = onProcessAll,
             enabled = !busy,
             colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Process All Frames") }
+        ) { Text(localized("ui.process_all_frames_2")) }
 
         OutlinedButton(onClick = { vm.processRemaining() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("Process Remaining")
+            Text(localized("ui.process_remaining"))
         }
         OutlinedButton(onClick = { vm.processCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("Process Current Frame")
+            Text(localized("ui.process_current_frame"))
         }
         OutlinedButton(onClick = { vm.reprocessCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("Reprocess Current (force)")
+            Text(localized("ui.reprocess_current_force"))
         }
 
         if (processing) {
@@ -78,15 +79,15 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll
                 onClick = { vm.cancelProcessing() },
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red),
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Cancel") }
+            ) { Text(localized("ui.cancel")) }
         }
 
-        Text("Render", color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        Text(localized("ui.render"), color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
         OutlinedButton(onClick = { vm.renderCurrentFrame() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("Render Current Frame")
+            Text(localized("ui.render_current_frame"))
         }
         OutlinedButton(onClick = { vm.renderAllFrames() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("Render All Frames")
+            Text(localized("ui.render_all_frames"))
         }
         if (rendering) {
             LinearProgressIndicator(
@@ -104,7 +105,7 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll
             trackColor = StarColors.cellDefault,
         )
         Text(
-            "$complete / $total complete" + (seqState?.let { " · $it" } ?: ""),
+            localized("ui.n_of_m_complete", complete, total) + (seqState?.let { " · $it" } ?: ""),
             color = StarColors.textSecondary,
             fontSize = 11.sp,
         )
@@ -136,7 +137,7 @@ private fun ShowViewModes(vm: SequenceViewModel) {
 
     if (available.size <= 1) return // nothing meaningful to choose between
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
-        Text("Show:", color = StarColors.textSecondary, fontSize = 11.sp)
+        Text(localized("ui.show_2"), color = StarColors.textSecondary, fontSize = 11.sp)
         VerticalStarPicker(
             options = available,
             selected = viewMode,

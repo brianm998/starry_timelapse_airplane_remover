@@ -20,13 +20,13 @@ struct AlignmentWindowView: View {
                 self.mainView(viewModel)
             } else {
                 VStack {
-                    Text("No Image sequence loaded.")
-                    Text("Load an image sequence in the main star window to see alignment details here.")
+                    Text(localized("ui.no_image_sequence_loaded"))
+                    Text(localized("ui.load_an_image_sequence_in_the_main_star"))
                 }
             }
         }
           .padding(20)
-          .navigationTitle("Star Alignment Info")
+          .navigationTitle(localized("ui.star_alignment_info"))
     }
         
     func mainView(_ viewModel: ImageSequenceViewModel) -> some View {
@@ -36,7 +36,7 @@ struct AlignmentWindowView: View {
                 VStack(alignment: .leading) {
                     if let results = viewModel.currentFrameView.frameObserver.starAlignmentResults {
                         if showStarDeviation {
-                            Text("Deviation in Star Alignment")
+                            Text(localized("ui.deviation_in_star_alignment"))
                             AlignmentDeviationChart(
                               frames: viewModel.starAlignmentInfo,
                               foregroundColor: .gray
@@ -53,7 +53,7 @@ struct AlignmentWindowView: View {
                        let results = viewModel.currentFrameView.frameObserver.earthAlignmentResults
                     {
                         if showEarthDeviation {
-                            Text("Deviation in Earth Alignment")
+                            Text(localized("ui.deviation_in_earth_alignment"))
                             AlignmentDeviationChart(
                               frames: viewModel.earthAlignmentInfo,
                               foregroundColor: .gray
@@ -76,19 +76,19 @@ struct AlignmentWindowView: View {
     private var controlsView: some View {
         VStack(alignment: .leading) {
             Space(height: 60)
-            Text("Show:")
-            Toggle("Star Deviation", isOn: $showStarDeviation)
-            Toggle("Star Keypoints", isOn: $showStarKeypoints)
+            Text(localized("ui.show_2"))
+            Toggle(localized("ui.star_deviation"), isOn: $showStarDeviation)
+            Toggle(localized("ui.star_keypoints"), isOn: $showStarKeypoints)
             if let viewModel = viewModel.imageSequence,
                viewModel.allowEarthAlignment
             {
-                Toggle("Earth Deviation", isOn: $showEarthDeviation)
-                Toggle("Earth Keypoints", isOn: $showEarthKeypoints)
+                Toggle(localized("ui.earth_deviation"), isOn: $showEarthDeviation)
+                Toggle(localized("ui.earth_keypoints"), isOn: $showEarthKeypoints)
             }
             Divider()
               .fixedSize(horizontal: true, vertical: false)
             Spacer()
-            Text("Legend")
+            Text(localized("ui.legend"))
             OffsetLegendView(offsets: allVisibleOffsets)
         }
     }
@@ -163,22 +163,22 @@ struct AlignmentKeypointsChart: View {
             // === Lines ===
             ForEach(points, id: \.id) { point in
                 LineMark(
-                  x: .value("Frame", point.baseFrame),
-                  y: .value("KeyPoints", point.keyPointCount)
+                  x: .value(localized("ui.frame_capitalised"), point.baseFrame),
+                  y: .value(localized("ui.keypoints_title"), point.keyPointCount)
                 )
                   //.foregroundStyle(Color.byOffset(group.offset))
-                //                        .foregroundStyle(by: .value("Neighbor Offset", group.offset))
+                //                        .foregroundStyle(by: .value(localized("ui.neighbor_offset"), group.offset))
                   .interpolationMethod(.linear)
             }
             
             // === Current frame indicator ===
             RuleMark(
-              x: .value("Current Frame", viewModel.currentIndex)
+              x: .value(localized("ui.current_frame"), viewModel.currentIndex)
             )
               .lineStyle(StrokeStyle(lineWidth: 2))
               .foregroundStyle(.red)
               .annotation(position: .top, alignment: .leading) {
-                  Text("Current")
+                  Text(localized("ui.current"))
                     .font(.caption)
                     .foregroundColor(.red)
               }
@@ -186,14 +186,14 @@ struct AlignmentKeypointsChart: View {
             // === Hover indicator ===
             if let hoveredFrame {
                 RuleMark(
-                  x: .value("Hover Frame", hoveredFrame)
+                  x: .value(localized("ui.hover_frame"), hoveredFrame)
                 )
                   .foregroundStyle(.gray.opacity(0.4))
 
                 PointMark(
-                  x: .value("Frame", hoveredFrame),
+                  x: .value(localized("ui.frame_capitalised"), hoveredFrame),
                   y: .value(
-                    "Key Points",
+                    localized("ui.key_points"),
                     keyPointsAt(frame: hoveredFrame)
                   )
                 )
@@ -211,8 +211,8 @@ struct AlignmentKeypointsChart: View {
           }
           .chartXScale(domain: xDomain)
 //          .chartYScale(domain: 0 ... maxVisibleDeviation)
-          .chartXAxisLabel("Frame Index")
-          .chartYAxisLabel("Number of Key Points")
+          .chartXAxisLabel(localized("ui.frame_index"))
+          .chartYAxisLabel(localized("ui.number_of_key_points"))
           .chartLegend(.hidden)
           //.chartYScale(domain: symmetricDomain())
           .chartOverlay { proxy in
@@ -376,7 +376,7 @@ struct AlignmentDeviationChart: View {
                   .font(.caption2)
                   .foregroundColor(foregroundColor)
                   .monospacedDigit()*/
-                Text("Height:")
+                Text(localized("ui.height_2"))
                   .font(.caption2)
                   .foregroundColor(foregroundColor)
                   .monospacedDigit()
@@ -395,11 +395,11 @@ struct AlignmentDeviationChart: View {
             ForEach(pointsByOffset, id: \.offset) { group in
                 ForEach(group.points) { point in
                     LineMark(
-                      x: .value("Frame", point.baseFrame),
-                      y: .value("Deviation", point.signedDeviation)
+                      x: .value(localized("ui.frame_capitalised"), point.baseFrame),
+                      y: .value(localized("ui.deviation"), point.signedDeviation)
                     )
                       .foregroundStyle(Color.byOffset(point.offset))
-                      .foregroundStyle(by: .value("Neighbor Offset", group.offset))
+                      .foregroundStyle(by: .value(localized("ui.neighbor_offset"), group.offset))
                       .interpolationMethod(.linear)
                       .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
                 }
@@ -407,12 +407,12 @@ struct AlignmentDeviationChart: View {
 
             // === Current frame indicator ===
             RuleMark(
-              x: .value("Current Frame", viewModel.currentIndex)
+              x: .value(localized("ui.current_frame"), viewModel.currentIndex)
             )
               .lineStyle(StrokeStyle(lineWidth: 2))
               .foregroundStyle(.red)
               .annotation(position: .top, alignment: .leading) {
-                  Text("Current")
+                  Text(localized("ui.current"))
                     .font(.caption)
                     .foregroundColor(.red)
               }
@@ -420,14 +420,14 @@ struct AlignmentDeviationChart: View {
             // === Hover indicator ===
             if let hoveredFrame, let hoveredOffset {
                 RuleMark(
-                  x: .value("Hover Frame", hoveredFrame)
+                  x: .value(localized("ui.hover_frame"), hoveredFrame)
                 )
                   .foregroundStyle(.gray.opacity(0.4))
 
                 PointMark(
-                  x: .value("Frame", hoveredFrame),
+                  x: .value(localized("ui.frame_capitalised"), hoveredFrame),
                   y: .value(
-                    "Deviation",
+                    localized("ui.deviation"),
                     deviationAt(frame: hoveredFrame, offset: hoveredOffset)
                   )
                 )
@@ -446,11 +446,11 @@ struct AlignmentDeviationChart: View {
           }
           .chartXScale(domain: xDomain)
           .chartXAxisLabel {
-              Text("Frame Index")
+              Text(localized("ui.frame_index"))
                 .foregroundColor(foregroundColor)
           }
           .chartYAxisLabel {
-              Text("Deviation")
+              Text(localized("ui.deviation"))
                 .foregroundColor(foregroundColor)
           }
           .chartLegend(.hidden)
@@ -567,12 +567,12 @@ struct AlignmentDeviationChart: View {
         Chart {
             ForEach(points) { point in
                 LineMark(
-                  x: .value("Frame", point.baseFrame),
-                  y: .value("Deviation", point.signedDeviation)
+                  x: .value(localized("ui.frame_capitalised"), point.baseFrame),
+                  y: .value(localized("ui.deviation"), point.signedDeviation)
                 )
                   .foregroundStyle(
                     by: .value(
-                      "Neighbor",
+                      localized("ui.neighbor"),
                       point.offset > 0
                         ? "+\(point.offset)"
                         : "\(point.offset)"
@@ -583,8 +583,8 @@ struct AlignmentDeviationChart: View {
                 
             }
         }
-          .chartXAxisLabel("Frame Index")
-          .chartYAxisLabel("Deviation")
+          .chartXAxisLabel(localized("ui.frame_index"))
+          .chartYAxisLabel(localized("ui.deviation"))
           .chartLegend(position: .trailing)
           .frame(minHeight: 300)
           .chartYScale(domain: symmetricDomain())
@@ -681,17 +681,17 @@ private extension AlignmentDeviationChart {
         let alignmentState = alignmentStateAt(frame: frame, offset: offset)
         
         return VStack(alignment: .leading, spacing: 4) {
-            Text("Frame \(frame)")
+            Text(localized("ui.frame_n", frame))
                 .font(.caption.bold())
 
-            Text("Neighbor offset: \(offset > 0 ? "+" : "")\(offset)")
+            Text(localized("ui.neighbor_offset_value", offset > 0 ? "+" : "", offset))
                 .font(.caption)
 
-            Text(String(format: "Deviation: %.3f", deviation))
+            Text(localized("ui.deviation_value", String(format: "%.3f", deviation)))
               .font(.caption.monospacedDigit())
               .foregroundColor(isGood ? .green : .red)
 
-            Text("Aligned: \(alignmentState)")
+            Text(localized("ui.aligned_state", alignmentState))
               .font(.caption.monospacedDigit())
         }
         .padding(8)
@@ -748,10 +748,10 @@ private extension AlignmentKeypointsChart {
         let keypoints = keyPointsAt(frame: frame)
         
         return VStack(alignment: .leading, spacing: 4) {
-            Text("Frame \(frame)")
+            Text(localized("ui.frame_n", frame))
                 .font(.caption.bold())
 
-            Text("Keypoints: \(keypoints)")
+            Text(localized("ui.keypoints_n", keypoints))
                 .font(.caption.monospacedDigit())
         }
         .padding(8)
@@ -768,7 +768,7 @@ struct OffsetLegendView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Neighbor Offset")
+            Text(localized("ui.neighbor_offset"))
                 .font(.caption.bold())
 
             ForEach(offsets, id: \.self) { offset in

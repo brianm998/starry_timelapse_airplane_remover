@@ -163,7 +163,7 @@ public class FrameViewModel {
         } else {
             ZStack {
                 Color(white: 0.15)
-                Text("N/A")
+                Text(localized("ui.n_a"))
                   .font(.largeTitle)
                   .foregroundColor(Color(white: 0.45))
             }
@@ -222,7 +222,7 @@ public class FrameViewModel {
         } else {
             ZStack {
                 Color(white: 0.15)
-                Text("\(type.longName) image not found for this frame")
+                Text(localized("ui.image_not_found_for_frame", type.longName))
                   .font(.system(size: 28, weight: .medium))
                   .multilineTextAlignment(.center)
                   .padding()

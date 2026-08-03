@@ -14,13 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let alert = NSAlert()
-        alert.messageText = "Work In Progress"
+        alert.messageText = localized("ui.work_in_progress")
         alert.informativeText =
-            "Currently \(seq.pendingWorkDescription). " +
-            "Quitting now will interrupt this work."
+            localized("ui.work_in_progress.quitting", seq.pendingWorkDescription)
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Quit Anyway")
+        alert.addButton(withTitle: localized("ui.cancel"))
+        alert.addButton(withTitle: localized("ui.quit_anyway"))
 
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
@@ -49,13 +48,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         if let seq = viewModel.imageSequence, seq.hasPendingWork {
             let alert = NSAlert()
-            alert.messageText = "Work In Progress"
+            alert.messageText = localized("ui.work_in_progress")
             alert.informativeText =
-                "Currently \(seq.pendingWorkDescription). " +
-                "Closing now will interrupt this work."
+                localized("ui.work_in_progress.closing", seq.pendingWorkDescription)
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Cancel")
-            alert.addButton(withTitle: "Close Anyway")
+            alert.addButton(withTitle: localized("ui.cancel"))
+            alert.addButton(withTitle: localized("ui.close_anyway"))
 
             let response = alert.runModal()
             if response == .alertFirstButtonReturn {

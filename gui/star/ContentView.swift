@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+import StarCore
 // the overall view of the app
 @available(macOS 13.0, *)
 struct ContentView: View {
@@ -47,18 +48,18 @@ struct ContentView: View {
               .opacity(0.5)
 
             VStack(spacing: 0) {
-                Text("Work In Progress")
+                Text(localized("ui.work_in_progress"))
                   .font(.headline)
                   .padding(.bottom, 16)
                 Text(viewModel.closeConfirmationMessage)
                   .multilineTextAlignment(.center)
                   .padding(.bottom, 24)
                 HStack(spacing: 16) {
-                    Button("Cancel") {
+                    Button(localized("ui.cancel")) {
                         viewModel.showCloseConfirmation = false
                         viewModel.closeConfirmationAction = nil
                     }
-                    Button("Stop and Close") {
+                    Button(localized("ui.stop_and_close")) {
                         let action = viewModel.closeConfirmationAction
                         viewModel.showCloseConfirmation = false
                         viewModel.closeConfirmationAction = nil
@@ -107,7 +108,7 @@ struct ContentView: View {
                 Button {
                     viewModel.showWarningAlert = false
                 } label: {
-                    Text("OK")
+                    Text(localized("ui.ok"))
                 }
                   .padding(.top, 28)
             }
@@ -126,7 +127,7 @@ struct ContentView: View {
               .opacity(0.5)
 
             VStack {
-                Text("ERROR")
+                Text(localized("ui.error"))
 
                 Spacer()
                   .frame(maxHeight: 40)
@@ -136,7 +137,7 @@ struct ContentView: View {
                 Button() {
                     viewModel.showErrorAlert = false
                 } label: {
-                    Text("Close")
+                    Text(localized("ui.close"))
                 }
             }
               .padding(40)
@@ -164,7 +165,7 @@ struct UserPreferencesEditingView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Preferences")
+                Text(localized("ui.preferences"))
                     .font(.title)
                     .foregroundColor(.white)
                 Spacer()
@@ -182,7 +183,7 @@ struct UserPreferencesEditingView: View {
                 VStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Processing Type")
+                            Text(localized("ui.processing_type"))
                                 .font(.headline)
                                 .foregroundColor(.white)
                             Spacer()
@@ -200,7 +201,7 @@ struct UserPreferencesEditingView: View {
                         }
 
                         if showProcessingTypeInfo {
-                            Text("The detection method used for outlier detection. 'Strong' is more aggressive, while 'Weak' is more conservative.")
+                            Text(localized("ui.the_detection_method_used_for_outlier"))
                                 .foregroundColor(.white)
                                 .font(.body)
                                 .padding(8)
@@ -214,7 +215,7 @@ struct UserPreferencesEditingView: View {
 
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Frame Rate")
+                            Text(localized("ui.frame_rate"))
                                 .font(.headline)
                                 .foregroundColor(.white)
                             Spacer()
@@ -230,13 +231,13 @@ struct UserPreferencesEditingView: View {
                                 .foregroundColor(.gray)
                                 .font(.caption)
                         } else {
-                            Text("Not set")
+                            Text(localized("ui.not_set"))
                                 .foregroundColor(.gray)
                                 .font(.caption)
                         }
 
                         if showFrameRateInfo {
-                            Text("The frame rate of the incoming and outgoing video. This affects playback speed and video generation.")
+                            Text(localized("ui.the_frame_rate_of_the_incoming_and_outgoing"))
                                 .foregroundColor(.white)
                                 .font(.body)
                                 .padding(8)
@@ -250,7 +251,7 @@ struct UserPreferencesEditingView: View {
 
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Show Horizon on Main View")
+                            Text(localized("ui.show_horizon_on_main_view"))
                                 .font(.headline)
                                 .foregroundColor(.white)
                             Spacer()
@@ -269,7 +270,7 @@ struct UserPreferencesEditingView: View {
                         }
 
                         if showHorizonOnMainViewInfo {
-                            Text("When enabled, the horizon line will be displayed on the main frame editing view for reference.")
+                            Text(localized("ui.when_enabled_the_horizon_line_will_be"))
                                 .foregroundColor(.white)
                                 .font(.body)
                                 .padding(8)
@@ -283,7 +284,7 @@ struct UserPreferencesEditingView: View {
 
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Show Horizon Painter Instructions")
+                            Text(localized("ui.show_horizon_painter_instructions"))
                                 .font(.headline)
                                 .foregroundColor(.white)
                             Spacer()
@@ -302,7 +303,7 @@ struct UserPreferencesEditingView: View {
                         }
 
                         if showHorizonPainterInstructionsInfo {
-                            Text("When enabled, startup instructions will be shown in the horizon painter overlay.")
+                            Text(localized("ui.when_enabled_startup_instructions_will_be"))
                                 .foregroundColor(.white)
                                 .font(.body)
                                 .padding(8)
@@ -316,7 +317,7 @@ struct UserPreferencesEditingView: View {
 
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Skip Render Prompt After Processing")
+                            Text(localized("ui.skip_render_prompt_after_processing"))
                                 .font(.headline)
                                 .foregroundColor(.white)
                             Spacer()
@@ -335,7 +336,7 @@ struct UserPreferencesEditingView: View {
                         }
 
                         if showSkipRenderPromptInfo {
-                            Text("When enabled, the render prompts before and after processing will be suppressed automatically.")
+                            Text(localized("ui.when_enabled_the_render_prompts_before_and"))
                                 .foregroundColor(.white)
                                 .font(.body)
                                 .padding(8)
@@ -352,7 +353,7 @@ struct UserPreferencesEditingView: View {
 
             HStack {
                 Button(action: { dismiss() }) {
-                    Text("Close")
+                    Text(localized("ui.close"))
                         .foregroundColor(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)

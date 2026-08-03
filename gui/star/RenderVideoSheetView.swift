@@ -140,9 +140,9 @@ struct RenderVideoSheetView: View {
             Space(width: 20)
             VStack {
                 Space(height: 20)
-                Text("Rendering \(videoFilename)")
+                Text(localized("ui.rendering_file", videoFilename))
                   .font(.title)
-                Text("frame \(encodingFrameNumber) of \(totalFrames)")
+                Text(localized("ui.frame_n_of_m", encodingFrameNumber, totalFrames))
                 ProgressBarView(progress: $encodingProgress, barColor: .green)
                 Space(height: 20)
             }
@@ -158,9 +158,9 @@ struct RenderVideoSheetView: View {
             ScrollView {
                 VStack {
                     Space(height: 20)
-                    Text("rendering error: \(renderingError)")
+                    Text(localized("ui.rendering_error", renderingError))
                       .font(.title)
-                    Button("Dismiss") {
+                    Button(localized("ui.dismiss")) {
                         self.isVisible = false
                     }
                     Space(height: 20)
@@ -176,13 +176,13 @@ struct RenderVideoSheetView: View {
             Space(width: 20)
             VStack {
                 Space(height: 20)
-                Text("Successfully Rendered \(videoFilename)")
+                Text(localized("ui.successfully_rendered", videoFilename))
                   .font(.title)
-                Button("Reveal In Finder") {
+                Button(localized("ui.reveal_in_finder")) {
                     let configManager = viewModel.config 
                     revealInFinder(path: "\(configManager.config().outputPath)/\(videoFilename)")
                 }
-                Button("Dismiss") {
+                Button(localized("ui.dismiss")) {
                     self.isVisible = false
                 }
                 Space(height: 20)
@@ -198,15 +198,15 @@ struct RenderVideoSheetView: View {
             VStack(alignment: .leading) {
                 Spacer()
                   .frame(minWidth: 300)
-                Text("Render video from \(viewModel.frames.count) frames")
+                Text(localized("ui.render_video_from_n_frames", viewModel.frames.count))
                   .font(.title)
                 
                 HStack {
-                    Picker("Frame Rate", selection: $frameRate) {
+                    Picker(localized("ui.frame_rate"), selection: $frameRate) {
                         ForEach(FrameRate.allCases, id: \.self) { frameRate in
                             switch frameRate {
                             case .custom(_):
-                                Text("custom")
+                                Text(localized("ui.custom_2"))
                             default:
                                 Text("\(String(format: "%g", frameRate.rawValue))")
                             }
@@ -232,8 +232,8 @@ struct RenderVideoSheetView: View {
                     default:
                         Group { }
                     }
-                    Text("frames per second")
-                    Text(" - Total Length: ")
+                    Text(localized("ui.frames_per_second"))
+                    Text(localized("ui.total_length"))
                     Text(self.totalLengthText)
                 }
                   .onChange(of: frameRate) {
@@ -255,7 +255,7 @@ struct RenderVideoSheetView: View {
                 
                 Divider()
                 
-                Picker("Codec", selection: $codec) {
+                Picker(localized("ui.codec"), selection: $codec) {
                     ForEach(FFmpegCodec.availableVideoCodecs, id: \.self) { codec in
                         Text(codec.description)
                     }
@@ -270,7 +270,7 @@ struct RenderVideoSheetView: View {
                       muxer = encoder.supportedMuxers[0]
                   }
 
-                Picker("Encoder", selection: $encoder) {
+                Picker(localized("ui.encoder"), selection: $encoder) {
                     ForEach(codec.encoders, id: \.self) { encoder in
                         Text("\(encoder.rawValue) [\(encoder.description)]")
                     }
@@ -281,7 +281,7 @@ struct RenderVideoSheetView: View {
                       pixelFormat = encoder.pixelFormats[0]
                   }
                 
-                Picker("Pixel Format", selection: $pixelFormat) {
+                Picker(localized("ui.pixel_format"), selection: $pixelFormat) {
                     ForEach(encoder.pixelFormats, id: \.self) { pixelFormat in
                         Text(pixelFormat.rawValue)
                     }
@@ -291,13 +291,13 @@ struct RenderVideoSheetView: View {
                       viewModel.pixelFormat = pixelFormat
                   }
 
-                Text("\(pixelFormat.numberOfComponents) components per pixel")
-                Text("\(pixelFormat.bitsPerPixel) bits per pixel")
-                Text("bit depths: \(pixelFormat.bitDepths)")
+                Text(localized("ui.n_components_per_pixel", pixelFormat.numberOfComponents))
+                Text(localized("ui.n_bits_per_pixel", pixelFormat.bitsPerPixel))
+                Text(localized("ui.bit_depths", pixelFormat.bitDepths))
                 
                 Divider()
 
-                Picker("Container", selection: $muxer) {
+                Picker(localized("ui.container"), selection: $muxer) {
                     ForEach(encoder.supportedMuxers, id: \.self) { muxer in
                         Text(muxer.rawValue)
                     }
@@ -323,10 +323,10 @@ struct RenderVideoSheetView: View {
                 
                 HStack {
                     Spacer()
-                    Button("Cancel") {
+                    Button(localized("ui.cancel")) {
                         self.isVisible = false
                     }
-                    Button("Render") {
+                    Button(localized("ui.render")) {
                         startRender()
                     }
                 }

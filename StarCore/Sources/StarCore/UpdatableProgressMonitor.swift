@@ -129,7 +129,8 @@ public actor UpdatableProgressMonitor {
                 await updatable.log(name: "processingState \(processingState.shortString)",
                                     message: self.padding + progressBar(length: self.numConcurrentRenders,
                                                                      progress: progress) +
-                                      " \(group.count) frames \(processingState.message)",
+                                      " " + localized("progress.frames_in_state",
+                                                      group.count, processingState.message),
                                      value: myValue)
             }
         }
@@ -157,7 +158,8 @@ public actor UpdatableProgressMonitor {
                 await updatable.log(name: "operation \(operationType.rawValue)",
                                     message: self.padding + progressBar(length: self.numConcurrentRenders,
                                                                      progress: progress) +
-                                      " \(done) frames \(operationType.logName)",
+                                      " " + localized("progress.frames_in_operation",
+                                                      done, operationType.logName),
                                      value: myValue)
             }
         }
@@ -298,7 +300,8 @@ public actor UpdatableProgressMonitor {
                 await updatable.log(name: "complete",
                                     message: progressBar(length: self.config.progressBarLength,
                                                          progress: progress) +
-                                      " \(done) / \(self.numberOfFrames) frames complete",
+                                      " " + localized("progress.frames_complete",
+                                                      done, self.numberOfFrames),
                                     value: self.value)
             }
         } else {
@@ -323,28 +326,33 @@ public actor UpdatableProgressMonitor {
 
 
 extension OperationType {
+    /// What the progress bar for this operation says, after the frame count.
+    ///
+    /// `alignmentValidation` deliberately has no text and no key — it has never had one, and an
+    /// empty entry in the catalogue would be flagged by `LocalizationTests` as an untranslated
+    /// string rather than as the intentional blank it is.
     var logName: String {
         switch self {
         case .preview:
-            "making preview"
+            localized("operation.preview")
         case .horizon:
-            "found horizon"
+            localized("operation.horizon")
         case .mergedHorizon:
-            "merged horizons"
+            localized("operation.merged_horizon")
         case .starKeypoints:
-            "have star keypoints"
+            localized("operation.star_keypoints")
         case .earthKeypoints:
-            "have earth keyoints"
+            localized("operation.earth_keypoints")
         case .starHomography:
-            "are star aligned"
+            localized("operation.star_homography")
         case .earthHomography:
-            "are earth aligned"
+            localized("operation.earth_homography")
         case .alignmentValidation:
             ""
         case .outliers:
-            "found outliers"
+            localized("operation.outliers")
         case .merge:
-            "have been merged"
+            localized("operation.merge")
         }
     }
 }

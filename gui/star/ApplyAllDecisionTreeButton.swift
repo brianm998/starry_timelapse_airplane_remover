@@ -27,15 +27,15 @@ struct ApplyAllDecisionTreeButton: View {
                         Log.w("FUCK")
                     }
                 } catch {
-                    await viewModel.report(error: "Decision tree render failed: \(error)")
+                    await viewModel.report(error: localized("ui.decision_tree_render_failed", error))
                 }
             }
         }
         let shortcutKey: KeyEquivalent = "d"
         return Button(action: action) {
-            Text("Decision Tree All")
+            Text(localized("ui.decision_tree_all"))
         }
           .keyboardShortcut(shortcutKey, modifiers: [])
-          .help("apply the outlier group decision tree to all outlier groups in this frame")
+          .help(localized("ui.apply_the_outlier_group_decision_tree_to_all"))
     }
 }

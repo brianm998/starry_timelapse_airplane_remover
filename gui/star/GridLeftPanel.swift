@@ -62,7 +62,7 @@ struct GridLeftPanel: View {
     private var viewModeSection: some View {
         @Bindable var viewModel = viewModel
         VStack(alignment: .leading, spacing: 8) {
-            Text("Show")
+            Text(localized("ui.show"))
                 .font(.headline)
                 .foregroundColor(.white)
 

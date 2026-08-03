@@ -27,8 +27,15 @@ message Envelope {
 
 // ---- Daemon ----
 
-message HelloRequest  { string client_version = 1; }
-message HelloResponse { string daemon_version = 1; string scratch_dir = 2; }
+// `locale` is the BCP-47 tag the client's UI is showing (e.g. "pt-BR"), or empty to let the
+// daemon follow its own machine. The daemon localizes everything it sends back — Warning
+// text, error strings — into it, so the two processes cannot end up speaking different
+// languages at the same user. One client per daemon, so this is process-wide.
+message HelloRequest  { string client_version = 1; string locale = 2; }
+// `locale` echoes back the language the daemon actually resolved to, which may not be the
+// one asked for: the client can request a language star has no translation for, and this is
+// how it finds out it got the fallback.
+message HelloResponse { string daemon_version = 1; string scratch_dir = 2; string locale = 3; }
 message ShutdownRequest {}
 message ShutdownResponse {}
 

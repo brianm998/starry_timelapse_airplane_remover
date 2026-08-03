@@ -20,13 +20,13 @@ struct ApplyDecisionTreeButton: View {
                         }
                     }
                 } catch {
-                    viewModel.report(error: "Decision tree render failed: \(error)")
+                    viewModel.report(error: localized("ui.decision_tree_render_failed", error))
                 }
             }
         }
         return Button(action: action) {
-            Text("DT Auto Only")
+            Text(localized("ui.dt_auto_only"))
         }
-          .help("apply the outlier group decision tree to all selected outlier groups in this frame")
+          .help(localized("ui.apply_the_outlier_group_decision_tree_to_all_2"))
     }    
 }

@@ -61,7 +61,7 @@ public struct FrameEditImageView: View {
                     }
                 }
             } else {
-                Text("image witn no frame :(") // XXX make this better
+                Text(localized("ui.image_witn_no_frame")) // XXX make this better
             }
         }
     }

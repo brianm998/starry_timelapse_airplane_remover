@@ -26,16 +26,16 @@ struct NewReleaseSheetView: View {
             {
                 VStack {
                     Space(height: 20)
-                    Text("There is a new release of Star available!")
+                    Text(localized("ui.there_is_a_new_release_of_star_available"))
                       .font(.title)
                     Space(height: 10)
-                    Text("You are running Star v\(Config.latestVersion), and Star v\(version) is now available")
+                    Text(localized("ui.new_release_available", Config.latestVersion, version))
                       .font(.title2)
 
                     Space(height: 20)
 
                     if let body = release.body {
-                        Text("Release Notes:")
+                        Text(localized("ui.release_notes"))
                           .font(.title3)
                         ScrollView {
                             Text(body)
@@ -45,14 +45,14 @@ struct NewReleaseSheetView: View {
                     }
 
                     HStack {
-                        Link("See Release on GitHub", destination: release.htmlURL)
+                        Link(localized("ui.see_release_on_github"), destination: release.htmlURL)
                           .font(.title)
                           .foregroundColor(.blue)
                           .underline()
                           .padding()
                         
                         if let url = release.packageURL(for: .gui) {
-                            Link("Download Star v\(version)", destination: url)
+                            Link(localized("ui.download_star", version), destination: url)
                               .font(.title)
                               .foregroundColor(.blue)
                               .underline()
@@ -64,7 +64,7 @@ struct NewReleaseSheetView: View {
                         Button() {
                             self.isVisible = false
                         } label: {
-                            Text("Upgrade Later")
+                            Text(localized("ui.upgrade_later"))
                               .font(.title)
                               .padding(20)
                         }
@@ -77,7 +77,7 @@ struct NewReleaseSheetView: View {
                                 NSApplication.shared.terminate(nil)
                             }
                         } label: {
-                            Text("Quit Star v\(Config.latestVersion)")
+                            Text(localized("ui.quit_star", Config.latestVersion))
                               .font(.title)
                               .padding(20)
                         }
@@ -88,11 +88,11 @@ struct NewReleaseSheetView: View {
                   .frame(minWidth: 800)
             } else {
                 VStack {
-                    Text("There is no new release available")
+                    Text(localized("ui.there_is_no_new_release_available"))
                     Button() {
                         self.isVisible = false
                     } label: {
-                        Text("OK")
+                        Text(localized("ui.ok"))
                           .font(.title)
                     }
                 }

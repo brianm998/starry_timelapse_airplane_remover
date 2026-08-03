@@ -11,8 +11,8 @@ struct RenderAllFramesButton: View {
         }
         
         return Button(action: action) {
-            Text("Render All Frames")
+            Text(localized("ui.render_all_frames"))
         }
-          .help("Render all frames of this sequence with current settings")
+          .help(localized("ui.render_all_frames_of_this_sequence_with"))
     }    
 }

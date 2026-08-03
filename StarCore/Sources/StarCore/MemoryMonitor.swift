@@ -187,12 +187,10 @@ public actor MemoryMonitor {
             postWarning(StarWarning(
               kind: .oversizedReservation,
               severity: .critical,
-              message: "A single step of this run needs \(bytes / (1024*1024))MB, which is more " +
-                       "than the \(budget / (1024*1024))MB star is allowed to use on this " +
-                       "machine, so it is running without a memory limit and could be stopped " +
-                       "by the system.",
-              suggestion: "Reduce the resolution star works at (--keypoint-divisor 1.5) or " +
-                          "raise --max-mat-memory-fraction if this machine has memory to spare."
+              message: localized("warning.oversized_reservation.message",
+                                 bytes / (1024*1024),
+                                 budget / (1024*1024)),
+              suggestion: localized("warning.oversized_reservation.suggestion")
             ))
             return
         }
@@ -304,11 +302,10 @@ public actor MemoryMonitor {
             postWarning(StarWarning(
               kind: .footprintOverBudget,
               severity: .warning,
-              message: "star is using \(footprint / (1024*1024))MB, which is past the " +
-                       "\(budget / (1024*1024))MB it budgeted for this machine. It is pausing " +
-                       "work rather than allocating more.",
-              suggestion: "The run should still finish, more slowly. If it is stopped by the " +
-                          "system, resume it with --keypoint-divisor 1.5."
+              message: localized("warning.footprint_over_budget.message",
+                                 footprint / (1024*1024),
+                                 budget / (1024*1024)),
+              suggestion: localized("warning.footprint_over_budget.suggestion")
             ))
             return "process footprint \(footprint / (1024*1024))MB is already at or past " +
                    "the \(budget / (1024*1024))MB budget — the ledger is under-counting " +
@@ -319,9 +316,8 @@ public actor MemoryMonitor {
             postWarning(StarWarning(
               kind: .lowSystemMemory,
               severity: .warning,
-              message: "This machine has only \(available / (1024*1024))MB of memory free. " +
-                       "star is pausing work rather than making it worse.",
-              suggestion: "Closing other applications will let the run continue at full speed."
+              message: localized("warning.low_system_memory.message", available / (1024*1024)),
+              suggestion: localized("warning.low_system_memory.suggestion")
             ))
             return "only \(available / (1024*1024))MB available system-wide, floor is " +
                    "\(systemFloorBytes / (1024*1024))MB"
@@ -395,10 +391,9 @@ public actor MemoryMonitor {
             postWarning(StarWarning(
               kind: .memoryPressure,
               severity: .critical,
-              message: "The system is low on memory and may stop star to reclaim it. " +
-                       "star is holding \(reality.processFootprint() / (1024*1024))MB.",
-              suggestion: "Closing other applications now may let this run finish. If it is " +
-                          "stopped, resume it and add --keypoint-divisor 1.5 to use less memory."
+              message: localized("warning.memory_pressure.message",
+                                 reality.processFootprint() / (1024*1024)),
+              suggestion: localized("warning.memory_pressure.suggestion")
             ))
         } else {
             Log.i("MemoryMonitor: memory pressure cleared, resuming admissions")

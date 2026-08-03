@@ -8,9 +8,9 @@ struct ReProcessCurrentFrameButton: View {
     var body: some View {
         Group {
             Button(action: action) {
-                Text("Re-Process this frame from the start")
+                Text(localized("ui.re_process_this_frame_from_the_start"))
             }
-              .help("Re-Process this frame from the start")
+              .help(localized("ui.re_process_this_frame_from_the_start"))
         }
     }
 

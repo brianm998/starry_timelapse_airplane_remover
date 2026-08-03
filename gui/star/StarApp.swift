@@ -258,22 +258,26 @@ struct StarApp: App {
         WindowGroup(id: StarApp.blobProcessingStepsWindowName) {
             BlobProcessingView()
               .environment(viewModel)
+              .starLanguage(viewModel.languageCode)
         }
 
         WindowGroup(id: StarApp.alignmentWindowName) {
             AlignmentWindowView()
               .environment(viewModel)
+              .starLanguage(viewModel.languageCode)
         }
 
         WindowGroup(id: StarApp.outlierGroupTableWindowName) {
             OutlierWindowView()
               .environment(viewModel)
+              .starLanguage(viewModel.languageCode)
         }
 
         WindowGroup(id: StarApp.debugWindowName) {
             DebugView()
               .environment(viewModel)
               .environment(loggingViewModel)
+              .starLanguage(viewModel.languageCode)
         }
 
         WindowGroup(id: StarApp.mainWindowName) {
@@ -299,27 +303,28 @@ struct StarApp: App {
               .onChange(of: loggingViewModel.fileLogLevel) {
                   enableFileLogs()
               }
+              .starLanguage(viewModel.languageCode)
         }
         .defaultLaunchBehavior(.presented)
         .commands {
             StarCommands(viewModel: viewModel)
             CommandGroup(after: .windowList) {
                 Divider()  // optional separator
-                Button("Blob Processing Window") {
+                Button(localized("ui.blob_processing_window")) {
                     openWindow(id: StarApp.blobProcessingStepsWindowName)
                 }
                   .keyboardShortcut("p", modifiers: [.option/*.command, .shift*/])
-                Button("Outlier Information Window") {
+                Button(localized("ui.outlier_information_window")) {
                     openWindow(id: StarApp.outlierGroupTableWindowName) 
                 }
                   .keyboardShortcut("o", modifiers: [.option])
 
-                Button("Alignment Information Window") {
+                Button(localized("ui.alignment_information_window")) {
                     openWindow(id: StarApp.alignmentWindowName) 
                 }
                 .keyboardShortcut("a", modifiers: [.option])
 
-                Button("Debug Window") {
+                Button(localized("ui.debug_window")) {
                     openWindow(id: StarApp.debugWindowName) 
                 }
                   .keyboardShortcut("d", modifiers: [.option])
@@ -333,20 +338,41 @@ struct StarApp: App {
                 VStack(spacing: 0) {
                     // maybe add buttons show show the different windows?
                     // maybe show overall progress monitor of some type?
-                    Text("Should really be doing something here")
-                    Text("what exactly?")
-                    Text("not sure")
+                    Text(localized("ui.should_really_be_doing_something_here"))
+                    Text(localized("ui.what_exactly"))
+                    Text(localized("ui.not_sure"))
                 }
             }
         } label: {
-            Label("star", systemImage: "wand.and.stars.inverse")
+            Label(localized("ui.star"), systemImage: "wand.and.stars.inverse")
         }
 
     }
 }
 
+extension View {
+    /// Make a window root follow the language the user picked in Star ▸ Language.
+    ///
+    /// Two separate things, both needed. `.id` forces SwiftUI to rebuild the subtree when the
+    /// language changes: our strings come from `localized(...)`, an ordinary function call that
+    /// SwiftUI cannot see into, so nothing else would tell it that every label on screen is now
+    /// stale. `.environment(\.locale:)` is for what SwiftUI formats itself — numbers, dates,
+    /// and any `Text` still holding a `LocalizedStringKey`.
+    ///
+    /// Layout direction is deliberately *not* flipped for Arabic and Urdu. It would have to be
+    /// done for real — the frame editor, the filmstrip and the horizon painter all position
+    /// content by hand against image coordinates, and mirroring the container without mirroring
+    /// those would put the controls and the image they act on in different places. The text is
+    /// translated and renders right-to-left within each label; the chrome stays where it is.
+    func starLanguage(_ code: String) -> some View {
+        self
+          .id(code)
+          .environment(\.locale, Locale(identifier: code))
+    }
+}
+
 let OUTLIER_WINDOW_PREFIX = "Outliers"
-let OTHER_WINDOW_TITLE = "\(OUTLIER_WINDOW_PREFIX) Group Information"   // XXX make this better
+var OTHER_WINDOW_TITLE: String { localized("ui.outlier_group_information") }
 
 // allow intiazliation of an array with objects of some type that know their index
 // XXX put this somewhere else

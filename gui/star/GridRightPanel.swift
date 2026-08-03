@@ -67,7 +67,7 @@ struct GridRightPanel: View {
     private var thumbnailSizeSection: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading, spacing: 6) {
-            Text("Thumbnail Size")
+            Text(localized("ui.thumbnail_size"))
                 .font(.headline)
                 .foregroundColor(.white)
 
@@ -85,11 +85,11 @@ struct GridRightPanel: View {
     private var horizonSection: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading, spacing: 6) {
-            Text("Display")
+            Text(localized("ui.display"))
                 .font(.headline)
                 .foregroundColor(.white)
 
-            Toggle("Show Horizon Lines", isOn: Binding(
+            Toggle(localized("ui.show_horizon_lines"), isOn: Binding(
                 get: { viewModel.userPreferences.showHorizonOnMainView ?? false },
                 set: { viewModel.userPreferences.showHorizonOnMainView = $0 }
             ))
@@ -97,7 +97,7 @@ struct GridRightPanel: View {
             .font(.caption)
             .foregroundColor(.white)
 
-            Toggle("Show Filmstrip", isOn: $viewModel.showFilmstrip)
+            Toggle(localized("ui.show_filmstrip"), isOn: $viewModel.showFilmstrip)
                 .toggleStyle(.switch)
                 .font(.caption)
                 .foregroundColor(.white)
@@ -110,11 +110,11 @@ struct GridRightPanel: View {
         let frame = viewModel.frames[viewModel.currentIndex]
 
         VStack(alignment: .leading, spacing: 6) {
-            Text("Frame")
+            Text(localized("ui.frame"))
                 .font(.headline)
                 .foregroundColor(.white)
 
-            infoRow("Index", value: "\(viewModel.currentIndex)")
+            infoRow(localized("ui.index"), value: "\(viewModel.currentIndex)")
 
             if let f = frame.frame,
                let url = f.imageAccessor.urlForImage(
@@ -123,12 +123,12 @@ struct GridRightPanel: View {
                  atSize: .original
                )
             {
-                infoRow("File", value: url.lastPathComponent)
+                infoRow(localized("ui.file"), value: url.lastPathComponent)
                     .lineLimit(2)
             }
 
             if let state = frame.frameState {
-                infoRow("State", value: state.shortString)
+                infoRow(localized("ui.state"), value: state.shortString)
                     .foregroundColor(state.color)
             }
         }
@@ -141,24 +141,24 @@ struct GridRightPanel: View {
 
         if frame.outliersLoaded == .loaded {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Outliers")
+                Text(localized("ui.outliers"))
                     .font(.headline)
                     .foregroundColor(.white)
 
                 if let n = frame.frameObserver.numberOfPositiveOutliers {
-                    infoRow("Positive", value: "\(n)")
+                    infoRow(localized("ui.positive"), value: "\(n)")
                         .foregroundColor(n > 0 ? .red : .white)
                 }
                 if let n = frame.frameObserver.numberOfNegativeOutliers {
-                    infoRow("Negative", value: "\(n)")
+                    infoRow(localized("ui.negative"), value: "\(n)")
                         .foregroundColor(n > 0 ? .green : .white)
                 }
                 if let n = frame.frameObserver.numberOfUndecidedOutliers {
-                    infoRow("Undecided", value: "\(n)")
+                    infoRow(localized("ui.undecided"), value: "\(n)")
                         .foregroundColor(n > 0 ? .orange : .white)
                 }
                 if let n = frame.frameObserver.numberOfTrashOutliers {
-                    infoRow("Trash", value: "\(n)")
+                    infoRow(localized("ui.trash"), value: "\(n)")
                         .foregroundColor(n > 0 ? .gray : .white)
                 }
             }
@@ -171,19 +171,19 @@ struct GridRightPanel: View {
         let frame = viewModel.frames[viewModel.currentIndex]
 
         VStack(alignment: .leading, spacing: 6) {
-            Text("Processing")
+            Text(localized("ui.processing"))
                 .font(.headline)
                 .foregroundColor(.white)
 
             switch frame.cleanMethod {
             case .automatic(let useOutliers):
-                infoRow("Mode", value: useOutliers ? "Auto-Selective" : "Automatic")
+                infoRow(localized("ui.mode"), value: useOutliers ? localized("ui.auto_selective") : localized("ui.automatic"))
             case .selective:
-                infoRow("Mode", value: "Selective")
+                infoRow(localized("ui.mode"), value: localized("ui.selective"))
             }
 
             if frame.horizonOverlay != nil {
-                infoRow("Horizon", value: frame.isPendingHorizonRefinement ? "Pending" : "Set")
+                infoRow(localized("ui.horizon"), value: frame.isPendingHorizonRefinement ? localized("ui.pending") : localized("ui.set"))
                     .foregroundColor(frame.isPendingHorizonRefinement ? .orange : .green)
             }
         }
@@ -191,7 +191,7 @@ struct GridRightPanel: View {
         Divider()
             .background(Color.white.opacity(0.2))
 
-        Text("Double-click a thumbnail to edit")
+        Text(localized("ui.double_click_a_thumbnail_to_edit"))
             .font(.caption)
             .foregroundColor(.white.opacity(0.5))
             .multilineTextAlignment(.leading)

@@ -19,12 +19,12 @@ struct BlobProcessingView: View {
                 self.mainView
             } else {
                 VStack {
-                    Text("No Image sequence loaded.")
-                    Text("Load an image sequence in the main star window to see and edit blob processing steps here")
+                    Text(localized("ui.no_image_sequence_loaded"))
+                    Text(localized("ui.load_an_image_sequence_in_the_main_star_2"))
                 }
             }
         }
-          .navigationTitle("Star Blob Processing")
+          .navigationTitle(localized("ui.star_blob_processing"))
           .onAppear {
               Task.detached {
                   let detectionType = await constants.getDetectionType()
@@ -44,12 +44,12 @@ struct BlobProcessingView: View {
 
     var mainView: some View {
         VStack(alignment: .leading) {
-            Text("Blob Processing Steps")
+            Text(localized("ui.blob_processing_steps"))
 
             if let imageSequence = viewModel.imageSequence {
                 @Bindable var imageSequence = imageSequence
                 
-                Picker("Current Detection Type", selection: $imageSequence.detectionType) {
+                Picker(localized("ui.current_detection_type"), selection: $imageSequence.detectionType) {
                     ForEach(DetectionType.allCases, id: \.self) { value in
                         Text(value.rawValue).tag(value)
                     }
@@ -104,11 +104,11 @@ struct BlobProcessingView: View {
                 if steps.count == 0,
                    !stepsLoaded
                 {
-                    Text("You have loaded an empty set of steps")
+                    Text(localized("ui.you_have_loaded_an_empty_set_of_steps"))
                       .foregroundColor(.white)
                       .font(.largeTitle)
                     
-                    Text("Please choose an existing detection type to start from") 
+                    Text(localized("ui.please_choose_an_existing_detection_type_to")) 
 
                     self.customCopyPicker
                 } else {
@@ -121,14 +121,14 @@ struct BlobProcessingView: View {
                     ScrollView {
                         VStack(alignment: .leading) {
                             VStack(alignment: .leading) {
-                                Text("Setup")
+                                Text(localized("ui.setup"))
                                   .foregroundColor(.white)
                                   .font(.largeTitle)
-                                Text("To begin processing each frame we must first:")
-                                Text(" - Create a star aligned image")
-                                Text(" - Subtract the star aligned image from the frame being processed")
-                                Text("Both of these can be loaded from file if they are available from before.")
-                                Text("There are no configurable parameters here")
+                                Text(localized("ui.to_begin_processing_each_frame_we_must_first"))
+                                Text(localized("ui.create_a_star_aligned_image"))
+                                Text(localized("ui.subtract_the_star_aligned_image_from_the"))
+                                Text(localized("ui.both_of_these_can_be_loaded_from_file_if"))
+                                Text(localized("ui.there_are_no_configurable_parameters_here"))
                             }
                               .padding(10)
                               .background(.gray)
@@ -177,7 +177,7 @@ struct BlobProcessingView: View {
                             }
 
                             VStack(alignment: .leading) {
-                                Text("Blob Processing Complete")
+                                Text(localized("ui.blob_processing_complete"))
                                   .foregroundColor(.white)
                                   .font(.largeTitle)
                                 Text("""
@@ -223,8 +223,8 @@ struct BlobProcessingView: View {
     private func smallBlobRemoverView(_ args: SmallBlobRemover.Args,
                                       stepIndex: Int) -> some View
     {
-        StepView(title: "Small Blob Remover",
-                 description: "gets rid of dimmer blobs off by themselves",
+        StepView(title: localized("ui.small_blob_remover"),
+                 description: localized("ui.small_blob_remover_desc"),
                  args: args,
                  array: SmallBlobRemover.Args.ArgType.allCases,
                  stepIndex: stepIndex,
@@ -233,20 +233,20 @@ struct BlobProcessingView: View {
 
     private func applyUserSlicesView() -> some View {
         VStack(alignment: .leading) {
-            Text("Apply User Slices")
+            Text(localized("ui.apply_user_slices"))
               .foregroundColor(.white)
               .font(.title2)
-            Text("Apply any existing user slices to blobs")
+            Text(localized("ui.apply_any_existing_user_slices_to_blobs"))
         }
           .padding(10)
     }
 
     private func compactBlobIdsView() -> some View {
         VStack(alignment: .leading) {
-            Text("Compact Blob Ids")
+            Text(localized("ui.compact_blob_ids"))
               .foregroundColor(.white)
               .font(.title2)
-            Text("Re-Id blobs to free up id space")
+            Text(localized("ui.re_id_blobs_to_free_up_id_space"))
         }
           .padding(10)
     }
@@ -254,7 +254,7 @@ struct BlobProcessingView: View {
     private func findBlobsView(_ args: BlobFinder.Args,
                                stepIndex: Int) -> some View
     {
-        StepView(title: "Initial Blob Detection",
+        StepView(title: localized("ui.initial_blob_detection"),
                  description: """
                    This initial step analyses both the original frame image and the subtraction
                    image to try to find neighboring groups (blobs) of pixels that are brighter
@@ -276,10 +276,10 @@ struct BlobProcessingView: View {
     
     private func blobDupeCheckView(_ step: String) -> some View {
         VStack(alignment: .leading) {
-            Text("Blob Dupe Check")
+            Text(localized("ui.blob_dupe_check"))
               .foregroundColor(.white)
               .font(.title2)
-            Text("look for duplicate blobs, and log them as step \(step) if any are found")
+            Text(localized("ui.duplicate_blob_step", step))
         }
           .padding(10)
     }
@@ -287,8 +287,8 @@ struct BlobProcessingView: View {
     private func linearBlobConnectorView(_ args: LinearBlobConnector.Args,
                                          stepIndex: Int) -> some View
     {
-        let description = "This step recurses on finding nearby blobs to find groups of neighbors in a set.\nIt then tries to combine some of them into a line (if we get a good enough line)"
-        return StepView(title: "Linear Blob Connector",
+        let description = localized("ui.linear_blob_connector_desc")
+        return StepView(title: localized("ui.linear_blob_connector"),
                         description: description,
                         args: args,
                         array: LinearBlobConnector.Args.ArgType.allCases,
@@ -299,8 +299,8 @@ struct BlobProcessingView: View {
     private func linearBlobExtenderView(_ args: LinearBlobExtender.Args,
                                          stepIndex: Int) -> some View
     {
-        let description = "This step looks along the blob line for other nearby blobs"
-        return StepView(title: "Linear Blob Extender",
+        let description = localized("ui.linear_blob_extender_desc")
+        return StepView(title: localized("ui.linear_blob_extender"),
                         description: description,
                         args: args,
                         array: LinearBlobExtender.Args.ArgType.allCases,
@@ -311,8 +311,8 @@ struct BlobProcessingView: View {
     private func blobLineTrimView(_ args: BlobLineTrim.Args,
                                   stepIndex: Int) -> some View
     {
-        StepView(title: "Blob Line Trim",
-                 description: "trim pixels that are too far from a blobs's line",
+        StepView(title: localized("ui.blob_line_trim"),
+                 description: localized("ui.blob_line_trim_desc"),
                  args: args,
                  array: BlobLineTrim.Args.ArgType.allCases,
                  stepIndex: stepIndex,
@@ -321,7 +321,7 @@ struct BlobProcessingView: View {
 
     private func saveView(_ imageType: FrameViewMode) -> some View {
       HStack(alignment: .firstTextBaseline) {
-            Text("Save Image")
+            Text(localized("ui.save_image"))
               .foregroundColor(.white)
               .font(.title2)
             Text(imageType.longName)
@@ -331,7 +331,7 @@ struct BlobProcessingView: View {
 
     private func frameStateView(_ processingState: FrameProcessingState) -> some View {
       HStack(alignment: .firstTextBaseline) {
-            Text("Set Frame Processing State")
+            Text(localized("ui.set_frame_processing_state"))
               .foregroundColor(.white)
               .font(.title2)
             Text(processingState.message)
@@ -342,7 +342,7 @@ struct BlobProcessingView: View {
     private func houghLineMatrixBlobConnectorView(_ args: HoughLineMatrixBlobConnector.Args,
                                                   stepIndex: Int) -> some View
     {
-        StepView(title: "Hough Line Matrix Blob Connector",
+        StepView(title: localized("ui.hough_line_matrix_blob_connector"),
                  description: """
                    Finds lines from the full blob map image,
                    and connects blobs that match those lines.
@@ -398,7 +398,7 @@ struct StepView<T: Hashable>: View {
                        showDisableButton
                     {
                         
-                        Toggle("Disable", isOn: $isDisabled)
+                        Toggle(localized("ui.disable"), isOn: $isDisabled)
                           .toggleStyle(.switch)
                           .onChange(of: isDisabled) { _, newValue in
                               if let customProcessor = DetectionType.custom.blobProcessor as? CustomBlobProcessor
@@ -420,17 +420,17 @@ struct StepView<T: Hashable>: View {
                   .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                   .frame(maxHeight: 10)
-                Text("Parameters which can affect how this step operates:")
+                Text(localized("ui.parameters_which_can_affect_how_this_step"))
                   .fixedSize(horizontal: false, vertical: true)
                 Grid(alignment: .topLeading) {
                     GridRow {
-                        Text("Name")
+                        Text(localized("ui.name"))
                           .foregroundColor(.white)
                           .fixedSize(horizontal: false, vertical: true)
-                        Text("Value")
+                        Text(localized("ui.value"))
                           .foregroundColor(.white)
                           .fixedSize(horizontal: false, vertical: true)
-                        Text("Description")
+                        Text(localized("ui.description"))
                           .foregroundColor(.white)
                           .fixedSize(horizontal: false, vertical: true)
                     }

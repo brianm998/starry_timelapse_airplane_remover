@@ -209,92 +209,91 @@ public enum FrameProcessingState: Codable,
         .complete
       ]
     
+    /// The state in the words the user reads, in the language they read.
+    ///
+    /// Display only — the cli progress bars, the gui filmstrip and the gui frame label all
+    /// show this. Nothing keys off it; `shortString` is what the updatable log dedups on, and
+    /// that one stays English on purpose so a language change does not orphan a live log line.
     public var message: String {
         switch self {
         case .unprocessed:
-            "unprocessed"
+            localized("frame_state.unprocessed")
         case .horizonDetection:
-            "finding horizon"
+            localized("frame_state.horizon_detection")
         case .mergingHorizon:
-            "merging horizon"
+            localized("frame_state.merging_horizon")
         case .horizonDetected:
-            "horizon found"
+            localized("frame_state.horizon_detected")
         case .starKeypoints:
-            "star keypoints"
+            localized("frame_state.star_keypoints")
         case .earthKeypoints:
-            "earth keypoints"
+            localized("frame_state.earth_keypoints")
         case .starKeypointsFound:
-            "found star keypoints"
+            localized("frame_state.star_keypoints_found")
         case .earthKeypointsFound:
-            "found earth keypoints"
+            localized("frame_state.earth_keypoints_found")
         case .starAlignment(let state):
-            "aligning stars \(state)"
+            localized("frame_state.star_alignment", state)
         case .earthAlignment(let state):
-            "aligning earth \(state)"
+            localized("frame_state.earth_alignment", state)
         case .starAlignmentFailed:
-            "star alignment failed"
+            localized("frame_state.star_alignment_failed")
         case .creatingStarAlignedFrame:
-            "creating star aligned frame"
+            localized("frame_state.creating_star_aligned_frame")
         case .creatingEarthAlignedFrame:
-            "creating earth aligned frame"
+            localized("frame_state.creating_earth_aligned_frame")
         case .subtractingNeighbor:
-            "subtracting aligned stars"
+            localized("frame_state.subtracting_neighbor")
         case .assemblingPixels:
-            "assembling pixels"
+            localized("frame_state.assembling_pixels")
         case .sortingPixels:
-            "sorting pixels"
+            localized("frame_state.sorting_pixels")
         case .detectingBlobs:
-            "detecting blobs"
-
+            localized("frame_state.detecting_blobs")
         case .filter1:
-            "filter 1"
+            localized("frame_state.filter", 1)
         case .filter2:
-            "filter 2"
+            localized("frame_state.filter", 2)
         case .filter3:
-            "filter 3"
+            localized("frame_state.filter", 3)
         case .filter4:
-            "filter 4"
+            localized("frame_state.filter", 4)
         case .filter5:
-            "filter 5"
+            localized("frame_state.filter", 5)
         case .filter6:
-            "filter 6"
+            localized("frame_state.filter", 6)
         case .filter7:
-            "filter 7"
+            localized("frame_state.filter", 7)
         case .filter8:
-            "filter 8"
-            
+            localized("frame_state.filter", 8)
         case .firstClassification:
-            "first classification"
-
-        case .readyForInterFrameProcessing: // XXX not covered in progress monitor
-            "ready for inter frame processing"
+            localized("frame_state.first_classification")
+        case .readyForInterFrameProcessing:
+            localized("frame_state.ready_for_inter_frame_processing")
         case .secondClassification:
-            "second classification"
+            localized("frame_state.second_classification")
         case .outlierProcessingComplete:
-            "ready to finish"
+            localized("frame_state.outlier_processing_complete")
         case .finishing:
-            "finishing"
+            localized("frame_state.finishing")
         case .userModified:
-            "classified"
-
-            // XXX what happens here ???
-            
+            localized("frame_state.user_modified")
         case .writingOutlierValues:
-            "writing classification values"
+            localized("frame_state.writing_outlier_values")
         case .waitingToLoadImages:
-            "waiting to load images"
+            localized("frame_state.waiting_to_load_images")
         case .loadingImages:
-            "loading images"
+            localized("frame_state.loading_images")
         case .loadingImages1:
-            "loading images 1"
+            localized("frame_state.loading_images1")
         case .creatingRemovalMask:
-            "creating removal mask"
+            localized("frame_state.creating_removal_mask")
         case .assemblingProcessedFrame:
-            "calculating processed frame"
+            localized("frame_state.assembling_processed_frame")
         case .writingOutputFile:
-            "writing to disk"
+            localized("frame_state.writing_output_file")
         case .complete:
-            "complete"
+            localized("frame_state.complete")
         }
     }
 

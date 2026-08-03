@@ -14,9 +14,9 @@ public enum CannyGradientMethod: InstructionOption,
     public var titleText: String {
         switch self {
         case .L1norm:
-            "L1 Norm"
+            localized("ui.l1_norm")
         case .L2norm:
-            "L2 Norm"
+            localized("ui.l2_norm")
         }
     }
 
@@ -29,14 +29,14 @@ public enum CannyGradientMethod: InstructionOption,
         }
     }
     
-    public static let topTitle = "Canny Gradient Method:"
+    public static var topTitle: String { localized("ui.canny_gradient_method") }
     
     public var helpText: String {
         switch self {
         case .L1norm:
-            "L1 Norm faster, less accurate"
+            localized("ui.l1_norm_help")
         case .L2norm:
-            "L2 Norm more accurate, slightly slower"
+            localized("ui.l2_norm_help")
         }
     }
 
@@ -74,29 +74,29 @@ public enum UseCannyEdgeDetectionForHorizon: InstructionOption,
     public var titleText: String {
         switch self {
         case .yes:
-            "Yes"
+            localized("ui.yes")
         case .no:
-            "No"
+            localized("ui.no")
         }
     }
 
-    public static let topTitle = "Canny Edge Detection:"
+    public static var topTitle: String { localized("ui.canny_edge_detection") }
     
     public var helpText: String {
         switch self {
         case .yes:
-            "Use Canny Edge Detection in addition to Otsu's thresholding for doing horizon detection."
+            localized("ui.canny_yes_help")
         case .no:
-            "Only use Otsu's tresholding when doing horizon detection."
+            localized("ui.canny_no_help")
         }
     }
 
     public var descriptionText: String {
         switch self {
         case .yes:
-            "Using Canny Edge Detection can help find horizons that have bright patches below the horizon.  One example is mountains with snow on them.  Otsu's Thresholding can include these brighter areas in the sky.  Using Canny edge detection in addition to Otsu's Thresholding gives better results in this case"
+            localized("ui.canny_yes_desc")
         case .no:
-            "Using only Otsu's Thresholding for horizon detection can work when the ground is really dark.  This will be a little faster than also doing Canny edge detection."
+            localized("ui.canny_no_desc")
         }
     }
 }
@@ -107,25 +107,30 @@ enum SceneType: String, InstructionOption, Identifiable {
 
     var id: Self { self }
 
-    static let topTitle = "Scene Type:"
+    static var topTitle: String { localized("ui.scene_type") }
     
-    var titleText: String { self.rawValue }
+    var titleText: String {
+        switch self {
+        case .skyHorizon: localized("scene_type.sky_horizon")
+        case .skyOnly:    localized("scene_type.sky_only")
+        }
+    }
 
     var helpText: String {
         switch self {
         case .skyOnly:
-            "Video contains only the sky; no land or horizon line."
+            localized("ui.sky_only_help")
         case .skyHorizon:
-            "Video shows both sky and ground (horizon line visible)."
+            localized("ui.sky_horizon_help")
         }
     }
 
     var descriptionText: String {
         switch self {
         case .skyOnly:
-            "Choose this option if every frame contains only stars, sky glow, and clouds, with no land features. In this mode, frames are aligned only to the stars, which is faster and avoids unnecessary processing."
+            localized("ui.sky_only_desc")
         case .skyHorizon:
-            "Select this if the video includes ground, mountains, treetops, or a clear horizon line. The processor will automatically align the sky to the stars and the ground to the horizon separately. This produces cleaner results in scenes containing both earth and sky."
+            localized("ui.sky_horizon_desc")
         }
     }
 }
@@ -136,25 +141,30 @@ enum CameraMotion: String, InstructionOption, Identifiable {
 
     var id: Self { self }
 
-    static let topTitle = "Camera Motion:"
+    static var topTitle: String { localized("ui.camera_motion") }
     
-    var titleText: String { self.rawValue }
+    var titleText: String {
+        switch self {
+        case .fixed:  localized("camera_motion.fixed")
+        case .moving: localized("camera_motion.moving")
+        }
+    }
 
     var helpText: String {
         switch self {
         case .fixed:
-            "Camera was stationary."
+            localized("ui.camera_fixed_help")
         case .moving:
-            "Camera panned or tracked."
+            localized("ui.camera_moving_help")
         }
     }
 
     var descriptionText: String {
         switch self {
         case .fixed:
-            "Choose this if the tripod/head stayed in one place all night. This gives the processor a stable reference, allowing more accurate alignment of the horizon."
+            localized("ui.camera_fixed_desc")
         case .moving:
-            "Select this if the camera was panning, tracking stars, or following a programmed movement. This helps the processor account for frame-to-frame motion and align images properly even as the scene shifts."
+            localized("ui.camera_moving_desc")
         }
     }
 }
@@ -380,7 +390,7 @@ struct ProcessingSettingsView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
         return VStack {
-              Text("Choose from the following options to let Star know the best way to process this video.")
+              Text(localized("ui.choose_from_the_following_options_to_let"))
                 .lineLimit(nil)
                 .font(.largeTitle)
                 .foregroundColor(.white)
@@ -394,7 +404,7 @@ struct ProcessingSettingsView: View {
                           Color.white
                             .cornerRadius(10)
 
-                          Text("Hide Info")
+                          Text(localized("ui.hide_info"))
                             .font(.body)
                             .padding(10)
                       }
@@ -407,7 +417,7 @@ struct ProcessingSettingsView: View {
                       ZStack {
                           Color.blue
                             .cornerRadius(10)
-                          Text("Show Info")
+                          Text(localized("ui.show_info"))
                             .font(.body)
                             .foregroundColor(.white)
                             .padding(10)
@@ -463,7 +473,7 @@ struct ProcessingSettingsView: View {
                                   self.homographySmoothingEpsilonView
                               }
                           } label: {
-                              Text("Alignment Settings") 
+                              Text(localized("ui.alignment_settings")) 
                                 .font(.title2)
                                 .foregroundColor(.white)
                                 .opacity(0.6)
@@ -506,7 +516,7 @@ struct ProcessingSettingsView: View {
                                   self.horizonSpikeWindowHalfView
                               }
                           } label: {
-                              Text("Horizon Settings")
+                              Text(localized("ui.horizon_settings"))
                                 .font(.title2)
                                 .foregroundColor(.white)
                                 .opacity(0.6)
@@ -529,7 +539,7 @@ struct ProcessingSettingsView: View {
                                   self.horizonFloorView
                               }
                           } label: {
-                              Text("Memory Settings")
+                              Text(localized("ui.memory_settings"))
                                 .font(.title2)
                                 .foregroundColor(.white)
                                 .opacity(0.6)
@@ -552,7 +562,7 @@ struct ProcessingSettingsView: View {
                               Color.white
                                 .cornerRadius(20)
 
-                              Text("Dismiss")
+                              Text(localized("ui.dismiss"))
                                 .font(.title2)
                                 .padding(20)
                           }
@@ -570,7 +580,7 @@ struct ProcessingSettingsView: View {
                               Color.blue
                                 .cornerRadius(20)
 
-                              Text("Process Now")
+                              Text(localized("ui.process_now"))
                                 .font(.title2)
                                 .padding(20)
                                 .foregroundColor(.white)
@@ -590,7 +600,7 @@ struct ProcessingSettingsView: View {
                               Color.blue
                                 .cornerRadius(10)
 
-                              Text(viewModel.showExpertSettings ? "Hide Expert Settings" : "Show Expert Settings")
+                              Text(viewModel.showExpertSettings ? localized("ui.hide_expert_settings") : localized("ui.show_expert_settings"))
                                 .foregroundColor(.white)
                                 .padding(10)
                           }
@@ -676,7 +686,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Neighbor Frame Count:")
+                    Text(localized("ui.neighbor_frame_count"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -715,7 +725,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Static Neighbor Frame Count:")
+                    Text(localized("ui.static_neighbor_frame_count"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -754,7 +764,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Pixel Threshold:")
+                    Text(localized("ui.pixel_threshold"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -791,7 +801,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Ground Horizon Extension:")
+                    Text(localized("ui.ground_horizon_extension"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -827,7 +837,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Sky Horizon Extension:")
+                    Text(localized("ui.sky_horizon_extension"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -863,7 +873,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Max Keypoints:")
+                    Text(localized("ui.max_keypoints"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -907,7 +917,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Keypoint Divisor:")
+                    Text(localized("ui.keypoint_divisor"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -945,7 +955,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Write Debug Images:")
+                    Text(localized("ui.write_debug_images"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -974,7 +984,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Allow Earth Alignment:")
+                    Text(localized("ui.allow_earth_alignment"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1003,7 +1013,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Base Image Threshold:")
+                    Text(localized("ui.base_image_threshold"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1039,7 +1049,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Base Image Dilation Size:")
+                    Text(localized("ui.base_image_dilation_size"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1075,7 +1085,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Horizon Strip Width:")
+                    Text(localized("ui.horizon_strip_width"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1113,7 +1123,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Canny Min Threshold:")
+                    Text(localized("ui.canny_min_threshold"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1151,7 +1161,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Homography Smoothing ε:")
+                    Text(localized("ui.homography_smoothing"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1189,7 +1199,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Canny Max Threshold:")
+                    Text(localized("ui.canny_max_threshold"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1229,7 +1239,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Horizon Shift:")
+                    Text(localized("ui.horizon_shift"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1272,7 +1282,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Reference Horizon Smoothing:")
+                    Text(localized("ui.reference_horizon_smoothing"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1304,7 +1314,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Reference Smoothing Distance:")
+                    Text(localized("ui.reference_smoothing_distance"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1347,7 +1357,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Reference Horizon Brightness Refinement:")
+                    Text(localized("ui.reference_horizon_brightness_refinement"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1379,7 +1389,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Brightness Refinement Search Radius:")
+                    Text(localized("ui.brightness_refinement_search_radius"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1422,7 +1432,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Brightness Refinement Histogram Buckets:")
+                    Text(localized("ui.brightness_refinement_histogram_buckets"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1465,7 +1475,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Reference Horizon Neighbourhood Size:")
+                    Text(localized("ui.reference_horizon_neighbourhood_size"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1505,7 +1515,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Horizon Spike Removal:")
+                    Text(localized("ui.horizon_spike_removal"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1537,7 +1547,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Spike Max Width (columns):")
+                    Text(localized("ui.spike_max_width_columns"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1579,7 +1589,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Spike Max Deviation Fraction:")
+                    Text(localized("ui.spike_max_deviation_fraction"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1621,7 +1631,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Spike Detection Window Half:")
+                    Text(localized("ui.spike_detection_window_half"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1660,7 +1670,7 @@ struct ProcessingSettingsView: View {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Selective Processing Mode:")
+                    Text(localized("ui.selective_processing_mode"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1825,7 +1835,7 @@ extension ProcessingSettingsView {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Memory Budget:")
+                    Text(localized("ui.memory_budget"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1872,7 +1882,7 @@ extension ProcessingSettingsView {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Keypoint Mem ×:")
+                    Text(localized("ui.keypoint_mem"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1923,7 +1933,7 @@ extension ProcessingSettingsView {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Outlier Mem ×:")
+                    Text(localized("ui.outlier_mem"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1971,7 +1981,7 @@ extension ProcessingSettingsView {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Merge Mem ×:")
+                    Text(localized("ui.merge_mem"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -2018,7 +2028,7 @@ extension ProcessingSettingsView {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Horizon Mem ×:")
+                    Text(localized("ui.horizon_mem"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -2067,7 +2077,7 @@ extension ProcessingSettingsView {
             HStack {
                 HStack {
                     Spacer()
-                    Text("Horizon Floor (MB):")
+                    Text(localized("ui.horizon_floor_mb"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -2114,7 +2124,7 @@ struct InstructionGridRow<Content: View, InfoContent: View>: View {
                 Text("ⓘ")
                     .font(.title2)
                     .foregroundColor(showInfo ? .red : .green)
-                    .help(showInfo ? "Hide Information" : "Show Information")
+                    .help(showInfo ? localized("ui.hide_information") : localized("ui.show_information"))
             }
             .buttonStyle(PlainButtonStyle())
 
@@ -2123,7 +2133,7 @@ struct InstructionGridRow<Content: View, InfoContent: View>: View {
                 if showInfo {
                     infoView()
                 } else {
-                    Text("Show Info")
+                    Text(localized("ui.show_info"))
                       .foregroundColor(.white)
                       .opacity(isEnabled ? 1.0 : 0.6)
                       .onTapGesture {

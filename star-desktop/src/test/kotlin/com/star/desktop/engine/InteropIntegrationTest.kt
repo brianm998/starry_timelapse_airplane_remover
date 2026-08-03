@@ -82,8 +82,9 @@ class InteropIntegrationTest {
             return
         }
         withEngine { client ->
-            val hello = client.hello("itest")
+            val hello = client.hello("itest", "en")
             assertTrue(hello.daemonVersion.isNotEmpty(), "Daemon.Hello returned no version")
+            assertEquals("en", hello.locale, "Daemon.Hello did not adopt the locale we asked for")
 
             val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
                 .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).build()
