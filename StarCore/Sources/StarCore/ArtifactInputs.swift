@@ -192,6 +192,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             "keypointDetectionScale":          str(config.keypointDetectionScale),
             "alignmentMaxKeypoints":           str(config.alignmentMaxKeypoints),
             "alignmentGroundHorizonExtension": str(config.alignmentGroundHorizonExtension),
+            "alignmentSkyHorizonExtension":    str(config.alignmentSkyHorizonExtension),
             "alignmentBaseImageDilateSize":    str(config.alignmentBaseImageDilateSize),
             "alignmentBaseImageThresholdValue": str(config.alignmentBaseImageThresholdValue),
             // Decides whether detection is masked with a horizon at all.

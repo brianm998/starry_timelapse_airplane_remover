@@ -77,6 +77,7 @@ final class ArtifactInputsTests: XCTestCase {
         let mutations: [(String, (inout Config) -> Void)] = [
             ("alignmentMaxKeypoints",            { $0.alignmentMaxKeypoints = 4000 }),
             ("alignmentGroundHorizonExtension",  { $0.alignmentGroundHorizonExtension = 250 }),
+            ("alignmentSkyHorizonExtension",     { $0.alignmentSkyHorizonExtension = 0 }),
             ("alignmentBaseImageDilateSize",     { $0.alignmentBaseImageDilateSize = 33 }),
             ("alignmentBaseImageThresholdValue", { $0.alignmentBaseImageThresholdValue = 55 }),
             ("alignmentKeypointDetectionDivisor", { $0.alignmentKeypointDetectionDivisor = 2.0 }),

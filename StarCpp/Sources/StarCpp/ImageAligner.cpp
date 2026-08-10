@@ -713,6 +713,7 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                    AlignmentType alignmentType,
                                    int maxKeypoints, bool writeDebugImages,
                                    int groundHorizonExtension,
+                                   int skyHorizonExtension,
                                    int baseImageDilateSize,
                                    int baseImageThresholdValue,
                                    double detectionScale,
@@ -728,6 +729,59 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             MatWrapperRef gradRef = createGradientMaskIntoSky(horizonMask, groundHorizonExtension);
             horizonMask = gradRef->mat.clone();
             mat_wrapper_release(gradRef);
+        } else if (alignmentType == AlignmentTypeSky && skyHorizonExtension > 0) {
+            // Pull the sky region up and away from the horizon before anything reads it.
+            //
+            // toGray8UWithMask zeroes everything outside this mask, so the horizon
+            // becomes a hard step from lit sky to black.  That step is a strong,
+            // perfectly repeatable edge, and it is locked to the GROUND — the terrain
+            // silhouette, not the stars.  makeStarMask below does not remove it: the
+            // sky just above a horizon is usually the brightest part of a night frame
+            // (twilight glow, light pollution), so it clears the threshold, and the
+            // dilate then grows the detection mask back down across the step.  Any
+            // keypoint SIFT places there votes for a ground-locked homography.
+            //
+            // Eroding the white sky region by this many pixels moves the step up into
+            // sky that the terrain cannot reach.  It also buys some tolerance for a
+            // horizon mask that sits slightly too low, which leaves real lit terrain —
+            // ridgelines, treetops, town glow — inside the sky region at full
+            // brightness.  Only some: the erosion has to exceed the mask's error to
+            // reach past it, so this is margin, not a defence against a bad mask.
+            //
+            // Erosion, not createGradientMaskIntoGround: a gradient would feather the
+            // edge rather than remove it, and toGray8UWithMask treats any non-zero
+            // mask value as "keep", so a feathered mask still admits the whole band.
+            //
+            // Done as a distance transform rather than cv::erode with a disc kernel.
+            // The two agree to 0.0002px on the keypoints they produce — they are asking
+            // the same question, "every sky pixel further than N from any ground pixel"
+            // — but erode walks the whole kernel per pixel, so its cost grows with N²:
+            // it added 0.6s at N=40 and 2.6s at N=80 to a 4240x2832 detection.  The
+            // distance transform is two passes whatever N is, which holds the cost flat
+            // at about 0.2s.
+            //
+            // With no horizon mask the mask is all-255.  distanceTransform measures the
+            // distance to the nearest ZERO pixel and there are none, so nothing is
+            // within N of anything and the mask survives untouched — an unmasked frame
+            // keeps its full frame, edges included.
+            cv::Mat binary;
+            cv::threshold(horizonMask, binary, 0, 255, cv::THRESH_BINARY);
+            cv::Mat dist;
+            cv::distanceTransform(binary, dist, cv::DIST_L2, 3);
+            cv::Mat eroded = (dist > (float)skyHorizonExtension);
+
+            // A sky region thinner than the extension erodes away completely, and an
+            // all-zero mask is worse than no erosion: toGray8UWithMask would ask
+            // minMaxLoc to find the range of an empty selection, and detection would
+            // then run on a frame with nothing left in it.  Keep the un-eroded mask and
+            // say so — a frame that is nearly all ground has little sky to align on
+            // either way, but it should fail on its own merits rather than on this.
+            if (cv::countNonZero(eroded) > 0) {
+                horizonMask = eroded;
+            } else {
+                Log_d("sky horizon extension %d erased the whole sky region, using the "
+                      "horizon mask unchanged", skyHorizonExtension);
+            }
         }
 
         cv::Mat baseImageGray = toGray8UWithMask(baseImage->mat, horizonMask);
