@@ -786,22 +786,45 @@ public struct Config: Codable, Sendable {
     public var alignmentWriteDebugImages: Bool = false
     public var alignmentGroundHorizonExtension: Int = 100 // extend the horizon for ground by this amount to get more keypoints
 
-    /// NOT WIRED UP YET.  Changing it has no effect on anything.
+    /// The opposite of `alignmentGroundHorizonExtension`, and not its mirror: earth
+    /// alignment reaches PAST the horizon for more keypoints, sky alignment pulls AWAY
+    /// from it to refuse some.  `ia_find_features` erodes the sky region of the horizon
+    /// mask by this many pixels before detecting on it.
     ///
-    /// The intended mirror of `alignmentGroundHorizonExtension`: for earth alignment
-    /// `ia_find_features` inverts the horizon mask and runs
-    /// `createGradientMaskIntoSky(mask, groundHorizonExtension)` to reach past the horizon
-    /// for more keypoints, whereas for sky alignment it uses the mask unchanged.  This is
-    /// the amount sky detection would reach down into the ground by, via the
-    /// `createGradientMaskIntoGround` helper that already exists next to that one and is
-    /// already exposed through the bridge.
+    /// What lives in that band is ground-locked, so a sky homography built on it is
+    /// steered by the terrain instead of the stars.  `toGray8UWithMask` zeroes the frame
+    /// outside the mask, which turns the horizon into a hard step from lit sky to black
+    /// — a strong, perfectly repeatable edge — and `makeStarMask` then DILATES the
+    /// bright-pixel mask by `alignmentBaseImageDilateSize`, growing the detection region
+    /// back down across that step.  Thresholding does not save it: the sky just above a
+    /// horizon is usually the brightest part of a night frame.
     ///
-    /// Left in place, with its controls in the gui and star-desktop, because finishing it
-    /// is a deliberate change to how every sky-aligned sequence is aligned and wants
-    /// measuring on real frames rather than being switched on in passing.  Until then it
-    /// is documented here so it reads as unfinished rather than as a bug — and it is
-    /// deliberately absent from `ArtifactInputs`, since a setting that cannot affect an
-    /// artifact must not invalidate one.
+    /// How much this matters depends entirely on how many real stars compete with that
+    /// edge, which is why it was measured on two sequences rather than restored on faith
+    /// (2026-08-10, 4240x2832 frames, `alignmentBaseImageDilateSize` 20):
+    ///
+    /// - A normal starry frame barely notices.  Over 19 frames of `test_a7sii_10`, 2 of
+    ///   38017 sky keypoints landed within 40px of the horizon and none on terrain;
+    ///   per-neighbour deviations moved by <0.01 out of ~13.  SIFT's own contrast test
+    ///   already avoids the bright low-contrast wash near a horizon.
+    /// - A near-starless frame is dominated by it.  On the twilight frame of the
+    ///   `03_21_2026-fx3-2` horizon fixture — bright cloud, no visible stars, lit
+    ///   sagebrush — 145 of 323 keypoints (44.9%) sat ON the terrain and 88.5% within
+    ///   40px of the horizon.  Every one of those 145 was within 20px of the horizon,
+    ///   i.e. exactly the dilate radius, confirming the step edge as the mechanism.
+    ///   At 40 that becomes 0% on terrain — and 351 keypoints rather than 323, because
+    ///   dropping the brightest band also lets `toGray8UWithMask` stretch the real sky
+    ///   over more of the 0-255 range.
+    ///
+    /// So it is close to free insurance: inert when the sky is rich, decisive when it is
+    /// not.  40 is the value the ObjC++ aligner used before the C++ rewrite dropped it,
+    /// and it is enough to clear a 20px dilate with margin.  80 also zeroes the 40px
+    /// band but gives up more sky for no measured gain.  It is not a defence against a
+    /// badly placed mask: with the horizon 100px too low, terrain keypoints survive at
+    /// any setting, because the erosion has to exceed the error to reach past it.
+    ///
+    /// 0 disables it.  Sequences with no horizon are unaffected either way — the mask is
+    /// then all-sky, and nothing is within reach of a ground pixel that does not exist.
     public var alignmentSkyHorizonExtension: Int = 40
     public var alignmentBaseImageDilateSize: Int = 20
     public var alignmentBaseImageThresholdValue: Int = 100

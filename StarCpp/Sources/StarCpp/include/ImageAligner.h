@@ -47,7 +47,15 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                   MatWrapperRef mask, // nullable
                                   AlignmentType alignmentType,
                                   int maxKeypoints, bool writeDebugImages,
+                                  // Earth alignment only: how far past the horizon to
+                                  // reach INTO the sky for more keypoints.
                                   int groundHorizonExtension,
+                                  // Sky alignment only: how many pixels to pull the sky
+                                  // region UP away from the horizon before detecting, so
+                                  // that neither the masked horizon's own step edge nor
+                                  // terrain left inside a slightly-low mask can be
+                                  // detected as stars.  0 disables it.
+                                  int skyHorizonExtension,
                                   int baseImageDilateSize,
                                   int baseImageThresholdValue,
                                   // Fraction of full resolution to detect at; 1.0 (or

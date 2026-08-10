@@ -589,6 +589,7 @@ final public actor FrameAlignmentProcessor {
              maxKeypoints: Int32(config.alignmentMaxKeypoints),
              writeDebugImages: config.alignmentWriteDebugImages,
              groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension),
+             skyHorizonExtension: Int32(config.alignmentSkyHorizonExtension),
              baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
              baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue),
              // A scale, not the divisor — `ia_find_features` treats anything >= 1.0 as

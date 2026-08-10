@@ -48,6 +48,7 @@ public enum ImageAligner {
                                      maxKeypoints: Int32,
                                      writeDebugImages: Bool,
                                      groundHorizonExtension: Int32,
+                                     skyHorizonExtension: Int32,
                                      baseImageDilateSize: Int32,
                                      baseImageThresholdValue: Int32,
                                      detectionScale: Double = 1.0) -> OCVFeatureSet? {
@@ -57,6 +58,7 @@ public enum ImageAligner {
                                         alignmentType, maxKeypoints,
                                         writeDebugImages,
                                         groundHorizonExtension,
+                                        skyHorizonExtension,
                                         baseImageDilateSize,
                                         baseImageThresholdValue,
                                         detectionScale,
