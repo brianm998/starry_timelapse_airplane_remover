@@ -530,14 +530,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var horizonStripWidth: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.horizonStripWidth = horizonStripWidth
-            config.update(realConfig)
-        }
-    }
-
     var useCannyForHorizonDetection: UseCannyEdgeDetectionForHorizon {
         didSet {
             var realConfig = config.config()
@@ -1340,7 +1332,6 @@ public final class ImageSequenceViewModel {
         self.numberStaticNeighborFrames = config.numberStaticNeighborFrames
         self.horizonDetectionEnabled = config.horizonDetectionEnabled
         self.useCannyForHorizonDetection = config.useCannyForHorizonDetection ? .yes : .no
-        self.horizonStripWidth = config.horizonStripWidth
         self.cannyMinThreshold = config.cannyMinThreshold
         self.cannyMaxThreshold = config.cannyMaxThreshold
         self.cannyUseL2Gradient = config.cannyUseL2Gradient ? .L2norm : .L1norm

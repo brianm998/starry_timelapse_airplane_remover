@@ -690,10 +690,12 @@ public struct Config: Codable, Sendable {
     // set to false to fall back to the previous adaptive search approach.
     public var useCombinedHorizonDetection: Bool = true
 
-    // the max size of each strip used to calculate the horizon image.
-    // smaller strips can help reduce noise especially around the edges of the frame
-    // too small and the horizon can get calculated wrong
-    public var horizonStripWidth: Int = 200
+    // Removed: horizonStripWidth.  It sized the strips that `PixelatedImage.horizonMask`
+    // used to Otsu-threshold separately; that step is the `splitIntoMatrix` call still
+    // commented out in Horizon.swift, and since it went the whole bottom crop is
+    // thresholded at once.  Nothing had read the value for some time, but it kept a
+    // control in the gui and in star-desktop that did nothing.  Proto field 32 is
+    // reserved.
 
     // should we use canny edge detection along with otsu for horizon detection?
     // or just otsu?  Defaults to true (use both)
@@ -783,6 +785,23 @@ public struct Config: Codable, Sendable {
     public var alignmentMaxKeypoints: Int = 2000
     public var alignmentWriteDebugImages: Bool = false
     public var alignmentGroundHorizonExtension: Int = 100 // extend the horizon for ground by this amount to get more keypoints
+
+    /// NOT WIRED UP YET.  Changing it has no effect on anything.
+    ///
+    /// The intended mirror of `alignmentGroundHorizonExtension`: for earth alignment
+    /// `ia_find_features` inverts the horizon mask and runs
+    /// `createGradientMaskIntoSky(mask, groundHorizonExtension)` to reach past the horizon
+    /// for more keypoints, whereas for sky alignment it uses the mask unchanged.  This is
+    /// the amount sky detection would reach down into the ground by, via the
+    /// `createGradientMaskIntoGround` helper that already exists next to that one and is
+    /// already exposed through the bridge.
+    ///
+    /// Left in place, with its controls in the gui and star-desktop, because finishing it
+    /// is a deliberate change to how every sky-aligned sequence is aligned and wants
+    /// measuring on real frames rather than being switched on in passing.  Until then it
+    /// is documented here so it reads as unfinished rather than as a bug — and it is
+    /// deliberately absent from `ArtifactInputs`, since a setting that cannot affect an
+    /// artifact must not invalidate one.
     public var alignmentSkyHorizonExtension: Int = 40
     public var alignmentBaseImageDilateSize: Int = 20
     public var alignmentBaseImageThresholdValue: Int = 100
@@ -1004,7 +1023,6 @@ public struct Config: Codable, Sendable {
         self.horizonSpikeMaxDeviationFraction = try c.decodeIfPresent(Double.self, forKey: .horizonSpikeMaxDeviationFraction) ?? self.horizonSpikeMaxDeviationFraction
         self.horizonSpikeWindowHalf = try c.decodeIfPresent(Int.self, forKey: .horizonSpikeWindowHalf) ?? self.horizonSpikeWindowHalf
         self.useCombinedHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCombinedHorizonDetection) ?? self.useCombinedHorizonDetection
-        self.horizonStripWidth = try c.decodeIfPresent(Int.self, forKey: .horizonStripWidth) ?? self.horizonStripWidth
         self.useCannyForHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCannyForHorizonDetection) ?? self.useCannyForHorizonDetection
         self.cannyMinThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMinThreshold) ?? self.cannyMinThreshold
         self.cannyMaxThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMaxThreshold) ?? self.cannyMaxThreshold

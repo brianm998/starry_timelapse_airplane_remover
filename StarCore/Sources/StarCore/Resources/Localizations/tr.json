@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Ufuk ayarları",
   "ui.horizon_shift": "Ufuk kaydırma:",
   "ui.horizon_spike_removal": "Ufuk çıkıntısı kaldırma:",
-  "ui.horizon_strip_width": "Ufuk şeridi genişliği:",
   "ui.hough_line_arguments": "Hough çizgisi değiştirgeleri",
   "ui.hough_line_matrix_blob_connector": "Hough çizgi matrisi leke bağlayıcı",
   "ui.hough_lines_for_the_selected_outlier": "Seçili aykırının Hough çizgileri",

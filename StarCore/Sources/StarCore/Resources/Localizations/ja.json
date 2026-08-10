@@ -354,7 +354,6 @@
   "ui.horizon_settings": "地平線の設定",
   "ui.horizon_shift": "地平線のシフト:",
   "ui.horizon_spike_removal": "地平線のスパイク除去:",
-  "ui.horizon_strip_width": "地平線ストリップの幅:",
   "ui.hough_line_arguments": "ハフ線の引数",
   "ui.hough_line_matrix_blob_connector": "ハフ線行列によるブロブ接続",
   "ui.hough_lines_for_the_selected_outlier": "選択した外れ値のハフ線",

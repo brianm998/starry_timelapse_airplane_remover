@@ -106,6 +106,25 @@ final class ConfigRoundTripTests: XCTestCase {
         XCTAssertNil(decoded.finalOutputDir)
     }
 
+    /// And the other direction: a config.json from *after* a property was removed still has
+    /// to decode, ignoring the key it no longer knows.
+    ///
+    /// Every sequence anyone has temp files for carries `horizonStripWidth`, which was
+    /// removed once it turned out nothing read it. If decoding rejected unknown keys, all
+    /// of those would stop resuming — so this pins the tolerance rather than leaving it to
+    /// a `JSONDecoder` default that a future custom decoder could quietly change.
+    func testAConfigCarryingARemovedKeyStillDecodes() throws {
+        let json = #"""
+          {"imageSequenceDirname":"seq","imageSequencePath":"/tmp",
+           "horizonStripWidth":1234,"alignmentMaxKeypoints":1500}
+          """#
+        let decoded = try JSONDecoder().decode(Config.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded.imageSequenceDirname, "seq")
+        XCTAssertEqual(decoded.alignmentMaxKeypoints, 1500,
+                       "the keys that still exist have to be read as usual")
+    }
+
     /// The specific failure that was observed, stated on its own so a regression names
     /// itself: a run told where to put its finals has to still know on resume.
     func testFinalOutputDirSurvivesResume() throws {

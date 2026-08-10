@@ -354,7 +354,6 @@
   "ui.horizon_settings": "क्षितिज सेटिंग",
   "ui.horizon_shift": "क्षितिज खिसकाव:",
   "ui.horizon_spike_removal": "क्षितिज स्पाइक हटाना:",
-  "ui.horizon_strip_width": "क्षितिज पट्टी की चौड़ाई:",
   "ui.hough_line_arguments": "हफ़ रेखा तर्क",
   "ui.hough_line_matrix_blob_connector": "हफ़ रेखा मैट्रिक्स ब्लॉब कनेक्टर",
   "ui.hough_lines_for_the_selected_outlier": "चयनित आउटलायर की हफ़ रेखाएँ",

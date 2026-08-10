@@ -124,10 +124,9 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         inputs["horizonSearchCropCount2"]    = str(config.horizonSearchCropCount2)
         inputs["horizonSearchNarrowingRange"] = str(config.horizonSearchNarrowingRange)
         inputs["horizonSearchSize"]          = str(config.horizonSearchSize)
-        // Not horizonStripWidth: nothing reads it.  Not horizonVerticalShiftAmount
-        // either — it shifts the mask when compositing sky over earth in
-        // `createStarAlignedSubtractedImage`, well downstream of the mask itself, so a
-        // change to it must not invalidate horizon detection.
+        // Not horizonVerticalShiftAmount — it shifts the mask when compositing sky over
+        // earth in `createStarAlignedSubtractedImage`, well downstream of the mask
+        // itself, so a change to it must not invalidate horizon detection.
         // The effective grids, not the range/count pairs they come from: two different
         // range/count pairs that produce the same grid are the same input.
         inputs["dpHorizonSmoothnessLambdaValues"] = str(config.dpHorizonSmoothnessLambdaValues)

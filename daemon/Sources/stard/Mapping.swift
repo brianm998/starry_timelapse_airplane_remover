@@ -227,7 +227,6 @@ enum Mapping {
         out.horizonSpikeMaxWidth = Int32(c.horizonSpikeMaxWidth)
         out.horizonSpikeMaxDeviationFraction = c.horizonSpikeMaxDeviationFraction
         out.horizonSpikeWindowHalf = Int32(c.horizonSpikeWindowHalf)
-        out.horizonStripWidth = Int32(c.horizonStripWidth)
         out.useCannyForHorizonDetection = c.useCannyForHorizonDetection
         out.cannyMinThreshold = c.cannyMinThreshold
         out.cannyMaxThreshold = c.cannyMaxThreshold
@@ -267,7 +266,6 @@ enum Mapping {
         if p.hasHorizonSpikeMaxWidth { c.horizonSpikeMaxWidth = Int(p.horizonSpikeMaxWidth) }
         if p.hasHorizonSpikeMaxDeviationFraction { c.horizonSpikeMaxDeviationFraction = p.horizonSpikeMaxDeviationFraction }
         if p.hasHorizonSpikeWindowHalf { c.horizonSpikeWindowHalf = Int(p.horizonSpikeWindowHalf) }
-        if p.hasHorizonStripWidth { c.horizonStripWidth = Int(p.horizonStripWidth) }
         if p.hasUseCannyForHorizonDetection { c.useCannyForHorizonDetection = p.useCannyForHorizonDetection }
         if p.hasCannyMinThreshold { c.cannyMinThreshold = p.cannyMinThreshold }
         if p.hasCannyMaxThreshold { c.cannyMaxThreshold = p.cannyMaxThreshold }

@@ -354,7 +354,6 @@
   "ui.horizon_settings": "地平线设置",
   "ui.horizon_shift": "地平线偏移：",
   "ui.horizon_spike_removal": "地平线尖刺去除：",
-  "ui.horizon_strip_width": "地平线条带宽度：",
   "ui.hough_line_arguments": "霍夫直线参数",
   "ui.hough_line_matrix_blob_connector": "霍夫直线矩阵斑点连接器",
   "ui.hough_lines_for_the_selected_outlier": "所选离群点的霍夫直线",

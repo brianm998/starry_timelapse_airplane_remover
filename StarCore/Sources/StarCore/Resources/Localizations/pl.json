@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Ustawienia horyzontu",
   "ui.horizon_shift": "Przesunięcie horyzontu:",
   "ui.horizon_spike_removal": "Usuwanie szpilek horyzontu:",
-  "ui.horizon_strip_width": "Szerokość pasa horyzontu:",
   "ui.hough_line_arguments": "Parametry linii Hougha",
   "ui.hough_line_matrix_blob_connector": "Łącznik plam na macierzy linii Hougha",
   "ui.hough_lines_for_the_selected_outlier": "Linie Hougha dla zaznaczonej odstającej",

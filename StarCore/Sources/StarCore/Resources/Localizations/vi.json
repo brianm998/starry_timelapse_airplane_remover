@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Cài đặt đường chân trời",
   "ui.horizon_shift": "Dịch đường chân trời:",
   "ui.horizon_spike_removal": "Loại bỏ gai đường chân trời:",
-  "ui.horizon_strip_width": "Bề rộng dải đường chân trời:",
   "ui.hough_line_arguments": "Tham số đường Hough",
   "ui.hough_line_matrix_blob_connector": "Bộ nối đốm theo ma trận đường Hough",
   "ui.hough_lines_for_the_selected_outlier": "Đường Hough của ngoại lai đã chọn",

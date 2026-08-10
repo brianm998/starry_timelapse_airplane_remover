@@ -192,7 +192,6 @@ struct ProcessingSettingsView: View {
     @State private var showCannyL2GradientView = false
     @State private var showHorizonVerticalShiftAmountView = false
 
-    @State private var showHorizonStripInfo = false
 
     @State private var showAlignmentMaxKeypointsInfo = false
     @State private var showAlignmentGroundHorizonExtensionInfo = false
@@ -234,7 +233,7 @@ struct ProcessingSettingsView: View {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
         showAutoPreservationMethodInfo || showProcessFramesInfo ||
         showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo ||
-        showUseCannyInfo || showHorizonStripInfo || showCannyMinThresholdView ||
+        showUseCannyInfo || showCannyMinThresholdView ||
         showCannyMaxThresholdView || showCannyL2GradientView ||
         showStaticNeighborFrameInfo || showHorizonVerticalShiftAmountView ||
         showMinAlignmentFramesInfo ||
@@ -281,7 +280,6 @@ struct ProcessingSettingsView: View {
         showStaticNeighborFrameInfo = true
         showPixelThresholdInfo = true
         showProcessingModeInfo = true
-        showHorizonStripInfo = true
         showUseCannyInfo = true
         showCannyMinThresholdView = true
         showCannyMaxThresholdView = true
@@ -329,7 +327,6 @@ struct ProcessingSettingsView: View {
         showMinAlignmentFramesInfo = false        
         showStaticNeighborFrameInfo = false
         showPixelThresholdInfo = false
-        showHorizonStripInfo = false
         showProcessingModeInfo = false
         showUseCannyInfo = false
         showCannyMinThresholdView = false
@@ -483,8 +480,6 @@ struct ProcessingSettingsView: View {
                           Divider()
                           DisclosureGroup {
                               Grid {
-                                  self.horizonStripWidthView
-                                  Divider()
                                   self.useCannyEdgeDetectionGridRow
                                   Divider()
                                   self.cannyMinThresholdView
@@ -1071,43 +1066,6 @@ struct ProcessingSettingsView: View {
                 }
             }
         }
-    }
-
-    private var horizonStripWidthView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showHorizonStripInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            When Star is calculating the horizon for a frame, the Otsu Thresholding works better when the image is split up into strips of a smaller width than the full image frame.
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text(localized("ui.horizon_strip_width"))
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    EditableNumberView(
-                      value: $viewModel.horizonStripWidth,
-                      minValue: 1,
-                      maxValue: 8000,
-                      fullTextProvider: { _ in "" },
-                      prefixText: "",
-                      suffixTextProvider: { _ in "" },
-                      textColor: .white,
-                      focusedField: $focusedField,
-                      focusField: .horizonStripWidth,
-                      alwaysOpen: true            
-                    )
-                    Spacer()
-                }
-            }
-        }
-          .disabled(viewModel.sceneType == .skyOnly)
     }
 
     private var cannyMinThresholdView: some View {

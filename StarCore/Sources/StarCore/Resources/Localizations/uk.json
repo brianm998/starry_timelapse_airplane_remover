@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Параметри горизонту",
   "ui.horizon_shift": "Зсув горизонту:",
   "ui.horizon_spike_removal": "Вилучення сплесків горизонту:",
-  "ui.horizon_strip_width": "Ширина смуги горизонту:",
   "ui.hough_line_arguments": "Параметри лінії Гафа",
   "ui.hough_line_matrix_blob_connector": "Зʼєднувач плям за матрицею ліній Гафа",
   "ui.hough_lines_for_the_selected_outlier": "Лінії Гафа для вибраного викиду",

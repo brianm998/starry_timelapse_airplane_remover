@@ -354,7 +354,6 @@
   "ui.horizon_settings": "দিগন্ত সেটিংস",
   "ui.horizon_shift": "দিগন্ত সরানো:",
   "ui.horizon_spike_removal": "দিগন্তের স্পাইক অপসারণ:",
-  "ui.horizon_strip_width": "দিগন্ত স্ট্রিপের প্রস্থ:",
   "ui.hough_line_arguments": "হাফ লাইন আর্গুমেন্ট",
   "ui.hough_line_matrix_blob_connector": "হাফ লাইন ম্যাট্রিক্স ব্লব সংযোজক",
   "ui.hough_lines_for_the_selected_outlier": "নির্বাচিত আউটলায়ারের হাফ লাইন",

@@ -354,7 +354,6 @@
   "ui.horizon_settings": "การตั้งค่าเส้นขอบฟ้า",
   "ui.horizon_shift": "การเลื่อนเส้นขอบฟ้า:",
   "ui.horizon_spike_removal": "การกำจัดหนามของเส้นขอบฟ้า:",
-  "ui.horizon_strip_width": "ความกว้างของแถบเส้นขอบฟ้า:",
   "ui.hough_line_arguments": "พารามิเตอร์เส้นฮัฟ",
   "ui.hough_line_matrix_blob_connector": "ตัวเชื่อมก้อนด้วยเมทริกซ์เส้นฮัฟ",
   "ui.hough_lines_for_the_selected_outlier": "เส้นฮัฟของค่าผิดปกติที่เลือก",

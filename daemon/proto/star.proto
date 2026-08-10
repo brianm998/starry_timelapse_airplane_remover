@@ -143,7 +143,12 @@ message Config {
   optional int32  horizon_spike_max_width                              = 29;
   optional double horizon_spike_max_deviation_fraction                 = 30;
   optional int32  horizon_spike_window_half                            = 31;
-  optional int32  horizon_strip_width                                  = 32;
+  // 32 was horizon_strip_width, which sized the strips that the Otsu horizon pass
+  // thresholded separately. That step went when the whole bottom crop started being
+  // thresholded at once, leaving the field read by nobody and a control in two
+  // clients that did nothing. Reserved so no future field can reuse the number and
+  // be misread by a client built against the old schema.
+  reserved 32;
   optional bool   use_canny_for_horizon_detection                      = 33;
   optional double canny_min_threshold                                  = 34;
   optional double canny_max_threshold                                  = 35;

@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Horizoninstellingen",
   "ui.horizon_shift": "Horizonverschuiving:",
   "ui.horizon_spike_removal": "Verwijderen van horizonpieken:",
-  "ui.horizon_strip_width": "Breedte van de horizonstrook:",
   "ui.hough_line_arguments": "Argumenten van de Hough-lijn",
   "ui.hough_line_matrix_blob_connector": "Vlekkenverbinder via Hough-lijnmatrix",
   "ui.hough_lines_for_the_selected_outlier": "Hough-lijnen van de geselecteerde uitschieter",

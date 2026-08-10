@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Nastavení horizontu",
   "ui.horizon_shift": "Posun horizontu:",
   "ui.horizon_spike_removal": "Odstranění špiček horizontu:",
-  "ui.horizon_strip_width": "Šířka pásu horizontu:",
   "ui.hough_line_arguments": "Parametry Houghovy přímky",
   "ui.hough_line_matrix_blob_connector": "Spojovač skvrn podle matice Houghových přímek",
   "ui.hough_lines_for_the_selected_outlier": "Houghovy přímky pro vybranou odlehlou hodnotu",

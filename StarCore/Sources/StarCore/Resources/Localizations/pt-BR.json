@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Ajustes do horizonte",
   "ui.horizon_shift": "Deslocamento do horizonte:",
   "ui.horizon_spike_removal": "Remoção de picos do horizonte:",
-  "ui.horizon_strip_width": "Largura da faixa do horizonte:",
   "ui.hough_line_arguments": "Argumentos da linha de Hough",
   "ui.hough_line_matrix_blob_connector": "Conector de manchas por matriz de linhas de Hough",
   "ui.hough_lines_for_the_selected_outlier": "Linhas de Hough do discrepante selecionado",

@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Réglages de l'horizon",
   "ui.horizon_shift": "Décalage de l'horizon :",
   "ui.horizon_spike_removal": "Suppression des pics d'horizon :",
-  "ui.horizon_strip_width": "Largeur de la bande d'horizon :",
   "ui.hough_line_arguments": "Arguments de la ligne de Hough",
   "ui.hough_line_matrix_blob_connector": "Connecteur de taches par matrice de lignes de Hough",
   "ui.hough_lines_for_the_selected_outlier": "Lignes de Hough de l'aberrant sélectionné",

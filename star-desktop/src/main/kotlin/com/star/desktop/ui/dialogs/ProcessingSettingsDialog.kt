@@ -244,7 +244,6 @@ internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
 )
 
 internal val HORIZON_FIELDS: List<ExpertField> = listOf(
-    IntField("Strip width", { it.horizonStripWidth }, { b, v -> b.setHorizonStripWidth(v) }, 1, 8000, { it.hasHorizonStripWidth() }),
     BoolField("Canny edge detection", { it.useCannyForHorizonDetection }, { b, v -> b.setUseCannyForHorizonDetection(v) }, { it.hasUseCannyForHorizonDetection() }),
     DoubleField("Canny min threshold", { it.cannyMinThreshold }, { b, v -> b.setCannyMinThreshold(v) }, { it.hasCannyMinThreshold() }),
     DoubleField("Canny max threshold", { it.cannyMaxThreshold }, { b, v -> b.setCannyMaxThreshold(v) }, { it.hasCannyMaxThreshold() }),

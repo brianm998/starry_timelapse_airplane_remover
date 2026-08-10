@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Horizonteinstellungen",
   "ui.horizon_shift": "Horizontverschiebung:",
   "ui.horizon_spike_removal": "Entfernung von Horizontspitzen:",
-  "ui.horizon_strip_width": "Breite des Horizontstreifens:",
   "ui.hough_line_arguments": "Argumente der Hough-Linie",
   "ui.hough_line_matrix_blob_connector": "Fleckenverbinder über Hough-Linienmatrix",
   "ui.hough_lines_for_the_selected_outlier": "Hough-Linien für den ausgewählten Ausreißer",

@@ -10,7 +10,6 @@ enum FocusedField: Hashable {
     case alignmentKeypointDivisor
     case pixelThreshold
     case maxZoomLevel
-    case horizonStripWidth
     case cannyMinThreshold
     case cannyMaxThreshold
     case maxConcurrentHorizons

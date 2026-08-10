@@ -354,7 +354,6 @@
   "ui.horizon_settings": "Pengaturan horizon",
   "ui.horizon_shift": "Pergeseran horizon:",
   "ui.horizon_spike_removal": "Penghapusan lonjakan horizon:",
-  "ui.horizon_strip_width": "Lebar pita horizon:",
   "ui.hough_line_arguments": "Argumen garis Hough",
   "ui.hough_line_matrix_blob_connector": "Penyambung bercak matriks garis Hough",
   "ui.hough_lines_for_the_selected_outlier": "Garis Hough untuk pencilan terpilih",
