@@ -67,6 +67,13 @@ public struct StarWarning: Sendable, Codable, Equatable {
         /// The output volume does not obviously have room for what this run will produce.
         /// An estimate, posted before the run starts.
         case lowDiskSpace
+
+        /// A setting that feeds a cached stage changed since this sequence was processed,
+        /// so star is rebuilding that stage — and, where keypoints are involved, throwing
+        /// away the stored alignment and the frames rendered from it.  Worth telling the
+        /// user about because it is the one kind here that discards work they can see:
+        /// output frames that existed a moment ago are now going to be re-rendered.
+        case artifactsInvalidated
     }
 
     /// How bad it is.  `critical` means "this run is in real danger of being killed";
@@ -127,6 +134,7 @@ public struct StarWarning: Sendable, Codable, Equatable {
         case .previousRunDied:      return localized("warning.title.previous_run_died")
         case .outputWriteFailed:    return localized("warning.title.output_write_failed")
         case .lowDiskSpace:         return localized("warning.title.low_disk_space")
+        case .artifactsInvalidated: return localized("warning.title.artifacts_invalidated")
         }
     }
 

@@ -169,6 +169,193 @@ public final actor FrameGraphBuilder {
         }
     }
     
+    /// Decide which cached stages this run may no longer reuse, and undo the work that
+    /// depended on them.
+    ///
+    /// The skip predicates ask only whether an artifact exists, which is as strong as the
+    /// loads they replaced but means a settings change had no effect on an
+    /// already-processed sequence: raising `alignmentMaxKeypoints` left every frame with
+    /// its old feature file.  `ArtifactInputs` closes that by recording what each stage
+    /// was built with; anything that differs makes that stage — and everything downstream
+    /// of it — ineligible for reuse.
+    ///
+    /// A stale artifact is deleted, not merely left unused.
+    ///
+    /// Declining to reuse it here is not enough, and that mistake is worth recording: the
+    /// loaders reuse whatever is on disk independently of this. `loadOrCreateOCVFeatures`
+    /// returns the file if it can parse it, and `KeypointOp.hasWorkToDo()` skips on the
+    /// file existing — so a stale feature file that is left in place gets loaded by the
+    /// homography stage anyway, and the settings change still does nothing. Measured that
+    /// exact outcome before deleting: the keypoint files came out byte-identical after
+    /// dropping `alignmentMaxKeypoints` from 2000 to 600.
+    ///
+    /// Deleting is also what makes an interrupted run consistent rather than mixed. Every
+    /// artifact is a regenerable cache under `star_temp_*`, and the frames whose rebuild
+    /// this run does not reach simply have none — so the next run builds them from the
+    /// current settings instead of finding old ones and trusting them.
+    ///
+    /// Confined to the frames this run will actually rebuild. Deleting the whole
+    /// sequence's artifacts when asked to process a hundred frames of it would throw away
+    /// work this run has no intention of redoing.
+    ///
+    /// The alignment products go too, and they are the reason this warns the user rather
+    /// than only logging: a stored homography was fitted to the old keypoints and
+    /// `homography.db` is keyed by frame index alone, so there is no version of it to
+    /// keep. `invalidateStarAlignmentIfExists` drops it along with the images derived from
+    /// it, which includes rendered output the user can see.
+    private func invalidateStaleArtifacts(
+      frames: [FrameAirplaneRemover],
+      range: FrameGraphRange,
+      framesByIndex: [Int: FrameAirplaneRemover],
+      config: Config
+    ) async {
+        let current = ArtifactInputs.current(from: config)
+        let stored = ArtifactInputs.load(fromTempOutputPath: config.tempOutputPath)
+        let stale = current.staleStages(comparedTo: stored)
+
+        guard !stale.isEmpty, let stored else {
+            if stored == nil {
+                // Every sequence processed before this existed is in this state.  Adopt
+                // the current settings rather than assuming the worst — see
+                // `staleStages(comparedTo:)`.
+                Log.i("no artifact input record in \(config.tempOutputPath), recording " +
+                      "this run's settings without invalidating anything")
+            }
+            persistArtifactInputs(current,
+                                  toTempOutputPath: config.tempOutputPath,
+                                  range: range,
+                                  frames: frames)
+            return
+        }
+
+        // Which settings, not just which stages: a run about to discard alignment should
+        // say what it is doing that for.
+        let differences = current.differences(from: stored)
+        for stage in ArtifactStage.allCases {
+            guard let changes = differences[stage] else { continue }
+            // Truncated, because a mode flag flipping brings a dozen settings into the
+            // record with it and the whole list buries the one that matters.
+            // `differences` orders the settings that actually moved first, so the head of
+            // the list is the informative part.
+            let shown = 4
+            let described = changes.count > shown
+              ? changes.prefix(shown).joined(separator: ", ")
+                  + ", and \(changes.count - shown) more"
+              : changes.joined(separator: ", ")
+            Log.i("\(stage.logDescription) settings changed: \(described)")
+        }
+        let described = ArtifactStage.allCases
+          .filter { stale.contains($0) }
+          .map { $0.logDescription }
+          .joined(separator: ", ")
+        Log.i("rebuilding \(described) — stages downstream of a change are stale too, " +
+              "since their inputs came from the old settings")
+
+        // Same ranges the reuse survey uses, so a deleted artifact is always one this run
+        // goes on to rebuild.
+        if stale.contains(.horizon) {
+            var deleted = 0
+            for frameIndex in range.horizon {
+                guard let frame = framesByIndex[frameIndex] else { continue }
+                guard frame.horizonMaskExistsOnDisk() else { continue }
+                frame.imageAccessor.deleteImages(frameIndex: frameIndex,
+                                                 ofTypes: [.horizon],
+                                                 atSizes: [.original, .preview])
+                deleted += 1
+            }
+            Log.i("deleted \(deleted) stale horizon mask(s)")
+        }
+        if stale.contains(.mergedHorizon) {
+            var deleted = 0
+            for frameIndex in range.keypoint {
+                guard let frame = framesByIndex[frameIndex] else { continue }
+                guard frame.mergedHorizonMaskExistsOnDisk() else { continue }
+                frame.imageAccessor.deleteImages(frameIndex: frameIndex,
+                                                 ofTypes: [.mergedHorizon],
+                                                 atSizes: [.original, .preview])
+                deleted += 1
+            }
+            Log.i("deleted \(deleted) stale merged horizon mask(s)")
+        }
+        if stale.contains(.keypoints) {
+            // Both alignment types, whether or not this run uses earth alignment: an
+            // earth feature file left behind is just as stale as the sky one beside it.
+            var deleted = 0
+            for frameIndex in range.keypoint {
+                for type in [FrameViewMode.starAligned, .earthAligned] {
+                    guard let path = config.keypointPath(frameIndex: frameIndex,
+                                                         ofType: type),
+                          FileManager.default.fileExists(atPath: path)
+                    else { continue }
+                    do {
+                        try FileManager.default.removeItem(atPath: path)
+                        deleted += 1
+                    } catch {
+                        // Not fatal, but it does mean this frame will reuse a stale file,
+                        // so it is worth more than a debug line.
+                        Log.w("could not delete stale \(path): \(error)")
+                    }
+                }
+            }
+            // The in-memory cache is keyed by that same path, so a hit there would serve
+            // the file this just deleted for the rest of the process.
+            await keypointCache.clear()
+            Log.i("deleted \(deleted) stale keypoint file(s) and cleared the keypoint cache")
+
+            var invalidated = 0
+            for frame in frames where range.output.contains(frame.frameIndex) {
+                if (try? await frame.invalidateStarAlignmentIfExists()) == true {
+                    invalidated += 1
+                }
+            }
+            if invalidated > 0 {
+                Log.i("discarded the stored homography and the images derived from it " +
+                      "for \(invalidated) frame(s); they will be re-aligned and re-rendered")
+                await StarWarnings.shared.post(StarWarning(
+                  kind: .artifactsInvalidated,
+                  severity: .warning,
+                  message: localized("warning.artifacts_invalidated.message",
+                                     invalidated),
+                  suggestion: localized("warning.artifacts_invalidated.suggestion")
+                ))
+            }
+        }
+
+        persistArtifactInputs(current,
+                              toTempOutputPath: config.tempOutputPath,
+                              range: range,
+                              frames: frames)
+    }
+
+    /// Record this run's settings — but only when it is going to cover the whole
+    /// sequence.
+    ///
+    /// The record has no per-frame granularity, so writing it after a partial run would
+    /// claim the new settings for frames this run never touched, and their stale
+    /// artifacts would be reused forever after.  Leaving it means the next run sees the
+    /// same change and rebuilds the rest; the cost is that the frames this run already
+    /// rebuilt get rebuilt again, which is the safe direction to be wrong in.
+    private func persistArtifactInputs(
+      _ inputs: ArtifactInputs,
+      toTempOutputPath tempOutputPath: String,
+      range: FrameGraphRange,
+      frames: [FrameAirplaneRemover]
+    ) {
+        guard range.output.count == frames.count else {
+            Log.i("processing \(range.output.count) of \(frames.count) frames, so not " +
+                  "recording these settings yet — a partial run would claim them for " +
+                  "frames it never rebuilt")
+            return
+        }
+        do {
+            try inputs.save(toTempOutputPath: tempOutputPath)
+        } catch {
+            // Not fatal: the cost is that the next run re-detects the same change and
+            // rebuilds again, which is wasteful rather than wrong.
+            Log.w("could not record artifact input settings: \(error)")
+        }
+    }
+
     public func build(
       frames: [FrameAirplaneRemover],
       startIndex: Int = 0,
@@ -304,9 +491,17 @@ public final actor FrameGraphBuilder {
         // for that whole sequence.  Frames whose artifact is present get no op at all,
         // and `AsyncOperation.hasWorkToDo()` is the backstop for the ops that are built.
         //
-        // Existence, not validity — see the note on the predicates in
-        // FrameAirplaneRemover.  These skips are exactly as strong as the loads they
-        // replace, which reused whatever was on disk too.
+        // Before the survey, and deliberately by deleting rather than by handing this a
+        // list to ignore: a file whose settings have changed is removed, so every
+        // existence check below — and every existence check in the loaders and in
+        // `hasWorkToDo()`, which this cannot reach — agrees without being told.
+        await invalidateStaleArtifacts(
+          frames: frames,
+          range: range,
+          framesByIndex: framesByIndex,
+          config: config
+        )
+
         var haveHorizon:        Set<Int> = []
         var haveMergedHorizon:  Set<Int> = []
         var haveSkyKeypoints:   Set<Int> = []

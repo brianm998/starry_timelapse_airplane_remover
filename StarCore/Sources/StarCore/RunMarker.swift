@@ -169,7 +169,13 @@ public struct RunMarker: Codable, Sendable, Equatable {
         // Disk, not memory. Blaming an out-of-space run on RAM would send the user to
         // entirely the wrong remedy — and `outputWriteFailed` in particular means the run
         // was reported properly at the time, so there is nothing here to re-diagnose.
-        case .outputWriteFailed, .lowDiskSpace, .previousRunDied, .none:
+        //
+        // `artifactsInvalidated` is neither: it reports a settings change, says nothing
+        // about the machine, and is routine rather than a symptom. It can easily be the
+        // last warning a run issued — it is posted early — so treating it as evidence of
+        // anything would misdiagnose every run that happened to rebuild a stage.
+        case .outputWriteFailed, .lowDiskSpace, .previousRunDied,
+             .artifactsInvalidated, .none:
             memoryWarning = false
         }
 
