@@ -288,10 +288,86 @@ public final actor FrameGraphBuilder {
               "\(range.output.count) frame(s) to write, \(range.keypoint.count) to align, " +
               "\(range.horizon.count) to detect a horizon for")
 
+        // ---- What is already on disk -----------------------------------------------
+        //
+        // Asked once, here, instead of being discovered by each op as it runs.  Every
+        // stage below used to establish "this frame is already done" only by fully
+        // reading the artifact it would have written: a 45ms YAML parse per feature set,
+        // a ~120ms full-res decode plus row-by-row bounds scan per horizon mask, and the
+        // same again per merged mask.  On an unchanged 1312-frame 6000×4000 sequence
+        // that came to ~370s of CPU and 3.1GB of reads spent concluding there was
+        // nothing to do — and it was paid *inside* the memory gate, since an op reserves
+        // before it executes, so a KeypointOp held 7.2GB while parsing a file it did not
+        // need.  The reservation, not the work, was setting the pace of a re-run.
+        //
+        // Answering the same question by `stat` costs ~6us per frame per artifact: 22ms
+        // for that whole sequence.  Frames whose artifact is present get no op at all,
+        // and `AsyncOperation.hasWorkToDo()` is the backstop for the ops that are built.
+        //
+        // Existence, not validity — see the note on the predicates in
+        // FrameAirplaneRemover.  These skips are exactly as strong as the loads they
+        // replace, which reused whatever was on disk too.
+        var haveHorizon:        Set<Int> = []
+        var haveMergedHorizon:  Set<Int> = []
+        var haveSkyKeypoints:   Set<Int> = []
+        var haveEarthKeypoints: Set<Int> = []
+
+        for frameIndex in range.horizon {
+            guard let frame = framesByIndex[frameIndex] else { continue }
+            if frame.horizonMaskExistsOnDisk() { haveHorizon.insert(frameIndex) }
+        }
+        for frameIndex in range.keypoint {
+            guard let frame = framesByIndex[frameIndex] else { continue }
+            if frame.mergedHorizonMaskExistsOnDisk() {
+                haveMergedHorizon.insert(frameIndex)
+            }
+            if frame.keypointsExistOnDisk(ofType: .starAligned, config: config) {
+                haveSkyKeypoints.insert(frameIndex)
+            }
+            if processEarth,
+               frame.keypointsExistOnDisk(ofType: .earthAligned, config: config)
+            {
+                haveEarthKeypoints.insert(frameIndex)
+            }
+        }
+
+        // Said up front and at info level on purpose.  A re-run of an unchanged sequence
+        // used to spend many minutes looking busy before it could report that there was
+        // nothing to do; the survey above already knows, so it says so now.
+        Log.i("already on disk: " +
+              "\(haveHorizon.count)/\(range.horizon.count) horizon masks, " +
+              "\(haveMergedHorizon.count)/\(range.keypoint.count) merged horizons, " +
+              "\(haveSkyKeypoints.count)/\(range.keypoint.count) sky keypoint sets" +
+              (processEarth
+                 ? ", \(haveEarthKeypoints.count)/\(range.keypoint.count) earth keypoint sets"
+                 : ""))
+
+        // Where the one static horizon merge would run, and whether it has anything to
+        // do.  Resolved here because the accumulator below is only worth building if
+        // that merge is going to consume it.
+        //
+        // Which frame anchors it does not matter: the mask is a vote over the whole
+        // sequence and gets hard-linked to every frame in it.
+        let staticMergeAnchor: FrameAirplaneRemover? = config.tripodHeadWasMoving
+          ? nil
+          : range.keypoint.first.flatMap { framesByIndex[$0] }
+        let staticMergeNeeded = staticMergeAnchor
+          .map { !haveMergedHorizon.contains($0.frameIndex) } ?? false
+
         // For static sequences without a reference horizon, create a shared accumulator
         // so that HorizonDetectionOps feed their results in as they complete, avoiding
         // a full disk reload of all masks during the later HorizonMergeOp.
-        if hasHorizon && !hasStaticReferenceHorizon && !config.tripodHeadWasMoving {
+        //
+        // Only when that merge will actually run.  With the merged mask already on disk
+        // the merge returns the file and never reads the accumulator, so registering one
+        // commits every frame in the sequence to a full-res decode whose result is then
+        // dropped on the floor — which was the single largest cost of a re-run.
+        let horizonAccumulatorInUse = hasHorizon
+          && !hasStaticReferenceHorizon
+          && !config.tripodHeadWasMoving
+          && staticMergeNeeded
+
+        if horizonAccumulatorInUse {
             // HorizonAccumulator sizes its internal table by frameCount and
             // indexes it directly by frameIndex, so it must cover up through
             // the largest frame index in the sequence.
@@ -315,13 +391,18 @@ public final actor FrameGraphBuilder {
         ) { taskGroup in
             for frameIndex in range.horizon {
                 guard let frame = framesByIndex[frameIndex] else { continue }
+                // Mask already on disk and nothing needs it in memory.  When the
+                // accumulator is in use the decode *is* the work, and doing it here in
+                // parallel is the whole point of having one — so those still get an op.
+                if haveHorizon.contains(frameIndex), !horizonAccumulatorInUse { continue }
                 taskGroup.addTask() {
                     // 1. Horizon
                     if hasHorizon && !hasStaticReferenceHorizon {
                         let horizonOp = HorizonDetectionOp(
                           frame: frame,
                           rawImageBytes: rawImageBytes,
-                          memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier())
+                          memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier()),
+                          feedsAccumulator: horizonAccumulatorInUse
                         ) { errorString in
                             Task { await errors.append(errorString) }
                             errorClosure(errorString)
@@ -364,6 +445,9 @@ public final actor FrameGraphBuilder {
                     // them with, which is wider than the frames we write output for.
                     for frameIndex in range.keypoint {
                         guard let frame = framesByIndex[frameIndex] else { continue }
+                        // The merged file is this op's only durable output, so with it
+                        // already there the op is a decode and a bounds scan for nothing.
+                        if haveMergedHorizon.contains(frameIndex) { continue }
                         taskGroup.addTask {
                             let horizonOp = HorizonMergeOp(
                               frame: frame,
@@ -398,33 +482,40 @@ public final actor FrameGraphBuilder {
                  depends upon all other horizon operations
                  */
                 // Anchored on the first frame that needs a merged mask rather than on
-                // `startIndex`, which the caller need not have passed us a frame for.
-                // Which frame runs it does not matter: the mask is a vote over the whole
-                // sequence and gets linked to every frame in it.
-                guard let anchorIndex = range.keypoint.first,
-                      let frame = framesByIndex[anchorIndex]
-                else {
+                // `startIndex`, which the caller need not have passed us a frame for —
+                // resolved as `staticMergeAnchor` above, since whether this op is needed
+                // decides whether there is an accumulator to feed it.
+                //
+                // `staticMergeNeeded` is false only when the anchor's merged mask is
+                // already on disk, and the static path hard-links that one file to every
+                // frame in the sequence — so one frame having it means they all do.
+                if !staticMergeNeeded {
+                    // Nothing to build.  The keypoint ops below simply get no merged
+                    // horizon dependency and read the mask from disk if they need it.
+                    Log.i("static merged horizon already on disk, not building a merge op")
+                } else if let frame = staticMergeAnchor {
+                    let horizonOp = HorizonMergeOp(
+                      frame: frame,
+                      rawImageBytes: rawImageBytes,
+                      memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier())
+                    ) { errorString in
+                        Task { await errors.append(errorString) }
+                        errorClosure(errorString)
+                    }
+                    horizonOp.queuePriority = .normal
+                    horizonOp.qualityOfService = .userInteractive
+                    staticMergedHorizonOp = horizonOp
+                    for op in horizonOps.values {
+                        horizonOp.addDependency(op)
+                    }
+                    allOps.append(horizonOp)
+                } else {
                     let msg = "no frame to anchor the static HorizonMergeOp on"
                     Log.e(msg)
                     errorClosure(msg)
                     closure([msg])
                     return
                 }
-                let horizonOp = HorizonMergeOp(
-                  frame: frame,
-                  rawImageBytes: rawImageBytes,
-                  memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier())
-                ) { errorString in
-                    Task { await errors.append(errorString) }
-                    errorClosure(errorString)
-                }
-                horizonOp.queuePriority = .normal
-                horizonOp.qualityOfService = .userInteractive
-                staticMergedHorizonOp = horizonOp
-                for op in horizonOps.values {
-                    horizonOp.addDependency(op)
-                }
-                allOps.append(horizonOp)
             }
         }
 
@@ -438,6 +529,11 @@ public final actor FrameGraphBuilder {
             // KeypointLimiter's memory gate.
             for frameIndex in range.keypoint {
                 guard let frame = framesByIndex[frameIndex] else { continue }
+                // Feature set already on disk.  Skipping leaves it out of RAM, which
+                // costs nothing: the homography stage reads a stored homography without
+                // needing keypoints, and where it does need them it loads the file under
+                // a gate of its own.
+                if haveSkyKeypoints.contains(frameIndex) { continue }
                 taskGroup.addTask {
                     // 2. Keypoints (always sky)
                     let skyKP = KeypointOp(
@@ -446,7 +542,9 @@ public final actor FrameGraphBuilder {
                       mode: .starAligned,
                       limiter: self.keypointLimiter,
                       rawImageBytes: rawImageBytes,
-                      memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier())
+                      memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier()),
+                      keypointPath: config.keypointPath(frameIndex: frameIndex,
+                                                        ofType: .starAligned)
                     ) { errorString in
                         Task { await errors.append(errorString) }
                         errorClosure(errorString)
@@ -492,6 +590,7 @@ public final actor FrameGraphBuilder {
                 // Keypoints depend upon the merged horizon mask for their index
                 for frameIndex in range.keypoint {
                     guard let frame = framesByIndex[frameIndex] else { continue }
+                    if haveEarthKeypoints.contains(frameIndex) { continue }
                     taskGroup.addTask {
                         // 2b. Earth keypoints (optional)
                         let kp = KeypointOp(
@@ -500,7 +599,9 @@ public final actor FrameGraphBuilder {
                           mode: .earthAligned,
                           limiter: self.keypointLimiter,
                           rawImageBytes: rawImageBytes,
-                          memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier())
+                          memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier()),
+                          keypointPath: config.keypointPath(frameIndex: frameIndex,
+                                                            ofType: .earthAligned)
                         ) { errorString in
                             Task { await errors.append(errorString) }
                             errorClosure(errorString)
@@ -650,6 +751,14 @@ public final actor FrameGraphBuilder {
         // exactly the frames that were asked for and no others.
         for frame in outputFrames {
 
+            // Output already written.  This is the test MergeOp has always made as its
+            // first act; made here it also keeps the op from reserving
+            // `effectiveMergeMemoryMultiplier` × the working frame in order to read one
+            // enum.  The frame's own state, not a file check: `.complete` is set from
+            // the final image existing at load and cleared by anything that invalidates
+            // it, so it means "written and still valid" rather than merely "written".
+            if await frame.processingState() == .complete { continue }
+
             let aligned = await frame.numberOfAlignedFrames
             let statics = await frame.getStaticNeighborFrames().count
             let mergeOp = MergeOp(
@@ -702,6 +811,17 @@ public final actor FrameGraphBuilder {
         }
         Log.d("\(mergeOps.count) mergeOps")
         mergeOps.forEach { completionOp.addDependency($0) }
+        // Validation and the outlier ops as well, not only the merges.
+        //
+        // A merge op used to be built for every frame in the range, which made it an
+        // unconditional descendant of both — so waiting on the merges waited on
+        // everything.  Now that a frame whose output is already written gets no merge op,
+        // a sequence that is entirely up to date has none at all, and completion would
+        // otherwise fire while validation was still running.  Both are cheap to depend on
+        // and one of them is already an ancestor of every merge, so this only ever
+        // removes a way to report done early.
+        completionOp.addDependency(validationOp)
+        outlierOps.values.forEach { completionOp.addDependency($0) }
         allOps.append(completionOp)
 
         await withCheckedContinuation { continuation in

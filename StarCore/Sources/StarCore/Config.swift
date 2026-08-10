@@ -1642,6 +1642,17 @@ public struct Config: Codable, Sendable {
         }
     }
 
+    /// Full path to a frame's persisted OpenCV feature set — `dirForKeypointData`
+    /// joined with `keypointFilename`.
+    ///
+    /// Every reader and writer of a feature file has to agree on this exact string, so
+    /// the join lives here with the name rather than at each call site.
+    public func keypointPath(frameIndex: Int, ofType type: FrameViewMode) -> String? {
+        guard let filename = keypointFilename(frameIndex: frameIndex, ofType: type)
+        else { return nil }
+        return "\(dirForKeypointData)/\(filename)"
+    }
+
 
     public func dirForImage(ofType type: FrameViewMode,
                             atSize size: ImageDisplaySize = .original) -> String?

@@ -304,19 +304,18 @@ final public actor FrameAlignmentProcessor {
                  atSize: .original
                )
             {
-                var keypointFilename = ""
-
                 // Must match what loadOrCreateOCVFeatures wrote for this neighbour,
-                // including the detection-scale suffix — see Config.keypointFilename.
-                if let name = config.keypointFilename(frameIndex: neighborIndex, ofType: type) {
-                    keypointFilename = name
+                // including the detection-scale suffix, and what FrameGraphBuilder
+                // stat'd when it decided whether to build a KeypointOp at all — so the
+                // path is built in one place, see Config.keypointPath.
+                var keypoints: OCVFeatureSet? = nil
+                if let keypointPath = config.keypointPath(frameIndex: neighborIndex,
+                                                          ofType: type)
+                {
+                    keypoints = await keypointCache.load(fromFilename: keypointPath)
                 } else {
                     Log.e("not loading keypoints for type \(type)")
                 }
-
-                let keypoints = await keypointCache.load(
-                  fromFilename: "\(config.dirForKeypointData)/\(keypointFilename)"
-                )
                 switch alignmentType {
                 case .earth:
                     if let maskFilename = self.imageAccessor.nameForImage(
@@ -498,11 +497,10 @@ final public actor FrameAlignmentProcessor {
             throw "unable to loadOrCreateOCVFeatures of type \(type)"
         }
 
-        guard let filename = config.keypointFilename(frameIndex: frameIndex, ofType: type) else {
+        guard let fullPath = config.keypointPath(frameIndex: frameIndex, ofType: type) else {
             throw "unable to loadOrCreateOCVFeatures of type \(type)"
         }
 
-        let fullPath = "\(config.dirForKeypointData)/\(filename)"
         if let features = await keypointCache.load(fromFilename: fullPath) {
             return features
         }

@@ -177,6 +177,53 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     nonisolated public let componentsPerPixel: Int
     nonisolated public let frameIndex: Int
 
+    // MARK: - "Already on disk" predicates
+    //
+    // Cheap answers to "has this stage already run for this frame?", for
+    // `FrameGraphBuilder` and for the `AsyncOperation.hasWorkToDo()` overrides.
+    //
+    // Each stage below used to answer that question only by *doing* its load: a
+    // KeypointOp parsed its 1.4MB feature YAML (45ms), a HorizonDetectionOp decoded a
+    // full-res mask and scanned it row by row (~120ms), and a HorizonMergeOp did the
+    // same again — then threw the result away.  Measured on a 1312-frame 6000×4000
+    // sequence that came to ~370s of CPU and 3.1GB of reads to establish that there
+    // was nothing to do.  A stat answers the same question in ~6us.
+    //
+    // `nonisolated`, and reading only `nonisolated let` state, so the graph builder can
+    // survey a whole sequence without an actor round-trip per frame.
+    //
+    // Deliberately existence, not validity.  That is exactly as strong as the check
+    // these replace: `loadOrCreateOCVFeatures` and `loadOrCreateMergedHorizonMask`
+    // already reuse whatever is on disk, and the only input that forces a recompute is
+    // the one encoded in the filename (see `Config.keypointFilename`).  A file that
+    // exists but cannot be parsed — a write interrupted by a crash, say — is handled
+    // where it always was: the load returns nil and the caller recomputes.
+
+    /// True when this frame's first-round horizon mask is already on disk.
+    nonisolated public func horizonMaskExistsOnDisk() -> Bool {
+        imageAccessor.imageExists(frameIndex: frameIndex,
+                                  ofType: .horizon,
+                                  atSize: .original)
+    }
+
+    /// True when this frame's merged horizon mask is already on disk.
+    nonisolated public func mergedHorizonMaskExistsOnDisk() -> Bool {
+        imageAccessor.imageExists(frameIndex: frameIndex,
+                                  ofType: .mergedHorizon,
+                                  atSize: .original)
+    }
+
+    /// True when this frame's persisted OpenCV feature set for `type` is already on
+    /// disk.  Takes the config rather than reading it, so this stays synchronous and
+    /// nonisolated; the caller already has one.
+    nonisolated public func keypointsExistOnDisk(ofType type: FrameViewMode,
+                                                 config: Config) -> Bool
+    {
+        guard let path = config.keypointPath(frameIndex: frameIndex, ofType: type)
+        else { return false }
+        return FileManager.default.fileExists(atPath: path)
+    }
+
     // populated by pruning
 
     public func getOutlierGroups() async -> OutlierGroups? { await outlierProcessor.getOutlierGroups() }
@@ -753,6 +800,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     internal func loadOrCreateFinalHorizonMask() async throws -> HorizonMask? {
         try await horizonProcessor.loadOrCreateFinalHorizonMask()
+    }
+    internal func cachedFinalHorizonMaskForTesting() async -> HorizonMask? {
+        await horizonProcessor.cachedFinalHorizonMaskForTesting()
     }
     public func loadOrCreateMergedHorizonMask() async throws -> HorizonMask? {
         try await horizonProcessor.loadOrCreateMergedHorizonMask()

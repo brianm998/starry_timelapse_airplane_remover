@@ -17,6 +17,17 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
         self.name = "merge frame \(frame.frameIndex)"
     }
 
+    /// Nothing to merge for a frame whose output is already written.
+    ///
+    /// The same test `asyncExecute` has always made first — hoisted ahead of the
+    /// reservation, because a merge reserves `effectiveMergeMemoryMultiplier` × the
+    /// working frame and was taking all of it in order to read one enum.  The check
+    /// inside `asyncExecute` stays: it is the one that holds for a frame that completes
+    /// between this being asked and the op running.
+    public override func hasWorkToDo() async -> Bool {
+        await frame.processingState() != .complete
+    }
+
     public override func asyncExecute() async {
         guard !Task.isCancelled else {
             Log.d("frame \(frame.frameIndex) merge cancelled")

@@ -120,6 +120,12 @@ final public actor FrameHorizonProcessor {
         cachedFinalHorizonMask = nil
     }
 
+    /// Whether a final horizon mask is currently held, for the tests that pin who
+    /// releases it.  Nothing in the pipeline needs to ask.
+    internal func cachedFinalHorizonMaskForTesting() -> HorizonMask? {
+        cachedFinalHorizonMask
+    }
+
     internal func loadOrCreateFinalHorizonMask() async throws -> HorizonMask? {
         if let cached = cachedFinalHorizonMask { return cached }
         let mask: HorizonMask?

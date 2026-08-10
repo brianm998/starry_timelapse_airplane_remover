@@ -111,6 +111,14 @@ open class AsyncOperation: Operation, @unchecked Sendable {
 
         let memBytes = estimatedMemoryBytes
         task = Task {
+            // Cheapest possible exit, ahead of both the concurrency gate and the
+            // reservation.  See `hasWorkToDo()` for why the order matters.
+            guard await self.hasWorkToDo() else {
+                Log.d("\(self.name ?? "\(self.type)") has nothing to do, skipping")
+                self.finish()
+                return
+            }
+
             // Op-type-specific concurrency gate (the keypoint limiter, today).
             //
             // Ahead of the reservation on purpose: an op parked here holds no memory
@@ -150,6 +158,28 @@ open class AsyncOperation: Operation, @unchecked Sendable {
     open func asyncExecute() async {
         fatalError("Subclasses must implement asyncExecute()")
     }
+
+    /// Asked once, before this op takes a concurrency slot or reserves any memory
+    /// budget.  Returning false finishes the op immediately: no
+    /// `acquireExecutionSlot()`, no `MemoryMonitor.reserve(bytes:)`, no
+    /// `asyncExecute()`.
+    ///
+    /// This has to be answerable *cheaply* — a `stat` of the artifact this op would
+    /// produce, not a load of it — because the point is to avoid paying for the op at
+    /// all.  `FrameGraphBuilder` asks the same question before it builds the op, so in
+    /// the normal case a no-op op is never even queued; this is the backstop for the
+    /// ops it does build, and for anything that enqueues an op directly.
+    ///
+    /// Worth having a backstop at all because `start()` reserves *before* the work
+    /// begins, so an op that turns out to have nothing to do still pays full price for
+    /// it.  A `KeypointOp` reserves `keypointMemoryMultiplier` × the working frame —
+    /// 7.2GB at 6000×4000 with the default 50 — to then discover in 45ms that its
+    /// feature file was already on disk.  Across a re-run of a long sequence that
+    /// reservation, not the work, is what sets the pace: throughput collapses to
+    /// `budget / 7.2GB` ops at a time no matter how little there is to do.
+    ///
+    /// Default: true, so an op that does not override this behaves exactly as before.
+    open func hasWorkToDo() async -> Bool { true }
 
     /// Awaited before this op reserves memory or does any work.  Override to gate a
     /// class of ops on something narrower than the queue's own concurrency limit.
