@@ -22,20 +22,13 @@ public struct HomographyResultsCodable: Codable, Sendable {
           .sorted { $0.frameIndex < $1.frameIndex }
     }
 
-    public func adjust(for newFrameIndex: Int) -> HomographyResultsCodable {
-        let frameDistance = newFrameIndex - frameIndex
-        return HomographyResultsCodable(
-          for: newFrameIndex,
-          with: neighborHomography.map {
-            AlignmentWarpInfoCodable(
-              homography: $0.homography,
-              deviation: $0.deviation,
-              alignmentState: $0.alignmentState,
-              frameIndex: $0.frameIndex + frameDistance
-            )
-        }
-        )
-    }
+    // There is deliberately no `adjust(for:)` here any more.  Shifting every
+    // neighbor's frame index by a constant looks like the obvious way to move one
+    // frame's set onto another, but it also carries over the source's neighbor *count*
+    // and offset shape, and those legitimately vary: frames near the ends of a sequence
+    // have fewer neighbors than interior ones.  Re-targeting a set is always relative to
+    // the offsets the destination frame actually has — see
+    // `extrapolateNeighborHomography` and `retargetNeighborHomography`.
 
     func mappedHomography() -> [Int: MatWrapper] {
         var ret: [Int: MatWrapper] = [:]
