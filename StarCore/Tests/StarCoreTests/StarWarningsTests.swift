@@ -218,6 +218,46 @@ final class StarWarningsTests: XCTestCase {
 /// Collects warnings from the `@Sendable` handler closure, which cannot capture a
 /// non-`Sendable` `XCTestCase`.  A class with a lock rather than an actor so assertions can
 /// read it without `await` interleaving further posts.
+/// Which warnings a banner may take down on its own, and which it must not.
+final class PassingConditionTests: XCTestCase {
+
+    private func warning(_ kind: StarWarning.Kind) -> StarWarning {
+        StarWarning(kind: kind, severity: .warning, message: "\(kind)")
+    }
+
+    /// The machine-state signals: `MemoryMonitor` samples these while it gates admissions, and
+    /// they stop being true on their own — a banner still asserting one after it cleared is
+    /// worse than no banner.
+    func testTheMachineStateConditionsPass() {
+        for kind in [StarWarning.Kind.memoryPressure, .lowSystemMemory, .footprintOverBudget] {
+            XCTAssertTrue(warning(kind).describesAPassingCondition, "\(kind)")
+        }
+    }
+
+    /// Everything else is posted once, about something that happened, and stays as true as it
+    /// was — so it stays up until the user takes it down.  `outputWriteFailed` is the one that
+    /// matters most: it is about the user's product going missing.
+    func testTheFactsAboutARunDoNot() {
+        for kind in [StarWarning.Kind.outputWriteFailed, .lowDiskSpace, .previousRunDied,
+                     .oversizedReservation, .memoryGatingDisabled, .artifactsInvalidated] {
+            XCTAssertFalse(warning(kind).describesAPassingCondition, "\(kind)")
+        }
+    }
+
+    /// The two lists above have to cover every kind: a case added to `Kind` and left out of
+    /// them would be classified by whichever branch happened to catch it.
+    func testEveryKindIsInOneOfTheTwoLists() {
+        let passing: Set<StarWarning.Kind> = [.memoryPressure, .lowSystemMemory,
+                                             .footprintOverBudget]
+        let staying: Set<StarWarning.Kind> = [.outputWriteFailed, .lowDiskSpace, .previousRunDied,
+                                             .oversizedReservation, .memoryGatingDisabled,
+                                             .artifactsInvalidated]
+        XCTAssertTrue(passing.isDisjoint(with: staying))
+        XCTAssertEqual(passing.count + staying.count, StarWarning.Kind.allCases.count,
+                       "a new StarWarning.Kind needs classifying in describesAPassingCondition")
+    }
+}
+
 private final class Box: @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [StarWarning] = []

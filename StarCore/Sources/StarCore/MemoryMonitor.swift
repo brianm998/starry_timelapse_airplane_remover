@@ -97,9 +97,28 @@ public actor MemoryMonitor {
     /// that "fits the ledger" is no help if the machine is already thrashing.
     private var systemFloorBytes: UInt64 = 2 * 1024 * 1024 * 1024
 
-    /// Set by the OS memory-pressure source. Stays false where there is no such source
-    /// to set it — see `startPressureMonitoringIfNeeded`.
-    private var underMemoryPressure = false
+    /// How loudly the OS is complaining about memory.
+    ///
+    /// A level rather than a Bool because Darwin's two non-normal levels mean very
+    /// different things.  `warn` is the system asking every application to give memory
+    /// back, which a machine working through a large sequence reaches routinely and comes
+    /// out of on its own; `critical` is the last notice before jetsam starts killing
+    /// processes.  Collapsing the two into one flag is what put a modal "the system may
+    /// stop star" alert in front of a run that then finished normally.
+    enum PressureLevel: String, Sendable {
+        case normal
+        case warning
+        case critical
+    }
+
+    /// Set by the OS memory-pressure sources.  Stays `.normal` where there are no such
+    /// sources to set it — see `startPressureMonitoringIfNeeded`.
+    private var pressureLevel: PressureLevel = .normal
+
+    /// Whether the admission brake holds.  Both non-normal levels hold it: declining to
+    /// start new heavy work while the system is asking for memory back costs some
+    /// throughput and undoes itself, which is exactly what interrupting the user does not.
+    private var underMemoryPressure: Bool { pressureLevel != .normal }
     #if canImport(Darwin)
     private var pressureSources: [DispatchSourceMemoryPressure] = []
     #endif
@@ -259,7 +278,7 @@ public actor MemoryMonitor {
             "(unaccounted \(unaccounted / (1024*1024))MB), " +
             "systemFree=\(reality.systemAvailable() / (1024*1024))MB, " +
             "realityHolds=\(realityHolds)" +
-            (underMemoryPressure ? ", UNDER PRESSURE" : "")
+            (underMemoryPressure ? ", UNDER PRESSURE (\(pressureLevel.rawValue))" : "")
     }
 
     // MARK: - Estimation helpers
@@ -295,7 +314,7 @@ public actor MemoryMonitor {
     /// hatch still applies and the brake cannot deadlock the pipeline.
     private func realityBlock() -> String? {
         if underMemoryPressure {
-            return "the OS reports memory pressure"
+            return "the OS reports \(pressureLevel.rawValue)-level memory pressure"
         }
         let footprint = reality.processFootprint()
         if footprint > 0, footprint >= budget {
@@ -345,28 +364,29 @@ public actor MemoryMonitor {
     /// Losing this costs the third of the reality brake's three signals. The other two —
     /// the process footprint against its reservations, and the system-available floor —
     /// are implemented for every platform in `memory_monitor.c` and still apply, so the
-    /// brake degrades rather than disappearing. `underMemoryPressure` simply stays false.
+    /// brake degrades rather than disappearing. The level simply stays `.normal`.
     ///
-    /// One source per state rather than one source reading `.data`: the event handler is
+    /// One source per level rather than one source reading `.data`: the event handler is
     /// a `sending` closure, and capturing the source in order to read `.data` off it
     /// would pull a non-Sendable value into that closure. Splitting by mask means each
-    /// handler captures only a `Bool`.
+    /// handler captures only a `PressureLevel`.
     private func startPressureMonitoringIfNeeded() {
         #if canImport(Darwin)
         guard pressureSources.isEmpty else { return }
-        let states: [(DispatchSource.MemoryPressureEvent, Bool)] = [
-            ([.warning, .critical], true),
-            ([.normal], false),
+        let states: [(DispatchSource.MemoryPressureEvent, PressureLevel)] = [
+            ([.critical], .critical),
+            ([.warning], .warning),
+            ([.normal], .normal),
         ]
-        for (mask, pressured) in states {
+        for (mask, level) in states {
             let source = DispatchSource.makeMemoryPressureSource(
               eventMask: mask,
               queue: .global(qos: .utility)
             )
-            // Capture nothing but the Bool — going through `shared` rather than `self`
+            // Capture nothing but the level — going through `shared` rather than `self`
             // keeps this closure Sendable, which `setEventHandler` requires.
             source.setEventHandler { @Sendable in
-                Task { await MemoryMonitor.shared.pressureChanged(pressured: pressured) }
+                Task { await MemoryMonitor.shared.pressureChanged(level: level) }
             }
             source.activate()
             pressureSources.append(source)
@@ -374,15 +394,45 @@ public actor MemoryMonitor {
         #endif
     }
 
-    private func pressureChanged(pressured: Bool) {
-        guard pressured != underMemoryPressure else { return }
-        underMemoryPressure = pressured
-        if pressured {
-            // Detail at info, because the user-facing sentence below is posted as a
-            // warning and logs itself — two WARN lines saying the same thing is noise.
-            Log.i("MemoryMonitor: OS memory pressure — holding new reservations " +
+    /// Internal rather than private because it is the only way in: the events themselves
+    /// come from the OS, and no test can make a machine run out of memory on cue.
+    func pressureChanged(level: PressureLevel) {
+        guard level != pressureLevel else { return }
+        let previous = pressureLevel
+        pressureLevel = level
+
+        // Detail at info, because the user-facing sentences below are posted as warnings
+        // and log themselves — two lines saying the same thing is noise.
+        if level != .normal {
+            Log.i("MemoryMonitor: OS memory pressure \(previous.rawValue) → " +
+                  "\(level.rawValue) — holding new reservations " +
                   "(reserved \(reservedBytes / (1024*1024))MB, footprint " +
                   "\(reality.processFootprint() / (1024*1024))MB)")
+        }
+
+        switch level {
+        case .normal:
+            Log.i("MemoryMonitor: memory pressure cleared, resuming admissions")
+            drainReadyWaiters()
+
+        case .warning:
+            // Deliberately not critical.  At this level the system is asking for memory
+            // back, not about to take it: a machine working through a large sequence
+            // crosses into warn and back out of it on its own, and a run that gets this
+            // far usually finishes.  Clients that interrupt the user for `critical` do not
+            // interrupt for this, so it reaches the log, the cli's warning line, the Kotlin
+            // client's banner and the run marker's breadcrumb — which is what keeps a run
+            // killed after nothing worse than warn level diagnosable — without stopping
+            // anybody's work.
+            postWarning(StarWarning(
+              kind: .memoryPressure,
+              severity: .warning,
+              message: localized("warning.memory_pressure_mild.message",
+                                 reality.processFootprint() / (1024*1024)),
+              suggestion: localized("warning.memory_pressure_mild.suggestion")
+            ))
+
+        case .critical:
             // The most important warning star can issue.  On Darwin this notification is
             // the last thing the system says before jetsam begins killing processes, and
             // the kill itself arrives as an uncatchable SIGKILL — so this is the only
@@ -395,9 +445,6 @@ public actor MemoryMonitor {
                                  reality.processFootprint() / (1024*1024)),
               suggestion: localized("warning.memory_pressure.suggestion")
             ))
-        } else {
-            Log.i("MemoryMonitor: memory pressure cleared, resuming admissions")
-            drainReadyWaiters()
         }
     }
 

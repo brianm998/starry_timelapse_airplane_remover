@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "Bitte melden Sie das — es ist ein Fehler in star und kein Problem mit Ihren Bildern.",
   "warning.memory_pressure.message": "Dem System geht der Speicher aus und es könnte star beenden, um ihn zurückzugewinnen. star hält gerade {0} MB.",
   "warning.memory_pressure.suggestion": "Wenn Sie jetzt andere Programme schließen, kann dieser Lauf vielleicht noch fertig werden. Falls er gestoppt wird, setzen Sie ihn fort und fügen Sie --keypoint-divisor 1.5 hinzu, um weniger Speicher zu verbrauchen.",
+  "warning.memory_pressure_mild.message": "Das System bittet die Programme, Speicher zurückzugeben. star hält gerade {0} MB und pausiert neue Arbeit, statt weitere hinzuzufügen.",
+  "warning.memory_pressure_mild.suggestion": "Es ist nichts zu tun — sobald sich das System beruhigt, wird der Lauf von selbst wieder schneller. Andere Programme zu schließen hilft dabei.",
   "warning.output_write_failed.message": "star konnte seine Ausgabe nicht schreiben. Das erste fehlgeschlagene Bild war {0}.",
   "warning.output_write_failed.suggestion": "Höchstwahrscheinlich ist die Festplatte voll oder der Ausgabeordner nicht beschreibbar. Geben Sie Platz frei und setzen Sie den Lauf fort — nichts von dem bereits Geschriebenen geht verloren.",
   "warning.oversized_reservation.message": "Ein einzelner Schritt dieses Laufs braucht {0} MB, mehr als die {1} MB, die star auf diesem Rechner verwenden darf. Er läuft daher ohne Speichergrenze und könnte vom System gestoppt werden.",

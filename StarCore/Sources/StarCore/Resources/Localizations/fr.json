@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "Merci de le signaler — c'est un bogue de star, pas un problème de vos images.",
   "warning.memory_pressure.message": "Le système manque de mémoire et pourrait arrêter star pour la récupérer. star retient {0} Mo.",
   "warning.memory_pressure.suggestion": "Fermer d'autres applications maintenant peut permettre à cette exécution d'aboutir. Si elle est arrêtée, reprenez-la en ajoutant --keypoint-divisor 1.5 pour utiliser moins de mémoire.",
+  "warning.memory_pressure_mild.message": "Le système demande aux applications de rendre de la mémoire. star retient {0} Mo et met en pause le nouveau travail plutôt que d'en ajouter.",
+  "warning.memory_pressure_mild.suggestion": "Il n'y a rien à faire : l'exécution retrouvera sa vitesse d'elle-même dès que le système se détendra. Fermer d'autres applications y aidera.",
   "warning.output_write_failed.message": "star n'a pas pu écrire sa sortie. La première image en échec était {0}.",
   "warning.output_write_failed.suggestion": "Le disque est très probablement plein, ou le dossier de sortie n'est pas accessible en écriture. Libérez de l'espace et reprenez l'exécution — rien de ce qui a déjà été écrit n'est perdu.",
   "warning.oversized_reservation.message": "Une seule étape de cette exécution a besoin de {0} Mo, soit plus que les {1} Mo que star est autorisé à utiliser sur cette machine ; elle s'exécute donc sans limite de mémoire et pourrait être arrêtée par le système.",

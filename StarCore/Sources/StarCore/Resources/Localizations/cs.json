@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "Nahlaste to prosím — je to chyba ve star, nikoli problém s vašimi obrázky.",
   "warning.memory_pressure.message": "Systému dochází paměť a může star zastavit, aby ji získal zpět. star drží {0} MB.",
   "warning.memory_pressure.suggestion": "Zavřít teď ostatní programy může tomuto běhu umožnit doběhnout. Pokud bude zastaven, obnovte jej s doplněným --keypoint-divisor 1.5, aby spotřeboval méně paměti.",
+  "warning.memory_pressure_mild.message": "Systém žádá programy, aby vrátily paměť. star drží {0} MB a novou práci pozastavuje, místo aby přidával další.",
+  "warning.memory_pressure_mild.suggestion": "Není třeba nic dělat — až se systém uklidní, běh sám zrychlí. Zavření ostatních programů tomu pomůže.",
   "warning.output_write_failed.message": "star nedokázal zapsat svůj výstup. Prvním snímkem, u kterého to selhalo, byl {0}.",
   "warning.output_write_failed.suggestion": "Nejspíš je plný disk, nebo do výstupní složky nelze zapisovat. Uvolněte trochu místa a běh obnovte — nic z toho, co už bylo zapsáno, se neztratilo.",
   "warning.oversized_reservation.message": "Jediný krok tohoto běhu potřebuje {0} MB, což je více než {1} MB, které star na tomto počítači smí využít; běží proto bez paměťového omezení a systém jej může zastavit.",

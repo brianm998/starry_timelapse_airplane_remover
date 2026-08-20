@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "请反馈此问题——这是 star 的缺陷，不是你的图像有问题。",
   "warning.memory_pressure.message": "系统内存不足，可能会终止 star 以回收内存。star 当前占用 {0} MB。",
   "warning.memory_pressure.suggestion": "现在关闭其他应用程序，本次运行也许还能完成。如果被终止，请在继续时加上 --keypoint-divisor 1.5 以减少内存占用。",
+  "warning.memory_pressure_mild.message": "系统正在要求各应用归还内存。star 当前占用 {0} MB，并暂停新的工作，不再继续增加占用。",
+  "warning.memory_pressure_mild.suggestion": "无需处理：系统缓和后，本次运行会自行恢复速度。关闭其他应用程序会更快一些。",
   "warning.output_write_failed.message": "star 无法写出其输出。第一个失败的帧是 {0}。",
   "warning.output_write_failed.suggestion": "最可能的原因是磁盘已满，或输出文件夹不可写。请释放一些空间后继续运行——已经写出的内容不会丢失。",
   "warning.oversized_reservation.message": "本次运行的单个步骤就需要 {0} MB，超过了 star 在本机被允许使用的 {1} MB，因此它在没有内存限制的情况下运行，可能被系统终止。",

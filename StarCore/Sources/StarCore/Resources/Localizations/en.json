@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "Please report this — it is a bug in star, not a problem with your images.",
   "warning.memory_pressure.message": "The system is low on memory and may stop star to reclaim it. star is holding {0}MB.",
   "warning.memory_pressure.suggestion": "Closing other applications now may let this run finish. If it is stopped, resume it and add --keypoint-divisor 1.5 to use less memory.",
+  "warning.memory_pressure_mild.message": "The system is asking applications to give memory back. star is holding {0}MB, and is pausing new work rather than adding to it.",
+  "warning.memory_pressure_mild.suggestion": "There is nothing to do — the run should pick up speed again on its own once the system settles. Closing other applications will help it along.",
   "warning.output_write_failed.message": "star could not write its output. The first frame it failed on was {0}.",
   "warning.output_write_failed.suggestion": "The disk is most likely full, or the output folder is not writable. Free some space and resume the run — nothing already written is lost.",
   "warning.oversized_reservation.message": "A single step of this run needs {0}MB, which is more than the {1}MB star is allowed to use on this machine, so it is running without a memory limit and could be stopped by the system.",

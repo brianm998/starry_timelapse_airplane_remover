@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "Prosimy to zgłosić — to błąd w star, a nie problem z twoimi obrazami.",
   "warning.memory_pressure.message": "Systemowi brakuje pamięci i może zatrzymać star, aby ją odzyskać. star trzyma {0} MB.",
   "warning.memory_pressure.suggestion": "Zamknięcie teraz innych programów może pozwolić temu przebiegowi się zakończyć. Jeśli zostanie zatrzymany, wznów go, dodając --keypoint-divisor 1.5, aby zużywać mniej pamięci.",
+  "warning.memory_pressure_mild.message": "System prosi programy o zwrot pamięci. star trzyma {0} MB i wstrzymuje nową pracę, zamiast dokładać kolejną.",
+  "warning.memory_pressure_mild.suggestion": "Nie trzeba nic robić — gdy system się uspokoi, przebieg sam wróci do pełnej szybkości. Zamknięcie innych programów to przyspieszy.",
   "warning.output_write_failed.message": "star nie zdołał zapisać wyniku. Pierwsza klatka, przy której się nie powiodło, to {0}.",
   "warning.output_write_failed.suggestion": "Najprawdopodobniej dysk jest pełny albo do folderu wynikowego nie można pisać. Zwolnij trochę miejsca i wznów przebieg — nic z tego, co już zapisano, nie zginęło.",
   "warning.oversized_reservation.message": "Pojedynczy etap tego przebiegu potrzebuje {0} MB, czyli więcej niż {1} MB, których star może użyć na tym komputerze. Działa więc bez limitu pamięci i system może go zatrzymać.",

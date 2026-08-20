@@ -32,11 +32,42 @@ struct ContentView: View {
             // these may show on top
             if viewModel.showInfoDialog { InfoDialogView() }
             if viewModel.showErrorAlert { self.errorAlert }
-            if viewModel.showWarningAlert { self.warningAlert }
             if viewModel.showCloseConfirmation { self.closeConfirmationAlert }
         }
         .sheet(isPresented: $bindableViewModel.showUserPreferencesSheet) {
             UserPreferencesEditingView(viewModel: viewModel)
+        }
+        // An overlay, deliberately, and not a member of the `ZStack` above: an overlay is
+        // sized by what it is attached to and reports nothing back, so — unlike the panels in
+        // that stack — no banner can ever be the reason this window changes size.  Measured
+        // both ways while fixing exactly that bug; see the note on `.alert` below.
+        .overlay(alignment: .top) {
+            if let warning = viewModel.bannerWarning {
+                WarningBannerView(warning: warning) { viewModel.dismissBanner() }
+            }
+        }
+        // Critical `StarWarning`s — the machine is about to stop this run, or a previous run
+        // was already stopped — go through the system alert rather than one of the hand-drawn
+        // panels above.
+        //
+        // This used to be one of them, and that panel resized the window.  A panel added to
+        // the root `ZStack` is a sibling of everything else in it, so its minimum size becomes
+        // part of the window's — and this one's minimum height was unbounded: the message and
+        // the suggestion were `fixedSize`d vertically, which at a narrow proposed width wraps
+        // them into an arbitrarily tall column.  AppKit then grew the window to satisfy that
+        // minimum, which is a window that cannot be shrunk back while the alert is up and that
+        // stays oversized after it goes away.  Measured: a window sized to 900x600 was forced
+        // to 900x4180 with a matching minimum height (`WarningAlertTests`), and on a real run
+        // over a 4240x2832 sequence the main window ended up 1452x3104 on a screen 1440 points
+        // tall.
+        //
+        // A system alert is its own window: it contributes nothing to the layout of this one,
+        // and its OK button dismisses it through the binding rather than through a button we
+        // place ourselves inside the content.
+        .alert(viewModel.warningTitle, isPresented: $bindableViewModel.showWarningAlert) {
+            Button(localized("ui.ok")) { viewModel.acknowledgeWarning() }
+        } message: {
+            Text(viewModel.warningAlertText)
         }
     }
 
@@ -72,50 +103,6 @@ struct ContentView: View {
               .frame(maxWidth: 480)
               .background(.regularMaterial)
               .cornerRadius(16)
-        }
-    }
-
-    /// Shown for critical `StarWarning`s: the machine is about to stop this run, or a
-    /// previous run was already stopped.
-    ///
-    /// Deliberately not the red `errorAlert` below — nothing has gone wrong with the user's
-    /// images or with star, and calling it an ERROR would send them looking for a fault that
-    /// isn't there.  Orange, with the suggestion given its own line, because unlike an error
-    /// there is usually something the user can actually do.
-    var warningAlert: some View {
-        ZStack {
-            Rectangle()
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-              .background(.gray)
-              .opacity(0.5)
-
-            VStack(spacing: 0) {
-                Text(viewModel.warningTitle)
-                  .font(.headline)
-                  .padding(.bottom, 20)
-
-                Text(viewModel.warningMessage)
-                  .multilineTextAlignment(.center)
-                  .fixedSize(horizontal: false, vertical: true)
-
-                if let suggestion = viewModel.warningSuggestion {
-                    Text(suggestion)
-                      .multilineTextAlignment(.center)
-                      .fixedSize(horizontal: false, vertical: true)
-                      .padding(.top, 16)
-                }
-
-                Button {
-                    viewModel.showWarningAlert = false
-                } label: {
-                    Text(localized("ui.ok"))
-                }
-                  .padding(.top, 28)
-            }
-              .padding(40)
-              .frame(maxWidth: 520)
-              .background(.orange)
-              .cornerRadius(20)
         }
     }
 
@@ -367,5 +354,58 @@ struct UserPreferencesEditingView: View {
             .background(Color(red: 0.15, green: 0.15, blue: 0.15))
         }
         .background(Color(red: 0.1, green: 0.1, blue: 0.1))
+    }
+}
+
+/// The quiet end of `StarWarning`: a strip across the top of the window for conditions that
+/// are worth knowing about but not worth stopping for — the system asking for memory back,
+/// star pausing work because the machine is busy, a repeat of something already acknowledged.
+///
+/// Coloured by severity the same way the Kotlin client's banner is, so the two clients do not
+/// describe the same condition with different urgency.  Yellow is "star noticed"; red is a
+/// critical condition being mentioned again after the user has already dealt with its alert.
+///
+/// The width is fixed rather than bounded by `maxWidth`.  That is what keeps the text's height
+/// finite: with a maximum-only width the layout is free to propose the width of the longest
+/// word, at which point wrapped text grows without limit — which is precisely what made the
+/// old warning panel resize the whole window.
+struct WarningBannerView: View {
+    let warning: StarWarning
+    let dismiss: () -> Void
+
+    private static let width: CGFloat = 620
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(localized("ui.warning_banner", warning.title))
+                  .font(.headline)
+                Text(warning.message)
+                  .font(.caption)
+                  .fixedSize(horizontal: false, vertical: true)
+                if let suggestion = warning.suggestion {
+                    Text(suggestion)
+                      .font(.caption)
+                      .opacity(0.75)
+                      .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+              .multilineTextAlignment(.leading)
+
+            Spacer(minLength: 0)
+
+            Button(localized("ui.dismiss")) { dismiss() }
+              .buttonStyle(.plain)
+              .font(.caption)
+        }
+          .foregroundColor(.black)
+          .padding(.horizontal, 14)
+          .padding(.vertical, 10)
+          .frame(width: WarningBannerView.width, alignment: .leading)
+          .background(warning.severity == .critical
+                        ? Color.red.opacity(0.94)
+                        : Color.yellow.opacity(0.94))
+          .cornerRadius(10)
+          .padding(.top, 10)
     }
 }
