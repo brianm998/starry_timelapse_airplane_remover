@@ -1272,10 +1272,14 @@ public struct Config: Codable, Sendable {
     // 0.11.2 lots of memory and speed improvements
     //        more unit tests and bug fixes
     // 0.11.3 better crash and error reporting across the board
+    // 0.11.4 add internationalization to 22 languages
+    //        stop the merge emitting black borders on the first and last frames
+    //        speed up re-running a sequence
+    //        stop the low-memory alert crying wolf and taking the window with it
     
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.11.3"
+    public static let latestVersion = "0.11.4"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
