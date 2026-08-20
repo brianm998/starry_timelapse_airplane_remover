@@ -222,6 +222,110 @@ final class MemoryMonitorTests: XCTestCase {
         XCTAssertTrue(granted)
     }
 
+    // MARK: - OS memory pressure
+
+    /// The distinction this section exists for.  Darwin has two non-normal pressure levels and
+    /// they mean different things: `warn` is the system asking every application to give memory
+    /// back, which a machine working through a large sequence reaches and comes out of on its
+    /// own, while `critical` is the last notice before jetsam starts killing processes.  Both
+    /// used to arrive here as one Bool and be reported as `critical`, and `critical` is what
+    /// every client puts in front of the user — which is how a run that finished normally
+    /// stopped to show a modal saying the system might kill it.
+    func testWarnLevelPressureIsReportedWithoutClaimingTheRunIsAboutToBeKilled() async {
+        let m = await monitor(footprint: 500 * mb)
+        let posted = await capturingWarnings { await m.pressureChanged(level: .warning) }
+
+        XCTAssertEqual(posted.count, 1)
+        XCTAssertEqual(posted.first?.kind, .memoryPressure)
+        XCTAssertEqual(posted.first?.severity, .warning,
+                       "warn-level pressure must not interrupt the user")
+        XCTAssertTrue(posted.first?.message.contains("500") ?? false,
+                      "the footprint belongs in the sentence: \(posted.first?.message ?? "")")
+    }
+
+    /// The other half: at `critical` the warning has to be loud, because on Darwin this is the
+    /// last thing the system says before the kill arrives as an uncatchable SIGKILL.
+    func testCriticalLevelPressureIsReportedAsCritical() async {
+        let m = await monitor(footprint: 500 * mb)
+        let posted = await capturingWarnings { await m.pressureChanged(level: .critical) }
+
+        XCTAssertEqual(posted.count, 1)
+        XCTAssertEqual(posted.first?.kind, .memoryPressure)
+        XCTAssertEqual(posted.first?.severity, .critical)
+    }
+
+    /// Both levels carry the same `kind`, which is what `RunMarker.diagnosis` reads: a run
+    /// killed after nothing worse than warn-level pressure is still diagnosed as a likely
+    /// out-of-memory death rather than as an unexplained stop.
+    func testBothLevelsReportTheSameKind() async {
+        let m = await monitor()
+        let posted = await capturingWarnings(atLeast: 2) {
+            await m.pressureChanged(level: .warning)
+            await m.pressureChanged(level: .critical)
+        }
+        XCTAssertEqual(posted.count, 2)
+        XCTAssertEqual(posted.map(\.kind), [.memoryPressure, .memoryPressure])
+        // A set: each warning is handed to the relay in its own task, so which of the two
+        // arrives first is not something this can rely on.
+        XCTAssertEqual(Set(posted.map(\.severity)), [.warning, .critical])
+    }
+
+    /// The source fires repeatedly at the level it is already at; only a change is news.
+    func testTheSameLevelReportedTwiceIsOneWarning() async {
+        let m = await monitor()
+        let posted = await capturingWarnings(atLeast: 0) {
+            await m.pressureChanged(level: .warning)
+            await m.pressureChanged(level: .warning)
+        }
+        XCTAssertEqual(posted.count, 1)
+    }
+
+    /// Returning to normal says nothing to the user — there is nothing to say, and the run is
+    /// about to speed up on its own.
+    func testPressureClearingPostsNothing() async {
+        let m = await monitor()
+        // Through the capture too, so the warn-level post has landed and cannot be mistaken
+        // for something the clear produced.
+        _ = await capturingWarnings { await m.pressureChanged(level: .warning) }
+
+        let posted = await capturingWarnings(atLeast: 0) {
+            await m.pressureChanged(level: .normal)
+        }
+        XCTAssertTrue(posted.isEmpty)
+    }
+
+    /// Quieter reporting is not laxer gating.  Warn-level pressure still holds new heavy work
+    /// back: declining to start more of it costs some throughput and undoes itself, which is
+    /// exactly what interrupting the user does not.
+    func testWarnLevelPressureStillHoldsAdmissionsBack() async {
+        let m = await monitor()
+        await m.configure(budgetFraction: 0.9, maxWaitTime: 60, forcedAdmissionInterval: 60)
+        await m.pressureChanged(level: .warning)
+
+        let granted = await withTimeout(seconds: 2) { await m.reserve(bytes: 1 * mb) }
+        XCTAssertFalse(granted,
+                       "the reality brake must hold at warn level, not only at critical")
+    }
+
+    /// And it lets go again when the system does.
+    func testAdmissionsResumeOnceThePressureIsGone() async {
+        let m = await monitor()
+        await m.pressureChanged(level: .critical)
+        await m.pressureChanged(level: .normal)
+
+        let granted = await withTimeout(seconds: 5) { await m.reserve(bytes: 1 * mb) }
+        XCTAssertTrue(granted)
+    }
+
+    /// The level names the reason a reservation is being held, so a log tells you which of the
+    /// two conditions the machine is in.
+    func testStatsNamesTheLevelItIsHoldingAt() async {
+        let m = await monitor()
+        await m.pressureChanged(level: .critical)
+        let stats = await m.stats()
+        XCTAssertTrue(stats.contains("critical"), "stats should name the level: \(stats)")
+    }
+
     // MARK: - stats
 
     func testStatsIsNonEmptyAndMentionsTheBudget() async {
@@ -233,6 +337,45 @@ final class MemoryMonitorTests: XCTestCase {
     }
 
     // MARK: - helper
+
+    /// Runs `work` with a handler installed on `StarWarnings.shared` and returns the
+    /// memory-pressure warnings it delivered.
+    ///
+    /// The shared relay rather than a fresh one because that is where `MemoryMonitor` posts —
+    /// the monitor under test can be a private instance, but the relay it reports to cannot
+    /// be.  The dedup interval is dropped to zero for the duration so that two levels
+    /// reported a millisecond apart are both seen, and everything is put back afterwards.
+    ///
+    /// `atLeast` is how many warnings to wait for: the monitor hands a warning off in a
+    /// detached `Task` rather than awaiting the relay from its own admission path, so a post
+    /// lands shortly *after* the call that caused it returns.
+    private func capturingWarnings(
+      atLeast expected: Int = 1,
+      _ work: @escaping @Sendable () async -> Void
+    ) async -> [StarWarning] {
+        let box = Box()
+        await StarWarnings.shared.setMinimumInterval(0)
+        await StarWarnings.shared.set { box.append($0) }
+
+        await work()
+
+        let deadline = Date().addingTimeInterval(3)
+        repeat {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            if box.values.filter({ $0.kind == .memoryPressure }).count >= expected,
+               expected > 0
+            {
+                break
+            }
+        } while Date() < deadline && expected > 0
+        if expected == 0 { try? await Task.sleep(nanoseconds: 300_000_000) }
+
+        await StarWarnings.shared.set(handler: nil)
+        await StarWarnings.shared.setMinimumInterval(30)
+        await StarWarnings.shared.reset()
+
+        return box.values.filter { $0.kind == .memoryPressure }
+    }
 
     /// Runs `work`, returning false if it did not finish within the timeout.  Used to assert that
     /// a reservation is *admitted* rather than queued, without hanging the suite if it is not.
@@ -253,5 +396,23 @@ final class MemoryMonitorTests: XCTestCase {
     private actor Flag {
         var value = false
         func set() { value = true }
+    }
+}
+
+
+/// Collects warnings from the relay's handler, which is `@Sendable` and called from whatever
+/// context posted.
+private final class Box: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [StarWarning] = []
+
+    func append(_ warning: StarWarning) {
+        lock.lock(); defer { lock.unlock() }
+        storage.append(warning)
+    }
+
+    var values: [StarWarning] {
+        lock.lock(); defer { lock.unlock() }
+        return storage
     }
 }

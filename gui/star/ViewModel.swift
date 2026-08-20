@@ -98,8 +98,8 @@ public final class ViewModel {
 
     // MARK: - Machine warnings
 
-    /// The most recent `StarWarning` of any severity, so a status area can show that
-    /// something is off without interrupting the user.
+    /// The most recent `StarWarning` of any severity, whether or not it was shown anywhere.
+    /// The banner below is what the user actually sees for the ones that do not interrupt.
     var latestWarning: StarWarning?
 
     var showWarningAlert = false
@@ -107,20 +107,118 @@ public final class ViewModel {
     var warningMessage: String = ""
     var warningSuggestion: String?
 
+    /// The message and the suggestion as one block of text, for the system alert — which
+    /// takes a single body string.  The suggestion gets its own paragraph because, unlike
+    /// an error, there is usually something the user can actually do about it.
+    var warningAlertText: String {
+        guard let warningSuggestion else { return warningMessage }
+        return "\(warningMessage)\n\n\(warningSuggestion)"
+    }
+
+    /// What the alert currently on screen is about, so acknowledging it silences that
+    /// condition rather than whatever happened to be reported since.
+    private var alertingWarningKind: StarWarning.Kind?
+
+    /// Conditions the user has already been interrupted about and dismissed.
+    ///
+    /// These conditions are sampled for as long as they last, and `StarWarnings` re-delivers
+    /// the same kind every 30 seconds, so without this the modal comes straight back after
+    /// the user presses OK.  Saying it once is the whole of what a modal can usefully do; a
+    /// repeat goes to the banner, the log and the run marker instead.
+    private var acknowledgedWarningKinds: Set<StarWarning.Kind> = []
+
+    // MARK: - the banner
+
+    /// The warning the banner is showing, if any.
+    ///
+    /// The banner is where every warning that deliberately did *not* interrupt goes: the
+    /// `warning`-severity ones, and repeats of a `critical` condition the user has already
+    /// acknowledged.  Without it those only reached the log, which in a gui means nobody sees
+    /// them — the whole point of a severity that does not interrupt is that there is somewhere
+    /// quieter for it to go.
+    private(set) var bannerWarning: StarWarning?
+
+    /// How long the banner stays up for a condition that passes on its own.
+    ///
+    /// Longer than the 30 seconds `StarWarnings` waits before re-delivering the same kind, so
+    /// a condition that is still happening keeps the banner alive and one that has stopped
+    /// takes it down shortly afterwards.  A property rather than a constant so tests do not
+    /// have to wait a minute.
+    var bannerLifetime: TimeInterval = 60
+
+    private var bannerExpiry: Task<Void, Never>?
+
+    /// Show a warning in the banner, replacing whatever was there.
+    ///
+    /// The newest report wins: these arrive at most every 30 seconds per kind, and a banner
+    /// that queued them would be showing the user a condition from several minutes ago.
+    private func show(inBanner warning: StarWarning) {
+        bannerWarning = warning
+        bannerExpiry?.cancel()
+        bannerExpiry = nil
+
+        // A fact about the run — output that could not be written, a disk that will run out —
+        // stays until the user takes it down.  It does not stop being true, and it is posted
+        // once, so a banner that expired could take it away before anyone read it.
+        guard warning.describesAPassingCondition, bannerLifetime > 0 else { return }
+
+        let lifetime = bannerLifetime
+        bannerExpiry = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(lifetime * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            guard let self, self.bannerWarning?.time == warning.time else { return }
+            self.bannerWarning = nil
+            self.bannerExpiry = nil
+        }
+    }
+
+    /// The banner's Dismiss button.
+    func dismissBanner() {
+        bannerExpiry?.cancel()
+        bannerExpiry = nil
+        bannerWarning = nil
+    }
+
     /// Route a warning to the user.
     ///
     /// Only `critical` interrupts.  A `warning` — star pausing work because the machine is
-    /// busy — is something the user may want to know but does not need to act on, and a
-    /// modal for it would train them to dismiss the modal that matters.  The critical ones
-    /// are memory pressure (the last notice before the system kills the app) and the report
-    /// of a previous run that was killed.
+    /// busy, or the system asking for memory back — is something the user may want to know
+    /// but does not need to act on, and a modal for it would train them to dismiss the modal
+    /// that matters, so it goes to the banner instead.  The critical ones are memory pressure
+    /// at the level where the system is about to start killing processes, and the report of a
+    /// previous run that was killed.
     func report(warning: StarWarning) {
         self.latestWarning = warning
-        guard warning.severity == .critical else { return }
+        guard warning.severity == .critical else {
+            show(inBanner: warning)
+            return
+        }
+        guard !acknowledgedWarningKinds.contains(warning.kind) else {
+            Log.i("not interrupting again for \(warning.kind.rawValue): already acknowledged")
+            // Still worth saying, quietly: the condition the user acknowledged is happening
+            // again, or still happening.
+            show(inBanner: warning)
+            return
+        }
         self.warningTitle = warning.title
         self.warningMessage = warning.message
         self.warningSuggestion = warning.suggestion
+        self.alertingWarningKind = warning.kind
         self.showWarningAlert = true
+    }
+
+    /// The alert's OK button.  Closes it, and remembers the condition so the same one cannot
+    /// put the same alert straight back up.
+    ///
+    /// Deliberately does not leave the same warning behind in the banner: the user has just
+    /// read it and said so, and making them dismiss the same sentence twice is how a banner
+    /// becomes something to click past.  A *later* report of the condition does go there.
+    func acknowledgeWarning() {
+        self.showWarningAlert = false
+        if let kind = alertingWarningKind {
+            acknowledgedWarningKinds.insert(kind)
+            alertingWarningKind = nil
+        }
     }
 
     var showCloseConfirmation = false
@@ -212,6 +310,11 @@ public final class ViewModel {
         cursorStack = []
         cursor = .arrow
         frameGraphViewModel.reset()
+        // A condition the user acknowledged about the sequence they just closed should not
+        // stay acknowledged for the next one, and a banner about it should not still be up.
+        acknowledgedWarningKinds = []
+        alertingWarningKind = nil
+        dismissBanner()
     }
 
     func startup(withConfigFile jsonConfigFilename: String) async throws {

@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "Mohon laporkan ini — ini kutu di star, bukan masalah pada gambarmu.",
   "warning.memory_pressure.message": "Memori sistem menipis dan sistem bisa menghentikan star untuk mengambilnya kembali. star sedang menahan {0} MB.",
   "warning.memory_pressure.suggestion": "Menutup aplikasi lain sekarang mungkin membuat proses ini bisa selesai. Bila dihentikan, lanjutkan dan tambahkan --keypoint-divisor 1.5 agar memakai lebih sedikit memori.",
+  "warning.memory_pressure_mild.message": "Sistem meminta aplikasi mengembalikan memori. star sedang menahan {0} MB dan menjeda pekerjaan baru alih-alih menambahnya.",
+  "warning.memory_pressure_mild.suggestion": "Tidak ada yang perlu dilakukan — begitu sistem tenang, prosesnya akan kembali cepat dengan sendirinya. Menutup aplikasi lain akan mempercepatnya.",
   "warning.output_write_failed.message": "star tidak bisa menulis keluarannya. Bingkai pertama yang gagal adalah {0}.",
   "warning.output_write_failed.suggestion": "Kemungkinan besar cakramnya penuh, atau folder keluaran tidak bisa ditulisi. Kosongkan sebagian ruang lalu lanjutkan prosesnya — tidak ada yang sudah ditulis yang hilang.",
   "warning.oversized_reservation.message": "Satu tahap saja dari proses ini butuh {0} MB, lebih besar dari {1} MB yang boleh dipakai star di mesin ini, jadi ia berjalan tanpa batas memori dan bisa dihentikan sistem.",

@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "これは報告してください。star のバグであり、画像の問題ではありません。",
   "warning.memory_pressure.message": "システムのメモリが不足しており、回収のために star を停止する可能性があります。star は {0} MB を保持しています。",
   "warning.memory_pressure.suggestion": "今すぐ他のアプリケーションを終了すれば、この実行を完了できるかもしれません。停止された場合は、--keypoint-divisor 1.5 を追加して再開すればメモリ使用量を減らせます。",
+  "warning.memory_pressure_mild.message": "システムがアプリケーションにメモリの返却を求めています。star は {0} MB を保持しており、これ以上増やさずに新しい作業を一時停止しています。",
+  "warning.memory_pressure_mild.suggestion": "何もする必要はありません。システムが落ち着けば実行は自然に速度を取り戻します。他のアプリケーションを終了すると、その助けになります。",
   "warning.output_write_failed.message": "star が出力を書き出せませんでした。最初に失敗したフレームは {0} です。",
   "warning.output_write_failed.suggestion": "ディスクがいっぱいか、出力フォルダに書き込めない可能性が高いです。空き容量を確保して実行を再開してください。すでに書き出された分は失われていません。",
   "warning.oversized_reservation.message": "この実行の 1 工程だけで {0} MB が必要で、これはこのマシンで star に許可された {1} MB を超えています。そのためメモリ制限なしで動作しており、システムに停止される可能性があります。",

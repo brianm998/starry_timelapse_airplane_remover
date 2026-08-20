@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "Meld dit alsjeblieft — het is een fout in star, geen probleem met je afbeeldingen.",
   "warning.memory_pressure.message": "Het systeem heeft weinig geheugen en kan star stoppen om het terug te winnen. star houdt {0} MB vast.",
   "warning.memory_pressure.suggestion": "Nu andere programma's sluiten kan deze run alsnog laten afronden. Wordt hij gestopt, hervat hem dan met --keypoint-divisor 1.5 erbij om minder geheugen te gebruiken.",
+  "warning.memory_pressure_mild.message": "Het systeem vraagt programma's om geheugen terug te geven. star houdt {0} MB vast en pauzeert nieuw werk in plaats van er meer bij te doen.",
+  "warning.memory_pressure_mild.suggestion": "Er hoeft niets te gebeuren — zodra het systeem tot rust komt, gaat de run vanzelf weer sneller. Andere programma's sluiten helpt daarbij.",
   "warning.output_write_failed.message": "star kon zijn uitvoer niet schrijven. Het eerste beeld waarop het misging was {0}.",
   "warning.output_write_failed.suggestion": "Waarschijnlijk is de schijf vol, of kan er niet in de uitvoermap worden geschreven. Maak wat ruimte vrij en hervat de run — van wat al geschreven is gaat niets verloren.",
   "warning.oversized_reservation.message": "Eén stap van deze run heeft {0} MB nodig, meer dan de {1} MB die star op deze machine mag gebruiken. Hij draait daarom zonder geheugenlimiet en kan door het systeem worden gestopt.",

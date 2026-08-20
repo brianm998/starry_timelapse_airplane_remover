@@ -809,6 +809,8 @@
   "warning.memory_gating_disabled.suggestion": "Xin hãy báo lại điều này — đây là lỗi của star, không phải vấn đề ở ảnh của bạn.",
   "warning.memory_pressure.message": "Hệ thống đang thiếu bộ nhớ và có thể dừng star để thu hồi. star đang giữ {0} MB.",
   "warning.memory_pressure.suggestion": "Đóng bớt ứng dụng khác ngay bây giờ có thể giúp lần chạy này hoàn tất. Nếu bị dừng, hãy tiếp tục và thêm --keypoint-divisor 1.5 để dùng ít bộ nhớ hơn.",
+  "warning.memory_pressure_mild.message": "Hệ thống đang yêu cầu các ứng dụng trả lại bộ nhớ. star đang giữ {0} MB và tạm dừng nhận việc mới thay vì thêm vào.",
+  "warning.memory_pressure_mild.suggestion": "Không cần làm gì — khi hệ thống dịu lại, lần chạy sẽ tự lấy lại tốc độ. Đóng bớt ứng dụng khác sẽ giúp nhanh hơn.",
   "warning.output_write_failed.message": "star không ghi được kết quả. Khung đầu tiên bị lỗi là {0}.",
   "warning.output_write_failed.suggestion": "Nhiều khả năng đĩa đã đầy, hoặc thư mục kết quả không ghi được. Hãy giải phóng chút dung lượng rồi tiếp tục lần chạy — không mất gì trong phần đã ghi.",
   "warning.oversized_reservation.message": "Chỉ một bước của lần chạy này đã cần {0} MB, nhiều hơn mức {1} MB mà star được phép dùng trên máy này, nên nó đang chạy không có giới hạn bộ nhớ và có thể bị hệ thống dừng.",

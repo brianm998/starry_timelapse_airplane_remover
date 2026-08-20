@@ -32,7 +32,11 @@ public struct StarWarning: Sendable, Codable, Equatable {
     /// What was noticed.  The kind is also the dedup key in `StarWarnings`, so add cases
     /// for genuinely distinct conditions rather than for variations of one condition's
     /// wording.
-    public enum Kind: String, Sendable, Codable {
+    ///
+    /// `CaseIterable` so that a test can insist every kind has been classified by
+    /// `describesAPassingCondition` — a `switch` is exhaustive at compile time, but the two
+    /// *lists* a banner's behaviour depends on are not.
+    public enum Kind: String, Sendable, Codable, CaseIterable {
         /// The OS reported memory pressure (`DispatchSource.MemoryPressureEvent`).  On
         /// Darwin this is the last warning the system gives before jetsam starts killing.
         case memoryPressure
@@ -135,6 +139,27 @@ public struct StarWarning: Sendable, Codable, Equatable {
         case .outputWriteFailed:    return localized("warning.title.output_write_failed")
         case .lowDiskSpace:         return localized("warning.title.low_disk_space")
         case .artifactsInvalidated: return localized("warning.title.artifacts_invalidated")
+        }
+    }
+
+    /// Whether this describes a state of the machine that passes on its own, as opposed to a
+    /// fact about the run that stays true.
+    ///
+    /// A client showing warnings in a banner needs the difference.  "The system is asking
+    /// applications to give memory back" is stale a minute after it stops being true, and a
+    /// banner still asserting it is worse than no banner — whereas "star could not write its
+    /// output" is exactly as true an hour later, and a banner that took itself down would be
+    /// hiding it.  So the first kind is shown for a while and the second until dismissed.
+    ///
+    /// The three passing ones are the machine-state signals `MemoryMonitor` samples while it
+    /// is gating admissions; everything else is posted once, about something that happened.
+    public var describesAPassingCondition: Bool {
+        switch kind {
+        case .memoryPressure, .lowSystemMemory, .footprintOverBudget:
+            return true
+        case .oversizedReservation, .memoryGatingDisabled, .previousRunDied,
+             .outputWriteFailed, .lowDiskSpace, .artifactsInvalidated:
+            return false
         }
     }
 
