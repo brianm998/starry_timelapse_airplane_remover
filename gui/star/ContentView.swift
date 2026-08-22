@@ -148,6 +148,7 @@ struct UserPreferencesEditingView: View {
     @State private var showHorizonOnMainViewInfo = false
     @State private var showHorizonPainterInstructionsInfo = false
     @State private var showSkipRenderPromptInfo = false
+    @State private var showProcessingWindowInfo = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -324,6 +325,43 @@ struct UserPreferencesEditingView: View {
 
                         if showSkipRenderPromptInfo {
                             Text(localized("ui.when_enabled_the_render_prompts_before_and"))
+                                .foregroundColor(.white)
+                                .font(.body)
+                                .padding(8)
+                                .background(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                .cornerRadius(4)
+                        }
+                    }
+                    .padding()
+                    .background(Color(red: 0.12, green: 0.12, blue: 0.12))
+                    .cornerRadius(6)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text(localized("ui.show_processing_window"))
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Spacer()
+                            Toggle(isOn: Binding(
+                                // Unset means shown: this is the default, and the
+                                // preference exists to turn it off.
+                                get: { viewModel.userPreferences.showProcessingWindow ?? true },
+                                set: { newValue in
+                                    viewModel.userPreferences.showProcessingWindow = newValue
+                                    viewModel.imageSequence?
+                                      .userPreferences.showProcessingWindow = newValue
+                                }
+                            )) { }
+                            .toggleStyle(.switch)
+                            Button(action: { showProcessingWindowInfo.toggle() }) {
+                                Image(systemName: showProcessingWindowInfo ? "chevron.up" : "chevron.down")
+                                    .foregroundColor(.blue)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+
+                        if showProcessingWindowInfo {
+                            Text(localized("ui.when_enabled_a_window_showing_each"))
                                 .foregroundColor(.white)
                                 .font(.body)
                                 .padding(8)

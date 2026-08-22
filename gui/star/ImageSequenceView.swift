@@ -94,6 +94,17 @@ struct ImageSequenceView: View {
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)
         }
+        // An overlay rather than another member of the `ZStack` above, so that the modal
+        // cannot become part of this window's minimum size — the same reason the warning
+        // banner in `ContentView` is one.  Conditioned on the run still being live, so a
+        // run that finishes or is stopped takes the modal with it.
+          .overlay {
+              if viewModel.processingModalShowing,
+                 viewModel.isProcessingFrames
+              {
+                  ProcessingModalView()
+              }
+          }
           .alert(localized("ui.error"), isPresented: $viewModel.showErrorAlert) {
               Button(localized("ui.ok")) {}
           } message: {

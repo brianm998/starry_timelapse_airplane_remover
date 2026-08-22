@@ -35,6 +35,7 @@
 		D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC102A2CF92900F38194 /* VideoPlaybackButtons.swift */; };
 		D33FFC142A2CFAED00F38194 /* ImageSequenceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC132A2CFAED00F38194 /* ImageSequenceView.swift */; };
 		D33FFC1E2A2D39BA00F38194 /* ProgressBars.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC1D2A2D39BA00F38194 /* ProgressBars.swift */; };
+		D3A1C0DE000700070007AAA6 /* ProcessingModalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A1C0DE000800080008AAA7 /* ProcessingModalView.swift */; };
 		D33FFC202A2D3BCD00F38194 /* FrameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC1F2A2D3BCD00F38194 /* FrameViewModel.swift */; };
 		D33FFC232A2D48F300F38194 /* FrameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC212A2D48F300F38194 /* FrameView.swift */; };
 		D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC222A2D48F300F38194 /* FrameEditView.swift */; };
@@ -161,6 +162,7 @@
 		D33FFC102A2CF92900F38194 /* VideoPlaybackButtons.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VideoPlaybackButtons.swift; sourceTree = "<group>"; };
 		D33FFC132A2CFAED00F38194 /* ImageSequenceView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ImageSequenceView.swift; sourceTree = "<group>"; };
 		D33FFC1D2A2D39BA00F38194 /* ProgressBars.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ProgressBars.swift; sourceTree = "<group>"; };
+		D3A1C0DE000800080008AAA7 /* ProcessingModalView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ProcessingModalView.swift; sourceTree = "<group>"; };
 		D33FFC1F2A2D3BCD00F38194 /* FrameViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameViewModel.swift; sourceTree = "<group>"; };
 		D33FFC212A2D48F300F38194 /* FrameView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameView.swift; sourceTree = "<group>"; };
 		D33FFC222A2D48F300F38194 /* FrameEditView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameEditView.swift; sourceTree = "<group>"; };
@@ -373,6 +375,7 @@
 				D33FFC212A2D48F300F38194 /* FrameView.swift */,
 				D33FFC1F2A2D3BCD00F38194 /* FrameViewModel.swift */,
 				D33FFC1D2A2D39BA00F38194 /* ProgressBars.swift */,
+				D3A1C0DE000800080008AAA7 /* ProcessingModalView.swift */,
 				D33FFC132A2CFAED00F38194 /* ImageSequenceView.swift */,
 				D33FFC0F2A2CF92900F38194 /* SystemButton.swift */,
 				D33FFC102A2CF92900F38194 /* VideoPlaybackButtons.swift */,
@@ -624,6 +627,7 @@
 				D3A1C0DE000600060006AAA5 /* KeypointDivisorStartupView.swift in Sources */,
 				D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */,
 				D33FFC1E2A2D39BA00F38194 /* ProgressBars.swift in Sources */,
+				D3A1C0DE000700070007AAA6 /* ProcessingModalView.swift in Sources */,
 				D3FBFA272CEAC0FF00A23FC6 /* InfoDialogView.swift in Sources */,
 				D392EB1B2E104D410020E16A /* ChangeToolButton.swift in Sources */,
 				D35A28462E4FC8AE007121E6 /* FinderStyleDropZone.swift in Sources */,

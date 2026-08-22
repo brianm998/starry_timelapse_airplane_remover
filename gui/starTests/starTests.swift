@@ -1169,3 +1169,189 @@ extension StarWarning.Kind {
         StarWarning(kind: self, severity: .warning, message: "").title
     }
 }
+
+/// The processing modal draws one bar per step from `FrameGraphViewModel`'s operation
+/// counters.  Those counters are cumulative for as long as a sequence is open — they only
+/// reset when it is closed — so every number the modal shows is a subtraction, and a
+/// subtraction that is wrong still draws a perfectly plausible bar.  That is what these
+/// pin down.
+final class ProcessingStepsTests: XCTestCase {
+
+    // MARK: - which steps are listed
+
+    func testTheStepsAreInTheOrderTheModalStacksThem() {
+        XCTAssertEqual(ProcessingSteps.types(horizonEnabled: true, earthEnabled: true),
+                       [.horizon, .mergedHorizon,
+                        .starKeypoints, .earthKeypoints,
+                        .starHomography, .earthHomography,
+                        .outliers, .merge])
+    }
+
+    func testEarthStepsAreOnlyListedWhenEarthAlignmentIsOn() {
+        let types = ProcessingSteps.types(horizonEnabled: true, earthEnabled: false)
+        XCTAssertEqual(types, [.horizon, .mergedHorizon, .starKeypoints, .starHomography,
+                               .outliers, .merge])
+    }
+
+    func testHorizonStepsAreOnlyListedWhenHorizonDetectionIsOn() {
+        let types = ProcessingSteps.types(horizonEnabled: false, earthEnabled: false)
+        XCTAssertEqual(types, [.starKeypoints, .starHomography, .outliers, .merge])
+    }
+
+    /// `preview` is thumbnail work that has nothing to do with a run, and the modal would be
+    /// showing a bar that fills in while nothing the user asked for is happening.
+    func testPreviewIsNeverListed() {
+        for horizon in [true, false] {
+            for earth in [true, false] {
+                XCTAssertFalse(
+                  ProcessingSteps.types(horizonEnabled: horizon, earthEnabled: earth)
+                    .contains(.preview))
+            }
+        }
+    }
+
+    /// Every listed step needs a row label, and `localized` returns the key itself when the
+    /// catalogue does not have it — which renders as `ui.merged_horizon` on screen rather
+    /// than as anything a user would recognise.
+    func testEveryListedStepHasALabelFromTheCatalogue() {
+        for type in ProcessingSteps.types(horizonEnabled: true, earthEnabled: true) {
+            let name = type.stepName
+            XCTAssertFalse(name.isEmpty, "\(type) has no name")
+            XCTAssertFalse(name.hasPrefix("ui."),
+                           "\(type) is labelled '\(name)', which is a missing catalogue key")
+        }
+    }
+
+    /// Same for the tooltip that explains the step.  An empty one is a row that silently
+    /// stops explaining itself; a `ui.` one is the key showing through.
+    func testEveryListedStepHasHoverHelpFromTheCatalogue() {
+        for type in ProcessingSteps.types(horizonEnabled: true, earthEnabled: true) {
+            let help = type.stepHelp
+            XCTAssertFalse(help.isEmpty, "\(type) has no hover help")
+            XCTAssertFalse(help.hasPrefix("ui."),
+                           "\(type)'s hover help is '\(help)', a missing catalogue key")
+            XCTAssertNotEqual(help, type.stepName,
+                              "\(type)'s hover help just repeats its label")
+        }
+    }
+
+    // MARK: - the arithmetic
+
+    private func counts(_ entries: [OperationType: (queued: UInt, running: UInt, done: UInt)])
+      -> [OperationType: [OperationState: UInt]]
+    {
+        entries.mapValues { [.queued: $0.queued, .running: $0.running, .done: $0.done] }
+    }
+
+    private func step(_ progress: [ProcessingStepProgress],
+                      _ type: OperationType) throws -> ProcessingStepProgress
+    {
+        try XCTUnwrap(progress.first { $0.type == type })
+    }
+
+    func testAStepReportsItsQueuedRunningAndDoneCounts() throws {
+        let progress = ProcessingSteps.progress(
+          for: [.horizon],
+          counts: counts([.horizon: (queued: 5, running: 2, done: 3)]))
+        let horizon = try step(progress, .horizon)
+
+        XCTAssertEqual(horizon.queued, 5)
+        XCTAssertEqual(horizon.running, 2)
+        XCTAssertEqual(horizon.done, 3)
+        XCTAssertEqual(horizon.total, 10)
+        XCTAssertTrue(horizon.hasWork)
+    }
+
+    func testTheBarSegmentsAreFractionsOfTheWholeStep() throws {
+        let progress = ProcessingSteps.progress(
+          for: [.merge],
+          counts: counts([.merge: (queued: 1, running: 1, done: 2)]))
+        let merge = try step(progress, .merge)
+
+        XCTAssertEqual(merge.doneFraction, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(merge.runningFraction, 0.25, accuracy: 0.0001)
+    }
+
+    /// A step whose artifacts were all on disk already builds no operations at all.  It has
+    /// to divide by something other than zero, and it must not read as 100% done.
+    func testAStepWithNoOperationsHasNoWorkAndNoFilledBar() throws {
+        let progress = ProcessingSteps.progress(for: [.starKeypoints], counts: [:])
+        let keypoints = try step(progress, .starKeypoints)
+
+        XCTAssertEqual(keypoints.total, 0)
+        XCTAssertFalse(keypoints.hasWork)
+        XCTAssertEqual(keypoints.doneFraction, 0)
+        XCTAssertEqual(keypoints.runningFraction, 0)
+    }
+
+    func testAStepIsAskedForEvenWhenTheCountersHaveNothingForIt() {
+        let progress = ProcessingSteps.progress(
+          for: [.horizon, .merge],
+          counts: counts([.horizon: (queued: 0, running: 0, done: 4)]))
+
+        XCTAssertEqual(progress.map(\.type), [.horizon, .merge],
+                       "every requested step needs a row, so the rows do not move about "
+                         + "as the run reaches each one")
+    }
+
+    // MARK: - the baseline
+
+    /// The whole point of the baseline: a second run in the same session starts with the
+    /// first run's operations still counted as done, and without subtracting them the bars
+    /// would open most of the way across.
+    func testASecondRunMeasuresFromWhereTheFirstOneFinished() throws {
+        let baseline = counts([.horizon: (queued: 0, running: 0, done: 20)])
+        let now = counts([.horizon: (queued: 2, running: 1, done: 22)])
+
+        let horizon = try step(ProcessingSteps.progress(for: [.horizon],
+                                                        counts: now,
+                                                        since: baseline),
+                               .horizon)
+        XCTAssertEqual(horizon.total, 5, "this run created five ops, not twenty five")
+        XCTAssertEqual(horizon.done, 2)
+        XCTAssertEqual(horizon.running, 1)
+        XCTAssertEqual(horizon.queued, 2)
+    }
+
+    func testAnEmptyBaselineMeasuresEverythingTheCountersHold() throws {
+        let now = counts([.merge: (queued: 0, running: 0, done: 7)])
+        let merge = try step(ProcessingSteps.progress(for: [.merge], counts: now), .merge)
+
+        XCTAssertEqual(merge.done, 7)
+        XCTAssertEqual(merge.total, 7)
+        XCTAssertEqual(merge.doneFraction, 1)
+    }
+
+    /// The gui does not let a second run start while one is going, but nothing in the
+    /// arithmetic depends on that: a baseline taken with work still in flight has to produce
+    /// a bar that can be drawn, not a negative width.
+    func testLeftoverOperationsFromBeforeTheBaselineCannotMakeASegmentNegative() throws {
+        let baseline = counts([.starHomography: (queued: 3, running: 0, done: 0)])
+        // those three finished, and nothing new was ever queued
+        let now = counts([.starHomography: (queued: 0, running: 0, done: 3)])
+
+        let align = try step(ProcessingSteps.progress(for: [.starHomography],
+                                                      counts: now,
+                                                      since: baseline),
+                             .starHomography)
+        XCTAssertGreaterThanOrEqual(align.queued, 0)
+        XCTAssertGreaterThanOrEqual(align.running, 0)
+        XCTAssertGreaterThanOrEqual(align.done, 0)
+        XCTAssertEqual(align.total, align.queued + align.running + align.done)
+        XCTAssertLessThanOrEqual(align.doneFraction, 1)
+    }
+
+    /// Every op the counters hold is in exactly one state, so the three segments always add
+    /// up to the whole bar however the counts move.
+    func testTheSegmentsAlwaysFillExactlyTheWholeBar() throws {
+        for done in 0...4 {
+            for running in 0...4 {
+                let now = counts([.merge: (queued: 4, running: UInt(running), done: UInt(done))])
+                let merge = try step(ProcessingSteps.progress(for: [.merge], counts: now), .merge)
+                XCTAssertEqual(merge.doneFraction + merge.runningFraction
+                                 + Double(merge.queued) / Double(merge.total),
+                               1, accuracy: 0.0001)
+            }
+        }
+    }
+}
