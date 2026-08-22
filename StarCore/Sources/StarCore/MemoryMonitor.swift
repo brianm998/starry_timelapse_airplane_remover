@@ -16,21 +16,35 @@ You should have received a copy of the GNU General Public License along with sta
 
 /// Gates large operations to prevent over-committing RAM.
 ///
-/// Uses pure accounting: tracks `reservedBytes` (sum of estimates for all
-/// in-flight ops) and refuses to start a new op when
-/// `reservedBytes + needed > physicalMemory * budgetFraction`.
+/// Tracks `reservedBytes` (the sum of estimates for all in-flight ops) and refuses to
+/// start a new op when `reservedBytes + needed > effectiveBudget()`.
 ///
-/// Ignores actual free RAM — assumes the OS will page things out — so there
-/// is no race between when an op starts and when it peaks.
+/// There are two budgets, and the difference between them matters:
+///
+///   - `budget` is structural — `physicalMemory * budgetFraction`. It answers "could this
+///     machine ever do this", and is used for sizing advice and for the impossible-request
+///     test in `reserve(bytes:)`.
+///   - `effectiveBudget()` is the admission limit — what star may hold *right now*, given
+///     what the rest of the machine is holding.
+///
+/// It used to gate on the structural figure alone, and that is a claim about the machine
+/// dressed up as a claim about the moment. On a 128GB machine at 0.85 it says star may
+/// reserve 111GB, whether star is the only thing running or is sharing the machine with a
+/// 42MP Lightroom export. A 32.7MP sequence took it at its word — 14 concurrent keypoint
+/// ops, 110GB reserved, 85GB actually resident — and the machine ran out of RAM and took
+/// the user's window session down with it. Nothing in the accounting could have noticed,
+/// because star's own footprint never came near the 111GB it was measured against.
 ///
 /// Waiters are patient by design. A request that cannot ever fit (bigger than the
-/// whole budget) is admitted immediately with an error, so every waiter that stays
+/// structural budget) is admitted immediately with an error, so every waiter that stays
 /// queued is one that *can* eventually be satisfied. Beyond that, a waiter is only
-/// forced over budget as a deadlock escape hatch: at most one at a time, spaced by
-/// `forcedAdmissionInterval`. That matters because waiters tend to enqueue together
-/// — they become ready at the same barrier — so their deadlines also expire
-/// together, and "admit everything past its deadline" would admit everything at
-/// once, which is precisely the overload the monitor exists to prevent.
+/// forced over budget as a deadlock escape hatch: at most one outstanding at a time,
+/// spaced by `forcedAdmissionInterval`, and never while the OS reports critical pressure.
+/// That matters because waiters tend to enqueue together — they become ready at the same
+/// barrier — so their deadlines also expire together, and "admit everything past its
+/// deadline" would admit everything at once, which is precisely the overload the monitor
+/// exists to prevent. See `drainReadyWaiters()` for what happened when the "at most one
+/// outstanding" half of that was documented but not implemented.
 ///
 /// API:
 ///   - `reserve(bytes:)` — call before starting heavy work; suspends until
@@ -70,6 +84,10 @@ public actor MemoryMonitor {
     /// When the last over-budget waiter was forced through, if any.
     private var lastForcedAdmission: Date?
 
+    /// When `drainReadyWaiters()` last reported that it was declining to force anything.
+    /// Purely for rate-limiting that log line — see its use.
+    private var lastWithholdLog: Date?
+
     // MARK: - Ground truth
 
     /// Where the monitor reads actual memory state from. Injectable so tests can drive
@@ -92,10 +110,22 @@ public actor MemoryMonitor {
 
     private var reality: RealityProbe = .live
 
-    /// Refuse new admissions when the system has less than this much left. Below this
-    /// the OS starts swapping, and swapping is the failure mode being avoided — an op
-    /// that "fits the ledger" is no help if the machine is already thrashing.
-    private var systemFloorBytes: UInt64 = 2 * 1024 * 1024 * 1024
+    /// What star leaves to the rest of the machine: the OS, the window server, and
+    /// whatever else the user is running. New admissions are refused once the system has
+    /// less than this left, and `effectiveBudget()` subtracts it from what star may grow
+    /// into. Below it the OS starts compressing and swapping, and that is the failure mode
+    /// being avoided — an op that "fits the ledger" is no help if the machine is thrashing.
+    ///
+    /// Proportional, not the flat 2GB it used to be. 2GB is a reasonable share of a 16GB
+    /// laptop and an absurd one on a 128GB workstation, where 2GB is 1.5% and someone is
+    /// very likely running something else — which is precisely the case that killed a run:
+    /// star at 85GB alongside a Lightroom export, on a machine whose floor it could not
+    /// reach because 2GB free means the machine has been thrashing for a long time already.
+    ///
+    /// `physical / 16` is 6.25%: 8GB at 128GB, 12GB at 192GB, and clamped up to 2GB at or
+    /// below 32GB so small machines keep the old behaviour.
+    private var systemFloorBytes: UInt64 =
+      max(2 * 1024 * 1024 * 1024, UInt64(ProcessInfo.processInfo.physicalMemory) / 16)
 
     /// How loudly the OS is complaining about memory.
     ///
@@ -134,8 +164,60 @@ public actor MemoryMonitor {
 
     private let physicalMemory: UInt64 = UInt64(ProcessInfo.processInfo.physicalMemory)
 
+    /// The structural ceiling: a fraction of the machine's RAM, and nothing else.
+    ///
+    /// Use this only for questions about what this machine could *ever* do — sizing
+    /// advice, and the "this request can never fit" test in `reserve(bytes:)`. It is not
+    /// the admission limit; `effectiveBudget()` is. Deciding admissions on this figure is
+    /// what let a run reserve 111GB of a 128GB machine while Lightroom was exporting, with
+    /// nothing in the accounting that could notice.
     private var budget: UInt64 {
         UInt64(Double(physicalMemory) * budgetFraction)
+    }
+
+    /// What star may hold right now: what it already holds, plus what the machine can
+    /// spare above `systemFloorBytes`, never more than the structural `budget`.
+    ///
+    /// The static budget answers "how much of this machine is star allowed to use", which
+    /// is the wrong question, because it is the same answer whether star is the only thing
+    /// running or is sharing the machine with a 42MP Lightroom export. A 128GB machine at
+    /// `maxMatMemoryFraction` 0.85 yields 111GB, and `Config.keypointConcurrency` will
+    /// happily fill essentially all of it with keypoint ops alone — 14 x 7868MB = 110GB at
+    /// 32.7MP. That was admitted, in full, on a machine that could not hold it.
+    ///
+    /// `footprint + available` is the right shape because it is stable as star grows: every
+    /// page star faults in moves from `available` into `footprint` and the sum barely
+    /// moves. It only shrinks when *something else* takes memory — which is exactly the
+    /// signal the static budget was missing. So this is, in effect, "physical memory minus
+    /// what everyone else is using".
+    ///
+    /// Anchoring on `footprint` rather than on `available` alone is what keeps it from
+    /// starving the pipeline. When the machine has nothing to spare this collapses to
+    /// `footprint`, meaning "keep what you have, finish what you are doing, start nothing
+    /// new" — never to zero, so a run already underway is throttled rather than stopped.
+    /// It also means the sticky footprint noted on `realityBlock()` is harmless here: those
+    /// pages are charged to star either way, and a footprint that has not yet fallen back
+    /// only makes this figure larger, not smaller.
+    ///
+    /// Comparing a predictive ledger against a measured footprint is deliberate. A
+    /// reservation is an upper bound on what an op will allocate, so `reservedBytes` runs
+    /// ahead of `footprint` — mixing them errs toward admitting less, which is the side to
+    /// err on.
+    ///
+    /// Falls back to the static budget when either probe reads 0: that means the platform
+    /// could not answer (see `memory_monitor.c`), not that the machine is empty.
+    private func effectiveBudget() -> UInt64 {
+        let ceiling = budget
+        let footprint = reality.processFootprint()
+        let available = reality.systemAvailable()
+        guard footprint > 0, available > 0 else { return ceiling }
+        // Early out on its own line so the sum below cannot overflow: past this point both
+        // terms are under `physicalMemory`, where a real probe would keep them anyway. A
+        // test is free to inject a footprint near `UInt64.max`, and wrapping it would
+        // produce a tiny budget rather than the intended enormous one.
+        guard footprint < ceiling else { return ceiling }
+        let spare = available > systemFloorBytes ? available - systemFloorBytes : 0
+        return min(ceiling, footprint + spare)
     }
 
     // MARK: - Waiter queue
@@ -176,6 +258,9 @@ public actor MemoryMonitor {
         Log.i("MemoryMonitor configured: budgetFraction=\(self.budgetFraction), " +
               "physical=\(physicalMemory / (1024*1024*1024))GB, " +
               "budget=\(budget / (1024*1024))MB, " +
+              "admitting up to \(effectiveBudget() / (1024*1024))MB right now " +
+              "(system floor \(systemFloorBytes / (1024*1024))MB, " +
+              "\(reality.systemAvailable() / (1024*1024))MB available), " +
               "maxWait=\(Int(self.maxWaitTime))s, " +
               "forcedGap=\(Int(self.forcedAdmissionInterval))s")
     }
@@ -191,7 +276,7 @@ public actor MemoryMonitor {
     public func memoryFreed() {}
 
     /// Reserve `bytes` of budget before starting heavy op work.
-    /// Suspends until `reservedBytes + bytes <= budget`.
+    /// Suspends until `reservedBytes + bytes <= effectiveBudget()`.
     /// Call `release(bytes:)` when the op finishes.
     public func reserve(bytes: UInt64) async {
         guard bytes > 0 else { return }
@@ -201,6 +286,13 @@ public actor MemoryMonitor {
         // say so — either the estimate or the budget is wrong, and that is worth
         // knowing.  This is also what makes it safe for the queue below to be patient:
         // every waiter that remains queued *can* eventually fit.
+        //
+        // Deliberately the structural `budget` and not `effectiveBudget()`.  This branch
+        // admits IMMEDIATELY and ungated, so testing it against a figure that shrinks when
+        // the machine is busy would invert the whole gate: a 7.8GB keypoint op would be
+        // declared impossible and waved straight through at exactly the moment there is no
+        // room for it.  The question here is only whether the request could ever fit on
+        // this machine at all.
         if bytes > budget {
             reservedBytes += bytes
             postWarning(StarWarning(
@@ -217,7 +309,8 @@ public actor MemoryMonitor {
         startPressureMonitoringIfNeeded()
 
         // The ledger says there is room. Check reality agrees before believing it.
-        if reservedBytes + bytes <= budget {
+        let admissionBudget = effectiveBudget()
+        if reservedBytes + bytes <= admissionBudget {
             if let blocked = realityBlock() {
                 realityHolds += 1
                 Log.w("MemoryMonitor: ledger has room for \(bytes / (1024*1024))MB but " +
@@ -225,14 +318,36 @@ public actor MemoryMonitor {
             } else {
                 reservedBytes += bytes
                 Log.d("MemoryMonitor: reserved \(bytes / (1024*1024))MB — " +
-                      "total=\(reservedBytes / (1024*1024))MB / \(budget / (1024*1024))MB")
+                      "total=\(reservedBytes / (1024*1024))MB / \(admissionBudget / (1024*1024))MB")
                 return
             }
         }
 
+        // Say so when it is the *machine* refusing rather than star's own accounting: this
+        // request would have fitted the structural budget and was held only because
+        // something else is holding the memory. Without this the user sees an unexplained
+        // slowdown — the run simply gets slower, with no warning until the machine drops
+        // below the floor, which it may never do. Reusing `lowSystemMemory` rather than
+        // adding a kind because its two sentences already say exactly the right thing, and
+        // `StarWarnings` dedups by kind so a throttled run posts it once rather than per
+        // waiter.
+        if reservedBytes + bytes > admissionBudget, reservedBytes + bytes <= budget {
+            postWarning(StarWarning(
+              kind: .lowSystemMemory,
+              severity: .warning,
+              message: localized("warning.low_system_memory.message",
+                                 reality.systemAvailable() / (1024*1024)),
+              suggestion: localized("warning.low_system_memory.suggestion")
+            ))
+        }
+
         let startTime = Date()
         Log.i("MemoryMonitor: waiting to reserve \(bytes / (1024*1024))MB — " +
-              "reserved=\(reservedBytes / (1024*1024))MB, budget=\(budget / (1024*1024))MB")
+              "reserved=\(reservedBytes / (1024*1024))MB, budget=\(admissionBudget / (1024*1024))MB" +
+              (admissionBudget < budget
+                 ? " (narrowed from \(budget / (1024*1024))MB — the rest of the machine is " +
+                   "holding memory star cannot have)"
+                 : ""))
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let id = nextWaiterId
@@ -270,13 +385,19 @@ public actor MemoryMonitor {
         // The gap between these two is the whole reason the reality brake exists: what
         // the ledger knows about versus what the process is actually holding.
         let unaccounted = footprint > reservedBytes ? footprint - reservedBytes : 0
+        let effective = effectiveBudget()
         return "MemoryMonitor: \(totalWaits) waits, " +
             "avg \(totalWaits > 0 ? String(format: "%.1f", totalWaitTime / Double(totalWaits)) : "0")s, " +
             "\(waiters.count) queued, " +
-            "reserved=\(reservedBytes / (1024*1024))MB / \(budget / (1024*1024))MB, " +
+            "reserved=\(reservedBytes / (1024*1024))MB / \(effective / (1024*1024))MB" +
+            // Both figures, because which one is binding is the question a stalled run
+            // raises: a gap between them means something else on the machine is holding
+            // memory star would otherwise have been allowed to use.
+            (effective < budget ? " (of \(budget / (1024*1024))MB physical)" : "") + ", " +
             "footprint=\(footprint / (1024*1024))MB " +
             "(unaccounted \(unaccounted / (1024*1024))MB), " +
             "systemFree=\(reality.systemAvailable() / (1024*1024))MB, " +
+            "floor=\(systemFloorBytes / (1024*1024))MB, " +
             "realityHolds=\(realityHolds)" +
             (underMemoryPressure ? ", UNDER PRESSURE (\(pressureLevel.rawValue))" : "")
     }
@@ -312,6 +433,15 @@ public actor MemoryMonitor {
     ///
     /// A held-back reservation becomes a normal waiter, so the forced-admission escape
     /// hatch still applies and the brake cannot deadlock the pipeline.
+    ///
+    /// `effectiveBudget()` now covers the same ground continuously rather than as a
+    /// threshold, and it is the part that does the work: the two tests below are worst-case
+    /// backstops that only fire once things are already bad. Neither of them fired at all
+    /// during the run that motivated this. The footprint test could not — star peaked at
+    /// 85.6GB against a 111.4GB budget, comfortably under, while the machine died — and the
+    /// available-memory test could not either, because `star_available_system_memory()` was
+    /// counting dirty anonymous pages as available. Both are fixed, and both are still the
+    /// wrong shape for the job on their own, which is why the budget moved instead.
     private func realityBlock() -> String? {
         if underMemoryPressure {
             return "the OS reports \(pressureLevel.rawValue)-level memory pressure"
@@ -488,24 +618,76 @@ public actor MemoryMonitor {
         var released: [Waiter] = []
         var remaining: [Waiter] = []
 
-        // A timed-out waiter may be forced over budget, but at most one per drain and
-        // no more often than forcedAdmissionInterval.  Waiters are appended in FIFO
-        // order, so the oldest eligible one wins and nothing starves.
+        // A timed-out waiter may be forced over budget, but at most one per drain, no more
+        // often than forcedAdmissionInterval, and only while the two conditions below
+        // hold.  Waiters are appended in FIFO order, so the oldest eligible one wins and
+        // nothing starves.
+        //
+        // Both conditions are load-bearing, and their absence is what turned a stalled
+        // run into a dead machine.  Forcing was unconditional: one op per minute, forever,
+        // with no ceiling.  On a 32.7MP sequence that ratcheted the ledger from 111GB to
+        // 151GB — five 7.8GB admissions in five minutes — and two of the five went through
+        // *after* the OS reported memory pressure, one of them after `critical`.  The
+        // machine took the window server down with it.
+        //
+        //   - `atOrUnderBudget`: only force when the ledger is not ALREADY over the
+        //     structural budget.  Since nothing but forcing can put it over, this is
+        //     exactly "at most one forced admission outstanding at a time", which bounds
+        //     the ledger at `budget` plus one reservation.  That is what the comment here
+        //     always claimed ("keeps the overshoot to a single operation") and what the
+        //     code did not do.  Deliberately the structural `budget` and not
+        //     `effectiveBudget()`: when the machine is full the effective figure sits below
+        //     the ledger more or less permanently, and gating the escape hatch on it would
+        //     be no escape hatch at all.
+        //   - not `.critical`: at this level jetsam is the next thing to happen, and the
+        //     kill arrives as an uncatchable SIGKILL.  Starting more heavy work is how a
+        //     run gets killed rather than merely delayed; a stall is recoverable and a
+        //     SIGKILL is not.  Warn level still forces, because a long sequence crosses
+        //     into warn and back out of it routinely and stalling there would be its own
+        //     bug.
+        //
+        // The residual risk is a chain of nested reservations two deep — an op holding one
+        // reservation while waiting for a second, twice over.  One level deep still
+        // resolves: the single forced admission completes, releases both, and the ledger
+        // falls back under budget for the next one.
+        let atOrUnderBudget = reservedBytes <= budget
         var mayForce = (lastForcedAdmission.map {
             now.timeIntervalSince($0) >= forcedAdmissionInterval
-        } ?? true)
+        } ?? true) && atOrUnderBudget && pressureLevel != .critical
 
         // Evaluated once per drain, not per waiter — it reads the process footprint.
         // Note this does NOT gate the forced path below: forcing is the deadlock escape
         // hatch, and reality being unhappy is exactly when a stuck queue must still
-        // eventually make progress.
+        // eventually make progress — subject to the two limits above, which is where
+        // reality now gets its say.
         let blocked = realityBlock()
         if let blocked, !waiters.isEmpty {
             Log.d("MemoryMonitor: holding \(waiters.count) waiter(s) — \(blocked)")
         }
 
+        // Recomputed per drain rather than per waiter: it reads both probes.
+        let admissionBudget = effectiveBudget()
+
+        // Rate-limited because this is the steady state of a throttled run, and
+        // `drainReadyWaiters()` runs twice a second while anyone is parked: unthrottled it
+        // would be the loudest thing in the diagnostic log of exactly the run someone needs
+        // to read. Once a minute is enough to show how long the stall lasted.
+        if !waiters.isEmpty, !mayForce, !atOrUnderBudget || pressureLevel == .critical,
+           lastWithholdLog.map({ now.timeIntervalSince($0) >= 60 }) ?? true
+        {
+            lastWithholdLog = now
+            Log.i("MemoryMonitor: \(waiters.count) waiter(s) held with forced admission " +
+                  "withheld — " +
+                  (atOrUnderBudget
+                     ? "the OS reports critical memory pressure"
+                     : "the ledger is already \((reservedBytes - budget) / (1024*1024))MB " +
+                       "over the \(budget / (1024*1024))MB budget from an earlier forced " +
+                       "admission") +
+                  ". Waiting for in-flight work to finish rather than adding to it.")
+        }
+
         for waiter in waiters {
-            if blocked == nil, speculativeReserved + waiter.needed <= budget {
+            if blocked == nil, speculativeReserved + waiter.needed <= admissionBudget {
                 released.append(waiter)
                 speculativeReserved += waiter.needed
                 continue
@@ -517,16 +699,17 @@ public actor MemoryMonitor {
                 // ledger still has room, `projected` may be UNDER budget. Subtracting
                 // unconditionally underflows — this trapped as soon as the brake landed.
                 let projected = speculativeReserved + waiter.needed
-                let why = projected > budget
-                    ? "this puts us \((projected - budget) / (1024*1024))MB over the " +
-                      "\(budget / (1024*1024))MB budget"
+                let why = projected > admissionBudget
+                    ? "this puts us \((projected - admissionBudget) / (1024*1024))MB over the " +
+                      "\(admissionBudget / (1024*1024))MB budget"
                     : "the ledger has room (\(projected / (1024*1024))MB of " +
-                      "\(budget / (1024*1024))MB) but " + (blocked ?? "reality disagreed")
+                      "\(admissionBudget / (1024*1024))MB) but " + (blocked ?? "reality disagreed")
                 Log.w("MemoryMonitor: forcing waiter \(waiter.id) " +
                       "(\(waiter.needed / (1024*1024))MB) through — waited " +
                       "\(String(format: "%.0f", now.timeIntervalSince(waiter.deadline) + maxWaitTime))s, " +
                       why + ". Further forced admissions " +
-                      "held for \(Int(forcedAdmissionInterval))s so \(waiters.count - 1) " +
+                      "held for \(Int(forcedAdmissionInterval))s, and none at all until " +
+                      "this one is released, so \(waiters.count - 1) " +
                       "other waiter(s) do not pile on.")
                 released.append(waiter)
                 speculativeReserved += waiter.needed
