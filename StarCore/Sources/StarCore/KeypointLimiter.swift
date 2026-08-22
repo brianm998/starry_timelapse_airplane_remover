@@ -232,9 +232,22 @@ public final class KeypointLimiter: @unchecked Sendable {
         lock.unlock()
 
         if !expired.isEmpty {
+            // Deliberately not "something holding a slot is not completing", which is what
+            // this said and which sent a real diagnosis down the wrong path. The ops were
+            // completing fine; the machine was too loaded for them to finish quickly. At
+            // 32.7MP a healthy keypoint op measured 21.8s min / 50.4s median / 195s max
+            // over 312 of them, so 300s means slot holders have slowed by several times —
+            // and on a machine that is out of memory, adding an ungated op is the last
+            // thing that helps. `MemoryMonitor` is what stops it doing real harm: an
+            // ungated op still has to reserve its 7.8GB, and cannot while the machine is
+            // full. The cap being exceeded here is a queue-depth statement, not a
+            // memory-safety one.
             Log.w("KeypointLimiter: \(expired.count) waiter(s) hit their deadline and are " +
                   "proceeding ungated — the \(cap)-op cap will be exceeded until they " +
-                  "finish. Something holding a keypoint slot is not completing.")
+                  "finish, though the memory gate still applies to each of them. Either a " +
+                  "slot holder is genuinely stuck, or the machine is loaded enough that " +
+                  "ops which normally take under a minute are taking more than five. " +
+                  "Check the MemoryMonitor lines above for which.")
         }
         // Timed-out waiters hold no slot, so they must not release one.
         for continuation in expired { continuation.resume(returning: false) }
