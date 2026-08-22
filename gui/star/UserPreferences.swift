@@ -108,6 +108,12 @@ struct UserPreferences: Codable, Sendable {
         didSet { self.save() }
     }
 
+    // whether starting a processing run puts the processing modal up over the window.
+    // nil means yes: this is on unless the user has turned it off.
+    var showProcessingWindow: Bool? {
+        didSet { self.save() }
+    }
+
     /// The language the user picked from the Language menu, or nil to follow the system.
     ///
     /// A BCP-47 tag rather than an index, so the file survives languages being added or

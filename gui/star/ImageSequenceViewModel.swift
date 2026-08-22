@@ -1159,6 +1159,20 @@ public final class ImageSequenceViewModel {
 
     var shouldShowProcessingSettings: Bool = false
 
+    /// Whether `ProcessingModalView` is up over the rest of the window.
+    ///
+    /// Only ever consulted together with `isProcessingFrames`, so a run that ends — for any
+    /// reason, including one this view model does not hear about directly — takes the modal
+    /// with it and nothing has to remember to close it.
+    var processingModalShowing: Bool = false
+
+    /// What `FrameGraphViewModel`'s counters read when the current run started.
+    ///
+    /// Those counters are cumulative for as long as a sequence is open, so this is what
+    /// lets the modal's bars show the run in front of the user rather than every op since
+    /// the sequence was loaded.  See `ProcessingSteps.progress(for:counts:since:)`.
+    var processingStepBaseline: [OperationType: [OperationState: UInt]] = [:]
+
     // used in initial instructions view
     var showExpertSettings = false
 
@@ -1867,6 +1881,27 @@ public final class ImageSequenceViewModel {
         processingGeneration += 1
         isProcessingFrames = false
         sequenceProcessingState = .unprocessed
+        processingModalShowing = false
+    }
+
+    /// Stop the run: forget the frames still to come, and cancel the operations already on
+    /// the queue.  What the Stop button under the frame does, and what the processing
+    /// modal's Stop button does.
+    func stopProcessing() {
+        cancelProcessing()
+        Task { await frameGraphBuilder.cancelAllOperations() }
+    }
+
+    /// Put the processing modal up for a run that is starting, unless the user has turned
+    /// that off in Preferences.
+    ///
+    /// The baseline is taken whether or not the modal is shown, so that turning it off does
+    /// not leave stale numbers behind for the next run that does show it.
+    private func startProcessingModal() {
+        processingStepBaseline = frameGraphViewModel.operations
+        if userPreferences.showProcessingWindow ?? true {
+            processingModalShowing = true
+        }
     }
 
     func processAll() {
@@ -1897,6 +1932,7 @@ public final class ImageSequenceViewModel {
     private func beginProcessing() {
         Log.d("beginProcessing")
         self.isProcessingFrames = true
+        self.startProcessingModal()
         processingGeneration += 1
         let capturedGen = processingGeneration
         if let frame = frames[0].frame {
@@ -2193,6 +2229,7 @@ public final class ImageSequenceViewModel {
         Log.d("processing frames from \(startIndex) to \(endIndex)")
         //if isProcessingFrames { return }
         isProcessingFrames = true
+        startProcessingModal()
 
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
 

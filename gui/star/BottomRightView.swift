@@ -104,8 +104,7 @@ struct BottomRightView: View {
                     Text(localized("ui.n_frames_processing", frameGraphViewModel.numberOfFramesProcessingNow))
                       .foregroundColor(.white)
                     Button {
-                        viewModel.cancelProcessing()
-                        Task { await frameGraphBuilder.cancelAllOperations() }
+                        viewModel.stopProcessing()
                     } label: {
                         Text(localized("ui.stop"))
                           .foregroundColor(.white)
@@ -332,8 +331,7 @@ struct BottomRightView: View {
                         Text(localized("ui.processing_n_more_frames", viewModel.frames.count - viewModel.numberOfFramesProcessed))
                           .foregroundColor(.white)
                         Button {
-                            viewModel.cancelProcessing()
-                            Task { await frameGraphBuilder.cancelAllOperations() }
+                            viewModel.stopProcessing()
                         } label: {
                             Text(localized("ui.stop"))
                               .foregroundColor(.white)
