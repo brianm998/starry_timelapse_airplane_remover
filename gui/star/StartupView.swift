@@ -201,7 +201,7 @@ struct SelectMovingHorizonsView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @Binding fileprivate var state: StartupState
 
-    // placeholder only: onAppear replaces it with the suggestion for this sequence
+    // placeholder only: onAppear replaces it with the count preferred for this sequence
     @State private var horizonCount: Int = 3
 
     private var maxCount: Int { max(1, viewModel.imageSequenceSize) }
@@ -240,7 +240,13 @@ struct SelectMovingHorizonsView: View {
                         horizonCount == 1
                           ? localized("ui.define_n_horizons_one")
                           : localized("ui.define_n_horizons", horizonCount),
-                        value: $horizonCount,
+                        // not $horizonCount: only a change the user makes goes through this
+                        // setter, so the preference is not rewritten by the initial suggestion
+                        value: Binding(get: { horizonCount },
+                                       set: { newCount in
+                                           horizonCount = newCount
+                                           viewModel.recordMovingHorizonCount(newCount)
+                                       }),
                         in: 1...maxCount
                     )
                     .foregroundColor(.white)
@@ -268,8 +274,7 @@ struct SelectMovingHorizonsView: View {
             }
         }
         .onAppear {
-            horizonCount = ImageSequenceViewModel
-              .suggestedMovingHorizonCount(total: viewModel.imageSequenceSize)
+            horizonCount = viewModel.preferredMovingHorizonCount
         }
     }
 }

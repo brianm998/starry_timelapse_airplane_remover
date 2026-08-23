@@ -114,6 +114,24 @@ struct UserPreferences: Codable, Sendable {
         didSet { self.save() }
     }
 
+    /// How many reference horizons the user wants for a moving sequence, relative to what
+    /// star suggests for that sequence's length.
+    ///
+    /// A multiplier rather than a count, because the count that suits a sequence depends on
+    /// how long it is: 12 references over 1450 frames says "about one every 120 frames", and
+    /// storing 12 would ask for the same 12 on a 200 frame sequence.  Stored as
+    /// `chosen / suggestedMovingHorizonCount(total)`, so 1.5 means "half again as many as
+    /// star suggests, whatever the length" and re-opening a sequence of the same length
+    /// offers exactly the count the user picked last time.
+    ///
+    /// nil until the user first moves the stepper: star's own suggestion, unmodified.
+    ///
+    /// Shared with the Kotlin client, which reads and writes the same key in the same
+    /// `~/.star.userprefs.json`.
+    var movingHorizonCountMultiplier: Double? {
+        didSet { self.save() }
+    }
+
     /// The language the user picked from the Language menu, or nil to follow the system.
     ///
     /// A BCP-47 tag rather than an index, so the file survives languages being added or

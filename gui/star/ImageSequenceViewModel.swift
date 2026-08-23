@@ -445,11 +445,61 @@ public final class ImageSequenceViewModel {
     /// 2000, 22 at 5000.  The floor of 3 keeps the old fixed suggestion for anything under
     /// about 120 frames, where the spacing is already tight.
     ///
-    /// A suggestion only — the stepper beside it lets the user pick any count up to `total`.
+    /// A suggestion only — the stepper beside it lets the user pick any count up to `total`,
+    /// and what they pick is remembered as a multiple of this baseline.  See
+    /// `preferredMovingHorizonCount(total:multiplier:)`.
     static func suggestedMovingHorizonCount(total: Int) -> Int {
         guard total > 0 else { return 1 }
         let scaled = Int((Double(total) / 10).squareRoot().rounded())
         return min(max(3, scaled), total)
+    }
+
+    /// `suggestedMovingHorizonCount(total:)` bent by what the user picked last time, as
+    /// recorded in `UserPreferences.movingHorizonCountMultiplier`.  A `nil` multiplier —
+    /// the user has never moved the stepper — leaves the suggestion alone.
+    ///
+    /// The floor of 3 in the baseline deliberately does not apply here: a user who asked for
+    /// fewer references than star suggests gets fewer, down to one.  The result is still
+    /// bounded by the sequence, since the stepper cannot offer more horizons than frames.
+    static func preferredMovingHorizonCount(total: Int, multiplier: Double?) -> Int {
+        let baseline = suggestedMovingHorizonCount(total: total)
+        guard let multiplier, multiplier > 0, multiplier.isFinite else { return baseline }
+        let ceiling = max(1, total)
+        // capped as a Double before it becomes an Int: nothing stops a hand-edited
+        // preferences file from holding a multiplier that scales past what an Int can
+        // hold, and that conversion traps rather than clamping
+        let scaled = (Double(baseline) * multiplier).rounded()
+        guard scaled < Double(ceiling) else { return ceiling }
+        return max(1, Int(scaled))
+    }
+
+    /// What to record when the user picks `chosen` horizons for a sequence of `total` frames:
+    /// how their choice compares to what star suggested for that length.
+    ///
+    /// Deliberately unclamped.  A multiplier is only ever produced from a count the user
+    /// actually dialled in, and clamping it would mean re-opening that same sequence offered
+    /// a different number than the one they chose.
+    static func movingHorizonCountMultiplier(chosen: Int, total: Int) -> Double {
+        Double(chosen) / Double(suggestedMovingHorizonCount(total: total))
+    }
+
+    /// The horizon count to offer for this sequence, personalised by the stored preference.
+    var preferredMovingHorizonCount: Int {
+        Self.preferredMovingHorizonCount(total: imageSequenceSize,
+                                         multiplier: userPreferences.movingHorizonCountMultiplier)
+    }
+
+    /// Remember that the user asked for `chosen` horizons on a sequence this long, so that a
+    /// sequence of a different length gets proportionally more or fewer next time.  Called on
+    /// every step, so the preference survives even if the user abandons the prompt afterwards.
+    ///
+    /// Written through both copies of the preferences: this view model holds one and
+    /// `ViewModel` holds the master, each saves the whole file on any change, and whichever
+    /// saves next would otherwise write its stale value back over this one.
+    func recordMovingHorizonCount(_ chosen: Int) {
+        let multiplier = Self.movingHorizonCountMultiplier(chosen: chosen, total: imageSequenceSize)
+        userPreferences.movingHorizonCountMultiplier = multiplier
+        topViewModel?.userPreferences.movingHorizonCountMultiplier = multiplier
     }
 
     private static func calculateFrameIndices(count: Int, total: Int) -> [Int] {

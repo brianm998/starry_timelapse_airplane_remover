@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.app.StartupStep
-import com.star.desktop.ui.app.suggestedMovingHorizonCount
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.CleanMethod
@@ -116,7 +115,7 @@ private fun SelectHorizonPrompt(app: AppViewModel) {
 @Composable
 private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
     val maxCount = app.startupFrameCount()
-    var count by remember { mutableStateOf(suggestedMovingHorizonCount(maxCount)) }
+    var count by remember { mutableStateOf(app.preferredHorizonCount()) }
 
     Title("Do you want to select the horizons yourself?")
     Body(
@@ -130,7 +129,11 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
         SecondaryButton("No") { app.startupAnswerSelectHorizon(false) }
         Spacer(Modifier.width(28.dp))
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Stepper("Define $count ${horizonWord(count)}", count, 1, maxCount) { count = it }
+            // every step records the preference: only a user change reaches this callback
+            Stepper("Define $count ${horizonWord(count)}", count, 1, maxCount) {
+                count = it
+                app.recordHorizonCount(it)
+            }
             PrimaryButton("Yes, select $count ${horizonWord(count)}") { app.startMovingHorizonStartupFlow(count) }
         }
         Spacer(Modifier.weight(1f))
