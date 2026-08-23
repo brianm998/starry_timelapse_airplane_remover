@@ -299,8 +299,8 @@ public actor MemoryMonitor {
               kind: .oversizedReservation,
               severity: .critical,
               message: localized("warning.oversized_reservation.message",
-                                 bytes / (1024*1024),
-                                 budget / (1024*1024)),
+                                 bytes.humanReadableBytes,
+                                 budget.humanReadableBytes),
               suggestion: localized("warning.oversized_reservation.suggestion")
             ))
             return
@@ -336,7 +336,7 @@ public actor MemoryMonitor {
               kind: .lowSystemMemory,
               severity: .warning,
               message: localized("warning.low_system_memory.message",
-                                 reality.systemAvailable() / (1024*1024)),
+                                 reality.systemAvailable().humanReadableBytes),
               suggestion: localized("warning.low_system_memory.suggestion")
             ))
         }
@@ -452,8 +452,8 @@ public actor MemoryMonitor {
               kind: .footprintOverBudget,
               severity: .warning,
               message: localized("warning.footprint_over_budget.message",
-                                 footprint / (1024*1024),
-                                 budget / (1024*1024)),
+                                 footprint.humanReadableBytes,
+                                 budget.humanReadableBytes),
               suggestion: localized("warning.footprint_over_budget.suggestion")
             ))
             return "process footprint \(footprint / (1024*1024))MB is already at or past " +
@@ -465,7 +465,7 @@ public actor MemoryMonitor {
             postWarning(StarWarning(
               kind: .lowSystemMemory,
               severity: .warning,
-              message: localized("warning.low_system_memory.message", available / (1024*1024)),
+              message: localized("warning.low_system_memory.message", available.humanReadableBytes),
               suggestion: localized("warning.low_system_memory.suggestion")
             ))
             return "only \(available / (1024*1024))MB available system-wide, floor is " +
@@ -558,7 +558,7 @@ public actor MemoryMonitor {
               kind: .memoryPressure,
               severity: .warning,
               message: localized("warning.memory_pressure_mild.message",
-                                 reality.processFootprint() / (1024*1024)),
+                                 reality.processFootprint().humanReadableBytes),
               suggestion: localized("warning.memory_pressure_mild.suggestion")
             ))
 
@@ -572,7 +572,7 @@ public actor MemoryMonitor {
               kind: .memoryPressure,
               severity: .critical,
               message: localized("warning.memory_pressure.message",
-                                 reality.processFootprint() / (1024*1024)),
+                                 reality.processFootprint().humanReadableBytes),
               suggestion: localized("warning.memory_pressure.suggestion")
             ))
         }
