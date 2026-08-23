@@ -397,6 +397,27 @@ public final actor FrameGraphBuilder {
         var homographyOps: [Operation] = []
         var mergeOps: [Operation] = []
 
+        // Per step, the frames in its range that need no op because the artifact is already
+        // on disk.  Reported to `frameGraphViewModel` at the end so the gui can measure a
+        // resumed run against the whole sequence rather than against the part of it that is
+        // left — half a sequence's merges already written is half the job done, not a job
+        // that has not started.
+        //
+        // Derived below as considered-minus-built rather than counted at each `continue`,
+        // so it cannot drift away from the skips it is describing.  Only for the steps
+        // whose skip means the work exists: a frame with no earth homography op was skipped
+        // for having its keypoints cached, which is not the same claim.
+        var alreadyDone: [OperationType: UInt] = [:]
+
+        func recordAlreadyDone(
+          _ type: OperationType,
+          consideredFrames considered: [Int],
+          builtOps built: Int
+        ) {
+            let inSequence = considered.filter { framesByIndex[$0] != nil }.count
+            alreadyDone[type] = UInt(max(0, inSequence - built))
+        }
+
         var skyKeypointOps: [Int: Operation] = [:]
         var earthKeypointOps: [Int: Operation] = [:]
 
@@ -623,6 +644,11 @@ public final actor FrameGraphBuilder {
             .sorted { $0.key < $1.key }
             .map { $0.value }
         )
+        if hasHorizon && !hasStaticReferenceHorizon {
+            recordAlreadyDone(.horizon,
+                              consideredFrames: range.horizon,
+                              builtOps: horizonOps.count)
+        }
 
         // next assemble merged horizons, which each depend upon an array of
         // original horizon operations from above.
@@ -670,6 +696,9 @@ public final actor FrameGraphBuilder {
                     .sorted { $0.key < $1.key }
                     .map { $0.value }
                 )
+                recordAlreadyDone(.mergedHorizon,
+                                  consideredFrames: range.keypoint,
+                                  builtOps: mergedHorizonOps.count)
             } else {
                 /*
                  for static tripod:
@@ -688,6 +717,8 @@ public final actor FrameGraphBuilder {
                     // Nothing to build.  The keypoint ops below simply get no merged
                     // horizon dependency and read the mask from disk if they need it.
                     Log.i("static merged horizon already on disk, not building a merge op")
+                    // One op is the whole of this step on a static tripod, and it is done.
+                    alreadyDone[.mergedHorizon] = 1
                 } else if let frame = staticMergeAnchor {
                     let horizonOp = HorizonMergeOp(
                       frame: frame,
@@ -777,6 +808,9 @@ public final actor FrameGraphBuilder {
             .sorted { $0.key < $1.key }
             .map { $0.value }
         )
+        recordAlreadyDone(.starKeypoints,
+                          consideredFrames: range.keypoint,
+                          builtOps: skyKeypointOps.count)
             
         if hasHorizon && processEarth {
             earthKeypointOps = await withTaskGroup(
@@ -820,6 +854,9 @@ public final actor FrameGraphBuilder {
                 .sorted { $0.key < $1.key }
                 .map { $0.value }
             )
+            recordAlreadyDone(.earthKeypoints,
+                              consideredFrames: range.keypoint,
+                              builtOps: earthKeypointOps.count)
         }
 
         // next assemble homography operations that depend upon the keyframes from above
@@ -1024,11 +1061,18 @@ public final actor FrameGraphBuilder {
             continuation.resume()
         }
 
+        // A frame whose output is already written and still valid gets no merge op, which
+        // on a resumed run is most of them.
+        recordAlreadyDone(.merge, consideredFrames: range.output, builtOps: mergeOps.count)
+
         // Every op this run will have now exists, so the per-type counts in
         // `frameGraphViewModel` are final and a type with none of them has nothing to do
         // rather than not having been reached yet.  Deliberately not in the two error
         // paths above: neither of them builds a graph, and both end the run.
-        await MainActor.run { frameGraphViewModel.finishedBuildingGraph() }
+        let alreadyDoneReport = alreadyDone
+        await MainActor.run {
+            frameGraphViewModel.finishedBuildingGraph(alreadyDone: alreadyDoneReport)
+        }
     }
     
     /// Re-enqueue horizon refinement and merge for the given frames after a

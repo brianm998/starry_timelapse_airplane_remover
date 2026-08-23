@@ -1412,6 +1412,81 @@ final class ProcessingStepsTests: XCTestCase {
                          + "as the run reaches each one")
     }
 
+    // MARK: - work finished before the run started
+
+    /// The bug this exists for: star was stopped part way through a 1434 frame sequence,
+    /// 494 of them already merged.  The rebuilt graph only has merge ops for the 940 that
+    /// are left, so counting operations alone reported "74 / 940" against a sequence the
+    /// line above it called 1434 frames — the wrong job, and a bar that jumps backwards
+    /// every time the run is resumed.
+    func testAResumedStepIsMeasuredAgainstTheWholeSequence() throws {
+        let progress = ProcessingSteps.progress(
+          for: [.merge],
+          counts: counts([.merge: (queued: 866, running: 0, done: 74)]),
+          alreadyDone: [.merge: 494])
+        let merge = try step(progress, .merge)
+
+        XCTAssertEqual(merge.total, 1434)
+        XCTAssertEqual(merge.completed, 568)
+        XCTAssertEqual(merge.doneFraction, 568.0 / 1434.0, accuracy: 0.0001)
+    }
+
+    /// Work done before the run counts as done, not as running or queued, so the bar fills
+    /// from the same end whichever run did it.
+    func testWorkFromBeforeTheRunFillsTheDoneEndOfTheBar() throws {
+        let progress = ProcessingSteps.progress(
+          for: [.starKeypoints],
+          counts: counts([.starKeypoints: (queued: 2, running: 1, done: 1)]),
+          alreadyDone: [.starKeypoints: 6])
+        let keypoints = try step(progress, .starKeypoints)
+
+        XCTAssertEqual(keypoints.total, 10)
+        XCTAssertEqual(keypoints.completed, 7)
+        XCTAssertEqual(keypoints.doneFraction, 0.7, accuracy: 0.0001)
+        XCTAssertEqual(keypoints.runningFraction, 0.1, accuracy: 0.0001)
+        XCTAssertEqual(keypoints.queued, 2)
+    }
+
+    /// A step finished entirely by an earlier run builds no operations at all.  It is not a
+    /// step with nothing to it — it is a step that is done — so it keeps its row, full.
+    func testAStepFinishedBeforeTheRunIsShownComplete() throws {
+        let progress = ProcessingSteps.progress(
+          for: [.horizon],
+          counts: [:],
+          alreadyDone: [.horizon: 1434])
+        let horizon = try step(progress, .horizon)
+
+        XCTAssertTrue(horizon.hasWork)
+        XCTAssertEqual(horizon.completed, 1434)
+        XCTAssertEqual(horizon.total, 1434)
+        XCTAssertEqual(horizon.doneFraction, 1)
+        XCTAssertEqual(ProcessingSteps.visible([horizon], graphIsBuilt: true).map(\.type),
+                       [.horizon],
+                       "a step that is finished is not a step to hide")
+    }
+
+    /// Nothing on disk and nothing to do is still nothing, and still goes.
+    func testAStepWithNeitherOperationsNorEarlierWorkIsStillHidden() throws {
+        let progress = ProcessingSteps.progress(for: [.mergedHorizon], counts: [:])
+        let merged = try step(progress, .mergedHorizon)
+
+        XCTAssertFalse(merged.hasWork)
+        XCTAssertTrue(ProcessingSteps.visible([merged], graphIsBuilt: true).isEmpty)
+    }
+
+    /// The segments still tile the bar exactly once earlier work is one of them.
+    func testTheSegmentsFillTheWholeBarWithEarlierWorkInIt() throws {
+        let progress = ProcessingSteps.progress(
+          for: [.merge],
+          counts: counts([.merge: (queued: 3, running: 2, done: 1)]),
+          alreadyDone: [.merge: 4])
+        let merge = try step(progress, .merge)
+
+        XCTAssertEqual(merge.doneFraction + merge.runningFraction
+                         + Double(merge.queued) / Double(merge.total),
+                       1, accuracy: 0.0001)
+    }
+
     // MARK: - the baseline
 
     /// The whole point of the baseline: a second run in the same session starts with the

@@ -2,28 +2,47 @@ import SwiftUI
 import StarCore
 import logging
 
-/// What one processing step has done so far this run.
+/// How far along one processing step is, over the whole of what that step has to cover.
 ///
-/// The counts are operations, not frames: `FrameGraphBuilder` builds one op per frame for
-/// most steps, but it skips the frames whose artifact is already on disk, and the static
-/// tripod case merges every horizon in a single op.  So the denominator here is however
-/// many ops of this type this run actually created, which is the only number that reaches
-/// zero remaining when the step is finished.
+/// The three live counts are operations rather than frames, because that is what there is
+/// to count: `FrameGraphBuilder` builds one op per frame for most steps, but it skips the
+/// frames whose artifact is already on disk, and the static tripod case merges every
+/// horizon in a single op.  Measuring a bar on those alone measures the wrong job the
+/// moment a run is resumed — a sequence half written builds ops for the half that is left,
+/// and a bar over them starts at zero as though nothing had ever been done.  `alreadyDone`
+/// is the rest of it, reported by the builder, and it belongs at the finished end.
 struct ProcessingStepProgress: Identifiable, Equatable {
     let type: OperationType
     let queued: Int
     let running: Int
     let done: Int
 
+    /// Frames of this step that were finished before the run started, so the graph built
+    /// no operation for them.  Part of the bar, at the done end: a sequence resumed half
+    /// way through is half finished, not starting from nothing.
+    let alreadyDone: Int
+
+    init(type: OperationType, queued: Int, running: Int, done: Int, alreadyDone: Int = 0) {
+        self.type = type
+        self.queued = queued
+        self.running = running
+        self.done = done
+        self.alreadyDone = alreadyDone
+    }
+
     var id: OperationType { type }
 
-    var total: Int { queued + running + done }
+    /// Every frame this step covers, whoever did it and whenever.
+    var total: Int { alreadyDone + queued + running + done }
 
-    /// A step with no operations at all — everything it would have produced was already on
-    /// disk, or this run does not need it.
+    /// Frames of this step that are finished, this run's and any earlier run's alike.
+    var completed: Int { alreadyDone + done }
+
+    /// A step with nothing to it at all: no operations, and nothing already on disk that
+    /// they would have produced.  Not a step this run is taking in any sense.
     var hasWork: Bool { total > 0 }
 
-    var doneFraction: Double { fraction(of: done) }
+    var doneFraction: Double { fraction(of: completed) }
     var runningFraction: Double { fraction(of: running) }
 
     private func fraction(of count: Int) -> Double {
@@ -115,7 +134,8 @@ enum ProcessingSteps {
     static func progress(
       for types: [OperationType],
       counts: [OperationType: [OperationState: UInt]],
-      since baseline: [OperationType: [OperationState: UInt]] = [:]
+      since baseline: [OperationType: [OperationState: UInt]] = [:],
+      alreadyDone: [OperationType: UInt] = [:]
     ) -> [ProcessingStepProgress] {
         types.map { type in
             let now = counts[type] ?? [:]
@@ -137,7 +157,8 @@ enum ProcessingSteps {
               type: type,
               queued: max(0, all - done - running),
               running: running,
-              done: min(done, all)
+              done: min(done, all),
+              alreadyDone: Int(alreadyDone[type] ?? 0)
             )
         }
     }
@@ -209,14 +230,19 @@ struct ProcessingModalView: View {
     @Environment(FrameGraphViewModel.self) var frameGraphViewModel: FrameGraphViewModel
 
     private var steps: [ProcessingStepProgress] {
-        ProcessingSteps.visible(
+        // `alreadyDone` describes whichever graph was built last, so until this run's is
+        // the one that was, it is the previous run's answer and belongs to nobody.  The
+        // same number gates the filtering below for the same reason.
+        let graphIsBuilt = frameGraphViewModel.graphBuildsCompleted
+                             > viewModel.processingBuildCount
+        return ProcessingSteps.visible(
           ProcessingSteps.progress(
             for: viewModel.processingStepTypes,
             counts: frameGraphViewModel.operations,
-            since: viewModel.processingStepBaseline
+            since: viewModel.processingStepBaseline,
+            alreadyDone: graphIsBuilt ? frameGraphViewModel.alreadyDone : [:]
           ),
-          graphIsBuilt: frameGraphViewModel.graphBuildsCompleted
-                          > viewModel.processingBuildCount
+          graphIsBuilt: graphIsBuilt
         )
     }
 
@@ -436,7 +462,7 @@ struct ProcessingStepsView: View {
             // being worked out — once it is, `ProcessingSteps.visible` drops it — so this
             // says "not known yet", which no wording says as plainly as leaving it out.
             Text(step.hasWork
-                   ? localized("ui.n_of_m_complete", step.done, step.total)
+                   ? localized("ui.n_of_m_complete", step.completed, step.total)
                    : "—")
               .font(.caption)
               .monospacedDigit()
