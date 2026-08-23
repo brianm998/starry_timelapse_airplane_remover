@@ -28,7 +28,21 @@ public final class FrameGraphViewModel {
     /// plan was final when it was not.
     public private(set) var graphBuildsCompleted: Int = 0
 
-    public func finishedBuildingGraph() {
+    /// Per step, how many frames of the last graph needed no operation because the work was
+    /// already on disk when it was built.
+    ///
+    /// Without this a resumed run reads as though it were starting from nothing: the counts
+    /// above only know about operations, and a sequence that is half finished builds
+    /// operations for the half that is left, so a bar over them alone measures the wrong
+    /// job.  Added to both ends of a bar it measures the whole one.
+    ///
+    /// Replaced by each build rather than accumulated, so it always describes the graph
+    /// `graphBuildsCompleted` last counted — a reader that already waits for that number to
+    /// move needs no separate baseline for this.
+    public private(set) var alreadyDone: [OperationType: UInt] = [:]
+
+    public func finishedBuildingGraph(alreadyDone: [OperationType: UInt] = [:]) {
+        self.alreadyDone = alreadyDone
         graphBuildsCompleted += 1
     }
 
@@ -78,6 +92,7 @@ public final class FrameGraphViewModel {
     
     public func reset() {
         operations = [:]
+        alreadyDone = [:]
         graphBuildsCompleted = 0
     }
 
