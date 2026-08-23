@@ -898,8 +898,14 @@ public final actor FrameGraphBuilder {
 
             // ---- Earth-aligned homography (optional) ----
             if hasHorizon && processEarth {
-                guard let selfEarthKP = earthKeypointOps[frame.frameIndex] else { continue }
-
+                // Built whether or not this frame has a keypoint op, exactly as the sky
+                // homography above is.  A missing keypoint op means the feature file is
+                // already on disk, which is a reason to skip *detection*, not a reason
+                // to skip the homography that reads it — and this used to `continue` on
+                // it, so a resume with cached earth keypoints built no earth homography
+                // op for those frames at all.  The merge then found no homography in
+                // memory and quietly warped nothing, leaving the ground exactly as it
+                // was on a run that had asked for it to be aligned.
                 let earthH = HomographyOp(
                   forStars: false,
                   frame: frame,
@@ -911,7 +917,10 @@ public final actor FrameGraphBuilder {
                 }
                 earthH.queuePriority = .veryHigh
                 earthH.qualityOfService = .userInteractive
+
+                if let selfEarthKP = earthKeypointOps[frame.frameIndex] {
                 earthH.addDependency(selfEarthKP)
+                }
 
                 for neighborIndex in neighbourIndices {
                     if let neighborKP = earthKeypointOps[neighborIndex] {

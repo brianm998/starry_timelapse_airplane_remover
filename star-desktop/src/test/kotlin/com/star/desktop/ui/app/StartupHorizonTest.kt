@@ -38,4 +38,93 @@ class StartupHorizonTest {
         assertEquals(emptyList(), evenlySpacedFrameIndices(count = 0, total = 10))
         assertEquals(emptyList(), evenlySpacedFrameIndices(count = 3, total = 0))
     }
+
+    // the suggested count (macOS `suggestedMovingHorizonCount`)
+
+    @Test fun suggestionScalesWithSequenceLength() {
+        assertEquals(12, suggestedMovingHorizonCount(1450)) // the measured good value
+        assertEquals(10, suggestedMovingHorizonCount(1000))
+        assertEquals(14, suggestedMovingHorizonCount(2000))
+        assertEquals(22, suggestedMovingHorizonCount(5000))
+    }
+
+    @Test fun shortSequencesKeepTheOldSuggestionOfThree() {
+        assertEquals(3, suggestedMovingHorizonCount(50))
+        assertEquals(3, suggestedMovingHorizonCount(122))
+        assertEquals(4, suggestedMovingHorizonCount(123)) // where sqrt(total/10) rounds past 3
+    }
+
+    @Test fun suggestionNeverExceedsTheSequence() {
+        assertEquals(1, suggestedMovingHorizonCount(1))
+        assertEquals(2, suggestedMovingHorizonCount(2))
+        assertEquals(1, suggestedMovingHorizonCount(0)) // matches the stepper's floor of 1
+    }
+
+    @Test fun suggestionIsAlwaysAValidStepperValue() {
+        for (total in 1..6000) {
+            val n = suggestedMovingHorizonCount(total)
+            assertEquals(true, n in 1..total, "suggestion $n out of 1..$total")
+        }
+    }
+
+    // the remembered multiplier (macOS `preferredMovingHorizonCount` / `movingHorizonCountMultiplier`)
+
+    @Test fun noRecordedPreferenceLeavesTheSuggestionAlone() {
+        assertEquals(12, preferredMovingHorizonCount(1450, null))
+        assertEquals(3, preferredMovingHorizonCount(50, null))
+    }
+
+    @Test fun aChoiceIsRecordedRelativeToWhatWasSuggested() {
+        assertEquals(2.0, movingHorizonCountMultiplier(chosen = 24, total = 1450)) // suggested 12
+        assertEquals(0.5, movingHorizonCountMultiplier(chosen = 6, total = 1450))
+        assertEquals(1.0, movingHorizonCountMultiplier(chosen = 12, total = 1450))
+    }
+
+    /** The whole point: a choice made on one sequence carries proportionally to another length. */
+    @Test fun theMultiplierCarriesToADifferentSequenceLength() {
+        val m = movingHorizonCountMultiplier(chosen = 24, total = 1450) // "twice what star suggests"
+        assertEquals(24, preferredMovingHorizonCount(1450, m))
+        assertEquals(20, preferredMovingHorizonCount(1000, m)) // 10 suggested → 20
+        assertEquals(44, preferredMovingHorizonCount(5000, m)) // 22 suggested → 44
+    }
+
+    /** Re-opening a sequence of the same length must offer exactly what was picked. */
+    @Test fun recordingThenApplyingRoundTripsForEveryCount() {
+        for (total in listOf(1, 2, 10, 123, 1450, 6000)) {
+            for (chosen in listOf(1, 2, 3, total / 2, total).filter { it in 1..total }.distinct()) {
+                val m = movingHorizonCountMultiplier(chosen, total)
+                assertEquals(chosen, preferredMovingHorizonCount(total, m), "round trip $chosen of $total")
+            }
+        }
+    }
+
+    /** Asking for fewer must be able to go below the baseline's floor of 3. */
+    @Test fun aPreferenceForFewerGoesBelowTheFloorOfThree() {
+        val m = movingHorizonCountMultiplier(chosen = 1, total = 1000) // 1 of the 10 suggested
+        assertEquals(1, preferredMovingHorizonCount(200, m))  // 4 suggested × 0.1 → 1, not the floor of 3
+        assertEquals(2, preferredMovingHorizonCount(5000, m)) // 22 suggested × 0.1 → 2
+    }
+
+    @Test fun thePreferredCountIsAlwaysAValidStepperValue() {
+        for (m in listOf(0.05, 0.5, 1.0, 2.5, 40.0)) {
+            for (total in listOf(1, 2, 3, 50, 1450, 6000)) {
+                val n = preferredMovingHorizonCount(total, m)
+                assertEquals(true, n in 1..total, "preferred $n out of 1..$total at multiplier $m")
+            }
+        }
+    }
+
+    @Test fun aNonsenseMultiplierFallsBackToTheSuggestion() {
+        assertEquals(12, preferredMovingHorizonCount(1450, 0.0))
+        assertEquals(12, preferredMovingHorizonCount(1450, -2.0))
+        assertEquals(12, preferredMovingHorizonCount(1450, Double.NaN))
+        assertEquals(12, preferredMovingHorizonCount(1450, Double.POSITIVE_INFINITY))
+    }
+
+    /** A finite but preposterous multiplier must cap at the sequence, not wrap around Int range. */
+    @Test fun aPreposterousMultiplierCapsAtTheSequence() {
+        assertEquals(1450, preferredMovingHorizonCount(1450, 1e6))
+        assertEquals(1450, preferredMovingHorizonCount(1450, Double.MAX_VALUE))
+        assertEquals(1, preferredMovingHorizonCount(1, Double.MAX_VALUE))
+    }
 }

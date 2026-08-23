@@ -15,6 +15,7 @@
 //
 import XCTest
 import SwiftUI
+import Observation
 import StarCore
 // The app target is named `Star`, not `star` — the lowercase name belongs to the .xcodeproj
 // and to this test target.  TEST_HOST points at Star.app, so this is what links.
@@ -1546,5 +1547,382 @@ final class ProcessingStepsTests: XCTestCase {
                                1, accuracy: 0.0001)
             }
         }
+    }
+}
+
+/// The moving-video startup prompt suggests how many reference horizons to paint by hand.
+/// It used to suggest 3 whatever the sequence length, which is too few for a long moving
+/// sequence: 12 was measured to work well over 1450 frames.  The suggestion is now derived
+/// from the length, and the numbers it lands on are what this pins down — together with the
+/// bound the stepper beside it relies on, that the suggestion is always a value the stepper's
+/// `1...total` range can actually hold.
+///
+/// The Kotlin client duplicates the formula (`suggestedMovingHorizonCount` in
+/// `AppViewModel.kt`, checked by `StartupHorizonTest`); the expected values here and there
+/// are deliberately the same.
+@MainActor
+final class SuggestedHorizonCountTests: XCTestCase {
+
+    private func suggestion(_ total: Int) -> Int {
+        ImageSequenceViewModel.suggestedMovingHorizonCount(total: total)
+    }
+
+    // MARK: - how it scales
+
+    /// 12 over 1450 frames is the measured value the curve is anchored to.
+    func testTheSuggestionMatchesTheMeasuredValueForA1450FrameSequence() {
+        XCTAssertEqual(suggestion(1450), 12)
+    }
+
+    func testTheSuggestionGrowsWithTheSequenceLength() {
+        XCTAssertEqual(suggestion(1000), 10)
+        XCTAssertEqual(suggestion(2000), 14)
+        XCTAssertEqual(suggestion(5000), 22)
+    }
+
+    /// Growth has to be sublinear: a fixed one-horizon-every-N-frames rate would ask for over
+    /// forty hand-painted horizons at 5000 frames, which nobody would sit through.  Doubling
+    /// the sequence must grow the suggestion, but by less than double.
+    func testTheSuggestionGrowsMoreSlowlyThanTheSequence() {
+        XCTAssertGreaterThan(suggestion(2900), suggestion(1450))
+        XCTAssertLessThan(suggestion(2900), 2 * suggestion(1450))
+    }
+
+    // MARK: - the short end
+
+    /// Nothing under about 120 frames should see a different suggestion than before, where
+    /// the spacing is already tight enough.
+    func testShortSequencesStillGetThree() {
+        XCTAssertEqual(suggestion(50), 3)
+        XCTAssertEqual(suggestion(122), 3)
+        XCTAssertEqual(suggestion(123), 4)
+    }
+
+    // MARK: - the bound the stepper depends on
+
+    func testTheSuggestionNeverExceedsTheSequence() {
+        XCTAssertEqual(suggestion(1), 1)
+        XCTAssertEqual(suggestion(2), 2)
+    }
+
+    /// `maxCount` floors at 1 even for an empty sequence, so the suggestion has to as well
+    /// or the stepper would start outside its own range.
+    func testAnEmptySequenceSuggestsOne() {
+        XCTAssertEqual(suggestion(0), 1)
+        XCTAssertEqual(suggestion(-5), 1)
+    }
+
+    func testTheSuggestionIsAlwaysInsideTheSteppersRange() {
+        for total in 1...6000 {
+            let n = suggestion(total)
+            XCTAssertGreaterThanOrEqual(n, 1, "suggestion \(n) below 1 for \(total) frames")
+            XCTAssertLessThanOrEqual(n, total, "suggestion \(n) above \(total) frames")
+        }
+    }
+
+    /// A longer sequence must never ask for fewer horizons than a shorter one.
+    func testTheSuggestionNeverDecreasesAsTheSequenceGrows() {
+        var previous = 0
+        for total in 1...6000 {
+            let n = suggestion(total)
+            XCTAssertGreaterThanOrEqual(n, previous, "suggestion dropped at \(total) frames")
+            previous = n
+        }
+    }
+}
+
+/// What the user picks in that prompt is remembered, so the next sequence starts from their
+/// taste rather than star's.  It is remembered as a multiple of what star suggested, not as a
+/// count: 12 references over 1450 frames means "one about every 120 frames", and storing the
+/// 12 would ask for the same 12 on a 200 frame sequence.
+///
+/// The arithmetic lives in statics precisely so it can be checked without standing up a live
+/// view model.  The Kotlin client duplicates it (`preferredMovingHorizonCount` /
+/// `movingHorizonCountMultiplier` in `AppViewModel.kt`) and shares the preferences file, so the
+/// expected values here and in `StartupHorizonTest` are deliberately the same.
+@MainActor
+final class RememberedHorizonCountTests: XCTestCase {
+
+    private func preferred(_ total: Int, _ multiplier: Double?) -> Int {
+        ImageSequenceViewModel.preferredMovingHorizonCount(total: total, multiplier: multiplier)
+    }
+
+    private func multiplier(chosen: Int, total: Int) -> Double {
+        ImageSequenceViewModel.movingHorizonCountMultiplier(chosen: chosen, total: total)
+    }
+
+    // MARK: - with nothing remembered
+
+    func testNoRecordedPreferenceLeavesTheSuggestionAlone() {
+        XCTAssertEqual(preferred(1450, nil), 12)
+        XCTAssertEqual(preferred(50, nil), 3)
+    }
+
+    // MARK: - what gets recorded
+
+    func testAChoiceIsRecordedRelativeToWhatWasSuggested() {
+        XCTAssertEqual(multiplier(chosen: 24, total: 1450), 2.0)   // star suggested 12
+        XCTAssertEqual(multiplier(chosen: 6, total: 1450), 0.5)
+        XCTAssertEqual(multiplier(chosen: 12, total: 1450), 1.0)
+    }
+
+    // MARK: - what it does next time
+
+    /// The whole point: a choice made on one sequence carries proportionally to another length.
+    func testTheMultiplierCarriesToADifferentSequenceLength() {
+        let m = multiplier(chosen: 24, total: 1450) // "twice what star suggests"
+        XCTAssertEqual(preferred(1450, m), 24)
+        XCTAssertEqual(preferred(1000, m), 20)      // 10 suggested → 20
+        XCTAssertEqual(preferred(5000, m), 44)      // 22 suggested → 44
+    }
+
+    /// Re-opening a sequence of the same length must offer exactly what was picked there, or
+    /// the number would drift every time the user looked at it.
+    func testRecordingThenApplyingRoundTripsForEveryCount() {
+        for total in [1, 2, 10, 123, 1450, 6000] {
+            for chosen in Set([1, 2, 3, total / 2, total]).filter({ (1...total).contains($0) }) {
+                XCTAssertEqual(preferred(total, multiplier(chosen: chosen, total: total)), chosen,
+                               "round trip \(chosen) of \(total)")
+            }
+        }
+    }
+
+    /// Asking for fewer has to be able to go below the suggestion curve's floor of 3 — the
+    /// floor describes star's default taste, not a limit on the user's.
+    func testAPreferenceForFewerGoesBelowTheFloorOfThree() {
+        let m = multiplier(chosen: 1, total: 1000)  // 1 of the 10 suggested
+        XCTAssertEqual(preferred(200, m), 1)        // 4 suggested × 0.1 → 1, not 3
+        XCTAssertEqual(preferred(5000, m), 2)       // 22 suggested × 0.1 → 2
+    }
+
+    func testThePreferredCountIsAlwaysAValidStepperValue() {
+        for m in [0.05, 0.5, 1.0, 2.5, 40.0] {
+            for total in [1, 2, 3, 50, 1450, 6000] {
+                let n = preferred(total, m)
+                XCTAssertGreaterThanOrEqual(n, 1, "preferred \(n) below 1 at ×\(m)")
+                XCTAssertLessThanOrEqual(n, total, "preferred \(n) above \(total) at ×\(m)")
+            }
+        }
+    }
+
+    /// A file written by hand, or by a future version, must not be able to produce a count the
+    /// stepper cannot show.
+    func testANonsenseMultiplierFallsBackToTheSuggestion() {
+        XCTAssertEqual(preferred(1450, 0), 12)
+        XCTAssertEqual(preferred(1450, -2), 12)
+        XCTAssertEqual(preferred(1450, .nan), 12)
+        XCTAssertEqual(preferred(1450, .infinity), 12)
+    }
+
+    /// A finite but preposterous multiplier scales past what an `Int` can hold, and converting
+    /// that traps — so it has to be capped while it is still a `Double`.  This test crashes
+    /// rather than fails if that ever regresses.
+    func testAPreposterousMultiplierCapsAtTheSequenceInsteadOfTrapping() {
+        XCTAssertEqual(preferred(1450, 1e6), 1450)
+        XCTAssertEqual(preferred(1450, .greatestFiniteMagnitude), 1450)
+        XCTAssertEqual(preferred(1, .greatestFiniteMagnitude), 1)
+    }
+
+    // MARK: - the shared preferences file
+
+    /// The Kotlin client reads and writes this key by hand in the same `~/.star.userprefs.json`,
+    /// while this side gets it from Codable synthesis — so the property name *is* the wire
+    /// format, and renaming it would silently split the two clients' preferences.
+    ///
+    /// Decoded rather than assigned: assigning would fire the `didSet` that saves, and the test
+    /// would overwrite the real preferences file of whoever ran it.
+    func testTheMultiplierUsesTheSameKeyTheKotlinClientWrites() throws {
+        // exactly what the Kotlin client's Gson wrote for a 1.5 multiplier, captured from it
+        let json = #"{"recentlyOpenedSequencelist":{},"skipRenderPromptAfterProcessing":false,"movingHorizonCountMultiplier":1.5}"#
+        let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+        XCTAssertEqual(prefs.movingHorizonCountMultiplier, 1.5)
+
+        let round = try JSONEncoder().encode(prefs)
+        let text = String(decoding: round, as: UTF8.self)
+        XCTAssertTrue(text.contains("movingHorizonCountMultiplier"), "encoded as: \(text)")
+
+        let back = try JSONDecoder().decode(UserPreferences.self, from: round)
+        XCTAssertEqual(back.movingHorizonCountMultiplier, 1.5)
+    }
+
+    /// An older preferences file has no such key at all, which has to read as "no preference"
+    /// rather than failing the whole file to decode.
+    func testPreferencesWrittenBeforeThisFeatureStillDecode() throws {
+        let json = #"{"recentlyOpenedSequencelist":{}}"#
+        let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+        XCTAssertNil(prefs.movingHorizonCountMultiplier)
+        XCTAssertEqual(preferred(1450, prefs.movingHorizonCountMultiplier), 12)
+    }
+}
+
+/// `UserPreferences` is a value type whose every field writes the *whole* file on change, so a
+/// second copy of it is a second writer: whichever copy saves last puts its own version of every
+/// other field back on disk.  `ViewModel` and `ImageSequenceViewModel` each held one, synced only
+/// when a sequence was opened, so a render setting changed in the render sheet (written through
+/// the sequence's copy) was undone the next time anything wrote through the app's copy — opening
+/// another sequence was enough, since that writes the recent-files list.
+///
+/// The fix is that there is now one live copy, in `UserPreferencesStore`, and both view models
+/// expose `userPreferences` as a view onto it.  That is a shape rather than a behaviour, and the
+/// objects that would demonstrate it cannot be stood up in a test: `ViewModel.init` reads the
+/// real preferences file and prunes it (writing it back), and `ImageSequenceViewModel`'s init is
+/// `async throws` over a `ConfigManager`.  So it is checked the way `SettingsWiringTests` checks
+/// its own two-site convention — over the source.
+@MainActor
+final class UserPreferencesStoreTests: XCTestCase {
+
+    /// gui/, derived from this file's location: gui/starTests/starTests.swift
+    private static var guiDir: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func source(_ relativePath: String) throws -> String {
+        try String(contentsOf: Self.guiDir.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private func swiftSources() throws -> [(name: String, text: String)] {
+        let dir = Self.guiDir.appendingPathComponent("star")
+        let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+            .filter { $0.hasSuffix(".swift") }
+        XCTAssertGreaterThan(names.count, 20, "found only \(names.count) sources in gui/star")
+        return try names.map { ($0, try source("star/\($0)")) }
+    }
+
+    /// The whole `var userPreferences: UserPreferences { ... }` declaration, accessors included.
+    private func accessor(in source: String) -> String? {
+        let pattern = #"var\s+userPreferences\s*:\s*UserPreferences\s*(\{[\s\S]*?\n    \})"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let ns = source as NSString
+        guard let m = re.firstMatch(in: source, range: NSRange(location: 0, length: ns.length))
+        else { return nil }
+        return ns.substring(with: m.range(at: 1))
+    }
+
+    // MARK: - one live copy
+
+    /// A stored `userPreferences` on either view model is the hazard itself.
+    func testNeitherViewModelKeepsItsOwnCopy() throws {
+        for file in ["star/ViewModel.swift", "star/ImageSequenceViewModel.swift"] {
+            let src = try source(file)
+            XCTAssertFalse(src.contains("var userPreferences: UserPreferences ="),
+                           "\(file) stores its own copy of the preferences again")
+
+            let block = try XCTUnwrap(accessor(in: src), "\(file) has no userPreferences accessor")
+            XCTAssertTrue(block.contains("UserPreferencesStore.shared.preferences"),
+                          "\(file) reads preferences from somewhere other than the store: \(block)")
+            XCTAssertTrue(block.contains("UserPreferencesStore.shared.preferences = newValue"),
+                          "\(file) writes preferences somewhere other than the store: \(block)")
+        }
+    }
+
+    /// Constructing one anywhere else makes a second value that can be written and saved.
+    func testOnlyTheStoreConstructsAUserPreferences() throws {
+        var built: [String] = []
+        for file in try swiftSources() {
+            // (?<!\w) so that applyUserPreferences() and the like do not match
+            if let re = try? NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])UserPreferences\("#) {
+                let ns = file.text as NSString
+                let n = re.numberOfMatches(in: file.text,
+                                           range: NSRange(location: 0, length: ns.length))
+                if n > 0 { built.append("\(file.name) ×\(n)") }
+            }
+        }
+        XCTAssertEqual(built, ["UserPreferences.swift ×1"],
+                       "a UserPreferences is built outside the store: \(built)")
+    }
+
+    /// The tell of the old hazard: reaching through one view model to write the preferences held
+    /// by the other, which is what had to be done, field by field, to keep them in step.
+    func testNoPreferenceIsWrittenThroughASecondViewModel() throws {
+        // over whitespace-collapsed source, not line by line: the one that used to be here was
+        // wrapped, with the receiver on one line and `.userPreferences` on the next
+        let reachThrough = #"(imageSequence\?|topViewModel\?|imageSequenceViewModel)\s*\.\s*userPreferences"#
+        let re = try NSRegularExpression(pattern: reachThrough)
+
+        var doubleWrites: [String] = []
+        for file in try swiftSources() {
+            let flat = file.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            let ns = flat as NSString
+            for m in re.matches(in: flat, range: NSRange(location: 0, length: ns.length)) {
+                let from = max(0, m.range.location - 20)
+                let length = min(ns.length - from, m.range.length + 60)
+                doubleWrites.append("\(file.name): …\(ns.substring(with: NSRange(location: from, length: length)))…")
+            }
+        }
+        XCTAssertEqual(doubleWrites, [],
+                       "preferences written through a second view model — the single store makes "
+                       + "this unnecessary, and it is how the two copies drifted: \(doubleWrites)")
+    }
+
+    // MARK: - what the sequence's view model still has to do
+
+    /// The stored property's `didSet` used to seed the video settings from the preferences on
+    /// every write; the setter has to keep doing it, or changing the frame rate in the render
+    /// sheet would no longer reach the settings the render actually uses.
+    func testWritingPreferencesStillSeedsTheSequenceSettings() throws {
+        let src = try source("star/ImageSequenceViewModel.swift")
+        let block = try XCTUnwrap(accessor(in: src))
+        XCTAssertTrue(block.contains("applyUserPreferences()"),
+                      "the setter no longer re-applies the preferences: \(block)")
+
+        for setting in ["detectionType", "frameRate", "codec", "encoder", "pixelFormat", "muxer"] {
+            XCTAssertTrue(src.contains("self.\(setting) = \(setting)"),
+                          "applyUserPreferences no longer seeds \(setting)")
+        }
+    }
+
+    /// A sequence opens with its settings at their defaults, so `ViewModel` has to seed them —
+    /// that was the one thing the copy-down assignment did that was not just copying.
+    func testOpeningASequenceAppliesThePreferencesToIt() throws {
+        let src = try source("star/ViewModel.swift")
+        let opens = src.components(separatedBy: "imageSequence = imageSequenceViewModel").count - 1
+        XCTAssertEqual(opens, 3, "the number of ways a sequence is opened has changed")
+        XCTAssertEqual(src.components(separatedBy: "imageSequenceViewModel.applyUserPreferences()").count - 1,
+                       opens, "not every sequence-open applies the preferences to the new sequence")
+    }
+
+    // MARK: - the store itself
+
+    /// Holding the value rather than vending copies of it is the whole point.  Assigning a whole
+    /// struct does not touch the file — only the individual field setters save — so this cannot
+    /// disturb the preferences of whoever runs it; the original is put back regardless.
+    func testTheStoreHoldsTheValueEveryReaderSees() throws {
+        let store = UserPreferencesStore.shared
+        let original = store.preferences
+        defer { store.preferences = original }
+
+        let json = #"{"recentlyOpenedSequencelist":{},"movingHorizonCountMultiplier":3.25}"#
+        store.preferences = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+
+        XCTAssertEqual(UserPreferencesStore.shared.preferences.movingHorizonCountMultiplier, 3.25)
+        XCTAssertTrue(UserPreferencesStore.shared === store, "the store is not a singleton")
+    }
+
+    private final class Flag: @unchecked Sendable { var raised = false }
+
+    /// Every view that reads a preference used to read it from an `@Observable` view model, so a
+    /// change redrew it.  Now the value lives a level further away, and the redraw depends on the
+    /// store being observable too — silently, since nothing fails to compile if it is not.
+    func testChangingAPreferenceStillNotifiesTheViewsThatReadIt() throws {
+        let store = UserPreferencesStore.shared
+        let original = store.preferences
+        defer { store.preferences = original }
+
+        let fired = Flag()
+        withObservationTracking {
+            _ = store.preferences.movingHorizonCountMultiplier
+        } onChange: {
+            fired.raised = true
+        }
+        XCTAssertFalse(fired.raised, "notified before anything changed")
+
+        let json = #"{"recentlyOpenedSequencelist":{},"movingHorizonCountMultiplier":4.5}"#
+        store.preferences = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+
+        XCTAssertTrue(fired.raised,
+                      "a preference changed without notifying its readers — views that show one "
+                      + "would no longer redraw")
     }
 }

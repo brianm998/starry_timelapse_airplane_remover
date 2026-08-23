@@ -34,6 +34,19 @@ class LocalPreferences {
     var language: String? = null
         private set
 
+    /**
+     * How many reference horizons the user wants for a moving sequence, relative to what star
+     * suggests for that sequence's length (macOS `UserPreferences.movingHorizonCountMultiplier`,
+     * same key in the same file).
+     *
+     * A multiplier rather than a count, because the count that suits a sequence depends on how
+     * long it is: `chosen / suggestedMovingHorizonCount(total)`, so 1.5 means "half again as many
+     * as star suggests, whatever the length". null until the user first moves the stepper.
+     */
+    @Volatile
+    var movingHorizonCountMultiplier: Double? = null
+        private set
+
     init {
         load()
     }
@@ -45,6 +58,11 @@ class LocalPreferences {
 
     fun setLanguage(value: String?) {
         language = value
+        save()
+    }
+
+    fun setMovingHorizonCountMultiplier(value: Double) {
+        movingHorizonCountMultiplier = value
         save()
     }
 
@@ -80,6 +98,8 @@ class LocalPreferences {
             }
             skipRenderPromptAfterProcessing = map["skipRenderPromptAfterProcessing"] as? Boolean ?: false
             language = (map["language"] as? String)?.takeIf { it.isNotEmpty() }
+            movingHorizonCountMultiplier =
+                (map["movingHorizonCountMultiplier"] as? Double)?.takeIf { it > 0 && it.isFinite() }
             synchronized(others) {
                 others.clear()
                 map.forEach { (k, v) -> if (k !in MANAGED_KEYS) others[k] = v }
@@ -97,6 +117,8 @@ class LocalPreferences {
             // Written only when set: absent means "follow the system", and the Swift side
             // decodes a missing key to nil the same way.
             language?.let { out["language"] = it }
+            // likewise absent until the user first moves the horizon stepper
+            movingHorizonCountMultiplier?.let { out["movingHorizonCountMultiplier"] = it }
             prefsFile.writeText(gson.toJson(out))
         } catch (e: Exception) {
             Log.w("Prefs") { "failed to write $prefsFile: ${e.message}" }
@@ -104,6 +126,11 @@ class LocalPreferences {
     }
 
     private companion object {
-        val MANAGED_KEYS = setOf("recentlyOpenedSequencelist", "skipRenderPromptAfterProcessing", "language")
+        val MANAGED_KEYS = setOf(
+            "recentlyOpenedSequencelist",
+            "skipRenderPromptAfterProcessing",
+            "language",
+            "movingHorizonCountMultiplier",
+        )
     }
 }

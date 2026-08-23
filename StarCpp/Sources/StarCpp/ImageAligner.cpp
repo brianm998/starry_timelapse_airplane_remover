@@ -928,7 +928,24 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                 std::vector<cv::Point2f> ptsNeighbor, ptsBase;
                 std::vector<std::vector<cv::DMatch>> knnMatches;
                 std::vector<cv::DMatch> matches;
-                cv::BFMatcher matcher(cv::NORM_L2);
+                // The norm has to match the descriptor, and the two detectors here do
+                // not produce the same kind.  SIFT (sky) gives 128 CV_32F gradient
+                // histograms, where L2 is the right distance.  AKAZE (earth) gives
+                // MLDB, 486 bits packed into 61 CV_8U bytes, where the only meaningful
+                // distance is Hamming — the numeric gap between two packed bytes says
+                // nothing about how many bits they share, so an L2 sum over them is
+                // noise wearing a distance's clothes, and Lowe's ratio test then keeps
+                // whichever pairs the noise happened to separate.
+                //
+                // This was NORM_L2 for both.  Measured on frame 672 of the 33MP aurora
+                // sequence against its neighbours at offsets -1, -2, -4 and +4, going
+                // to Hamming for the earth pass takes the surviving correspondences
+                // from 82/82/89/70 to 197/193/195/180 — 2.4x — and the resulting warp
+                // from 8px wrong at the left edge of the ground (where phase
+                // correlation says the truth is a uniform -8px shift) to about 2px.
+                const int matchNorm =
+                    (descBase.depth() == CV_8U) ? cv::NORM_HAMMING : cv::NORM_L2;
+                cv::BFMatcher matcher(matchNorm);
 
                 switch (matchMethod) {
                 case FeatureMatchMethodBruteForce: {
@@ -958,11 +975,21 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                     break;
                 }
                 case FeatureMatchMethodFLANN: {
-                    cv::Mat dn32, db32;
-                    descNeighbor.convertTo(dn32, CV_32F);
-                    descBase.convertTo(db32, CV_32F);
-                    cv::FlannBasedMatcher flann;
-                    flann.knnMatch(dn32, db32, knnMatches, 2);
+                    if (matchNorm == cv::NORM_HAMMING) {
+                        // FLANN's default index is a KDTree over L2, which is the same
+                        // mismatch the BFMatcher above had: widening packed bits to
+                        // floats does not make Euclidean distance mean anything on
+                        // them.  LSH would be the FLANN-side answer, but it brings
+                        // tuning parameters nothing here can validate, so binary
+                        // descriptors take the exact matcher instead.
+                        matcher.knnMatch(descNeighbor, descBase, knnMatches, 2);
+                    } else {
+                        cv::Mat dn32, db32;
+                        descNeighbor.convertTo(dn32, CV_32F);
+                        descBase.convertTo(db32, CV_32F);
+                        cv::FlannBasedMatcher flann;
+                        flann.knnMatch(dn32, db32, knnMatches, 2);
+                    }
                     for (size_t i = 0; i < knnMatches.size(); i++) {
                         if (knnMatches[i].size() == 2) {
                             const auto &m1 = knnMatches[i][0], &m2 = knnMatches[i][1];
