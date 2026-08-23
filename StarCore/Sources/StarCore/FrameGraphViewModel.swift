@@ -14,6 +14,24 @@ public final class FrameGraphViewModel {
 
     public var operations: [OperationType: [OperationState: UInt]] = [:]
 
+    /// How many frame graphs have finished being assembled since the sequence was opened.
+    ///
+    /// `operations` below is filled in as `FrameGraphBuilder` constructs each op, one type
+    /// at a time in dependency order, so a type with no operations yet may simply not have
+    /// been reached — which is a different thing from a type with nothing to do, and the
+    /// two are indistinguishable from the counts alone.  A caller that snapshots this when
+    /// its run starts can tell them apart: until the number moves, the plan is still being
+    /// worked out.
+    ///
+    /// Bumped by `build` only, not by `enqueueHorizonRefinement`: a refinement assembles
+    /// its own small graph, and letting that count would tell a run in progress that its
+    /// plan was final when it was not.
+    public private(set) var graphBuildsCompleted: Int = 0
+
+    public func finishedBuildingGraph() {
+        graphBuildsCompleted += 1
+    }
+
     public var numberOfFramesProcessingNow: Int {
         var ret = 0
         for type in OperationType.allCases {
@@ -60,6 +78,7 @@ public final class FrameGraphViewModel {
     
     public func reset() {
         operations = [:]
+        graphBuildsCompleted = 0
     }
 
     public func queuedOperation(ofType type: OperationType) {

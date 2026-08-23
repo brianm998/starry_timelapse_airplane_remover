@@ -1180,33 +1180,118 @@ final class ProcessingStepsTests: XCTestCase {
 
     // MARK: - which steps are listed
 
+    /// Everything on: a moving camera with earth alignment, horizon detection and a clean
+    /// method that reviews outliers.
+    private func allSteps() -> [OperationType] {
+        ProcessingSteps.types(horizonDetectionEnabled: true,
+                              hasStaticReferenceHorizon: false,
+                              cameraWasMoving: true,
+                              allowEarthAlignment: true,
+                              usesOutliers: true)
+    }
+
     func testTheStepsAreInTheOrderTheModalStacksThem() {
-        XCTAssertEqual(ProcessingSteps.types(horizonEnabled: true, earthEnabled: true),
+        XCTAssertEqual(allSteps(),
                        [.horizon, .mergedHorizon,
                         .starKeypoints, .earthKeypoints,
                         .starHomography, .earthHomography,
                         .outliers, .merge])
     }
 
-    func testEarthStepsAreOnlyListedWhenEarthAlignmentIsOn() {
-        let types = ProcessingSteps.types(horizonEnabled: true, earthEnabled: false)
+    func testEarthStepsAreNotListedWhenEarthAlignmentIsOff() {
+        let types = ProcessingSteps.types(horizonDetectionEnabled: true,
+                                          hasStaticReferenceHorizon: false,
+                                          cameraWasMoving: true,
+                                          allowEarthAlignment: false,
+                                          usesOutliers: true)
         XCTAssertEqual(types, [.horizon, .mergedHorizon, .starKeypoints, .starHomography,
                                .outliers, .merge])
     }
 
-    func testHorizonStepsAreOnlyListedWhenHorizonDetectionIsOn() {
-        let types = ProcessingSteps.types(horizonEnabled: false, earthEnabled: false)
+    /// The setting is not enough on its own: `FrameGraphBuilder` needs the camera to have
+    /// been moving too, so on a fixed tripod these rows would sit at zero all run.
+    func testEarthStepsAreNotListedForAFixedCameraEvenWithEarthAlignmentOn() {
+        let types = ProcessingSteps.types(horizonDetectionEnabled: true,
+                                          hasStaticReferenceHorizon: false,
+                                          cameraWasMoving: false,
+                                          allowEarthAlignment: true,
+                                          usesOutliers: true)
+        XCTAssertFalse(types.contains(.earthKeypoints))
+        XCTAssertFalse(types.contains(.earthHomography))
+    }
+
+    /// Earth work is masked by the horizon, so with no horizon detection there is none of
+    /// it either — the builder gates both on `hasHorizon && processEarth`.
+    func testEarthStepsAreNotListedWithoutHorizonDetection() {
+        let types = ProcessingSteps.types(horizonDetectionEnabled: false,
+                                          hasStaticReferenceHorizon: false,
+                                          cameraWasMoving: true,
+                                          allowEarthAlignment: true,
+                                          usesOutliers: true)
         XCTAssertEqual(types, [.starKeypoints, .starHomography, .outliers, .merge])
     }
 
-    /// `preview` is thumbnail work that has nothing to do with a run, and the modal would be
-    /// showing a bar that fills in while nothing the user asked for is happening.
-    func testPreviewIsNeverListed() {
+    func testHorizonStepsAreNotListedWhenHorizonDetectionIsOff() {
+        let types = ProcessingSteps.types(horizonDetectionEnabled: false,
+                                          hasStaticReferenceHorizon: false,
+                                          cameraWasMoving: false,
+                                          allowEarthAlignment: false,
+                                          usesOutliers: true)
+        XCTAssertEqual(types, [.starKeypoints, .starHomography, .outliers, .merge])
+    }
+
+    /// A painted reference horizon on a static sequence is used directly, so neither
+    /// detection nor the merge that combines detections runs at all.
+    func testHorizonStepsAreNotListedForAPaintedStaticReference() {
+        let types = ProcessingSteps.types(horizonDetectionEnabled: true,
+                                          hasStaticReferenceHorizon: true,
+                                          cameraWasMoving: false,
+                                          allowEarthAlignment: false,
+                                          usesOutliers: true)
+        XCTAssertFalse(types.contains(.horizon))
+        XCTAssertFalse(types.contains(.mergedHorizon))
+    }
+
+    /// The same painted reference does not apply to a moving sequence — there the painted
+    /// frames are references for detection rather than a replacement for it.
+    func testHorizonStepsSurviveAPaintedReferenceWhenTheCameraMoved() {
+        let types = ProcessingSteps.types(horizonDetectionEnabled: true,
+                                          hasStaticReferenceHorizon: true,
+                                          cameraWasMoving: true,
+                                          allowEarthAlignment: false,
+                                          usesOutliers: true)
+        XCTAssertTrue(types.contains(.horizon))
+        XCTAssertTrue(types.contains(.mergedHorizon))
+    }
+
+    func testOutliersAreNotListedForACleanMethodThatDoesNotUseThem() {
+        let types = ProcessingSteps.types(horizonDetectionEnabled: true,
+                                          hasStaticReferenceHorizon: false,
+                                          cameraWasMoving: true,
+                                          allowEarthAlignment: false,
+                                          usesOutliers: false)
+        XCTAssertFalse(types.contains(.outliers))
+        XCTAssertEqual(types.last, .merge)
+    }
+
+    /// The two steps every run takes, whatever it is configured to do.
+    func testKeypointsAndTheMergeAreAlwaysListed() {
         for horizon in [true, false] {
             for earth in [true, false] {
-                XCTAssertFalse(
-                  ProcessingSteps.types(horizonEnabled: horizon, earthEnabled: earth)
-                    .contains(.preview))
+                for moving in [true, false] {
+                    for outliers in [true, false] {
+                        let types = ProcessingSteps.types(
+                          horizonDetectionEnabled: horizon,
+                          hasStaticReferenceHorizon: false,
+                          cameraWasMoving: moving,
+                          allowEarthAlignment: earth,
+                          usesOutliers: outliers)
+                        XCTAssertTrue(types.contains(.starKeypoints))
+                        XCTAssertTrue(types.contains(.starHomography))
+                        XCTAssertTrue(types.contains(.merge))
+                        XCTAssertFalse(types.contains(.preview))
+                    }
+                }
             }
         }
     }
@@ -1215,7 +1300,7 @@ final class ProcessingStepsTests: XCTestCase {
     /// catalogue does not have it — which renders as `ui.merged_horizon` on screen rather
     /// than as anything a user would recognise.
     func testEveryListedStepHasALabelFromTheCatalogue() {
-        for type in ProcessingSteps.types(horizonEnabled: true, earthEnabled: true) {
+        for type in allSteps() {
             let name = type.stepName
             XCTAssertFalse(name.isEmpty, "\(type) has no name")
             XCTAssertFalse(name.hasPrefix("ui."),
@@ -1226,7 +1311,7 @@ final class ProcessingStepsTests: XCTestCase {
     /// Same for the tooltip that explains the step.  An empty one is a row that silently
     /// stops explaining itself; a `ui.` one is the key showing through.
     func testEveryListedStepHasHoverHelpFromTheCatalogue() {
-        for type in ProcessingSteps.types(horizonEnabled: true, earthEnabled: true) {
+        for type in allSteps() {
             let help = type.stepHelp
             XCTAssertFalse(help.isEmpty, "\(type) has no hover help")
             XCTAssertFalse(help.hasPrefix("ui."),
@@ -1234,6 +1319,39 @@ final class ProcessingStepsTests: XCTestCase {
             XCTAssertNotEqual(help, type.stepName,
                               "\(type)'s hover help just repeats its label")
         }
+    }
+
+    // MARK: - which steps are drawn
+
+    private func progress(_ entries: [(OperationType, Int)]) -> [ProcessingStepProgress] {
+        entries.map { ProcessingStepProgress(type: $0.0, queued: $0.1, running: 0, done: 0) }
+    }
+
+    /// The point of the whole exercise: a step whose artifacts were all already on disk
+    /// built no operations, so it is not a step this run takes and it should not be a row.
+    func testAStepWithNothingToDoIsNotDrawnOnceThePlanIsSettled() {
+        let steps = progress([(.horizon, 0), (.starKeypoints, 19), (.merge, 19)])
+        let visible = ProcessingSteps.visible(steps, graphIsBuilt: true)
+
+        XCTAssertEqual(visible.map(\.type), [.starKeypoints, .merge])
+    }
+
+    /// Until the builder has finished, every step has no operations yet.  Filtering then
+    /// would open the panel empty and pop the rows in one at a time.
+    func testNothingIsHiddenWhileThePlanIsStillBeingWorkedOut() {
+        let steps = progress([(.horizon, 0), (.starKeypoints, 0), (.merge, 0)])
+        let visible = ProcessingSteps.visible(steps, graphIsBuilt: false)
+
+        XCTAssertEqual(visible.map(\.type), [.horizon, .starKeypoints, .merge])
+    }
+
+    /// A step that has finished still has operations, so it keeps its filled bar rather
+    /// than vanishing at the moment it completes.
+    func testAFinishedStepIsStillDrawn() {
+        let done = ProcessingStepProgress(type: .horizon, queued: 0, running: 0, done: 19)
+        let visible = ProcessingSteps.visible([done], graphIsBuilt: true)
+
+        XCTAssertEqual(visible.map(\.type), [.horizon])
     }
 
     // MARK: - the arithmetic

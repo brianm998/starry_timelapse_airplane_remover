@@ -1246,6 +1246,16 @@ public final class ImageSequenceViewModel {
     /// the sequence was loaded.  See `ProcessingSteps.progress(for:counts:since:)`.
     var processingStepBaseline: [OperationType: [OperationState: UInt]] = [:]
 
+    /// The steps the current run will take, settled when it starts from the same
+    /// configuration `FrameGraphBuilder` is about to read.
+    var processingStepTypes: [OperationType] = []
+
+    /// `FrameGraphViewModel.graphBuildsCompleted` when the current run started, so that the
+    /// modal can tell "this step has nothing to do" from "the builder has not got to this
+    /// step yet".  The two look the same in the counts, and only the first should hide a
+    /// row.
+    var processingBuildCount: Int = 0
+
     // used in initial instructions view
     var showExpertSettings = false
 
@@ -1972,6 +1982,8 @@ public final class ImageSequenceViewModel {
     /// not leave stale numbers behind for the next run that does show it.
     private func startProcessingModal() {
         processingStepBaseline = frameGraphViewModel.operations
+        processingBuildCount = frameGraphViewModel.graphBuildsCompleted
+        processingStepTypes = ProcessingSteps.types(for: config.config())
         if userPreferences.showProcessingWindow ?? true {
             processingModalShowing = true
         }

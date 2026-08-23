@@ -38,25 +38,66 @@ struct ProcessingStepProgress: Identifiable, Equatable {
 /// below — which is the part that can be wrong without looking wrong — is testable.
 enum ProcessingSteps {
 
-    /// The steps, in the order the modal stacks them: horizon work first, then keypoints,
-    /// then alignment, then outlier detection, then the merge that consumes all of it.
+    /// The steps this configuration will take, in the order the modal stacks them: horizon
+    /// work first, then keypoints, then alignment, then outlier detection, then the merge
+    /// that consumes all of it.
+    ///
+    /// The conditions are `FrameGraphBuilder.build`'s own, spelled the same way, because a
+    /// row for a step that will never run is worse than no row: it sits at zero for the
+    /// whole run and reads as something stuck.  Two of them are easy to get wrong from the
+    /// gui side — earth work needs the camera to have been moving as well as the setting to
+    /// be on, since a fixed tripod has nothing to align the ground against, and a painted
+    /// static reference horizon replaces horizon detection and its merge outright.
     ///
     /// Deliberately not `OperationType.allCases`: `preview` is thumbnail work that has
     /// nothing to do with a processing run, and `alignmentValidation` is an internal stage
     /// this display does not break out.
-    static func types(horizonEnabled: Bool, earthEnabled: Bool) -> [OperationType] {
+    static func types(
+      horizonDetectionEnabled: Bool,
+      hasStaticReferenceHorizon: Bool,
+      cameraWasMoving: Bool,
+      allowEarthAlignment: Bool,
+      usesOutliers: Bool
+    ) -> [OperationType] {
+        let paintedStaticReference = hasStaticReferenceHorizon && !cameraWasMoving
+        let detectsHorizons = horizonDetectionEnabled && !paintedStaticReference
+        let processesEarth = horizonDetectionEnabled && allowEarthAlignment && cameraWasMoving
+
         var types: [OperationType] = []
-        if horizonEnabled {
+        if detectsHorizons {
             types.append(.horizon)
             types.append(.mergedHorizon)
         }
         types.append(.starKeypoints)
-        if earthEnabled { types.append(.earthKeypoints) }
+        if processesEarth { types.append(.earthKeypoints) }
         types.append(.starHomography)
-        if earthEnabled { types.append(.earthHomography) }
-        types.append(.outliers)
+        if processesEarth { types.append(.earthHomography) }
+        if usesOutliers { types.append(.outliers) }
         types.append(.merge)
         return types
+    }
+
+    /// The steps a run under `config` will take.
+    static func types(for config: Config) -> [OperationType] {
+        types(horizonDetectionEnabled: config.horizonDetectionEnabled,
+              hasStaticReferenceHorizon: config.hasStaticReferenceHorizon,
+              cameraWasMoving: config.tripodHeadWasMoving,
+              allowEarthAlignment: config.allowEarthAlignment,
+              usesOutliers: config.cleanMethod.usesOutliers)
+    }
+
+    /// The rows worth drawing, out of the steps this configuration can take.
+    ///
+    /// A step can be one this run does not need even though the configuration allows it —
+    /// every artifact it would produce is already on disk, so the builder gives it no
+    /// operations at all.  Those are dropped, but only once `graphIsBuilt`: while the plan
+    /// is still being assembled every step has no operations yet, and filtering then would
+    /// empty the panel and then pop the rows in one at a time as the builder reached them.
+    static func visible(
+      _ steps: [ProcessingStepProgress],
+      graphIsBuilt: Bool
+    ) -> [ProcessingStepProgress] {
+        graphIsBuilt ? steps.filter(\.hasWork) : steps
     }
 
     /// Progress for each of `types`, measured from `baseline`.
@@ -168,11 +209,14 @@ struct ProcessingModalView: View {
     @Environment(FrameGraphViewModel.self) var frameGraphViewModel: FrameGraphViewModel
 
     private var steps: [ProcessingStepProgress] {
-        ProcessingSteps.progress(
-          for: ProcessingSteps.types(horizonEnabled: viewModel.horizonDetectionEnabled,
-                                     earthEnabled: viewModel.allowEarthAlignment),
-          counts: frameGraphViewModel.operations,
-          since: viewModel.processingStepBaseline
+        ProcessingSteps.visible(
+          ProcessingSteps.progress(
+            for: viewModel.processingStepTypes,
+            counts: frameGraphViewModel.operations,
+            since: viewModel.processingStepBaseline
+          ),
+          graphIsBuilt: frameGraphViewModel.graphBuildsCompleted
+                          > viewModel.processingBuildCount
         )
     }
 
@@ -361,6 +405,14 @@ struct ProcessingStepsView: View {
               .font(.headline)
               .foregroundColor(.white)
 
+            if steps.isEmpty {
+                // Every step this configuration takes turned out to have nothing left to
+                // do — a re-run over a sequence that is already finished.  Rare, and over
+                // quickly, but a lone heading with nothing under it looks broken.
+                Text(localized("ui.nothing_to_do"))
+                  .foregroundColor(.gray)
+            }
+
             ForEach(steps) { step in
                 stepRow(step)
             }
@@ -380,14 +432,20 @@ struct ProcessingStepsView: View {
 
             stepBar(step)
 
+            // A step with no operations is only ever on screen while the plan is still
+            // being worked out — once it is, `ProcessingSteps.visible` drops it — so this
+            // says "not known yet", which no wording says as plainly as leaving it out.
             Text(step.hasWork
                    ? localized("ui.n_of_m_complete", step.done, step.total)
-                   : localized("ui.nothing_to_do"))
+                   : "—")
               .font(.caption)
               .monospacedDigit()
               .foregroundColor(step.hasWork ? .white : .gray)
-              .lineLimit(1)
-              .minimumScaleFactor(0.75)
+              // Wraps rather than shrinking.  `minimumScaleFactor` was scaling one row and
+              // not the row above it with the very same text in it — measured — which
+              // reads as a rendering fault; wrapping is at least the same on every row.
+              .lineLimit(2)
+              .fixedSize(horizontal: false, vertical: true)
               .frame(width: countWidth, alignment: .trailing)
         }
           // Over the whole row, gaps included, rather than over the label alone: the bar
