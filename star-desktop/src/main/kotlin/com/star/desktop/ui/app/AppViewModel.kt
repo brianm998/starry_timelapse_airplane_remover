@@ -53,6 +53,19 @@ internal fun evenlySpacedFrameIndices(count: Int, total: Int): List<Int> {
 }
 
 /**
+ * How many reference horizons to suggest painting for a moving sequence of [total] frames (macOS
+ * `ImageSequenceViewModel.suggestedMovingHorizonCount`). A moving camera drifts further over a
+ * longer sequence, so `sqrt(total / 10)` tracks the length while growing slowly enough to stay
+ * reasonable: 12 for the 1450 frame sequence 12 was measured to work well on, 14 at 2000, 22 at
+ * 5000. The floor of 3 keeps the old fixed suggestion for anything under about 120 frames.
+ */
+internal fun suggestedMovingHorizonCount(total: Int): Int {
+    if (total <= 0) return 1
+    val scaled = Math.round(Math.sqrt(total.toDouble() / 10)).toInt()
+    return minOf(maxOf(3, scaled), total)
+}
+
+/**
  * Root app state (macOS `ViewModel`): owns the engine, repositories, prefs, and the current screen.
  * Engine status is collected in its own coroutine; opening a source routes Initial → Loading →
  * Sequence; engine death while a session is open surfaces an error and returns to Initial.

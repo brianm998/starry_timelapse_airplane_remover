@@ -201,6 +201,7 @@ struct SelectMovingHorizonsView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @Binding fileprivate var state: StartupState
 
+    // placeholder only: onAppear replaces it with the suggestion for this sequence
     @State private var horizonCount: Int = 3
 
     private var maxCount: Int { max(1, viewModel.imageSequenceSize) }
@@ -267,7 +268,8 @@ struct SelectMovingHorizonsView: View {
             }
         }
         .onAppear {
-            horizonCount = min(3, maxCount)
+            horizonCount = ImageSequenceViewModel
+              .suggestedMovingHorizonCount(total: viewModel.imageSequenceSize)
         }
     }
 }

@@ -38,4 +38,32 @@ class StartupHorizonTest {
         assertEquals(emptyList(), evenlySpacedFrameIndices(count = 0, total = 10))
         assertEquals(emptyList(), evenlySpacedFrameIndices(count = 3, total = 0))
     }
+
+    // the suggested count (macOS `suggestedMovingHorizonCount`)
+
+    @Test fun suggestionScalesWithSequenceLength() {
+        assertEquals(12, suggestedMovingHorizonCount(1450)) // the measured good value
+        assertEquals(10, suggestedMovingHorizonCount(1000))
+        assertEquals(14, suggestedMovingHorizonCount(2000))
+        assertEquals(22, suggestedMovingHorizonCount(5000))
+    }
+
+    @Test fun shortSequencesKeepTheOldSuggestionOfThree() {
+        assertEquals(3, suggestedMovingHorizonCount(50))
+        assertEquals(3, suggestedMovingHorizonCount(122))
+        assertEquals(4, suggestedMovingHorizonCount(123)) // where sqrt(total/10) rounds past 3
+    }
+
+    @Test fun suggestionNeverExceedsTheSequence() {
+        assertEquals(1, suggestedMovingHorizonCount(1))
+        assertEquals(2, suggestedMovingHorizonCount(2))
+        assertEquals(1, suggestedMovingHorizonCount(0)) // matches the stepper's floor of 1
+    }
+
+    @Test fun suggestionIsAlwaysAValidStepperValue() {
+        for (total in 1..6000) {
+            val n = suggestedMovingHorizonCount(total)
+            assertEquals(true, n in 1..total, "suggestion $n out of 1..$total")
+        }
+    }
 }

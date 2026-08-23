@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.app.StartupStep
+import com.star.desktop.ui.app.suggestedMovingHorizonCount
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.CleanMethod
@@ -115,7 +116,7 @@ private fun SelectHorizonPrompt(app: AppViewModel) {
 @Composable
 private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
     val maxCount = app.startupFrameCount()
-    var count by remember { mutableStateOf(minOf(3, maxCount)) }
+    var count by remember { mutableStateOf(suggestedMovingHorizonCount(maxCount)) }
 
     Title("Do you want to select the horizons yourself?")
     Body(

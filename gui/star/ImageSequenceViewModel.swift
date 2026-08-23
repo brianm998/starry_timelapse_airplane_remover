@@ -435,6 +435,23 @@ public final class ImageSequenceViewModel {
         // and resets the HorizonPaintState for the new frame automatically.
     }
 
+    /// How many reference horizons to suggest painting for a moving sequence of `total`
+    /// frames.  A moving camera drifts further over a longer sequence, so one reference is
+    /// never enough, but asking for one every N frames makes the suggestion grow without
+    /// bound: a 5000 frame sequence would ask for over forty hand painted horizons.
+    ///
+    /// `sqrt(total/10)` grows slowly enough to stay reasonable while still tracking the
+    /// length: 12 for the 1450 frame sequence that 12 was measured to work well on, 14 at
+    /// 2000, 22 at 5000.  The floor of 3 keeps the old fixed suggestion for anything under
+    /// about 120 frames, where the spacing is already tight.
+    ///
+    /// A suggestion only — the stepper beside it lets the user pick any count up to `total`.
+    static func suggestedMovingHorizonCount(total: Int) -> Int {
+        guard total > 0 else { return 1 }
+        let scaled = Int((Double(total) / 10).squareRoot().rounded())
+        return min(max(3, scaled), total)
+    }
+
     private static func calculateFrameIndices(count: Int, total: Int) -> [Int] {
         guard count > 0, total > 0 else { return [] }
         if count == 1 { return [0] }
