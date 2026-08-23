@@ -32,12 +32,17 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                 // tripod was stationary
                 try await self.validateStaticStarAlignment()
             }
+            // Only the moving case has an earth homography to validate: a stationary
+            // tripod's ground needs no warp, so FrameGraphBuilder computes none — see
+            // `processEarth` there.
+            if config.allowEarthAlignment, config.tripodHeadWasMoving {
+                await validateMovingEarthAlignment()
+            }
         } catch {
             let str = "error during alignment validation: \(error)"
             Log.e(str)
             errorClosure(str)
         }
-        // XXX still need to handle earth alignment if enabled
         Log.d("end")
     }
 
@@ -281,6 +286,394 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
         Log.d("validateMovingStarAlignment done")
     }
+
+    // MARK: - Earth
+
+    /// Replace the ground homographies that jumped.
+    ///
+    /// A moving tripod's ground warp drifts; it does not jump.  There is no
+    /// sequence-wide model for it the way there is for a static tripod's sky — where
+    /// the head goes next is up to whoever is turning it — but the head's motion
+    /// changes slowly compared with the frame interval, so for a fixed neighbour offset
+    /// `d` the warp between a frame and its neighbour traces a smooth curve as the
+    /// sequence advances.  A frame that leaves that curve has an estimation failure,
+    /// not a real move.
+    ///
+    /// Those failures are common on the ground and rare in the sky, and for a reason
+    /// that is not going to go away: a dark foreground offers far fewer and far weaker
+    /// features than a sky full of stars, and they sit in a thin band across the bottom
+    /// of the frame, which is a poorly conditioned set of points to fit eight degrees
+    /// of freedom to.  Measured on 31 frames of a 33MP aurora sequence at 8 neighbours
+    /// each: the frame-to-frame change in where the ground warp lands a point had a
+    /// median of 1.4 to 4.3px near the frame centre but 7 to 62px at the left and right
+    /// edges of the ground, and individual entries were wrong by as much as 62px —
+    /// including one whose sign was inverted.  Every one of those is a source in the
+    /// ground median merge, so each bad entry smears the ground it was meant to clean.
+    ///
+    /// So each entry is compared against a robust local model of the same offset in
+    /// nearby frames and replaced when it disagrees.  Per offset, not per frame: the
+    /// warp to the neighbour 4 frames back is a different quantity from the warp to the
+    /// one 1 frame forward, and only entries measuring the same thing belong in the
+    /// same median.
+    func validateMovingEarthAlignment() async {
+        var entries: [GapFillEntry] = []
+        for frame in frames {
+            entries.append(
+              GapFillEntry(
+                frame: frame,
+                homography: await frame.getNeighborEarthHomography(),
+                neighborFrameIndices: await frame.getAlignmentFrameIndices()
+              )
+            )
+        }
+        guard let firstFrame = frames.first else { return }
+
+        let measured = entries.lazy.filter { $0.homography != nil }.count
+        Log.i("validateMovingEarthAlignment: \(measured) of \(entries.count) frames " +
+              "have a measured ground homography")
+        guard measured > 0 else {
+            // Not fatal the way it is for the sky.  With no ground homography at all
+            // every frame falls back to its own unwarped pixels, which is what the
+            // pipeline does with earth alignment off — a worse result than was asked
+            // for, not a broken one.
+            Log.w("validateMovingEarthAlignment: no ground homographies to validate")
+            return
+        }
+
+        // frameIndex -> offset -> matrix, for the offsets that were actually solved,
+        // and frameIndex -> the offsets that frame is supposed to have.  Near the ends
+        // of a sequence a frame legitimately has fewer neighbours, and filling in one
+        // it never had would hand the merge a source that does not exist.
+        var measuredByFrame: [Int: [Int: [Double]]] = [:]
+        var expectedOffsets: [Int: [Int]] = [:]
+        for entry in entries {
+            let frameIndex = entry.frame.frameIndex
+            expectedOffsets[frameIndex] = entry.neighborFrameIndices.map { $0 - frameIndex }
+            guard let results = entry.homography else { continue }
+            var byOffset: [Int: [Double]] = [:]
+            for warp in results.neighborHomography {
+                guard let h = warp.homography, h.count == 9 else { continue }
+                byOffset[warp.frameIndex - results.frameIndex] = h
+            }
+            measuredByFrame[frameIndex] = byOffset
+        }
+
+        let result = EarthHomographyContinuityFilter.corrections(
+          measured: measuredByFrame,
+          expectedOffsets: expectedOffsets,
+          probes: EarthHomographyContinuityFilter.groundProbePoints(
+            width: firstFrame.width, height: firstFrame.height
+          )
+        )
+
+        for report in result.perOffset {
+            Log.i("validateMovingEarthAlignment offset \(report.offset): " +
+                  "\(report.comparableFrames) comparable frames, median disagreement " +
+                  "\(String(format: "%.2f", report.medianDisagreement))px, worst " +
+                  "\(String(format: "%.2f", report.worstDisagreement))px, cutoff " +
+                  "\(String(format: "%.2f", report.cutoff))px, " +
+                  "\(report.replaced) replaced, \(report.filled) filled")
+        }
+
+        guard result.replaced + result.filled > 0 else {
+            Log.i("validateMovingEarthAlignment: every ground homography agrees with " +
+                  "its neighbours, nothing to correct")
+            return
+        }
+
+        // Write back only the frames that changed.
+        for entry in entries {
+            let frameIndex = entry.frame.frameIndex
+            guard let corrections = result.corrected[frameIndex],
+                  !corrections.isEmpty
+            else { continue }
+            var byOffset: [Int: AlignmentWarpInfoCodable] = [:]
+            for warp in entry.homography?.neighborHomography ?? [] {
+                byOffset[warp.frameIndex - frameIndex] = warp
+            }
+            for (offset, newHomography) in corrections {
+                byOffset[offset] = AlignmentWarpInfoCodable(
+                  homography: newHomography,
+                  deviation: homographyDeviation(newHomography),
+                  // Not what this frame measured: taken from the frames around it
+                  // because what it measured did not agree with them.  The same state
+                  // the static path uses when it fills an offset from a model.
+                  alignmentState: .usedExistingHomography,
+                  frameIndex: frameIndex + offset
+                )
+            }
+            await entry.frame.set(
+              neighborEarthHomography: HomographyResultsCodable(
+                for: frameIndex,
+                with: byOffset.values.sorted { $0.frameIndex < $1.frameIndex }
+              )
+            )
+        }
+
+        Log.i("validateMovingEarthAlignment: replaced \(result.replaced) ground " +
+              "homographies that disagreed with their neighbours and filled " +
+              "\(result.filled) that were missing")
+    }
+}
+
+
+/// Finds the ground homographies that jumped, and what to put in their place.
+///
+/// Pure: it sees frame indices and 3x3 matrices, nothing else, so the rule it applies
+/// can be exercised directly.  `AlignmentValidationOp.validateMovingEarthAlignment`
+/// gathers the input from the frames and writes the answer back.
+public enum EarthHomographyContinuityFilter {
+
+    /// How many frames either side of a frame make up the local model of one offset.
+    /// Wide enough that a single bad frame cannot dominate the median, narrow enough
+    /// that the model still tracks a head that is speeding up or slowing down.
+    public static let windowRadius = 4
+
+    /// Below this many samples in the window there is nothing to compare against, and
+    /// a frame is left exactly as measured rather than judged on two neighbours.
+    public static let minWindowSamples = 3
+
+    /// How far, in pixels, a frame's ground warp may land a point from where the local
+    /// model puts it before it is treated as an estimation failure.
+    ///
+    /// The cutoff is a multiple of the offset's own median disagreement, held between
+    /// these two: scaling with the sequence keeps a well-tracked ground on a tight
+    /// cutoff and stops a barely-trackable one having most of its frames declared bad,
+    /// but neither end of that can be allowed to run away.
+    ///
+    /// Tuned against phase correlation, which measures how far a piece of ground
+    /// actually moved without using any of the keypoint machinery, so it can say
+    /// whether a replacement was an improvement.  Over 126 frame pairs of a 33MP
+    /// aurora sequence, scoring the error at the centre of each third of the ground
+    /// band: leaving everything alone gave worst-case errors of 39.5px (left third),
+    /// 11.1px (centre) and 15.4px (right); this policy gives 6.3, 7.6 and 4.8, and
+    /// nudges the medians down as well.  A looser 4x/8/20 gave 7.4, 7.6 and 7.5 —
+    /// still most of the gain, so the exact numbers are not a knife edge.
+    public static let minCutoff: Double = 4
+    public static let maxCutoff: Double = 12
+
+    /// Multiple of the median disagreement at which an entry is called an outlier.
+    public static let deviationMultiple: Double = 3
+
+    /// What one neighbour offset looked like across the sequence.  Logged, so a run
+    /// that corrected a lot says why.
+    public struct OffsetReport: Sendable {
+        public let offset: Int
+        public let comparableFrames: Int
+        public let medianDisagreement: Double
+        public let worstDisagreement: Double
+        public let cutoff: Double
+        public let replaced: Int
+        public let filled: Int
+    }
+
+    public struct Result: Sendable {
+        /// frameIndex -> offset -> the matrix to use instead.  Only the entries that
+        /// changed; a frame with nothing to correct is absent.
+        public let corrected: [Int: [Int: [Double]]]
+        /// measured, but too far from its neighbours to believe
+        public let replaced: Int
+        /// never measured, and filled in from the neighbours
+        public let filled: Int
+        public let perOffset: [OffsetReport]
+    }
+
+    /// - Parameters:
+    ///   - measured: frameIndex -> offset -> row-major 3x3, for the offsets that were
+    ///     solved.  An offset that failed is simply absent.
+    ///   - expectedOffsets: frameIndex -> the offsets that frame is supposed to have.
+    ///     Frames near the ends of a sequence legitimately have fewer neighbours, and
+    ///     filling in one a frame never had would hand the merge a source that does
+    ///     not exist.
+    ///   - probes: image points at which two homographies are compared.
+    public static func corrections(
+      measured: [Int: [Int: [Double]]],
+      expectedOffsets: [Int: [Int]],
+      probes: [(x: Double, y: Double)]
+    ) -> Result {
+        var corrected: [Int: [Int: [Double]]] = [:]
+        var reports: [OffsetReport] = []
+        var replacedTotal = 0
+        var filledTotal = 0
+
+        let offsets = Set(measured.values.flatMap { $0.keys }).sorted()
+
+        for offset in offsets {
+            // The local model for each frame, and how far that frame's own entry is
+            // from it.  Both are computed for every frame before anything is replaced,
+            // because the cutoff comes from the spread of those distances and every
+            // judgement has to be made against what was measured.
+            var localModel: [Int: [Double]] = [:]
+            var distance: [Int: Double] = [:]
+
+            for (frameIndex, expected) in expectedOffsets {
+                guard expected.contains(offset) else { continue }
+
+                var window: [[Double]] = []
+                for other in (frameIndex - windowRadius)...(frameIndex + windowRadius) {
+                    guard other != frameIndex,
+                          let h = measured[other]?[offset]
+                    else { continue }
+                    window.append(h)
+                }
+                guard window.count >= minWindowSamples else { continue }
+
+                let model = medoidHomography(of: window, at: probes)
+                localModel[frameIndex] = model
+                if let own = measured[frameIndex]?[offset] {
+                    distance[frameIndex] = maxProbeDistance(between: own,
+                                                            and: model,
+                                                            at: probes)
+                }
+            }
+
+            let sortedDistances = distance.values.sorted()
+            let typical = sortedDistances.isEmpty
+              ? 0
+              : sortedDistances[sortedDistances.count/2]
+            let cutoff = min(maxCutoff, max(minCutoff, typical * deviationMultiple))
+
+            var replaced = 0
+            var filled = 0
+            for (frameIndex, model) in localModel {
+                if let d = distance[frameIndex] {
+                    guard d > cutoff else { continue }
+                    replaced += 1
+                } else {
+                    // measured for its neighbours but not for this frame
+                    filled += 1
+                }
+                corrected[frameIndex, default: [:]][offset] = model
+            }
+            replacedTotal += replaced
+            filledTotal += filled
+
+            if !sortedDistances.isEmpty {
+                reports.append(
+                  OffsetReport(offset: offset,
+                               comparableFrames: sortedDistances.count,
+                               medianDisagreement: typical,
+                               worstDisagreement: sortedDistances[sortedDistances.count - 1],
+                               cutoff: cutoff,
+                               replaced: replaced,
+                               filled: filled)
+                )
+            }
+        }
+
+        return Result(corrected: corrected,
+                      replaced: replacedTotal,
+                      filled: filledTotal,
+                      perOffset: reports)
+    }
+
+    /// Where two ground warps are compared: the centre of each third of the frame's
+    /// width, at two heights near the bottom.
+    ///
+    /// The ground is by definition below the horizon, so the bottom of the frame is the
+    /// part of it every sequence has.  Height matters more than it looks: probing the
+    /// bottom quarter reaches above the horizon on a typical landscape frame, and up
+    /// there the two warps are both extrapolating into sky neither was fitted to.
+    /// Measured on the same 33MP sequence, the median disagreement between a frame's
+    /// warp and its neighbours' reads 20.5px probed over the bottom quarter's corners
+    /// and 2.7px probed here — the difference is almost entirely sky, and the loose
+    /// reading pushed the adaptive cutoff to its ceiling and had a third of the
+    /// sequence declared bad.
+    ///
+    /// Thirds rather than the frame's corners for the same reason in the other axis: at
+    /// x = 0 and x = width - 1 there is often no ground content to have constrained the
+    /// fit, so the two warps disagree there without either being wrong about anything
+    /// the merge will read.
+    public static func groundProbePoints(
+      width: Int, height: Int
+    ) -> [(x: Double, y: Double)] {
+        let upper = Double(height) * 0.95
+        let lower = Double(height - 1)
+        let w = Double(width)
+        return [w/6, w/2, 5*w/6]
+          .flatMap { x in [(x: x, y: upper), (x: x, y: lower)] }
+    }
+}
+
+
+/// The largest distance, over `probes`, between where two homographies send the same
+/// point.  This is what a difference between two ground warps costs the merge, and it
+/// is not what `deviation` measures: `norm(H - I)` is dominated by the matrix's
+/// translation column, which is where the warp sends the image *origin* — thousands of
+/// pixels above the ground on a landscape frame, so a rotation too small to matter down
+/// at the horizon shows up there as a huge number.
+func maxProbeDistance(
+  between a: [Double],
+  and b: [Double],
+  at probes: [(x: Double, y: Double)]
+) -> Double {
+    guard a.count == 9, b.count == 9 else { return .infinity }
+    var worst: Double = 0
+    for probe in probes {
+        guard let pa = project(a, probe), let pb = project(b, probe) else { return .infinity }
+        worst = max(worst, ((pa.x - pb.x)*(pa.x - pb.x) + (pa.y - pb.y)*(pa.y - pb.y)).squareRoot())
+    }
+    return worst
+}
+
+private func project(
+  _ h: [Double],
+  _ p: (x: Double, y: Double)
+) -> (x: Double, y: Double)? {
+    let w = h[6]*p.x + h[7]*p.y + h[8]
+    guard abs(w) > 1e-12 else { return nil }
+    return ((h[0]*p.x + h[1]*p.y + h[2]) / w,
+            (h[3]*p.x + h[4]*p.y + h[5]) / w)
+}
+
+/// The member of `homographies` that agrees best with the rest of them.
+///
+/// A medoid rather than any kind of average, and that is the whole point: the answer is
+/// one of the measured warps, so it is guaranteed to be a self-consistent homography
+/// that some frame actually observed.
+///
+/// The obvious alternative, an element-wise median of the nine matrix entries, was
+/// built first and measured against this — it is materially worse, and for a reason
+/// worth writing down.  A homography's effect is a ratio: the projective row (h6, h7)
+/// divides the translation column (h2, h5), and on a ground fit those two are strongly
+/// correlated because the points are all in a band at the bottom of the frame.  Taking
+/// each entry's median independently pairs one frame's projective row with another
+/// frame's translation, breaking that correlation and producing a matrix no frame ever
+/// measured, whose behaviour away from the fixed point can be far off both.  Scored
+/// against phase correlation over 126 frame pairs, the element-wise median left the
+/// worst-case ground error at 12.7 / 14.8 / 26.4px across the three thirds and made
+/// three of the five entries it replaced *worse* than they had been (one going from
+/// 0.5px to 26.4px); the medoid gives 6.3 / 7.6 / 4.8px and improved every entry it
+/// touched.
+///
+/// The cost is the sum of the closest half of each candidate's distances rather than
+/// all of them, so a window holding two or three wild members still elects a good one.
+func medoidHomography(
+  of homographies: [[Double]],
+  at probes: [(x: Double, y: Double)]
+) -> [Double] {
+    guard homographies.count > 1 else {
+        return homographies.first ?? [1,0,0, 0,1,0, 0,0,1]
+    }
+    var best = homographies[0]
+    var bestCost = Double.infinity
+    // By index, not by value: two members of a window can legitimately hold the same
+    // matrix — one of them may already have been replaced by the other — and `!=` on
+    // the arrays would then drop both from the comparison.
+    for (candidateIndex, candidate) in homographies.enumerated() {
+        var distances: [Double] = []
+        for (otherIndex, other) in homographies.enumerated()
+          where otherIndex != candidateIndex
+        {
+            distances.append(maxProbeDistance(between: candidate, and: other, at: probes))
+        }
+        guard !distances.isEmpty else { continue }
+        distances.sort()
+        let counted = min(distances.count, distances.count/2 + 1)
+        let cost = distances.prefix(counted).reduce(0, +)
+        if cost < bestCost { bestCost = cost; best = candidate }
+    }
+    return best
 }
 
 func scaleHomographyTowardsIdentity(

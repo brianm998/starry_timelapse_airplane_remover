@@ -524,6 +524,14 @@ public struct ImageAccessor: Sendable {
                     return (dir, baseFileName)
                 case .failedStarAligned:
                     return (dir, baseFileName)
+                case .failedEarthAligned:
+                    // Was missing while its sky counterpart above was present, so this
+                    // type had a directory in Config and no way to name a file in it.
+                    // Nothing writes one yet either way — see the note in
+                    // `FrameAlignmentProcessor.loadOrCreateAlignedImage` — but a type
+                    // that cannot be named cannot be checked for, and the caller's
+                    // existence test is what keeps that fallback quiet.
+                    return (dir, baseFileName)
                 case .earthAligned:
                     return (dir, baseFileName)
                 case .original:

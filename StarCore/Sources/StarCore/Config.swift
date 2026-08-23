@@ -784,12 +784,36 @@ public struct Config: Codable, Sendable {
 
     public var alignmentMaxKeypoints: Int = 2000
     public var alignmentWriteDebugImages: Bool = false
-    public var alignmentGroundHorizonExtension: Int = 100 // extend the horizon for ground by this amount to get more keypoints
+    /// Distance, in pixels below the horizon, over which the earth detection mask is
+    /// ramped from 0 to 255 — and, as things stand, a knob with no effect.
+    ///
+    /// It does not do what its name says.  Nothing extends past the horizon: for earth,
+    /// `ia_find_features` inverts the horizon mask and hands it to
+    /// `createGradientMaskIntoSky`, which produces a mask that is 0 in the sky and ramps
+    /// up across the first N pixels of ground.  Both consumers of that mask —
+    /// `toGray8UWithMask`, which is a `cv::Mat::copyTo` with a mask, and the detection
+    /// mask AKAZE filters keypoints against — treat any non-zero value as "keep", so the
+    /// ramp is a binary mask with a boundary one pixel from where the un-ramped one
+    /// would be.  Setting this to 0, 100 or 1000 selects the same ground.
+    ///
+    /// Left inert deliberately rather than made to match its name, because the name
+    /// describes something measurably harmful.  Reaching past the horizon puts sky in
+    /// the earth detection region, and sky is exactly what earth alignment must not
+    /// lock onto.  It also costs twice: `toGray8UWithMask` sets the ground's contrast
+    /// stretch from the brightest and darkest pixel inside the mask, so admitting lit
+    /// sky compresses the real ground into a fraction of the 0-255 range on top of
+    /// offering AKAZE strong sky features to prefer.  Seen for real, from a horizon mask
+    /// that was wrong rather than from this setting: on a 33MP frame whose merged mask
+    /// had a block of Milky Way misclassified as ground, 1056 of the 2000 retained earth
+    /// keypoints piled into the eighth of the frame width holding that block, against
+    /// 374 in the worst eighth with the mask corrected.
+    ///
+    /// The mirror of this on the sky side, `alignmentSkyHorizonExtension`, is real and
+    /// does erode.
+    public var alignmentGroundHorizonExtension: Int = 100
 
-    /// The opposite of `alignmentGroundHorizonExtension`, and not its mirror: earth
-    /// alignment reaches PAST the horizon for more keypoints, sky alignment pulls AWAY
-    /// from it to refuse some.  `ia_find_features` erodes the sky region of the horizon
-    /// mask by this many pixels before detecting on it.
+    /// Pulls the sky detection region AWAY from the horizon.  `ia_find_features` erodes
+    /// the sky region of the horizon mask by this many pixels before detecting on it.
     ///
     /// What lives in that band is ground-locked, so a sky homography built on it is
     /// steered by the terrain instead of the stars.  `toGray8UWithMask` zeroes the frame
