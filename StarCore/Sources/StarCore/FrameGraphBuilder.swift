@@ -1023,6 +1023,12 @@ public final actor FrameGraphBuilder {
             queue.addOperations(allOps, waitUntilFinished: false)
             continuation.resume()
         }
+
+        // Every op this run will have now exists, so the per-type counts in
+        // `frameGraphViewModel` are final and a type with none of them has nothing to do
+        // rather than not having been reached yet.  Deliberately not in the two error
+        // paths above: neither of them builds a graph, and both end the run.
+        await MainActor.run { frameGraphViewModel.finishedBuildingGraph() }
     }
     
     /// Re-enqueue horizon refinement and merge for the given frames after a
