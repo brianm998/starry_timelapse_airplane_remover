@@ -47,7 +47,11 @@ public final class LoggingViewModel {
 @MainActor @Observable
 public final class ViewModel {
 
-    var userPreferences: UserPreferences = UserPreferences()
+    /// A view onto the one live copy, not a copy of it — see `UserPreferencesStore`.
+    var userPreferences: UserPreferences {
+        get { UserPreferencesStore.shared.preferences }
+        set { UserPreferencesStore.shared.preferences = newValue }
+    }
 
     /// The language every window is currently drawn in.
     ///
@@ -343,7 +347,7 @@ public final class ViewModel {
             }
         }
         imageSequence = imageSequenceViewModel
-        imageSequenceViewModel.userPreferences = userPreferences
+        imageSequenceViewModel.applyUserPreferences()
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         self.userPreferences.justOpened(filename: jsonConfigFilename)
@@ -371,7 +375,7 @@ public final class ViewModel {
             }
         }
         imageSequence = imageSequenceViewModel
-        imageSequenceViewModel.userPreferences = userPreferences
+        imageSequenceViewModel.applyUserPreferences()
         loadingImageSequenceFilename = nil
         isLoadingImageSequence = false
         // just opened handled in InitialView where we know the full path
@@ -403,7 +407,7 @@ public final class ViewModel {
             }
         }
         imageSequence = imageSequenceViewModel
-        imageSequenceViewModel.userPreferences = userPreferences
+        imageSequenceViewModel.applyUserPreferences()
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         if let configManager = imageSequence?.config {

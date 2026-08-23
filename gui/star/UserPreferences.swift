@@ -3,6 +3,29 @@ import StarCore
 import logging
 import Semaphore
 
+/// The one live copy of the user's preferences.
+///
+/// `UserPreferences` is a value type that writes the *whole* file whenever any one of its
+/// fields changes, so a second copy of it is a second writer: whichever copy saved last put
+/// its own version of every other field back on disk, silently undoing what had been changed
+/// through the other one.  `ViewModel` and `ImageSequenceViewModel` each used to hold one,
+/// synced only at sequence-open — so a render setting changed in the render sheet (which
+/// writes through the sequence's copy) was lost as soon as anything wrote through the app's
+/// copy, opening another sequence being enough to do it.
+///
+/// Both now expose `userPreferences` as a view onto this, so there is exactly one writer and
+/// no sync to forget.  `@Observable` so that a change still redraws the views that read it,
+/// exactly as it did when each view model stored its own.
+@MainActor @Observable
+final class UserPreferencesStore {
+    static let shared = UserPreferencesStore()
+
+    /// Loaded from disk by `ViewModel.init`, which is the first thing to touch it.
+    var preferences = UserPreferences()
+
+    private init() {}
+}
+
 struct UserPreferences: Codable, Sendable {
     static let filename = ".star.userprefs.json"
 

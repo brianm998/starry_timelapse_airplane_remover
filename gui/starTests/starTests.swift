@@ -15,6 +15,7 @@
 //
 import XCTest
 import SwiftUI
+import Observation
 import StarCore
 // The app target is named `Star`, not `star` — the lowercase name belongs to the .xcodeproj
 // and to this test target.  TEST_HOST points at Star.app, so this is what links.
@@ -1558,5 +1559,177 @@ final class RememberedHorizonCountTests: XCTestCase {
         let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
         XCTAssertNil(prefs.movingHorizonCountMultiplier)
         XCTAssertEqual(preferred(1450, prefs.movingHorizonCountMultiplier), 12)
+    }
+}
+
+/// `UserPreferences` is a value type whose every field writes the *whole* file on change, so a
+/// second copy of it is a second writer: whichever copy saves last puts its own version of every
+/// other field back on disk.  `ViewModel` and `ImageSequenceViewModel` each held one, synced only
+/// when a sequence was opened, so a render setting changed in the render sheet (written through
+/// the sequence's copy) was undone the next time anything wrote through the app's copy — opening
+/// another sequence was enough, since that writes the recent-files list.
+///
+/// The fix is that there is now one live copy, in `UserPreferencesStore`, and both view models
+/// expose `userPreferences` as a view onto it.  That is a shape rather than a behaviour, and the
+/// objects that would demonstrate it cannot be stood up in a test: `ViewModel.init` reads the
+/// real preferences file and prunes it (writing it back), and `ImageSequenceViewModel`'s init is
+/// `async throws` over a `ConfigManager`.  So it is checked the way `SettingsWiringTests` checks
+/// its own two-site convention — over the source.
+@MainActor
+final class UserPreferencesStoreTests: XCTestCase {
+
+    /// gui/, derived from this file's location: gui/starTests/starTests.swift
+    private static var guiDir: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func source(_ relativePath: String) throws -> String {
+        try String(contentsOf: Self.guiDir.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private func swiftSources() throws -> [(name: String, text: String)] {
+        let dir = Self.guiDir.appendingPathComponent("star")
+        let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+            .filter { $0.hasSuffix(".swift") }
+        XCTAssertGreaterThan(names.count, 20, "found only \(names.count) sources in gui/star")
+        return try names.map { ($0, try source("star/\($0)")) }
+    }
+
+    /// The whole `var userPreferences: UserPreferences { ... }` declaration, accessors included.
+    private func accessor(in source: String) -> String? {
+        let pattern = #"var\s+userPreferences\s*:\s*UserPreferences\s*(\{[\s\S]*?\n    \})"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let ns = source as NSString
+        guard let m = re.firstMatch(in: source, range: NSRange(location: 0, length: ns.length))
+        else { return nil }
+        return ns.substring(with: m.range(at: 1))
+    }
+
+    // MARK: - one live copy
+
+    /// A stored `userPreferences` on either view model is the hazard itself.
+    func testNeitherViewModelKeepsItsOwnCopy() throws {
+        for file in ["star/ViewModel.swift", "star/ImageSequenceViewModel.swift"] {
+            let src = try source(file)
+            XCTAssertFalse(src.contains("var userPreferences: UserPreferences ="),
+                           "\(file) stores its own copy of the preferences again")
+
+            let block = try XCTUnwrap(accessor(in: src), "\(file) has no userPreferences accessor")
+            XCTAssertTrue(block.contains("UserPreferencesStore.shared.preferences"),
+                          "\(file) reads preferences from somewhere other than the store: \(block)")
+            XCTAssertTrue(block.contains("UserPreferencesStore.shared.preferences = newValue"),
+                          "\(file) writes preferences somewhere other than the store: \(block)")
+        }
+    }
+
+    /// Constructing one anywhere else makes a second value that can be written and saved.
+    func testOnlyTheStoreConstructsAUserPreferences() throws {
+        var built: [String] = []
+        for file in try swiftSources() {
+            // (?<!\w) so that applyUserPreferences() and the like do not match
+            if let re = try? NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])UserPreferences\("#) {
+                let ns = file.text as NSString
+                let n = re.numberOfMatches(in: file.text,
+                                           range: NSRange(location: 0, length: ns.length))
+                if n > 0 { built.append("\(file.name) ×\(n)") }
+            }
+        }
+        XCTAssertEqual(built, ["UserPreferences.swift ×1"],
+                       "a UserPreferences is built outside the store: \(built)")
+    }
+
+    /// The tell of the old hazard: reaching through one view model to write the preferences held
+    /// by the other, which is what had to be done, field by field, to keep them in step.
+    func testNoPreferenceIsWrittenThroughASecondViewModel() throws {
+        // over whitespace-collapsed source, not line by line: the one that used to be here was
+        // wrapped, with the receiver on one line and `.userPreferences` on the next
+        let reachThrough = #"(imageSequence\?|topViewModel\?|imageSequenceViewModel)\s*\.\s*userPreferences"#
+        let re = try NSRegularExpression(pattern: reachThrough)
+
+        var doubleWrites: [String] = []
+        for file in try swiftSources() {
+            let flat = file.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            let ns = flat as NSString
+            for m in re.matches(in: flat, range: NSRange(location: 0, length: ns.length)) {
+                let from = max(0, m.range.location - 20)
+                let length = min(ns.length - from, m.range.length + 60)
+                doubleWrites.append("\(file.name): …\(ns.substring(with: NSRange(location: from, length: length)))…")
+            }
+        }
+        XCTAssertEqual(doubleWrites, [],
+                       "preferences written through a second view model — the single store makes "
+                       + "this unnecessary, and it is how the two copies drifted: \(doubleWrites)")
+    }
+
+    // MARK: - what the sequence's view model still has to do
+
+    /// The stored property's `didSet` used to seed the video settings from the preferences on
+    /// every write; the setter has to keep doing it, or changing the frame rate in the render
+    /// sheet would no longer reach the settings the render actually uses.
+    func testWritingPreferencesStillSeedsTheSequenceSettings() throws {
+        let src = try source("star/ImageSequenceViewModel.swift")
+        let block = try XCTUnwrap(accessor(in: src))
+        XCTAssertTrue(block.contains("applyUserPreferences()"),
+                      "the setter no longer re-applies the preferences: \(block)")
+
+        for setting in ["detectionType", "frameRate", "codec", "encoder", "pixelFormat", "muxer"] {
+            XCTAssertTrue(src.contains("self.\(setting) = \(setting)"),
+                          "applyUserPreferences no longer seeds \(setting)")
+        }
+    }
+
+    /// A sequence opens with its settings at their defaults, so `ViewModel` has to seed them —
+    /// that was the one thing the copy-down assignment did that was not just copying.
+    func testOpeningASequenceAppliesThePreferencesToIt() throws {
+        let src = try source("star/ViewModel.swift")
+        let opens = src.components(separatedBy: "imageSequence = imageSequenceViewModel").count - 1
+        XCTAssertEqual(opens, 3, "the number of ways a sequence is opened has changed")
+        XCTAssertEqual(src.components(separatedBy: "imageSequenceViewModel.applyUserPreferences()").count - 1,
+                       opens, "not every sequence-open applies the preferences to the new sequence")
+    }
+
+    // MARK: - the store itself
+
+    /// Holding the value rather than vending copies of it is the whole point.  Assigning a whole
+    /// struct does not touch the file — only the individual field setters save — so this cannot
+    /// disturb the preferences of whoever runs it; the original is put back regardless.
+    func testTheStoreHoldsTheValueEveryReaderSees() throws {
+        let store = UserPreferencesStore.shared
+        let original = store.preferences
+        defer { store.preferences = original }
+
+        let json = #"{"recentlyOpenedSequencelist":{},"movingHorizonCountMultiplier":3.25}"#
+        store.preferences = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+
+        XCTAssertEqual(UserPreferencesStore.shared.preferences.movingHorizonCountMultiplier, 3.25)
+        XCTAssertTrue(UserPreferencesStore.shared === store, "the store is not a singleton")
+    }
+
+    private final class Flag: @unchecked Sendable { var raised = false }
+
+    /// Every view that reads a preference used to read it from an `@Observable` view model, so a
+    /// change redrew it.  Now the value lives a level further away, and the redraw depends on the
+    /// store being observable too — silently, since nothing fails to compile if it is not.
+    func testChangingAPreferenceStillNotifiesTheViewsThatReadIt() throws {
+        let store = UserPreferencesStore.shared
+        let original = store.preferences
+        defer { store.preferences = original }
+
+        let fired = Flag()
+        withObservationTracking {
+            _ = store.preferences.movingHorizonCountMultiplier
+        } onChange: {
+            fired.raised = true
+        }
+        XCTAssertFalse(fired.raised, "notified before anything changed")
+
+        let json = #"{"recentlyOpenedSequencelist":{},"movingHorizonCountMultiplier":4.5}"#
+        store.preferences = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+
+        XCTAssertTrue(fired.raised,
+                      "a preference changed without notifying its readers — views that show one "
+                      + "would no longer redraw")
     }
 }

@@ -109,27 +109,38 @@ public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this 
 public final class ImageSequenceViewModel {
     let config: ConfigManager
 
-    var userPreferences: UserPreferences = UserPreferences() {
-        didSet {
-            if let detectionType = userPreferences.processingType {
-                self.detectionType = detectionType
-            }
-            if let frameRate = userPreferences.frameRate {
-                self.frameRate = frameRate
-            }
-            if let codec = userPreferences.codec {
-                self.codec = codec
-            }
-            if let encoder = userPreferences.encoder {
-                self.encoder = encoder
-            }
-            if let pixelFormat = userPreferences.pixelFormat {
-                self.pixelFormat = pixelFormat
-            }
-            if let muxer = userPreferences.muxer {
-                self.muxer = muxer
-            }
+    /// A view onto the one live copy, not a copy of it — see `UserPreferencesStore`.
+    var userPreferences: UserPreferences {
+        get { UserPreferencesStore.shared.preferences }
+        set {
+            UserPreferencesStore.shared.preferences = newValue
+            applyUserPreferences()
+        }
+    }
 
+    /// Seed the video settings this view model works from with whatever the preferences hold.
+    ///
+    /// Called on every write through `userPreferences` — which is what the `didSet` on the
+    /// old stored property did — and by `ViewModel` on a freshly opened sequence, whose
+    /// settings start at their defaults until this runs.
+    func applyUserPreferences() {
+        if let detectionType = userPreferences.processingType {
+            self.detectionType = detectionType
+        }
+        if let frameRate = userPreferences.frameRate {
+            self.frameRate = frameRate
+        }
+        if let codec = userPreferences.codec {
+            self.codec = codec
+        }
+        if let encoder = userPreferences.encoder {
+            self.encoder = encoder
+        }
+        if let pixelFormat = userPreferences.pixelFormat {
+            self.pixelFormat = pixelFormat
+        }
+        if let muxer = userPreferences.muxer {
+            self.muxer = muxer
         }
     }
 
@@ -492,14 +503,9 @@ public final class ImageSequenceViewModel {
     /// Remember that the user asked for `chosen` horizons on a sequence this long, so that a
     /// sequence of a different length gets proportionally more or fewer next time.  Called on
     /// every step, so the preference survives even if the user abandons the prompt afterwards.
-    ///
-    /// Written through both copies of the preferences: this view model holds one and
-    /// `ViewModel` holds the master, each saves the whole file on any change, and whichever
-    /// saves next would otherwise write its stale value back over this one.
     func recordMovingHorizonCount(_ chosen: Int) {
-        let multiplier = Self.movingHorizonCountMultiplier(chosen: chosen, total: imageSequenceSize)
-        userPreferences.movingHorizonCountMultiplier = multiplier
-        topViewModel?.userPreferences.movingHorizonCountMultiplier = multiplier
+        userPreferences.movingHorizonCountMultiplier =
+          Self.movingHorizonCountMultiplier(chosen: chosen, total: imageSequenceSize)
     }
 
     private static func calculateFrameIndices(count: Int, total: Int) -> [Int] {
