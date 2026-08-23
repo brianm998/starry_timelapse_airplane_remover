@@ -713,7 +713,18 @@ final public actor FrameAlignmentProcessor {
             )
         } else {
             Log.d("frame \(frameIndex) unable to load image of type \(type)")
-            if let failedType {
+            // Nothing in the pipeline writes a `.failedStarAligned` or
+            // `.failedEarthAligned` image — the types, their config directories and this
+            // fallback exist, but the write side was never built, so both directories
+            // are always empty.  Ask whether the file is there before trying to load it:
+            // unconditionally, this warned twice per frame about an image that cannot
+            // exist, which is ~3500 warnings on a 1449 frame sequence and buries the one
+            // just below that says the alignment actually gave up.
+            if let failedType,
+               imageAccessor.imageExists(frameIndex: frameIndex,
+                                         ofType: failedType,
+                                         atSize: .original)
+            {
                 if let failedFrame = try await imageAccessor.load(
                      frameIndex: frameIndex,
                      type: failedType,
@@ -752,8 +763,6 @@ final public actor FrameAlignmentProcessor {
                 } else {
                     Log.w("frame \(frameIndex) unable to load image of failed type \(failedType) when missing image of type \(type)")
                 }
-            } else {
-                Log.w("frame \(frameIndex) no failed type to load when missing image of type \(type)")
             }
         }
         // with no saved aligned frame, first load or create the set of aligned frames
@@ -883,11 +892,24 @@ final public actor FrameAlignmentProcessor {
             }
 
             Log.d("frame \(frameIndex) doing real alignment for type \(alignmentType)")
+            // In-memory first, then the database.  The homography op that ran before
+            // this leaves the result in the field, but "no field" is not the same as
+            // "no homography": a frame can reach the merge without one — a graph built
+            // for a subrange, a resume, an op that was skipped — and the else branch
+            // below treats that as nothing to warp by and hands back the unwarped
+            // frame, so the merge quietly does not happen.  The read is cheap and it
+            // is the same row the op would have written.
             var homography: [Int: MatWrapper]? = nil
             switch type {
             case .starAligned:
+                if neighborStarHomography == nil {
+                    neighborStarHomography = await readStarNeighborHomographyForThisFrame()
+                }
                 homography = neighborStarHomography?.mappedHomography()
             case .earthAligned:
+                if neighborEarthHomography == nil {
+                    neighborEarthHomography = await readEarthNeighborHomographyForThisFrame()
+                }
                 homography = neighborEarthHomography?.mappedHomography()
             default:
                 break
@@ -924,12 +946,20 @@ final public actor FrameAlignmentProcessor {
                     Log.w("frame \(frameIndex) alignment returned no results")
                 }
             } else {
-                Log.w("frame \(frameIndex) cannot align without homography")
+                Log.e("frame \(frameIndex) has no \(type) homography, so nothing was " +
+                      "warped or merged — the caller gets this frame's own pixels back " +
+                      "and whatever it replaces with them will be unchanged")
             }
         }
         Log.i("frame \(frameIndex) got alignment result \(warpedResult as Any) for type \(type)")
         guard let warpedResult else {
-            Log.e("frame \(frameIndex) got no alignment result")
+            // Returning the original is the safe answer — it is what the pipeline does
+            // with this alignment turned off — but it is not the answer that was asked
+            // for, and it is indistinguishable downstream from a merge that found
+            // nothing to remove.  Say so at error level so a run that quietly stopped
+            // aligning is visible in the log rather than only in the output.
+            Log.e("frame \(frameIndex) got no \(type) alignment result, " +
+                  "falling back to the unaligned original frame")
             return WarpedImageResult(
               warpedFrame: originalFrame.mat,
               warpedHorizon: nil
