@@ -53,6 +53,47 @@ internal fun evenlySpacedFrameIndices(count: Int, total: Int): List<Int> {
 }
 
 /**
+ * How many reference horizons to suggest painting for a moving sequence of [total] frames (macOS
+ * `ImageSequenceViewModel.suggestedMovingHorizonCount`). A moving camera drifts further over a
+ * longer sequence, so `sqrt(total / 10)` tracks the length while growing slowly enough to stay
+ * reasonable: 12 for the 1450 frame sequence 12 was measured to work well on, 14 at 2000, 22 at
+ * 5000. The floor of 3 keeps the old fixed suggestion for anything under about 120 frames.
+ */
+internal fun suggestedMovingHorizonCount(total: Int): Int {
+    if (total <= 0) return 1
+    val scaled = Math.round(Math.sqrt(total.toDouble() / 10)).toInt()
+    return minOf(maxOf(3, scaled), total)
+}
+
+/**
+ * [suggestedMovingHorizonCount] bent by what the user picked last time, as recorded in
+ * `LocalPreferences.movingHorizonCountMultiplier` (macOS `preferredMovingHorizonCount`). A null
+ * multiplier — the user has never moved the stepper — leaves the suggestion alone.
+ *
+ * The baseline's floor of 3 deliberately does not apply here: a user who asked for fewer
+ * references than star suggests gets fewer, down to one.
+ */
+internal fun preferredMovingHorizonCount(total: Int, multiplier: Double?): Int {
+    val baseline = suggestedMovingHorizonCount(total)
+    if (multiplier == null || multiplier <= 0 || !multiplier.isFinite()) return baseline
+    val ceiling = maxOf(1, total)
+    // compared as a Long before narrowing: a hand-edited multiplier can scale past Int range
+    val scaled = Math.round(baseline * multiplier)
+    if (scaled >= ceiling) return ceiling
+    return maxOf(1, scaled.toInt())
+}
+
+/**
+ * What to record when the user picks [chosen] horizons for a sequence of [total] frames: how their
+ * choice compares to what star suggested for that length (macOS `movingHorizonCountMultiplier`).
+ *
+ * Deliberately unclamped — clamping would mean re-opening that same sequence offered a different
+ * number than the one the user chose.
+ */
+internal fun movingHorizonCountMultiplier(chosen: Int, total: Int): Double =
+    chosen.toDouble() / suggestedMovingHorizonCount(total)
+
+/**
  * Root app state (macOS `ViewModel`): owns the engine, repositories, prefs, and the current screen.
  * Engine status is collected in its own coroutine; opening a source routes Initial → Loading →
  * Sequence; engine death while a session is open surfaces an error and returns to Initial.
@@ -296,6 +337,19 @@ class AppViewModel(
 
     /** Total frames in the open sequence — bounds the moving-horizon count stepper. */
     fun startupFrameCount(): Int = (currentSequence?.frameCount ?: 1).coerceAtLeast(1)
+
+    /** The horizon count to offer for the open sequence, personalised by the stored preference. */
+    fun preferredHorizonCount(): Int =
+        preferredMovingHorizonCount(startupFrameCount(), prefs.movingHorizonCountMultiplier)
+
+    /**
+     * Remember that the user asked for [chosen] horizons on a sequence this long, so that a
+     * sequence of a different length gets proportionally more or fewer next time. Called on every
+     * step, so the preference survives even if the user abandons the prompt afterwards.
+     */
+    fun recordHorizonCount(chosen: Int) {
+        prefs.setMovingHorizonCountMultiplier(movingHorizonCountMultiplier(chosen, startupFrameCount()))
+    }
 
     /** "Advanced" gear on a prompt: persist the answers so the dialog reflects them, then open settings. */
     fun startupOpenAdvanced() {

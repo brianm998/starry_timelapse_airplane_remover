@@ -348,8 +348,6 @@ struct UserPreferencesEditingView: View {
                                 get: { viewModel.userPreferences.showProcessingWindow ?? true },
                                 set: { newValue in
                                     viewModel.userPreferences.showProcessingWindow = newValue
-                                    viewModel.imageSequence?
-                                      .userPreferences.showProcessingWindow = newValue
                                 }
                             )) { }
                             .toggleStyle(.switch)

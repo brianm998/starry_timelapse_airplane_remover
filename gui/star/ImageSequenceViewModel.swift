@@ -109,27 +109,38 @@ public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this 
 public final class ImageSequenceViewModel {
     let config: ConfigManager
 
-    var userPreferences: UserPreferences = UserPreferences() {
-        didSet {
-            if let detectionType = userPreferences.processingType {
-                self.detectionType = detectionType
-            }
-            if let frameRate = userPreferences.frameRate {
-                self.frameRate = frameRate
-            }
-            if let codec = userPreferences.codec {
-                self.codec = codec
-            }
-            if let encoder = userPreferences.encoder {
-                self.encoder = encoder
-            }
-            if let pixelFormat = userPreferences.pixelFormat {
-                self.pixelFormat = pixelFormat
-            }
-            if let muxer = userPreferences.muxer {
-                self.muxer = muxer
-            }
+    /// A view onto the one live copy, not a copy of it — see `UserPreferencesStore`.
+    var userPreferences: UserPreferences {
+        get { UserPreferencesStore.shared.preferences }
+        set {
+            UserPreferencesStore.shared.preferences = newValue
+            applyUserPreferences()
+        }
+    }
 
+    /// Seed the video settings this view model works from with whatever the preferences hold.
+    ///
+    /// Called on every write through `userPreferences` — which is what the `didSet` on the
+    /// old stored property did — and by `ViewModel` on a freshly opened sequence, whose
+    /// settings start at their defaults until this runs.
+    func applyUserPreferences() {
+        if let detectionType = userPreferences.processingType {
+            self.detectionType = detectionType
+        }
+        if let frameRate = userPreferences.frameRate {
+            self.frameRate = frameRate
+        }
+        if let codec = userPreferences.codec {
+            self.codec = codec
+        }
+        if let encoder = userPreferences.encoder {
+            self.encoder = encoder
+        }
+        if let pixelFormat = userPreferences.pixelFormat {
+            self.pixelFormat = pixelFormat
+        }
+        if let muxer = userPreferences.muxer {
+            self.muxer = muxer
         }
     }
 
@@ -433,6 +444,68 @@ public final class ImageSequenceViewModel {
         currentIndex = horizonPainterStartupFrameIndices[horizonPainterStartupFramePosition]
         // FrameEditView watches currentIndex while painter is open in startup mode
         // and resets the HorizonPaintState for the new frame automatically.
+    }
+
+    /// How many reference horizons to suggest painting for a moving sequence of `total`
+    /// frames.  A moving camera drifts further over a longer sequence, so one reference is
+    /// never enough, but asking for one every N frames makes the suggestion grow without
+    /// bound: a 5000 frame sequence would ask for over forty hand painted horizons.
+    ///
+    /// `sqrt(total/10)` grows slowly enough to stay reasonable while still tracking the
+    /// length: 12 for the 1450 frame sequence that 12 was measured to work well on, 14 at
+    /// 2000, 22 at 5000.  The floor of 3 keeps the old fixed suggestion for anything under
+    /// about 120 frames, where the spacing is already tight.
+    ///
+    /// A suggestion only — the stepper beside it lets the user pick any count up to `total`,
+    /// and what they pick is remembered as a multiple of this baseline.  See
+    /// `preferredMovingHorizonCount(total:multiplier:)`.
+    static func suggestedMovingHorizonCount(total: Int) -> Int {
+        guard total > 0 else { return 1 }
+        let scaled = Int((Double(total) / 10).squareRoot().rounded())
+        return min(max(3, scaled), total)
+    }
+
+    /// `suggestedMovingHorizonCount(total:)` bent by what the user picked last time, as
+    /// recorded in `UserPreferences.movingHorizonCountMultiplier`.  A `nil` multiplier —
+    /// the user has never moved the stepper — leaves the suggestion alone.
+    ///
+    /// The floor of 3 in the baseline deliberately does not apply here: a user who asked for
+    /// fewer references than star suggests gets fewer, down to one.  The result is still
+    /// bounded by the sequence, since the stepper cannot offer more horizons than frames.
+    static func preferredMovingHorizonCount(total: Int, multiplier: Double?) -> Int {
+        let baseline = suggestedMovingHorizonCount(total: total)
+        guard let multiplier, multiplier > 0, multiplier.isFinite else { return baseline }
+        let ceiling = max(1, total)
+        // capped as a Double before it becomes an Int: nothing stops a hand-edited
+        // preferences file from holding a multiplier that scales past what an Int can
+        // hold, and that conversion traps rather than clamping
+        let scaled = (Double(baseline) * multiplier).rounded()
+        guard scaled < Double(ceiling) else { return ceiling }
+        return max(1, Int(scaled))
+    }
+
+    /// What to record when the user picks `chosen` horizons for a sequence of `total` frames:
+    /// how their choice compares to what star suggested for that length.
+    ///
+    /// Deliberately unclamped.  A multiplier is only ever produced from a count the user
+    /// actually dialled in, and clamping it would mean re-opening that same sequence offered
+    /// a different number than the one they chose.
+    static func movingHorizonCountMultiplier(chosen: Int, total: Int) -> Double {
+        Double(chosen) / Double(suggestedMovingHorizonCount(total: total))
+    }
+
+    /// The horizon count to offer for this sequence, personalised by the stored preference.
+    var preferredMovingHorizonCount: Int {
+        Self.preferredMovingHorizonCount(total: imageSequenceSize,
+                                         multiplier: userPreferences.movingHorizonCountMultiplier)
+    }
+
+    /// Remember that the user asked for `chosen` horizons on a sequence this long, so that a
+    /// sequence of a different length gets proportionally more or fewer next time.  Called on
+    /// every step, so the preference survives even if the user abandons the prompt afterwards.
+    func recordMovingHorizonCount(_ chosen: Int) {
+        userPreferences.movingHorizonCountMultiplier =
+          Self.movingHorizonCountMultiplier(chosen: chosen, total: imageSequenceSize)
     }
 
     private static func calculateFrameIndices(count: Int, total: Int) -> [Int] {
