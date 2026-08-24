@@ -10,10 +10,17 @@ public enum ImageAligner {
     /// sources are streamed from raw scratch files under `scratchDir` instead, which
     /// bounds peak memory at the cost of writing and re-reading each source once. The
     /// output is bit-identical either way. Pass 0 to disable streaming.
+    ///
+    /// `loadConcurrency` is how many sources are decoded at once while they are all
+    /// being held resident; 1 is the old one-at-a-time loop. It cannot change the
+    /// result — the merge sorts each pixel's samples before using them, so source order
+    /// never reaches the answer, and the sources are collected in file order anyway.
+    /// Ignored on the streaming path, which stays serial by design.
     public static func medianMergeImage(_ image: MatWrapper, withFilenames filenames: [String],
                                          outlierThreshold: Double, includeAll: Bool,
                                          scratchDir: String? = nil,
-                                         streamingThresholdBytes: Int64 = 0) -> MatWrapper {
+                                         streamingThresholdBytes: Int64 = 0,
+                                         loadConcurrency: Int = 1) -> MatWrapper {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
@@ -23,7 +30,8 @@ public enum ImageAligner {
                                                   Int32(buf.count),
                                                   outlierThreshold, includeAll,
                                                   scratchDir,
-                                                  streamingThresholdBytes)
+                                                  streamingThresholdBytes,
+                                                  Int32(loadConcurrency))
         }
         return MatWrapper(ref: r!)
     }
@@ -144,7 +152,8 @@ public enum ImageAligner {
                                             outlierThreshold: Double,
                                             includeAll: Bool,
                                             scratchDir: String? = nil,
-                                            streamingThresholdBytes: Int64 = 0)
+                                            streamingThresholdBytes: Int64 = 0,
+                                            loadConcurrency: Int = 1)
       -> (merged: MatWrapper, warpCount: Int)?
     {
         let cNeighbors = neighbors.map { n in
@@ -177,6 +186,7 @@ public enum ImageAligner {
                                                outlierThreshold, includeAll,
                                                scratchDir,
                                                streamingThresholdBytes,
+                                               Int32(loadConcurrency),
                                                &warpCount, &errMsg)
                 }
             }

@@ -9,6 +9,13 @@ extern "C" {
 
 // --- Create / Destroy ---
 MatWrapperRef mat_wrapper_load(const char *filename);
+
+// Whether mat_wrapper_load will read this file's pixels directly instead of
+// handing it to cv::imread — true only for an uncompressed, 16-bit, gray or RGB,
+// chunky, top-left, untiled, host-byte-order TIFF.  Loading does not depend on
+// the answer, which is why this exists: the fast path has to be provably narrow,
+// and a test can only pin that if it can ask.
+bool mat_wrapper_tiff_is_fast_readable(const char *filename);
 MatWrapperRef mat_wrapper_clone(MatWrapperRef ref);
 
 // Returns a NEW ref that SHARES ref's pixel buffer through OpenCV's refcount

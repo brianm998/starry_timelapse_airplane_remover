@@ -44,6 +44,13 @@ final class MedianMergeTests: XCTestCase {
 
     /// A 16-bit single-channel Mat built from `value(x, y)`.
     private func makeMat(_ value: (Int, Int) -> UInt16) -> MatWrapper {
+        makeMat(width: width, height: height, value)
+    }
+
+    /// The same, at an explicit size — the width is what decides how a row is split
+    /// between the kernel's two paths, so some tests need to vary it.
+    private func makeMat(width: Int, height: Int,
+                         _ value: (Int, Int) -> UInt16) -> MatWrapper {
         let count = width * height
         let data = UnsafeMutablePointer<UInt16>.allocate(capacity: count)
         for y in 0..<height {
@@ -249,6 +256,201 @@ final class MedianMergeTests: XCTestCase {
                                                        includeAll: false)
             XCTAssertEqual(Set(try samples(of: merged).flatMap { $0 }), [10100],
                            "merging \(levels)")
+        }
+    }
+
+    /// The kernel merges a fixed-width block of pixel-channels at a time and handles
+    /// whatever is left of a row one pixel at a time, so a row is split between two code
+    /// paths at an offset that depends only on the frame's width.  A pixel's value must
+    /// not depend on which side of that split it lands on.
+    ///
+    /// This walks the same nine sources across every width from 1 to 40 — widths below,
+    /// at, and either side of the block width, so each column in turn is a block pixel in
+    /// one run and a leftover in another — and requires column `x` to merge to the same
+    /// value every time.  The column data is chosen to exercise the parts of the
+    /// selection that the two paths implement differently: how many sources are zero
+    /// varies by column, so `first`, the deviation and the outlier cut all move with `x`.
+    func testAPixelMergesTheSameWhereverTheBlockBoundaryFalls() throws {
+        let height = 3
+        let sources = 9
+
+        // column x has (x % 5) of its eight neighbours warped out, and one bright sample
+        // every third column, so neither the zero count nor the outlier cut is constant
+        func level(_ x: Int, _ source: Int) -> UInt16 {
+            if source > 0, source <= x % 5 { return 0 }
+            if source == 1, x % 3 == 0 { return 60000 }
+            return UInt16(10000 + 100 * source + 7 * (x % 11))
+        }
+
+        var mergedByWidth: [Int: [Int: UInt16]] = [:]   // width -> column -> value
+
+        for width in 1...40 {
+            let base = makeMat(width: width, height: height) { x, _ in level(x, 0) }
+            let filenames = try (1..<sources).map { source in
+                try write(makeMat(width: width, height: height) { x, _ in level(x, source) },
+                          named: "boundary-\(width)-\(source)")
+            }
+            let merged = ImageAligner.medianMergeImage(base, withFilenames: filenames,
+                                                       outlierThreshold: Self.defaultPixelThreshold,
+                                                       includeAll: false)
+            let rows = try samples(of: merged)
+            XCTAssertEqual(rows.count, height)
+            XCTAssertEqual(rows[0].count, width, "width \(width) came back \(rows[0].count) wide")
+            // every row is identical by construction, so one is enough to compare across
+            for row in rows {
+                XCTAssertEqual(row, rows[0], "rows disagree at width \(width)")
+            }
+            mergedByWidth[width] = Dictionary(uniqueKeysWithValues: rows[0].enumerated().map { ($0, $1) })
+        }
+
+        // the widest run is the reference: every narrower one has to agree with it column
+        // for column, which it can only do if both paths decide a pixel the same way
+        let reference = try XCTUnwrap(mergedByWidth[40])
+        for width in 1...39 {
+            let row = try XCTUnwrap(mergedByWidth[width])
+            for x in 0..<width {
+                XCTAssertEqual(row[x], reference[x],
+                               "column \(x) merged to \(row[x] as Any) at width \(width) " +
+                               "but \(reference[x] as Any) at width 40")
+            }
+        }
+    }
+
+    // MARK: - loading several sources at once
+
+    /// Nine levels, one per source, arranged so that losing or duplicating any single
+    /// source is visible in the output.
+    ///
+    /// The merge sorts each pixel's samples before it uses them, so source *order* never
+    /// reaches the answer — which means a test that only compares one concurrency against
+    /// another cannot see a source going missing, as long as it goes missing every time.
+    /// What does reach the answer is the multiset. Modelled against the kernel:
+    ///
+    ///   - all nine levels merge to 11500;
+    ///   - removing any of 11500, 12000, 12500, 13000 or 60000 gives 11000 instead;
+    ///   - a second copy of 10000, 10500 or 11000 gives 11000 instead.
+    ///
+    /// Source `s` carries `levels[(s + x) % 9]` in column `x`, so over nine or more
+    /// columns every source carries every level somewhere. Losing source `s` therefore
+    /// removes a sensitive level in some column, and duplicating it adds one — either way
+    /// at least one column moves off 11500. Every column sees the same nine levels, so
+    /// the correct answer is 11500 everywhere, which makes the assertion a single value.
+    private static let concurrencyLevels: [UInt16] =
+      [0, 10000, 10500, 11000, 11500, 12000, 12500, 13000, 60000]
+    private static let concurrencyExpected: UInt16 = 11500
+    /// What the merge produces when the multiset is one source short or one source long.
+    private static let concurrencyPerturbed: UInt16 = 11000
+
+    private func concurrencyLevel(source: Int, column: Int) -> UInt16 {
+        let levels = Self.concurrencyLevels
+        return levels[(source + column) % levels.count]
+    }
+
+    /// Sources 1...8 as files; source 0 is the base image the caller passes separately.
+    private func writeConcurrencySources(prefix: String) throws -> [String] {
+        try (1..<Self.concurrencyLevels.count).map { source in
+            try write(makeMat { x, _ in concurrencyLevel(source: source, column: x) },
+                      named: "\(prefix)-\(source)")
+        }
+    }
+
+    private func concurrencyBase() -> MatWrapper {
+        makeMat { x, _ in concurrencyLevel(source: 0, column: x) }
+    }
+
+    /// A merge decodes several of its sources at once, and what it produces must not
+    /// depend on how many were in flight — nor may a source be lost or duplicated on the
+    /// way, which is the failure mode of handing the loop to a thread pool.
+    func testTheResultDoesNotDependOnHowManySourcesLoadAtOnce() throws {
+        let filenames = try writeConcurrencySources(prefix: "conc")
+        try assertSourcesLoad(filenames)
+
+        for concurrency in [1, 2, 3, 4, 8, 32] {
+            let merged = ImageAligner.medianMergeImage(
+              concurrencyBase(), withFilenames: filenames,
+              outlierThreshold: Self.defaultPixelThreshold,
+              includeAll: false,
+              loadConcurrency: concurrency)
+            XCTAssertEqual(Set(try samples(of: merged).flatMap { $0 }),
+                           [Self.concurrencyExpected],
+                           "merging with \(concurrency) sources in flight did not merge "
+                           + "all nine levels")
+        }
+    }
+
+    /// And the assertion above has teeth: hand the same merge one source too few, and then
+    /// one too many, and it has to notice. Without this the test would keep passing if the
+    /// pool silently dropped or repeated a source every time.
+    func testAMergeMissingOrRepeatingASourceIsVisible() throws {
+        let filenames = try writeConcurrencySources(prefix: "sensitivity")
+        try assertSourcesLoad(filenames)
+
+        let complete = ImageAligner.medianMergeImage(
+          concurrencyBase(), withFilenames: filenames,
+          outlierThreshold: Self.defaultPixelThreshold, includeAll: false,
+          loadConcurrency: 4)
+        XCTAssertEqual(Set(try samples(of: complete).flatMap { $0 }), [Self.concurrencyExpected])
+
+        for dropped in filenames.indices {
+            var short = filenames
+            short.remove(at: dropped)
+            let merged = ImageAligner.medianMergeImage(
+              concurrencyBase(), withFilenames: short,
+              outlierThreshold: Self.defaultPixelThreshold, includeAll: false,
+              loadConcurrency: 4)
+            let values = Set(try samples(of: merged).flatMap { $0 })
+            XCTAssertTrue(values.contains(Self.concurrencyPerturbed),
+                          "dropping source \(dropped + 1) left every column at "
+                          + "\(values.sorted()), so a lost source would not be noticed")
+        }
+
+        for repeated in filenames.indices {
+            let long = filenames + [filenames[repeated]]
+            let merged = ImageAligner.medianMergeImage(
+              concurrencyBase(), withFilenames: long,
+              outlierThreshold: Self.defaultPixelThreshold, includeAll: false,
+              loadConcurrency: 4)
+            let values = Set(try samples(of: merged).flatMap { $0 })
+            XCTAssertTrue(values.contains(Self.concurrencyPerturbed),
+                          "repeating source \(repeated + 1) left every column at "
+                          + "\(values.sorted()), so a duplicated source would not be noticed")
+        }
+    }
+
+    /// The aligned merge loads *and warps* concurrently, and reports how many neighbours
+    /// it managed to warp — a count the caller reads as "fall back to the unaligned frame"
+    /// when it is zero, so it has to be right whatever the worker count.
+    ///
+    /// The homographies are all identity, so the same nine levels reach the kernel as
+    /// above and the answer is again 11500 in every column: this is testing the pool's
+    /// bookkeeping, not the warp, which the tests above already cover.
+    func testTheAlignedMergeAgreesWithItselfAtEveryConcurrency() throws {
+        let filenames = try writeConcurrencySources(prefix: "aligned-conc")
+        try assertSourcesLoad(filenames)
+
+        var neighbors: [AlignmentNeighborInfo] = []
+        var homography: [Int: MatWrapper] = [:]
+        for (offset, filename) in filenames.enumerated() {
+            let frameIndex = offset + 1
+            neighbors.append(AlignmentNeighborInfo(filename: filename, maskFilename: nil,
+                                                   keypoints: nil, frameIndex: Int32(frameIndex)))
+            homography[frameIndex] = MatWrapper(homographyValues: [1, 0, 0,
+                                                                   0, 1, 0,
+                                                                   0, 0, 1])
+        }
+
+        for concurrency in [1, 2, 3, 6, 16] {
+            let result = try XCTUnwrap(ImageAligner.alignAndMedianMerge(
+              baseImage: concurrencyBase(), baseFrameIndex: 0,
+              neighbors: neighbors, homography: homography,
+              outlierThreshold: Self.defaultPixelThreshold, includeAll: false,
+              loadConcurrency: concurrency))
+            XCTAssertEqual(result.warpCount, neighbors.count,
+                           "concurrency \(concurrency) warped \(result.warpCount) of "
+                           + "\(neighbors.count) neighbours")
+            XCTAssertEqual(Set(try samples(of: result.merged).flatMap { $0 }),
+                           [Self.concurrencyExpected],
+                           "concurrency \(concurrency) did not merge all nine levels")
         }
     }
 }

@@ -21,6 +21,14 @@ public final class MatWrapper: @unchecked Sendable {
         return MatWrapper(ref: r)
     }
 
+    /// Whether `load(fromFilename:)` will read this file's pixels directly rather than
+    /// through `cv::imread` — true only for an uncompressed, 16-bit, gray or RGB, chunky,
+    /// top-left, untiled, host-byte-order TIFF.  What loads and what it loads to does not
+    /// depend on this; it is here so a test can pin how narrow the fast path is.
+    public static func tiffIsFastReadable(_ filename: String) -> Bool {
+        mat_wrapper_tiff_is_fast_readable(filename)
+    }
+
     public init(width: Int, height: Int, cvType: Int32, bytesPerRow: Int, data: UnsafeMutableRawPointer, takeOwnership: Bool) {
         self.ref = mat_wrapper_create(Int64(width), Int64(height), cvType,
                                        bytesPerRow, data, takeOwnership)
