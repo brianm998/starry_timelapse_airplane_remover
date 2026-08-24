@@ -390,6 +390,88 @@ static MatWrapperRef medianImageFromMats(const std::vector<cv::Mat>& mats,
     return wrap(output);
 }
 
+// --- Loading merge sources concurrently -------------------------------------
+//
+// A merge does nothing but load its sources: 9 originals for a star-aligned build,
+// 17 for a static-earth one, and no other work reads a file.  Each source was
+// decoded and warped before the next one started, and a decode is single-threaded,
+// so the loop held one core while the rest of the machine waited on it.
+//
+// Measured on a 42MP 8-neighbour set, load and warp only, best of two runs each:
+//
+//     workers   wall          core-seconds   peak RSS
+//     1         12.2 - 13.9s  45.7 - 47.1    2.13 GB
+//     2         10.3 - 10.6s  35.0 - 38.8    2.36 GB
+//     4          7.7 -  9.6s  29.6 - 32.8    2.83 GB
+//     6          8.2 -  9.6s  29.3 - 30.1    3.07 GB
+//     8          6.4 - 12.2s  36.5 - 42.6    3.78 GB
+//
+// Core-seconds bottom out at 4 to 6 and climb again at 8, because
+// `warpPerspective` is already internally parallel — measured 15x to 19x on 36
+// threads for a single call — so past that the workers are only competing with
+// each other.  Four is the default: at the bottom of that curve and the cheapest
+// of the options there in memory.
+//
+// What makes this safe for the output is not the ordering below: medianMergeTyped
+// sorts each pixel's samples before it looks at them, so which source arrived
+// first cannot change what it decides.  What could change it is losing or
+// duplicating a source, which is what the slots are for — each worker fills its
+// own and nothing is appended from a thread.
+//
+// The order is preserved anyway, collected in index order once the workers are
+// done, so the sequence handed to the kernel, the warp count and the log lines do
+// not depend on how the threads were scheduled.  A merge that reads the same
+// whatever the machine was doing is worth more than the few lines it costs, and it
+// means this does not quietly rest on a property of today's kernel.
+//
+// Only the all-resident paths use this.  The streaming paths exist to hold one
+// source at a time; N workers in flight would hold N of them, which is the thing
+// streaming is for.
+namespace {
+
+// One merge source, as its loader left it.  `present` rather than `mat.empty()`
+// so that "nothing to merge here" never depends on what an empty Mat means.
+struct MergeSource {
+    cv::Mat mat;
+    bool present = false;
+    std::string note;      // logged by the caller, in source order
+};
+
+// Runs body(i) for every i in [0, count), on at most `concurrency` threads.
+// A body that throws loses its source rather than the process: nothing may escape
+// a std::thread, and one unreadable neighbour is not worth aborting a merge over.
+// That one line does go to the log from the worker, unlike the routine notes the
+// caller collects — an exception is rare enough to be worth reading interleaved,
+// and losing it to keep the log tidy would be the wrong trade.
+template <typename Body>
+static void forEachMergeSource(int count, int concurrency, Body &&body) {
+    if (count <= 0) return;
+    const int workers = std::max(1, std::min(concurrency, count));
+
+    auto guarded = [&body](int i) {
+        try { body(i); }
+        catch (const std::exception &e) { Log_e("merge source %d: %s", i, e.what()); }
+        catch (...) { Log_e("merge source %d: unknown exception", i); }
+    };
+
+    if (workers == 1) {
+        for (int i = 0; i < count; ++i) guarded(i);
+        return;
+    }
+
+    std::atomic<int> next{0};
+    std::vector<std::thread> pool;
+    pool.reserve((size_t)workers);
+    for (int w = 0; w < workers; ++w) {
+        pool.emplace_back([&] {
+            for (int i = next.fetch_add(1); i < count; i = next.fetch_add(1)) guarded(i);
+        });
+    }
+    for (auto &t : pool) t.join();
+}
+
+} // namespace
+
 // --- Streaming median merge ------------------------------------------------
 //
 // medianMergeTyped only ever needs row y of every input, so the whole set does
@@ -733,7 +815,8 @@ MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char **filenames, int count,
                                                     double outlierThreshold, bool includeAll,
                                                     const char *scratchDir,
-                                                    int64_t streamingThresholdBytes) {
+                                                    int64_t streamingThresholdBytes,
+                                                    int loadConcurrency) {
     try {
         // The all-resident path below holds every source at once.  When that would
         // exceed the threshold, stream from scratch files instead: same result,
@@ -755,14 +838,23 @@ MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
         }
 
         std::vector<cv::Mat> mats;
+        mats.reserve((size_t)std::max(count, 0) + 1);
         if (baseImage) mats.push_back(baseImage->mat);
-        for (int i = 0; i < count; i++) {
+
+        std::vector<MergeSource> sources((size_t)std::max(count, 0));
+        forEachMergeSource(count, loadConcurrency, [&](int i) {
             MatWrapperRef img = image_cache_load(filenames[i]);
-            // Shallow push, matching baseImage above and ia_median_merge below: the
-            // vector's cv::Mat keeps the buffer alive past the release, and
+            // Shallow copy, matching baseImage above and ia_median_merge below: the
+            // slot's cv::Mat keeps the buffer alive past the release, and
             // medianImageFromMats only reads its inputs.
-            if (img) { mats.push_back(img->mat); mat_wrapper_release(img); }
-        }
+            if (!img) return;
+            sources[(size_t)i].mat = img->mat;
+            sources[(size_t)i].present = true;
+            mat_wrapper_release(img);
+        });
+        // in index order, so the merge sees what the serial loop handed it
+        for (auto &src : sources) if (src.present) mats.push_back(src.mat);
+
         return medianImageFromMats(mats, outlierThreshold, includeAll);
     } KHT_CATCH_LOG("ia_median_merge_image_with_filenames")
     return nullptr;
@@ -1292,6 +1384,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                         double outlierThreshold, bool includeAll,
                                         const char *scratchDir,
                                         int64_t streamingThresholdBytes,
+                                        int loadConcurrency,
                                         int *outWarpCount,
                                         const char **errorMsg) {
     if (outWarpCount) *outWarpCount = 0;
@@ -1324,40 +1417,63 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
             warps.reserve((size_t)std::max(neighborCount, 0));
         }
 
-        int warpCount = 0;
-        for (int i = 0; i < neighborCount; ++i) {
+        // One neighbour: decode it and warp it by its homography.  A neighbour with
+        // no file, no homography, or a warp whose geometry does not match the base
+        // comes back absent, as it did before.  Anything worth saying goes in `note`
+        // rather than straight to the log, because on the resident path this runs on
+        // several threads at once and the lines would interleave with each other and
+        // with other frames'.
+        auto warpNeighbour = [&](int i, MergeSource &out) {
             MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
-            if (!neighbor) continue;
+            if (!neighbor) return;
 
             MatWrapperRef H = homographyForOffset(neighbors[i].frameIndex - baseFrameIndex,
                                                   homographyKeys, homographyValues,
                                                   homographyCount);
-            if (!H) { mat_wrapper_release(neighbor); continue; }
+            if (!H) { mat_wrapper_release(neighbor); return; }
 
-            // Scoped so the warp is freed at the end of the iteration on the
-            // streaming path — that release is the whole point of fusing the merge
-            // into the alignment.
-            {
-                cv::Mat warped = warpInto(neighbor->mat, H->mat);
-                mat_wrapper_release(neighbor);
+            cv::Mat warped = warpInto(neighbor->mat, H->mat);
+            mat_wrapper_release(neighbor);
 
-                if (warped.rows != base.rows || warped.cols != base.cols ||
-                    warped.type() != base.type()) {
-                    Log_w("aligned merge: warp of %s does not match the base geometry",
-                          neighbors[i].filename);
-                    continue;
-                }
-
-                if (stream) {
-                    if (!spiller.add(warped)) {   // logs its own failure
-                        if (errorMsg) *errorMsg = "cannot spill warped frame to scratch";
-                        return nullptr;
-                    }
-                } else {
-                    warps.push_back(warped);
-                }
+            if (warped.rows != base.rows || warped.cols != base.cols ||
+                warped.type() != base.type()) {
+                out.note = std::string("aligned merge: warp of ") + neighbors[i].filename +
+                           " does not match the base geometry";
+                return;
             }
-            warpCount++;
+            out.mat = warped;
+            out.present = true;
+        };
+
+        int warpCount = 0;
+        if (stream) {
+            // Serial on purpose.  Each warp is spilled and freed within the iteration
+            // that produced it — that release is the whole point of fusing the merge
+            // into the alignment, and workers in flight would each hold one.
+            for (int i = 0; i < neighborCount; ++i) {
+                MergeSource src;
+                warpNeighbour(i, src);
+                if (!src.note.empty()) Log_w("%s", src.note.c_str());
+                if (!src.present) continue;
+                if (!spiller.add(src.mat)) {   // logs its own failure
+                    if (errorMsg) *errorMsg = "cannot spill warped frame to scratch";
+                    return nullptr;
+                }
+                warpCount++;
+            }
+        } else {
+            // The resident path is going to hold every warp anyway, so producing them
+            // concurrently costs only the sources in flight.
+            std::vector<MergeSource> sources((size_t)std::max(neighborCount, 0));
+            forEachMergeSource(neighborCount, loadConcurrency, [&](int i) {
+                warpNeighbour(i, sources[(size_t)i]);
+            });
+            for (auto &src : sources) {
+                if (!src.note.empty()) Log_w("%s", src.note.c_str());
+                if (!src.present) continue;
+                warps.push_back(src.mat);
+                warpCount++;
+            }
         }
 
         if (outWarpCount) *outWarpCount = warpCount;

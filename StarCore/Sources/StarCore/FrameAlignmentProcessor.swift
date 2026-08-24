@@ -930,7 +930,8 @@ final public actor FrameAlignmentProcessor {
                   includeAll: false,
                   scratchDir: config.tempOutputPath,
                   streamingThresholdBytes:
-                    Int64(config.mergeStreamingThresholdMB) * 1024 * 1024
+                    Int64(config.mergeStreamingThresholdMB) * 1024 * 1024,
+                  loadConcurrency: config.mergeLoadConcurrency
                 )
 
                 if let result {

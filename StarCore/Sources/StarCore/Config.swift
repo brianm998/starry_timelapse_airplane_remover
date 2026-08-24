@@ -968,6 +968,54 @@ public struct Config: Codable, Sendable {
     /// into fewer concurrent merges on its own. No multiplier needs to change with it.
     public var mergeStreamingThresholdMB: Int = 8192
 
+    /// How many of a merge's sources are decoded — and, for an aligned merge, warped —
+    /// at the same time, on the path that holds them all resident anyway.
+    ///
+    /// Defaults to 1, the one-at-a-time loop, because raising it did not make a full run
+    /// faster on the machine it was measured on. It is here because it plainly speeds up
+    /// a merge in isolation, and because whether that reaches the wall clock depends on
+    /// something this machine cannot show.
+    ///
+    /// One 42MP 8-neighbour merge, load and warp only, nothing else running, best of two
+    /// runs each:
+    ///
+    ///     workers   wall           core-seconds   peak RSS
+    ///     1         12.2 - 13.9s   45.7 - 47.1    2.13 GB
+    ///     2         10.3 - 10.6s   35.0 - 38.8    2.36 GB
+    ///     4          7.7 -  9.6s   29.6 - 32.8    2.83 GB
+    ///     6          8.2 -  9.6s   29.3 - 30.1    3.07 GB
+    ///     8          6.4 - 12.2s   36.5 - 42.6    3.78 GB
+    ///
+    /// So a merge on its own goes about 1.5x faster at 4, and past 6 the workers only
+    /// compete with `warpPerspective`, which is already internally parallel — measured
+    /// 15x to 19x on 36 threads for one call.
+    ///
+    /// End to end it vanished. Two alternating pairs of 20-frame 42MP runs through the
+    /// release cli, concurrency 4 against 1: wall 298 and 332s against 332 and 287s,
+    /// CPU 1468 and 1194 core-seconds against 1240 and 1247. Four made no difference to
+    /// the wall clock and cost a little more CPU on average, with much more variance. A
+    /// 19-frame 6.8MP run showed the same nothing. The reason is that a run is already
+    /// keeping the machine busy with other frames' ops, so there is no idle capacity for
+    /// the extra workers to take — the concurrency the merges were missing was already
+    /// coming from `numberOfFramesToProcessConcurrently`.
+    ///
+    /// That is a fact about a 36-thread, 128GB machine running many frames at once. Where
+    /// frame concurrency is low — a smaller machine, where the memory budget admits one
+    /// or two frames, or an explicitly serialised run — the cores a merge cannot use are
+    /// real, and this is what spends them. Raising it there is worth measuring.
+    ///
+    /// This does not change what a merge produces. The kernel sorts each pixel's samples
+    /// before it uses them, so which source arrived first never reaches the answer, and
+    /// the sources are collected in file order regardless. Byte-identical output was
+    /// confirmed at 1 and 4 on full runs at both 42MP and 6.8MP. What it does change is
+    /// what a merge costs, which `concurrentLoadExtraMultiplier` charges for — so raising
+    /// this buys fewer concurrent merges, and that trade is the reason it is not on by
+    /// default.
+    ///
+    /// The streaming path ignores this and stays serial. Holding one source at a time is
+    /// the whole reason it exists, and workers in flight would each hold one.
+    public var mergeLoadConcurrency: Int = 1
+
     public var imageWidth: Int = 0
     public var imageHeight: Int = 0
     public var imageBytesPerPixel: Int = 0
@@ -1112,6 +1160,7 @@ public struct Config: Codable, Sendable {
             self.alignmentKeypointDetectionDivisor = legacy ? 2.0 : 1.0
         }
         self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
+        self.mergeLoadConcurrency = try c.decodeIfPresent(Int.self, forKey: .mergeLoadConcurrency) ?? self.mergeLoadConcurrency
         self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
         self.keypointCacheMaxMB = try c.decodeIfPresent(Int.self, forKey: .keypointCacheMaxMB) ?? self.keypointCacheMaxMB
         self.horizonMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .horizonMemoryMultiplier) ?? self.horizonMemoryMultiplier
@@ -1511,20 +1560,44 @@ public struct Config: Codable, Sendable {
         return max(extra, 0)
     }
 
+    /// Extra multiples of the raw frame for the sources a merge has in flight beyond the
+    /// first, from `mergeLoadConcurrency`.
+    ///
+    /// A worker on the aligned path holds two frames at its peak — the decoded
+    /// neighbour and the warp destination it is filling — and releases the neighbour on
+    /// the way out, so `2 * (concurrency - 1)` is what the extra workers can hold at
+    /// once beyond what the serial loop held. That is the worst case rather than the
+    /// measured one: at 42MP with 8 neighbours, going from 1 worker to 4 moved peak RSS
+    /// from 2.13GB to 2.83GB, which is 2.9 frames against the 6 charged here, because
+    /// four workers do not reach their own peaks together. Over-reserving costs
+    /// concurrency; under-reserving costs the machine, and this is the term that would
+    /// have to be wrong for a whole frame at a time.
+    ///
+    /// Charged whether or not the build is resident. The streaming path does not use
+    /// concurrency at all, so for it this over-reserves — but a streaming merge is
+    /// already the cheap case, and only above 84MP at the default threshold.
+    public var concurrentLoadExtraMultiplier: Int {
+        2 * max(mergeLoadConcurrency - 1, 0)
+    }
+
     /// What one merge op should reserve, as a multiple of the raw frame.
     /// See `residentBuildExtraMultiplier` for what the counts mean, and what `nil` costs.
     public func effectiveMergeMemoryMultiplier(alignedNeighbours: Int?,
                                               staticNeighbours: Int?) -> Int {
-        mergeMemoryMultiplier + residentBuildExtraMultiplier(alignedNeighbours: alignedNeighbours,
-                                                            staticNeighbours: staticNeighbours)
+        mergeMemoryMultiplier
+          + residentBuildExtraMultiplier(alignedNeighbours: alignedNeighbours,
+                                         staticNeighbours: staticNeighbours)
+          + concurrentLoadExtraMultiplier
     }
 
     /// What one outlier op should reserve, as a multiple of the raw frame.
     /// See `residentBuildExtraMultiplier` for what the counts mean, and what `nil` costs.
     public func effectiveOutlierMemoryMultiplier(alignedNeighbours: Int?,
                                                 staticNeighbours: Int?) -> Int {
-        outlierMemoryMultiplier + residentBuildExtraMultiplier(alignedNeighbours: alignedNeighbours,
-                                                              staticNeighbours: staticNeighbours)
+        outlierMemoryMultiplier
+          + residentBuildExtraMultiplier(alignedNeighbours: alignedNeighbours,
+                                         staticNeighbours: staticNeighbours)
+          + concurrentLoadExtraMultiplier
     }
 
     /// The result of `keypointConcurrency(physicalMemory:)`.

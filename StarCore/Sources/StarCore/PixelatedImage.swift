@@ -996,8 +996,10 @@ extension PixelatedImage {
     ///
     /// Pass `config` so the merge can stream from scratch files instead of holding
     /// every source in memory when the set is large — see
-    /// `Config.mergeStreamingThresholdMB`. Without it the merge keeps everything
-    /// resident, which is `frames.count + 1` whole frames.
+    /// `Config.mergeStreamingThresholdMB` — and so it can decode more than one source
+    /// at a time, see `Config.mergeLoadConcurrency`. Without it the merge keeps
+    /// everything resident, which is `frames.count + 1` whole frames, and loads them
+    /// one at a time.
     public func medianMerge(
       with frames: [String],
       outlierThreshold: Double = 1.2,
@@ -1010,7 +1012,8 @@ extension PixelatedImage {
             outlierThreshold: outlierThreshold,
             includeAll: includeAll,
             scratchDir: config?.tempOutputPath,
-            streamingThresholdBytes: Int64(config?.mergeStreamingThresholdMB ?? 0) * 1024 * 1024
+            streamingThresholdBytes: Int64(config?.mergeStreamingThresholdMB ?? 0) * 1024 * 1024,
+            loadConcurrency: config?.mergeLoadConcurrency ?? 1
         )
         return PixelatedImage(mat: mat)
     }

@@ -113,8 +113,49 @@ final class MergeMemoryEstimateTests: XCTestCase {
                        "everything streams at a 1MB threshold, so nothing extra is held")
         XCTAssertEqual(streaming.effectiveMergeMemoryMultiplier(alignedNeighbours: nil,
                                                                staticNeighbours: nil),
-                       streaming.mergeMemoryMultiplier,
-                       "a fully streaming run should charge the base multiplier alone")
+                       streaming.mergeMemoryMultiplier
+                         + streaming.concurrentLoadExtraMultiplier,
+                       "with nothing resident, a merge should charge the base multiplier "
+                       + "and its sources in flight, and nothing else")
+    }
+
+    /// The sources in flight are their own term, charged whether or not a build is
+    /// resident, because `mergeLoadConcurrency` decides how many of them exist. It has to
+    /// vanish at 1 — the serial loop holds one source, which the base multiplier already
+    /// covers — and grow with the setting, since that is the memory the setting buys.
+    func testSourcesInFlightAreChargedSeparatelyFromTheResidentSet() {
+        var c = config(megapixels: 42.2)
+
+        // The shipped default loads one source at a time and so costs nothing here.
+        // Measured: raising it made one merge ~1.5x faster in isolation but made no
+        // difference to a full 42MP run, because the run is already keeping the machine
+        // busy with other frames — so the default does not pay for what it cannot use.
+        XCTAssertEqual(Config().mergeLoadConcurrency, 1)
+        XCTAssertEqual(c.concurrentLoadExtraMultiplier, 0,
+                       "the default must not reserve for workers it does not run")
+
+        c.mergeLoadConcurrency = 1
+        XCTAssertEqual(c.concurrentLoadExtraMultiplier, 0,
+                       "one worker is the serial loop, which holds nothing extra")
+        let serial = c.effectiveMergeMemoryMultiplier(alignedNeighbours: 8, staticNeighbours: 16)
+
+        c.mergeLoadConcurrency = 4
+        XCTAssertGreaterThan(c.concurrentLoadExtraMultiplier, 0)
+        let concurrent = c.effectiveMergeMemoryMultiplier(alignedNeighbours: 8, staticNeighbours: 16)
+        XCTAssertGreaterThan(concurrent, serial,
+                             "raising the concurrency has to raise what a merge reserves")
+
+        // and it is not the resident term in disguise: it applies with everything streaming
+        c.mergeStreamingThresholdMB = 1
+        XCTAssertEqual(c.residentBuildExtraMultiplier(alignedNeighbours: 8, staticNeighbours: 16), 0,
+                       "precondition: everything streams at a 1MB threshold")
+        XCTAssertGreaterThan(c.effectiveMergeMemoryMultiplier(alignedNeighbours: 8,
+                                                             staticNeighbours: 16),
+                             c.mergeMemoryMultiplier)
+
+        // a negative setting must not turn into a credit
+        c.mergeLoadConcurrency = -3
+        XCTAssertEqual(c.concurrentLoadExtraMultiplier, 0)
     }
 
     /// Raising the threshold is what pays for the resident path, in concurrency rather
@@ -148,8 +189,9 @@ final class MergeMemoryEstimateTests: XCTestCase {
         XCTAssertLessThan(one, configured)
 
         XCTAssertEqual(c.effectiveMergeMemoryMultiplier(alignedNeighbours: 0, staticNeighbours: 0),
-                       c.mergeMemoryMultiplier,
-                       "an actual 0 is honoured as 0 — a merge with no sources holds nothing extra")
+                       c.mergeMemoryMultiplier + c.concurrentLoadExtraMultiplier,
+                       "an actual 0 is honoured as 0 — a merge with no sources holds no "
+                       + "resident set, whatever its loaders could have been carrying")
     }
 
     /// An unknown frame size must not silently read as "everything fits". With no

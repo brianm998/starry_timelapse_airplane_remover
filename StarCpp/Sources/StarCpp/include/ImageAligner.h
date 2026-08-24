@@ -32,11 +32,19 @@ MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
 //
 // streamingThresholdBytes <= 0 disables streaming.  scratchDir may be null, in
 // which case the system temp directory is used.
+//
+// loadConcurrency is how many sources may be decoded (and, for the aligned merge,
+// warped) at once on the all-resident path — 1 for the old one-at-a-time loop.  It
+// cannot change the result: the merge sorts each pixel's samples before using them,
+// so source order does not reach the answer, and the sources are collected in file
+// order regardless.  The streaming path ignores it and stays serial: holding one
+// source at a time is what it is for.
 MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char **filenames, int count,
                                                     double outlierThreshold, bool includeAll,
                                                     const char *scratchDir,
-                                                    int64_t streamingThresholdBytes);
+                                                    int64_t streamingThresholdBytes,
+                                                    int loadConcurrency);
 
 // --- Feature detection ---
 
@@ -115,6 +123,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                         double outlierThreshold, bool includeAll,
                                         const char *scratchDir,
                                         int64_t streamingThresholdBytes,
+                                        int loadConcurrency,
                                         int *outWarpCount,
                                         const char **errorMsg);
 
