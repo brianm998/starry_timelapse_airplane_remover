@@ -44,6 +44,13 @@ final class MedianMergeTests: XCTestCase {
 
     /// A 16-bit single-channel Mat built from `value(x, y)`.
     private func makeMat(_ value: (Int, Int) -> UInt16) -> MatWrapper {
+        makeMat(width: width, height: height, value)
+    }
+
+    /// The same, at an explicit size — the width is what decides how a row is split
+    /// between the kernel's two paths, so some tests need to vary it.
+    private func makeMat(width: Int, height: Int,
+                         _ value: (Int, Int) -> UInt16) -> MatWrapper {
         let count = width * height
         let data = UnsafeMutablePointer<UInt16>.allocate(capacity: count)
         for y in 0..<height {
@@ -249,6 +256,63 @@ final class MedianMergeTests: XCTestCase {
                                                        includeAll: false)
             XCTAssertEqual(Set(try samples(of: merged).flatMap { $0 }), [10100],
                            "merging \(levels)")
+        }
+    }
+
+    /// The kernel merges a fixed-width block of pixel-channels at a time and handles
+    /// whatever is left of a row one pixel at a time, so a row is split between two code
+    /// paths at an offset that depends only on the frame's width.  A pixel's value must
+    /// not depend on which side of that split it lands on.
+    ///
+    /// This walks the same nine sources across every width from 1 to 40 — widths below,
+    /// at, and either side of the block width, so each column in turn is a block pixel in
+    /// one run and a leftover in another — and requires column `x` to merge to the same
+    /// value every time.  The column data is chosen to exercise the parts of the
+    /// selection that the two paths implement differently: how many sources are zero
+    /// varies by column, so `first`, the deviation and the outlier cut all move with `x`.
+    func testAPixelMergesTheSameWhereverTheBlockBoundaryFalls() throws {
+        let height = 3
+        let sources = 9
+
+        // column x has (x % 5) of its eight neighbours warped out, and one bright sample
+        // every third column, so neither the zero count nor the outlier cut is constant
+        func level(_ x: Int, _ source: Int) -> UInt16 {
+            if source > 0, source <= x % 5 { return 0 }
+            if source == 1, x % 3 == 0 { return 60000 }
+            return UInt16(10000 + 100 * source + 7 * (x % 11))
+        }
+
+        var mergedByWidth: [Int: [Int: UInt16]] = [:]   // width -> column -> value
+
+        for width in 1...40 {
+            let base = makeMat(width: width, height: height) { x, _ in level(x, 0) }
+            let filenames = try (1..<sources).map { source in
+                try write(makeMat(width: width, height: height) { x, _ in level(x, source) },
+                          named: "boundary-\(width)-\(source)")
+            }
+            let merged = ImageAligner.medianMergeImage(base, withFilenames: filenames,
+                                                       outlierThreshold: Self.defaultPixelThreshold,
+                                                       includeAll: false)
+            let rows = try samples(of: merged)
+            XCTAssertEqual(rows.count, height)
+            XCTAssertEqual(rows[0].count, width, "width \(width) came back \(rows[0].count) wide")
+            // every row is identical by construction, so one is enough to compare across
+            for row in rows {
+                XCTAssertEqual(row, rows[0], "rows disagree at width \(width)")
+            }
+            mergedByWidth[width] = Dictionary(uniqueKeysWithValues: rows[0].enumerated().map { ($0, $1) })
+        }
+
+        // the widest run is the reference: every narrower one has to agree with it column
+        // for column, which it can only do if both paths decide a pixel the same way
+        let reference = try XCTUnwrap(mergedByWidth[40])
+        for width in 1...39 {
+            let row = try XCTUnwrap(mergedByWidth[width])
+            for x in 0..<width {
+                XCTAssertEqual(row[x], reference[x],
+                               "column \(x) merged to \(row[x] as Any) at width \(width) " +
+                               "but \(reference[x] as Any) at width 40")
+            }
         }
     }
 }

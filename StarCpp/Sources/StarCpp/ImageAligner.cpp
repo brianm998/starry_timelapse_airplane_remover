@@ -68,6 +68,62 @@ static inline void small_sort(int* v, int n) {
     }
 }
 
+// One compare-exchange of a sorting network: put the smaller of the two slots in
+// `a` and the larger in `b`.  A network is a fixed list of these, applied in
+// order, and it sorts any input — which is why the block kernel below can run one
+// network across a whole block of pixels at once without branching per pixel.
+struct MergeComparator { int a, b; };
+
+// Batcher's odd-even merge sort, the textbook recursive construction.  Only
+// defined for a power-of-two width, which is why mergeSortNetwork sorts the
+// largest power of two that fits and inserts the rest by hand.
+static void oddEvenMergeNet(int lo, int n, int r, std::vector<MergeComparator> &out) {
+    const int m = r * 2;
+    if (m < n) {
+        oddEvenMergeNet(lo, n, m, out);
+        oddEvenMergeNet(lo + r, n, m, out);
+        for (int i = lo + r; i + r < lo + n; i += m) out.push_back({i, i + r});
+    } else {
+        out.push_back({lo, lo + r});
+    }
+}
+
+static void oddEvenSortNet(int lo, int n, std::vector<MergeComparator> &out) {
+    if (n <= 1) return;
+    const int m = n / 2;
+    oddEvenSortNet(lo, m, out);
+    oddEvenSortNet(lo + m, m, out);
+    oddEvenMergeNet(lo, n, 1, out);
+}
+
+// A network that sorts `n` values ascending.  Batcher over the largest power of
+// two <= n, then each leftover element bubbled down into place.
+//
+// Padding up to a power of two with sentinels is the more usual trick and it is
+// much worse here: the two source counts star actually merges are 9 (base plus
+// numberAlignedNeighborFrames) and 17 (base plus numberStaticNeighborFrames),
+// and padding costs 63 and 191 comparators against 27 and 79 this way.
+//
+// Cheap enough to build per call — a few dozen push_backs against a band of a
+// million-odd pixels — so it is not cached or preallocated anywhere.
+static std::vector<MergeComparator> mergeSortNetwork(int n) {
+    std::vector<MergeComparator> net;
+    if (n < 2) return net;
+    int p = 1;
+    while ((p << 1) <= n) p <<= 1;
+    oddEvenSortNet(0, p, net);
+    for (int i = p; i < n; ++i)
+        for (int j = i; j > 0; --j) net.push_back({j - 1, j});
+    // Neither construction above can pair a slot with itself, but the block kernel
+    // hands the two slots to the compiler as restrict pointers, so a comparator
+    // that did would be a miscompile rather than a wrong answer.  Drop it here,
+    // once per merge, instead of testing for it per pixel.
+    net.erase(std::remove_if(net.begin(), net.end(),
+                             [](const MergeComparator &c) { return c.a == c.b; }),
+              net.end());
+    return net;
+}
+
 template <typename T>
 static inline T clamp_cast_int(int v) {
     if constexpr (std::is_same_v<T, uchar>) {
@@ -77,16 +133,60 @@ static inline T clamp_cast_int(int v) {
     }
 }
 
-// Parallel over bands of rows.  This kernel is where a 42MP run now spends most of its
-// time — profiled at 16 of 49 threads inside it with 894 of 894 samples each and 77 of
-// 23805 samples on I/O, while the machine ran 18 of 36 cores because the loop was serial
-// and all the concurrency came from running many MergeOps at once.
+// Pixel-channels a block handles at once — eight lanes of int32 is two SSE2 or
+// NEON registers, and four of doubles — and the largest source count the block
+// path will take.  A merge with more sources than that runs entirely on the
+// scalar tail below, which is the code this kernel has always run.  See the
+// kernel's own comment for why the width is 8.
+static const int kMergeLanes = 8;
+static const int kMergeMaxBlockSources = 64;
+
+// Parallel over bands of rows, and within a row over blocks of kMergeLanes
+// pixel-channels.
 //
-// Bit-identical by construction rather than by measurement: output pixel (y, xc) reads
-// only column xc of row y of each source, and `vals`/`rowPtrs`/`mean`/`M2` are all
-// per-pixel or per-row state.  There is no accumulator spanning rows and no dependence on
-// the order bands are visited in, so banding cannot perturb a single value.  `vals` and
-// `rowPtrs` move inside the body because they are now per-worker rather than shared.
+// The merge is the pipeline's largest single consumer of CPU at 42MP.  Two things
+// make it so, measured per pixel-channel on real 9-source frames with the flags
+// star ships (no -march, so SSE2 on Intel and NEON on Apple silicon): the sort
+// was 194ns of a 304ns total, all of it std::sort mispredicting branches on nine
+// elements, and the Welford recurrence below was most of the rest, latency-bound
+// on a chain of nine double divisions.
+//
+// Both go away by doing kMergeLanes pixel-channels in lockstep instead of one at
+// a time.  Consecutive pixel-channels are contiguous in every source, so the
+// gather is a vector load; a comparator network sorts all the lanes with the same
+// branchless min/max pairs; and the statistics run the identical scalar
+// recurrence per lane, which the compiler puts in vector registers.  The
+// divisions no longer wait on each other because eight independent chains
+// interleave.
+//
+// Measured against the previous kernel, serially so the figures are core-seconds
+// rather than whatever share of the machine a run happened to get: 3.7x at 9
+// sources (33.9 -> 9.1 core-seconds per 42MP frame) and 4.0x at 17 (61.3 ->
+// 15.2).  On the whole frame with the machine to itself, 2.94s -> 0.73s.  End to
+// end, a 19-frame 12MP sequence through the release cli went from 1053 and 1059
+// core-seconds on two runs to 752 and 838 — about a quarter of the entire
+// pipeline's CPU — for byte-identical output.  Wall clock is not the instrument
+// to read this with: the same four runs ranged 94-150s.
+//
+// kMergeLanes = 16 measured a few percent better again at both source counts,
+// and slower than 8 once -march=native was in play, so this stays at the width
+// that was never the worse of the two.  AVX512 adds nothing over the shipped
+// SSE2 baseline here — the loop is bound by divide throughput, not width — so
+// there is no reason to build runtime CPU dispatch for it.
+//
+// Bit-identical, by construction and then by measurement.  A comparator network
+// computes the same total order std::sort does, so `blk` holds exactly the array
+// `vals` held.  Every lane then evaluates the same IEEE double operations in the
+// same order as the scalar code — lanes whose data starts later are carried
+// along and their updates discarded by a select, never folded in — and IEEE
+// division and square root are exactly rounded, so a vectorised lane and a
+// scalar one cannot disagree.  Checked against the old kernel over full 42MP
+// frames including the zero-covered edges, and over randomised inputs across
+// source counts, depths, channel counts and both includeAll settings.
+//
+// Bands remain safe for the same reason as before: output pixel (y, xc) reads
+// only column xc of row y of each source, there is no accumulator spanning rows,
+// and nothing depends on the order bands are visited in.
 //
 // Worth knowing before tuning this: the vendored OpenCV selects the GCD backend at
 // runtime (`getBuildInformation()` reports "Parallel framework: GCD", despite
@@ -99,80 +199,172 @@ template <typename T>
 static void medianMergeTyped(cv::Mat &output, const std::vector<cv::Mat>& mats,
                              double k, bool includeAll, int rows, int cols, int ch) {
     const int n = (int)mats.size();
+    if (n <= 0) return;
+
+    const int total = cols * ch;
+    const std::vector<MergeComparator> net = mergeSortNetwork(n);
+    const MergeComparator *netData = net.data();
+    const int netCount = (int)net.size();
+    const bool blocked = n <= kMergeMaxBlockSources && total >= kMergeLanes;
 
     cv::parallel_for_(cv::Range(0, rows), [&](const cv::Range &band) {
         std::vector<int> vals(n);
         std::vector<const T*> rowPtrs(n);
+        alignas(64) int blk[kMergeMaxBlockSources][kMergeLanes];
 
         for (int y = band.start; y < band.end; ++y) {
             for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<T>(y);
             T* outRow = output.ptr<T>(y);
 
-            for (int x = 0; x < cols; ++x) {
-                for (int c = 0; c < ch; ++c) {
-                    const int xc = x * ch + c;
-                    for (int i = 0; i < n; ++i) vals[i] = rowPtrs[i][xc];
-                    small_sort(vals.data(), n);
+            int xc = 0;
 
-                    // vals is sorted ascending, so any zeros are leading.  A zero means
-                    // "no source data here": warpInto zeroes everything its warp does not
-                    // cover, so near the frame edges a neighbour simply has no sample to
-                    // offer.  Those slots are not observations and must stay out of both
-                    // the statistics and the selection below.
-                    //
-                    // Leaving them in the statistics is what put a black border down one
-                    // side of the first and last few frames of a sequence.  Those frames
-                    // have neighbours on one side only, so every warp uncovers the same
-                    // edge, and in that strip most of `vals` is zero.  The zeros dragged
-                    // the mean down and inflated the deviation until the base frame's own
-                    // real value looked like a bright outlier, `maxIndex` excluded it,
-                    // minIndex/maxIndex crossed over, and the midpoint landed back inside
-                    // the run of zeros — emitting black where exactly one source, the
-                    // base frame, had a perfectly good value.  Measured at the default
-                    // pixelThreshold of 1.2 and 8 aligned neighbours, that happened
-                    // wherever 3 or fewer of the 9 sources had data.
-                    int minIndex = 0;
-                    if (!includeAll) {
-                        while (minIndex < n && vals[minIndex] == 0) ++minIndex;
+            if (blocked) {
+                for (; xc + kMergeLanes <= total; xc += kMergeLanes) {
+                    for (int i = 0; i < n; ++i) {
+                        const T *src = rowPtrs[i] + xc;
+                        for (int l = 0; l < kMergeLanes; ++l) blk[i][l] = src[l];
                     }
-                    // all zero: nothing covered this pixel, so 0 is the honest answer
-                    const int first = (minIndex < n) ? minIndex : n - 1;
-                    const int count = n - first;
 
-                    // Welford, deliberately kept.  Replacing it with exact int64 sum and
-                    // sum-of-squares was tried and reverted: measured 1.52x on the SERIAL
-                    // kernel (45.22s -> 29.76s on a 17-source 42MP merge), but once the
-                    // row loop above is parallel the kernel is ~3s and the difference
-                    // disappears into noise — 0.86x and 1.15x on two runs of the same
-                    // benchmark.  Against that it is not free: `threshold` feeds the
-                    // int-vs-double compare below, real data decides it at exactly zero
-                    // margin, and a flip selects a different source frame's sample
-                    // entirely rather than a neighbouring value.  Measured end to end,
-                    // 1 of 20 output frames changed, in 4 samples of 126.5M, but with a
-                    // max delta of 26368 of 65535.  No measurable speed for occasional
-                    // large isolated pixel changes is the wrong trade.
-                    double mean = 0.0, M2 = 0.0;
-                    for (int i = first; i < n; ++i) {
-                        double delta = vals[i] - mean;
-                        mean += delta / (i - first + 1);
-                        M2 += delta * (vals[i] - mean);
-                    }
-                    const double threshold = mean + k * std::sqrt(M2 / count);
-
-                    int maxIndex = n;
-                    if (!includeAll) {
-                        for (int z = first; z < n; ++z) {
-                            if (vals[z] < threshold) maxIndex = z;
-                            else break;
+                    // sort every lane, one comparator at a time.  The two slots a
+                    // comparator touches are always different, so restrict holds.
+                    for (int c = 0; c < netCount; ++c) {
+                        int *__restrict lo = blk[netData[c].a];
+                        int *__restrict hi = blk[netData[c].b];
+                        for (int l = 0; l < kMergeLanes; ++l) {
+                            const int x = lo[l], y2 = hi[l];
+                            lo[l] = x < y2 ? x : y2;
+                            hi[l] = x < y2 ? y2 : x;
                         }
                     }
 
-                    int idx = (minIndex + maxIndex) / 2;
-                    if (idx >= n) idx = n - 1;
-                    // never fall back into the no-data zeros
-                    if (idx < first) idx = first;
-                    outRow[xc] = clamp_cast_int<T>(vals[idx]);
+                    if (includeAll) {
+                        // With every source counted, minIndex is 0 and maxIndex is n
+                        // whatever the statistics say, so the answer is the plain
+                        // midpoint and the whole pass below is dead.
+                        for (int l = 0; l < kMergeLanes; ++l)
+                            outRow[xc + l] = clamp_cast_int<T>(blk[n / 2][l]);
+                        continue;
+                    }
+
+                    // Leading zeros are "no source data here" — see the scalar path
+                    // below for what happens when they are counted as observations.
+                    int minIndex[kMergeLanes], first[kMergeLanes];
+                    for (int l = 0; l < kMergeLanes; ++l) {
+                        int zeros = 0;
+                        for (int i = 0; i < n; ++i) zeros += blk[i][l] == 0 ? 1 : 0;
+                        minIndex[l] = zeros;
+                        first[l] = zeros < n ? zeros : n - 1;
+                    }
+
+                    // Welford, per lane, from each lane's own `first`.  A lane that is
+                    // not started yet computes its update anyway and throws it away;
+                    // the divisor is floored at 1 so that idle arithmetic cannot
+                    // divide by zero.
+                    double mean[kMergeLanes] = {0.0}, M2[kMergeLanes] = {0.0};
+                    for (int i = 0; i < n; ++i) {
+                        for (int l = 0; l < kMergeLanes; ++l) {
+                            const double v = blk[i][l];
+                            const double delta = v - mean[l];
+                            const int count = i - first[l] + 1;
+                            const double nextMean =
+                              mean[l] + delta / (double)(count < 1 ? 1 : count);
+                            const double nextM2 = M2[l] + delta * (v - nextMean);
+                            const bool active = i >= first[l];
+                            mean[l] = active ? nextMean : mean[l];
+                            M2[l] = active ? nextM2 : M2[l];
+                        }
+                    }
+
+                    double threshold[kMergeLanes];
+                    for (int l = 0; l < kMergeLanes; ++l)
+                        threshold[l] =
+                          mean[l] + k * std::sqrt(M2[l] / (double)(n - first[l]));
+
+                    // The scalar path walks up from `first` and stops at the first
+                    // value the threshold rejects.  The values are sorted, so the ones
+                    // it accepts are exactly a prefix, and counting them says where it
+                    // would have stopped.  An empty prefix — including the NaN case,
+                    // where every compare is false — leaves maxIndex at n, as there.
+                    int below[kMergeLanes] = {0};
+                    for (int i = 0; i < n; ++i)
+                        for (int l = 0; l < kMergeLanes; ++l)
+                            below[l] += (i >= first[l] &&
+                                         (double)blk[i][l] < threshold[l]) ? 1 : 0;
+
+                    for (int l = 0; l < kMergeLanes; ++l) {
+                        const int maxIndex = below[l] ? first[l] + below[l] - 1 : n;
+                        int idx = (minIndex[l] + maxIndex) / 2;
+                        if (idx >= n) idx = n - 1;
+                        if (idx < first[l]) idx = first[l];
+                        outRow[xc + l] = clamp_cast_int<T>(blk[idx][l]);
+                    }
                 }
+            }
+
+            // Whatever the blocks did not cover: the last few pixel-channels of a row,
+            // or every one of them when there are more sources than a block holds.
+            for (; xc < total; ++xc) {
+                for (int i = 0; i < n; ++i) vals[i] = rowPtrs[i][xc];
+                small_sort(vals.data(), n);
+
+                // vals is sorted ascending, so any zeros are leading.  A zero means
+                // "no source data here": warpInto zeroes everything its warp does not
+                // cover, so near the frame edges a neighbour simply has no sample to
+                // offer.  Those slots are not observations and must stay out of both
+                // the statistics and the selection below.
+                //
+                // Leaving them in the statistics is what put a black border down one
+                // side of the first and last few frames of a sequence.  Those frames
+                // have neighbours on one side only, so every warp uncovers the same
+                // edge, and in that strip most of `vals` is zero.  The zeros dragged
+                // the mean down and inflated the deviation until the base frame's own
+                // real value looked like a bright outlier, `maxIndex` excluded it,
+                // minIndex/maxIndex crossed over, and the midpoint landed back inside
+                // the run of zeros — emitting black where exactly one source, the
+                // base frame, had a perfectly good value.  Measured at the default
+                // pixelThreshold of 1.2 and 8 aligned neighbours, that happened
+                // wherever 3 or fewer of the 9 sources had data.
+                int minIndex = 0;
+                if (!includeAll) {
+                    while (minIndex < n && vals[minIndex] == 0) ++minIndex;
+                }
+                // all zero: nothing covered this pixel, so 0 is the honest answer
+                const int first = (minIndex < n) ? minIndex : n - 1;
+                const int count = n - first;
+
+                // Welford, deliberately kept.  Replacing it with exact int64 sum and
+                // sum-of-squares was tried and reverted: measured 1.52x on the SERIAL
+                // kernel (45.22s -> 29.76s on a 17-source 42MP merge), but once the
+                // row loop above is parallel the kernel is ~3s and the difference
+                // disappears into noise — 0.86x and 1.15x on two runs of the same
+                // benchmark.  Against that it is not free: `threshold` feeds the
+                // int-vs-double compare below, real data decides it at exactly zero
+                // margin, and a flip selects a different source frame's sample
+                // entirely rather than a neighbouring value.  Measured end to end,
+                // 1 of 20 output frames changed, in 4 samples of 126.5M, but with a
+                // max delta of 26368 of 65535.  No measurable speed for occasional
+                // large isolated pixel changes is the wrong trade.
+                double mean = 0.0, M2 = 0.0;
+                for (int i = first; i < n; ++i) {
+                    double delta = vals[i] - mean;
+                    mean += delta / (i - first + 1);
+                    M2 += delta * (vals[i] - mean);
+                }
+                const double threshold = mean + k * std::sqrt(M2 / count);
+
+                int maxIndex = n;
+                if (!includeAll) {
+                    for (int z = first; z < n; ++z) {
+                        if (vals[z] < threshold) maxIndex = z;
+                        else break;
+                    }
+                }
+
+                int idx = (minIndex + maxIndex) / 2;
+                if (idx >= n) idx = n - 1;
+                // never fall back into the no-data zeros
+                if (idx < first) idx = first;
+                outRow[xc] = clamp_cast_int<T>(vals[idx]);
             }
         }
     });
