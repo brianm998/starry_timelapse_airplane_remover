@@ -353,7 +353,6 @@
   "ui.horizon_floor_mb": "Ondergrens horizon (MB):",
   "ui.horizon_mem": "Horizongeheugen ×:",
   "ui.horizon_settings": "Horizoninstellingen",
-  "ui.horizon_shift": "Horizonverschuiving:",
   "ui.horizon_spike_removal": "Verwijderen van horizonpieken:",
   "ui.hough_line_arguments": "Argumenten van de Hough-lijn",
   "ui.hough_line_matrix_blob_connector": "Vlekkenverbinder via Hough-lijnmatrix",

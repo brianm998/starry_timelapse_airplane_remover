@@ -153,7 +153,13 @@ message Config {
   optional double canny_min_threshold                                  = 34;
   optional double canny_max_threshold                                  = 35;
   optional bool   canny_use_l2_gradient                                = 36;
-  optional int32  horizon_vertical_shift_amount                        = 37;
+  // 37 was horizon_vertical_shift_amount, a hand-entered number of pixels the
+  // horizon mask was scooted up by before compositing the star-aligned sky over the
+  // earth image, to hide the ground smear the merge's warps land above the horizon.
+  // The composite now derives the exact envelope from the merge's own homographies
+  // (StarAlignedHorizonMask), so the knob went away.  Reserved so no future field can
+  // reuse the number and be misread by a client built against the old schema.
+  reserved 37;
   optional bool   allow_earth_alignment                                = 38;
   optional int32  alignment_max_keypoints                              = 39;
   optional bool   alignment_write_debug_images                         = 40;

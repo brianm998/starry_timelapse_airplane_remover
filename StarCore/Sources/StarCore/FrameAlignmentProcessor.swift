@@ -235,6 +235,41 @@ final public actor FrameAlignmentProcessor {
 
     public func getNeighborEarthHomography() -> HomographyResultsCodable? { neighborEarthHomography }
 
+    /// `baseMask` shrunk to the sky this frame's star-aligned image really has.
+    ///
+    /// The merge behind `loadOrCreateStarAlignedImage` warps each neighbour into this
+    /// frame by its star homography, and those warps can land neighbour ground above
+    /// this frame's own horizon — see `StarAlignedHorizonMask` for the geometry.  The
+    /// same homographies say exactly how far, so the composite paths ask here rather
+    /// than shifting the mask by a hand-entered guess.
+    ///
+    /// Comes back unchanged when this frame has no star homography: in that case the
+    /// merge warped nothing (the "aligned" image is the frame's own pixels), so there
+    /// is no smear to keep out of the sky.  Also unchanged, with a warning, if the
+    /// mask arithmetic itself fails — a mask that admits the smear band beats no
+    /// composite at all, which is what the old shift-by-N fallbacks settled for too.
+    public func starAlignedHorizonMask(from baseMask: PixelatedImage) async -> PixelatedImage {
+        // In-memory first, then the database, for the same reason the merge itself
+        // reads this way: "no field" is not "no homography" on a resume.
+        if neighborStarHomography == nil {
+            neighborStarHomography = await readStarNeighborHomographyForThisFrame()
+        }
+        let homographies = (neighborStarHomography?.neighborHomography ?? [])
+          .compactMap { $0.homography }
+        guard !homographies.isEmpty else { return baseMask }
+
+        if let adjusted = await starAlignedHorizonMaskCache.mask(
+             from: baseMask,
+             homographies: homographies
+           )
+        {
+            return adjusted
+        }
+        Log.w("frame \(frameIndex) could not compute the star-aligned horizon mask " +
+              "over \(homographies.count) homographies, using the base mask unchanged")
+        return baseMask
+    }
+
     func clearHomographyCache() {
         self.neighborStarHomography = nil
         self.neighborEarthHomography = nil

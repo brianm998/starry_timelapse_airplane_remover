@@ -19,7 +19,6 @@ enum FocusedField: Hashable {
     case numberStaticNeighborFrames
     case frameStaticNeighborFrames
     case frameAlignedNeighborFrames
-    case horizonVerticalShiftAmount
     case minAlignmentFrames
     case alignmentMaxKeypoints
     case alignmentBaseImageDilateSize

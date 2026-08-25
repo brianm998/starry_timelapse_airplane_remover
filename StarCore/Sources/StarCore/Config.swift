@@ -717,9 +717,15 @@ public struct Config: Codable, Sendable {
 
     public var numberOfFramesToProcessConcurrently: Int = ProcessInfo.processInfo.processorCount
     
-    // when doing auto aligned outputs, how far to shift up the horizon mask
-    // when doing a final composite image.
-    public var horizonVerticalShiftAmount: Int = 8
+    // Removed: horizonVerticalShiftAmount.  It scooted the horizon mask up by a
+    // hand-entered number of pixels before compositing the star-aligned sky over the
+    // earth image, to hide the smeared ground the merge's warps land above the real
+    // horizon.  One constant could not be right: measured on a 42MP west-facing
+    // sequence the smear reached 7 to 33px depending on the column (the guess in use
+    // was 8), and an east-facing camera needs none at all.  The composite now derives
+    // the exact envelope from the same homographies the merge warped by — see
+    // StarAlignedHorizonMask — so the knob had nothing left to do.  Proto field 37 is
+    // reserved.
 
     // try to align earth on moving frames?
     // turned off by default as it's still expermintal
@@ -1127,7 +1133,6 @@ public struct Config: Codable, Sendable {
         self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
         self.numberOfFramesToProcessConcurrently = try c.decodeIfPresent(Int.self, forKey: .numberOfFramesToProcessConcurrently) ?? self.numberOfFramesToProcessConcurrently
 
-        self.horizonVerticalShiftAmount = try c.decodeIfPresent(Int.self, forKey: .horizonVerticalShiftAmount) ?? self.horizonVerticalShiftAmount
 
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
 

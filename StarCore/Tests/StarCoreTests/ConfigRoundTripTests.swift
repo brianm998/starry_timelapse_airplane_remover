@@ -116,7 +116,8 @@ final class ConfigRoundTripTests: XCTestCase {
     func testAConfigCarryingARemovedKeyStillDecodes() throws {
         let json = #"""
           {"imageSequenceDirname":"seq","imageSequencePath":"/tmp",
-           "horizonStripWidth":1234,"alignmentMaxKeypoints":1500}
+           "horizonStripWidth":1234,"horizonVerticalShiftAmount":8,
+           "alignmentMaxKeypoints":1500}
           """#
         let decoded = try JSONDecoder().decode(Config.self, from: Data(json.utf8))
 

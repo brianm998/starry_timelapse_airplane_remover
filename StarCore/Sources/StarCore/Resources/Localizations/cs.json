@@ -353,7 +353,6 @@
   "ui.horizon_floor_mb": "Dolní mez horizontu (MB):",
   "ui.horizon_mem": "Paměť horizontu ×:",
   "ui.horizon_settings": "Nastavení horizontu",
-  "ui.horizon_shift": "Posun horizontu:",
   "ui.horizon_spike_removal": "Odstranění špiček horizontu:",
   "ui.hough_line_arguments": "Parametry Houghovy přímky",
   "ui.hough_line_matrix_blob_connector": "Spojovač skvrn podle matice Houghových přímek",
