@@ -1397,7 +1397,22 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
         return nullptr;
     }
     try {
-        const cv::Mat &base = baseImage->mat;
+        // Zero means "no source data here" to the merge kernel, because warpInto
+        // zeroes whatever its warp does not cover.  That convention collides with
+        // pixel-channels that are legitimately zero: a deep twilight sky exposes with
+        // its red channel at exactly 0, so in that channel every source reads
+        // "no data" and the one source with light there — a star's red component, an
+        // airplane's red beacon — becomes the only observation the median sees.
+        // Measured on a dusk frame: a saturated red stamp (54795 of 65535) in the
+        // merged output at a position where the base frame recorded nothing, one per
+        // source with a light there.  The merge exists to remove those.
+        //
+        // So every source is lifted off zero before merging: 0 becomes 1, an
+        // observation one count above black, and only the warp borders are 0
+        // afterwards because warpInto writes them after this.  Costs one extra
+        // frame-sized buffer for the base and one per neighbour in flight.
+        cv::Mat base;
+        cv::max(baseImage->mat, 1, base);
         const uint64_t frameBytes = (uint64_t)base.total() * base.elemSize();
         const uint64_t residentBytes = frameBytes * (uint64_t)(neighborCount + 1);
         const bool stream = streamingThresholdBytes > 0 &&
@@ -1432,8 +1447,13 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                                   homographyCount);
             if (!H) { mat_wrapper_release(neighbor); return; }
 
-            cv::Mat warped = warpInto(neighbor->mat, H->mat);
+            // lifted off zero before the warp, so that afterwards a zero means
+            // exactly one thing: the warp did not cover this pixel — see the
+            // comment on `base` above
+            cv::Mat lifted;
+            cv::max(neighbor->mat, 1, lifted);
             mat_wrapper_release(neighbor);
+            cv::Mat warped = warpInto(lifted, H->mat);
 
             if (warped.rows != base.rows || warped.cols != base.cols ||
                 warped.type() != base.type()) {
