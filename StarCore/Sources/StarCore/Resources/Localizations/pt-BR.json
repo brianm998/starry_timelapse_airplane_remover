@@ -353,7 +353,6 @@
   "ui.horizon_floor_mb": "Piso do horizonte (MB):",
   "ui.horizon_mem": "Mem. do horizonte ×:",
   "ui.horizon_settings": "Ajustes do horizonte",
-  "ui.horizon_shift": "Deslocamento do horizonte:",
   "ui.horizon_spike_removal": "Remoção de picos do horizonte:",
   "ui.hough_line_arguments": "Argumentos da linha de Hough",
   "ui.hough_line_matrix_blob_connector": "Conector de manchas por matriz de linhas de Hough",

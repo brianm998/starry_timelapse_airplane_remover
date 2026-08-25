@@ -353,7 +353,6 @@
   "ui.horizon_floor_mb": "지평선 하한(MB):",
   "ui.horizon_mem": "지평선 메모리 ×:",
   "ui.horizon_settings": "지평선 설정",
-  "ui.horizon_shift": "지평선 이동:",
   "ui.horizon_spike_removal": "지평선 돌출부 제거:",
   "ui.hough_line_arguments": "허프 선 인자",
   "ui.hough_line_matrix_blob_connector": "허프 선 행렬 블롭 연결기",

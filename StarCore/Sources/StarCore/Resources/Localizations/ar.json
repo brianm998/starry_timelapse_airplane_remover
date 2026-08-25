@@ -353,7 +353,6 @@
   "ui.horizon_floor_mb": "الحد الأدنى للأفق (م.ب):",
   "ui.horizon_mem": "ذاكرة الأفق ×:",
   "ui.horizon_settings": "إعدادات الأفق",
-  "ui.horizon_shift": "إزاحة الأفق:",
   "ui.horizon_spike_removal": "إزالة نتوءات الأفق:",
   "ui.hough_line_arguments": "معطيات خط Hough",
   "ui.hough_line_matrix_blob_connector": "موصّل البقع بمصفوفة خطوط Hough",

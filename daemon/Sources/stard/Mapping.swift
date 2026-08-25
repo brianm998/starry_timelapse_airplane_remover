@@ -231,7 +231,6 @@ enum Mapping {
         out.cannyMinThreshold = c.cannyMinThreshold
         out.cannyMaxThreshold = c.cannyMaxThreshold
         out.cannyUseL2Gradient = c.cannyUseL2Gradient
-        out.horizonVerticalShiftAmount = Int32(c.horizonVerticalShiftAmount)
         out.allowEarthAlignment = c.allowEarthAlignment
         out.alignmentMaxKeypoints = Int32(c.alignmentMaxKeypoints)
         out.alignmentWriteDebugImages = c.alignmentWriteDebugImages
@@ -270,7 +269,6 @@ enum Mapping {
         if p.hasCannyMinThreshold { c.cannyMinThreshold = p.cannyMinThreshold }
         if p.hasCannyMaxThreshold { c.cannyMaxThreshold = p.cannyMaxThreshold }
         if p.hasCannyUseL2Gradient { c.cannyUseL2Gradient = p.cannyUseL2Gradient }
-        if p.hasHorizonVerticalShiftAmount { c.horizonVerticalShiftAmount = Int(p.horizonVerticalShiftAmount) }
         if p.hasAllowEarthAlignment { c.allowEarthAlignment = p.allowEarthAlignment }
         if p.hasAlignmentMaxKeypoints { c.alignmentMaxKeypoints = Int(p.alignmentMaxKeypoints) }
         if p.hasAlignmentWriteDebugImages { c.alignmentWriteDebugImages = p.alignmentWriteDebugImages }

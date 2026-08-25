@@ -1372,15 +1372,6 @@ public struct Star_V1_Config: @unchecked Sendable {
   /// Clears the value of `cannyUseL2Gradient`. Subsequent reads from it will return its default value.
   public mutating func clearCannyUseL2Gradient() {_uniqueStorage()._cannyUseL2Gradient = nil}
 
-  public var horizonVerticalShiftAmount: Int32 {
-    get {_storage._horizonVerticalShiftAmount ?? 0}
-    set {_uniqueStorage()._horizonVerticalShiftAmount = newValue}
-  }
-  /// Returns true if `horizonVerticalShiftAmount` has been explicitly set.
-  public var hasHorizonVerticalShiftAmount: Bool {_storage._horizonVerticalShiftAmount != nil}
-  /// Clears the value of `horizonVerticalShiftAmount`. Subsequent reads from it will return its default value.
-  public mutating func clearHorizonVerticalShiftAmount() {_uniqueStorage()._horizonVerticalShiftAmount = nil}
-
   public var allowEarthAlignment: Bool {
     get {_storage._allowEarthAlignment ?? false}
     set {_uniqueStorage()._allowEarthAlignment = newValue}
@@ -3546,7 +3537,7 @@ extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{3}horizon_vertical_shift_amount\0\u{3}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{c} \u{1}\u{c}/\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -3584,7 +3575,6 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _cannyMinThreshold: Double? = nil
     var _cannyMaxThreshold: Double? = nil
     var _cannyUseL2Gradient: Bool? = nil
-    var _horizonVerticalShiftAmount: Int32? = nil
     var _allowEarthAlignment: Bool? = nil
     var _alignmentMaxKeypoints: Int32? = nil
     var _alignmentWriteDebugImages: Bool? = nil
@@ -3642,7 +3632,6 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _cannyMinThreshold = source._cannyMinThreshold
       _cannyMaxThreshold = source._cannyMaxThreshold
       _cannyUseL2Gradient = source._cannyUseL2Gradient
-      _horizonVerticalShiftAmount = source._horizonVerticalShiftAmount
       _allowEarthAlignment = source._allowEarthAlignment
       _alignmentMaxKeypoints = source._alignmentMaxKeypoints
       _alignmentWriteDebugImages = source._alignmentWriteDebugImages
@@ -3708,7 +3697,6 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 34: try { try decoder.decodeSingularDoubleField(value: &_storage._cannyMinThreshold) }()
         case 35: try { try decoder.decodeSingularDoubleField(value: &_storage._cannyMaxThreshold) }()
         case 36: try { try decoder.decodeSingularBoolField(value: &_storage._cannyUseL2Gradient) }()
-        case 37: try { try decoder.decodeSingularInt32Field(value: &_storage._horizonVerticalShiftAmount) }()
         case 38: try { try decoder.decodeSingularBoolField(value: &_storage._allowEarthAlignment) }()
         case 39: try { try decoder.decodeSingularInt32Field(value: &_storage._alignmentMaxKeypoints) }()
         case 40: try { try decoder.decodeSingularBoolField(value: &_storage._alignmentWriteDebugImages) }()
@@ -3838,9 +3826,6 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       try { if let v = _storage._cannyUseL2Gradient {
         try visitor.visitSingularBoolField(value: v, fieldNumber: 36)
       } }()
-      try { if let v = _storage._horizonVerticalShiftAmount {
-        try visitor.visitSingularInt32Field(value: v, fieldNumber: 37)
-      } }()
       try { if let v = _storage._allowEarthAlignment {
         try visitor.visitSingularBoolField(value: v, fieldNumber: 38)
       } }()
@@ -3921,7 +3906,6 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._cannyMinThreshold != rhs_storage._cannyMinThreshold {return false}
         if _storage._cannyMaxThreshold != rhs_storage._cannyMaxThreshold {return false}
         if _storage._cannyUseL2Gradient != rhs_storage._cannyUseL2Gradient {return false}
-        if _storage._horizonVerticalShiftAmount != rhs_storage._horizonVerticalShiftAmount {return false}
         if _storage._allowEarthAlignment != rhs_storage._allowEarthAlignment {return false}
         if _storage._alignmentMaxKeypoints != rhs_storage._alignmentMaxKeypoints {return false}
         if _storage._alignmentWriteDebugImages != rhs_storage._alignmentWriteDebugImages {return false}

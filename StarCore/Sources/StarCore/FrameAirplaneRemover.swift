@@ -1457,38 +1457,26 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             }
             
             if let earthImage {
-                if let horizonMask,
-                   let highHorizon = horizonMask.shiftImageUp(
-                     by: config.horizonVerticalShiftAmount
-                   )
-                {
-                    // this merged horizon mask should have been created right above
+                if horizonMask == nil {
+                    // fallback to the non-merged one, which is better than nothing
+                    Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
+                    horizonMask = try await horizonProcessor.loadOrCreateFinalHorizonMask()?.image
+                }
+                if let horizonMask {
+                    // The star-aligned image's sky is smaller than the mask says:
+                    // wherever the merge's warps could land neighbour ground above
+                    // this frame's horizon, these pixels have to come from the earth
+                    // image instead.  Computed from the same homographies the merge
+                    // used — see StarAlignedHorizonMask.
+                    let starAlignedMask =
+                      await alignmentProcessor.starAlignedHorizonMask(from: horizonMask)
                     return try skyImage.apply(
-                      mask: highHorizon,
+                      mask: starAlignedMask,
                       with: earthImage
                     )
                 } else {
-                    // but if not, fallback to the non-merged one, which is better than nothing
-                    Log.w("frame \(frameIndex) falling back to non-merged horizon mask")
-                    if let horizonMask = try await horizonProcessor.loadOrCreateFinalHorizonMask() {
-                        if let highHorizon = horizonMask.image.shiftImageUp(
-                             by: config.horizonVerticalShiftAmount
-                           ) {
-                            return try skyImage.apply(
-                              mask: highHorizon,
-                              with: earthImage
-                            )
-                        } else {
-                            // we can't extend the horizon, just use what we have
-                            return try skyImage.apply(
-                              mask: horizonMask.image,
-                              with: earthImage
-                            )
-                        }
-                    } else {
-                        Log.w("frame \(frameIndex) cannot load or create final horizon mask")
-                        return skyImage
-                    }
+                    Log.w("frame \(frameIndex) cannot load or create final horizon mask")
+                    return skyImage
                 }
             } else {
                 // no earth aligned image, fall back to sky
@@ -1903,17 +1891,25 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             if let earthImage,
                let earth = PixelatedImage(mat: earthImage)
             {
-                if let horizonMask,
-                   let horizon = PixelatedImage(mat: horizonMask)
-                {
-                    imageToSubtract = try skyImage.apply(
-                      mask: horizon,
-                      with: earth
-                    )
-                } else if let mask = try await horizonProcessor.loadOrCreateFinalHorizonMask() {
+                var horizon: PixelatedImage? = nil
+                if let horizonMask {
+                    horizon = PixelatedImage(mat: horizonMask)
+                }
+                if horizon == nil {
                     // fall back to non merged horizon mask if we have to
+                    horizon = try await horizonProcessor.loadOrCreateFinalHorizonMask()?.image
+                }
+                if let horizon {
+                    // Same adjustment the final composite makes: the star-aligned
+                    // image's smeared ground can reach above this mask's horizon, and
+                    // subtracting sky-smear from the original's sharp ridge painted a
+                    // bright false band there for the outlier pass to chase.  Take
+                    // those pixels from the earth image on both sides of the
+                    // subtraction instead — see StarAlignedHorizonMask.
+                    let starAlignedMask =
+                      await alignmentProcessor.starAlignedHorizonMask(from: horizon)
                     imageToSubtract = try skyImage.apply(
-                      mask: mask.image,
+                      mask: starAlignedMask,
                       with: earth
                     )
                 }

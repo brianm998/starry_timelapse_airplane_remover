@@ -353,7 +353,6 @@
   "ui.horizon_floor_mb": "Ufuk alt sınırı (MB):",
   "ui.horizon_mem": "Ufuk belleği ×:",
   "ui.horizon_settings": "Ufuk ayarları",
-  "ui.horizon_shift": "Ufuk kaydırma:",
   "ui.horizon_spike_removal": "Ufuk çıkıntısı kaldırma:",
   "ui.hough_line_arguments": "Hough çizgisi değiştirgeleri",
   "ui.hough_line_matrix_blob_connector": "Hough çizgi matrisi leke bağlayıcı",

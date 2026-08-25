@@ -353,7 +353,6 @@
   "ui.horizon_floor_mb": "Нижня межа горизонту (МБ):",
   "ui.horizon_mem": "Памʼять горизонту ×:",
   "ui.horizon_settings": "Параметри горизонту",
-  "ui.horizon_shift": "Зсув горизонту:",
   "ui.horizon_spike_removal": "Вилучення сплесків горизонту:",
   "ui.hough_line_arguments": "Параметри лінії Гафа",
   "ui.hough_line_matrix_blob_connector": "Зʼєднувач плям за матрицею ліній Гафа",

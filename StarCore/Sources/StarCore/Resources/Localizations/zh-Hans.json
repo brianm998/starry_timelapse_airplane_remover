@@ -353,7 +353,6 @@
   "ui.horizon_floor_mb": "地平线下限（MB）：",
   "ui.horizon_mem": "地平线内存 ×：",
   "ui.horizon_settings": "地平线设置",
-  "ui.horizon_shift": "地平线偏移：",
   "ui.horizon_spike_removal": "地平线尖刺去除：",
   "ui.hough_line_arguments": "霍夫直线参数",
   "ui.hough_line_matrix_blob_connector": "霍夫直线矩阵斑点连接器",

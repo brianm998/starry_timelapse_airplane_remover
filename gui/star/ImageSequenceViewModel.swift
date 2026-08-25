@@ -852,14 +852,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var horizonVerticalShiftAmount: Int {
-        didSet {
-            var realConfig = config.config()
-            realConfig.horizonVerticalShiftAmount = horizonVerticalShiftAmount
-            config.update(realConfig)
-        }
-    }
-
     var allowEarthAlignment: Bool {
         didSet {
             var realConfig = config.config()
@@ -1447,7 +1439,6 @@ public final class ImageSequenceViewModel {
         self.horizonMemoryMultiplier = config.horizonMemoryMultiplier
         self.horizonReservationFloorMB = config.horizonReservationFloorMB
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
-        self.horizonVerticalShiftAmount = config.horizonVerticalShiftAmount
         self.allowEarthAlignment = config.allowEarthAlignment
         self.useReferenceHorizonSmoothing = config.useReferenceHorizonSmoothing
         self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance

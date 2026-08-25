@@ -353,7 +353,6 @@
   "ui.horizon_floor_mb": "Dolny próg horyzontu (MB):",
   "ui.horizon_mem": "Pamięć horyzontu ×:",
   "ui.horizon_settings": "Ustawienia horyzontu",
-  "ui.horizon_shift": "Przesunięcie horyzontu:",
   "ui.horizon_spike_removal": "Usuwanie szpilek horyzontu:",
   "ui.hough_line_arguments": "Parametry linii Hougha",
   "ui.hough_line_matrix_blob_connector": "Łącznik plam na macierzy linii Hougha",
