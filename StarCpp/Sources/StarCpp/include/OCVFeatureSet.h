@@ -18,6 +18,13 @@ int64_t ocv_feature_set_descriptor_rows(OCVFeatureSetRef ref);
 int64_t ocv_feature_set_descriptor_cols(OCVFeatureSetRef ref);
 int     ocv_feature_set_descriptor_type(OCVFeatureSetRef ref);
 
+// Copies keypoint positions as interleaved x,y pairs into `xy`, which holds
+// `capacity` doubles (so capacity/2 points).  Returns the number of points
+// copied.  Positions are in full-resolution image coordinates — findFeatures
+// scales them back up when detection ran on a downscaled copy.
+int64_t ocv_feature_set_keypoint_positions(OCVFeatureSetRef ref,
+                                           double *xy, int64_t capacity);
+
 // --- Persistence ---
 bool ocv_feature_set_write(OCVFeatureSetRef ref, const char *filename,
                            const char **errorMsg);

@@ -126,6 +126,22 @@ public enum PixelatedImageBridge {
         return MatWrapper(ref: r)
     }
 
+    /// How far image `b`'s high-frequency sky content sits from where the same
+    /// content sits in `a`, within the given crop of both — sub-pixel, by phase
+    /// correlation after a large-scale high-pass so stars decide the answer
+    /// rather than sky gradients or clouds.
+    public static func skyShift(
+      from a: MatWrapper, to b: MatWrapper,
+      cropX: Int32, cropY: Int32, cropWidth: Int32, cropHeight: Int32
+    ) -> (dx: Double, dy: Double, response: Double)? {
+        var dx = 0.0, dy = 0.0, response = 0.0
+        guard pib_sky_shift(a.ref, b.ref,
+                            cropX, cropY, cropWidth, cropHeight,
+                            &dx, &dy, &response)
+        else { return nil }
+        return (dx: dx, dy: dy, response: response)
+    }
+
     /// Create binary horizon mask. Pass nil in horizonY to mean "all sky" for that column.
     public static func binaryHorizonMask(width: Int32, height: Int32,
                                           horizonY: [Int?]) -> MatWrapper {
