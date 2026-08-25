@@ -644,6 +644,53 @@ MatWrapperRef pib_warp_horizon_mask(MatWrapperRef mask, MatWrapperRef homography
     return nullptr;
 }
 
+bool pib_sky_shift(MatWrapperRef a, MatWrapperRef b,
+                   int x, int y, int w, int h,
+                   double *dx, double *dy, double *response) {
+    if (!a || !b || !dx || !dy || w < 64 || h < 64) return false;
+    try {
+        const cv::Mat &ma = a->mat, &mb = b->mat;
+        if (ma.size() != mb.size()) return false;
+        if (x < 0 || y < 0 || x + w > ma.cols || y + h > ma.rows) return false;
+        const cv::Rect crop(x, y, w, h);
+
+        // Grayscale float crops.  The high-pass below is what makes this work at
+        // dusk: subtracting a heavily blurred copy removes the sky gradient and the
+        // clouds, whose motion is not the sky's, and leaves the stars — measured on
+        // a dusk sequence this way, the correlation locks onto the sidereal drift
+        // even when the frame is dominated by sunlit cloud.  The blur must run at
+        // full resolution: an earlier version blurred a 1/8-scale copy and resized
+        // it back, and the resampling staircase it subtracted in was static content
+        // — measured pulling the correlation toward zero shift and, on one dusk
+        // gap, reading a 1.5-step interval as 1.9.
+        auto prep = [&](const cv::Mat &src) {
+            cv::Mat gray = src(crop);
+            if (gray.channels() > 1) cv::cvtColor(gray, gray, cv::COLOR_BGR2GRAY);
+            cv::Mat f;
+            gray.convertTo(f, CV_32F);
+            cv::Mat blurred;
+            cv::GaussianBlur(f, blurred, cv::Size(0, 0), 81.0);
+            return cv::Mat(f - blurred);
+        };
+        cv::Mat fa = prep(ma), fb = prep(mb);
+
+        cv::Mat window;
+        cv::createHanningWindow(window, fa.size(), CV_32F);
+        double resp = 0;
+        // phaseCorrelate(fa, fb) reports where fb's content sits relative to fa's —
+        // measured: dots moved by (+3, +5) between the two read back as (+3, +5) —
+        // which is exactly the "b sits this far from a" the caller wants.
+        cv::Point2d shift = cv::phaseCorrelate(fa, fb, window, &resp);
+        *dx = shift.x;
+        *dy = shift.y;
+        if (response) *response = resp;
+        return true;
+    } catch (const cv::Exception &e) {
+        Log_e("pib_sky_shift: cv exception: %s", e.what());
+    }
+    return false;
+}
+
 MatWrapperRef pib_binary_horizon_mask(int width, int height, const int *horizonY) {
     try {
         cv::Mat mask(height, width, CV_8UC1, cv::Scalar(255));

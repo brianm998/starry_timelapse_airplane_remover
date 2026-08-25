@@ -1,4 +1,5 @@
 import Foundation
+import StarCppBridge
 import logging
 
 /*
@@ -72,6 +73,13 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
         let config = await configManager.config()
 
+        // One median per offset assumes every consecutive gap is one nominal step of
+        // time.  Measure the gaps that were not — a ramped interval settling at dusk,
+        // a stalled buffer — so the pairs spanning them get a warp scaled to the time
+        // that actually passed instead of a full step's worth.  Empty on the sequences
+        // the assumption holds for, which keeps the stamped entries bit-identical there.
+        let anomalousGaps = await measureCaptureGapAnomalies(median: median, config: config)
+
         // apply the chosen median homography to all frames
         for frame in frames {
             // only if this frame has the standard number of neighbor frames
@@ -91,16 +99,225 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                   neighborStarHomography:
                     HomographyResultsCodable(
                       for: frame.frameIndex,
-                      with: extrapolateNeighborHomography(
+                      with: cadenceAwareNeighborHomography(
                         from: median,
                         toFrameIndex: frame.frameIndex,
-                        targetNeighborFrameIndices: neighborFrameIndices
+                        targetNeighborFrameIndices: neighborFrameIndices,
+                        anomalousGaps: anomalousGaps
                       )
                     )
                 )
             }
         }
         Log.d("done validating static star alignment")
+    }
+
+    /// The consecutive capture gaps whose measured duration is not one nominal step:
+    /// lower frame index of the gap → its duration in steps.  Empty when every gap
+    /// is nominal, which is the common case and leaves the stamping path untouched.
+    ///
+    /// Keypoint-position matching decides most gaps for free; the ones it cannot —
+    /// twilight frames where the strongest keypoints sit on clouds and fixed-pattern
+    /// sensor content, and any gap genuinely shorter than a third of a step — are
+    /// measured from the original images by phase correlation.
+    private func measureCaptureGapAnomalies(
+      median: HomographyResultsCodable,
+      config: Config
+    ) async -> [Int: Double] {
+        let sorted = frames.sorted { $0.frameIndex < $1.frameIndex }
+        guard sorted.count >= 2 else { return [:] }
+
+        // the model of one nominal step: the median's +1 entry, or the inverse of
+        // its -1 entry when the median frame had no later neighbour
+        var oneStep: [Double]? = nil
+        for entry in median.neighborHomography {
+            guard let h = entry.homography else { continue }
+            let offset = entry.frameIndex - median.frameIndex
+            if offset == 1 { oneStep = h; break }
+            if offset == -1, oneStep == nil { oneStep = CaptureCadence.invert3x3(h) }
+        }
+        guard let oneStep else {
+            Log.w("static cadence check skipped: the median homography set has " +
+                  "no one-step entry to model a nominal gap with")
+            return [:]
+        }
+
+        // Tier 1: keypoint positions, loaded concurrently.  Deliberately not through
+        // keypointCache, which pins entries for the run — the positions are a few
+        // hundred KB where the cached feature sets are megabytes of descriptors.
+        let loadStart = Date()
+        var positions: [Int: [(x: Double, y: Double)]] = [:]
+        await withTaskGroup(of: (Int, [(x: Double, y: Double)])?.self) { taskGroup in
+            var inFlight = 0
+            for frame in sorted {
+                let frameIndex = frame.frameIndex
+                guard let path = config.keypointPath(frameIndex: frameIndex,
+                                                     ofType: .starAligned)
+                else { continue }
+                if inFlight >= 8, let result = await taskGroup.next() {
+                    if let (index, points) = result { positions[index] = points }
+                    inFlight -= 1
+                }
+                taskGroup.addTask {
+                    guard let features = OCVFeatureSet.load(fromFilename: path)
+                    else { return nil }
+                    return (frameIndex, features.keypointPositions())
+                }
+                inFlight += 1
+            }
+            for await result in taskGroup {
+                if let (index, points) = result { positions[index] = points }
+            }
+        }
+
+        Log.i("static cadence check: loaded keypoint positions for " +
+              "\(positions.count) frames in " +
+              "\(String(format: "%.1f", -loadStart.timeIntervalSinceNow))s")
+
+        var spans: [Int: Double] = [:]
+        var undecided: [Int] = []
+        for (frame, next) in zip(sorted, sorted.dropFirst()) {
+            guard next.frameIndex == frame.frameIndex + 1 else { continue }
+            let gap = frame.frameIndex
+            if let earlier = positions[gap],
+               let later = positions[gap + 1],
+               let span = CaptureCadence.trustedSpan(
+                 CaptureCadence.matchedStarSpan(from: earlier,
+                                                to: later,
+                                                oneStep: oneStep))
+            {
+                spans[gap] = span
+            } else {
+                undecided.append(gap)
+            }
+        }
+
+        // Tier 2: the images themselves, for the gaps keypoints could not decide.
+        // Bounded: a sequence with no usable stars anywhere would otherwise decode
+        // every frame twice here for answers it cannot give.
+        let tier2Limit = 64
+        if undecided.count > tier2Limit {
+            Log.w("static cadence check: \(undecided.count) gaps have no keypoint " +
+                  "answer, measuring the first \(tier2Limit) from the images and " +
+                  "treating the rest as nominal")
+        }
+        if !undecided.isEmpty {
+            let framesByIndex = Dictionary(uniqueKeysWithValues:
+                                             sorted.map { ($0.frameIndex, $0) })
+            let crops = await skyCrops(for: sorted[0])
+
+            // originals seen by this pass, kept only as long as a nearby gap can
+            // still want them
+            var images: [Int: PixelatedImage] = [:]
+            func image(_ index: Int) async -> PixelatedImage? {
+                if let held = images[index] { return held }
+                guard let frame = framesByIndex[index] else { return nil }
+                guard let loaded = try? await frame.imageAccessor.load(
+                        frameIndex: index, type: .original, atSize: .original)
+                else { return nil }
+                images[index] = loaded
+                return loaded
+            }
+
+            let toMeasure = undecided.sorted().prefix(tier2Limit)
+            for gap in toMeasure {
+                for held in images.keys where held < gap - 2 {
+                    images.removeValue(forKey: held)
+                }
+                guard let earlier = await image(gap),
+                      let later = await image(gap + 1)
+                else { continue }
+                if let span = CaptureCadence.consensusSpan(
+                     from: earlier, to: later, oneStep: oneStep, crops: crops)
+                {
+                    spans[gap] = span
+                }
+            }
+
+            // Tier 2b: the leftovers, measured over a longer baseline.  Clouds
+            // deform and decorrelate over a few frames while the stars stay
+            // identical, so a pair a few steps apart is more star-dominated than
+            // the gap's own pair — the gap's duration is the baseline's measured
+            // span minus its other, already-decided gaps.  Two baselines have to
+            // agree before the answer is believed.
+            let leftover = toMeasure.filter { spans[$0] == nil }
+            for gap in leftover {
+                for held in images.keys where held < gap - 2 {
+                    images.removeValue(forKey: held)
+                }
+                var estimates: [Double] = []
+                for (a, b) in [(gap - 1, gap + 1), (gap, gap + 2),
+                               (gap - 2, gap + 1), (gap, gap + 3)] {
+                    guard framesByIndex[a] != nil, framesByIndex[b] != nil
+                    else { continue }
+                    var known = 0.0
+                    var allDecided = true
+                    for other in a..<b where other != gap {
+                        if let span = spans[other] {
+                            known += span
+                        } else {
+                            allDecided = false
+                            break
+                        }
+                    }
+                    guard allDecided,
+                          let earlier = await image(a),
+                          let later = await image(b),
+                          let total = CaptureCadence.consensusSpan(
+                            from: earlier, to: later, oneStep: oneStep, crops: crops)
+                    else { continue }
+                    let estimate = total - known
+                    guard estimate > -0.05, estimate < 4.0 else { continue }
+                    estimates.append(max(0.0, estimate))
+                    if estimates.count >= 2 { break }
+                }
+                if estimates.count >= 2, abs(estimates[0] - estimates[1]) <= 0.25 {
+                    spans[gap] = (estimates[0] + estimates[1]) / 2
+                }
+            }
+        }
+
+        let anomalies = spans.filter {
+            abs($0.value - 1.0) > CaptureCadence.anomalyTolerance
+        }
+        if anomalies.isEmpty {
+            Log.i("static cadence check: \(spans.count) of \(sorted.count - 1) " +
+                  "gaps measured, all nominal")
+        } else {
+            for (gap, span) in anomalies.sorted(by: { $0.key < $1.key }) {
+                Log.i("static cadence check: the capture gap between frames " +
+                      "\(gap) and \(gap + 1) measures \(String(format: "%.2f", span)) " +
+                      "of the nominal interval — pairs spanning it get a warp " +
+                      "scaled to match")
+            }
+        }
+        return anomalies
+    }
+
+    /// Squares of sky to phase-correlate, spread across the frame's width and kept
+    /// in the *upper* sky.  Up there twilight leaves the stars alone; the band just
+    /// above the horizon is where the dusk glow and the clouds live, and a crop
+    /// placed there is what let fixed-pattern content win the correlation.  Several
+    /// crops rather than one because `CaptureCadence.consensusSpan` only believes
+    /// answers that agree across them.
+    private func skyCrops(for frame: FrameAirplaneRemover) async -> [(x: Int, y: Int, size: Int)] {
+        let width = frame.width
+        let height = frame.height
+        var skyBottom = Int(Double(height) * 0.45)
+        if let mask = try? await frame.loadOrCreateFinalHorizonMask() {
+            // the smaller of the two bounds is the highest ground anywhere
+            let top = min(mask.horizonTopY, mask.horizonBottomY)
+            if top > height / 4 { skyBottom = top - 200 }
+        }
+        let y = max(0, (skyBottom * 3) / 20)
+        var size = 1600
+        size = min(size, (skyBottom * 9) / 20, width / 3 - 8)
+        size = max(size, 64)
+        return [width / 6, width / 2, (5 * width) / 6].map { centerX in
+            (x: max(0, min(centerX - size / 2, width - size - 1)),
+             y: min(y, height - size - 1),
+             size: size)
+        }
     }
 
 
@@ -885,6 +1102,68 @@ func extrapolateNeighborHomography(
         }
     }
     return ret
+}
+
+/// `extrapolateNeighborHomography`, made aware of capture gaps that are not one
+/// nominal step long.
+///
+/// A neighbor pair whose span contains no anomalous gap gets exactly what
+/// `extrapolateNeighborHomography` gives it — the median's own entry, bit for bit —
+/// so sequences with a steady cadence are untouched.  A pair spanning an anomalous
+/// gap gets the median warp for the *time* the span actually covers: the sum of its
+/// gaps' durations in nominal steps, turned into a matrix by interpolating between
+/// the median's own integer-offset entries (`CaptureCadence.fractionalHomography`).
+/// Those entries carry `.usedExistingHomography`, the same "derived, not measured"
+/// state the extrapolation path uses for offsets it fills from the model.
+public func cadenceAwareNeighborHomography(
+    from src: HomographyResultsCodable,
+    toFrameIndex targetFrameIndex: Int,
+    targetNeighborFrameIndices: [Int],
+    anomalousGaps: [Int: Double]
+) -> [AlignmentWarpInfoCodable] {
+    let nominal = extrapolateNeighborHomography(
+      from: src,
+      toFrameIndex: targetFrameIndex,
+      targetNeighborFrameIndices: targetNeighborFrameIndices
+    )
+    guard !anomalousGaps.isEmpty else { return nominal }
+
+    var anchors: [Int: [Double]] = [:]
+    for entry in src.neighborHomography {
+        guard let h = entry.homography else { continue }
+        anchors[entry.frameIndex - src.frameIndex] = h
+    }
+
+    return nominal.map { entry in
+        let neighborIndex = entry.frameIndex
+        let low = min(targetFrameIndex, neighborIndex)
+        let high = max(targetFrameIndex, neighborIndex)
+        // the gaps this pair spans, keyed by their lower frame
+        var span = 0.0
+        var crossesAnomaly = false
+        for gap in low..<high {
+            if let measured = anomalousGaps[gap] {
+                span += measured
+                crossesAnomaly = true
+            } else {
+                span += 1.0
+            }
+        }
+        guard crossesAnomaly else { return entry }
+        let signedSpan = neighborIndex > targetFrameIndex ? span : -span
+        guard let synthesized = CaptureCadence.fractionalHomography(
+                atSpan: signedSpan,
+                anchors: anchors
+              )
+        else { return entry }
+        return AlignmentWarpInfoCodable(
+          homography: synthesized,
+          // derived from the median and the measured gap, not measured for this
+          // pair itself — the same state the offset model's fills carry
+          alignmentState: .usedExistingHomography,
+          frameIndex: neighborIndex
+        )
+    }
 }
 
 /// A linear model of how a static sequence's neighbor homography varies with frame

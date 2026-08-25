@@ -64,6 +64,16 @@ MatWrapperRef pib_warp_horizon_mask(MatWrapperRef mask, MatWrapperRef homography
 MatWrapperRef pib_binary_horizon_mask(int width, int height,
                                       const int *horizonY);
 
+// Measures how far the high-frequency content of `b` sits from where the same
+// content sits in `a`, within the crop (x, y, w, h) of both — sub-pixel, via
+// phase correlation after a large-scale high-pass that suppresses smooth
+// gradients and clouds so stars decide the answer.  Writes the (dx, dy) of b's
+// content relative to a's and the correlation peak response, and returns true;
+// false when the crop is out of bounds or the images do not match.
+bool pib_sky_shift(MatWrapperRef a, MatWrapperRef b,
+                   int x, int y, int w, int h,
+                   double *dx, double *dy, double *response);
+
 // Dynamic programming horizon tracing
 MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
                                   double cannyMin, double cannyMax,

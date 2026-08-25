@@ -72,6 +72,18 @@ int ocv_feature_set_descriptor_type(OCVFeatureSetRef ref) {
     return ref ? ref->descriptors.type() : 0;
 }
 
+int64_t ocv_feature_set_keypoint_positions(OCVFeatureSetRef ref,
+                                           double *xy, int64_t capacity) {
+    if (!ref || !xy || capacity < 2) return 0;
+    const int64_t want = (int64_t)ref->keypoints.size();
+    const int64_t count = std::min(want, capacity / 2);
+    for (int64_t i = 0; i < count; i++) {
+        xy[i * 2]     = (double)ref->keypoints[(size_t)i].pt.x;
+        xy[i * 2 + 1] = (double)ref->keypoints[(size_t)i].pt.y;
+    }
+    return count;
+}
+
 bool ocv_feature_set_write(OCVFeatureSetRef ref, const char *filename,
                            const char **errorMsg) {
     if (!ref || ref->keypoints.empty() || ref->descriptors.empty()) {
