@@ -1231,6 +1231,21 @@ public final class ImageSequenceViewModel {
     /// with it and nothing has to remember to close it.
     var processingModalShowing: Bool = false
 
+    /// Whether `SequenceProgressModalView` is up over the rest of the window.
+    ///
+    /// Raised by `ViewModel` on the paths that re-open a sequence from a config file it
+    /// wrote earlier, and by nothing else: a sequence being set up for the first time gets
+    /// the startup questionnaire instead, which asks the questions this panel reports the
+    /// answers to.
+    var sequenceProgressModalShowing: Bool = false
+
+    /// How far a previous run had got when this sequence was opened, read off the artifacts
+    /// it left behind.  `nil` until the survey at the end of `setup` finishes.
+    ///
+    /// A snapshot, as the name says: it is not refreshed as a run progresses, because the
+    /// thing that reports a live run is `ProcessingModalView` and it measures operations.
+    var progressWhenOpened: SequenceProgress?
+
     /// What `FrameGraphViewModel`'s counters read when the current run started.
     ///
     /// Those counters are cumulative for as long as a sequence is open, so this is what
@@ -1653,7 +1668,28 @@ public final class ImageSequenceViewModel {
         await doublyLink(frames: frames)
 
         Log.d("done loading image sequence")
-        
+
+        // What a previous run left on disk, surveyed here rather than by whoever puts the
+        // panel up, because this is the one place that certainly holds every frame: the
+        // per-frame assignments above reach `self.frames` through a `Task { @MainActor }`
+        // hop each, so a reader on the main actor cannot know they have all landed.
+        //
+        // Done for every sequence, including one being set up for the first time, where
+        // nothing reads it — the whole survey is a few stats per frame, and a flag threaded
+        // down here to skip it would cost more to keep honest than the work it saves.
+        let (surveyConfig, homographyDatabase) = await MainActor.run {
+            (configManager.config(), configManager.homographyDatabase)
+        }
+        let surveyed = await SequenceProgressSurvey.survey(
+          frames: frames,
+          config: surveyConfig,
+          homographyDatabase: homographyDatabase
+        )
+        Log.i("opened with \(surveyed.framesComplete)/\(surveyed.frameCount) frames already written")
+        // Assigned before this returns, rather than through a queued hop, so that whoever
+        // decides to show the panel cannot get there first and find nothing to draw.
+        await MainActor.run { self.progressWhenOpened = surveyed }
+
         Task { @MainActor in
             self.initialLoadInProgress = false
         }
@@ -1991,6 +2027,41 @@ public final class ImageSequenceViewModel {
         } else {
             preProcessingRenderPromptShowing = true
         }
+    }
+
+    /// The re-open panel's "Finish Processing" button — and its "Start Processing", which
+    /// is the same button over a sequence nothing has been done to yet.
+    ///
+    /// `processAll` rather than a range starting at the first unwritten frame: the frames
+    /// that are not finished are not necessarily a contiguous tail — a user can reprocess
+    /// any frame, and a stopped run leaves holes wherever its workers happened to be — and
+    /// `FrameGraphBuilder` already builds no merge op for a frame whose output is written.
+    /// Running the whole sequence *is* finishing it, by the same route the startup
+    /// questionnaire takes, render prompt preference and all.
+    func finishProcessingOpenedSequence() {
+        sequenceProgressModalShowing = false
+        enterEditMode()
+        processAll()
+    }
+
+    /// The re-open panel's "Render Video" button.
+    func renderVideoForOpenedSequence() {
+        sequenceProgressModalShowing = false
+        enterEditMode()
+        renderVideoSheetShowing = true
+    }
+
+    /// Move to the mode the panel's actions need, on the way out of it.
+    ///
+    /// A sequence re-opened from a config file starts in `.scrub`, and both of the sheets
+    /// those actions raise — the render sheet and the pre-processing render prompt — are
+    /// attached inside `BottomRightView`'s edit-mode branch.  Setting their flag from
+    /// `.scrub` would show nothing at all, and in the processing case would leave a run
+    /// that never starts.  Edit mode is also where the frames, the outlier tools and the
+    /// progress panels are, which is where someone who just asked for either of these
+    /// wants to be next.
+    private func enterEditMode() {
+        interactionMode = .edit
     }
 
     // Called by PreProcessingRenderPromptView once the user has chosen.

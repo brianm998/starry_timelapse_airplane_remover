@@ -271,4 +271,148 @@ final class ReRunSkipTests: FrameHarnessTestCase {
                         "a frame still being processed wants the cache — the release is " +
                         "specifically for frames nothing will revisit")
     }
+
+    // MARK: - the predicates the sequence survey counts with
+
+    /// The two predicates that answer "is this frame finished?" and "has it been
+    /// classified?" — the ones `init` starts a frame's state from, and the ones the gui's
+    /// re-open panel counts across a whole sequence to say how far the last run got.
+    ///
+    /// Existence checks over paths spelled in one place and written in another, so what
+    /// they are worth is entirely whether the two strings still agree.
+    func testTheOutputPredicateFollowsTheFinalImageOnDisk() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, named: "output-predicate")
+        harness = h
+        let accessor = h.frame.imageAccessor
+
+        XCTAssertFalse(h.frame.outputFileExistsOnDisk(),
+                       "nothing has been merged yet")
+
+        // A preview of the finished frame first, because that is the trap: previews are
+        // written for a frame separately from its output, so a predicate that asked only
+        // for "a final image" without saying at what size would call a frame finished on
+        // the strength of a thumbnail.
+        try plant(at: accessor.nameForImage(frameIndex: 0, ofType: .final, atSize: .preview))
+        XCTAssertFalse(h.frame.outputFileExistsOnDisk(),
+                       "a preview is not an output")
+
+        try plant(at: accessor.nameForImage(frameIndex: 0, ofType: .final, atSize: .original))
+        XCTAssertTrue(h.frame.outputFileExistsOnDisk(),
+                      "a written output has to be visible to the predicate, or a re-run " +
+                      "merges every frame it already merged")
+    }
+
+    private func plant(at path: String?) throws {
+        let path = try XCTUnwrap(path)
+        let url = URL(fileURLWithPath: path)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data("planted".utf8).write(to: url)
+    }
+
+    func testTheOutlierPredicateFollowsTheBinaryOnDisk() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, named: "outlier-predicate")
+        harness = h
+        let config = await h.configManager.config()
+
+        XCTAssertFalse(h.frame.outliersExistOnDisk(config: config))
+
+        // The same path `FrameOutlierProcessor.blobBinaryFilename` writes to, reached the
+        // way the processor reaches it rather than by repeating the string here.
+        let path = await h.frame.blobBinaryFilename
+        try FileManager.default.createDirectory(
+          at: URL(fileURLWithPath: path).deletingLastPathComponent(),
+          withIntermediateDirectories: true)
+        try Data("planted".utf8).write(to: URL(fileURLWithPath: path))
+
+        XCTAssertTrue(h.frame.outliersExistOnDisk(config: config),
+                      "the predicate and the outlier writer have to resolve the same path")
+    }
+}
+
+/// `HomographyDatabase.storedFrameIndices` is how the gui asks how far the alignment
+/// stages got without reading any of what they produced.  A bound-parameter query that
+/// quietly matches nothing looks exactly like a sequence that has never been aligned, so
+/// what these check is that it distinguishes the two.
+final class HomographyDatabaseSurveyTests: XCTestCase {
+
+    private var tempDir: URL!
+
+    override func setUpWithError() throws {
+        tempDir = URL(fileURLWithPath: NSTemporaryDirectory())
+          .appendingPathComponent("star-homography-survey-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        if let tempDir { try? FileManager.default.removeItem(at: tempDir) }
+    }
+
+    private func results(for frameIndex: Int) -> HomographyResultsCodable {
+        HomographyResultsCodable(for: frameIndex, with: [])
+    }
+
+    /// Asking must not create the database.  This is asked when a sequence is *opened*,
+    /// and `ensureOpen` opens for writing — so without the guard, opening a sequence
+    /// would leave a file behind in its temp directory.
+    func testAskingASequenceThatHasNeverAlignedLeavesNoDatabase() async throws {
+        let db = HomographyDatabase(tempOutputPath: tempDir.path)
+
+        let indices = try await db.storedFrameIndices(type: .star)
+        let dbPath = await db.dbPath
+
+        XCTAssertTrue(indices.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dbPath),
+                       "a survey of a sequence with no alignment work must not write one")
+    }
+
+    func testEveryStoredFrameIsReported() async throws {
+        let db = HomographyDatabase(tempOutputPath: tempDir.path)
+        for frameIndex in [0, 3, 17] {
+            try await db.write(frameIndex: frameIndex, type: .star, results: results(for: frameIndex))
+        }
+
+        let indices = try await db.storedFrameIndices(type: .star)
+
+        XCTAssertEqual(indices, [0, 3, 17])
+    }
+
+    /// Star and earth share one table and are told apart by a bound text column.  A query
+    /// that dropped the binding would report earth's frames as star's, which on a
+    /// sky-only sequence is the difference between "not aligned" and "fully aligned".
+    func testTheTwoAlignmentTypesAreCountedSeparately() async throws {
+        let db = HomographyDatabase(tempOutputPath: tempDir.path)
+        try await db.write(frameIndex: 1, type: .star, results: results(for: 1))
+        try await db.write(frameIndex: 2, type: .earth, results: results(for: 2))
+        try await db.write(frameIndex: 3, type: .earth, results: results(for: 3))
+
+        let star = try await db.storedFrameIndices(type: .star)
+        let earth = try await db.storedFrameIndices(type: .earth)
+
+        XCTAssertEqual(star, [1])
+        XCTAssertEqual(earth, [2, 3])
+    }
+
+    /// A frame written twice is one frame, not two — the table's primary key says so, and
+    /// a survey that double counted could report more finished frames than the sequence has.
+    func testAFrameRewrittenIsStillOneFrame() async throws {
+        let db = HomographyDatabase(tempOutputPath: tempDir.path)
+        try await db.write(frameIndex: 5, type: .star, results: results(for: 5))
+        try await db.write(frameIndex: 5, type: .star, results: results(for: 5))
+
+        let indices = try await db.storedFrameIndices(type: .star)
+
+        XCTAssertEqual(indices, [5])
+    }
+
+    func testADeletedFrameStopsBeingReported() async throws {
+        let db = HomographyDatabase(tempOutputPath: tempDir.path)
+        try await db.write(frameIndex: 4, type: .star, results: results(for: 4))
+        try await db.write(frameIndex: 6, type: .star, results: results(for: 6))
+
+        try await db.delete(frameIndex: 4, type: .star)
+
+        let indices = try await db.storedFrameIndices(type: .star)
+        XCTAssertEqual(indices, [6])
+    }
 }

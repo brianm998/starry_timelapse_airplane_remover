@@ -105,6 +105,17 @@ struct ImageSequenceView: View {
                   ProcessingModalView()
               }
           }
+        // Also an overlay, for the same reason — and because the sheets are attached
+        // inside `BottomRightView`'s edit-mode branch, which a sequence re-opened from a
+        // config file is not in.  Stood down the moment a run starts, so the panel cannot
+        // still be sitting over the frames describing a state its own button changed.
+          .overlay {
+              if viewModel.sequenceProgressModalShowing,
+                 !viewModel.isProcessingFrames
+              {
+                  SequenceProgressModalView()
+              }
+          }
           .alert(localized("ui.error"), isPresented: $viewModel.showErrorAlert) {
               Button(localized("ui.ok")) {}
           } message: {

@@ -232,6 +232,28 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         return FileManager.default.fileExists(atPath: path)
     }
 
+    /// True when this frame's classified outlier set is already on disk.
+    ///
+    /// The same file `init` looks for to decide that a frame is `.userModified` — see
+    /// below — spelled from the config rather than from `outlierProcessor`, whose
+    /// `outliersDirname` is `async` and would make this an actor hop per frame.
+    nonisolated public func outliersExistOnDisk(config: Config) -> Bool {
+        FileManager.default.fileExists(
+          atPath: "\(config.outlierOutputDirname)/\(frameIndex)/\(BlobBinarySaver.outlierBinaryFilename)"
+        )
+    }
+
+    /// True when this frame's finished output image is already on disk.
+    ///
+    /// The test `init` makes to start a frame off `.complete`, and the one `MergeOp` skips
+    /// on.  Existence only, like the rest of these: what makes a written output *stale* is
+    /// a user edit or a reprocess, and both of those delete it.
+    nonisolated public func outputFileExistsOnDisk() -> Bool {
+        imageAccessor.imageExists(frameIndex: frameIndex,
+                                  ofType: .final,
+                                  atSize: .original)
+    }
+
     // populated by pruning
 
     public func getOutlierGroups() async -> OutlierGroups? { await outlierProcessor.getOutlierGroups() }
@@ -412,12 +434,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         )
         //Log.d("frame \(frameIndex) init mid")
         
-        if imageAccessor.imageExists(frameIndex: frameIndex,
-                                     ofType: .final,
-                                     atSize: .original)
-        {
+        // Through the predicates above rather than spelled out again here, so that what a
+        // frame's state says on load and what a survey of the sequence counts cannot drift
+        // apart.  Also drops an actor hop per frame: `outlierProcessor.outliersDirname` is
+        // `async`, and this is on the path every frame of every sequence takes.
+        if outputFileExistsOnDisk() {
             self.state = .complete
-        } else if FileManager.default.fileExists(atPath: "\(await outlierProcessor.outliersDirname)/\(BlobBinarySaver.outlierBinaryFilename)") {
+        } else if outliersExistOnDisk(config: initialConfig) {
             // if we have outliers, mark it as userModified (classified),
             // even if some are not classified
             self.state = .userModified
