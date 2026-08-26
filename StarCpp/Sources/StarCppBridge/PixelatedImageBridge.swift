@@ -126,6 +126,16 @@ public enum PixelatedImageBridge {
         return MatWrapper(ref: r)
     }
 
+    /// Blend `image1` over `image2` by an 8-bit alpha mask: 255 takes image1,
+    /// 0 takes image2, values between mix linearly — the soft counterpart of
+    /// `combineImage`, whose hard threshold turns any brightness mismatch
+    /// between the layers into a visible line along the mask boundary.
+    public static func blendImage(_ image1: MatWrapper, mask: MatWrapper,
+                                   background image2: MatWrapper) -> MatWrapper? {
+        guard let r = pib_blend_image(image1.ref, mask.ref, image2.ref) else { return nil }
+        return MatWrapper(ref: r)
+    }
+
     /// How far image `b`'s high-frequency sky content sits from where the same
     /// content sits in `a`, within the given crop of both — sub-pixel, by phase
     /// correlation after a large-scale high-pass so stars decide the answer

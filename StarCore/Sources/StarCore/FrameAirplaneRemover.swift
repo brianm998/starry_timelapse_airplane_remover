@@ -177,6 +177,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     nonisolated public let componentsPerPixel: Int
     nonisolated public let frameIndex: Int
 
+    /// How far the sky-over-earth composite blends across the horizon mask's
+    /// boundary instead of switching at it.  The ramp climbs from the boundary
+    /// into sky that both layers are known to have clean, so its only effect is
+    /// to spread a brightness mismatch between them — measured at ~5% during
+    /// twilight, where a hard edge drew it as a second horizon — across enough
+    /// pixels to be invisible.  Where the layers agree, blending changes nothing.
+    static let horizonFeatherPixels = 24
+
     // MARK: - "Already on disk" predicates
     //
     // Cheap answers to "has this stage already run for this frame?", for
@@ -1470,6 +1478,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // used — see StarAlignedHorizonMask.
                     let starAlignedMask =
                       await alignmentProcessor.starAlignedHorizonMask(from: horizonMask)
+                    // Feathered rather than switched: the two layers are medians
+                    // over different time windows, and at twilight that is a
+                    // measured ~5% brightness step which a hard boundary draws as
+                    // a second horizon.  The ramp climbs into sky both layers
+                    // agree is clean, so blending there can introduce nothing.
+                    if let feathered = starAlignedMask.raiseMaskBy(
+                         Self.horizonFeatherPixels),
+                       let blended = try? skyImage.blend(
+                         mask: feathered,
+                         with: earthImage
+                       )
+                    {
+                        return blended
+                    }
+                    Log.w("frame \(frameIndex) could not feather the horizon " +
+                          "composite, falling back to the hard mask edge")
                     return try skyImage.apply(
                       mask: starAlignedMask,
                       with: earthImage
@@ -1905,13 +1929,25 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // subtracting sky-smear from the original's sharp ridge painted a
                     // bright false band there for the outlier pass to chase.  Take
                     // those pixels from the earth image on both sides of the
-                    // subtraction instead — see StarAlignedHorizonMask.
+                    // subtraction instead — see StarAlignedHorizonMask — feathered
+                    // for the same reason the composite is: a hard switch between
+                    // layers whose brightness differs subtracts as a false edge.
                     let starAlignedMask =
                       await alignmentProcessor.starAlignedHorizonMask(from: horizon)
-                    imageToSubtract = try skyImage.apply(
-                      mask: starAlignedMask,
-                      with: earth
-                    )
+                    if let feathered = starAlignedMask.raiseMaskBy(
+                         FrameAirplaneRemover.horizonFeatherPixels),
+                       let blended = try? skyImage.blend(
+                         mask: feathered,
+                         with: earth
+                       )
+                    {
+                        imageToSubtract = blended
+                    } else {
+                        imageToSubtract = try skyImage.apply(
+                          mask: starAlignedMask,
+                          with: earth
+                        )
+                    }
                 }
             } else {
                 // with no earth image to use, fall back to the sky
