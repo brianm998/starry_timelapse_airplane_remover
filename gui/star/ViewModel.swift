@@ -321,6 +321,14 @@ public final class ViewModel {
         dismissBanner()
     }
 
+    /// Open a sequence from a config file star wrote on an earlier run — Load Config, Open
+    /// Recent, or a dropped `.json`.
+    ///
+    /// This and `startup(withConfig:)` are the two ways a sequence is *re*-opened, and both
+    /// raise the progress panel: the config already carries the answers the startup
+    /// questionnaire asks for, so what there is left to tell the user is how far the last
+    /// run got and what to do about it.  `startup(withNewImageSequence:)` deliberately does
+    /// not — it builds a fresh config, so it has those questions to ask instead.
     func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = jsonConfigFilename
@@ -348,11 +356,14 @@ public final class ViewModel {
         }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.applyUserPreferences()
+        imageSequenceViewModel.sequenceProgressModalShowing = true
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         self.userPreferences.justOpened(filename: jsonConfigFilename)
     }
 
+    /// Open a sequence from a config file that has already been parsed.  See
+    /// `startup(withConfigFile:)` for why this raises the progress panel too.
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = config.config().imageSequenceDirname
@@ -376,6 +387,7 @@ public final class ViewModel {
         }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.applyUserPreferences()
+        imageSequenceViewModel.sequenceProgressModalShowing = true
         loadingImageSequenceFilename = nil
         isLoadingImageSequence = false
         // just opened handled in InitialView where we know the full path

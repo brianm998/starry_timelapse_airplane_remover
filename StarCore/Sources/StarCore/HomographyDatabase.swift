@@ -72,6 +72,33 @@ public actor HomographyDatabase {
         return try JSONDecoder().decode(HomographyResultsCodable.self, from: data)
     }
 
+    /// Which frames already have a stored homography of `type`.
+    ///
+    /// For surveying how far a previous run got without reading any of it: one query for
+    /// the whole sequence rather than a `read` per frame, and no blob decode — the frame
+    /// numbers are the answer, and `HomographyResultsCodable` is the expensive part.
+    ///
+    /// Answers `[]` for a sequence that has never stored one, rather than creating the
+    /// database to find that out.  `ensureOpen` opens for writing and creates the table,
+    /// which is right for every other caller here and wrong for this one: this is asked
+    /// when a sequence is *opened*, and opening a sequence should leave nothing behind.
+    public func storedFrameIndices(type: HomographyType) throws -> Set<Int> {
+        guard db != nil || FileManager.default.fileExists(atPath: dbPath) else { return [] }
+        try ensureOpen()
+        let sql = "SELECT frame_index FROM homographies WHERE type = ?"
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw "HomographyDatabase: prepare failed for storedFrameIndices"
+        }
+        sqlite3_bind_text(stmt, 1, type.rawValue, -1, SQLITE_TRANSIENT_PTR)
+        var indices: Set<Int> = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            indices.insert(Int(sqlite3_column_int(stmt, 0)))
+        }
+        return indices
+    }
+
     public func delete(frameIndex: Int, type: HomographyType) throws {
         try ensureOpen()
         let sql = "DELETE FROM homographies WHERE frame_index = ? AND type = ?"
