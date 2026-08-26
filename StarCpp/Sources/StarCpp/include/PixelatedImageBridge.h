@@ -64,6 +64,13 @@ MatWrapperRef pib_warp_horizon_mask(MatWrapperRef mask, MatWrapperRef homography
 MatWrapperRef pib_binary_horizon_mask(int width, int height,
                                       const int *horizonY);
 
+// Blends image1 over image2 by the 8-bit alpha mask: 255 takes image1, 0 takes
+// image2, values between mix linearly.  The soft counterpart of
+// pib_combine_image, whose hard threshold turns any brightness mismatch between
+// the two layers into a visible line along the mask boundary.
+MatWrapperRef pib_blend_image(MatWrapperRef image1, MatWrapperRef mask,
+                              MatWrapperRef image2);
+
 // Measures how far the high-frequency content of `b` sits from where the same
 // content sits in `a`, within the crop (x, y, w, h) of both — sub-pixel, via
 // phase correlation after a large-scale high-pass that suppresses smooth

@@ -644,6 +644,68 @@ MatWrapperRef pib_warp_horizon_mask(MatWrapperRef mask, MatWrapperRef homography
     return nullptr;
 }
 
+MatWrapperRef pib_blend_image(MatWrapperRef image1, MatWrapperRef mask,
+                              MatWrapperRef image2) {
+    if (!image1 || !mask || !image2) return nullptr;
+    try {
+        const cv::Mat &mat1 = image1->mat;
+        const cv::Mat &mat2 = image2->mat;
+        if (mat1.size() != mat2.size() || mat1.type() != mat2.type()) {
+            Log_e("pib_blend_image: images must match in size and type");
+            return nullptr;
+        }
+        cv::Mat alpha = mask->mat;
+        if (alpha.channels() > 1) cv::cvtColor(alpha, alpha, cv::COLOR_BGR2GRAY);
+        if (alpha.depth() != CV_8U) alpha = ensure8U(alpha);
+        if (alpha.size() != mat1.size()) {
+            Log_e("pib_blend_image: mask must match the images' size");
+            return nullptr;
+        }
+
+        // Only the rows holding a partial alpha need arithmetic — for a feathered
+        // horizon that is a band a few dozen pixels tall, not the frame.  Full-frame
+        // float blending would allocate several frame-sized temporaries for rows
+        // that are a plain copy of one side or the other.
+        cv::Mat partial;
+        cv::inRange(alpha, 1, 254, partial);
+        cv::Mat rowHasPartial;
+        cv::reduce(partial, rowHasPartial, 1, cv::REDUCE_MAX, CV_8U);
+        int bandTop = -1, bandBottom = -1;
+        for (int row = 0; row < rowHasPartial.rows; row++) {
+            if (rowHasPartial.at<uchar>(row, 0)) {
+                if (bandTop < 0) bandTop = row;
+                bandBottom = row;
+            }
+        }
+
+        // fully binary rows: whichever side the alpha says, copied not computed
+        cv::Mat output(mat1.size(), mat1.type());
+        mat2.copyTo(output);
+        cv::Mat binaryHigh;
+        cv::compare(alpha, 127, binaryHigh, cv::CMP_GT);
+        mat1.copyTo(output, binaryHigh);
+        if (bandTop < 0) return wrap(output);   // no partial alpha anywhere
+
+        const cv::Range rows(bandTop, bandBottom + 1);
+        cv::Mat w1;
+        alpha.rowRange(rows).convertTo(w1, CV_32F, 1.0 / 255.0);
+        cv::Mat w1c;
+        std::vector<cv::Mat> channels((size_t)mat1.channels(), w1);
+        cv::merge(channels, w1c);
+        cv::Mat w2c = cv::Scalar::all(1.0) - w1c;
+
+        cv::Mat f1, f2;
+        mat1.rowRange(rows).convertTo(f1, CV_32F);
+        mat2.rowRange(rows).convertTo(f2, CV_32F);
+        cv::Mat blended = f1.mul(w1c) + f2.mul(w2c);
+        blended.convertTo(output.rowRange(rows), mat1.type());
+        return wrap(output);
+    } catch (const cv::Exception &e) {
+        Log_e("pib_blend_image: cv exception: %s", e.what());
+    }
+    return nullptr;
+}
+
 bool pib_sky_shift(MatWrapperRef a, MatWrapperRef b,
                    int x, int y, int w, int h,
                    double *dx, double *dy, double *response) {

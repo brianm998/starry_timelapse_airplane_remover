@@ -1140,6 +1140,26 @@ extension PixelatedImage {
         throw "cannot darken darks"
     }
 
+    /// `apply(mask:with:)` with a soft edge: the mask is read as an 8-bit alpha,
+    /// so a gradient mask blends this image into the background across its ramp
+    /// instead of switching at a threshold.  A hard switch turns any brightness
+    /// mismatch between the two layers into a line along the boundary — which is
+    /// what a twilight composite showed, where the star-merged sky and the earth
+    /// image's sky are medians over different time windows.
+    public func blend(
+      mask: PixelatedImage,
+      with background: PixelatedImage
+    ) throws -> PixelatedImage {
+        guard let blendedMat = PixelatedImageBridge.blendImage(
+                self.mat,
+                mask: mask.mat,
+                background: background.mat
+              )
+        else { throw "blendImage returned nil" }
+        if let ret = PixelatedImage(mat: blendedMat) { return ret }
+        throw "unable to blend masked images"
+    }
+
     public func apply(
       mask: PixelatedImage,
       with background: PixelatedImage
