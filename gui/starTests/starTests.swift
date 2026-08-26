@@ -100,10 +100,14 @@ final class SettingsWiringTests: XCTestCase {
 
     /// Guard against a vacuous pass: if the patterns above stop matching, every other test
     /// here would trivially succeed over an empty set.
+    ///
+    /// The floor is deliberately far below the real count (40 at the time of writing) — it is
+    /// there to catch the parse breaking, not to inventory the settings.  A snug floor just
+    /// fails the next time a setting is legitimately retired, which it has already done twice.
     func testTheParseFindsTheSettings() throws {
         let src = try source("star/ImageSequenceViewModel.swift")
         let writers = configWriters(in: src)
-        XCTAssertGreaterThan(writers.count, 40,
+        XCTAssertGreaterThan(writers.count, 30,
                              "only found \(writers.count) config-backed properties; the "
                              + "patterns have probably stopped matching the source")
         XCTAssertFalse(configLoaders(in: src).isEmpty)
