@@ -1354,7 +1354,6 @@ public struct Config: Codable, Sendable {
     //        stop the merge emitting black borders on the first and last frames
     //        speed up re-running a sequence
     //        stop the low-memory alert crying wolf and taking the window with i    // 0.11.5 add horizon adjustment via homography
-t
     
     public var starVersion = Config.latestVersion
 
