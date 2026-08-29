@@ -141,6 +141,43 @@ static inline T clamp_cast_int(int v) {
 static const int kMergeLanes = 8;
 static const int kMergeMaxBlockSources = 64;
 
+// How many of a merge's sources have no sample at a given pixel — one byte per
+// pixel, shared by every channel, or nothing at all when every source covers the
+// whole frame.
+//
+// This is what lets the kernel tell "the warp did not reach here" from "this pixel
+// is black", and it is deliberately a count rather than a mask per source.  A
+// source with no sample reads 0, the smallest value the type holds, so all of them
+// land in the leading run of zeros once a pixel's samples are sorted.  Which of
+// those zeros came from which source cannot matter to a kernel that only ever
+// looks at values, so the count is everything: skip that many and what is left is
+// exactly the sources that had something to say, real zeros included.
+//
+// One plane of counts rather than one mask per source is not a small saving at
+// these sizes — 40MB against 683MB for a 17-source 42MP merge — and it stays
+// resident through a streaming merge instead of being spilled and read back
+// alongside every source.
+struct CoverageMisses {
+    const uint8_t *data = nullptr;
+    size_t stride = 0;
+
+    CoverageMisses() = default;
+    explicit CoverageMisses(const cv::Mat &m)
+      : data(m.empty() ? nullptr : m.ptr<uint8_t>()),
+        stride(m.empty() ? 0 : m.step) {}
+
+    // The same plane seen from row `y`, for a kernel running on a band of rows.
+    CoverageMisses fromRow(int y) const {
+        if (!data) return CoverageMisses();
+        CoverageMisses ret;
+        ret.data = data + (size_t)y * stride;
+        ret.stride = stride;
+        return ret;
+    }
+
+    const uint8_t *row(int y) const { return data ? data + (size_t)y * stride : nullptr; }
+};
+
 // Parallel over bands of rows, and within a row over blocks of kMergeLanes
 // pixel-channels.
 //
@@ -197,7 +234,8 @@ static const int kMergeMaxBlockSources = 64;
 // parallelising this loop are one change and not two.
 template <typename T>
 static void medianMergeTyped(cv::Mat &output, const std::vector<cv::Mat>& mats,
-                             double k, bool includeAll, int rows, int cols, int ch) {
+                             double k, bool includeAll, int rows, int cols, int ch,
+                             CoverageMisses misses = CoverageMisses()) {
     const int n = (int)mats.size();
     if (n <= 0) return;
 
@@ -215,6 +253,10 @@ static void medianMergeTyped(cv::Mat &output, const std::vector<cv::Mat>& mats,
         for (int y = band.start; y < band.end; ++y) {
             for (int i = 0; i < n; ++i) rowPtrs[i] = mats[i].ptr<T>(y);
             T* outRow = output.ptr<T>(y);
+            // How many sources have no sample at each pixel of this row, or null
+            // when they all cover it.  One entry per pixel, not per pixel-channel:
+            // a warp either reached a pixel or it did not, whatever its colour.
+            const uint8_t *missRow = misses.row(y);
 
             int xc = 0;
 
@@ -246,14 +288,15 @@ static void medianMergeTyped(cv::Mat &output, const std::vector<cv::Mat>& mats,
                         continue;
                     }
 
-                    // Leading zeros are "no source data here" — see the scalar path
-                    // below for what happens when they are counted as observations.
+                    // The leading `misses` entries are the sources with no sample
+                    // here — see the scalar path below.  Every one of them is a
+                    // zero, so they are exactly the front of the sorted block; any
+                    // zero past them is a pixel that really is black and counts.
                     int minIndex[kMergeLanes], first[kMergeLanes];
                     for (int l = 0; l < kMergeLanes; ++l) {
-                        int zeros = 0;
-                        for (int i = 0; i < n; ++i) zeros += blk[i][l] == 0 ? 1 : 0;
-                        minIndex[l] = zeros;
-                        first[l] = zeros < n ? zeros : n - 1;
+                        const int miss = missRow ? (int)missRow[(xc + l) / ch] : 0;
+                        minIndex[l] = miss < n ? miss : n;
+                        first[l] = miss < n ? miss : n - 1;
                     }
 
                     // Welford, per lane, from each lane's own `first`.  A lane that is
@@ -307,11 +350,11 @@ static void medianMergeTyped(cv::Mat &output, const std::vector<cv::Mat>& mats,
                 for (int i = 0; i < n; ++i) vals[i] = rowPtrs[i][xc];
                 small_sort(vals.data(), n);
 
-                // vals is sorted ascending, so any zeros are leading.  A zero means
-                // "no source data here": warpInto zeroes everything its warp does not
-                // cover, so near the frame edges a neighbour simply has no sample to
-                // offer.  Those slots are not observations and must stay out of both
-                // the statistics and the selection below.
+                // How many sources have nothing to offer at this pixel.  warpInto
+                // zeroes everything its warp does not cover, so near the frame edges
+                // a neighbour simply has no sample here; those slots are not
+                // observations and must stay out of both the statistics and the
+                // selection below.
                 //
                 // Leaving them in the statistics is what put a black border down one
                 // side of the first and last few frames of a sequence.  Those frames
@@ -324,9 +367,26 @@ static void medianMergeTyped(cv::Mat &output, const std::vector<cv::Mat>& mats,
                 // base frame, had a perfectly good value.  Measured at the default
                 // pixelThreshold of 1.2 and 8 aligned neighbours, that happened
                 // wherever 3 or fewer of the 9 sources had data.
+                //
+                // This count is the answer to that, and counting the zeros here
+                // instead was the wrong one.  A zero is not evidence of anything: a
+                // black-clipped foreground reads exactly 0 in 99.8% of its
+                // pixel-channels, so every real observation was discarded as
+                // no-data and the merge returned the median of whatever light had
+                // crossed the frame — printing cars into a static earth merge
+                // brighter than any single frame had them, one per source frame they
+                // appeared in.  Coverage is a property of the warp, not of the
+                // brightness it lands, so it is carried alongside the sources rather
+                // than inferred from them; see CoverageMisses.
+                //
+                // vals is sorted ascending and every no-data slot is a zero, so those
+                // slots are exactly the first `minIndex` entries.  A zero after them
+                // is a pixel that really is black, and is an observation like any
+                // other.
                 int minIndex = 0;
-                if (!includeAll) {
-                    while (minIndex < n && vals[minIndex] == 0) ++minIndex;
+                if (!includeAll && missRow) {
+                    const int miss = (int)missRow[xc / ch];
+                    minIndex = miss < n ? miss : n;
                 }
                 // all zero: nothing covered this pixel, so 0 is the honest answer
                 const int first = (minIndex < n) ? minIndex : n - 1;
@@ -371,7 +431,8 @@ static void medianMergeTyped(cv::Mat &output, const std::vector<cv::Mat>& mats,
 }
 
 static MatWrapperRef medianImageFromMats(const std::vector<cv::Mat>& mats,
-                                          double k, bool includeAll) {
+                                          double k, bool includeAll,
+                                          const cv::Mat &misses = cv::Mat()) {
     if (mats.empty()) return wrap(cv::Mat());
 
     const cv::Mat& first = mats[0];
@@ -382,9 +443,19 @@ static MatWrapperRef medianImageFromMats(const std::vector<cv::Mat>& mats,
             return wrap(cv::Mat());
     }
 
+    // A plane that does not describe these sources is worse than none: it would
+    // skip real samples at every pixel.  Refuse it rather than merge with it.
+    if (!misses.empty() &&
+        (misses.rows != rows || misses.cols != cols || misses.type() != CV_8UC1))
+    {
+        Log_e("median merge: coverage plane does not match the source geometry");
+        return wrap(cv::Mat());
+    }
+
     cv::Mat output(rows, cols, first.type());
-    if (depth == CV_8U) medianMergeTyped<uchar>(output, mats, k, includeAll, rows, cols, ch);
-    else if (depth == CV_16U) medianMergeTyped<uint16_t>(output, mats, k, includeAll, rows, cols, ch);
+    const CoverageMisses cover{misses};
+    if (depth == CV_8U) medianMergeTyped<uchar>(output, mats, k, includeAll, rows, cols, ch, cover);
+    else if (depth == CV_16U) medianMergeTyped<uint16_t>(output, mats, k, includeAll, rows, cols, ch, cover);
     else return wrap(cv::Mat());
 
     return wrap(output);
@@ -606,10 +677,23 @@ public:
     // residentMats stay in RAM (there is at most one, the base image) and come
     // first, in the order given, then each spilled source in the order it was
     // added — the same order the all-resident path would see.
+    //
+    // `misses` is not banded with the sources: it stays whole and resident for the
+    // life of the merge, and each band takes a view of its own rows.  At one byte a
+    // pixel that is 40MB against the gigabytes streaming exists to avoid, and it is
+    // the reason coverage is carried as a count rather than a mask per source —
+    // masks would have to be spilled and read back with every band.
     MatWrapperRef merge(const std::vector<cv::Mat> &residentMats,
-                        double k, bool includeAll) {
+                        double k, bool includeAll,
+                        const cv::Mat &misses = cv::Mat()) {
         if (rows_ <= 0 || cols_ <= 0) return wrap(cv::Mat());
         if (residentMats.empty() && files_.empty()) return wrap(cv::Mat());
+        if (!misses.empty() &&
+            (misses.rows != rows_ || misses.cols != cols_ || misses.type() != CV_8UC1))
+        {
+            Log_e("median merge: coverage plane does not match the source geometry");
+            return wrap(cv::Mat());
+        }
 
         const int depth = CV_MAT_DEPTH(type_);
         if (depth != CV_8U && depth != CV_16U) return wrap(cv::Mat());
@@ -621,6 +705,7 @@ public:
         for (auto &b : bandBufs) b.resize(rowBytes_ * (size_t)band);
 
         cv::Mat output(rows_, cols_, type_);
+        const CoverageMisses cover{misses};
 
         std::vector<cv::Mat> bandMats;
         bandMats.reserve(residentMats.size() + files_.size());
@@ -639,8 +724,9 @@ public:
             }
 
             cv::Mat outBand = output.rowRange(y0, y0 + n);
-            if (depth == CV_8U) medianMergeTyped<uchar>(outBand, bandMats, k, includeAll, n, cols_, ch);
-            else                medianMergeTyped<uint16_t>(outBand, bandMats, k, includeAll, n, cols_, ch);
+            const CoverageMisses bandCover = cover.fromRow(y0);
+            if (depth == CV_8U) medianMergeTyped<uchar>(outBand, bandMats, k, includeAll, n, cols_, ch, bandCover);
+            else                medianMergeTyped<uint16_t>(outBand, bandMats, k, includeAll, n, cols_, ch, bandCover);
         }
 
         Log_d("median merge: streamed %zu sources in bands of %d rows",
@@ -665,7 +751,8 @@ private:
 static MatWrapperRef medianImageStreaming(const std::vector<cv::Mat> &residentMats,
                                           const char **filenames, int fileCount,
                                           double k, bool includeAll,
-                                          const char *scratchDir)
+                                          const char *scratchDir,
+                                          const cv::Mat &misses = cv::Mat())
 {
     MergeSpiller spiller(scratchDir);
     if (!residentMats.empty()) spiller.expect(residentMats[0]);
@@ -686,7 +773,7 @@ static MatWrapperRef medianImageStreaming(const std::vector<cv::Mat> &residentMa
         if (!spilled) return wrap(cv::Mat());
     }
 
-    return spiller.merge(residentMats, k, includeAll);
+    return spiller.merge(residentMats, k, includeAll, misses);
 }
 
 // --- Gradient masks ---
@@ -811,6 +898,18 @@ MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
     return nullptr;
 }
 
+// No coverage plane goes to the kernel from here, and that is the whole of what
+// this entry point has to say about it: nothing is warped on the way in, so every
+// source covers every pixel and there are no holes to describe.
+//
+// It used to say nothing and mean something else.  The kernel read coverage off the
+// pixels — a zero was a hole — and this merge fed it originals, whose blacks are
+// zeros.  A static earth merge of a black-clipped foreground (99.8% of its
+// pixel-channels at exactly 0 on the 08_15_2026 a7riii sequence) therefore threw
+// away every real sample it had and returned the median of the only "observations"
+// left, which were car headlights: frame 1197's ground came back saturated where
+// the frame itself recorded 581 of 65535, and each of the six frames a car crossed
+// was painted into the twenty-two output frames that had it as a neighbour.
 MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char **filenames, int count,
                                                     double outlierThreshold, bool includeAll,
@@ -1355,9 +1454,14 @@ static cv::Mat warpInto(const cv::Mat &src, const cv::Mat &H) {
     // is covered by nothing but fringe, that showed up as a dim ragged band: measured
     // down to 70% brightness across three columns on a 4240px frame.
     //
-    // BORDER_TRANSPARENT skips any destination pixel whose interpolation window is not
-    // wholly inside the source, leaving it as it found it — so pre-zeroing the
-    // destination gets the fringe zeroed by the same pass that does the warp.
+    // BORDER_TRANSPARENT leaves alone every destination pixel that maps outside the
+    // source, so pre-zeroing the destination gets those zeroed by the same pass that
+    // does the warp.  It does not leave the fringe alone — remapBilinear's transparent
+    // branch renormalises a pixel whose window is only partly inside by the weights
+    // that do land on real samples (imgwarp.cpp), so the boundary comes back at full
+    // brightness rather than skipped.  Either way there is no dim fringe; it is worth
+    // knowing which of the two it is before reimplementing this rule anywhere else,
+    // because it is a property of the OpenCV in the tree and not of the flag's name.
     //
     // The alternative, warping a solid mask through the same homography and rejecting
     // wherever it comes back short of full scale, was built and measured against this.
@@ -1372,6 +1476,29 @@ static cv::Mat warpInto(const cv::Mat &src, const cv::Mat &H) {
     cv::warpPerspective(src, warped, H, src.size(),
                         cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
     return warped;
+}
+
+// Which destination pixels warpInto reaches under `H`: 255 where the warp lands a
+// sample, 0 where it does not.  `probe` is a solid frame-sized CV_8UC1 of 255s,
+// passed in so a merge allocates one and every neighbour warps the same one.
+//
+// Exact by construction rather than by argument.  BORDER_TRANSPARENT decides
+// whether to touch a destination pixel from that pixel, the homography and the
+// source size, and reads no pixel values doing it, so running the identical call
+// over a solid probe reproduces the image warp's untouched set byte for byte.  A
+// covered pixel comes back at 255 whichever branch produced it: bilinear over
+// samples that are all 255 is 255, and so is the renormalised partial-window case,
+// which divides by exactly the weights it summed.
+//
+// The alternative is to compute the covered quadrilateral from H directly, which
+// would cost nothing at all — but it means reimplementing OpenCV's boundary rule,
+// and that rule is a detail of the copy of OpenCV in the tree.  Deriving it from
+// the same call cannot drift from it.
+static cv::Mat warpCoverage(const cv::Mat &probe, const cv::Mat &H) {
+    cv::Mat covered = cv::Mat::zeros(probe.size(), probe.type());
+    cv::warpPerspective(probe, covered, H, probe.size(),
+                        cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+    return covered;
 }
 
 
@@ -1397,26 +1524,31 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
         return nullptr;
     }
     try {
-        // Zero means "no source data here" to the merge kernel, because warpInto
-        // zeroes whatever its warp does not cover.  That convention collides with
-        // pixel-channels that are legitimately zero: a deep twilight sky exposes with
-        // its red channel at exactly 0, so in that channel every source reads
-        // "no data" and the one source with light there — a star's red component, an
-        // airplane's red beacon — becomes the only observation the median sees.
-        // Measured on a dusk frame: a saturated red stamp (54795 of 65535) in the
-        // merged output at a position where the base frame recorded nothing, one per
-        // source with a light there.  The merge exists to remove those.
-        //
-        // So every source is lifted off zero before merging: 0 becomes 1, an
-        // observation one count above black, and only the warp borders are 0
-        // afterwards because warpInto writes them after this.  Costs one extra
-        // frame-sized buffer for the base and one per neighbour in flight.
-        cv::Mat base;
-        cv::max(baseImage->mat, 1, base);
+        const cv::Mat &base = baseImage->mat;
         const uint64_t frameBytes = (uint64_t)base.total() * base.elemSize();
         const uint64_t residentBytes = frameBytes * (uint64_t)(neighborCount + 1);
         const bool stream = streamingThresholdBytes > 0 &&
                             residentBytes > (uint64_t)streamingThresholdBytes;
+
+        // What the kernel is told about the holes the warps leave, in place of
+        // reading them off the pixels.  One byte per pixel counting the neighbours
+        // that landed nothing there; the base is never warped, so it never adds to
+        // it.  See CoverageMisses for why a count is enough, and why it is not a
+        // mask per source.
+        //
+        // Peak cost is the plane, the probe and one warped mask per worker in
+        // flight — about 120MB at 42MP with the default one loader, against the
+        // frame-sized copy per source that lifting every source off zero used to
+        // take.  This is the cheaper of the two as well as the one that does not
+        // put words in a pixel's mouth.
+        // Neither is allocated under includeAll, which counts every source at every
+        // pixel and never asks about coverage: an empty plane says "no holes".
+        cv::Mat misses, coverageProbe;
+        if (!includeAll) {
+            misses = cv::Mat::zeros(base.rows, base.cols, CV_8U);
+            coverageProbe = cv::Mat(base.rows, base.cols, CV_8U, cv::Scalar(255));
+        }
+        std::mutex missesMutex;
 
         // Only one of these is used: warps are either banked here or spilled there.
         std::vector<cv::Mat> warps;
@@ -1447,13 +1579,8 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                                   homographyCount);
             if (!H) { mat_wrapper_release(neighbor); return; }
 
-            // lifted off zero before the warp, so that afterwards a zero means
-            // exactly one thing: the warp did not cover this pixel — see the
-            // comment on `base` above
-            cv::Mat lifted;
-            cv::max(neighbor->mat, 1, lifted);
+            cv::Mat warped = warpInto(neighbor->mat, H->mat);
             mat_wrapper_release(neighbor);
-            cv::Mat warped = warpInto(lifted, H->mat);
 
             if (warped.rows != base.rows || warped.cols != base.cols ||
                 warped.type() != base.type()) {
@@ -1461,6 +1588,21 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                            " does not match the base geometry";
                 return;
             }
+
+            // Where this warp landed nothing, recorded before the source is handed
+            // on.  Only for a neighbour that is going to be merged: a source the
+            // kernel never sees must not be counted against the pixels it would
+            // have missed, or the kernel skips a real sample for every one of them.
+            //
+            // Skipped entirely under includeAll, which counts every source at every
+            // pixel and never asks.
+            if (!includeAll) {
+                cv::Mat covered = warpCoverage(coverageProbe, H->mat);
+                cv::bitwise_not(covered, covered);  // 255 where the warp reached nothing
+                std::lock_guard<std::mutex> lock(missesMutex);
+                cv::add(misses, cv::Scalar(1), misses, covered);
+            }
+
             out.mat = warped;
             out.present = true;
         };
@@ -1499,13 +1641,13 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
         if (outWarpCount) *outWarpCount = warpCount;
         if (warpCount == 0) return nullptr;   // caller falls back to the original frame
 
-        if (stream) return spiller.merge({base}, outlierThreshold, includeAll);
+        if (stream) return spiller.merge({base}, outlierThreshold, includeAll, misses);
 
         std::vector<cv::Mat> mats;
         mats.reserve(warps.size() + 1);
         mats.push_back(base);
         mats.insert(mats.end(), warps.begin(), warps.end());
-        return medianImageFromMats(mats, outlierThreshold, includeAll);
+        return medianImageFromMats(mats, outlierThreshold, includeAll, misses);
     } catch (const cv::Exception &e) {
         if (errorMsg) *errorMsg = "OpenCV exception in aligned merge";
         Log_e("Error: %s", e.what());
