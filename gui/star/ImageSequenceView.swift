@@ -132,7 +132,9 @@ struct ImageSequenceView: View {
           .alert(localized("ui.horizon_refinement_prompt_title"),
                  isPresented: $viewModel.showHorizonRefinementPrompt)
           {
-              Button(localized("ui.horizon_refinement_later"), role: .cancel) {}
+              Button(localized("ui.horizon_refinement_later"), role: .cancel) {
+                  viewModel.deferHorizonRefinement()
+              }
               Button(localized("ui.horizon_refinement_now")) {
                   viewModel.reprocessHorizonsForUpdatedReferences()
               }

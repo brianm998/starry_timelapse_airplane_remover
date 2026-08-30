@@ -360,7 +360,7 @@
   "ui.horizon_refinement_later": "Later",
   "ui.horizon_refinement_now": "Re-run Now",
   "ui.horizon_refinement_preparing": "Checking which frames need redoing: {0} / {1}",
-  "ui.horizon_refinement_prompt_message": "Frames affected: {0} — {1} of them have already been rendered and would be rendered again.\n\nRe-run now: those frames go straight back through the pipeline. Their alignment is kept, so only the horizon and the final render are redone — seconds to about a minute per frame, depending on image size. They cannot be edited until it finishes.\n\nLater: nothing runs now, and the affected frames stay marked in orange. Paint any other reference horizons that need fixing first, then press “Re-run Horizon Refinement” in the right panel to do them all in one pass — faster than one pass per reference.",
+  "ui.horizon_refinement_prompt_message": "Frames affected: {0} — {1} of them have already been rendered and would be rendered again.\n\nRe-run now: those frames go straight back through the pipeline. Their alignment is kept, so only the horizon and the final render are redone — seconds to about a minute per frame, depending on image size. They cannot be edited until it finishes.\n\nLater: nothing is processed now, but the renders made with the old horizon are removed, so the sequence is no longer ready to render a video. The affected frames stay marked in orange, and either “Re-run Horizon Refinement” in the right panel or the next “Process Frames” run redoes them — in one pass, over every reference you have painted by then.",
   "ui.horizon_refinement_prompt_title": "Re-run horizon refinement now?",
   "ui.horizon_settings": "Horizon Settings",
   "ui.horizon_spike_removal": "Horizon Spike Removal:",

@@ -1036,24 +1036,38 @@ public final class ImageSequenceViewModel {
     /// "Re-run Horizon Refinement".
     var affectedHorizonRefinementFrameIndices: Set<Int> = []
 
-    /// What the run in progress took out of the two sets above, held until it finishes.
+    /// Frames whose finished render "Later" already took away, and which therefore need one
+    /// again when the pending refinement finally runs.
     ///
-    /// A run claims them: it empties both so that a reference painted while it works starts
+    /// Without this the re-run would look at the disk, find no output for them, and take
+    /// that for "never processed — nothing to re-render", leaving the frames it had just
+    /// refined with no picture at all.
+    var horizonRefinementStrippedFrameIndices: Set<Int> = []
+
+    /// What the run in progress took out of the sets above, held until it finishes.
+    ///
+    /// A run claims them: it empties them so that a reference painted while it works starts
     /// a fresh set.  A run that is stopped has to give them back — the frames it never got
     /// to are still marked orange, and without this the button that would pick them up is
     /// disabled, leaving the sequence in a state only re-painting a reference gets out of.
-    private var horizonRefinementInFlight: (affected: Set<Int>, references: Set<Int>)?
+    private var horizonRefinementInFlight: (affected: Set<Int>,
+                                            references: Set<Int>,
+                                            stripped: Set<Int>)?
 
     /// Whether there is horizon refinement work waiting — what enables the right panel's
-    /// "Re-run Horizon Refinement" button.
+    /// "Re-run Horizon Refinement" button, and what makes the next ordinary run pick the
+    /// work up on its way past.
     ///
-    /// Both sets, not just the interpolated frames between references: a reference painted
-    /// next to another one has no frames in between to re-refine, and still has its own
-    /// output to render again.
+    /// Not just the interpolated frames between references: a reference painted next to
+    /// another one has no frames in between to re-refine, and still has its own output to
+    /// render again — and after "Later" has taken that output away, the record of having
+    /// done so is the only thing left saying the frame is owed one.
     var hasPendingHorizonRefinement: Bool {
         !affectedHorizonRefinementFrameIndices.isEmpty
+          || !horizonRefinementStrippedFrameIndices.isEmpty
           || !framesNeedingHorizonRerender(updatedReferenceHorizonFrameIndices).isEmpty
     }
+
 
     /// Give back what a stopped run had claimed, so the user can run it again.
     ///
@@ -1066,6 +1080,7 @@ public final class ImageSequenceViewModel {
         horizonRefinementInFlight = nil
         updatedReferenceHorizonFrameIndices.formUnion(inFlight.references)
         affectedHorizonRefinementFrameIndices.formUnion(inFlight.affected)
+        horizonRefinementStrippedFrameIndices.formUnion(inFlight.stripped)
         for i in affectedHorizonRefinementFrameIndices where i < frames.count {
             frames[i].isPendingHorizonRefinement = true
         }
@@ -1110,8 +1125,9 @@ public final class ImageSequenceViewModel {
     /// This used to start the run itself, which put a span of frames back into the
     /// pipeline the instant the painter closed — before anything on screen said why, and
     /// often for one reference of several the user was about to paint.  Nothing is lost by
-    /// saying later: the frames stay marked, and the right panel's "Re-run Horizon
-    /// Refinement" button does exactly this work over every reference painted since.
+    /// saying later: `deferHorizonRefinement` takes away what the old horizon was baked
+    /// into, and either the right panel's "Re-run Horizon Refinement" or the next ordinary
+    /// run redoes it, over every reference painted by then.
     func promptToReprocessHorizons(forUpdatedReference frameIndex: Int) {
         recordReferenceHorizonUpdated(frameIndex: frameIndex)
 
@@ -1132,6 +1148,114 @@ public final class ImageSequenceViewModel {
         showHorizonRefinementPrompt = true
     }
 
+    /// The alert's "Later": keep the work pending, but take away what the horizon the user
+    /// has just corrected was already baked into.
+    ///
+    /// Saying later used to leave the sequence looking finished.  Every affected frame kept
+    /// the render made with the old horizon, so "Render Video" stayed live over frames the
+    /// user had just told star were wrong, and "Process Frames" stayed disabled because by
+    /// the frame states nothing was left to do.  Deleting that output is what makes the
+    /// state honest, and it is the same output the run would have deleted anyway — the only
+    /// difference is that nothing is rendered to replace it yet.
+    ///
+    /// The stale merged horizon masks go too, and that is what makes "later" survive the
+    /// app being closed: the sets below are only in memory, but a frame with no merged mask
+    /// and no output is a frame every run already knows to redo, in this session or the
+    /// next.  The cost is that a pending frame's overlay falls back to the raw detected
+    /// line it was painted over — which is what that frame's horizon honestly is until the
+    /// work runs, and it is drawn in pending orange either way.
+    func deferHorizonRefinement() {
+        let affected = affectedHorizonRefinementFrameIndices
+        let references = updatedReferenceHorizonFrameIndices
+        let all = affected.union(references).sorted()
+        guard !all.isEmpty else { return }
+
+        Task.detached(priority: .userInitiated) { [self] in
+            // In memory and cheap, and the merged masks about to be rebuilt are computed
+            // from it — a run that read the old numbers would rebuild the old horizon.
+            for idx in references {
+                await referenceHorizonStatsCache.clearStats(for: idx)
+            }
+
+            var stripped = Set<Int>()
+            for i in all {
+                guard i < (await self.frames.count),
+                      let frame = await self.frames[i].frame else { continue }
+                await frame.discardMergedHorizon()
+                let hadOutput = await self.frameHasHorizonOutput(i)
+                if hadOutput {
+                    await frame.deleteMergeOutput()
+                    stripped.insert(i)
+                }
+                await MainActor.run {
+                    if hadOutput {
+                        self.frames[i].existingImages
+                          .subtract(Self.horizonRefinementOutputTypes)
+                    }
+                    // The mask the overlay was drawing is gone; show what is left.
+                    self.frames[i].refreshHorizonOverlay()
+                    self.frames[i].refreshFrameHorizonOverlay()
+                }
+            }
+            await MainActor.run {
+                self.horizonRefinementStrippedFrameIndices.formUnion(stripped)
+                Log.i("horizon refinement deferred over \(all.count) frames, "
+                        + "\(stripped.count) of which lost their output")
+            }
+        }
+    }
+
+    /// Whether frame `index` has output that a changed horizon went into.
+    private func frameHasHorizonOutput(_ index: Int) -> Bool {
+        guard index < frames.count else { return false }
+        return !frames[index].existingImages.isDisjoint(with: Self.horizonRefinementOutputTypes)
+    }
+
+    /// Fold pending horizon refinement into a run that is about to start, so that pressing
+    /// "Process Frames" does it without the user having to know it was owed.
+    ///
+    /// Nothing here queues an operation: it takes away the artifacts the changed reference
+    /// has made wrong — the stale merged horizon masks, the cached reference statistics, and
+    /// any render still standing on them — and `FrameGraphBuilder` does the rest, since it
+    /// builds a horizon merge for a frame whose mask is missing and a merge for a frame
+    /// whose output is.  Awaited before the graph is built, because the build surveys the
+    /// disk and would otherwise find all of it still there.
+    ///
+    /// Mostly a no-op after `deferHorizonRefinement`, which has already taken the same
+    /// things away.  What it is really for is the pending work that has *not* been through
+    /// that: a refinement run the user stopped part way, which gives its frames back with
+    /// their output deleted and their masks — for the frames it never reached — still
+    /// standing.
+    ///
+    /// Only for runs over the whole sequence.  A run over a range would clear the pending
+    /// marks for frames it was never going to reach.
+    private func applyPendingHorizonRefinementToRun() async {
+        let affected = affectedHorizonRefinementFrameIndices
+        let references = updatedReferenceHorizonFrameIndices
+        let stripped = horizonRefinementStrippedFrameIndices
+        let all = affected.union(references).union(stripped).sorted()
+        guard !all.isEmpty else { return }
+
+        Log.i("processing run is taking on \(all.count) frames of pending horizon refinement")
+
+        updatedReferenceHorizonFrameIndices = []
+        affectedHorizonRefinementFrameIndices = []
+        horizonRefinementStrippedFrameIndices = []
+
+        for idx in references {
+            await referenceHorizonStatsCache.clearStats(for: idx)
+        }
+        for i in all {
+            guard i < frames.count, let frame = frames[i].frame else { continue }
+            await frame.discardMergedHorizon()
+            if frameHasHorizonOutput(i) {
+                await frame.deleteMergeOutput()
+                frames[i].existingImages.subtract(Self.horizonRefinementOutputTypes)
+            }
+            frames[i].isPendingHorizonRefinement = false
+        }
+    }
+
     /// The body of that alert: what each answer costs, in this sequence's numbers.
     var horizonRefinementPromptMessage: String {
         localized("ui.horizon_refinement_prompt_message",
@@ -1139,8 +1263,9 @@ public final class ImageSequenceViewModel {
                   horizonRefinementPromptRenderCount)
     }
 
-    /// Of `indices`, the frames a re-run would have to render again: the ones that already
-    /// have output the changed horizon went into.
+    /// Of `indices`, the frames a re-run would have to render again: the ones that still
+    /// have output the changed horizon went into, and the ones whose output "Later" has
+    /// already taken away on the same grounds.
     ///
     /// Read off `existingImages`, which is where each frame's own `imageExists` survey put
     /// its types, so this agrees with the check `reprocessHorizonsForUpdatedReferences`
@@ -1148,9 +1273,8 @@ public final class ImageSequenceViewModel {
     /// run, by the alert and by the modal's first step list.
     private func framesNeedingHorizonRerender(_ indices: Set<Int>) -> Set<Int> {
         indices.filter { index in
-            guard index < frames.count else { return false }
-            return !frames[index].existingImages
-              .isDisjoint(with: Self.horizonRefinementOutputTypes)
+            horizonRefinementStrippedFrameIndices.contains(index)
+              || frameHasHorizonOutput(index)
         }
     }
 
@@ -1195,9 +1319,16 @@ public final class ImageSequenceViewModel {
         let toProcess = affectedHorizonRefinementFrameIndices
         let toInvalidate = updatedReferenceHorizonFrameIndices
 
+        // Frames a previous "Later" already stripped need a merge just as much as the ones
+        // that still have output, and nothing on disk says so any more.
+        let toRestore = horizonRefinementStrippedFrameIndices
+
         updatedReferenceHorizonFrameIndices = []
         affectedHorizonRefinementFrameIndices = []
-        horizonRefinementInFlight = (affected: toProcess, references: toInvalidate)
+        horizonRefinementStrippedFrameIndices = []
+        horizonRefinementInFlight = (affected: toProcess,
+                                     references: toInvalidate,
+                                     stripped: toRestore)
         // Leave isPendingHorizonRefinement = true for affected frames so the
         // filmstrip and frame view show orange horizon lines while re-merge is queued.
         // It will be cleared per-frame once its merge completes (or immediately below
@@ -1247,7 +1378,7 @@ public final class ImageSequenceViewModel {
             // that was already processed, delete only its merge output so it gets
             // re-queued for re-compositing with the updated horizon.  Star/earth
             // alignment output is preserved.
-            let allModified = toProcess.union(toInvalidate).sorted()
+            let allModified = toProcess.union(toInvalidate).union(toRestore).sorted()
             var framesToMerge: [FrameAirplaneRemover] = []
             for (examined, i) in allModified.enumerated() {
                 // This loop is the wait: `imageExists` and `deleteMergeOutput` are both
@@ -1270,7 +1401,10 @@ public final class ImageSequenceViewModel {
                 // Re-queue any frame that already has final output, regardless of whether
                 // it has alignment files. Frames in gaps where alignment was skipped still
                 // have auto-processed output and need their horizon re-composited.
-                let hasOutput =
+                // Already stripped by a "Later", so the disk cannot say — the record that
+                // it was stripped is what says this frame is owed a render.
+                let wasStripped = toRestore.contains(i)
+                let hasOutput = wasStripped ||
                     frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
                                                     ofType: .autoProcessed, atSize: .original) ||
                     frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
@@ -2522,6 +2656,10 @@ public final class ImageSequenceViewModel {
         if let frame = frames[0].frame {
             Task {
                 Log.d("beginProcessing")
+                // Before the graph is built, which surveys the disk: a horizon reference
+                // the user painted and put off applying is taken on by this run, so
+                // pressing "Process Frames" is a way through it and not a way around it.
+                await self.applyPendingHorizonRefinementToRun()
                 await self.process(
                   frame: frame
                 ) { processingState in

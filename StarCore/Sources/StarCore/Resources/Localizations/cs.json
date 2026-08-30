@@ -360,7 +360,7 @@
   "ui.horizon_refinement_later": "Později",
   "ui.horizon_refinement_now": "Spustit hned",
   "ui.horizon_refinement_preparing": "Zjišťuje se, které snímky je třeba předělat: {0} / {1}",
-  "ui.horizon_refinement_prompt_message": "Dotčené snímky: {0} — {1} z nich už bylo vykresleno a vykreslí se znovu.\n\nSpustit hned: tyto snímky se okamžitě vrátí do zpracování. Zarovnání zůstává, takže se přepočítá jen horizont a finální vykreslení — podle velikosti obrázku sekundy až zhruba minuta na snímek. Dokud to neskončí, nelze je upravovat.\n\nPozději: teď se nespustí nic a dotčené snímky zůstanou označené oranžově. Nejdřív namalujte ostatní referenční horizonty, které potřebují opravit, a pak v pravém panelu stiskněte „Znovu spustit zpřesnění horizontu“ — všechny se zpracují najednou, což je rychlejší než jeden průchod na každou referenci.",
+  "ui.horizon_refinement_prompt_message": "Dotčené snímky: {0} — {1} z nich už bylo vykresleno a vykreslí se znovu.\n\nSpustit hned: tyto snímky se okamžitě vrátí do zpracování. Zarovnání zůstává, takže se přepočítá jen horizont a finální vykreslení — podle velikosti obrázku sekundy až zhruba minuta na snímek. Dokud to neskončí, nelze je upravovat.\n\nPozději: teď se nic nezpracuje, ale vykreslení vzniklá se starým horizontem se smažou, takže sekvence už není připravená na vykreslení videa. Dotčené snímky zůstanou označené oranžově a znovu je vytvoří buď „Znovu spustit zpřesnění horizontu“ v pravém panelu, nebo další spuštění „Zpracovat snímky“ — jedním průchodem přes všechny reference, které do té doby namalujete.",
   "ui.horizon_refinement_prompt_title": "Spustit zpřesnění horizontu hned?",
   "ui.horizon_settings": "Nastavení horizontu",
   "ui.horizon_spike_removal": "Odstranění špiček horizontu:",

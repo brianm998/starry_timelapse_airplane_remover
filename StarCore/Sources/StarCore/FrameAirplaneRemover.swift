@@ -852,6 +852,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func recomputeMergedHorizon() async throws {
         try await horizonProcessor.recomputeMergedHorizon()
     }
+    public func discardMergedHorizon() async {
+        await horizonProcessor.discardMergedHorizon()
+    }
     internal func loadOrCreateHorizonMask() async throws -> HorizonMask {
         try await horizonProcessor.loadOrCreateHorizonMask()
     }

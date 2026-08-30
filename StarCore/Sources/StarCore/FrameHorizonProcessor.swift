@@ -98,6 +98,28 @@ final public actor FrameHorizonProcessor {
         _ = try await loadOrCreateFinalHorizonMask()
     }
 
+    /// Throw the merged horizon away — the file and the cached copy — without building a
+    /// new one.
+    ///
+    /// The deferred half of `recomputeMergedHorizonIfExists`, for a reference edit the user
+    /// has asked to apply later.  With the mask gone, the next run of any kind builds it
+    /// again from the new reference: `FrameGraphBuilder` gives a frame a `HorizonMergeOp`
+    /// exactly when its merged mask is missing.  Dropping the cache matters as much as
+    /// deleting the file — a reader in this session would otherwise be served the mask the
+    /// old reference produced without ever going near the disk.
+    ///
+    /// Harmless on a reference frame itself, whose painted mask lives in
+    /// `horizonReference/` and wins over this file anyway; the cache it clears there is the
+    /// point, since the frame was just repainted.
+    public func discardMergedHorizon() {
+        cachedFinalHorizonMask = nil
+        imageAccessor.deleteImages(
+          frameIndex: frameIndex,
+          ofTypes: [.mergedHorizon],
+          atSizes: [.original, .preview]
+        )
+    }
+
     /// Unconditional variant of `recomputeMergedHorizonIfExists`: always creates
     /// a fresh merged horizon, saving it with overwrite:true.
     /// Does NOT delete the old file first — if creation fails, the old

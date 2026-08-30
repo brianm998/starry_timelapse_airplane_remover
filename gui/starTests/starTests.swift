@@ -2287,14 +2287,16 @@ final class ProcessingButtonRoleTests: XCTestCase {
       rendering: Bool = false,
       unprocessed: Int = 0,
       horizonDetected: Int = 0,
-      frames: Int = 10
+      frames: Int = 10,
+      pendingHorizon: Bool = false
     ) -> ProcessingButtonRole {
         ProcessingButtonRole.current(
           isProcessingFrames: processing,
           isRenderingVideo: rendering,
           unprocessedCount: unprocessed,
           horizonDetectedCount: horizonDetected,
-          frameCount: frames
+          frameCount: frames,
+          pendingHorizonRefinement: pendingHorizon
         )
     }
 
@@ -2343,6 +2345,26 @@ final class ProcessingButtonRoleTests: XCTestCase {
 
     func testRenderingAVideoHoldsOffAnotherRun() {
         XCTAssertEqual(role(rendering: true, unprocessed: 10), .process(enabled: false))
+    }
+
+    /// A sequence every frame of which is finished, and which is still owed the horizon
+    /// reference the user painted and put off applying.  By the frame states there is
+    /// nothing to do — the frames whose render was taken away for it are not `.unprocessed`
+    /// — so without this the run that would apply it could not be started.
+    func testAPendingHorizonRefinementIsWorthProcessingFor() {
+        XCTAssertEqual(role(unprocessed: 0, horizonDetected: 0, pendingHorizon: true),
+                       .process(enabled: true))
+    }
+
+    /// It is work, not an override: a video being written still holds off the run that
+    /// would do it.
+    func testAPendingHorizonRefinementStillWaitsForAVideo() {
+        XCTAssertEqual(role(rendering: true, pendingHorizon: true), .process(enabled: false))
+    }
+
+    /// And it does not change what a live run's button says.
+    func testAPendingHorizonRefinementDoesNotHideTheStatusButton() {
+        XCTAssertEqual(role(processing: true, pendingHorizon: true), .status)
     }
 }
 

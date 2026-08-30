@@ -22,13 +22,19 @@ enum ProcessingButtonRole: Equatable {
       isRenderingVideo: Bool,
       unprocessedCount: Int,
       horizonDetectedCount: Int,
-      frameCount: Int
+      frameCount: Int,
+      pendingHorizonRefinement: Bool = false
     ) -> ProcessingButtonRole {
         if isProcessingFrames { return .status }
 
         // Nothing left that has not been processed, and not the one other state worth
-        // processing from — every frame stopped at horizon detection.
-        let nothingToDo = unprocessedCount == 0 && horizonDetectedCount != frameCount
+        // processing from — every frame stopped at horizon detection — and no horizon
+        // reference waiting to be applied.  That last one is work a finished sequence can
+        // still be owed: the frames it affects were rendered with a horizon the user has
+        // since corrected, and this run is one of the two ways to redo them.
+        let nothingToDo = unprocessedCount == 0
+          && horizonDetectedCount != frameCount
+          && !pendingHorizonRefinement
         return .process(enabled: !nothingToDo && !isRenderingVideo)
     }
 }
@@ -199,7 +205,8 @@ struct LeftPanel: View {
           isRenderingVideo: viewModel.isRenderingVideo,
           unprocessedCount: viewModel.frameStateMap[.unprocessed]?.count ?? 0,
           horizonDetectedCount: viewModel.frameStateMap[.horizonDetected]?.count ?? 0,
-          frameCount: viewModel.frames.count
+          frameCount: viewModel.frames.count,
+          pendingHorizonRefinement: viewModel.hasPendingHorizonRefinement
         )
     }
 
