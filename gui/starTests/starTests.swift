@@ -1788,8 +1788,12 @@ final class UserPreferencesStoreTests: XCTestCase {
 
     private func swiftSources() throws -> [(name: String, text: String)] {
         let dir = Self.guiDir.appendingPathComponent("star")
+        // Dotfiles are skipped, not just hidden clutter: an Emacs lock file is named
+        // `.#Foo.swift` and is a dangling symlink (its target is `user@host.pid:boot`, not a
+        // path), so it passes a bare `.swift` filter and then fails to read.  Anyone with the
+        // project open in an editor that writes lock files would see these tests fail.
         let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
-            .filter { $0.hasSuffix(".swift") }
+            .filter { $0.hasSuffix(".swift") && !$0.hasPrefix(".") }
         XCTAssertGreaterThan(names.count, 20, "found only \(names.count) sources in gui/star")
         return try names.map { ($0, try source("star/\($0)")) }
     }
