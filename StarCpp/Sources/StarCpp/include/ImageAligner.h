@@ -159,6 +159,16 @@ MatWrapperRef ia_finalize_horizon_accumulation(MatWrapperRef accum, int32_t tota
 MatWrapperRef ia_gradient_mask_into_sky(MatWrapperRef binaryMask, int gradientDistance);
 MatWrapperRef ia_gradient_mask_into_ground(MatWrapperRef binaryMask, int gradientDistance);
 
+// --- Contrast stretch ---
+
+// The single-channel 8-bit image feature detection actually runs on: `image`
+// converted to gray, with the intensity range that `mask` selects stretched across
+// 0-255 and everything outside the mask zeroed.  Exposed because the range that
+// stretch picks decides how much of a dark foreground survives quantisation, which is
+// the difference between a ground full of keypoints and one holding none.
+// Caller must release the returned ref.  `mask` may be null.
+MatWrapperRef ia_masked_stretch_to_gray8(MatWrapperRef image, MatWrapperRef mask);
+
 #ifdef __cplusplus
 }
 #endif

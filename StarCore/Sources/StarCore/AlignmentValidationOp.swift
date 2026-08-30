@@ -545,10 +545,42 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         }
         guard let firstFrame = frames.first else { return }
 
-        let measured = entries.lazy.filter { $0.homography != nil }.count
-        Log.i("validateMovingEarthAlignment: \(measured) of \(entries.count) frames " +
-              "have a measured ground homography")
-        guard measured > 0 else {
+        // Per neighbour pair, not per frame.  A frame has a results container as soon
+        // as its homography op ran, whether or not any of the eight warps inside it
+        // were solved, so counting containers reports a fully-measured sequence for one
+        // where every single pair was rejected — which is precisely the case worth
+        // noticing.
+        var solvedPairs = 0
+        var expectedPairs = 0
+        for entry in entries {
+            expectedPairs += entry.neighborFrameIndices.count
+            solvedPairs += entry.homography?.neighborHomography
+              .lazy.filter { $0.homography != nil }.count ?? 0
+        }
+        let solvedFraction = expectedPairs > 0
+          ? Double(solvedPairs) / Double(expectedPairs)
+          : 0
+        Log.i("validateMovingEarthAlignment: \(solvedPairs) of \(expectedPairs) " +
+              "neighbour pairs have a measured ground homography " +
+              "(\(String(format: "%.1f", solvedFraction * 100))%)")
+
+        // A ground that cannot be tracked is not an error — the merge falls back to
+        // each frame's own pixels, which is what earth alignment off does — but it is
+        // not what was asked for either, and the output looks like nothing happened.
+        // Say so once, at a level that survives a skim of the log, with the reason:
+        // this is what a foreground with no detail in it produces, and the usual cause
+        // is source frames whose shadows were clipped to black before star saw them.
+        if solvedFraction < 0.5, expectedPairs > 0 {
+            Log.w("validateMovingEarthAlignment: the ground could not be tracked on " +
+                  "\(String(format: "%.0f", (1 - solvedFraction) * 100))% of neighbour " +
+                  "pairs, so those frames keep their own unwarped ground and nothing " +
+                  "moving on it will be removed. This is what a foreground carrying no " +
+                  "detectable detail looks like — check whether the source frames' " +
+                  "shadows are clipped to black, which is common when they were " +
+                  "extracted from an already-encoded video.")
+        }
+
+        guard solvedPairs > 0 else {
             // Not fatal the way it is for the sky.  With no ground homography at all
             // every frame falls back to its own unwarped pixels, which is what the
             // pipeline does with earth alignment off — a worse result than was asked

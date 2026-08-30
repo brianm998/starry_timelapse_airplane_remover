@@ -845,16 +845,107 @@ static cv::Mat toGray8U(const cv::Mat& src) {
     return tmp;
 }
 
+// The intensity range inside a mask that detection stretches across 0-255, taken at
+// percentiles of the masked pixels rather than at their extremes.
+//
+// cv::minMaxLoc answers with the single brightest and single darkest pixel in the
+// selection, which puts the whole region's contrast at the mercy of one of them.  A
+// ground region almost always contains one: a distant street light, a lit window, a
+// passing headlight, a hot pixel.  Measured on frame 700 of a 24MP sequence whose
+// ground held a near-saturated light (65448 of 65535) while 98.4% of the ground sat at
+// exactly 0 and its 99th percentile was 64 — min/max gave a scale of 255/65448, so the
+// entire ground quantised to 8-bit 0 before CLAHE ever saw it and AKAZE found 913
+// keypoints crammed into a 163px band at the horizon.  The same frame's 0.1-99.9
+// percentile range is 0..1765, 37x tighter, and yields the full 2000.
+//
+// 99.9 rather than something tighter because this also feeds the sky, where the bright
+// tail is the signal: on a 33MP frame the sky's 99.9th percentile was 58445 against a
+// maximum of 60304, a 3% change, so the star mask's threshold keeps meaning what it
+// was tuned to mean.  A percentile deep enough to reject one light is still shallow
+// enough to keep a sky full of stars.
+//
+// Values outside the range are not lost, they saturate: convertTo to CV_8U clamps, so
+// the light that used to set the scale simply reads 255 like any other highlight.
+static constexpr double kStretchLowPercentile  = 0.001;
+static constexpr double kStretchHighPercentile = 0.999;
+
+// The [low, high] intensities bounding `lowPercentile`..`highPercentile` of the pixels
+// `mask` selects in `gray`.  False when there is nothing to measure or the answer would
+// not be a usable range, which leaves the caller on min/max.
+//
+// An exact histogram rather than a sample: one pass, and at CV_16U the 65536 bins cost
+// 512KB against a frame that is measured in hundreds of megabytes.
+static bool maskedPercentileRange(const cv::Mat& gray, const cv::Mat& mask,
+                                  double lowPercentile, double highPercentile,
+                                  double& outLow, double& outHigh) {
+    if (gray.empty() || mask.empty()) return false;
+    if (gray.size() != mask.size()) return false;
+    if (gray.channels() != 1 || mask.type() != CV_8U) return false;
+
+    int bins;
+    if (gray.depth() == CV_8U)       bins = 256;
+    else if (gray.depth() == CV_16U) bins = 65536;
+    else return false;               // float/signed depths keep the old behaviour
+
+    std::vector<uint64_t> histogram((size_t)bins, 0);
+    uint64_t total = 0;
+    for (int y = 0; y < gray.rows; ++y) {
+        const uchar *maskRow = mask.ptr<uchar>(y);
+        if (gray.depth() == CV_8U) {
+            const uchar *grayRow = gray.ptr<uchar>(y);
+            for (int x = 0; x < gray.cols; ++x)
+                if (maskRow[x]) { histogram[grayRow[x]]++; total++; }
+        } else {
+            const ushort *grayRow = gray.ptr<ushort>(y);
+            for (int x = 0; x < gray.cols; ++x)
+                if (maskRow[x]) { histogram[grayRow[x]]++; total++; }
+        }
+    }
+    if (total == 0) return false;
+
+    // Both bounds are the first bin at or past their share of the population, so a
+    // region holding one value returns that value twice and is rejected below.
+    //
+    // At least one pixel, never zero: a selection smaller than 1/lowPercentile — under
+    // a thousand pixels at 0.1% — rounds its share down to nothing, and a target of
+    // zero is met by the first bin looked at whether or not anything is in it.  That
+    // would answer 0 for a region whose darkest pixel is nowhere near it.
+    auto binAtFraction = [&](double fraction) {
+        const uint64_t want = std::max<uint64_t>(1, (uint64_t)(fraction * (double)total));
+        uint64_t seen = 0;
+        for (int i = 0; i < bins; ++i) {
+            seen += histogram[(size_t)i];
+            if (seen >= want) return i;
+        }
+        return bins - 1;
+    };
+
+    const int low  = binAtFraction(lowPercentile);
+    const int high = binAtFraction(highPercentile);
+    if (high <= low) return false;
+
+    outLow  = (double)low;
+    outHigh = (double)high;
+    return true;
+}
+
 static cv::Mat toGray8UWithMask(const cv::Mat& src, const cv::Mat& mask) {
     cv::Mat gray;
     if (src.channels() > 1) cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
     else gray = src.clone();
 
     if (!mask.empty() && mask.type() == CV_8U) {
-        double minVal, maxVal;
-        cv::minMaxLoc(gray, &minVal, &maxVal, nullptr, nullptr, mask);
-        double scale = (maxVal > minVal) ? 255.0 / (maxVal - minVal) : 1.0;
-        double shift = -minVal * scale;
+        double lowVal, highVal;
+        if (!maskedPercentileRange(gray, mask,
+                                   kStretchLowPercentile, kStretchHighPercentile,
+                                   lowVal, highVal)) {
+            // Nothing a percentile can say about this selection — a depth the
+            // histogram does not cover, or a region holding a single value.  The
+            // extremes are no worse an answer here than they ever were.
+            cv::minMaxLoc(gray, &lowVal, &highVal, nullptr, nullptr, mask);
+        }
+        double scale = (highVal > lowVal) ? 255.0 / (highVal - lowVal) : 1.0;
+        double shift = -lowVal * scale;
         cv::Mat test;
         gray.copyTo(test, mask);
         cv::Mat tmp;
@@ -1266,6 +1357,64 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
     return nullptr;
 }
 
+// Whether RANSAC's consensus set is enough evidence to warp a frame's ground by the
+// homography it elected.  Ground only — see below for why the sky is left alone.
+//
+// findHomography always returns a matrix if it can solve four points, and says nothing
+// about whether the rest of the correspondences agreed.  On a ground that has features
+// that is a formality: the fit explains nearly everything Lowe's ratio test let
+// through.  On a ground that does not, RANSAC picks whichever quartet happened to be
+// mutually consistent and reports it with the same confidence — and the result is not
+// slightly wrong, it is a near-180-degree rotation that smears the terrain across the
+// frame.  A whole sequence of those is what a black-clipped foreground produces, and
+// nothing downstream can tell them from real motion: the continuity filter in
+// AlignmentValidationOp compares each warp against its neighbours', which only works
+// while the neighbours are right.
+//
+// So the test is on the evidence, not on the answer: no threshold here asks how far
+// the warp moves the ground, because a fast pan legitimately moves it a long way.
+// Measured across 29 frame pairs at offsets -1 and +4, on the two 08_15_2026 aurora
+// sequences shot side by side — one exported 16-bit from raw, the other extracted from
+// a 10-bit video whose ground had been crushed to black:
+//
+//                        inlier ratio     inliers
+//   ground with detail   0.86 - 0.94     108 - 304     (13 pairs, every warp sane)
+//   ground crushed flat  0.06 - 0.56       5 -  63     (16 pairs, every warp garbage)
+//
+// The two do not overlap and the gap is wide, so the cutoffs sit nearer the failing
+// side: a sequence that is merely hard to track should keep being tracked.
+//
+// Not applied to the sky, where a low ratio is normal rather than damning.  Stars all
+// look alike, so SIFT descriptors collide and Lowe's test passes many pairs RANSAC
+// then rejects.  The same measurement over the sky of the crushed sequence read
+// ratios of 0.61, 0.73 and 0.94 for three homographies that were all correct (they
+// moved the sky 4.9, 23.5 and 6.5px) — two of the three would have failed this test.
+// The sky also has no graceful fallback: a missing ground warp costs one source in a
+// median merge, a missing sky warp costs the frame.
+static constexpr double kMinGroundInlierRatio = 0.65;
+static constexpr int    kMinGroundInliers     = 20;
+
+static bool groundConsensusIsUsable(AlignmentType alignmentType,
+                                    const std::vector<uchar> &inlierMask,
+                                    size_t correspondences,
+                                    int frameIndex, int neighborFrameIndex) {
+    if (alignmentType != AlignmentTypeEarth) return true;
+    // RANSAC fills the mask; anything else leaves it empty and is not judged here.
+    if (inlierMask.empty() || correspondences == 0) return true;
+
+    int inliers = 0;
+    for (uchar flag : inlierMask) if (flag) inliers++;
+    const double ratio = (double)inliers / (double)correspondences;
+
+    if (inliers >= kMinGroundInliers && ratio >= kMinGroundInlierRatio) return true;
+
+    Log_d("frame %d ground homography to %d rejected: %d of %zu correspondences agreed "
+          "(%.2f), below %d and %.2f",
+          frameIndex, neighborFrameIndex, inliers, correspondences, ratio,
+          kMinGroundInliers, kMinGroundInlierRatio);
+    return false;
+}
+
 int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                           int frameIndex,
                           const AlignmentNeighborData *neighbors, int neighborCount,
@@ -1399,10 +1548,16 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                         (static_cast<uint64_t>(frameIndex) * 2654435761ULL) ^
                         static_cast<uint64_t>(neighbors[ii].frameIndex);
                     cv::theRNG() = cv::RNG(rngSeed);
-                    cv::Mat H = cv::findHomography(ptsNeighbor, ptsBase, cv::RANSAC, 10);
+                    std::vector<uchar> inlierMask;
+                    cv::Mat H = cv::findHomography(ptsNeighbor, ptsBase, cv::RANSAC, 10,
+                                                   inlierMask);
                     if (!H.empty() && H.type() != CV_64F) H.convertTo(H, CV_64F);
 
-                    if (!H.empty() && H.rows == 3 && H.cols == 3) {
+                    if (!H.empty() && H.rows == 3 && H.cols == 3 &&
+                        groundConsensusIsUsable(alignmentType, inlierMask,
+                                                ptsNeighbor.size(), frameIndex,
+                                                neighbors[ii].frameIndex))
+                    {
                         cv::Mat I = cv::Mat::eye(3, 3, H.type());
                         double deviation = cv::norm(H - I, cv::NORM_L2);
                         outWarpInfos[ii].homography = wrap(H);
@@ -1571,13 +1726,17 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
         // several threads at once and the lines would interleave with each other and
         // with other frames'.
         auto warpNeighbour = [&](int i, MergeSource &out) {
-            MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
-            if (!neighbor) return;
-
+            // The homography first: a neighbour without one contributes nothing, and
+            // decoding it to find that out costs a full-resolution decode per source
+            // per frame — the whole sequence's worth on footage where the ground
+            // cannot be aligned at all, which is exactly when it is all wasted.
             MatWrapperRef H = homographyForOffset(neighbors[i].frameIndex - baseFrameIndex,
                                                   homographyKeys, homographyValues,
                                                   homographyCount);
-            if (!H) { mat_wrapper_release(neighbor); return; }
+            if (!H) return;
+
+            MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
+            if (!neighbor) return;
 
             cv::Mat warped = warpInto(neighbor->mat, H->mat);
             mat_wrapper_release(neighbor);
@@ -1673,5 +1832,13 @@ MatWrapperRef ia_gradient_mask_into_ground(MatWrapperRef binaryMask, int gradien
     try {
         return createGradientMaskIntoGround(binaryMask->mat, gradientDistance);
     } KHT_CATCH_LOG("ia_gradient_mask_into_ground")
+    return nullptr;
+}
+
+MatWrapperRef ia_masked_stretch_to_gray8(MatWrapperRef image, MatWrapperRef mask) {
+    if (!image) return nullptr;
+    try {
+        return wrap(toGray8UWithMask(image->mat, mask ? mask->mat : cv::Mat()));
+    } KHT_CATCH_LOG("ia_masked_stretch_to_gray8")
     return nullptr;
 }
