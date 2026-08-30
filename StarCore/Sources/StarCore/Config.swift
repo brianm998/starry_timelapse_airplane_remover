@@ -90,10 +90,17 @@ public class ConfigManager {
 
     /// Replace the managed config and notify observers.
     ///
-    /// Pass `save: false` when the caller persists the config itself. `save()` goes
-    /// through `Config.writeJson`, which resolves a filename that isn't prefixed by
-    /// `tempOutputPath` against `tempOutputPath` — so for an absolute json path
-    /// (as stard uses) saving here would write to a bogus location.
+    /// `save()` writes to the filename this manager was built with, wherever that points: a
+    /// bare name lands under `tempOutputPath`, and a name carrying a directory names its own
+    /// destination, relative or absolute.  Pass `save: false` only when the write itself is
+    /// unwanted — the value being set is re-derived on every open, say, or the caller
+    /// persists the config somewhere else.
+    ///
+    /// It was not always safe for an absolute path.  Until e262031c, `Config.writeJson`
+    /// asked whether the filename had `tempOutputPath` as a prefix and appended it to
+    /// `tempOutputPath` when it did not, so an absolute session path (as stard uses) landed
+    /// somewhere bogus — which is what `save: false` was originally reaching for at stard's
+    /// call sites.  `WriteJsonTests` pins the current behaviour at both layers.
     public func update(_ config: Config, save shouldSave: Bool = true) {
         self._config = config
         if shouldSave { save() }

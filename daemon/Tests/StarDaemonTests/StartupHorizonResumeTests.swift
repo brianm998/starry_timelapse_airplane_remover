@@ -1,5 +1,6 @@
 import XCTest
 import Foundation
+import StarCore
 import StarDaemonMessages
 import SwiftProtobuf
 
@@ -45,10 +46,14 @@ final class StartupHorizonResumeTests: XCTestCase {
 
         // On disk, which is the part a killed session depends on: nothing gets to run any
         // cleanup, so whatever is in config.json at that moment is the whole record.
+        // Decoded rather than grepped for the key, which the open-time write already put
+        // there at its default and would answer for regardless of whether the update landed.
         let configPath = "\(info.scratchSessionDir)/config.json"
-        let onDisk = try String(contentsOfFile: configPath, encoding: .utf8)
-        XCTAssertTrue(onDisk.contains("startupHorizonFramePosition"),
-                      "the update has to be persisted, not just held in the session")
+        let onDisk = try JSONDecoder()
+          .decode(Config.self, from: try Data(contentsOf: URL(fileURLWithPath: configPath)))
+        XCTAssertEqual(onDisk.startupHorizonFrameIndices, [0, 1, 2],
+                       "the update has to be persisted, not just held in the session")
+        XCTAssertEqual(onDisk.startupHorizonFramePosition, 1)
 
         // And back out the way a resume reads it.
         var reopen = Star_V1_OpenConfigRequest()

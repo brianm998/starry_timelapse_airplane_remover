@@ -291,7 +291,7 @@ extension Session {
 
         let configFilename = "\(scratchSessionDir)/config.json"
         let configManager = await ConfigManager(configFilename: configFilename, config: config)
-        writeConfigJson(config, toDir: scratchSessionDir)  // persist config.json (writeJson mangles abs paths)
+        writeConfigJson(config, toDir: scratchSessionDir)  // the initial file; nothing has updated the manager yet
         await constants.set(detectionType: config.detectionType)
 
         let imageSequence = try ImageSequence(
@@ -308,7 +308,9 @@ extension Session {
         // makes every op's estimatedMemoryBytes 0 (AsyncOperation then skips reserve()
         // entirely) and drops the keypoint limiter back to
         // numberOfFramesToProcessConcurrently — i.e. no memory gating at all.
-        // save: false because this session persists config.json itself via writeConfigJson.
+        // save: false because there is nothing here worth rewriting config.json for — the
+        // dimensions are read back off the sequence on every open. (Not the old reason:
+        // saving an absolute path works; see writeConfigJson at the bottom of this file.)
         var configWithImageInfo = await configManager.config()
         configWithImageInfo.set(imageInfo: imageInfo)
         await configManager.update(configWithImageInfo, save: false)
@@ -364,7 +366,7 @@ extension Session {
 
         let configFilename = "\(scratchSessionDir)/config.json"
         let configManager = await ConfigManager(configFilename: configFilename, config: config)
-        writeConfigJson(config, toDir: scratchSessionDir)  // persist config.json (writeJson mangles abs paths)
+        writeConfigJson(config, toDir: scratchSessionDir)  // the initial file; nothing has updated the manager yet
         await constants.set(detectionType: config.detectionType)
 
         let imageSequence = try ImageSequence(
@@ -381,7 +383,9 @@ extension Session {
         // makes every op's estimatedMemoryBytes 0 (AsyncOperation then skips reserve()
         // entirely) and drops the keypoint limiter back to
         // numberOfFramesToProcessConcurrently — i.e. no memory gating at all.
-        // save: false because this session persists config.json itself via writeConfigJson.
+        // save: false because there is nothing here worth rewriting config.json for — the
+        // dimensions are read back off the sequence on every open. (Not the old reason:
+        // saving an absolute path works; see writeConfigJson at the bottom of this file.)
         var configWithImageInfo = await configManager.config()
         configWithImageInfo.set(imageInfo: imageInfo)
         await configManager.update(configWithImageInfo, save: false)
@@ -425,7 +429,10 @@ extension Session {
         // makes every op's estimatedMemoryBytes 0 (AsyncOperation then skips reserve()
         // entirely) and drops the keypoint limiter back to
         // numberOfFramesToProcessConcurrently — i.e. no memory gating at all.
-        // save: false because this session persists config.json itself via writeConfigJson.
+        // save: false because there is nothing here worth rewriting config.json for — the
+        // dimensions are read back off the sequence on every open, and this session's
+        // config.json is the user's own file rather than one in the scratch dir. (Not the
+        // old reason: saving an absolute path works; see writeConfigJson below.)
         var configWithImageInfo = await configManager.config()
         configWithImageInfo.set(imageInfo: imageInfo)
         await configManager.update(configWithImageInfo, save: false)
@@ -456,10 +463,16 @@ func splitDirPath(_ dir: String) -> (name: String, path: String) {
     return (ns.lastPathComponent, ns.deletingLastPathComponent)
 }
 
-// Persist the session's config.json to the scratch session root so OpenConfig can resume it
-// (and the macOS app can interop). Config is Codable; we write it directly rather than via
-// ConfigManager.save() → Config.writeJson, which resolves a non-prefixed absolute path against
-// tempOutputPath and silently writes to a bogus location.
+// Persist a config.json at the scratch session root, which is what the clients hand back to
+// Session.OpenConfig to resume, and what the macOS app can open for interop.
+//
+// Written by hand rather than through ConfigManager.save(), but not for the reason this
+// comment used to give.  Config.writeJson once appended an absolute filename to
+// tempOutputPath instead of honouring it, so a session config went somewhere bogus; that has
+// not been true since e262031c, and WriteJsonTests pins it.  What is left is the two things
+// this still does that save() does not: it writes the *initial* file, before the manager has
+// been asked to update anything, and it always targets the scratch dir — which for a session
+// opened from a user's own config.json is a different file from the one the manager writes.
 func writeConfigJson(_ config: Config, toDir dir: String) {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
