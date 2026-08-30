@@ -137,6 +137,16 @@ struct UserPreferences: Codable, Sendable {
         didSet { self.save() }
     }
 
+    /// Whether the processing modal draws its alignment deviation charts.
+    ///
+    /// nil means yes.  Stored rather than held in the modal's own state because the modal
+    /// is torn down and rebuilt every time it is dismissed and brought back, and a user who
+    /// turned the charts off wants them to stay off — they are the tall half of the panel,
+    /// and on a short window they are what pushes the steps into a scroll view.
+    var showAlignmentInProcessingWindow: Bool? {
+        didSet { self.save() }
+    }
+
     /// How many reference horizons the user wants for a moving sequence, relative to what
     /// star suggests for that sequence's length.
     ///

@@ -175,7 +175,7 @@ struct SequenceProgressPanel: View {
 
     /// The same width as `ProcessingModalPanel`, and for the same reason: it holds the
     /// longest translated step name over two lines, and the two panels stack the same rows.
-    static var width: CGFloat { ProcessingModalPanel<EmptyView>.width }
+    static var width: CGFloat { ProcessingModalPanel<EmptyView, EmptyView>.width }
 
     var body: some View {
         ZStack {

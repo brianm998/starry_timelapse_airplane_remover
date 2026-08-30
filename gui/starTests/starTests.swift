@@ -2110,3 +2110,108 @@ final class SequenceProgressTests: XCTestCase {
         }
     }
 }
+
+
+/// The left panel's top button is two buttons sharing one place on screen, and the rule for
+/// which one it is has a trap in it: the frame counts that decide whether there is anything
+/// left to process must not be allowed to disable the Status button.  A run that has just
+/// claimed the last unprocessed frame would otherwise take away the only way back to its
+/// own processing modal, which the modal's Dismiss button puts down.
+@MainActor
+final class ProcessingButtonRoleTests: XCTestCase {
+
+    private func role(
+      processing: Bool = false,
+      rendering: Bool = false,
+      unprocessed: Int = 0,
+      horizonDetected: Int = 0,
+      frames: Int = 10
+    ) -> ProcessingButtonRole {
+        ProcessingButtonRole.current(
+          isProcessingFrames: processing,
+          isRenderingVideo: rendering,
+          unprocessedCount: unprocessed,
+          horizonDetectedCount: horizonDetected,
+          frameCount: frames
+        )
+    }
+
+    func testAFreshSequenceOffersToProcess() {
+        XCTAssertEqual(role(unprocessed: 10), .process(enabled: true))
+    }
+
+    func testARunInProgressOffersItsStatus() {
+        XCTAssertEqual(role(processing: true, unprocessed: 4), .status)
+    }
+
+    /// The regression this exists for.
+    func testTheStatusButtonSurvivesTheLastFrameBeingClaimed() {
+        XCTAssertEqual(role(processing: true, unprocessed: 0, horizonDetected: 0), .status)
+    }
+
+    /// `.status` carries no enabled flag at all, which is the point: there is no state in
+    /// which the way back to a live run's modal is withheld.
+    func testTheStatusButtonIsNeverDisabled() {
+        for rendering in [false, true] {
+            for unprocessed in [0, 1, 10] {
+                for horizon in [0, 5, 10] {
+                    XCTAssertEqual(role(processing: true, rendering: rendering,
+                                        unprocessed: unprocessed, horizonDetected: horizon),
+                                   .status)
+                }
+            }
+        }
+    }
+
+    func testAFinishedSequenceHasNothingLeftToProcess() {
+        XCTAssertEqual(role(unprocessed: 0, horizonDetected: 0), .process(enabled: false))
+    }
+
+    /// Every frame stopped after horizon detection is the one state with no unprocessed
+    /// frames that is still worth processing from.
+    func testASequenceStoppedAtHorizonDetectionCanStillBeProcessed() {
+        XCTAssertEqual(role(unprocessed: 0, horizonDetected: 10, frames: 10),
+                       .process(enabled: true))
+    }
+
+    func testSomeFramesAtHorizonDetectionIsNotEnough() {
+        XCTAssertEqual(role(unprocessed: 0, horizonDetected: 6, frames: 10),
+                       .process(enabled: false))
+    }
+
+    func testRenderingAVideoHoldsOffAnotherRun() {
+        XCTAssertEqual(role(rendering: true, unprocessed: 10), .process(enabled: false))
+    }
+}
+
+/// Whether the processing modal draws its alignment charts is a preference rather than view
+/// state, because the modal is torn down and rebuilt each time it is dismissed and brought
+/// back — state there would forget the answer every time.
+final class ProcessingModalAlignmentPreferenceTests: XCTestCase {
+
+    func testAPreferencesFileWithoutTheKeyLeavesItUnset() throws {
+        let json = #"{"recentlyOpenedSequencelist":{}}"#
+        let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+        XCTAssertNil(prefs.showAlignmentInProcessingWindow)
+    }
+
+    /// Decoded rather than assigned: every setter on `UserPreferences` writes the real
+    /// preferences file in the home directory, so a test that assigns one clobbers the
+    /// user's own settings.
+    func testTheChoiceRoundTrips() throws {
+        for chosen in [true, false] {
+            let json = """
+              {"recentlyOpenedSequencelist":{},"showAlignmentInProcessingWindow":\(chosen)}
+              """
+            let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+            XCTAssertEqual(prefs.showAlignmentInProcessingWindow, chosen)
+
+            let encoded = try JSONEncoder().encode(prefs)
+            XCTAssertTrue(String(decoding: encoded, as: UTF8.self)
+                            .contains("showAlignmentInProcessingWindow"))
+
+            let back = try JSONDecoder().decode(UserPreferences.self, from: encoded)
+            XCTAssertEqual(back.showAlignmentInProcessingWindow, chosen)
+        }
+    }
+}
