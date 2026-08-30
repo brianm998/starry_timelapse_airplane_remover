@@ -14,7 +14,7 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 /// A cached stage whose artifacts are reused across runs, and which therefore has to be
-/// invalidated when the settings that produced them change.
+/// invalidated when the inputs that produced them change.
 ///
 /// Declared in dependency order, because each stage consumes the one before it: the
 /// merged horizon is a vote over first-round horizon masks, and keypoint detection is
@@ -47,8 +47,12 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
     }
 }
 
-/// The settings each cached stage was built with, recorded alongside the artifacts so a
-/// later run can tell whether they are still valid.
+/// What each cached stage was built with, recorded alongside the artifacts so a later
+/// run can tell whether they are still valid.
+///
+/// Settings, mostly — but for keypoints also the version of the code that produced them,
+/// since that stage's behaviour lives more in `ia_find_features` than in the handful of
+/// settings that steer it.  See `detectionAlgorithmVersion`.
 ///
 /// The skip predicates that let a re-run reuse these artifacts ask only whether the file
 /// exists (see the note on `FrameAirplaneRemover`'s predicates).  That was as strong as
@@ -73,7 +77,45 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     /// file not comparable — a stage gaining an input it should always have had, say.
     /// A version mismatch is treated like a missing file rather than like a change, so
     /// upgrading star does not invalidate everyone's work.
+    ///
+    /// Which is exactly why this is not the lever for "the code that built these
+    /// artifacts changed".  That is `detectionAlgorithmVersion`: a recorded input like
+    /// any other, so it is compared, reported by name, and invalidates the one stage
+    /// that contributes it.
     public static let currentVersion = 1
+
+    /// Which version of the keypoint detection *code* produced a keypoint file.
+    ///
+    /// Everything else recorded here is a `Config` setting, which is enough for a stage
+    /// whose behaviour lives in its settings.  Keypoint detection's largely does not:
+    /// the settings only steer `ia_find_features`, and what decides where the features
+    /// actually land — the mask handling, the contrast stretch the detector is handed,
+    /// the star mask, SIFT and AKAZE and the cap applied to them — is code.  Change any
+    /// of that and every cached keypoint file is a record of the old code, with nothing
+    /// in the settings to say so.
+    ///
+    /// Not hypothetical: 485c4e04 moved `toGray8UWithMask`'s contrast stretch from
+    /// min/max to percentiles, because one bright light in a near-black ground was
+    /// quantising the whole ground to zero before AKAZE ever saw it.  That changes the
+    /// image handed to detection on every frame, and so changes every keypoint set — and
+    /// a user resuming an existing `star_temp_*` directory with the fixed build would
+    /// otherwise keep the keypoints the old stretch produced and see the fix do nothing.
+    ///
+    /// Bump this whenever a change to `ia_find_features`, or to anything it calls,
+    /// changes which keypoints come out.  Not for a change to cost, logging or debug
+    /// images: a bump discards every cached keypoint file and every homography fitted to
+    /// one, and that is the whole of a sequence's alignment.
+    ///
+    /// Safe to bump *because* `keypoints` is last in `ArtifactStage`'s dependency order.
+    /// `andDownstream` is empty beyond it, so this reaches the alignment and the frames
+    /// rendered from it and stops — the horizon stages, which cost far more to rebuild,
+    /// are untouched.
+    ///
+    /// - 1: the min/max stretch — everything up to and including 0.11.5.  Never written
+    ///      by anything: it is what a record that omits this key means, which is why the
+    ///      key's mere appearance is what invalidates those records, once.
+    /// - 2: percentile stretch (485c4e04).
+    public static let detectionAlgorithmVersion = 2
 
     public let version: Int
 
@@ -103,6 +145,18 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     /// not consult cannot invalidate anything.  The combined+RW detector takes no config
     /// at all — `CombinedHorizonDetector.detect(image:)` is fully parameterised in code
     /// — so in that mode the only input is the choice of mode itself.
+    ///
+    /// Which means this stage has the same blind spot `detectionAlgorithmVersion` closes
+    /// for the keypoints, and more of it: in combined mode a change to the detector is
+    /// invisible here.  Deliberately left open for now.  The two levers are not
+    /// comparable in cost — `horizon` is first in the dependency order, so a version
+    /// here would take the merged masks and every keypoint set and every homography with
+    /// it, i.e. the entire sequence, where the keypoint lever stops at the alignment —
+    /// and nothing has yet needed it: the horizon code changes since this landed are
+    /// output-neutral by their own measurement (8364ff9e scales every candidate in a
+    /// comparison equally, so the ordering it feeds cannot move; 97928062 fixes a trap on
+    /// an empty horizon, a path that produced no mask to cache).  Add one the first time
+    /// a horizon change moves a mask, and expect it to cost a full reprocess.
     private static func horizonInputs(_ config: Config) -> [String: String] {
         var inputs: [String: String] = [
             "horizonDetectionEnabled":    str(config.horizonDetectionEnabled),
@@ -179,13 +233,16 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     }
 
     /// What `FrameAlignmentProcessor.loadOrCreateOCVFeatures` passes to
-    /// `ImageAligner.findFeatures`.
+    /// `ImageAligner.findFeatures` — and, unlike the other two stages, the version of
+    /// the code on the far side of that call.  See `detectionAlgorithmVersion` for why
+    /// this stage needs one and what bumping it costs.
     ///
     /// `keypointDetectionScale` is recorded even though it is also encoded in the
     /// filename: the filename makes a divisor change invalidate on its own, but a run
     /// that changes several settings at once should still be able to report it.
     private static func keypointInputs(_ config: Config) -> [String: String] {
         [
+            "detectionAlgorithmVersion":       str(detectionAlgorithmVersion),
             "keypointDetectionScale":          str(config.keypointDetectionScale),
             "alignmentMaxKeypoints":           str(config.alignmentMaxKeypoints),
             "alignmentGroundHorizonExtension": str(config.alignmentGroundHorizonExtension),

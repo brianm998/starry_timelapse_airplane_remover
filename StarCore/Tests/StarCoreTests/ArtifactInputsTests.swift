@@ -24,6 +24,19 @@ final class ArtifactInputsTests: XCTestCase {
         try? FileManager.default.removeItem(atPath: path)
     }
 
+    /// A record as some earlier star wrote it, with one keypoint input edited or dropped.
+    /// The only way to stand in for "written by a different build", since `current` can
+    /// only ever report this build's constant.
+    private func record(_ inputs: ArtifactInputs,
+                        withKeypointInput key: String,
+                        setTo value: String?) -> ArtifactInputs {
+        var stages = inputs.stages
+        var keypoints = stages[ArtifactStage.keypoints.rawValue] ?? [:]
+        keypoints[key] = value
+        stages[ArtifactStage.keypoints.rawValue] = keypoints
+        return ArtifactInputs(version: inputs.version, stages: stages)
+    }
+
     // MARK: - the dependency chain
 
     /// Each stage consumes the one before it, so a change never invalidates only itself.
@@ -66,6 +79,85 @@ final class ArtifactInputsTests: XCTestCase {
 
         XCTAssertEqual(stale, [.keypoints],
                        "nothing recorded here feeds back into the horizon masks")
+    }
+
+    // MARK: - the code that produces the keypoints
+
+    /// Settings are enough for a stage whose behaviour lives in settings.  Keypoint
+    /// detection's mostly lives in `ia_find_features`, so the code gets recorded too —
+    /// without it, a change to the stretch or the detector leaves every cached feature
+    /// file in place and does nothing at all on a resumed sequence.
+    func testTheKeypointStageRecordsTheVersionOfTheCodeThatBuiltIt() {
+        let recorded = ArtifactInputs.current(from: config())
+            .stages[ArtifactStage.keypoints.rawValue]
+        XCTAssertEqual(recorded?["detectionAlgorithmVersion"],
+                       "\(ArtifactInputs.detectionAlgorithmVersion)")
+    }
+
+    /// The whole reason this lever is affordable. `keypoints` is last in the dependency
+    /// order, so `andDownstream` stops there: a bump discards the alignment and the
+    /// frames rendered from it, and leaves the horizon masks — which cost far more to
+    /// rebuild, and which the detection code has no hand in — alone.
+    func testBumpingTheDetectionVersionInvalidatesTheKeypointsAndNothingUpstream() {
+        let c = config()
+        let current = ArtifactInputs.current(from: c)
+        let builtByAnEarlierStar = record(current,
+                                          withKeypointInput: "detectionAlgorithmVersion",
+                                          setTo: "1")
+
+        let stale = current.staleStages(comparedTo: builtByAnEarlierStar)
+
+        XCTAssertEqual(stale, [.keypoints],
+                       "a detection-code change cannot have moved a horizon mask, and " +
+                       "rebuilding those would cost the whole sequence (got \(stale))")
+        XCTAssertEqual(current.differences(from: builtByAnEarlierStar)[.keypoints],
+                       ["detectionAlgorithmVersion 1 -> " +
+                          "\(ArtifactInputs.detectionAlgorithmVersion)"],
+                       "and the log has to be able to name the reason")
+    }
+
+    /// Every temp directory written by 0.11.4 or 0.11.5 is in this state: a record at the
+    /// current version whose keypoint stage predates this key. Their features came out of
+    /// the min/max stretch that 485c4e04 replaced, so they have to go — once.
+    ///
+    /// Only those. A directory from before `ArtifactInputs` existed has no record at all,
+    /// and `staleStages(comparedTo: nil)` invalidates nothing by design
+    /// (`testNoStoredRecordInvalidatesNothing`), so this cannot reach it: those sequences
+    /// keep the old stretch's keypoints until they are reprocessed from scratch.
+    func testARecordFromBeforeThisKeyExistedInvalidatesItsKeypointsExactlyOnce() throws {
+        let c = config()
+        defer { tearDownPath(c.tempOutputPath) }
+        let current = ArtifactInputs.current(from: c)
+        let pre = record(current, withKeypointInput: "detectionAlgorithmVersion", setTo: nil)
+        XCTAssertEqual(pre.version, ArtifactInputs.currentVersion,
+                       "precondition: same version, so this is compared rather than " +
+                       "waved through as an unreadable format")
+
+        XCTAssertEqual(current.staleStages(comparedTo: pre), [.keypoints],
+                       "the key appearing at all is what invalidates these — its value " +
+                       "is never compared against anything, because they have none")
+
+        // Once: the run that rebuilds them records the current inputs, and the run after
+        // that finds nothing to do.
+        try current.save(toTempOutputPath: c.tempOutputPath)
+        let stored = try XCTUnwrap(ArtifactInputs.load(fromTempOutputPath: c.tempOutputPath))
+        XCTAssertTrue(ArtifactInputs.current(from: c).staleStages(comparedTo: stored).isEmpty)
+    }
+
+    /// The horizon stages deliberately have no equivalent, and adding one is not a
+    /// like-for-like decision: `horizon` leads the dependency order, so a version there
+    /// takes the merged masks, every keypoint set and every homography with it — a full
+    /// reprocess, against the keypoint lever's re-alignment. Change this test when a
+    /// horizon change actually moves a mask, and not before.
+    func testOnlyTheKeypointStageRecordsACodeVersion() {
+        let inputs = ArtifactInputs.current(from: config())
+        for stage in [ArtifactStage.horizon, .mergedHorizon] {
+            let versionKeys = (inputs.stages[stage.rawValue] ?? [:]).keys
+              .filter { $0.lowercased().contains("algorithmversion") }
+            XCTAssertTrue(versionKeys.isEmpty,
+                          "\(stage) records \(versionKeys), which invalidates it and " +
+                          "everything downstream on any star upgrade that bumps it")
+        }
     }
 
     // MARK: - settings that must invalidate
