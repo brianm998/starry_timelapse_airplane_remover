@@ -359,7 +359,7 @@
   "ui.horizon_mem": "Mém. horizon ×:",
   "ui.horizon_refinement_later": "Plus tard",
   "ui.horizon_refinement_now": "Relancer maintenant",
-  "ui.horizon_refinement_preparing": "Recherche des images à refaire : {0} / {1}",
+  "ui.horizon_refinement_preparing": "Suppression des rendus faits avec l’ancien horizon : {0} images",
   "ui.horizon_refinement_prompt_message": "Images concernées : {0} — dont {1} déjà rendues, qui seraient rendues à nouveau.\n\nRelancer maintenant : ces images repassent immédiatement dans le traitement. L’alignement est conservé, seuls l’horizon et le rendu final sont refaits — de quelques secondes à environ une minute par image selon sa taille. Elles ne sont pas modifiables tant que ce n’est pas terminé.\n\nPlus tard : rien n’est traité maintenant, mais les rendus faits avec l’ancien horizon sont supprimés, la séquence n’est donc plus prête pour une vidéo. Les images concernées restent marquées en orange, et c’est « Relancer l’affinage de l’horizon » dans le panneau de droite ou le prochain « Traiter les images » qui les refait — en une seule passe, sur toutes les références peintes d’ici là.",
   "ui.horizon_refinement_prompt_title": "Relancer l’affinage de l’horizon maintenant ?",
   "ui.horizon_settings": "Réglages de l'horizon",

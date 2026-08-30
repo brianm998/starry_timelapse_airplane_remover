@@ -359,7 +359,7 @@
   "ui.horizon_mem": "지평선 메모리 ×:",
   "ui.horizon_refinement_later": "나중에",
   "ui.horizon_refinement_now": "지금 실행",
-  "ui.horizon_refinement_preparing": "다시 처리할 프레임 확인 중: {0} / {1}",
+  "ui.horizon_refinement_preparing": "예전 지평선으로 만든 렌더링 삭제 중: {0}개 프레임",
   "ui.horizon_refinement_prompt_message": "영향을 받는 프레임: {0}개 — 그중 {1}개는 이미 렌더링되어 다시 렌더링됩니다.\n\n지금 실행: 해당 프레임이 곧바로 다시 처리됩니다. 정렬 결과는 유지되므로 지평선과 최종 렌더링만 다시 계산되며, 이미지 크기에 따라 프레임당 몇 초에서 1분 정도 걸립니다. 끝날 때까지 그 프레임은 편집할 수 없습니다.\n\n나중에: 지금은 아무것도 처리하지 않지만 예전 지평선으로 만든 렌더링은 삭제되므로, 이 시퀀스는 더 이상 동영상을 만들 준비가 된 상태가 아닙니다. 영향을 받는 프레임은 주황색으로 표시된 채로 남고, 오른쪽 패널의 “지평선 보정 다시 실행”이나 다음 “프레임 처리” 실행이 그때까지 그린 모든 기준을 한 번에 다시 만들어 줍니다.",
   "ui.horizon_refinement_prompt_title": "지금 지평선 보정을 다시 실행할까요?",
   "ui.horizon_settings": "지평선 설정",

@@ -359,7 +359,7 @@
   "ui.horizon_mem": "Horizont-Speicher ×:",
   "ui.horizon_refinement_later": "Später",
   "ui.horizon_refinement_now": "Jetzt ausführen",
-  "ui.horizon_refinement_preparing": "Es wird geprüft, welche Bilder neu gemacht werden müssen: {0} / {1}",
+  "ui.horizon_refinement_preparing": "Renderings mit dem alten Horizont werden entfernt: {0} Bilder",
   "ui.horizon_refinement_prompt_message": "Betroffene Bilder: {0} — {1} davon wurden bereits gerendert und würden erneut gerendert.\n\nJetzt ausführen: Diese Bilder gehen sofort wieder durch die Verarbeitung. Die Ausrichtung bleibt erhalten, es werden also nur der Horizont und das finale Rendern neu berechnet — je nach Bildgröße Sekunden bis etwa eine Minute pro Bild. Bis das fertig ist, lassen sie sich nicht bearbeiten.\n\nSpäter: Jetzt wird nichts verarbeitet, aber die mit dem alten Horizont erstellten Renderings werden entfernt, die Sequenz ist also nicht mehr bereit für ein Video. Die betroffenen Bilder bleiben orange markiert, und entweder „Horizontverfeinerung erneut ausführen“ im rechten Bereich oder der nächste Lauf von „Bilder verarbeiten“ erstellt sie neu — in einem Durchgang, über alle bis dahin gemalten Referenzen.",
   "ui.horizon_refinement_prompt_title": "Horizontverfeinerung jetzt erneut ausführen?",
   "ui.horizon_settings": "Horizonteinstellungen",

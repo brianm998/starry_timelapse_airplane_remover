@@ -359,7 +359,7 @@
   "ui.horizon_mem": "Ufuk belleği ×:",
   "ui.horizon_refinement_later": "Daha sonra",
   "ui.horizon_refinement_now": "Şimdi çalıştır",
-  "ui.horizon_refinement_preparing": "Hangi karelerin yenilenmesi gerektiği denetleniyor: {0} / {1}",
+  "ui.horizon_refinement_preparing": "Eski ufukla üretilen çıktılar siliniyor: {0} kare",
   "ui.horizon_refinement_prompt_message": "Etkilenen kareler: {0} — bunların {1} tanesi zaten işlendi ve yeniden işlenecek.\n\nŞimdi çalıştır: bu kareler hemen yeniden işleme girer. Hizalama korunur, yani yalnızca ufuk ve son çıktı yeniden hesaplanır — görüntü boyutuna göre kare başına birkaç saniyeden yaklaşık bir dakikaya kadar. İşlem bitene dek bu kareler düzenlenemez.\n\nDaha sonra: şimdi hiçbir şey işlenmez, ama eski ufukla üretilen çıktılar silinir; dizi artık video almaya hazır değildir. Etkilenen kareler turuncu işaretli kalır ve onları ya sağ paneldeki “Ufuk iyileştirmesini yeniden çalıştır” ya da bir sonraki “Kareleri işle” çalıştırması yeniden üretir — o ana kadar çizdiğiniz bütün referansları tek seferde kapsayarak.",
   "ui.horizon_refinement_prompt_title": "Ufuk iyileştirmesi şimdi yeniden çalıştırılsın mı?",
   "ui.horizon_settings": "Ufuk ayarları",

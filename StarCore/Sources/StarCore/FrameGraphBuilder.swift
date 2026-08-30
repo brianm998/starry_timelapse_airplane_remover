@@ -1218,10 +1218,33 @@ public final actor FrameGraphBuilder {
             refinementOps[frame.frameIndex] = op
         }
 
+        // Each frame is an actor, and each of these is a hop into it that waits behind
+        // whatever that frame is doing — which, when this is a second refinement over a
+        // sequence still finishing the first, is a merge.  Asked of every frame at once
+        // they overlap; asked in a loop they add up, and they add up in front of the user,
+        // who is waiting for these operations to appear.
+        let neighbourCounts = await withTaskGroup(
+          of: (Int, aligned: Int, statics: Int).self
+        ) { group in
+            for frame in mergeFrames {
+                group.addTask {
+                    (frame.frameIndex,
+                     aligned: await frame.numberOfAlignedFrames,
+                     statics: await frame.getStaticNeighborFrames().count)
+                }
+            }
+            var counts: [Int: (aligned: Int, statics: Int)] = [:]
+            for await (index, aligned, statics) in group {
+                counts[index] = (aligned: aligned, statics: statics)
+            }
+            return counts
+        }
+
         var mergeOps: [MergeOp] = []
         for frame in mergeFrames {
-            let aligned = await frame.numberOfAlignedFrames
-            let statics = await frame.getStaticNeighborFrames().count
+            let counts = neighbourCounts[frame.frameIndex]
+            let aligned = counts?.aligned ?? 0
+            let statics = counts?.statics ?? 0
             let mergeOp = MergeOp(
               frame: frame,
               rawImageBytes: rawImageBytes,

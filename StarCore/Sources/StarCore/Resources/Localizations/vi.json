@@ -359,7 +359,7 @@
   "ui.horizon_mem": "Bộ nhớ đường chân trời ×:",
   "ui.horizon_refinement_later": "Để sau",
   "ui.horizon_refinement_now": "Chạy ngay",
-  "ui.horizon_refinement_preparing": "Đang kiểm tra những khung nào cần làm lại: {0} / {1}",
+  "ui.horizon_refinement_preparing": "Đang xóa các bản kết xuất dùng đường chân trời cũ: {0} khung hình",
   "ui.horizon_refinement_prompt_message": "Khung hình bị ảnh hưởng: {0} — trong đó {1} khung đã kết xuất và sẽ được kết xuất lại.\n\nChạy ngay: những khung đó lập tức quay lại quy trình xử lý. Kết quả căn chỉnh được giữ lại nên chỉ tính lại đường chân trời và bản kết xuất cuối — mất vài giây đến khoảng một phút mỗi khung, tùy kích thước ảnh. Không thể chỉnh sửa các khung đó cho đến khi xong.\n\nĐể sau: hiện không xử lý gì, nhưng các bản kết xuất tạo bằng đường chân trời cũ sẽ bị xóa, nên chuỗi ảnh không còn sẵn sàng để dựng video. Các khung bị ảnh hưởng vẫn được đánh dấu màu cam, và “Chạy lại phần tinh chỉnh đường chân trời” ở bảng bên phải hoặc lần “Xử lý khung hình” kế tiếp sẽ dựng lại chúng — trong một lượt, cho mọi tham chiếu bạn đã vẽ đến lúc đó.",
   "ui.horizon_refinement_prompt_title": "Chạy lại phần tinh chỉnh đường chân trời ngay bây giờ?",
   "ui.horizon_settings": "Cài đặt đường chân trời",

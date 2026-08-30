@@ -359,7 +359,7 @@
   "ui.horizon_mem": "Mem. do horizonte ×:",
   "ui.horizon_refinement_later": "Mais tarde",
   "ui.horizon_refinement_now": "Executar agora",
-  "ui.horizon_refinement_preparing": "Verificando quais quadros precisam ser refeitos: {0} / {1}",
+  "ui.horizon_refinement_preparing": "Removendo as renderizações feitas com o horizonte antigo: {0} quadros",
   "ui.horizon_refinement_prompt_message": "Quadros afetados: {0} — destes, {1} já foram renderizados e seriam renderizados de novo.\n\nExecutar agora: esses quadros voltam imediatamente para o processamento. O alinhamento é preservado, então só o horizonte e a renderização final são refeitos — de segundos a cerca de um minuto por quadro, conforme o tamanho da imagem. Eles não podem ser editados até terminar.\n\nMais tarde: nada é processado agora, mas as renderizações feitas com o horizonte antigo são removidas, então a sequência deixa de estar pronta para gerar um vídeo. Os quadros afetados continuam marcados em laranja, e quem os refaz é “Executar novamente o refinamento do horizonte” no painel direito ou a próxima execução de “Processar quadros” — em uma única passagem, com todas as referências que você tiver pintado até lá.",
   "ui.horizon_refinement_prompt_title": "Executar novamente o refinamento do horizonte agora?",
   "ui.horizon_settings": "Ajustes do horizonte",

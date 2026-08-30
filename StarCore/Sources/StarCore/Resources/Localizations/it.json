@@ -359,7 +359,7 @@
   "ui.horizon_mem": "Mem. orizzonte ×:",
   "ui.horizon_refinement_later": "Più tardi",
   "ui.horizon_refinement_now": "Esegui ora",
-  "ui.horizon_refinement_preparing": "Verifica di quali fotogrammi vanno rifatti: {0} / {1}",
+  "ui.horizon_refinement_preparing": "Rimozione dei rendering fatti con il vecchio orizzonte: {0} fotogrammi",
   "ui.horizon_refinement_prompt_message": "Fotogrammi interessati: {0} — di questi {1} sono già stati renderizzati e verrebbero renderizzati di nuovo.\n\nEsegui ora: quei fotogrammi rientrano subito nell’elaborazione. L’allineamento viene mantenuto, quindi si rifanno solo l’orizzonte e il rendering finale — da pochi secondi a circa un minuto per fotogramma, a seconda della dimensione dell’immagine. Finché non termina non sono modificabili.\n\nPiù tardi: ora non viene elaborato nulla, ma i rendering fatti con il vecchio orizzonte vengono rimossi, quindi la sequenza non è più pronta per il video. I fotogrammi interessati restano segnati in arancione, e a rifarli è «Riesegui l’affinamento dell’orizzonte» nel pannello di destra oppure la prossima esecuzione di «Elabora fotogrammi» — in un’unica passata, su tutti i riferimenti disegnati fino a quel momento.",
   "ui.horizon_refinement_prompt_title": "Rieseguire ora l’affinamento dell’orizzonte?",
   "ui.horizon_settings": "Impostazioni dell'orizzonte",

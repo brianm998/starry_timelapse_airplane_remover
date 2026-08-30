@@ -359,7 +359,7 @@
   "ui.horizon_mem": "地平线内存 ×：",
   "ui.horizon_refinement_later": "稍后",
   "ui.horizon_refinement_now": "立即运行",
-  "ui.horizon_refinement_preparing": "正在检查哪些帧需要重做：{0} / {1}",
+  "ui.horizon_refinement_preparing": "正在删除用旧地平线渲染的成片：{0} 帧",
   "ui.horizon_refinement_prompt_message": "受影响的帧：{0} 帧，其中 {1} 帧已渲染过，将会重新渲染。\n\n立即运行：这些帧会马上重新进入处理流程。对齐结果会保留，因此只重新计算地平线和最终渲染——视图像大小而定，每帧约几秒到一分钟。处理完成前这些帧无法编辑。\n\n稍后：现在不做任何处理，但用旧地平线渲染出的成片会被删除，因此该序列不再处于可以导出视频的状态。受影响的帧仍以橙色标记，右侧面板的“重新运行地平线精修”或下一次“处理帧”都会把它们重新做好——一次处理完，涵盖你到那时画好的所有参考。",
   "ui.horizon_refinement_prompt_title": "现在重新运行地平线精修？",
   "ui.horizon_settings": "地平线设置",

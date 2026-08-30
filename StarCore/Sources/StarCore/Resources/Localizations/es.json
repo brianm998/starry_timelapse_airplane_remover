@@ -359,7 +359,7 @@
   "ui.horizon_mem": "Mem. de horizonte ×:",
   "ui.horizon_refinement_later": "Más tarde",
   "ui.horizon_refinement_now": "Ejecutar ahora",
-  "ui.horizon_refinement_preparing": "Comprobando qué fotogramas hay que rehacer: {0} / {1}",
+  "ui.horizon_refinement_preparing": "Eliminando los renderizados con el horizonte antiguo: {0} fotogramas",
   "ui.horizon_refinement_prompt_message": "Fotogramas afectados: {0}; {1} de ellos ya se han renderizado y se volverían a renderizar.\n\nEjecutar ahora: esos fotogramas vuelven de inmediato al procesado. Se conserva la alineación, así que solo se recalculan el horizonte y el renderizado final: de segundos a alrededor de un minuto por fotograma, según el tamaño de la imagen. No se pueden editar hasta que termine.\n\nMás tarde: ahora no se procesa nada, pero se eliminan los renderizados hechos con el horizonte antiguo, así que la secuencia deja de estar lista para renderizar un vídeo. Los fotogramas afectados siguen marcados en naranja, y los rehace «Volver a ejecutar el refinado del horizonte» en el panel derecho o la siguiente ejecución de «Procesar fotogramas»: en una sola pasada, con todas las referencias que hayas pintado para entonces.",
   "ui.horizon_refinement_prompt_title": "¿Volver a ejecutar el refinado del horizonte ahora?",
   "ui.horizon_settings": "Ajustes del horizonte",
