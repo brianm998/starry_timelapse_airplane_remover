@@ -78,6 +78,14 @@ public struct StarWarning: Sendable, Codable, Equatable {
         /// user about because it is the one kind here that discards work they can see:
         /// output frames that existed a moment ago are now going to be re-rendered.
         case artifactsInvalidated
+
+        /// Most of a moving sequence's neighbour pairs produced no ground homography, so
+        /// most frames merge their ground unwarped and whatever moved across it stays in
+        /// the output.  The run still finishes and everything above the horizon is
+        /// unaffected, which is why this is a `warning` and not a `critical` — but it is
+        /// the one condition here a user could otherwise only discover by looking at the
+        /// finished ground and wondering why it is dirty.
+        case groundAlignmentFailed
     }
 
     /// How bad it is.  `critical` means "this run is in real danger of being killed";
@@ -130,15 +138,16 @@ public struct StarWarning: Sendable, Codable, Equatable {
     /// two different things.
     public var title: String {
         switch kind {
-        case .memoryPressure:       return localized("warning.title.memory_pressure")
-        case .lowSystemMemory:      return localized("warning.title.low_system_memory")
-        case .footprintOverBudget:  return localized("warning.title.footprint_over_budget")
-        case .oversizedReservation: return localized("warning.title.oversized_reservation")
-        case .memoryGatingDisabled: return localized("warning.title.memory_gating_disabled")
-        case .previousRunDied:      return localized("warning.title.previous_run_died")
-        case .outputWriteFailed:    return localized("warning.title.output_write_failed")
-        case .lowDiskSpace:         return localized("warning.title.low_disk_space")
-        case .artifactsInvalidated: return localized("warning.title.artifacts_invalidated")
+        case .memoryPressure:        return localized("warning.title.memory_pressure")
+        case .lowSystemMemory:       return localized("warning.title.low_system_memory")
+        case .footprintOverBudget:   return localized("warning.title.footprint_over_budget")
+        case .oversizedReservation:  return localized("warning.title.oversized_reservation")
+        case .memoryGatingDisabled:  return localized("warning.title.memory_gating_disabled")
+        case .previousRunDied:       return localized("warning.title.previous_run_died")
+        case .outputWriteFailed:     return localized("warning.title.output_write_failed")
+        case .lowDiskSpace:          return localized("warning.title.low_disk_space")
+        case .artifactsInvalidated:  return localized("warning.title.artifacts_invalidated")
+        case .groundAlignmentFailed: return localized("warning.title.ground_alignment_failed")
         }
     }
 
@@ -158,7 +167,8 @@ public struct StarWarning: Sendable, Codable, Equatable {
         case .memoryPressure, .lowSystemMemory, .footprintOverBudget:
             return true
         case .oversizedReservation, .memoryGatingDisabled, .previousRunDied,
-             .outputWriteFailed, .lowDiskSpace, .artifactsInvalidated:
+             .outputWriteFailed, .lowDiskSpace, .artifactsInvalidated,
+             .groundAlignmentFailed:
             return false
         }
     }
