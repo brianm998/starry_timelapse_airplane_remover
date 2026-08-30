@@ -244,6 +244,14 @@ public enum ImageAligner {
                                                       gradientDistance: Int32) -> MatWrapper {
         MatWrapper(ref: ia_gradient_mask_into_ground(binaryMask.ref, gradientDistance))
     }
+
+    /// The 8-bit gray that feature detection runs on: `image` stretched across 0-255
+    /// over the range `mask` selects, and zeroed outside it.
+    public static func maskedStretchToGray8(_ image: MatWrapper,
+                                            mask: MatWrapper?) -> MatWrapper? {
+        let r = ia_masked_stretch_to_gray8(image.ref, mask?.ref)
+        return r.map { MatWrapper(ref: $0) }
+    }
 }
 
 // MARK: - Supporting types
