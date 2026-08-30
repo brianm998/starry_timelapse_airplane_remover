@@ -715,7 +715,10 @@ public struct Config: Codable, Sendable {
     public var horizonMinY: Int?
     public var horizonMaxY: Int?
 
-    public var numberOfFramesToProcessConcurrently: Int = ProcessInfo.processInfo.processorCount
+    // How many frames the pipeline may work on at once.  Physical cores rather than the
+    // logical count `ProcessInfo` reports: see `PhysicalCores`, which explains why the
+    // hyperthreads are not worth counting here and why over-counting them costs RAM.
+    public var numberOfFramesToProcessConcurrently: Int = PhysicalCores.count
     
     // Removed: horizonVerticalShiftAmount.  It scooted the horizon mask up by a
     // hand-entered number of pixels before compositing the star-aligned sky over the
