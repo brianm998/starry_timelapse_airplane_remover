@@ -483,6 +483,23 @@ final class GroundTrackingCoverageTests: XCTestCase {
         (0..<10).map { frame($0, offsets: [-2, -1, 1, 2], solved: solvedPerFrame) }
     }
 
+    /// As `frame`, but the stored container also holds solved warps at `staleOffsets` —
+    /// neighbours this frame no longer has.  What a container left behind by a run at a
+    /// wider `numberAlignedNeighborFrames` looks like on the next run.
+    private func frameWithStaleWarps(_ index: Int,
+                                     offsets: [Int],
+                                     solved: Int,
+                                     staleOffsets: [Int]) -> GroundTrackingCoverage.Frame
+    {
+        let neighbours = offsets.map { index + $0 }
+        var warps = neighbours.enumerated().map { warp($0.element, solved: $0.offset < solved) }
+        warps += staleOffsets.map { warp(index + $0, solved: true) }
+        return GroundTrackingCoverage.Frame(
+          neighborFrameIndices: neighbours,
+          homography: HomographyResultsCodable(for: index, with: warps)
+        )
+    }
+
     // MARK: - the threshold
 
     func testASequenceThatSolvedEveryPairIsSilent() {
@@ -549,6 +566,47 @@ final class GroundTrackingCoverageTests: XCTestCase {
         XCTAssertEqual(missing.expectedPairs, failed.expectedPairs)
         XCTAssertEqual(missing.solvedPairs, failed.solvedPairs)
         XCTAssertTrue(missing.groundWasNotTracked)
+    }
+
+    // MARK: - stale entries
+
+    /// A warp is only coverage if the merge can spend it, and the merge looks its
+    /// homography up by offset — it never asks for a neighbour this frame does not have.
+    func testAWarpAtANeighbourTheFrameNoLongerHasDoesNotCountAsSolved() {
+        let coverage = GroundTrackingCoverage(frames: [
+          frameWithStaleWarps(5, offsets: [-2, -1, 1, 2], solved: 4, staleOffsets: [-4, -3, 3, 4])
+        ])
+        XCTAssertEqual(coverage.expectedPairs, 4)
+        XCTAssertEqual(coverage.solvedPairs, 4, "the four stale warps are not this frame's to spend")
+        XCTAssertEqual(coverage.failedPairs, 0)
+    }
+
+    /// The reason the intersection is worth doing at all: counted straight, a container
+    /// left by a wider run lends its extra solved warps to the total, and a sequence with
+    /// one usable pair in four reports as tracked.  Here that would be 50 solved of 40
+    /// expected; only 10 of them are pairs this run can use.
+    func testStaleWarpsCannotSuppressTheWarning() {
+        let frames = (0..<10).map {
+            frameWithStaleWarps($0, offsets: [-2, -1, 1, 2], solved: 1,
+                                staleOffsets: [-4, -3, 3, 4])
+        }
+        let coverage = GroundTrackingCoverage(frames: frames)
+        XCTAssertEqual(coverage.expectedPairs, 40)
+        XCTAssertEqual(coverage.solvedPairs, 10, "one usable pair per frame")
+        XCTAssertTrue(coverage.groundWasNotTracked)
+    }
+
+    /// Counting as sets makes this structural rather than lucky: however many entries a
+    /// container holds, a frame cannot solve more pairs than it has neighbours, so the
+    /// fraction cannot exceed 1 and `failedPairs` cannot go negative.
+    func testSolvedPairsCannotExceedExpectedPairs() {
+        let coverage = GroundTrackingCoverage(frames: [
+          frameWithStaleWarps(9, offsets: [-1, 1], solved: 2, staleOffsets: [-8, -4, 4, 8])
+        ])
+        XCTAssertEqual(coverage.expectedPairs, 2)
+        XCTAssertEqual(coverage.solvedPairs, 2)
+        XCTAssertEqual(coverage.solvedFraction, 1)
+        XCTAssertEqual(coverage.failedPairs, 0)
     }
 
     // MARK: - edges

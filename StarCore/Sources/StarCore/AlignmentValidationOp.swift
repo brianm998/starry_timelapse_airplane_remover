@@ -706,7 +706,7 @@ struct GroundTrackingCoverage {
     /// Every neighbour pair the sequence is supposed to have, summed over its frames.
     let expectedPairs: Int
 
-    /// The subset of those that produced a matrix.
+    /// The subset of those that produced a matrix the frame can actually use.
     let solvedPairs: Int
 
     init(frames: [Frame]) {
@@ -714,8 +714,25 @@ struct GroundTrackingCoverage {
         var expected = 0
         for frame in frames {
             expected += frame.neighborFrameIndices.count
-            solved += frame.homography?.neighborHomography
-              .lazy.filter { $0.homography != nil }.count ?? 0
+
+            // Only the warps that landed on a neighbour this frame still has.  A stored
+            // container outlives the setting that shaped it: re-run a sequence with a
+            // smaller `numberAlignedNeighborFrames` and the entries from the wider run
+            // are still on disk, at neighbour indices this frame no longer has.  The
+            // merge looks its homography up by offset and never asks for those, so
+            // counting them measures coverage the run cannot spend — and it inflates the
+            // count in the one direction that matters, suppressing the warning on a
+            // sequence whose usable pairs are actually below the threshold.
+            //
+            // As sets, so the count cannot exceed the frame's own neighbour count no
+            // matter what a container holds, and `solvedFraction` therefore cannot come
+            // out above 1.
+            let wanted = Set(frame.neighborFrameIndices)
+            let solvedNeighbours = Set(
+              (frame.homography?.neighborHomography ?? [])
+                .lazy.filter { $0.homography != nil }.map(\.frameIndex)
+            )
+            solved += solvedNeighbours.intersection(wanted).count
         }
         self.expectedPairs = expected
         self.solvedPairs = solved
