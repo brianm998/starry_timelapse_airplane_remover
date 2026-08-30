@@ -633,6 +633,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "रीसेट करके बैंड चयन से दोबारा शुरू करें (R)",
   "ui.reset_and_start_over_r": "रीसेट करके दोबारा शुरू करें (R)",
   "ui.restart_engine": "इंजन पुनः आरंभ करें",
+  "ui.restart_now": "अभी पुनः आरंभ करें",
   "ui.restart_re_opens_this_session_from_its_saved": "पुनः आरंभ करने पर यह सत्र उसकी सहेजी गई कॉन्फ़िग से दोबारा खुलता है।",
   "ui.resume": "जारी रखें…",
   "ui.resume_from_config_json": "config.json से जारी रखें…",

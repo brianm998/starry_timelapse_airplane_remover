@@ -90,10 +90,17 @@ public class ConfigManager {
 
     /// Replace the managed config and notify observers.
     ///
-    /// Pass `save: false` when the caller persists the config itself. `save()` goes
-    /// through `Config.writeJson`, which resolves a filename that isn't prefixed by
-    /// `tempOutputPath` against `tempOutputPath` — so for an absolute json path
-    /// (as stard uses) saving here would write to a bogus location.
+    /// `save()` writes to the filename this manager was built with, wherever that points: a
+    /// bare name lands under `tempOutputPath`, and a name carrying a directory names its own
+    /// destination, relative or absolute.  Pass `save: false` only when the write itself is
+    /// unwanted — the value being set is re-derived on every open, say, or the caller
+    /// persists the config somewhere else.
+    ///
+    /// It was not always safe for an absolute path.  Until e262031c, `Config.writeJson`
+    /// asked whether the filename had `tempOutputPath` as a prefix and appended it to
+    /// `tempOutputPath` when it did not, so an absolute session path (as stard uses) landed
+    /// somewhere bogus — which is what `save: false` was originally reaching for at stard's
+    /// call sites.  `WriteJsonTests` pins the current behaviour at both layers.
     public func update(_ config: Config, save shouldSave: Bool = true) {
         self._config = config
         if shouldSave { save() }
@@ -654,6 +661,23 @@ public struct Config: Codable, Sendable {
     // so FrameGraphBuilder can skip per-frame detection and merge operations.
     public var hasStaticReferenceHorizon: Bool = false
 
+    // The frames the user chose to hand paint reference horizons on during the startup
+    // questionnaire, and how far through that list they got.  Empty means there is no
+    // unfinished selection: either it was never started, or it ran to the end and was
+    // cleared.
+    //
+    // Recorded here, rather than only in the gui's view model, because the whole point is
+    // to survive the session.  A sequence whose run was stopped part way through painting
+    // used to re-open straight into processing, which then ran with only the horizons that
+    // happened to be painted before the stop — the remaining frames silently fell back to
+    // automatic detection, which is what the user had already declined.  See
+    // ImageSequenceViewModel.resumeStartupHorizonSelectionIfUnfinished.
+    public var startupHorizonFrameIndices: [Int] = []
+
+    // Index into startupHorizonFrameIndices of the frame being painted when the session
+    // ended.  Meaningless on its own; only read when the list above is non-empty.
+    public var startupHorizonFramePosition: Int = 0
+
     // when true and tripodHeadWasMoving is set, frames that are within
     // referenceHorizonSmoothingMaxDistance of a user-defined reference horizon
     // frame have their computed horizon filtered against that reference to weed
@@ -752,8 +776,14 @@ public struct Config: Codable, Sendable {
     // reserved.
 
     // try to align earth on moving frames?
-    // turned off by default as it's still expermintal
-    public var allowEarthAlignment: Bool = false
+    // On by default.  This was off while ground alignment would apply whatever
+    // homography RANSAC returned, including the garbage warps a dark or crushed
+    // foreground produces.  The percentile stretch and the earth-only inlier
+    // ratio guard in ImageAligner.cpp now throw those out instead, so a ground
+    // that cannot be tracked drops out of the median merge rather than smearing
+    // the frame — the same result this switch being off used to give, arrived
+    // at per neighbour instead of per sequence.
+    public var allowEarthAlignment: Bool = true
 
     // --- Adaptive horizon detection parameters ---
 
@@ -1164,6 +1194,9 @@ public struct Config: Codable, Sendable {
         // Was previously not decoded, so a painted static reference horizon was lost on config
         // reload/resume even though it is encoded. Decode it for round-trip fidelity.
         self.hasStaticReferenceHorizon = try c.decodeIfPresent(Bool.self, forKey: .hasStaticReferenceHorizon) ?? self.hasStaticReferenceHorizon
+
+        self.startupHorizonFrameIndices = try c.decodeIfPresent([Int].self, forKey: .startupHorizonFrameIndices) ?? self.startupHorizonFrameIndices
+        self.startupHorizonFramePosition = try c.decodeIfPresent(Int.self, forKey: .startupHorizonFramePosition) ?? self.startupHorizonFramePosition
 
         self.alignmentMaxKeypoints = try c.decodeIfPresent(Int.self, forKey: .alignmentMaxKeypoints) ?? self.alignmentMaxKeypoints
         self.alignmentWriteDebugImages = try c.decodeIfPresent(Bool.self, forKey: .alignmentWriteDebugImages) ?? self.alignmentWriteDebugImages

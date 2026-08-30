@@ -123,6 +123,15 @@ public final class ViewModel {
     /// condition rather than whatever happened to be reported since.
     private var alertingWarningKind: StarWarning.Kind?
 
+    /// The `config.json` the alert's "Restart Now" button would re-open and process, when
+    /// what is being reported is a run that stopped and left one behind.
+    ///
+    /// Lives exactly as long as the alert does: set only on the path that raises it, and
+    /// cleared by `acknowledgeWarning()`.  The same alert also carries machine warnings —
+    /// memory pressure, a failed write — which have no run to restart, and the button must
+    /// not linger on those.
+    private(set) var restartableRunConfigPath: String?
+
     /// Conditions the user has already been interrupted about and dismissed.
     ///
     /// These conditions are sampled for as long as they last, and `StarWarnings` re-delivers
@@ -191,7 +200,10 @@ public final class ViewModel {
     /// that matters, so it goes to the banner instead.  The critical ones are memory pressure
     /// at the level where the system is about to start killing processes, and the report of a
     /// previous run that was killed.
-    func report(warning: StarWarning) {
+    /// - Parameter restartableConfigPath: for a `previousRunDied` report, the config the
+    ///   stopped run can be picked back up from.  Offers the alert a "Restart Now" button;
+    ///   see `restartAbandonedRun()`.
+    func report(warning: StarWarning, restartableConfigPath: String? = nil) {
         self.latestWarning = warning
         guard warning.severity == .critical else {
             show(inBanner: warning)
@@ -208,7 +220,47 @@ public final class ViewModel {
         self.warningMessage = warning.message
         self.warningSuggestion = warning.suggestion
         self.alertingWarningKind = warning.kind
+        self.restartableRunConfigPath = restartableConfigPath
         self.showWarningAlert = true
+    }
+
+    /// The alert's "Restart Now" button: re-open the sequence the stopped run was working on
+    /// and carry on processing it.
+    ///
+    /// Everything a resume needs is already in the config that run wrote — which frames are
+    /// finished is read off disk by `FrameGraphBuilder`, not remembered — so this is the
+    /// ordinary re-open path with the button press that follows it made for the user.
+    ///
+    /// Acknowledges first: the user has acted on the report, and leaving the alert's
+    /// condition unacknowledged would let a second abandoned marker put the same alert back
+    /// up over the sequence that is now loading.
+    func restartAbandonedRun() {
+        guard let path = restartableRunConfigPath else { return }
+        acknowledgeWarning()
+
+        Log.i("restarting the run that stopped, from \(path)")
+
+        // Detached and held in `eraserTask` for the same reason opening a config from the
+        // initial view is: loading a sequence reads every frame's header and must not run on
+        // the main actor, and the task has to outlive the view that started it.
+        eraserTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.startup(withConfigFile: path)
+                await MainActor.run {
+                    guard let sequence = self.imageSequence else { return }
+                    // A run stopped part way through hand painting horizons resumes there
+                    // instead: the open above has already put the painter back up, and
+                    // processing now would run without the horizons the user asked to
+                    // define.  They start it themselves once the selection is finished.
+                    guard !sequence.isShowingHorizonPainter else { return }
+                    sequence.restartProcessing()
+                }
+            } catch {
+                Log.e("cannot restart \(path): \(error)")
+                await MainActor.run { self.report(error: "\(error)") }
+            }
+        }
     }
 
     /// The alert's OK button.  Closes it, and remembers the condition so the same one cannot
@@ -219,6 +271,7 @@ public final class ViewModel {
     /// becomes something to click past.  A *later* report of the condition does go there.
     func acknowledgeWarning() {
         self.showWarningAlert = false
+        self.restartableRunConfigPath = nil
         if let kind = alertingWarningKind {
             acknowledgedWarningKinds.insert(kind)
             alertingWarningKind = nil
@@ -325,10 +378,12 @@ public final class ViewModel {
     /// Recent, or a dropped `.json`.
     ///
     /// This and `startup(withConfig:)` are the two ways a sequence is *re*-opened, and both
-    /// raise the progress panel: the config already carries the answers the startup
+    /// go through `raiseReopenStep`: the config already carries the answers the startup
     /// questionnaire asks for, so what there is left to tell the user is how far the last
-    /// run got and what to do about it.  `startup(withNewImageSequence:)` deliberately does
-    /// not — it builds a fresh config, so it has those questions to ask instead.
+    /// run got and what to do about it — unless it also carries a hand-painted horizon
+    /// selection that was never finished, which comes first.
+    /// `startup(withNewImageSequence:)` deliberately does neither — it builds a fresh
+    /// config, so it has the questionnaire's questions to ask instead.
     func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = jsonConfigFilename
@@ -356,14 +411,27 @@ public final class ViewModel {
         }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.applyUserPreferences()
-        imageSequenceViewModel.sequenceProgressModalShowing = true
+        raiseReopenStep(for: imageSequenceViewModel)
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         self.userPreferences.justOpened(filename: jsonConfigFilename)
     }
 
+    /// What a re-opened sequence shows first.
+    ///
+    /// Normally the progress panel — how far the last run got, and the one thing left to do
+    /// about it.  But a sequence whose hand-painted horizon selection was never finished has
+    /// something to do *before* that: the frames the user asked to paint are still waiting,
+    /// and a run started now would quietly fall back to the automatic horizon detection they
+    /// declined.  So that picks up where it stopped instead, and the progress panel waits
+    /// until the selection is done and the startup flow reaches its own removal step.
+    private func raiseReopenStep(for sequence: ImageSequenceViewModel) {
+        if sequence.resumeStartupHorizonSelectionIfUnfinished() { return }
+        sequence.sequenceProgressModalShowing = true
+    }
+
     /// Open a sequence from a config file that has already been parsed.  See
-    /// `startup(withConfigFile:)` for why this raises the progress panel too.
+    /// `startup(withConfigFile:)` for why this takes the same re-open step too.
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = config.config().imageSequenceDirname
@@ -387,7 +455,7 @@ public final class ViewModel {
         }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.applyUserPreferences()
-        imageSequenceViewModel.sequenceProgressModalShowing = true
+        raiseReopenStep(for: imageSequenceViewModel)
         loadingImageSequenceFilename = nil
         isLoadingImageSequence = false
         // just opened handled in InitialView where we know the full path

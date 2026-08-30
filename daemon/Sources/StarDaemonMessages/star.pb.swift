@@ -1016,6 +1016,14 @@ public struct Star_V1_SessionInfo: Sendable {
   /// Clears the value of `sourceVideoInfo`. Subsequent reads from it will return its default value.
   public mutating func clearSourceVideoInfo() {self._sourceVideoInfo = nil}
 
+  /// Where this session's config.json actually lives — the file the daemon saves to, and the
+  /// one to hand back to Session.OpenConfig to resume it. For a session opened from a
+  /// sequence or a video that is `scratch_session_dir/config.json`; for one opened from a
+  /// config it is the caller's own file, which is NOT in the scratch dir. Clients used to
+  /// build the scratch path themselves, which left a resumed session pointing at a file
+  /// nothing ever wrote.
+  public var configJsonPath: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1491,6 +1499,32 @@ public struct Star_V1_Config: @unchecked Sendable {
   public var hasMergeStreamingThresholdMb: Bool {_storage._mergeStreamingThresholdMb != nil}
   /// Clears the value of `mergeStreamingThresholdMb`. Subsequent reads from it will return its default value.
   public mutating func clearMergeStreamingThresholdMb() {_uniqueStorage()._mergeStreamingThresholdMb = nil}
+
+  /// Recorded state rather than a setting, and so not in the expert dialog: the frames the
+  /// user chose to hand paint reference horizons on during the startup prompts, and how far
+  /// through that list they got. An empty list means there is nothing unfinished. A client
+  /// re-opening a session with one left over puts the painter back on
+  /// startup_horizon_frame_indices[startup_horizon_frame_position] rather than going on to
+  /// process, which would run the frames the user never reached with the automatic horizon
+  /// detection they had already declined.
+  ///
+  /// The two are applied together and gated on the *position* being present. A repeated
+  /// field cannot be `optional`, so an empty list is indistinguishable from an unset one —
+  /// without the gate, any client that sent a config back without knowing about these would
+  /// wipe the record.
+  public var startupHorizonFrameIndices: [Int32] {
+    get {_storage._startupHorizonFrameIndices}
+    set {_uniqueStorage()._startupHorizonFrameIndices = newValue}
+  }
+
+  public var startupHorizonFramePosition: Int32 {
+    get {_storage._startupHorizonFramePosition ?? 0}
+    set {_uniqueStorage()._startupHorizonFramePosition = newValue}
+  }
+  /// Returns true if `startupHorizonFramePosition` has been explicitly set.
+  public var hasStartupHorizonFramePosition: Bool {_storage._startupHorizonFramePosition != nil}
+  /// Clears the value of `startupHorizonFramePosition`. Subsequent reads from it will return its default value.
+  public mutating func clearStartupHorizonFramePosition() {_uniqueStorage()._startupHorizonFramePosition = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3301,7 +3335,7 @@ extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
 
 extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SessionInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_count\0\u{3}image_width\0\u{3}image_height\0\u{3}components_per_pixel\0\u{1}config\0\u{3}scratch_session_dir\0\u{3}source_video_info\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_count\0\u{3}image_width\0\u{3}image_height\0\u{3}components_per_pixel\0\u{1}config\0\u{3}scratch_session_dir\0\u{3}source_video_info\0\u{3}config_json_path\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3317,6 +3351,7 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       case 6: try { try decoder.decodeSingularMessageField(value: &self._config) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.scratchSessionDir) }()
       case 8: try { try decoder.decodeSingularMessageField(value: &self._sourceVideoInfo) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.configJsonPath) }()
       default: break
       }
     }
@@ -3351,6 +3386,9 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     try { if let v = self._sourceVideoInfo {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     } }()
+    if !self.configJsonPath.isEmpty {
+      try visitor.visitSingularStringField(value: self.configJsonPath, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3363,6 +3401,7 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     if lhs._config != rhs._config {return false}
     if lhs.scratchSessionDir != rhs.scratchSessionDir {return false}
     if lhs._sourceVideoInfo != rhs._sourceVideoInfo {return false}
+    if lhs.configJsonPath != rhs.configJsonPath {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3537,7 +3576,7 @@ extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -3587,6 +3626,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _alignmentKeypointDetectionDivisor: Double? = nil
     var _maxConcurrentKeypointOps: Int32? = nil
     var _mergeStreamingThresholdMb: Int32? = nil
+    var _startupHorizonFrameIndices: [Int32] = []
+    var _startupHorizonFramePosition: Int32? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -3644,6 +3685,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _alignmentKeypointDetectionDivisor = source._alignmentKeypointDetectionDivisor
       _maxConcurrentKeypointOps = source._maxConcurrentKeypointOps
       _mergeStreamingThresholdMb = source._mergeStreamingThresholdMb
+      _startupHorizonFrameIndices = source._startupHorizonFrameIndices
+      _startupHorizonFramePosition = source._startupHorizonFramePosition
     }
   }
 
@@ -3709,6 +3752,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 48: try { try decoder.decodeSingularInt32Field(value: &_storage._maxConcurrentKeypointOps) }()
         case 49: try { try decoder.decodeSingularInt32Field(value: &_storage._mergeStreamingThresholdMb) }()
         case 50: try { try decoder.decodeSingularDoubleField(value: &_storage._alignmentKeypointDetectionDivisor) }()
+        case 51: try { try decoder.decodeRepeatedInt32Field(value: &_storage._startupHorizonFrameIndices) }()
+        case 52: try { try decoder.decodeSingularInt32Field(value: &_storage._startupHorizonFramePosition) }()
         default: break
         }
       }
@@ -3862,6 +3907,12 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       try { if let v = _storage._alignmentKeypointDetectionDivisor {
         try visitor.visitSingularDoubleField(value: v, fieldNumber: 50)
       } }()
+      if !_storage._startupHorizonFrameIndices.isEmpty {
+        try visitor.visitPackedInt32Field(value: _storage._startupHorizonFrameIndices, fieldNumber: 51)
+      }
+      try { if let v = _storage._startupHorizonFramePosition {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 52)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -3918,6 +3969,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._alignmentKeypointDetectionDivisor != rhs_storage._alignmentKeypointDetectionDivisor {return false}
         if _storage._maxConcurrentKeypointOps != rhs_storage._maxConcurrentKeypointOps {return false}
         if _storage._mergeStreamingThresholdMb != rhs_storage._mergeStreamingThresholdMb {return false}
+        if _storage._startupHorizonFrameIndices != rhs_storage._startupHorizonFrameIndices {return false}
+        if _storage._startupHorizonFramePosition != rhs_storage._startupHorizonFramePosition {return false}
         return true
       }
       if !storagesAreEqual {return false}

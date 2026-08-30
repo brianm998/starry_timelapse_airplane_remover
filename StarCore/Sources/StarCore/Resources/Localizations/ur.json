@@ -633,6 +633,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "دوبارہ ترتیب دیں اور پٹی کے انتخاب سے شروع کریں (R)",
   "ui.reset_and_start_over_r": "دوبارہ ترتیب دیں اور نئے سرے سے شروع کریں (R)",
   "ui.restart_engine": "انجن دوبارہ چلائیں",
+  "ui.restart_now": "ابھی دوبارہ شروع کریں",
   "ui.restart_re_opens_this_session_from_its_saved": "دوبارہ چلانے سے یہ سیشن اپنی محفوظ کنفیگ سے دوبارہ کھل جاتا ہے۔",
   "ui.resume": "جاری رکھیں…",
   "ui.resume_from_config_json": "config.json سے جاری رکھیں…",

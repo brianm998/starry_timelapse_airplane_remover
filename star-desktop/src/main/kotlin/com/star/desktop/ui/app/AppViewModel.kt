@@ -13,6 +13,7 @@ import com.star.desktop.engine.EngineStatus
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.util.Log
 import com.star.proto.CleanMethod
+import com.star.proto.Config
 import com.star.proto.OpenProgress
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +51,23 @@ internal fun evenlySpacedFrameIndices(count: Int, total: Int): List<Int> {
     if (count == 1) return listOf(0)
     if (count >= total) return (0 until total).toList()
     return (0 until count).map { i -> Math.round(i.toDouble() * (total - 1) / (count - 1)).toInt() }
+}
+
+/**
+ * The frame a recorded horizon selection should resume on, or null when there is nothing to
+ * resume (macOS `ImageSequenceViewModel.startupHorizonResumeFrame`).
+ *
+ * Null for a selection that was never started (empty list) or that ran to the end — the list is
+ * cleared then, so a position past it means the two halves of the record disagree — and for a
+ * frame the sequence does not have. That last one is not paranoia for its own sake: config.json
+ * can be hand edited, and a sequence can be re-extracted at a different length while its config
+ * survives.
+ */
+internal fun startupHorizonResumeFrame(indices: List<Int>, position: Int, frameCount: Int): Int? {
+    if (position < 0 || position >= indices.size) return null
+    val frameIndex = indices[position]
+    if (frameIndex < 0 || frameIndex >= frameCount) return null
+    return frameIndex
 }
 
 /**
@@ -258,12 +276,10 @@ class AppViewModel(
     // Accumulated answers, applied to the session config when the user opens Advanced or starts processing.
     private var startupHasHorizon = false
     private var startupCameraMoving = false
-    private var startupAllowEarth = false
 
     private fun resetStartupChoices() {
         startupHasHorizon = false
         startupCameraMoving = false
-        startupAllowEarth = false
     }
 
     /** Prompt 1 answer: does the sequence include a horizon? */
@@ -275,7 +291,6 @@ class AppViewModel(
     /** Prompt 2 answer: was the camera moving (false = static on a tripod)? */
     fun startupAnswerMoving(moving: Boolean) {
         startupCameraMoving = moving
-        startupAllowEarth = !moving // macOS defaults earth alignment on for static cameras
         _startupStep.value = when {
             !startupHasHorizon -> StartupStep.REMOVAL
             moving -> StartupStep.SELECT_MOVING_HORIZONS
@@ -301,7 +316,9 @@ class AppViewModel(
         val svm = currentSequence ?: return
         scope.launch {
             applyStartupChoices() // persist moving/horizon to config before saving per-frame references
-            svm.beginStartupHorizon(evenlySpacedFrameIndices(count, svm.frameCount))
+            val indices = evenlySpacedFrameIndices(count, svm.frameCount)
+            svm.beginStartupHorizon(indices)
+            recordStartupHorizonProgress(indices, 0)
             _startupStep.value = null
         }
     }
@@ -311,7 +328,12 @@ class AppViewModel(
         val svm = currentSequence ?: return
         scope.launch {
             applyStartupChoices()
-            svm.beginStartupHorizon(emptyList()) // empty = single frame (the one currently shown)
+            // A one-frame list rather than the empty one this used to pass, so an interrupted
+            // static selection resumes by the same route as a moving one. See
+            // SequenceViewModel.beginStartupHorizon for why nothing downstream notices.
+            val indices = listOf(svm.currentIndex.value)
+            svm.beginStartupHorizon(indices)
+            recordStartupHorizonProgress(indices, 0)
             _startupStep.value = null
         }
     }
@@ -319,20 +341,71 @@ class AppViewModel(
     /** Painter "Next"/"Continue" in startup mode: advance to the next frame, or finish → removal. */
     fun startupHorizonAdvanceOrContinue() {
         val svm = currentSequence ?: return
-        if (svm.startupHorizonHasMore()) svm.advanceStartupHorizon()
-        else continueToRemovalFromHorizonPainter()
+        if (svm.startupHorizonHasMore()) {
+            svm.advanceStartupHorizon()
+            scope.launch {
+                recordStartupHorizonProgress(svm.startupHorizonIndices.value,
+                                             svm.startupHorizonPosition.value)
+            }
+        } else {
+            continueToRemovalFromHorizonPainter()
+        }
     }
 
     /** Finish startup horizon painting → show the removal prompt (macOS `continueToRemovalFromHorizonPainter`). */
     fun continueToRemovalFromHorizonPainter() {
         currentSequence?.endStartupHorizon()
+        scope.launch { recordStartupHorizonProgress(emptyList(), 0) } // finished: nothing to resume
         _startupStep.value = StartupStep.REMOVAL
     }
 
     /** Painter "Cancel" in startup mode → back to the moving/stationary question (macOS `returnToMovingViewFromHorizonPainter`). */
     fun cancelStartupHorizon() {
         currentSequence?.endStartupHorizon()
+        scope.launch { recordStartupHorizonProgress(emptyList(), 0) } // backed out: nothing to resume
         _startupStep.value = StartupStep.MOVING
+    }
+
+    /**
+     * Mirror the painter's position in the startup horizon flow into the session config, so a
+     * selection the user is part way through survives the session.
+     *
+     * Written on every step, not once at the end: the session this protects against is the one
+     * that was killed or quit mid-paint, which gets no chance to clean up. Losing it means
+     * re-opening straight into processing, with the frames the user never reached falling back
+     * to the automatic horizon detection they had just declined.
+     */
+    private suspend fun recordStartupHorizonProgress(indices: List<Int>, position: Int) {
+        val current = runCatching { sessions.getConfig() }.getOrNull() ?: return
+        val b = current.toBuilder()
+            .clearStartupHorizonFrameIndices()
+            .addAllStartupHorizonFrameIndices(indices)
+            // Set even when clearing: the daemon gates the pair on the position being
+            // *present*, since a repeated field cannot be optional and an empty list would
+            // otherwise be indistinguishable from a client that knows nothing about these.
+            .setStartupHorizonFramePosition(position)
+        runCatching { sessions.updateConfig(b.build()) }
+    }
+
+    /**
+     * Put the painter back on a hand-painted horizon selection the last session did not finish.
+     *
+     * The horizons already painted are on disk, so only the frames from the recorded position
+     * on are left to do. Finishing them lands on the removal prompt, which starts the run the
+     * ordinary way — which is the point: processing before the selection is done runs the
+     * frames the user never reached with the automatic detection they had just declined.
+     */
+    private fun resumeStartupHorizonIfUnfinished(svm: SequenceViewModel, config: Config) {
+        val indices = config.startupHorizonFrameIndicesList
+        val position = config.startupHorizonFramePosition
+        if (startupHorizonResumeFrame(indices, position, svm.frameCount) == null) {
+            if (indices.isNotEmpty()) {
+                Log.w("App") { "startup horizon selection at $position of $indices does not fit ${svm.frameCount} frames; not resuming" }
+            }
+            return
+        }
+        Log.i("App") { "resuming hand painted horizon selection at ${position + 1} of ${indices.size}" }
+        svm.beginStartupHorizon(indices, position)
     }
 
     /** Total frames in the open sequence — bounds the moving-horizon count stepper. */
@@ -378,7 +451,9 @@ class AppViewModel(
         val b = current.toBuilder()
             .setHorizonDetectionEnabled(startupHasHorizon)
             .setTripodHeadWasMoving(startupCameraMoving)
-            .setAllowEarthAlignment(startupAllowEarth)
+            // Earth alignment is on for both static and moving sequences now that the
+            // ground homography guard rejects the warps it used to apply blindly.
+            .setAllowEarthAlignment(true)
         cleanMethod?.let { b.setCleanMethod(it) }
         runCatching { sessions.updateConfig(b.build()) }
     }
@@ -509,8 +584,12 @@ class AppViewModel(
             prefs.addRecentFile(path)
             _recentFiles.value = prefs.recentFiles
         }
-        // The session's on-disk config.json — the resume path for crash recovery (cross-client resume).
-        lastResumePath = "${info.scratchSessionDir}/config.json"
+        // The session's on-disk config.json — the resume path for crash recovery (cross-client
+        // resume). Reported by the daemon rather than built from the scratch dir: a session
+        // opened from a config keeps writing to the caller's own file, which is somewhere
+        // else entirely, so the constructed path named a file nothing ever wrote and
+        // restartEngine() gave up on a session that was perfectly resumable.
+        lastResumePath = info.configJsonPath.ifEmpty { "${info.scratchSessionDir}/config.json" }
         _engineDown.value = null
         // Warn if the session was last written by a different engine version (req #4).
         val engineVer = (engine.status.value as? EngineStatus.Connected)?.daemonVersion
@@ -540,6 +619,11 @@ class AppViewModel(
         if (promptStartup && autoMode == null) {
             resetStartupChoices()
             _startupStep.value = StartupStep.HORIZON
+        } else if (autoMode == null) {
+            // A config resume. Normally there is nothing to prompt for — the config already
+            // carries the answers. The exception is a hand-painted horizon selection the last
+            // session never finished, which has to come before processing rather than after.
+            resumeStartupHorizonIfUnfinished(svm, info.config)
         }
     }
 

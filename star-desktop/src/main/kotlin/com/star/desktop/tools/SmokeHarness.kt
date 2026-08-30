@@ -55,7 +55,7 @@ object SmokeHarness {
             client.openSequence(File(path).absolutePath, cfg)
         }
         println("SessionInfo: id=${info.sessionId} frames=${info.frameCount} ${info.imageWidth}x${info.imageHeight}")
-        println("configJson=${info.scratchSessionDir}/config.json")
+        println("configJson=${info.configJsonPath.ifEmpty { "${info.scratchSessionDir}/config.json" }}")
 
         if (mode == "process" || mode == "processall" || mode == "selective") {
             val done = CompletableDeferred<Unit>()

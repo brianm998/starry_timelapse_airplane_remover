@@ -633,6 +633,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Сбросить и начать заново с выбора полосы (R)",
   "ui.reset_and_start_over_r": "Сбросить и начать заново (R)",
   "ui.restart_engine": "Перезапустить движок",
+  "ui.restart_now": "Перезапустить сейчас",
   "ui.restart_re_opens_this_session_from_its_saved": "Перезапуск заново открывает этот сеанс из сохранённой конфигурации.",
   "ui.resume": "Продолжить…",
   "ui.resume_from_config_json": "Продолжить из config.json…",

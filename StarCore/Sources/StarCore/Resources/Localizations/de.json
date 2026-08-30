@@ -633,6 +633,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Zurücksetzen und bei der Bandauswahl neu beginnen (R)",
   "ui.reset_and_start_over_r": "Zurücksetzen und neu beginnen (R)",
   "ui.restart_engine": "Engine neu starten",
+  "ui.restart_now": "Jetzt neu starten",
   "ui.restart_re_opens_this_session_from_its_saved": "Ein Neustart öffnet diese Sitzung aus ihrer gespeicherten Konfiguration erneut.",
   "ui.resume": "Fortsetzen …",
   "ui.resume_from_config_json": "Aus config.json fortsetzen …",

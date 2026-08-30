@@ -9,6 +9,11 @@ actor Session {
     let sessionID: String
     let scratchSessionDir: String
 
+    /// Where this session's config.json is, which is what a client hands back to
+    /// `Session.OpenConfig` to resume it.  Not always under `scratchSessionDir`: a session
+    /// opened from a config keeps writing to the caller's own file.
+    let configJsonPath: String
+
     private(set) var configManager: ConfigManager
     private(set) var imageSequence: ImageSequence
     private(set) var frames: [FrameAirplaneRemover] = []
@@ -24,6 +29,7 @@ actor Session {
     init(
         sessionID: String,
         scratchSessionDir: String,
+        configJsonPath: String,
         configManager: ConfigManager,
         imageSequence: ImageSequence,
         imageInfo: ImageInfo,
@@ -31,6 +37,7 @@ actor Session {
     ) {
         self.sessionID = sessionID
         self.scratchSessionDir = scratchSessionDir
+        self.configJsonPath = configJsonPath
         self.configManager = configManager
         self.imageSequence = imageSequence
         self.imageInfo = imageInfo
@@ -104,8 +111,7 @@ actor Session {
     func setStaticReferenceHorizon(_ enabled: Bool) async {
         var cfg = await configManager.config()
         cfg.hasStaticReferenceHorizon = enabled
-        await configManager.update(cfg)
-        writeConfigJson(cfg, toDir: scratchSessionDir)
+        await configManager.update(cfg)   // saves to configJsonPath
     }
 
     // Start processing (calls frameGraphBuilder.build).
@@ -291,7 +297,7 @@ extension Session {
 
         let configFilename = "\(scratchSessionDir)/config.json"
         let configManager = await ConfigManager(configFilename: configFilename, config: config)
-        writeConfigJson(config, toDir: scratchSessionDir)  // persist config.json (writeJson mangles abs paths)
+        await configManager.save()   // the initial file; nothing has updated the manager yet
         await constants.set(detectionType: config.detectionType)
 
         let imageSequence = try ImageSequence(
@@ -308,7 +314,8 @@ extension Session {
         // makes every op's estimatedMemoryBytes 0 (AsyncOperation then skips reserve()
         // entirely) and drops the keypoint limiter back to
         // numberOfFramesToProcessConcurrently — i.e. no memory gating at all.
-        // save: false because this session persists config.json itself via writeConfigJson.
+        // save: false because there is nothing here worth rewriting config.json for — the
+        // dimensions are read back off the sequence on every open.
         var configWithImageInfo = await configManager.config()
         configWithImageInfo.set(imageInfo: imageInfo)
         await configManager.update(configWithImageInfo, save: false)
@@ -316,6 +323,7 @@ extension Session {
         let session = Session(
             sessionID: sessionID,
             scratchSessionDir: scratchSessionDir,
+            configJsonPath: configFilename,
             configManager: configManager,
             imageSequence: imageSequence,
             imageInfo: imageInfo
@@ -364,7 +372,7 @@ extension Session {
 
         let configFilename = "\(scratchSessionDir)/config.json"
         let configManager = await ConfigManager(configFilename: configFilename, config: config)
-        writeConfigJson(config, toDir: scratchSessionDir)  // persist config.json (writeJson mangles abs paths)
+        await configManager.save()   // the initial file; nothing has updated the manager yet
         await constants.set(detectionType: config.detectionType)
 
         let imageSequence = try ImageSequence(
@@ -381,7 +389,8 @@ extension Session {
         // makes every op's estimatedMemoryBytes 0 (AsyncOperation then skips reserve()
         // entirely) and drops the keypoint limiter back to
         // numberOfFramesToProcessConcurrently — i.e. no memory gating at all.
-        // save: false because this session persists config.json itself via writeConfigJson.
+        // save: false because there is nothing here worth rewriting config.json for — the
+        // dimensions are read back off the sequence on every open.
         var configWithImageInfo = await configManager.config()
         configWithImageInfo.set(imageInfo: imageInfo)
         await configManager.update(configWithImageInfo, save: false)
@@ -389,6 +398,7 @@ extension Session {
         let session = Session(
             sessionID: sessionID,
             scratchSessionDir: scratchSessionDir,
+            configJsonPath: configFilename,
             configManager: configManager,
             imageSequence: imageSequence,
             imageInfo: imageInfo,
@@ -425,7 +435,9 @@ extension Session {
         // makes every op's estimatedMemoryBytes 0 (AsyncOperation then skips reserve()
         // entirely) and drops the keypoint limiter back to
         // numberOfFramesToProcessConcurrently — i.e. no memory gating at all.
-        // save: false because this session persists config.json itself via writeConfigJson.
+        // save: false because there is nothing here worth rewriting config.json for — the
+        // dimensions are read back off the sequence on every open, and this session's
+        // config.json is the caller's own file rather than one in the scratch dir.
         var configWithImageInfo = await configManager.config()
         configWithImageInfo.set(imageInfo: imageInfo)
         await configManager.update(configWithImageInfo, save: false)
@@ -433,6 +445,7 @@ extension Session {
         let session = Session(
             sessionID: sessionID,
             scratchSessionDir: scratchSessionDir,
+            configJsonPath: configPath,   // the caller's own file, not one in the scratch dir
             configManager: configManager,
             imageSequence: imageSequence,
             imageInfo: imageInfo
@@ -454,18 +467,6 @@ func splitDirPath(_ dir: String) -> (name: String, path: String) {
     let trimmed = (dir.count > 1 && dir.hasSuffix("/")) ? String(dir.dropLast()) : dir
     let ns = trimmed as NSString
     return (ns.lastPathComponent, ns.deletingLastPathComponent)
-}
-
-// Persist the session's config.json to the scratch session root so OpenConfig can resume it
-// (and the macOS app can interop). Config is Codable; we write it directly rather than via
-// ConfigManager.save() → Config.writeJson, which resolves a non-prefixed absolute path against
-// tempOutputPath and silently writes to a bogus location.
-func writeConfigJson(_ config: Config, toDir dir: String) {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
-    if let data = try? encoder.encode(config) {
-        try? data.write(to: URL(fileURLWithPath: "\(dir)/config.json"))
-    }
 }
 
 private extension FrameSavingState {

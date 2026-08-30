@@ -633,6 +633,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Wyzeruj i zacznij od nowa od wyboru pasa (R)",
   "ui.reset_and_start_over_r": "Wyzeruj i zacznij od nowa (R)",
   "ui.restart_engine": "Uruchom silnik ponownie",
+  "ui.restart_now": "Uruchom ponownie teraz",
   "ui.restart_re_opens_this_session_from_its_saved": "Ponowne uruchomienie otwiera tę sesję z jej zapisanej konfiguracji.",
   "ui.resume": "Wznów…",
   "ui.resume_from_config_json": "Wznów z config.json…",

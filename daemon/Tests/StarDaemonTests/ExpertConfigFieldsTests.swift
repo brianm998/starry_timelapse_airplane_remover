@@ -1,6 +1,7 @@
 import XCTest
 import StarCore
 import StarDaemonMessages
+@testable import stard
 
 // The expert Config fields are `optional` in the proto on purpose: an unset field has to
 // keep StarCore's own (non-zero) default instead of being clobbered by a proto3 zero.
@@ -100,6 +101,83 @@ final class ExpertConfigFieldsTests: XCTestCase {
         XCTAssertFalse(back.hasAlignmentKeypointDetectionDivisor)
         XCTAssertFalse(back.hasMaxConcurrentKeypointOps)
         XCTAssertFalse(back.hasMergeStreamingThresholdMb)
+    }
+
+    // MARK: - the unfinished horizon selection
+
+    /// The pair that records a hand-painted horizon selection the user did not finish. Not
+    /// an expert setting — recorded state — but it lives in the same message and has the
+    /// same presence hazard, in a sharper form: `repeated` cannot be `optional`, so an
+    /// empty list is indistinguishable from an unset one.
+
+    func testAnUnfinishedSelectionRoundTripsOverTheWire() throws {
+        var c = Star_V1_Config()
+        c.startupHorizonFrameIndices = [0, 25, 50, 75, 99]
+        c.startupHorizonFramePosition = 2
+
+        let back = try Star_V1_Config(serializedBytes: try c.serializedData())
+        XCTAssertEqual(back.startupHorizonFrameIndices, [0, 25, 50, 75, 99])
+        XCTAssertEqual(back.startupHorizonFramePosition, 2)
+    }
+
+    /// Position 0 — stopped before painting anything — is the most likely value of all, and
+    /// the one a proto3 zero would lose.
+    func testAPresentZeroPositionStaysPresent() throws {
+        var c = Star_V1_Config()
+        c.startupHorizonFrameIndices = [0, 50, 99]
+        c.startupHorizonFramePosition = 0
+
+        let back = try Star_V1_Config(serializedBytes: try c.serializedData())
+        XCTAssertTrue(back.hasStartupHorizonFramePosition,
+                      "the position is what applyExpertConfig gates the pair on; losing "
+                      + "presence at 0 drops the commonest record of all")
+    }
+
+    func testAnUntouchedSelectionStaysAbsent() throws {
+        let back = try Star_V1_Config(serializedBytes: try Star_V1_Config().serializedData())
+        XCTAssertFalse(back.hasStartupHorizonFramePosition)
+        XCTAssertTrue(back.startupHorizonFrameIndices.isEmpty)
+    }
+
+    /// What the gate is for. The expert dialog builds its update from the config the daemon
+    /// sent, but a client built before these fields existed does not — and applying its
+    /// empty list would wipe the selection the user is part way through.
+    func testAConfigThatNeverMentionsTheSelectionLeavesItAlone() {
+        var c = Config()
+        c.startupHorizonFrameIndices = [0, 50, 99]
+        c.startupHorizonFramePosition = 1
+
+        Mapping.applyExpertConfig(&c, from: Star_V1_Config())
+
+        XCTAssertEqual(c.startupHorizonFrameIndices, [0, 50, 99])
+        XCTAssertEqual(c.startupHorizonFramePosition, 1)
+    }
+
+    /// And the other direction: a client that *does* know about them can clear the record,
+    /// which is how finishing or cancelling the selection is reported.
+    func testAPresentEmptySelectionClearsTheRecord() {
+        var c = Config()
+        c.startupHorizonFrameIndices = [0, 50, 99]
+        c.startupHorizonFramePosition = 1
+
+        var p = Star_V1_Config()
+        p.startupHorizonFramePosition = 0    // present, with no indices alongside it
+        Mapping.applyExpertConfig(&c, from: p)
+
+        XCTAssertTrue(c.startupHorizonFrameIndices.isEmpty)
+        XCTAssertEqual(c.startupHorizonFramePosition, 0)
+    }
+
+    /// The daemon always reports the record, so a client can tell on open that the last
+    /// session left a selection unfinished without asking a second question.
+    func testTheDaemonReportsTheSelectionToClients() {
+        var c = Config()
+        c.startupHorizonFrameIndices = [4, 8, 15]
+        c.startupHorizonFramePosition = 1
+
+        let p = Mapping.protoConfig(c)
+        XCTAssertEqual(p.startupHorizonFrameIndices, [4, 8, 15])
+        XCTAssertEqual(p.startupHorizonFramePosition, 1)
     }
 
     /// The defaults the daemon reports to a client should be StarCore's, not zeros.

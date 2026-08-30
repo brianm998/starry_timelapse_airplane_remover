@@ -222,7 +222,13 @@ struct StarApp: App {
             // default, so before this a user whose app was killed mid-run had nothing at all.
             for marker in await RunMarkerStore.shared.abandonedRuns() {
                 Log.w("previous run did not finish: \(marker.report)")
-                await MainActor.run { viewModel.report(warning: marker.asWarning) }
+                // The config, when the run left one star can still find, is what puts a
+                // "Restart Now" button on the alert instead of only an OK.
+                let restartableConfigPath = marker.restartableConfigPath
+                await MainActor.run {
+                    viewModel.report(warning: marker.asWarning,
+                                     restartableConfigPath: restartableConfigPath)
+                }
             }
             await RunMarkerStore.shared.clearAbandoned()
 

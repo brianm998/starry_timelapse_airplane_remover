@@ -113,6 +113,50 @@ final class WriteJsonTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: "\(elsewhere)/config.json"))
     }
 
+    // MARK: - through ConfigManager
+
+    /// The layer everything but the cli actually goes through. `ConfigManager.save()` hands
+    /// its own `_jsonFilename` to `writeJson`, and for stard that is an absolute path in a
+    /// scratch session dir with no relation to `tempOutputPath`.
+    ///
+    /// This used not to work, and the daemon carried a hand-rolled writer and a scattering
+    /// of `save: false` to route around it: before the prefix test above became a
+    /// `deletingLastPathComponent`, an absolute path that was not literally prefixed by
+    /// `tempOutputPath` got appended to it, so the file landed at
+    /// `<tempOutputPath>//scratch/<uuid>/config.json`.
+    func testConfigManagerSavesToAnAbsoluteFilename() async throws {
+        let sessionDir = "\(scratch)/session-dir"
+        try FileManager.default.createDirectory(atPath: sessionDir,
+                                                withIntermediateDirectories: true)
+        var starting = config(tempOutputPath: "\(scratch)/star_temp_seq")
+        starting.imageSequenceDirname = "seq"
+
+        let manager = await ConfigManager(configFilename: "\(sessionDir)/config.json",
+                                          config: starting)
+        var updated = await manager.config()
+        updated.imageWidth = 4240
+        await manager.update(updated)          // save: true, the default
+
+        let data = try Data(contentsOf: URL(fileURLWithPath: "\(sessionDir)/config.json"))
+        let decoded = try JSONDecoder().decode(Config.self, from: data)
+        XCTAssertEqual(decoded.imageWidth, 4240)
+        XCTAssertEqual(decoded.imageSequenceDirname, "seq")
+    }
+
+    /// And a bare filename still lands under `tempOutputPath`, which is what a fresh cli run
+    /// hands `ConfigManager`.
+    func testConfigManagerSavesABareFilenameUnderTempOutputPath() async throws {
+        let tempPath = "\(scratch)/star_temp_seq"
+        let manager = await ConfigManager(configFilename: "config.json",
+                                          config: config(tempOutputPath: tempPath))
+        var updated = await manager.config()
+        updated.imageWidth = 1234
+        await manager.update(updated)
+
+        let data = try Data(contentsOf: URL(fileURLWithPath: "\(tempPath)/config.json"))
+        XCTAssertEqual(try JSONDecoder().decode(Config.self, from: data).imageWidth, 1234)
+    }
+
     // MARK: - overwrite
 
     func testItRefusesToClobberWithoutOverwrite() throws {

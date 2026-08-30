@@ -98,9 +98,9 @@ The benefit of using some of the earth aligned image in the sky is that airplane
 
 ##### Moving
 
-For videos show on a moving triod, earth alignment is experimental as of Star 0.10.4.  There is an option in settings to turn it on, off by default.   
+For videos shot on a moving tripod, earth alignment is on by default.  There is an option in settings to turn it off.
 
-It needs more work, as earth alignment is more difficult, especially for really dark foregrounds.
+Aligning the ground is harder than aligning the sky, and a really dark foreground can still be untrackable.  Star checks the RANSAC consensus behind each ground homography and throws out the ones that do not have enough agreement, so a neighbor whose ground cannot be tracked drops out of the merge instead of smearing the frame.
 
 #### Final Auto Clean
 

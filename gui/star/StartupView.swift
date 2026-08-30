@@ -132,7 +132,6 @@ struct MovingView: View {
                 Spacer()
                 Button {
                     viewModel.cameraMotion = .fixed
-                    viewModel.allowEarthAlignment = true // default to on for earth
                     if viewModel.horizonDetectionEnabled {
                         self.state = .selectHorizon
                     } else {
@@ -313,9 +312,7 @@ struct SelectHorizonView: View {
                 Space(width: 20)
 
                 Button {
-                    viewModel.horizonPainterMode = .startup
-                    viewModel.shouldShowInitialInstructions = false
-                    viewModel.isShowingHorizonPainter = true
+                    viewModel.startStaticHorizonStartupFlow()
                 } label: {
                     Text(localized("ui.yes"))
                       .font(.title)

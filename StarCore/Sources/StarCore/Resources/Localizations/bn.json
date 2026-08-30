@@ -633,6 +633,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "রিসেট করে ব্যান্ড নির্বাচন থেকে আবার শুরু করুন (R)",
   "ui.reset_and_start_over_r": "রিসেট করে আবার শুরু করুন (R)",
   "ui.restart_engine": "ইঞ্জিন পুনরায় চালু করুন",
+  "ui.restart_now": "এখনই পুনরায় শুরু করুন",
   "ui.restart_re_opens_this_session_from_its_saved": "পুনরায় চালু করলে এই সেশনটি তার সংরক্ষিত কনফিগ থেকে আবার খোলে।",
   "ui.resume": "আবার শুরু…",
   "ui.resume_from_config_json": "config.json থেকে আবার শুরু…",

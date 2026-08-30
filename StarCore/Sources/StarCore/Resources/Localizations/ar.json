@@ -633,6 +633,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "أعد التعيين وابدأ من جديد من اختيار النطاق (R)",
   "ui.reset_and_start_over_r": "أعد التعيين وابدأ من جديد (R)",
   "ui.restart_engine": "إعادة تشغيل المحرك",
+  "ui.restart_now": "إعادة التشغيل الآن",
   "ui.restart_re_opens_this_session_from_its_saved": "تعيد إعادة التشغيل فتح هذه الجلسة من إعداداتها المحفوظة.",
   "ui.resume": "استئناف…",
   "ui.resume_from_config_json": "الاستئناف من config.json…",

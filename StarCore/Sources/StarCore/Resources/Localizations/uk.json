@@ -633,6 +633,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Скинути й почати спочатку з вибору смуги (R)",
   "ui.reset_and_start_over_r": "Скинути й почати спочатку (R)",
   "ui.restart_engine": "Перезапустити рушій",
+  "ui.restart_now": "Перезапустити зараз",
   "ui.restart_re_opens_this_session_from_its_saved": "Перезапуск відкриває цей сеанс наново з його збереженої конфігурації.",
   "ui.resume": "Продовжити…",
   "ui.resume_from_config_json": "Продовжити з config.json…",

@@ -633,6 +633,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Redefinir e recomeçar a partir da seleção de faixa (R)",
   "ui.reset_and_start_over_r": "Redefinir e recomeçar (R)",
   "ui.restart_engine": "Reiniciar o motor",
+  "ui.restart_now": "Reiniciar agora",
   "ui.restart_re_opens_this_session_from_its_saved": "Reiniciar reabre esta sessão a partir da configuração salva.",
   "ui.resume": "Retomar…",
   "ui.resume_from_config_json": "Retomar do config.json…",

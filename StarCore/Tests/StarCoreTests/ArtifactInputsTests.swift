@@ -255,7 +255,10 @@ final class ArtifactInputsTests: XCTestCase {
         var base = config()
         base.tripodHeadWasMoving = true
         let mutations: [(String, (inout Config) -> Void)] = [
-            ("allowEarthAlignment",        { $0.allowEarthAlignment = true }),
+            // Toggled rather than set: earth alignment defaults to on now, so assigning
+            // `true` here mutated nothing and the assertion below passed on an unchanged
+            // config. What matters is that the setting *changed*, not which way.
+            ("allowEarthAlignment",        { $0.allowEarthAlignment.toggle() }),
             ("homographySmoothingEpsilon", { $0.homographySmoothingEpsilon = 0.25 }),
             ("pixelThreshold",             { $0.pixelThreshold = 2.5 }),
             ("numberAlignedNeighborFrames", { $0.numberAlignedNeighborFrames = 12 }),
@@ -281,7 +284,7 @@ final class ArtifactInputsTests: XCTestCase {
         var base = config()
         base.tripodHeadWasMoving = false
         var after = base
-        after.allowEarthAlignment = true
+        after.allowEarthAlignment.toggle()   // see the note in the moving case above
 
         let stale = ArtifactInputs.current(from: after)
             .staleStages(comparedTo: ArtifactInputs.current(from: base))

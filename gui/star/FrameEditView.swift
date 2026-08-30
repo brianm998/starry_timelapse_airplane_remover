@@ -141,6 +141,16 @@ struct FrameEditView: View {
                 horizonPaintState = nil
             }
         }
+        // The painter can also be open before this view exists: re-opening a sequence whose
+        // horizon selection was never finished puts it up while the window is still showing
+        // the initial view (`resumeStartupHorizonSelectionIfUnfinished`).  There is no
+        // change for `onChange` to see in that case, so the paint state has to be built
+        // here or the toolbar draws over nothing.
+        .onAppear {
+            if viewModel.isShowingHorizonPainter, horizonPaintState == nil {
+                loadHorizonPainterForCurrentFrame()
+            }
+        }
         // During the startup moving-horizon flow the user advances through evenly-spaced
         // frames. Reset the painter state each time the frame changes so the user gets a
         // clean canvas for each new horizon.
