@@ -434,3 +434,145 @@ final class AlignmentValidationTests: XCTestCase {
         }
     }
 }
+
+
+/// Tests for `GroundTrackingCoverage`, the count that decides whether the user is told
+/// that star could not track the ground.
+///
+/// The threshold is the whole content of the type, and getting it wrong is quiet in both
+/// directions: too permissive and every moving sequence raises a banner about a couple of
+/// fills nobody would have noticed, too strict and a sequence whose foreground was clipped
+/// to black by a video export finishes with a dirty ground and says nothing about it.
+final class GroundTrackingCoverageTests: XCTestCase {
+
+    // MARK: - fixtures
+
+    private func warp(_ frameIndex: Int, solved: Bool) -> AlignmentWarpInfoCodable {
+        AlignmentWarpInfoCodable(
+          homography: solved ? [1, 0, 0, 0, 1, 0, 0, 0, 1] : nil,
+          deviation: 0,
+          alignmentState: solved ? .homographySuccess : .noHomographyFound,
+          frameIndex: frameIndex
+        )
+    }
+
+    /// One frame with a neighbour at each of `offsets`, of which the first `solved`
+    /// produced a matrix.  `solved: nil` means the homography op left no container at
+    /// all, which is a different thing from a container whose warps all failed.
+    private func frame(_ index: Int,
+                       offsets: [Int],
+                       solved: Int?) -> GroundTrackingCoverage.Frame
+    {
+        let neighbours = offsets.map { index + $0 }
+        guard let solved else {
+            return GroundTrackingCoverage.Frame(neighborFrameIndices: neighbours,
+                                                homography: nil)
+        }
+        return GroundTrackingCoverage.Frame(
+          neighborFrameIndices: neighbours,
+          homography: HomographyResultsCodable(
+            for: index,
+            with: neighbours.enumerated().map { warp($0.element, solved: $0.offset < solved) }
+          )
+        )
+    }
+
+    /// A ten frame sequence, every frame with the same four neighbours and the same
+    /// number of them solved.
+    private func sequence(solvedPerFrame: Int?) -> [GroundTrackingCoverage.Frame] {
+        (0..<10).map { frame($0, offsets: [-2, -1, 1, 2], solved: solvedPerFrame) }
+    }
+
+    // MARK: - the threshold
+
+    func testASequenceThatSolvedEveryPairIsSilent() {
+        let coverage = GroundTrackingCoverage(frames: sequence(solvedPerFrame: 4))
+        XCTAssertEqual(coverage.expectedPairs, 40)
+        XCTAssertEqual(coverage.solvedPairs, 40)
+        XCTAssertEqual(coverage.failedPairs, 0)
+        XCTAssertFalse(coverage.groundWasNotTracked)
+    }
+
+    /// Ground estimation failing on individual pairs is ordinary, and the continuity
+    /// filter fills those from the frames around them.  A quarter gone is not news.
+    func testAFewFailedPairsAreSilent() {
+        let coverage = GroundTrackingCoverage(frames: sequence(solvedPerFrame: 3))
+        XCTAssertEqual(coverage.failedPairs, 10)
+        XCTAssertFalse(coverage.groundWasNotTracked)
+    }
+
+    /// The boundary is strict: exactly half still leaves a solid enough local model for
+    /// the continuity filter to fill the other half from.
+    func testExactlyHalfIsStillSilent() {
+        let coverage = GroundTrackingCoverage(frames: sequence(solvedPerFrame: 2))
+        XCTAssertEqual(coverage.solvedPairs, 20)
+        XCTAssertEqual(coverage.failedPairs, 20)
+        XCTAssertEqual(coverage.solvedFraction, 0.5, accuracy: 1e-12)
+        XCTAssertFalse(coverage.groundWasNotTracked)
+    }
+
+    /// One pair either side of the boundary, so the comparison cannot be off by one and
+    /// still pass.
+    func testJustPastHalfIsReported() {
+        var frames = sequence(solvedPerFrame: 2)
+        frames[0] = frame(0, offsets: [-2, -1, 1, 2], solved: 1)
+        let coverage = GroundTrackingCoverage(frames: frames)
+        XCTAssertEqual(coverage.solvedPairs, 19)
+        XCTAssertLessThan(coverage.solvedFraction, 0.5)
+        XCTAssertTrue(coverage.groundWasNotTracked)
+    }
+
+    func testNothingSolvedAtAllIsReported() {
+        let coverage = GroundTrackingCoverage(frames: sequence(solvedPerFrame: 0))
+        XCTAssertEqual(coverage.solvedPairs, 0)
+        XCTAssertEqual(coverage.failedPairs, 40)
+        XCTAssertTrue(coverage.groundWasNotTracked)
+    }
+
+    // MARK: - why it counts pairs
+
+    /// The reason the count is per pair: every frame here has a homography container, so
+    /// a per-frame count calls this sequence fully measured, and not one pair solved.
+    func testAContainerWhoseWarpsAllFailedCountsAsNothingSolved() {
+        let frames = sequence(solvedPerFrame: 0)
+        XCTAssertTrue(frames.allSatisfy { $0.homography != nil },
+                      "the fixture has to have a container per frame for this to mean anything")
+        XCTAssertEqual(GroundTrackingCoverage(frames: frames).solvedPairs, 0)
+        XCTAssertTrue(GroundTrackingCoverage(frames: frames).groundWasNotTracked)
+    }
+
+    /// A frame whose homography op never ran at all counts the same as one whose warps
+    /// all failed — both leave those pairs unmeasured.
+    func testAMissingContainerCountsTheSameAsAFailedOne() {
+        let missing = GroundTrackingCoverage(frames: sequence(solvedPerFrame: nil))
+        let failed = GroundTrackingCoverage(frames: sequence(solvedPerFrame: 0))
+        XCTAssertEqual(missing.expectedPairs, failed.expectedPairs)
+        XCTAssertEqual(missing.solvedPairs, failed.solvedPairs)
+        XCTAssertTrue(missing.groundWasNotTracked)
+    }
+
+    // MARK: - edges
+
+    /// Frames near the ends of a sequence legitimately have fewer neighbours, so the
+    /// expected total is not frame count times neighbour count.  Counting the full
+    /// shape for them would invent failures that were never possible.
+    func testTruncatedEndFramesCountOnlyTheNeighboursTheyHave() {
+        var frames = (1..<9).map { frame($0, offsets: [-2, -1, 1, 2], solved: 4) }
+        frames.append(frame(0, offsets: [1, 2], solved: 2))
+        frames.append(frame(9, offsets: [-2, -1], solved: 2))
+        let coverage = GroundTrackingCoverage(frames: frames)
+        XCTAssertEqual(coverage.expectedPairs, 36, "8 interior frames at 4, 2 end frames at 2")
+        XCTAssertEqual(coverage.failedPairs, 0)
+        XCTAssertFalse(coverage.groundWasNotTracked)
+    }
+
+    /// A sequence with nothing to measure has a solved fraction of zero for want of a
+    /// denominator, not because anything failed — so it must not raise the warning, and
+    /// must not divide by zero getting there.
+    func testASequenceWithNoNeighboursAtAllIsSilent() {
+        let coverage = GroundTrackingCoverage(frames: [])
+        XCTAssertEqual(coverage.expectedPairs, 0)
+        XCTAssertEqual(coverage.solvedFraction, 0)
+        XCTAssertFalse(coverage.groundWasNotTracked)
+    }
+}
