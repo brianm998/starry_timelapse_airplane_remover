@@ -1036,6 +1036,41 @@ public final class ImageSequenceViewModel {
     /// "Re-run Horizon Refinement".
     var affectedHorizonRefinementFrameIndices: Set<Int> = []
 
+    /// What the run in progress took out of the two sets above, held until it finishes.
+    ///
+    /// A run claims them: it empties both so that a reference painted while it works starts
+    /// a fresh set.  A run that is stopped has to give them back — the frames it never got
+    /// to are still marked orange, and without this the button that would pick them up is
+    /// disabled, leaving the sequence in a state only re-painting a reference gets out of.
+    private var horizonRefinementInFlight: (affected: Set<Int>, references: Set<Int>)?
+
+    /// Whether there is horizon refinement work waiting — what enables the right panel's
+    /// "Re-run Horizon Refinement" button.
+    ///
+    /// Both sets, not just the interpolated frames between references: a reference painted
+    /// next to another one has no frames in between to re-refine, and still has its own
+    /// output to render again.
+    var hasPendingHorizonRefinement: Bool {
+        !affectedHorizonRefinementFrameIndices.isEmpty
+          || !framesNeedingHorizonRerender(updatedReferenceHorizonFrameIndices).isEmpty
+    }
+
+    /// Give back what a stopped run had claimed, so the user can run it again.
+    ///
+    /// Everything it claimed, including the frames it had already finished: there is no
+    /// per-frame record of which merges completed, and redoing one costs a merge and
+    /// changes nothing — `deleteMergeOutput` and the merge that follows land on the same
+    /// output either way.
+    private func returnInFlightHorizonRefinement() {
+        guard let inFlight = horizonRefinementInFlight else { return }
+        horizonRefinementInFlight = nil
+        updatedReferenceHorizonFrameIndices.formUnion(inFlight.references)
+        affectedHorizonRefinementFrameIndices.formUnion(inFlight.affected)
+        for i in affectedHorizonRefinementFrameIndices where i < frames.count {
+            frames[i].isPendingHorizonRefinement = true
+        }
+    }
+
     /// Called from HorizonPainterView after a reference horizon is saved.
     /// Recomputes the affected set and marks those frames orange.
     func recordReferenceHorizonUpdated(frameIndex: Int) {
@@ -1162,6 +1197,7 @@ public final class ImageSequenceViewModel {
 
         updatedReferenceHorizonFrameIndices = []
         affectedHorizonRefinementFrameIndices = []
+        horizonRefinementInFlight = (affected: toProcess, references: toInvalidate)
         // Leave isPendingHorizonRefinement = true for affected frames so the
         // filmstrip and frame view show orange horizon lines while re-merge is queued.
         // It will be cleared per-frame once its merge completes (or immediately below
@@ -1180,6 +1216,10 @@ public final class ImageSequenceViewModel {
                                                            references: toInvalidate)
         let showsModal = !expectedSteps.isEmpty && !isProcessingFrames
         let toExamine = toProcess.union(toInvalidate).count
+        // Stopping bumps this.  The pass below is the reachable half of that now that the
+        // modal — and its Stop button — is up while it runs: without the checks, Stop would
+        // hand the window back and then let the run queue its operations anyway.
+        let capturedGeneration = processingGeneration
         if showsModal {
             isProcessingFrames = true
             startProcessingModal(
@@ -1213,11 +1253,17 @@ public final class ImageSequenceViewModel {
                 // This loop is the wait: `imageExists` and `deleteMergeOutput` are both
                 // disk, per frame.  Counting it out is the only honest thing the modal can
                 // show until the operations exist.
-                if showsModal {
-                    await MainActor.run {
+                let stillRunning = await MainActor.run { () -> Bool in
+                    guard self.processingGeneration == capturedGeneration else { return false }
+                    if showsModal {
                         self.processingStatusText = localized("ui.horizon_refinement_preparing",
                                                               examined + 1, allModified.count)
                     }
+                    return true
+                }
+                guard stillRunning else {
+                    Log.i("horizon refinement stopped while working out what to redo")
+                    return
                 }
                 guard i < (await self.frames.count),
                       let frame = await self.frames[i].frame else { continue }
@@ -1250,8 +1296,9 @@ public final class ImageSequenceViewModel {
             guard !refinementFrames.isEmpty || !framesToMerge.isEmpty else {
                 // Nothing came of it, so end the run this started — otherwise the modal
                 // sits there over a sequence that is not processing anything.
-                if showsModal {
-                    await MainActor.run {
+                await MainActor.run {
+                    self.horizonRefinementInFlight = nil
+                    if showsModal {
                         self.isProcessingFrames = false
                         self.processingStatusText = nil
                     }
@@ -1267,13 +1314,19 @@ public final class ImageSequenceViewModel {
             var steps: [OperationType] = []
             if !refinementFrames.isEmpty { steps.append(.mergedHorizon) }
             if !framesToMerge.isEmpty { steps.append(.merge) }
-            await MainActor.run {
+            let stillRunning = await MainActor.run { () -> Bool in
+                guard self.processingGeneration == capturedGeneration else { return false }
                 self.isProcessingFrames = true
                 if showsModal {
                     self.processingStepTypes = steps
                     // There are operations to count now, so the bars say it better.
                     self.processingStatusText = nil
                 }
+                return true
+            }
+            guard stillRunning else {
+                Log.i("horizon refinement stopped before its operations were queued")
+                return
             }
 
             await frameGraphBuilder.enqueueHorizonRefinement(
@@ -1295,6 +1348,10 @@ public final class ImageSequenceViewModel {
                     for i in mergeIndices where i < self.frames.count {
                         self.frames[i].isPendingHorizonRefinement = false
                     }
+                    // This run finished, so it keeps what it claimed.  Only a stopped one
+                    // gives it back, and a stopped one never reaches here — the completion
+                    // op is cancelled with the rest.
+                    self.horizonRefinementInFlight = nil
                     self.isProcessingFrames = false
                 }
             }
@@ -2335,6 +2392,7 @@ public final class ImageSequenceViewModel {
         sequenceProcessingState = .unprocessed
         processingModalShowing = false
         processingStatusText = nil
+        returnInFlightHorizonRefinement()
     }
 
     /// Stop the run: forget the frames still to come, and cancel the operations already on

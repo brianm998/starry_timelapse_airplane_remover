@@ -157,7 +157,7 @@ struct RightPanel: View {
                             .buttonStyle(.bordered)
                             .tint(.orange)
                             .help(localized("ui.re_run_brightness_position_refinement_for"))
-                            .disabled(viewModel.affectedHorizonRefinementFrameIndices.isEmpty)
+                            .disabled(!viewModel.hasPendingHorizonRefinement)
 
                             Toggle(localized("ui.show_trash"), isOn: $viewModel.shouldShowTrash)
                               .foregroundColor(.white)
