@@ -1110,6 +1110,94 @@ final class WarningAlertTests: XCTestCase {
                        "the banner must not resize the window it appears over")
     }
 
+    // MARK: - restarting the run that stopped
+
+    /// The whole point of the button: a report of a run that died with a config star can
+    /// still find offers to pick it up, rather than only an OK that loses it.
+    func testAReportOfAStoppedRunOffersARestart() {
+        let viewModel = ViewModel()
+        viewModel.report(warning: warning(.previousRunDied, .critical),
+                         restartableConfigPath: "/tmp/star_temp_seq/config.json")
+
+        XCTAssertTrue(viewModel.showWarningAlert)
+        XCTAssertEqual(viewModel.restartableRunConfigPath, "/tmp/star_temp_seq/config.json")
+    }
+
+    /// The same alert carries the machine warnings, where there is no run to restart and a
+    /// button offering one would be a lie.
+    func testAMachineWarningOffersNoRestart() {
+        let viewModel = ViewModel()
+        viewModel.report(warning: warning(.memoryPressure, .critical))
+
+        XCTAssertTrue(viewModel.showWarningAlert)
+        XCTAssertNil(viewModel.restartableRunConfigPath)
+    }
+
+    /// The path's lifetime is the alert's.  Without this, a memory-pressure alert raised
+    /// later in the session would inherit the dead run's button and restart a sequence
+    /// nobody asked about.
+    func testAcknowledgingForgetsWhatThereWasToRestart() {
+        let viewModel = ViewModel()
+        viewModel.report(warning: warning(.previousRunDied, .critical),
+                         restartableConfigPath: "/tmp/star_temp_seq/config.json")
+        viewModel.acknowledgeWarning()
+
+        XCTAssertNil(viewModel.restartableRunConfigPath)
+
+        viewModel.report(warning: warning(.memoryPressure, .critical))
+        XCTAssertTrue(viewModel.showWarningAlert)
+        XCTAssertNil(viewModel.restartableRunConfigPath,
+                     "the next alert must not inherit the last one's restart")
+    }
+
+    /// A report that went to the banner instead — a repeat of a condition already
+    /// acknowledged — has no alert to hang a button on.
+    func testARestartableReportThatDoesNotInterruptOffersNoButton() {
+        let viewModel = ViewModel()
+        viewModel.report(warning: warning(.previousRunDied, .critical),
+                         restartableConfigPath: "/tmp/star_temp_seq/config.json")
+        viewModel.acknowledgeWarning()
+
+        viewModel.report(warning: warning(.previousRunDied, .critical),
+                         restartableConfigPath: "/tmp/star_temp_seq/config.json")
+
+        XCTAssertFalse(viewModel.showWarningAlert)
+        XCTAssertNil(viewModel.restartableRunConfigPath)
+        XCTAssertEqual(viewModel.bannerWarning?.kind, .previousRunDied)
+    }
+
+    /// Pressing it acknowledges the report on the way past, so a second abandoned marker
+    /// cannot put the same alert straight back up over the sequence that is now loading.
+    /// The load itself is not exercised here — there is no sequence at this path — which is
+    /// also what keeps the test from starting a run.
+    func testRestartingAcknowledgesTheReport() {
+        let viewModel = ViewModel()
+        viewModel.report(warning: warning(.previousRunDied, .critical),
+                         restartableConfigPath: "/tmp/star_temp_seq/config.json")
+
+        viewModel.restartAbandonedRun()
+
+        XCTAssertFalse(viewModel.showWarningAlert)
+        XCTAssertNil(viewModel.restartableRunConfigPath)
+        viewModel.eraserTask?.cancel()
+
+        viewModel.report(warning: warning(.previousRunDied, .critical),
+                         restartableConfigPath: "/tmp/star_temp_seq/config.json")
+        XCTAssertFalse(viewModel.showWarningAlert,
+                       "the report the user acted on must not come back")
+    }
+
+    /// And with nothing to restart it does nothing at all, rather than tearing the alert
+    /// down as if it had.
+    func testRestartingWithNothingToRestartLeavesTheAlertAlone() {
+        let viewModel = ViewModel()
+        viewModel.report(warning: warning(.memoryPressure, .critical))
+
+        viewModel.restartAbandonedRun()
+
+        XCTAssertTrue(viewModel.showWarningAlert)
+    }
+
     // MARK: - the alert's text
 
     /// The system alert takes one body string, so the suggestion has to be folded into it —
@@ -2110,3 +2198,4 @@ final class SequenceProgressTests: XCTestCase {
         }
     }
 }
+

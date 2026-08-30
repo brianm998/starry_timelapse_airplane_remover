@@ -623,6 +623,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Atur ulang dan mulai lagi dari pemilihan pita (R)",
   "ui.reset_and_start_over_r": "Atur ulang dan mulai lagi (R)",
   "ui.restart_engine": "Mulai ulang mesin",
+  "ui.restart_now": "Mulai Ulang Sekarang",
   "ui.restart_re_opens_this_session_from_its_saved": "Memulai ulang akan membuka kembali sesi ini dari konfigurasi tersimpannya.",
   "ui.resume": "Lanjutkan…",
   "ui.resume_from_config_json": "Lanjutkan dari config.json…",

@@ -623,6 +623,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "รีเซ็ตแล้วเริ่มใหม่จากการเลือกแถบ (R)",
   "ui.reset_and_start_over_r": "รีเซ็ตแล้วเริ่มใหม่ (R)",
   "ui.restart_engine": "เริ่มเอนจินใหม่",
+  "ui.restart_now": "เริ่มใหม่ตอนนี้",
   "ui.restart_re_opens_this_session_from_its_saved": "การเริ่มใหม่จะเปิดเซสชันนี้ขึ้นมาอีกครั้งจากไฟล์ตั้งค่าที่บันทึกไว้",
   "ui.resume": "ทำต่อ…",
   "ui.resume_from_config_json": "ทำต่อจาก config.json…",

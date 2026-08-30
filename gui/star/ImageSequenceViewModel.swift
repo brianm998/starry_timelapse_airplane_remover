@@ -2044,6 +2044,31 @@ public final class ImageSequenceViewModel {
         processAll()
     }
 
+    /// Pick up a run that stopped, from the "Restart Now" button on the alert that reported
+    /// it (`ViewModel.restartAbandonedRun`).
+    ///
+    /// `beginProcessing()` rather than `processAll()`, which is what the panel's button
+    /// takes: `processAll` stops to ask whether to render the video afterwards, and a button
+    /// that says it restarts the run now must not answer with another question.  Nothing is
+    /// lost by skipping it — `handleProcessingDone()` asks the same thing at the end of the
+    /// run, when there is a video to render.
+    ///
+    /// Like `finishProcessingOpenedSequence`, this runs the whole sequence: the frames left
+    /// undone by a killed run are not a contiguous tail, and `FrameGraphBuilder` builds no
+    /// work for a frame whose output is already written.
+    func restartProcessing() {
+        guard frames.first?.frame != nil else {
+            // Reachable only if the sequence failed to load, since the caller awaits the
+            // open before getting here.  Silence would look like a button that does nothing.
+            Log.w("cannot restart processing: no frames loaded")
+            return
+        }
+        sequenceProgressModalShowing = false
+        enterEditMode()
+        autoRenderAfterProcessing = false
+        beginProcessing()
+    }
+
     /// The re-open panel's "Render Video" button.
     func renderVideoForOpenedSequence() {
         sequenceProgressModalShowing = false

@@ -623,6 +623,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Đặt lại và bắt đầu lại từ bước chọn dải (R)",
   "ui.reset_and_start_over_r": "Đặt lại và bắt đầu lại (R)",
   "ui.restart_engine": "Khởi động lại bộ máy",
+  "ui.restart_now": "Khởi động lại ngay",
   "ui.restart_re_opens_this_session_from_its_saved": "Khởi động lại sẽ mở lại phiên này từ cấu hình đã lưu.",
   "ui.resume": "Tiếp tục…",
   "ui.resume_from_config_json": "Tiếp tục từ config.json…",

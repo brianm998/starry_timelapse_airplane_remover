@@ -407,6 +407,20 @@ public struct RunMarker: Codable, Sendable, Equatable {
         return text
     }
 
+    /// The config a client could re-open to pick this run up where it stopped, when the
+    /// marker named one and it is still on disk.
+    ///
+    /// Checked rather than trusted.  A marker outlives the run it describes — it is read at
+    /// the *next* launch, which may be days later — and by then the user may have moved or
+    /// deleted the output directory.  Offering to restart a run whose config has gone is
+    /// worse than not offering at all, because the failure lands after the click.
+    public var restartableConfigPath: String? {
+        guard let resumeConfigPath,
+              FileManager.default.fileExists(atPath: resumeConfigPath)
+        else { return nil }
+        return resumeConfigPath
+    }
+
     /// The marker as a `StarWarning`, so a client that has already wired up warnings gets
     /// crash reporting through the same path with no extra plumbing.
     public var asWarning: StarWarning {

@@ -623,6 +623,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "リセットして帯の選択からやり直す (R)",
   "ui.reset_and_start_over_r": "リセットしてやり直す (R)",
   "ui.restart_engine": "エンジンを再起動",
+  "ui.restart_now": "今すぐ再開",
   "ui.restart_re_opens_this_session_from_its_saved": "再起動すると、保存された設定からこのセッションを開き直します。",
   "ui.resume": "再開…",
   "ui.resume_from_config_json": "config.json から再開…",

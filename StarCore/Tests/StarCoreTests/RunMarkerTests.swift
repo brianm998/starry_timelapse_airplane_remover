@@ -477,6 +477,38 @@ final class RunMarkerTests: XCTestCase {
         XCTAssertTrue(marker.briefReport.contains("report it"))
     }
 
+    // MARK: - Restarting the run that stopped
+
+    /// The gui offers a "Restart Now" button on the crash report, and it can only do that if
+    /// there is a config to re-open.
+    func testAMarkerWithAConfigStillOnDiskCanBeRestarted() throws {
+        let config = directory.appendingPathComponent("config.json")
+        try Data("{}".utf8).write(to: config)
+
+        var marker = RunMarker(id: "x", client: "Star")
+        marker.resumeConfigPath = config.path
+
+        XCTAssertEqual(marker.restartableConfigPath, config.path)
+    }
+
+    /// A marker is read at the *next* launch, which may be long after the run died, so the
+    /// path in it is a claim about the past.  Offering a restart that fails after the click
+    /// is worse than not offering one.
+    func testAMarkerWhoseConfigHasGoneCannotBeRestarted() {
+        var marker = RunMarker(id: "x", client: "Star")
+        marker.resumeConfigPath = directory.appendingPathComponent("gone.json").path
+
+        XCTAssertNil(marker.restartableConfigPath)
+    }
+
+    /// The daemon writes its marker before it has a session, and a run killed that early
+    /// never named a config at all.
+    func testAMarkerThatNamedNoConfigCannotBeRestarted() {
+        let marker = RunMarker(id: "x", client: "stard")
+
+        XCTAssertNil(marker.restartableConfigPath)
+    }
+
     // MARK: - Liveness
 
     func testAPidAboveTheSystemMaximumIsNotAlive() throws {

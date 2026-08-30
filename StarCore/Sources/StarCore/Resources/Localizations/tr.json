@@ -623,6 +623,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Sıfırla ve şerit seçiminden yeniden başla (R)",
   "ui.reset_and_start_over_r": "Sıfırla ve yeniden başla (R)",
   "ui.restart_engine": "Motoru yeniden başlat",
+  "ui.restart_now": "Şimdi Yeniden Başlat",
   "ui.restart_re_opens_this_session_from_its_saved": "Yeniden başlatma, bu oturumu kaydedilmiş yapılandırmasından yeniden açar.",
   "ui.resume": "Sürdür…",
   "ui.resume_from_config_json": "config.json'dan sürdür…",

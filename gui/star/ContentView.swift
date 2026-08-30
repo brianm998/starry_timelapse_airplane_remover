@@ -65,7 +65,20 @@ struct ContentView: View {
         // and its OK button dismisses it through the binding rather than through a button we
         // place ourselves inside the content.
         .alert(viewModel.warningTitle, isPresented: $bindableViewModel.showWarningAlert) {
+            // Declared first, which is what makes it the rightmost button and the default:
+            // SwiftUI lays an alert's buttons out in reverse of declaration order and gives
+            // the return key to the one that ends up on the right (measured, not assumed).
+            // The safe half of the pair belongs there — reopening a sequence and starting a
+            // run that may take hours is not what a stray return on an alert the user did
+            // not ask for should do.
             Button(localized("ui.ok")) { viewModel.acknowledgeWarning() }
+            // Only a report of a run that stopped, and only one whose config is still on
+            // disk, has anything to restart.  The other conditions that reach this alert are
+            // machine warnings — memory pressure, a write that failed — where there is
+            // nothing to pick back up.
+            if viewModel.restartableRunConfigPath != nil {
+                Button(localized("ui.restart_now")) { viewModel.restartAbandonedRun() }
+            }
         } message: {
             Text(viewModel.warningAlertText)
         }

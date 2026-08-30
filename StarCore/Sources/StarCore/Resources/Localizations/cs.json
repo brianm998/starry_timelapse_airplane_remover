@@ -623,6 +623,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Obnovit a začít znovu od výběru pásu (R)",
   "ui.reset_and_start_over_r": "Obnovit a začít znovu (R)",
   "ui.restart_engine": "Restartovat jádro",
+  "ui.restart_now": "Restartovat nyní",
   "ui.restart_re_opens_this_session_from_its_saved": "Restart znovu otevře tuto relaci z její uložené konfigurace.",
   "ui.resume": "Pokračovat…",
   "ui.resume_from_config_json": "Pokračovat z config.json…",

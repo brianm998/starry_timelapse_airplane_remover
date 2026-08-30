@@ -623,6 +623,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Herstellen en opnieuw beginnen bij de bandselectie (R)",
   "ui.reset_and_start_over_r": "Herstellen en opnieuw beginnen (R)",
   "ui.restart_engine": "Engine opnieuw starten",
+  "ui.restart_now": "Nu opnieuw starten",
   "ui.restart_re_opens_this_session_from_its_saved": "Opnieuw starten opent deze sessie opnieuw vanuit de opgeslagen configuratie.",
   "ui.resume": "Hervat…",
   "ui.resume_from_config_json": "Hervatten vanaf config.json…",

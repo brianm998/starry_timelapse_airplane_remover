@@ -623,6 +623,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "重置并从条带选择重新开始（R）",
   "ui.reset_and_start_over_r": "重置并重新开始（R）",
   "ui.restart_engine": "重新启动引擎",
+  "ui.restart_now": "立即重新开始",
   "ui.restart_re_opens_this_session_from_its_saved": "重新启动会从已保存的配置重新打开此会话。",
   "ui.resume": "继续…",
   "ui.resume_from_config_json": "从 config.json 继续…",

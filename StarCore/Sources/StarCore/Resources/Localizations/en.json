@@ -623,6 +623,7 @@
   "ui.reset_and_start_over_from_band_selection_r": "Reset and start over from band selection (R)",
   "ui.reset_and_start_over_r": "Reset and start over (R)",
   "ui.restart_engine": "Restart Engine",
+  "ui.restart_now": "Restart Now",
   "ui.restart_re_opens_this_session_from_its_saved": "Restart re-opens this session from its saved config.",
   "ui.resume": "Resume…",
   "ui.resume_from_config_json": "Resume from config.json…",
