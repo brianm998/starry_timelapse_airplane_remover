@@ -254,13 +254,42 @@ struct ProcessingModalView: View {
         viewModel.earthAlignmentInfo.contains { !$0.isEmpty }
     }
 
+    /// Whether the charts are drawn, kept in preferences rather than in this view's state:
+    /// the view is rebuilt every time the modal is dismissed and brought back.
+    private var showAlignment: Binding<Bool> {
+        Binding(
+          get: { viewModel.userPreferences.showAlignmentInProcessingWindow ?? true },
+          set: { viewModel.userPreferences.showAlignmentInProcessingWindow = $0 }
+        )
+    }
+
+    /// The concurrency field's own focus scope.  Separate from the right panel's, which is
+    /// a different `@FocusState` property in a different view, so both may claim
+    /// `.numberOfFramesToProcessConcurrently` without fighting over the keyboard.
+    @FocusState private var focusedField: FocusedField?
+
     var body: some View {
         ProcessingModalPanel(
           framesComplete: viewModel.count(for: .complete),
           frameCount: viewModel.frames.count,
           steps: steps,
+          showAlignment: showAlignment,
           stop: { viewModel.stopProcessing() },
-          dismiss: { viewModel.processingModalShowing = false }
+          dismiss: { viewModel.processingModalShowing = false },
+          concurrencyContent: {
+              // The same control the right panel carries, which this modal covers up while
+              // it is on screen.  Editing it while a run is going is the point: a changed
+              // config goes through `ConfigManager.onUpdate` to
+              // `FrameGraphBuilder.update(from:)`, which sets the operation queue's
+              // `maxConcurrentOperationCount` there and then.
+              EditableNumberOfFramesToProcessConcurrentlyView(
+                focusedField: $focusedField,
+                textColor: .gray,
+                alwaysOpen: false
+              )
+                .font(.caption)
+                .help(localized("ui.number_of_frames_to_process_concurrently_help"))
+          }
         ) {
             alignmentCharts
         }
@@ -308,12 +337,24 @@ struct ProcessingModalView: View {
 ///
 /// Split out so the layout can be rendered without a loaded image sequence behind it —
 /// these are the numbers and the translated labels that decide whether a row fits.
-struct ProcessingModalPanel<AlignmentContent: View>: View {
+struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: View {
     let framesComplete: Int
     let frameCount: Int
     let steps: [ProcessingStepProgress]
+
+    /// Whether the alignment charts are drawn.  Off is what the toggle in the alignment
+    /// heading gives, and it takes the tallest part of the panel with it.
+    @Binding var showAlignment: Bool
+
     let stop: () -> Void
     let dismiss: () -> Void
+
+    /// How many frames the run may work on at once.  A slot rather than a value for the
+    /// same reason `alignmentContent` is one: the editor for it reaches into the
+    /// environment for a `ViewModel` (its cursor modifier does), and a panel that needs one
+    /// of those is a panel nothing can render on its own.
+    @ViewBuilder let concurrencyContent: () -> ConcurrencyContent
+
     @ViewBuilder let alignmentContent: () -> AlignmentContent
 
     static var width: CGFloat { 640 }
@@ -359,10 +400,20 @@ struct ProcessingModalPanel<AlignmentContent: View>: View {
             ProcessingStepsView(steps: steps)
             Divider()
             VStack(alignment: .leading, spacing: 8) {
-                Text(localized("ui.alignment_2"))
-                  .font(.headline)
-                  .foregroundColor(.white)
-                alignmentContent()
+                HStack {
+                    Text(localized("ui.alignment_2"))
+                      .font(.headline)
+                      .foregroundColor(.white)
+                    Spacer()
+                    Toggle(localized("ui.show_alignment_results"), isOn: $showAlignment)
+                      .toggleStyle(.checkbox)
+                      .font(.caption)
+                      .foregroundColor(.gray)
+                      .help(localized("ui.show_alignment_results_help"))
+                }
+                if showAlignment {
+                    alignmentContent()
+                }
             }
         }
           .padding(20)
@@ -385,6 +436,7 @@ struct ProcessingModalPanel<AlignmentContent: View>: View {
                   .foregroundColor(.gray)
             }
             Spacer()
+            concurrencyContent()
         }
           .padding(20)
     }

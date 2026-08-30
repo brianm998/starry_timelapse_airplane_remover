@@ -417,7 +417,13 @@ public actor OutlierGroups {
     }
 
     // removes outliers.bin and dust.bin from outliers dir for this frame
-    public func removeOutliersBinary(from dirname: String) async throws {
+    /// Remove a frame's stored outlier groups, and its trash, from disk.
+    ///
+    /// `static` because deleting them cannot be allowed to depend on having loaded them.
+    /// This was an instance method, reached through `outlierGroups?` — so a frame whose
+    /// outliers had never been read deleted nothing at all and kept its file, which the
+    /// next run then loaded and reused.  Nothing in here ever touched `self`.
+    public static func removeOutliersBinary(from dirname: String) throws {
 
         let outlierBinaryFilename = "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)"
         if FileManager.default.fileExists(atPath: outlierBinaryFilename) {

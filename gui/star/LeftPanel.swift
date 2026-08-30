@@ -2,6 +2,37 @@ import SwiftUI
 import StarCore
 import logging
 
+/// What the left panel's top button offers.
+///
+/// A value rather than a pair of conditions spelled out in the view, because it is two
+/// different buttons sharing one place on screen and the rule for which one it is has to
+/// be readable: while a run is going it is the only way back to a processing modal that
+/// has been dismissed, and that is not something the frame counts can be allowed to
+/// disable.
+enum ProcessingButtonRole: Equatable {
+    /// Opens the settings sheet, which is where a run is started from.
+    case process(enabled: Bool)
+
+    /// Puts the processing modal back up over the window.  Never disabled: it does not
+    /// start anything, and a run in progress always has a status to show.
+    case status
+
+    static func current(
+      isProcessingFrames: Bool,
+      isRenderingVideo: Bool,
+      unprocessedCount: Int,
+      horizonDetectedCount: Int,
+      frameCount: Int
+    ) -> ProcessingButtonRole {
+        if isProcessingFrames { return .status }
+
+        // Nothing left that has not been processed, and not the one other state worth
+        // processing from — every frame stopped at horizon detection.
+        let nothingToDo = unprocessedCount == 0 && horizonDetectedCount != frameCount
+        return .process(enabled: !nothingToDo && !isRenderingVideo)
+    }
+}
+
 struct LeftPanel: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @Environment(FrameGraphViewModel.self) var frameGraphViewModel: FrameGraphViewModel
@@ -157,11 +188,24 @@ struct LeftPanel: View {
         }
     }
     
-    var processButtonDisabled: Bool {
-        let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
-        let horizon = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
+    /// The processing modal's Dismiss button hands the window back with the run still
+    /// going, and there was no way back to it — dismissing it was a one-way door.  While a
+    /// run is live this button is that way back, which is also the only thing it could
+    /// usefully be: starting a second run over the same frames is exactly what it must not
+    /// do.
+    var processingButtonRole: ProcessingButtonRole {
+        ProcessingButtonRole.current(
+          isProcessingFrames: viewModel.isProcessingFrames,
+          isRenderingVideo: viewModel.isRenderingVideo,
+          unprocessedCount: viewModel.frameStateMap[.unprocessed]?.count ?? 0,
+          horizonDetectedCount: viewModel.frameStateMap[.horizonDetected]?.count ?? 0,
+          frameCount: viewModel.frames.count
+        )
+    }
 
-        return (unprocessed == 0 && horizon != viewModel.frames.count) || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+    var processButtonDisabled: Bool {
+        if case .process(let enabled) = processingButtonRole { return !enabled }
+        return false
     }
 
     var updateButtonDisabled: Bool {
@@ -179,16 +223,26 @@ struct LeftPanel: View {
             let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
             let horizonCount = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
 
+            let role = processingButtonRole
+
             Button() {
-                viewModel.shouldShowProcessingSettings = true
+                switch role {
+                case .status:  viewModel.processingModalShowing = true
+                case .process: viewModel.shouldShowProcessingSettings = true
+                }
             } label: {
-                Text(localized("ui.process_frames"))
+                Text(role == .status
+                       ? localized("ui.status")
+                       : localized("ui.process_frames"))
             }
               .disabled(processButtonDisabled)
-              .if(!processButtonDisabled) { 
+              .if(!processButtonDisabled) {
                   $0.buttonStyle(.borderedProminent)
                     .tint(.blue)
               }
+              .help(role == .status
+                      ? localized("ui.show_the_processing_status_again")
+                      : localized("ui.choose_settings_and_process_these_frames"))
             
             
             let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0

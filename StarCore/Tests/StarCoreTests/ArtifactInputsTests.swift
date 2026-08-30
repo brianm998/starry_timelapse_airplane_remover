@@ -41,17 +41,46 @@ final class ArtifactInputsTests: XCTestCase {
 
     /// Each stage consumes the one before it, so a change never invalidates only itself.
     func testStagesAreDeclaredInDependencyOrder() {
-        XCTAssertEqual(ArtifactStage.allCases, [.horizon, .mergedHorizon, .keypoints],
+        XCTAssertEqual(ArtifactStage.allCases,
+                       [.horizon, .mergedHorizon, .keypoints,
+                        .alignment, .outliers, .output],
                        "andDownstream slices allCases, so the declaration order IS the " +
                        "dependency order — reordering these silently breaks the cascade")
     }
 
     func testDownstreamOfAStageIncludesItselfAndEverythingAfter() {
         XCTAssertEqual(ArtifactStage.horizon.andDownstream,
-                       [.horizon, .mergedHorizon, .keypoints])
+                       [.horizon, .mergedHorizon, .keypoints,
+                        .alignment, .outliers, .output])
         XCTAssertEqual(ArtifactStage.mergedHorizon.andDownstream,
-                       [.mergedHorizon, .keypoints])
-        XCTAssertEqual(ArtifactStage.keypoints.andDownstream, [.keypoints])
+                       [.mergedHorizon, .keypoints, .alignment, .outliers, .output])
+        XCTAssertEqual(ArtifactStage.keypoints.andDownstream,
+                       [.keypoints, .alignment, .outliers, .output])
+        XCTAssertEqual(ArtifactStage.alignment.andDownstream,
+                       [.alignment, .outliers, .output])
+        XCTAssertEqual(ArtifactStage.outliers.andDownstream, [.outliers, .output])
+        XCTAssertEqual(ArtifactStage.output.andDownstream, [.output])
+    }
+
+    /// Every stage says what it owns on disk.  That half of the mapping is what
+    /// `FrameGraphBuilder.invalidateStaleArtifacts` has to keep deleting: a stage that
+    /// records a setting and removes nothing when it moves is the original bug, one level
+    /// further down the pipeline.
+    func testEveryStageDescribesWhatItLeavesOnDisk() {
+        for stage in ArtifactStage.allCases {
+            XCTAssertFalse(stage.artifactDescription.isEmpty, "\(stage)")
+            XCTAssertFalse(stage.logDescription.isEmpty, "\(stage)")
+        }
+    }
+
+    /// A record with a setting in it that nothing deletes is a setting that still silently
+    /// does nothing on an already-processed sequence.
+    func testEveryStageRecordsSomeSettings() {
+        let inputs = ArtifactInputs.current(from: config())
+        for stage in ArtifactStage.allCases {
+            XCTAssertFalse(inputs.stages[stage.rawValue]?.isEmpty ?? true,
+                           "\(stage) records no settings at all")
+        }
     }
 
     /// The merged horizon masks keypoint detection, so a horizon-detection change reaches
@@ -65,10 +94,11 @@ final class ArtifactInputsTests: XCTestCase {
         let stale = ArtifactInputs.current(from: after)
             .staleStages(comparedTo: ArtifactInputs.current(from: before))
 
-        XCTAssertEqual(stale, [.horizon, .mergedHorizon, .keypoints])
+        XCTAssertEqual(stale, [.horizon, .mergedHorizon, .keypoints,
+                               .alignment, .outliers, .output])
     }
 
-    func testAKeypointChangeInvalidatesOnlyKeypoints() {
+    func testAKeypointChangeInvalidatesTheKeypointsAndWhatConsumesThem() {
         var before = config()
         before.alignmentMaxKeypoints = 2000
         var after = before
@@ -77,8 +107,9 @@ final class ArtifactInputsTests: XCTestCase {
         let stale = ArtifactInputs.current(from: after)
             .staleStages(comparedTo: ArtifactInputs.current(from: before))
 
-        XCTAssertEqual(stale, [.keypoints],
-                       "nothing recorded here feeds back into the horizon masks")
+        XCTAssertEqual(stale, [.keypoints, .alignment, .outliers, .output],
+                       "nothing recorded here feeds back into the horizon masks, but " +
+                       "everything after the keypoints was built from them")
     }
 
     // MARK: - the code that produces the keypoints
@@ -94,10 +125,14 @@ final class ArtifactInputsTests: XCTestCase {
                        "\(ArtifactInputs.detectionAlgorithmVersion)")
     }
 
-    /// The whole reason this lever is affordable. `keypoints` is last in the dependency
-    /// order, so `andDownstream` stops there: a bump discards the alignment and the
-    /// frames rendered from it, and leaves the horizon masks — which cost far more to
-    /// rebuild, and which the detection code has no hand in — alone.
+    /// The whole reason this lever is affordable.  Nothing upstream of `keypoints` depends
+    /// on it, so `andDownstream` reaches forward only: a bump discards the alignment, the
+    /// outlier groups and the frames rendered from them, and leaves the horizon masks —
+    /// which cost far more to rebuild, and which the detection code has no hand in — alone.
+    ///
+    /// The three stages after `keypoints` were once one lump inside
+    /// `invalidateStaleArtifacts`, deleted by the keypoint branch itself, so naming them
+    /// changed what this reports and not what a bump costs.
     func testBumpingTheDetectionVersionInvalidatesTheKeypointsAndNothingUpstream() {
         let c = config()
         let current = ArtifactInputs.current(from: c)
@@ -107,7 +142,7 @@ final class ArtifactInputsTests: XCTestCase {
 
         let stale = current.staleStages(comparedTo: builtByAnEarlierStar)
 
-        XCTAssertEqual(stale, [.keypoints],
+        XCTAssertEqual(stale, [.keypoints, .alignment, .outliers, .output],
                        "a detection-code change cannot have moved a horizon mask, and " +
                        "rebuilding those would cost the whole sequence (got \(stale))")
         XCTAssertEqual(current.differences(from: builtByAnEarlierStar)[.keypoints],
@@ -133,7 +168,8 @@ final class ArtifactInputsTests: XCTestCase {
                        "precondition: same version, so this is compared rather than " +
                        "waved through as an unreadable format")
 
-        XCTAssertEqual(current.staleStages(comparedTo: pre), [.keypoints],
+        XCTAssertEqual(current.staleStages(comparedTo: pre),
+                       [.keypoints, .alignment, .outliers, .output],
                        "the key appearing at all is what invalidates these — its value " +
                        "is never compared against anything, because they have none")
 
@@ -212,6 +248,121 @@ final class ArtifactInputsTests: XCTestCase {
         }
     }
 
+    /// The alignment stage: what the homographies and the aligned images were fitted
+    /// under.  Before these were recorded, turning earth alignment on for a
+    /// half-processed moving sequence left the first half aligned the old way.
+    func testSettingsFedToAlignmentInvalidateIt() {
+        var base = config()
+        base.tripodHeadWasMoving = true
+        let mutations: [(String, (inout Config) -> Void)] = [
+            ("allowEarthAlignment",        { $0.allowEarthAlignment = true }),
+            ("homographySmoothingEpsilon", { $0.homographySmoothingEpsilon = 0.25 }),
+            ("pixelThreshold",             { $0.pixelThreshold = 2.5 }),
+            ("numberAlignedNeighborFrames", { $0.numberAlignedNeighborFrames = 12 }),
+            ("horizonDetectionEnabled",    { $0.horizonDetectionEnabled = false }),
+        ]
+        for (name, mutate) in mutations {
+            var after = base
+            mutate(&after)
+            let stale = ArtifactInputs.current(from: after)
+                .staleStages(comparedTo: ArtifactInputs.current(from: base))
+            XCTAssertTrue(stale.contains(.alignment),
+                          "changing \(name) must invalidate the alignment")
+            XCTAssertTrue(stale.contains(.output),
+                          "and the output with it, since the finished frame is composited " +
+                          "from the aligned neighbours")
+        }
+    }
+
+    /// A fixed camera has no ground to align — the earth branch median merges the static
+    /// neighbours and reads none of the earth settings — so the toggle cannot have changed
+    /// anything that is on disk.
+    func testEarthAlignmentDoesNotInvalidateAFixedCamera() {
+        var base = config()
+        base.tripodHeadWasMoving = false
+        var after = base
+        after.allowEarthAlignment = true
+
+        let stale = ArtifactInputs.current(from: after)
+            .staleStages(comparedTo: ArtifactInputs.current(from: base))
+        XCTAssertTrue(stale.isEmpty, "got \(stale)")
+    }
+
+    func testSettingsFedToOutlierDetectionInvalidateIt() {
+        var base = config()
+        base.cleanMethod = .selective
+        let mutations: [(String, (inout Config) -> Void)] = [
+            ("detectionType",     { $0.detectionType = .excessive }),
+            ("ignoreLowerPixels", { $0.ignoreLowerPixels = 200 }),
+            ("numberFinalProcessingNeighborsNeeded",
+                                  { $0.numberFinalProcessingNeighborsNeeded = 4 }),
+            ("cleanMethod",       { $0.cleanMethod = .automatic(true) }),
+        ]
+        for (name, mutate) in mutations {
+            var after = base
+            mutate(&after)
+            let stale = ArtifactInputs.current(from: after)
+                .staleStages(comparedTo: ArtifactInputs.current(from: base))
+            XCTAssertTrue(stale.contains(.outliers),
+                          "changing \(name) must invalidate the outlier groups")
+            XCTAssertTrue(stale.contains(.output),
+                          "and the output with it, since the removal is painted from them")
+            XCTAssertFalse(stale.contains(.alignment),
+                           "but not the alignment: \(name) is read after the frames are " +
+                           "aligned, and re-aligning for it would throw away the expensive " +
+                           "half of the run for nothing")
+        }
+    }
+
+    /// A clean method with no outliers writes no outlier group, so nothing about how they
+    /// would have been detected can be stale.
+    func testOutlierDetectionSettingsDoNotInvalidateAnAutomaticOnlyRun() {
+        var base = config()
+        base.cleanMethod = .automatic(false)
+        var after = base
+        after.detectionType = .excessive
+        after.ignoreLowerPixels = 200
+
+        let stale = ArtifactInputs.current(from: after)
+            .staleStages(comparedTo: ArtifactInputs.current(from: base))
+        XCTAssertTrue(stale.isEmpty, "got \(stale)")
+    }
+
+    /// The last stage.  These change how the finished frame is painted and nothing
+    /// upstream of it, so the alignment — hours of work on a long sequence — must survive.
+    func testSettingsFedToTheOutputInvalidateOnlyTheOutput() {
+        let base = config()
+        let mutations: [(String, (inout Config) -> Void)] = [
+            ("outlierGroupPaintBorderPixels",
+               { $0.outlierGroupPaintBorderPixels = 40 }),
+            ("outlierGroupPaintBorderInnerWallPixels",
+               { $0.outlierGroupPaintBorderInnerWallPixels = 9 }),
+            ("pixelReplacementOverrides",
+               { $0.pixelReplacementOverrides = [4: .selective] }),
+        ]
+        for (name, mutate) in mutations {
+            var after = base
+            mutate(&after)
+            let stale = ArtifactInputs.current(from: after)
+                .staleStages(comparedTo: ArtifactInputs.current(from: base))
+            XCTAssertEqual(stale, [.output],
+                           "changing \(name) must redo the merge and keep everything " +
+                           "that fed it (got \(stale))")
+        }
+    }
+
+    /// `pixelReplacementOverrides` is a dictionary, and an unordered one recorded two ways
+    /// would invalidate the output every run for a sequence that had not changed at all.
+    func testTheSameOverridesRecordTheSameWayWhateverOrderTheyWereBuiltIn() {
+        var one = config()
+        one.pixelReplacementOverrides = [1: .selective, 7: .automatic(true), 3: .automatic(false)]
+        var two = config()
+        two.pixelReplacementOverrides = [3: .automatic(false), 1: .selective, 7: .automatic(true)]
+
+        XCTAssertEqual(ArtifactInputs.current(from: one).stages,
+                       ArtifactInputs.current(from: two).stages)
+    }
+
     // MARK: - settings that must NOT invalidate
 
     /// Invalidating on these would discard good artifacts — and, through the keypoint
@@ -227,6 +378,10 @@ final class ArtifactInputsTests: XCTestCase {
             ("maxMatMemoryFraction",       { $0.maxMatMemoryFraction = 0.5 }),
             ("keypointMemoryMultiplier",   { $0.keypointMemoryMultiplier = 12 }),
             ("writeFramePreviewFiles",     { $0.writeFramePreviewFiles = false }),
+            // The answer to "redo the frames that were done differently?" is not itself a
+            // difference — recording it would make every run that was told "no" look
+            // changed to the run after it.
+            ("reprocessOnSettingsChange",  { $0.reprocessOnSettingsChange = false }),
         ]
         for (name, mutate) in mutations {
             var after = base

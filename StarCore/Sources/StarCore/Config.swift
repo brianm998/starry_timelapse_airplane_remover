@@ -263,6 +263,27 @@ public struct Config: Codable, Sendable {
     /// The gui always renders and ignores this.
     public var writeOutputFiles: Bool = true
 
+    /// Whether a run that finds its settings have changed since the artifacts on disk were
+    /// built throws those artifacts away and rebuilds them.
+    ///
+    /// On, which is what a settings change means: raise `alignmentMaxKeypoints` and every
+    /// frame should be detected again, or the setting silently does nothing to the frames
+    /// already done.  `FrameGraphBuilder.invalidateStaleArtifacts` is what acts on it, and
+    /// `ArtifactInputs` decides what "changed" covers — only settings that change what a
+    /// stage *produces*, never the concurrency and memory knobs.
+    ///
+    /// Off is the answer to "some frames were processed with the old settings — redo
+    /// them?" being no.  The frames still to come get the new settings regardless; this is
+    /// only about what is already written.  A half-and-half sequence is a real thing to
+    /// want — the settings that were right for the first hour of a night are not always
+    /// right for the last — and the alternative to offering it is a user who changes one
+    /// setting near the end of a long sequence and silently loses the lot.
+    ///
+    /// Deliberately in `Config` rather than an argument to `process`: it describes how
+    /// output is produced, which is what `Config` is for, and it has to reach
+    /// `FrameGraphBuilder` through the `ConfigManager` every client already has.
+    public var reprocessOnSettingsChange: Bool = true
+
     // how far in each direction do we go when doing final processing?
     // used for OutlierGroupFeature data
     public var numberFinalProcessingNeighborsNeeded = 2 // in each direction
@@ -715,7 +736,10 @@ public struct Config: Codable, Sendable {
     public var horizonMinY: Int?
     public var horizonMaxY: Int?
 
-    public var numberOfFramesToProcessConcurrently: Int = ProcessInfo.processInfo.processorCount
+    // How many frames the pipeline may work on at once.  Physical cores rather than the
+    // logical count `ProcessInfo` reports: see `PhysicalCores`, which explains why the
+    // hyperthreads are not worth counting here and why over-counting them costs RAM.
+    public var numberOfFramesToProcessConcurrently: Int = PhysicalCores.count
     
     // Removed: horizonVerticalShiftAmount.  It scooted the horizon mask up by a
     // hand-entered number of pixels before compositing the star-aligned sky over the
@@ -1103,6 +1127,7 @@ public struct Config: Codable, Sendable {
         self.writeFrameProcessedPreviewFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameProcessedPreviewFiles) ?? self.writeFrameProcessedPreviewFiles
         self.writeFrameThumbnailFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameThumbnailFiles) ?? self.writeFrameThumbnailFiles
         self.writeOutputFiles = try c.decodeIfPresent(Bool.self, forKey: .writeOutputFiles) ?? self.writeOutputFiles
+        self.reprocessOnSettingsChange = try c.decodeIfPresent(Bool.self, forKey: .reprocessOnSettingsChange) ?? self.reprocessOnSettingsChange
 
         self.ignoreLowerPixels = try c.decodeIfPresent(Int.self, forKey: .ignoreLowerPixels) ?? self.ignoreLowerPixels
 

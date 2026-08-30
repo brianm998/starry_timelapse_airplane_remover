@@ -16,6 +16,17 @@ uint64_t star_available_system_memory(void);
 /// multipliers can be derived from measurement instead of guessed.
 uint64_t star_process_footprint(void);
 
+/// Returns the number of *physical* cores on this machine, or 0 if that cannot be
+/// determined.
+///
+/// Distinct from `ProcessInfo.processorCount`, which is the logical count — on a
+/// hyperthreaded machine, twice the cores.  star's heavy operations (SIFT, warps, blob
+/// analysis) are compute- and memory-bandwidth-bound, and two of them on the two threads of
+/// one core contend for the same execution units rather than running twice as fast, while
+/// each still reserves a full frame's worth of RAM.  0 means "unknown", and the caller
+/// falls back to the logical count.
+uint32_t star_physical_core_count(void);
+
 // --- Fatal signal handling ---------------------------------------------------
 //
 // See crash_handler.c for why this is C and not Swift. In short: a signal handler may
