@@ -46,8 +46,10 @@ final class SessionManagerTests: XCTestCase {
         let info = try await sequence.getImageInfo()
         let configManager = await MainActor.run { ConfigManager() }
 
+        let sessionDir = scratch.appendingPathComponent(id).path
         return Session(sessionID: id,
-                       scratchSessionDir: scratch.appendingPathComponent(id).path,
+                       scratchSessionDir: sessionDir,
+                       configJsonPath: "\(sessionDir)/config.json",
                        configManager: configManager,
                        imageSequence: sequence,
                        imageInfo: info)

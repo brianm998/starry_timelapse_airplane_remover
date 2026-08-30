@@ -1016,6 +1016,14 @@ public struct Star_V1_SessionInfo: Sendable {
   /// Clears the value of `sourceVideoInfo`. Subsequent reads from it will return its default value.
   public mutating func clearSourceVideoInfo() {self._sourceVideoInfo = nil}
 
+  /// Where this session's config.json actually lives — the file the daemon saves to, and the
+  /// one to hand back to Session.OpenConfig to resume it. For a session opened from a
+  /// sequence or a video that is `scratch_session_dir/config.json`; for one opened from a
+  /// config it is the caller's own file, which is NOT in the scratch dir. Clients used to
+  /// build the scratch path themselves, which left a resumed session pointing at a file
+  /// nothing ever wrote.
+  public var configJsonPath: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3327,7 +3335,7 @@ extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
 
 extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SessionInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_count\0\u{3}image_width\0\u{3}image_height\0\u{3}components_per_pixel\0\u{1}config\0\u{3}scratch_session_dir\0\u{3}source_video_info\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_count\0\u{3}image_width\0\u{3}image_height\0\u{3}components_per_pixel\0\u{1}config\0\u{3}scratch_session_dir\0\u{3}source_video_info\0\u{3}config_json_path\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3343,6 +3351,7 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       case 6: try { try decoder.decodeSingularMessageField(value: &self._config) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self.scratchSessionDir) }()
       case 8: try { try decoder.decodeSingularMessageField(value: &self._sourceVideoInfo) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.configJsonPath) }()
       default: break
       }
     }
@@ -3377,6 +3386,9 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     try { if let v = self._sourceVideoInfo {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     } }()
+    if !self.configJsonPath.isEmpty {
+      try visitor.visitSingularStringField(value: self.configJsonPath, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3389,6 +3401,7 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     if lhs._config != rhs._config {return false}
     if lhs.scratchSessionDir != rhs.scratchSessionDir {return false}
     if lhs._sourceVideoInfo != rhs._sourceVideoInfo {return false}
+    if lhs.configJsonPath != rhs.configJsonPath {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

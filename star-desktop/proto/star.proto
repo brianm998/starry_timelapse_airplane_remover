@@ -98,6 +98,13 @@ message SessionInfo {
   Config    config                = 6;
   string    scratch_session_dir   = 7;
   VideoInfo source_video_info     = 8;  // set iff opened from a video (Session.OpenVideo); else default
+  // Where this session's config.json actually lives — the file the daemon saves to, and the
+  // one to hand back to Session.OpenConfig to resume it. For a session opened from a
+  // sequence or a video that is `scratch_session_dir/config.json`; for one opened from a
+  // config it is the caller's own file, which is NOT in the scratch dir. Clients used to
+  // build the scratch path themselves, which left a resumed session pointing at a file
+  // nothing ever wrote.
+  string    config_json_path      = 9;
 }
 
 message CloseSessionRequest  { string session_id = 1; }

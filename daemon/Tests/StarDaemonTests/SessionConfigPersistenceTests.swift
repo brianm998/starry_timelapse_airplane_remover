@@ -4,15 +4,19 @@ import StarCore
 import StarDaemonMessages
 import SwiftProtobuf
 
-/// The record of a hand-painted horizon selection the user did not finish has to survive a
-/// session ending: that is the whole reason it lives in `Config` rather than in a client's
-/// memory.  Losing it means a re-opened sequence goes straight to processing, running the
-/// frames the user never reached with the automatic horizon detection they had just declined.
+/// What a session's config.json holds, and where it is.
 ///
-/// Driven through the real daemon rather than through `Mapping` alone, because the link that
-/// can actually break is neither end of the mapping but the middle: `Sequence.UpdateConfig`
-/// has to reach `config.json` on disk, and `Session.OpenConfig` has to read it back.
-final class StartupHorizonResumeTests: XCTestCase {
+/// Both halves are what makes a session resumable, and both used to have a hole in them.
+/// The record of a hand-painted horizon selection the user did not finish has to survive the
+/// session ending — losing it means a re-opened sequence goes straight to processing, running
+/// the frames the user never reached with the automatic horizon detection they had just
+/// declined.  And a client has to be told *which* file to resume from, because a session
+/// opened from a config keeps writing to the caller's own, not to one in the scratch dir.
+///
+/// Driven through the real daemon rather than through `Mapping` alone, because what can
+/// actually break is neither end of the mapping but the middle: `Sequence.UpdateConfig` has
+/// to reach a file on disk, and `Session.OpenConfig` has to read it back.
+final class SessionConfigPersistenceTests: XCTestCase {
 
     func testAnUnfinishedSelectionSurvivesUpdateConfigAndOpenConfig() async throws {
         let scratch = try makeScratchDir()
@@ -107,6 +111,107 @@ final class StartupHorizonResumeTests: XCTestCase {
           try await daemon.call(method: "Session.OpenConfig", request: reopen)
         XCTAssertTrue(reopened.config.startupHorizonFrameIndices.isEmpty,
                       "a finished selection must not come back on the next open")
+    }
+
+    // MARK: - where the session's config.json is
+
+    /// A session opened from a sequence keeps its config in the scratch dir, and says so.
+    func testASequenceSessionReportsItsScratchConfig() async throws {
+        let scratch = try makeScratchDir()
+        defer { try? FileManager.default.removeItem(atPath: scratch) }
+        let sequenceDir = try makeSequence(in: scratch, frames: 3)
+
+        let daemon = try launchDaemon(scratchDir: scratch)
+        defer { daemon.terminate() }
+        try await hello(daemon)
+
+        var openReq = Star_V1_OpenSequenceRequest()
+        openReq.sequenceDir = sequenceDir
+        let info: Star_V1_SessionInfo =
+          try await daemon.call(method: "Session.OpenSequence", request: openReq)
+
+        XCTAssertEqual(info.configJsonPath, "\(info.scratchSessionDir)/config.json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: info.configJsonPath),
+                      "the path a client would resume from has to exist by the time it is "
+                      + "handed one")
+    }
+
+    /// A session opened from a config keeps writing to the caller's own file, which is *not*
+    /// in the scratch dir.  Building the scratch path instead — which is what clients did
+    /// before this field existed — names a file nothing ever writes, so crash recovery gave
+    /// up on a session that was perfectly resumable.
+    func testAConfigSessionReportsTheCallersOwnFile() async throws {
+        let scratch = try makeScratchDir()
+        defer { try? FileManager.default.removeItem(atPath: scratch) }
+        let sequenceDir = try makeSequence(in: scratch, frames: 3)
+
+        let daemon = try launchDaemon(scratchDir: scratch)
+        defer { daemon.terminate() }
+        try await hello(daemon)
+
+        var openReq = Star_V1_OpenSequenceRequest()
+        openReq.sequenceDir = sequenceDir
+        let first: Star_V1_SessionInfo =
+          try await daemon.call(method: "Session.OpenSequence", request: openReq)
+
+        // Re-open that config from somewhere the scratch dir does not reach.
+        let elsewhere = "\(scratch)/elsewhere"
+        try FileManager.default.createDirectory(atPath: elsewhere, withIntermediateDirectories: true)
+        let callersConfig = "\(elsewhere)/config.json"
+        try FileManager.default.copyItem(atPath: first.configJsonPath, toPath: callersConfig)
+
+        var reopen = Star_V1_OpenConfigRequest()
+        reopen.configJsonPath = callersConfig
+        let info: Star_V1_SessionInfo =
+          try await daemon.call(method: "Session.OpenConfig", request: reopen)
+
+        XCTAssertEqual(info.configJsonPath, callersConfig)
+        XCTAssertNotEqual(info.configJsonPath, "\(info.scratchSessionDir)/config.json")
+        XCTAssertFalse(
+          FileManager.default.fileExists(atPath: "\(info.scratchSessionDir)/config.json"),
+          "nothing writes a config into a resumed session's scratch dir, which is exactly "
+          + "why the client cannot build the path itself")
+    }
+
+    /// And what it reports is the file the daemon actually saves to, not just a name.
+    func testAConfigSessionSavesToTheFileItReported() async throws {
+        let scratch = try makeScratchDir()
+        defer { try? FileManager.default.removeItem(atPath: scratch) }
+        let sequenceDir = try makeSequence(in: scratch, frames: 3)
+
+        let daemon = try launchDaemon(scratchDir: scratch)
+        defer { daemon.terminate() }
+        try await hello(daemon)
+
+        var openReq = Star_V1_OpenSequenceRequest()
+        openReq.sequenceDir = sequenceDir
+        let first: Star_V1_SessionInfo =
+          try await daemon.call(method: "Session.OpenSequence", request: openReq)
+
+        let elsewhere = "\(scratch)/elsewhere"
+        try FileManager.default.createDirectory(atPath: elsewhere, withIntermediateDirectories: true)
+        let callersConfig = "\(elsewhere)/config.json"
+        try FileManager.default.copyItem(atPath: first.configJsonPath, toPath: callersConfig)
+
+        var reopen = Star_V1_OpenConfigRequest()
+        reopen.configJsonPath = callersConfig
+        let info: Star_V1_SessionInfo =
+          try await daemon.call(method: "Session.OpenConfig", request: reopen)
+
+        var cfg = info.config
+        cfg.startupHorizonFrameIndices = [0, 2]
+        cfg.startupHorizonFramePosition = 1
+        var update = Star_V1_UpdateConfigRequest()
+        update.sessionID = info.sessionID
+        update.config = cfg
+        _ = try await daemon.call(method: "Sequence.UpdateConfig", request: update)
+          as Star_V1_Config
+
+        let onDisk = try JSONDecoder().decode(
+          Config.self, from: try Data(contentsOf: URL(fileURLWithPath: info.configJsonPath)))
+        XCTAssertEqual(onDisk.startupHorizonFrameIndices, [0, 2],
+                       "configJsonPath has to be where the session's writes land, or "
+                       + "resuming from it loses everything done since it was opened")
     }
 
     // MARK: - harness

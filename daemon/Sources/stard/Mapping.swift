@@ -372,6 +372,7 @@ enum Mapping {
         info.componentsPerPixel = Int32(imageInfo.componentsPerPixel)
         info.config = protoConfig(config)
         info.scratchSessionDir = session.scratchSessionDir
+        info.configJsonPath = session.configJsonPath
         if let vi { info.sourceVideoInfo = videoInfo(vi) }
         return info
     }
