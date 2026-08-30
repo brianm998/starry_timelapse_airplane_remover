@@ -545,24 +545,13 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         }
         guard let firstFrame = frames.first else { return }
 
-        // Per neighbour pair, not per frame.  A frame has a results container as soon
-        // as its homography op ran, whether or not any of the eight warps inside it
-        // were solved, so counting containers reports a fully-measured sequence for one
-        // where every single pair was rejected — which is precisely the case worth
-        // noticing.
-        var solvedPairs = 0
-        var expectedPairs = 0
-        for entry in entries {
-            expectedPairs += entry.neighborFrameIndices.count
-            solvedPairs += entry.homography?.neighborHomography
-              .lazy.filter { $0.homography != nil }.count ?? 0
-        }
-        let solvedFraction = expectedPairs > 0
-          ? Double(solvedPairs) / Double(expectedPairs)
-          : 0
-        Log.i("validateMovingEarthAlignment: \(solvedPairs) of \(expectedPairs) " +
-              "neighbour pairs have a measured ground homography " +
-              "(\(String(format: "%.1f", solvedFraction * 100))%)")
+        let coverage = GroundTrackingCoverage(frames: entries.map {
+            GroundTrackingCoverage.Frame(neighborFrameIndices: $0.neighborFrameIndices,
+                                         homography: $0.homography)
+        })
+        Log.i("validateMovingEarthAlignment: \(coverage.solvedPairs) of " +
+              "\(coverage.expectedPairs) neighbour pairs have a measured ground " +
+              "homography (\(String(format: "%.1f", coverage.solvedFraction * 100))%)")
 
         // A ground that cannot be tracked is not an error — the merge falls back to
         // each frame's own pixels, which is what earth alignment off does — but it is
@@ -579,17 +568,17 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         //
         // `.warning`, not `.critical`: the run finishes and everything above the
         // horizon is exactly as good as it would have been.
-        if solvedFraction < 0.5, expectedPairs > 0 {
+        if coverage.groundWasNotTracked {
             await StarWarnings.shared.post(StarWarning(
               kind: .groundAlignmentFailed,
               severity: .warning,
               message: localized("warning.ground_alignment_failed.message",
-                                 expectedPairs - solvedPairs, expectedPairs),
+                                 coverage.failedPairs, coverage.expectedPairs),
               suggestion: localized("warning.ground_alignment_failed.suggestion")
             ))
         }
 
-        guard solvedPairs > 0 else {
+        guard coverage.solvedPairs > 0 else {
             // Not fatal the way it is for the sky.  With no ground homography at all
             // every frame falls back to its own unwarped pixels, which is what the
             // pipeline does with earth alignment off — a worse result than was asked
@@ -671,6 +660,82 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         Log.i("validateMovingEarthAlignment: replaced \(result.replaced) ground " +
               "homographies that disagreed with their neighbours and filled " +
               "\(result.filled) that were missing")
+    }
+}
+
+
+/// How much of a moving sequence's ground actually got measured, and whether that is
+/// little enough to be worth telling the user about.
+///
+/// Counted per neighbour pair, not per frame.  A frame has a results container as soon as
+/// its homography op ran, whether or not any of the warps inside it were solved, so
+/// counting containers reports a fully-measured sequence for one where every single pair
+/// was rejected — which is precisely the case worth noticing.
+///
+/// Split out of `validateMovingEarthAlignment` so the threshold can be exercised without
+/// standing up a sequence of real frames: `GapFillEntry` carries a whole
+/// `FrameAirplaneRemover`, and none of that is involved in the count.
+struct GroundTrackingCoverage {
+
+    /// One frame's contribution — the two fields of `GapFillEntry` the count reads.
+    struct Frame {
+        /// The neighbours this frame is supposed to have.  Frames near the ends of a
+        /// sequence legitimately have fewer, so the expected total is not frame count
+        /// times neighbour count.
+        let neighborFrameIndices: [Int]
+
+        /// What its homography op produced, if it ran at all.
+        let homography: HomographyResultsCodable?
+
+        init(neighborFrameIndices: [Int], homography: HomographyResultsCodable?) {
+            self.neighborFrameIndices = neighborFrameIndices
+            self.homography = homography
+        }
+    }
+
+    /// The share of pairs that has to have solved before the ground counts as tracked.
+    ///
+    /// Ground estimation failing on individual pairs is ordinary — a dark foreground is a
+    /// poorly conditioned thing to fit eight degrees of freedom to, which is the whole
+    /// reason `EarthHomographyContinuityFilter` exists — and a handful of fills changes
+    /// nothing anyone would see.  Below half there is no longer a solid enough local
+    /// model left for that filter to fill the gaps from, and the frames it cannot fill
+    /// merge their ground unwarped.
+    static let minimumSolvedFraction: Double = 0.5
+
+    /// Every neighbour pair the sequence is supposed to have, summed over its frames.
+    let expectedPairs: Int
+
+    /// The subset of those that produced a matrix.
+    let solvedPairs: Int
+
+    init(frames: [Frame]) {
+        var solved = 0
+        var expected = 0
+        for frame in frames {
+            expected += frame.neighborFrameIndices.count
+            solved += frame.homography?.neighborHomography
+              .lazy.filter { $0.homography != nil }.count ?? 0
+        }
+        self.expectedPairs = expected
+        self.solvedPairs = solved
+    }
+
+    var failedPairs: Int { expectedPairs - solvedPairs }
+
+    /// Zero rather than a division by zero on a sequence with no neighbours at all.
+    var solvedFraction: Double {
+        expectedPairs > 0 ? Double(solvedPairs) / Double(expectedPairs) : 0
+    }
+
+    /// Strictly below the threshold, so a sequence that solved exactly half of its pairs
+    /// is left alone — half is still enough for the continuity filter to fill from.
+    ///
+    /// The `expectedPairs > 0` guard is what stops a sequence with nothing to measure
+    /// reporting a fully untracked ground: `solvedFraction` is 0 there for want of a
+    /// denominator, not because anything failed.
+    var groundWasNotTracked: Bool {
+        solvedFraction < Self.minimumSolvedFraction && expectedPairs > 0
     }
 }
 
