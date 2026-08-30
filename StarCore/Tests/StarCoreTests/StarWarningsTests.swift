@@ -195,14 +195,15 @@ final class StarWarningsTests: XCTestCase {
     /// a box heading and the cli prints the one-liner.  A kind added without them would
     /// surface as a blank alert.
     func testEveryKindHasATitleAndAOneLineDescription() {
-        let kinds: [StarWarning.Kind] = [
-          .memoryPressure, .lowSystemMemory, .footprintOverBudget,
-          .oversizedReservation, .memoryGatingDisabled, .previousRunDied,
-        ]
-        for kind in kinds {
+        for kind in StarWarning.Kind.allCases {
             let w = StarWarning(kind: kind, severity: .warning,
                                 message: "something", suggestion: "do something")
             XCTAssertFalse(w.title.isEmpty, "\(kind) has no title")
+            // `localized` returns the key itself when nothing in the catalogue has it, so a
+            // title that still reads as a key is a kind whose string was never written.
+            // Without this the check above passes on a `warning.title.*` typo.
+            XCTAssertFalse(w.title.hasPrefix("warning.title."),
+                           "\(kind) has no warning.title.* string in the catalogue")
             XCTAssertTrue(w.oneLineDescription.contains("something"), "\(kind)")
             XCTAssertTrue(w.oneLineDescription.contains("do something"), "\(kind)")
         }
@@ -239,7 +240,8 @@ final class PassingConditionTests: XCTestCase {
     /// matters most: it is about the user's product going missing.
     func testTheFactsAboutARunDoNot() {
         for kind in [StarWarning.Kind.outputWriteFailed, .lowDiskSpace, .previousRunDied,
-                     .oversizedReservation, .memoryGatingDisabled, .artifactsInvalidated] {
+                     .oversizedReservation, .memoryGatingDisabled, .artifactsInvalidated,
+                     .groundAlignmentFailed] {
             XCTAssertFalse(warning(kind).describesAPassingCondition, "\(kind)")
         }
     }
@@ -251,7 +253,7 @@ final class PassingConditionTests: XCTestCase {
                                              .footprintOverBudget]
         let staying: Set<StarWarning.Kind> = [.outputWriteFailed, .lowDiskSpace, .previousRunDied,
                                              .oversizedReservation, .memoryGatingDisabled,
-                                             .artifactsInvalidated]
+                                             .artifactsInvalidated, .groundAlignmentFailed]
         XCTAssertTrue(passing.isDisjoint(with: staying))
         XCTAssertEqual(passing.count + staying.count, StarWarning.Kind.allCases.count,
                        "a new StarWarning.Kind needs classifying in describesAPassingCondition")

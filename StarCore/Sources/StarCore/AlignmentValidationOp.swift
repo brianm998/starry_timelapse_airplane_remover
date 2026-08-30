@@ -567,17 +567,26 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         // A ground that cannot be tracked is not an error — the merge falls back to
         // each frame's own pixels, which is what earth alignment off does — but it is
         // not what was asked for either, and the output looks like nothing happened.
-        // Say so once, at a level that survives a skim of the log, with the reason:
-        // this is what a foreground with no detail in it produces, and the usual cause
-        // is source frames whose shadows were clipped to black before star saw them.
+        // Say so once, with the reason: this is what a foreground with no detail in it
+        // produces, and the usual cause is source frames whose shadows were clipped to
+        // black before star saw them.
+        //
+        // A `StarWarning` rather than the `Log.w` this used to be, because the log it
+        // was written to is ~/Library/Logs/star and nobody reads it — least of all the
+        // user whose finished ground still has whatever crossed it in.  `StarWarnings`
+        // logs at the same level on its way past, so nothing is lost by going through
+        // it, and the gui banner and the desktop client's notification are gained.
+        //
+        // `.warning`, not `.critical`: the run finishes and everything above the
+        // horizon is exactly as good as it would have been.
         if solvedFraction < 0.5, expectedPairs > 0 {
-            Log.w("validateMovingEarthAlignment: the ground could not be tracked on " +
-                  "\(String(format: "%.0f", (1 - solvedFraction) * 100))% of neighbour " +
-                  "pairs, so those frames keep their own unwarped ground and nothing " +
-                  "moving on it will be removed. This is what a foreground carrying no " +
-                  "detectable detail looks like — check whether the source frames' " +
-                  "shadows are clipped to black, which is common when they were " +
-                  "extracted from an already-encoded video.")
+            await StarWarnings.shared.post(StarWarning(
+              kind: .groundAlignmentFailed,
+              severity: .warning,
+              message: localized("warning.ground_alignment_failed.message",
+                                 expectedPairs - solvedPairs, expectedPairs),
+              suggestion: localized("warning.ground_alignment_failed.suggestion")
+            ))
         }
 
         guard solvedPairs > 0 else {

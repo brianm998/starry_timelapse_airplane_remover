@@ -174,8 +174,13 @@ public struct RunMarker: Codable, Sendable, Equatable {
         // about the machine, and is routine rather than a symptom. It can easily be the
         // last warning a run issued — it is posted early — so treating it as evidence of
         // anything would misdiagnose every run that happened to rebuild a stage.
+        //
+        // `groundAlignmentFailed` is the same shape of thing: it is about what the source
+        // frames contain, not about this machine, and it is posted mid-run on a run that
+        // then goes on to finish normally. A sequence with an untrackable ground would
+        // otherwise have every later kill of it blamed on memory.
         case .outputWriteFailed, .lowDiskSpace, .previousRunDied,
-             .artifactsInvalidated, .none:
+             .artifactsInvalidated, .groundAlignmentFailed, .none:
             memoryWarning = false
         }
 
