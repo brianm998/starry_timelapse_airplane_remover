@@ -1231,6 +1231,20 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    /// Whether a run whose settings have changed since the artifacts on disk were built
+    /// throws those artifacts away and builds them again.
+    ///
+    /// The answer to the confirmation the settings sheet puts up over a sequence that has
+    /// already been processed.  Not a control anywhere: `updateSettingsAndProcess(reprocess:)`
+    /// is the only thing that sets it, and it sets it from the button the user pressed.
+    var reprocessOnSettingsChange: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.reprocessOnSettingsChange = reprocessOnSettingsChange
+            config.update(realConfig)
+        }
+    }
+
     var memoryBudgetFraction: Double {
         didSet {
             var realConfig = config.config()
@@ -1310,6 +1324,92 @@ public final class ImageSequenceViewModel {
     var shouldShowInitialInstructions: Bool = false
 
     var shouldShowProcessingSettings: Bool = false
+
+    // MARK: - Settings changed over work already done
+
+    /// The configuration as it was when the settings sheet was opened.
+    ///
+    /// The settings view is built for a sequence nothing has been done to, where every
+    /// switch it offers affects only work still to come.  Over a sequence that is part way
+    /// through, the same switch splits the sequence in two — some frames merged with earth
+    /// alignment and some without — and the only way to say so is to know what the settings
+    /// were before the user started changing them.
+    ///
+    /// Not the record `FrameGraphBuilder` keeps on disk, which would be the other candidate:
+    /// that one is written only by a run that covers the whole sequence, so it is absent for
+    /// exactly the half-finished sequences this is for, and absent again for every sequence
+    /// processed before it existed.  A snapshot is always available and answers the narrower
+    /// question the user is actually asking — "does what I just changed contradict what is
+    /// already done?"
+    var settingsSnapshot: Config? {
+        didSet { recomputeStagesChangedInSettings() }
+    }
+
+    /// Which cached stages the settings changed in this settings session would invalidate.
+    ///
+    /// Empty when nothing output-affecting has moved.  `ArtifactInputs` is what draws that
+    /// line, and it draws it in one place for every client: the concurrency and memory
+    /// knobs change how the work is done rather than what comes out, so turning one of
+    /// those does not raise a warning about frames that are already finished.
+    ///
+    /// Stored rather than computed, because it is derived from the *whole* `Config` and
+    /// `ConfigManager` is not `@Observable`.  A computed property reading it would be
+    /// recomputed only when something else happened to redraw the settings sheet — and the
+    /// controls that change these settings are child views holding bindings, which the
+    /// sheet's own body never reads.  So the warning would appear a keystroke late, or not
+    /// at all.
+    private(set) var stagesChangedInSettings: Set<ArtifactStage> = []
+
+    /// Called from the `ConfigManager.onUpdate` hook that every setting's `didSet` goes
+    /// through, so this is as current as the config is.
+    private func recomputeStagesChangedInSettings() {
+        guard let settingsSnapshot else {
+            stagesChangedInSettings = []
+            return
+        }
+        stagesChangedInSettings =
+          ArtifactInputs.current(from: config.config())
+            .staleStages(comparedTo: ArtifactInputs.current(from: settingsSnapshot))
+    }
+
+    /// Whether the settings sheet should be warning that this change contradicts work
+    /// already done, and offering Update rather than Process Now.  The rule is
+    /// `SettingsChangeState`'s; this is where the numbers it needs are.
+    var settingsContradictFinishedWork: Bool {
+        SettingsChangeState.contradictsFinishedWork(
+          isProcessingFrames: isProcessingFrames,
+          completeFrameCount: count(for: .complete),
+          userModifiedFrameCount: count(for: .userModified),
+          openedSequenceWasUntouched: progressWhenOpened?.isUntouched,
+          changedStages: stagesChangedInSettings
+        )
+    }
+
+    /// Start processing under settings that have just changed over work already done.
+    ///
+    /// `reprocess` is the answer to the confirmation: true throws away what the changed
+    /// settings invalidated and builds it again, false keeps it and applies the new
+    /// settings only to the frames that are left.
+    ///
+    /// A run already in progress is stopped and started again rather than left to finish.
+    /// Its graph was planned — and its stale artifacts surveyed — under the settings as
+    /// they were, so the operations still queued would go on skipping frames whose
+    /// artifacts the change has just made wrong.  Only a fresh build re-surveys, and the
+    /// wait is what keeps the new build's invalidation pass from deleting artifacts the
+    /// old build's stragglers are still writing.
+    func updateSettingsAndProcess(reprocess: Bool) {
+        reprocessOnSettingsChange = reprocess
+
+        guard isProcessingFrames else {
+            processAll()
+            return
+        }
+        cancelProcessing()
+        Task {
+            await frameGraphBuilder.cancelAllOperationsAndWait()
+            self.processAll()
+        }
+    }
 
     /// Whether `ProcessingModalView` is up over the rest of the window.
     ///
@@ -1533,6 +1633,7 @@ public final class ImageSequenceViewModel {
         self.alignedNeighborFrameOverrides = config.alignedNeighborFrameOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
+        self.reprocessOnSettingsChange = config.reprocessOnSettingsChange
         self.memoryBudgetFraction = config.maxMatMemoryFraction
         self.keypointMemoryMultiplier = config.keypointMemoryMultiplier
         self.maxConcurrentKeypointOps = config.maxConcurrentKeypointOps
@@ -1688,6 +1789,15 @@ public final class ImageSequenceViewModel {
 
         
         await frameGraphBuilder.set(configManager: configManager)
+
+        // Every setting's `didSet` ends in `config.update`, which runs this.  It is what
+        // keeps `stagesChangedInSettings` — and so the settings sheet's warning and the
+        // Update button — in step with a config nothing observes directly.
+        await MainActor.run {
+            configManager.onUpdate { [weak self] _ in
+                Task { @MainActor in self?.recomputeStagesChangedInSettings() }
+            }
+        }
 
         let distributor = IndexDistributor(max: filenames.count)
 
@@ -2190,6 +2300,10 @@ public final class ImageSequenceViewModel {
 
     private func beginProcessing() {
         Log.d("beginProcessing")
+        // The run adopts whatever the settings now are, so this is the baseline the next
+        // settings session compares against.  Until a run starts, a change the user made
+        // and dismissed is still a change the frames on disk have not had.
+        self.settingsSnapshot = config.config()
         self.isProcessingFrames = true
         self.startProcessingModal()
         processingGeneration += 1

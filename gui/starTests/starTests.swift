@@ -1946,8 +1946,12 @@ final class UserPreferencesStoreTests: XCTestCase {
 
     private func swiftSources() throws -> [(name: String, text: String)] {
         let dir = Self.guiDir.appendingPathComponent("star")
+        // Dotfiles are skipped, not just hidden clutter: an Emacs lock file is named
+        // `.#Foo.swift` and is a dangling symlink (its target is `user@host.pid:boot`, not a
+        // path), so it passes a bare `.swift` filter and then fails to read.  Anyone with the
+        // project open in an editor that writes lock files would see these tests fail.
         let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
-            .filter { $0.hasSuffix(".swift") }
+            .filter { $0.hasSuffix(".swift") && !$0.hasPrefix(".") }
         XCTAssertGreaterThan(names.count, 20, "found only \(names.count) sources in gui/star")
         return try names.map { ($0, try source("star/\($0)")) }
     }
@@ -2265,6 +2269,195 @@ final class SequenceProgressTests: XCTestCase {
             let sequence = progress(frameCount: 19, framesComplete: onDisk, steps: steps)
             XCTAssertFalse(sequence.isComplete && sequence.isUntouched,
                            "\(onDisk) frames written reads as both finished and untouched")
+        }
+    }
+}
+
+
+/// The left panel's top button is two buttons sharing one place on screen, and the rule for
+/// which one it is has a trap in it: the frame counts that decide whether there is anything
+/// left to process must not be allowed to disable the Status button.  A run that has just
+/// claimed the last unprocessed frame would otherwise take away the only way back to its
+/// own processing modal, which the modal's Dismiss button puts down.
+@MainActor
+final class ProcessingButtonRoleTests: XCTestCase {
+
+    private func role(
+      processing: Bool = false,
+      rendering: Bool = false,
+      unprocessed: Int = 0,
+      horizonDetected: Int = 0,
+      frames: Int = 10
+    ) -> ProcessingButtonRole {
+        ProcessingButtonRole.current(
+          isProcessingFrames: processing,
+          isRenderingVideo: rendering,
+          unprocessedCount: unprocessed,
+          horizonDetectedCount: horizonDetected,
+          frameCount: frames
+        )
+    }
+
+    func testAFreshSequenceOffersToProcess() {
+        XCTAssertEqual(role(unprocessed: 10), .process(enabled: true))
+    }
+
+    func testARunInProgressOffersItsStatus() {
+        XCTAssertEqual(role(processing: true, unprocessed: 4), .status)
+    }
+
+    /// The regression this exists for.
+    func testTheStatusButtonSurvivesTheLastFrameBeingClaimed() {
+        XCTAssertEqual(role(processing: true, unprocessed: 0, horizonDetected: 0), .status)
+    }
+
+    /// `.status` carries no enabled flag at all, which is the point: there is no state in
+    /// which the way back to a live run's modal is withheld.
+    func testTheStatusButtonIsNeverDisabled() {
+        for rendering in [false, true] {
+            for unprocessed in [0, 1, 10] {
+                for horizon in [0, 5, 10] {
+                    XCTAssertEqual(role(processing: true, rendering: rendering,
+                                        unprocessed: unprocessed, horizonDetected: horizon),
+                                   .status)
+                }
+            }
+        }
+    }
+
+    func testAFinishedSequenceHasNothingLeftToProcess() {
+        XCTAssertEqual(role(unprocessed: 0, horizonDetected: 0), .process(enabled: false))
+    }
+
+    /// Every frame stopped after horizon detection is the one state with no unprocessed
+    /// frames that is still worth processing from.
+    func testASequenceStoppedAtHorizonDetectionCanStillBeProcessed() {
+        XCTAssertEqual(role(unprocessed: 0, horizonDetected: 10, frames: 10),
+                       .process(enabled: true))
+    }
+
+    func testSomeFramesAtHorizonDetectionIsNotEnough() {
+        XCTAssertEqual(role(unprocessed: 0, horizonDetected: 6, frames: 10),
+                       .process(enabled: false))
+    }
+
+    func testRenderingAVideoHoldsOffAnotherRun() {
+        XCTAssertEqual(role(rendering: true, unprocessed: 10), .process(enabled: false))
+    }
+}
+
+/// Whether the processing modal draws its alignment charts is a preference rather than view
+/// state, because the modal is torn down and rebuilt each time it is dismissed and brought
+/// back — state there would forget the answer every time.
+final class ProcessingModalAlignmentPreferenceTests: XCTestCase {
+
+    func testAPreferencesFileWithoutTheKeyLeavesItUnset() throws {
+        let json = #"{"recentlyOpenedSequencelist":{}}"#
+        let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+        XCTAssertNil(prefs.showAlignmentInProcessingWindow)
+    }
+
+    /// Decoded rather than assigned: every setter on `UserPreferences` writes the real
+    /// preferences file in the home directory, so a test that assigns one clobbers the
+    /// user's own settings.
+    func testTheChoiceRoundTrips() throws {
+        for chosen in [true, false] {
+            let json = """
+              {"recentlyOpenedSequencelist":{},"showAlignmentInProcessingWindow":\(chosen)}
+              """
+            let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+            XCTAssertEqual(prefs.showAlignmentInProcessingWindow, chosen)
+
+            let encoded = try JSONEncoder().encode(prefs)
+            XCTAssertTrue(String(decoding: encoded, as: UTF8.self)
+                            .contains("showAlignmentInProcessingWindow"))
+
+            let back = try JSONDecoder().decode(UserPreferences.self, from: encoded)
+            XCTAssertEqual(back.showAlignmentInProcessingWindow, chosen)
+        }
+    }
+}
+
+
+/// The settings view was built for a sequence nothing has been done to, where every switch
+/// it offers affects only work still to come.  Over a sequence part way through, a switch
+/// that changes how the output looks splits it in two — some frames merged with earth
+/// alignment and some without — and that is what these two halves are for.
+///
+/// Both halves have to hold at once, and each is silent on its own: a change with nothing
+/// finished behind it is the ordinary first run, and finished work with no change behind it
+/// is an ordinary resume.
+@MainActor
+final class SettingsChangeStateTests: XCTestCase {
+
+    private func contradicts(
+      processing: Bool = false,
+      complete: Int = 0,
+      userModified: Int = 0,
+      openedUntouched: Bool? = nil,
+      changed: Set<ArtifactStage> = [.output]
+    ) -> Bool {
+        SettingsChangeState.contradictsFinishedWork(
+          isProcessingFrames: processing,
+          completeFrameCount: complete,
+          userModifiedFrameCount: userModified,
+          openedSequenceWasUntouched: openedUntouched,
+          changedStages: changed
+        )
+    }
+
+    // MARK: - silent on its own
+
+    func testAFirstRunOverAnUntouchedSequenceSaysNothing() {
+        XCTAssertFalse(contradicts(openedUntouched: true))
+    }
+
+    func testAChangeWithNothingFinishedBehindItSaysNothing() {
+        XCTAssertFalse(contradicts(changed: [.horizon, .keypoints, .output]))
+    }
+
+    /// The concurrency and memory knobs land here: `ArtifactInputs` records none of them,
+    /// so they change nothing that is on disk and must not warn about it.
+    func testFinishedWorkWithNoOutputAffectingChangeSaysNothing() {
+        XCTAssertFalse(contradicts(complete: 40, openedUntouched: false, changed: []))
+        XCTAssertFalse(contradicts(processing: true, changed: []))
+    }
+
+    // MARK: - both halves together
+
+    func testAChangeOverFinishedFramesWarns() {
+        XCTAssertTrue(contradicts(complete: 40, openedUntouched: false))
+    }
+
+    /// A run counts before its first frame is written: the horizon masks and keypoint sets
+    /// it has already built were built under the old settings, and those are what a change
+    /// throws away.
+    func testAChangeDuringARunWarnsBeforeAnyFrameIsFinished() {
+        XCTAssertTrue(contradicts(processing: true, complete: 0, openedUntouched: true))
+    }
+
+    /// Classified outliers are work too, and the settings that produced them are recorded.
+    func testAChangeOverClassifiedFramesWarns() {
+        XCTAssertTrue(contradicts(userModified: 12))
+    }
+
+    /// The half-finished sequence the feature exists for: re-opened, nothing merged yet,
+    /// but hours of keypoints and alignment on disk behind it.
+    func testAChangeOverAReopenedSequenceWithNoFinishedFramesWarns() {
+        XCTAssertTrue(contradicts(complete: 0, openedUntouched: false))
+    }
+
+    /// No survey means this sequence was set up in this session, so there is nothing on
+    /// disk from before to contradict.
+    func testASequenceWithNoSurveyAndNoFinishedFramesSaysNothing() {
+        XCTAssertFalse(contradicts(openedUntouched: nil))
+    }
+
+    /// Whichever stage moved, the answer is the same — the question is whether anything
+    /// output-affecting changed, not which thing.
+    func testAnyChangedStageIsEnough() {
+        for stage in ArtifactStage.allCases {
+            XCTAssertTrue(contradicts(complete: 1, changed: [stage]), "\(stage)")
         }
     }
 }

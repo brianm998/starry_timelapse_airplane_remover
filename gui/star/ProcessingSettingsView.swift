@@ -2,6 +2,45 @@ import SwiftUI
 import StarCore
 import logging
 
+/// Whether the settings sheet is describing a change that contradicts work already on
+/// disk — the thing that turns Process Now into Update and puts the red line under the
+/// heading.
+///
+/// A value rather than a condition spelled out in the view, because the rule has two
+/// halves that are easy to get backwards.  A change with nothing finished behind it is the
+/// ordinary case this whole view was built for and must stay silent; work finished with no
+/// change behind it is a sequence being resumed, which is also ordinary and also silent.
+/// Only both together are worth interrupting for.
+enum SettingsChangeState {
+
+    /// - Parameters:
+    ///   - changedStages: what the settings changed in this settings session would
+    ///     invalidate, from `ArtifactInputs`.  Empty for the concurrency and memory knobs,
+    ///     which change how the work is done rather than what comes out.
+    ///   - openedSequenceWasUntouched: whether the survey taken when this sequence was
+    ///     opened found nothing done to it, or nil where no survey was taken — a sequence
+    ///     set up for the first time in this session, which by definition has nothing on
+    ///     disk from before.
+    static func contradictsFinishedWork(
+      isProcessingFrames: Bool,
+      completeFrameCount: Int,
+      userModifiedFrameCount: Int,
+      openedSequenceWasUntouched: Bool?,
+      changedStages: Set<ArtifactStage>
+    ) -> Bool {
+        guard !changedStages.isEmpty else { return false }
+
+        // A live run counts before its first frame is written: the horizon masks and
+        // keypoint sets it has already built were built under the settings as they were,
+        // and those are exactly what a change throws away.
+        if isProcessingFrames { return true }
+
+        if completeFrameCount > 0 { return true }
+        if userModifiedFrameCount > 0 { return true }
+        return openedSequenceWasUntouched == false
+    }
+}
+
 public enum CannyGradientMethod: InstructionOption,
                                  Sendable,
                                  Codable
@@ -362,6 +401,9 @@ struct ProcessingSettingsView: View {
         showHorizonFloorInfo = false
     }
     
+    /// Whether the "already processed frames have different settings" confirmation is up.
+    @State private var showUpdateConfirmation = false
+
     @FocusState private var focusedField: FocusedField?
 
     init(viewModel: ImageSequenceViewModel) {
@@ -388,6 +430,18 @@ struct ProcessingSettingsView: View {
                 .lineLimit(nil)
                 .font(.largeTitle)
                 .foregroundColor(.white)
+
+              // Under the top label, and only over a sequence that has work on disk this
+              // change contradicts.  A sequence nothing has been done to is what this whole
+              // view was built for, and there is nothing to warn about there.
+              if viewModel.settingsContradictFinishedWork {
+                  Text(localized("ui.already_processed_frames_have_different_settings"))
+                    .font(.title2)
+                    .foregroundColor(.red)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .help(localized("ui.already_processed_frames_have_different_settings_help"))
+              }
 
               HStack {
                   Spacer()
@@ -570,7 +624,13 @@ struct ProcessingSettingsView: View {
                               Color.blue
                                 .cornerRadius(20)
 
-                              Text(localized("ui.process_now"))
+                              // "Update" rather than "Process Now" once there is finished
+                              // work this change contradicts, because that is what the
+                              // button does then: it does not start a run over an untouched
+                              // sequence, it changes one that is already part done.
+                              Text(viewModel.settingsContradictFinishedWork
+                                     ? localized("ui.update")
+                                     : localized("ui.process_now"))
                                 .font(.title2)
                                 .padding(20)
                                 .foregroundColor(.white)
@@ -578,7 +638,11 @@ struct ProcessingSettingsView: View {
                       }
                         .buttonStyle(PlainButtonStyle()) // XXX these styles suck
                         .fixedSize(horizontal: true, vertical: true)
-                        .disabled(viewModel.isProcessingFrames)
+                        // Not disabled while a run is going any more: over a live run this
+                        // button is the one thing that makes a settings change reach the
+                        // frames the run has not got to yet.
+                        .disabled(viewModel.isProcessingFrames
+                                    && !viewModel.settingsContradictFinishedWork)
 
                       Spacer()
                       Button() {
@@ -603,6 +667,35 @@ struct ProcessingSettingsView: View {
           .frame(minWidth: 800)
           .padding(20)
           .background(.gray)
+          .onAppear {
+              // Only when there is not one already.  A settings change the user made and
+              // then dismissed without processing is still a change the frames on disk do
+              // not have, and re-taking the baseline here would forget it — the run that
+              // adopts it is what clears it (see `beginProcessing`).
+              if viewModel.settingsSnapshot == nil {
+                  viewModel.settingsSnapshot = viewModel.config.config()
+              }
+          }
+          // The clean method is the one setting this view holds locally rather than
+          // writing straight through, so without these the warning below could not see it
+          // move — the user would switch from automatic to selective, which changes every
+          // output frame, and be told nothing.
+          .onChange(of: cleanMethod) { self.applySettings() }
+          .onChange(of: autoPreservationMode) { self.applySettings() }
+          // The whole question as the title, with no message under it.  Splitting it would
+          // put the first clause in the bold title and the second in the body, which reads
+          // as the same sentence said twice.
+          .alert(localized("ui.reprocess_already_processed_frames_question"),
+                 isPresented: $showUpdateConfirmation)
+          {
+              // No first and Yes second.  Measured: the cancel role takes Escape and sits
+              // on the left, and Yes takes Return — which is what makes it the default
+              // button, and the default button of a macOS alert is the blue one.  Escape
+              // therefore lands on the choice that deletes nothing.
+              Button(localized("ui.no"), role: .cancel) { finishUpdate(reprocess: false) }
+              Button(localized("ui.yes")) { finishUpdate(reprocess: true) }
+                .keyboardShortcut(.defaultAction)
+          }
     }
 
     private var sceneTypeGridRow: some View {
@@ -1628,11 +1721,28 @@ struct ProcessingSettingsView: View {
     private func startProcessing() {
         Log.d("processAll Starting processing")
         self.applySettings()
-        viewModel.shouldShowProcessingSettings = false
         Log.d("processAll settings applied")
-      
+
+        // Over a sequence with work on disk that this change contradicts, the button is
+        // Update and it asks before it acts.  Asked here rather than in the view model
+        // because it is a question about this settings session, and the sheet is the only
+        // thing that knows one is happening.
+        if viewModel.settingsContradictFinishedWork {
+            showUpdateConfirmation = true
+            return
+        }
+
+        viewModel.shouldShowProcessingSettings = false
         viewModel.processAll()
         Log.d("processAll process all returned")
+    }
+
+    /// The answer to the confirmation.  Yes throws away what the change invalidated and
+    /// builds it again; No keeps it, and the new settings apply only to the frames that are
+    /// left.
+    private func finishUpdate(reprocess: Bool) {
+        viewModel.shouldShowProcessingSettings = false
+        viewModel.updateSettingsAndProcess(reprocess: reprocess)
     }
 }
 
