@@ -985,8 +985,11 @@ struct HorizonPainterToolbarView: View {
                 viewModel.currentFrameView.refreshHorizonOverlay()
                 viewModel.currentFrameView.refreshFrameHorizonOverlay()
                 if applyToNearbyFrames {
-                    viewModel.recordReferenceHorizonUpdated(frameIndex: viewModel.currentFrameView.frameIndex)
-                    viewModel.reprocessHorizonsForUpdatedReferences()
+                    // Marks the neighbours and asks whether to re-run the refinement now
+                    // or later — it no longer starts the run itself.
+                    viewModel.promptToReprocessHorizons(
+                      forUpdatedReference: viewModel.currentFrameView.frameIndex
+                    )
                 }
                 viewModel.isShowingHorizonPainter = false
             }

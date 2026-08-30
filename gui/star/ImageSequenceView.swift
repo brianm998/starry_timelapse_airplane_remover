@@ -121,5 +121,24 @@ struct ImageSequenceView: View {
           } message: {
               Text(viewModel.errorMessage)
           }
+        // Asked after a reference horizon is painted over an already-processed sequence,
+        // because saying yes puts a span of frames back through the pipeline.  Attached
+        // here, and not in the painter's own toolbar or the right panel that opens it:
+        // saving closes the painter, and an alert hung off a view that is going away goes
+        // with it.  This view outlives both, and is not inside an interaction-mode branch
+        // — the trap the sheets in `BottomRightView` fell into.
+        //
+        // "Later" is the cancel role, so Escape lands on the answer that starts nothing.
+          .alert(localized("ui.horizon_refinement_prompt_title"),
+                 isPresented: $viewModel.showHorizonRefinementPrompt)
+          {
+              Button(localized("ui.horizon_refinement_later"), role: .cancel) {}
+              Button(localized("ui.horizon_refinement_now")) {
+                  viewModel.reprocessHorizonsForUpdatedReferences()
+              }
+                .keyboardShortcut(.defaultAction)
+          } message: {
+              Text(viewModel.horizonRefinementPromptMessage)
+          }
     }
 }

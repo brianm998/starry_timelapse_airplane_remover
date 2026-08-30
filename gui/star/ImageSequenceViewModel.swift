@@ -966,6 +966,87 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    // MARK: - Horizon refinement confirmation
+
+    /// Raises the "re-run the refinement now, or later?" alert, which `ImageSequenceView`
+    /// attaches.
+    var showHorizonRefinementPrompt = false
+
+    /// The numbers that alert quotes.  Captured when it goes up rather than read live:
+    /// answering it clears the two sets they are counted from.
+    private(set) var horizonRefinementPromptFrameCount = 0
+    private(set) var horizonRefinementPromptRenderCount = 0
+
+    /// Frame output whose presence means a frame has to be rendered again when the horizon
+    /// under it moves — the same set `reprocessHorizonsForUpdatedReferences` deletes.
+    private static let horizonRefinementOutputTypes: Set<FrameViewMode> =
+      [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final]
+
+    /// What the horizon painter calls after saving a reference with "apply to nearby
+    /// frames" on: mark the affected frames, then *ask* whether to re-run now.
+    ///
+    /// This used to start the run itself, which put a span of frames back into the
+    /// pipeline the instant the painter closed — before anything on screen said why, and
+    /// often for one reference of several the user was about to paint.  Nothing is lost by
+    /// saying later: the frames stay marked, and the right panel's "Re-run Horizon
+    /// Refinement" button does exactly this work over every reference painted since.
+    func promptToReprocessHorizons(forUpdatedReference frameIndex: Int) {
+        recordReferenceHorizonUpdated(frameIndex: frameIndex)
+
+        let affected = affectedHorizonRefinementFrameIndices
+        let toRender = framesNeedingHorizonRerender(
+          affected.union(updatedReferenceHorizonFrameIndices)
+        )
+
+        // No horizons to recompute and no output to render again — there is nothing to
+        // ask about.  Run it anyway, which in this state only clears the tracking.
+        guard !affected.isEmpty || !toRender.isEmpty else {
+            reprocessHorizonsForUpdatedReferences()
+            return
+        }
+
+        horizonRefinementPromptFrameCount = affected.union(toRender).count
+        horizonRefinementPromptRenderCount = toRender.count
+        showHorizonRefinementPrompt = true
+    }
+
+    /// The body of that alert: what each answer costs, in this sequence's numbers.
+    var horizonRefinementPromptMessage: String {
+        localized("ui.horizon_refinement_prompt_message",
+                  horizonRefinementPromptFrameCount,
+                  horizonRefinementPromptRenderCount)
+    }
+
+    /// Of `indices`, the frames a re-run would have to render again: the ones that already
+    /// have output the changed horizon went into.
+    ///
+    /// Read off `existingImages`, which is where each frame's own `imageExists` survey put
+    /// its types, so this agrees with the check `reprocessHorizonsForUpdatedReferences`
+    /// makes against the disk — and can be asked on the main actor, before that pass has
+    /// run, by the alert and by the modal's first step list.
+    private func framesNeedingHorizonRerender(_ indices: Set<Int>) -> Set<Int> {
+        indices.filter { index in
+            guard index < frames.count else { return false }
+            return !frames[index].existingImages
+              .isDisjoint(with: Self.horizonRefinementOutputTypes)
+        }
+    }
+
+    /// The steps a re-run over these frames looks like it will take, as far as can be told
+    /// before the frames themselves have been looked at.  Corrected to what the work
+    /// actually came to once the pass over them finishes.
+    private func expectedHorizonRefinementSteps(
+      refining toProcess: Set<Int>,
+      references: Set<Int>
+    ) -> [OperationType] {
+        var steps: [OperationType] = []
+        if !toProcess.isEmpty { steps.append(.mergedHorizon) }
+        if !framesNeedingHorizonRerender(toProcess.union(references)).isEmpty {
+            steps.append(.merge)
+        }
+        return steps
+    }
+
     private func computeAffectedHorizonRefinementFrameIndices() -> Set<Int> {
         let allReferenceIndices = frames.indices
             .filter { frames[$0].existingImages.contains(.userHorizon) }
@@ -999,6 +1080,27 @@ public final class ImageSequenceViewModel {
         // It will be cleared per-frame once its merge completes (or immediately below
         // for frames that have no alignment output and won't be re-merged).
 
+        // Up here, on the main actor, and not where the operations are finally enqueued:
+        // the pass below stats and deletes files one frame at a time and can take a minute
+        // or two on a large sequence, and that was a minute or two of the window looking
+        // as though answering the prompt had done nothing at all.  The rows start from
+        // what this can tell without touching the disk and are corrected below to what the
+        // work came to; if it comes to nothing, the run ends and takes the modal with it.
+        //
+        // Skipped while a run is already going: raising the modal re-takes the progress
+        // baseline, which would leave that run's bars measuring from the wrong place.
+        let expectedSteps = expectedHorizonRefinementSteps(refining: toProcess,
+                                                           references: toInvalidate)
+        let showsModal = !expectedSteps.isEmpty && !isProcessingFrames
+        let toExamine = toProcess.union(toInvalidate).count
+        if showsModal {
+            isProcessingFrames = true
+            startProcessingModal(
+              steps: expectedSteps,
+              status: localized("ui.horizon_refinement_preparing", 0, toExamine)
+            )
+        }
+
         Task.detached(priority: .userInitiated) { [self] in
             for idx in toInvalidate {
                 await referenceHorizonStatsCache.clearStats(for: idx)
@@ -1020,7 +1122,16 @@ public final class ImageSequenceViewModel {
             // alignment output is preserved.
             let allModified = toProcess.union(toInvalidate).sorted()
             var framesToMerge: [FrameAirplaneRemover] = []
-            for i in allModified {
+            for (examined, i) in allModified.enumerated() {
+                // This loop is the wait: `imageExists` and `deleteMergeOutput` are both
+                // disk, per frame.  Counting it out is the only honest thing the modal can
+                // show until the operations exist.
+                if showsModal {
+                    await MainActor.run {
+                        self.processingStatusText = localized("ui.horizon_refinement_preparing",
+                                                              examined + 1, allModified.count)
+                    }
+                }
                 guard i < (await self.frames.count),
                       let frame = await self.frames[i].frame else { continue }
                 // Re-queue any frame that already has final output, regardless of whether
@@ -1049,10 +1160,34 @@ public final class ImageSequenceViewModel {
                 framesToMerge.append(frame)
             }
 
-            guard !refinementFrames.isEmpty || !framesToMerge.isEmpty else { return }
+            guard !refinementFrames.isEmpty || !framesToMerge.isEmpty else {
+                // Nothing came of it, so end the run this started — otherwise the modal
+                // sits there over a sequence that is not processing anything.
+                if showsModal {
+                    await MainActor.run {
+                        self.isProcessingFrames = false
+                        self.processingStatusText = nil
+                    }
+                }
+                return
+            }
 
             let mergeIndices = framesToMerge.map { $0.frameIndex }
-            await MainActor.run { self.isProcessingFrames = true }
+            // What the work actually came to, now that the frames have been looked at: a
+            // row for a step with no operations would sit at zero and read as stuck, and
+            // these rows are never filtered — that needs a graph build to complete, and
+            // this kind of run completes none.
+            var steps: [OperationType] = []
+            if !refinementFrames.isEmpty { steps.append(.mergedHorizon) }
+            if !framesToMerge.isEmpty { steps.append(.merge) }
+            await MainActor.run {
+                self.isProcessingFrames = true
+                if showsModal {
+                    self.processingStepTypes = steps
+                    // There are operations to count now, so the bars say it better.
+                    self.processingStatusText = nil
+                }
+            }
 
             await frameGraphBuilder.enqueueHorizonRefinement(
               refinementFrames: refinementFrames,
@@ -1362,6 +1497,16 @@ public final class ImageSequenceViewModel {
     /// step yet".  The two look the same in the counts, and only the first should hide a
     /// row.
     var processingBuildCount: Int = 0
+
+    /// What the run is doing before it has any operations to count, shown in the modal's
+    /// header in place of the frames-complete line.
+    ///
+    /// `nil` for a run whose work is known as soon as it starts, which is every run that
+    /// builds a frame graph.  The horizon refinement re-run is the exception: it spends its
+    /// first minute or two reading the frames on disk to find out what it has to redo, and
+    /// during that the step rows have nothing in them and the frames-complete line still
+    /// reads as the finished sequence it is about to take apart.
+    var processingStatusText: String? = nil
 
     // used in initial instructions view
     var showExpertSettings = false
@@ -2102,6 +2247,7 @@ public final class ImageSequenceViewModel {
         isProcessingFrames = false
         sequenceProcessingState = .unprocessed
         processingModalShowing = false
+        processingStatusText = nil
     }
 
     /// Stop the run: forget the frames still to come, and cancel the operations already on
@@ -2117,10 +2263,17 @@ public final class ImageSequenceViewModel {
     ///
     /// The baseline is taken whether or not the modal is shown, so that turning it off does
     /// not leave stale numbers behind for the next run that does show it.
-    private func startProcessingModal() {
+    ///
+    /// `steps` overrides the step list for a run that does not build a frame graph, which
+    /// today means the horizon refinement re-run.  Rows are only filtered down to the ones
+    /// with work once a graph build completes (`ProcessingSteps.visible`), and that run
+    /// completes none — so it passes exactly the steps it is about to enqueue rather than
+    /// the whole pipeline, which would otherwise sit at zero and read as stuck.
+    private func startProcessingModal(steps: [OperationType]? = nil, status: String? = nil) {
         processingStepBaseline = frameGraphViewModel.operations
         processingBuildCount = frameGraphViewModel.graphBuildsCompleted
-        processingStepTypes = ProcessingSteps.types(for: config.config())
+        processingStepTypes = steps ?? ProcessingSteps.types(for: config.config())
+        processingStatusText = status
         if userPreferences.showProcessingWindow ?? true {
             processingModalShowing = true
         }

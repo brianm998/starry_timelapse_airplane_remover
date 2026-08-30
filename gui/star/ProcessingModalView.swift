@@ -273,6 +273,7 @@ struct ProcessingModalView: View {
           framesComplete: viewModel.count(for: .complete),
           frameCount: viewModel.frames.count,
           steps: steps,
+          statusText: viewModel.processingStatusText,
           showAlignment: showAlignment,
           stop: { viewModel.stopProcessing() },
           dismiss: { viewModel.processingModalShowing = false },
@@ -341,6 +342,12 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     let framesComplete: Int
     let frameCount: Int
     let steps: [ProcessingStepProgress]
+
+    /// What the run is doing, for a run that cannot yet be counted in operations — shown
+    /// under the title in place of the frames-complete line.  Normally `nil`: a run that
+    /// builds a frame graph has operations to count from the start, and the frames-complete
+    /// line is the more useful of the two.
+    var statusText: String? = nil
 
     /// Whether the alignment charts are drawn.  Off is what the toggle in the alignment
     /// heading gives, and it takes the tallest part of the panel with it.
@@ -431,7 +438,12 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
                 Text(localized("ui.processing_frames"))
                   .font(.title2)
                   .foregroundColor(.white)
-                Text(localized("progress.frames_complete", framesComplete, frameCount))
+                // The status line wins while there is one: it says what star is doing,
+                // where the count would be describing a sequence this run is in the middle
+                // of taking apart — "40 / 40 frames complete" over a run that has just
+                // started reads as finished.
+                Text(statusText ?? localized("progress.frames_complete",
+                                             framesComplete, frameCount))
                   .font(.caption)
                   .foregroundColor(.gray)
             }
