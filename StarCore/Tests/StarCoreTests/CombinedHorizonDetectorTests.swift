@@ -22,6 +22,105 @@ final class CombinedHorizonDetectorTests: XCTestCase {
         (0..<width).map { x in y + Int((Double(amplitude) * sin(Double(x) / 8.0)).rounded()) }
     }
 
+    // MARK: - Prior
+
+    /// The band handed to the base methods is the prior's extent plus its radius, as fractions
+    /// of image height.  This is the whole mechanism for the methods that take a band, so a
+    /// mistake here is a detector searching the wrong part of the frame with no other symptom.
+    func testTheBandIsThePriorsExtentWidenedByTheRadius() throws {
+        let prior = CombinedHorizonDetector.Prior(
+          yPerColumn: [3400, 3500, 3600], searchRadius: 200)
+        let band = try XCTUnwrap(prior.searchFractions(imageHeight: 4000))
+        XCTAssertEqual(band.top, (3400.0 - 200) / 4000, accuracy: 1e-9)
+        XCTAssertEqual(band.bottom, (3600.0 + 200) / 4000, accuracy: 1e-9)
+    }
+
+    /// A horizon near an edge of the frame must not produce a band outside it, and must not
+    /// produce an inverted or zero-height one — the base methods index rows from these.
+    func testTheBandIsClampedIntoTheFrame() throws {
+        let high = CombinedHorizonDetector.Prior(yPerColumn: [10], searchRadius: 500)
+        let highBand = try XCTUnwrap(high.searchFractions(imageHeight: 4000))
+        XCTAssertEqual(highBand.top, 0.0)
+        XCTAssertGreaterThan(highBand.bottom, highBand.top)
+
+        let low = CombinedHorizonDetector.Prior(yPerColumn: [3990], searchRadius: 500)
+        let lowBand = try XCTUnwrap(low.searchFractions(imageHeight: 4000))
+        XCTAssertLessThanOrEqual(lowBand.bottom, 1.0)
+        XCTAssertGreaterThanOrEqual(lowBand.bottom - lowBand.top, 0.02)
+    }
+
+    /// A prior with no defined columns describes no band, and must not be mistaken for one at
+    /// the top of the frame.
+    func testAnEmptyPriorHasNoBand() {
+        let prior = CombinedHorizonDetector.Prior(yPerColumn: [nil, nil], searchRadius: 100)
+        XCTAssertNil(prior.searchFractions(imageHeight: 4000))
+    }
+
+    /// Agreement is the fraction of a method's own defined columns that land inside the radius.
+    /// It becomes a confidence multiplier, so the scale matters as much as the ordering.
+    func testAgreementIsTheFractionOfColumnsInsideTheRadius() {
+        let prior = CombinedHorizonDetector.Prior(
+          yPerColumn: [100, 100, 100, 100], searchRadius: 10)
+        XCTAssertEqual(CombinedHorizonDetector.priorAgreement([100, 105, 100, 109], prior: prior),
+                       1.0, accuracy: 1e-9)
+        XCTAssertEqual(CombinedHorizonDetector.priorAgreement([100, 500, 100, 500], prior: prior),
+                       0.5, accuracy: 1e-9)
+        XCTAssertEqual(CombinedHorizonDetector.priorAgreement([900, 900, 900, 900], prior: prior),
+                       0.0, accuracy: 1e-9)
+    }
+
+    /// Exactly on the radius counts as agreement — the radius is how far the horizon *may* be,
+    /// not how far it may nearly be.
+    func testTheRadiusIsInclusive() {
+        let prior = CombinedHorizonDetector.Prior(yPerColumn: [100], searchRadius: 10)
+        XCTAssertEqual(CombinedHorizonDetector.priorAgreement([110], prior: prior), 1.0)
+        XCTAssertEqual(CombinedHorizonDetector.priorAgreement([111], prior: prior), 0.0)
+    }
+
+    /// Columns either side has no value for are not counted either way, so a sparse method is
+    /// judged on what it actually said.
+    func testColumnsWithNoValueOnEitherSideAreNotCounted() {
+        let prior = CombinedHorizonDetector.Prior(yPerColumn: [100, nil, 100], searchRadius: 5)
+        XCTAssertEqual(CombinedHorizonDetector.priorAgreement([100, 9999, nil], prior: prior),
+                       1.0, accuracy: 1e-9,
+                       "column 1 has no prior and column 2 has no detection")
+    }
+
+    /// A method with nothing defined agrees with nothing, rather than dividing by zero or
+    /// coming back as perfect agreement over an empty set.
+    func testAnEmptyMethodAgreesWithNothing() {
+        let prior = CombinedHorizonDetector.Prior(yPerColumn: [100], searchRadius: 5)
+        XCTAssertEqual(CombinedHorizonDetector.priorAgreement([nil], prior: prior), 0.0)
+        XCTAssertEqual(CombinedHorizonDetector.priorAgreement([], prior: prior), 0.0)
+    }
+
+    /// What seeds the Random Walker is bounded into the band.  The walker grows its answer out
+    /// of this line, so a seed sitting on the wrong edge produces a confidently wrong mask —
+    /// which is the failure that reaches the user.
+    func testTheCombinedCurveIsBoundedIntoTheBand() {
+        let prior = CombinedHorizonDetector.Prior(
+          yPerColumn: [100, 100, 100], searchRadius: 20)
+        let bounded = CombinedHorizonDetector.boundedByPrior([50, 105, 900], prior: prior)
+        XCTAssertEqual(bounded[0], 80, "clamped up to the top of the band")
+        XCTAssertEqual(bounded[1], 105, "already inside, untouched")
+        XCTAssertEqual(bounded[2], 120, "clamped down to the bottom of the band")
+    }
+
+    /// Columns the combine left undefined take the prior outright, so the walker is seeded
+    /// across the full width rather than left with holes.
+    func testUndefinedColumnsTakeThePrior() {
+        let prior = CombinedHorizonDetector.Prior(yPerColumn: [100, 200], searchRadius: 20)
+        let bounded = CombinedHorizonDetector.boundedByPrior([nil, nil], prior: prior)
+        XCTAssertEqual(bounded, [100, 200])
+    }
+
+    /// Where the prior itself is undefined there is nothing to bound against, and the
+    /// detection stands as it is.
+    func testColumnsWithNoPriorAreLeftAlone() {
+        let prior = CombinedHorizonDetector.Prior(yPerColumn: [nil, nil], searchRadius: 20)
+        XCTAssertEqual(CombinedHorizonDetector.boundedByPrior([7, nil], prior: prior), [7, nil])
+    }
+
     // MARK: - Params
 
     /// The defaults are what every production call uses — `FrameHorizonProcessor` constructs a

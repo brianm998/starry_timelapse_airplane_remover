@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Catat ke berkas pada tingkat:",
   "ui.max_keypoints": "Titik kunci maksimum:",
   "ui.max_log_lines": "Baris log maksimum",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Jumlah piksel maksimum horizon hasil penghalusan boleh turun di bawah garis dasar horizon gabungan (0 = mati)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Jumlah piksel maksimum penghalusan boleh mendorong horizon di bawah garis yang diprediksi horizon acuan Anda (0 = otomatis)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

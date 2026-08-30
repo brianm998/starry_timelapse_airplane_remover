@@ -837,6 +837,18 @@ struct HorizonPainterToolbarView: View {
 
     // MARK: - Max downward extension control
 
+    /// How far below the reference-derived line the brightness refinement may put the horizon.
+    ///
+    /// Zero is stored to mean "derive it from the refinement search radius", so the readout
+    /// shows the derived number rather than a bare 0 — the value on screen is always the one
+    /// in force.  The derivation lives in `HorizonTunedParameters` so this and the refinement
+    /// cannot drift apart.
+    private var effectiveMaxDownwardExtension: Int {
+        HorizonTunedParameters.effectiveMaxDownwardExtension(
+          configured: tunedParams.maxDownwardExtension,
+          searchRadius: viewModel.referenceHorizonBrightnessRefinementSearchRadius)
+    }
+
     @ViewBuilder
     private var maxDownwardExtensionControl: some View {
         HStack(spacing: 4) {
@@ -849,9 +861,9 @@ struct HorizonPainterToolbarView: View {
             .help(localized("ui.decrease_max_downward_extension_by_10px"))
             .disabled(tunedParams.maxDownwardExtension <= 0)
 
-            Text("↓\(tunedParams.maxDownwardExtension)px")
+            Text(verbatim: "↓\(effectiveMaxDownwardExtension)px")
                 .font(.system(.caption, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundColor(tunedParams.maxDownwardExtension > 0 ? .secondary : .secondary.opacity(0.6))
                 .frame(minWidth: 52, alignment: .center)
                 .help(localized("ui.max_pixels_the_refined_horizon_may_go_below"))
 
@@ -870,8 +882,20 @@ struct HorizonPainterToolbarView: View {
         tunedParams = await frame.loadTunedHorizonParameters()
     }
 
+    /// Steps the bound and writes it to `horizonReference/tuned_parameters.json`, which is one
+    /// file for the whole sequence rather than per frame.
+    ///
+    /// The new value reaches a frame's horizon the next time that frame's merged horizon is
+    /// built — which for the frame being painted is when this reference is saved, since that
+    /// is what raises the refinement.  It does not reach back into merged horizons already on
+    /// disk elsewhere in the sequence; those take it on their next merge.
     private func adjustMaxDownwardExtension(by delta: Int) {
-        tunedParams.maxDownwardExtension = max(0, tunedParams.maxDownwardExtension + delta)
+        // Stepping down from the derived default starts from the number on screen, not from
+        // the stored 0 — otherwise the first press of "−" reads as doing nothing.
+        let base = tunedParams.maxDownwardExtension > 0
+          ? tunedParams.maxDownwardExtension
+          : effectiveMaxDownwardExtension
+        tunedParams.maxDownwardExtension = max(0, base + delta)
         Task {
             guard let frame = viewModel.currentFrameView.frame else { return }
             try? await frame.saveTunedHorizonParameters(tunedParams)

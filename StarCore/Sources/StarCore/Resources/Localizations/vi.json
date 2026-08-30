@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Ghi ra tệp ở mức:",
   "ui.max_keypoints": "Số điểm đặc trưng tối đa:",
   "ui.max_log_lines": "Số dòng nhật ký tối đa",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Số điểm ảnh tối đa mà đường chân trời đã tinh chỉnh có thể xuống dưới đường nền của đường chân trời đã ghép (0 = tắt)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Số điểm ảnh tối đa mà bước tinh chỉnh có thể đẩy đường chân trời xuống dưới đường mà các đường chân trời tham chiếu của bạn dự đoán (0 = tự động)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

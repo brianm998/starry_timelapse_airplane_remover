@@ -44,10 +44,22 @@ public struct HorizonTunedParameters: Codable, Sendable {
     /// the mean deviation are replaced with the Pass-1 baseline.
     public var errorOutlierSigma: Double = 2.5
 
-    /// Maximum pixels the refined horizon may be pushed below the current
-    /// frame's merged-horizon baseline.  0 = disabled.  A value like 30 stops
-    /// Pass-1 warped masks from reclassifying ground as sky in building/
-    /// foreground areas on moving-camera timelapses.
+    /// How far below the expected horizon the reference-guided refinement may put the
+    /// boundary, in pixels.  0 means let `effectiveMaxDownwardExtension` derive it.
+    ///
+    /// This is the knob behind the horizon painter's `↓Npx` stepper, and it bounds the one
+    /// error the brightness refinement makes in only one direction.  Sky colours are bright
+    /// and spread wide while ground colours are dark and tightly clustered, so a bright
+    /// ground pixel — snow on a ridge — sits far outside the ground distribution and
+    /// comfortably inside the sky one, and the likelihood ratio calls it sky.  The boundary
+    /// then walks downhill into the terrain until the position prior outweighs it, around
+    /// 20-25 px down.  Raise this to let real terrain detail through on a sequence whose
+    /// references are painted coarsely; lower it on one where the ground is bright.
+    ///
+    /// `HomographyHorizonDetector` reads the same field with its own meaning — a ceiling
+    /// relative to the merged horizon, where 0 disables the clamp outright.  Nothing
+    /// currently runs that detector, but the two readings differ at 0 and a future wiring
+    /// has to keep them apart rather than assume they agree.
     public var maxDownwardExtension: Int = 0
 
     // MARK: - Canny snap parameters
@@ -75,6 +87,24 @@ public struct HorizonTunedParameters: Codable, Sendable {
 
     /// Number of reference frames used when these parameters were tuned.
     public var tuningFrameCount: Int = 0
+
+    // MARK: - Derived
+
+    /// The bound the refinement actually applies, given the sequence's refinement search
+    /// radius: the configured value when the user has set one, and a tenth of the radius
+    /// otherwise.
+    ///
+    /// One definition rather than two, because the horizon painter shows this number and the
+    /// refinement enforces it — a stepper reading 10 px while 25 px is in force is worse than
+    /// no stepper.  A tenth of the shipped 100 px radius is the value the held-out
+    /// measurement in `referenceStatsBrightnessRefinedHorizonMask` settled on.
+    public static func effectiveMaxDownwardExtension(
+      configured: Int,
+      searchRadius: Int
+    ) -> Int {
+        guard configured > 0 else { return max(1, searchRadius / 10) }
+        return configured
+    }
 
     // MARK: - Constants
 

@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "이 수준으로 파일에 기록:",
   "ui.max_keypoints": "최대 키포인트 수:",
   "ui.max_log_lines": "최대 로그 줄 수",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "보정된 지평선이 병합 지평선 기준선 아래로 내려갈 수 있는 최대 픽셀 수(0 = 사용 안 함)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "보정이 기준 지평선이 예측한 선 아래로 지평선을 밀어낼 수 있는 최대 픽셀 수(0 = 자동)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

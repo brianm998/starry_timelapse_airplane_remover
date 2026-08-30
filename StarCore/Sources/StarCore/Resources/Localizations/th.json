@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "เขียนลงไฟล์ที่ระดับ:",
   "ui.max_keypoints": "จุดสำคัญสูงสุด:",
   "ui.max_log_lines": "บรรทัดบันทึกสูงสุด",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "จำนวนพิกเซลสูงสุดที่เส้นขอบฟ้าซึ่งปรับแล้วจะลงต่ำกว่าเส้นฐานของเส้นขอบฟ้าที่รวมแล้วได้ (0 = ปิด)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "จำนวนพิกเซลสูงสุดที่การปรับละเอียดจะดันเส้นขอบฟ้าให้ต่ำกว่าเส้นที่เส้นขอบฟ้าอ้างอิงของคุณคาดการณ์ไว้ (0 = อัตโนมัติ)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

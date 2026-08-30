@@ -204,7 +204,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 48,
                                         neighborHorizonFilenames: [],
                                         neighborOriginalFilenames: [],
-                                        neighborHomographies: [])
+                                        neighborEarthHomographies: [],
+                                        neighborStarHomographies: [])
         XCTAssertEqual(prepared.currentWidth, 64)
         XCTAssertEqual(prepared.currentHeight, 48)
         XCTAssertEqual(prepared.pass1RawY.count, 64)
@@ -226,7 +227,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 48,
                                         neighborHorizonFilenames: [maskPath],
                                         neighborOriginalFilenames: [],
-                                        neighborHomographies: [identity])
+                                        neighborEarthHomographies: [identity],
+                                        neighborStarHomographies: [identity])
 
         XCTAssertEqual(prepared.pass1RawY.count, 64)
         let defined = prepared.pass1RawY.compactMap { $0 }
@@ -251,7 +253,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 96,
                                         neighborHorizonFilenames: [low1, low2, high],
                                         neighborOriginalFilenames: [],
-                                        neighborHomographies: [identity, identity, identity])
+                                        neighborEarthHomographies: [identity, identity, identity],
+                                        neighborStarHomographies: [identity, identity, identity])
 
         let defined = prepared.pass1RawY.compactMap { $0 }
         XCTAssertFalse(defined.isEmpty)
@@ -274,7 +277,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                        currentHeight: 96,
                                        neighborHorizonFilenames: [maskPath],
                                        neighborOriginalFilenames: [],
-                                       neighborHomographies: [translation(dy: 12)])
+                                       neighborEarthHomographies: [translation(dy: 12)],
+                                        neighborStarHomographies: [translation(dy: 12)])
 
         let defined = shifted.pass1RawY.compactMap { $0 }
         XCTAssertFalse(defined.isEmpty, "the warp must not empty the mask")
@@ -297,7 +301,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
           currentHeight: 32,
           neighborHorizonFilenames: ["/nonexistent/path/nope.tiff", good],
           neighborOriginalFilenames: [],
-          neighborHomographies: [identity, identity])
+          neighborEarthHomographies: [identity, identity],
+                                        neighborStarHomographies: [identity, identity])
 
         XCTAssertFalse(prepared.pass1RawY.compactMap { $0 }.isEmpty,
                        "the readable neighbour must still contribute")
@@ -310,7 +315,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 16,
                                         neighborHorizonFilenames: ["/nope/a.tiff", "/nope/b.tiff"],
                                         neighborOriginalFilenames: [],
-                                        neighborHomographies: [identity, identity])
+                                        neighborEarthHomographies: [identity, identity],
+                                        neighborStarHomographies: [identity, identity])
         XCTAssertEqual(prepared.pass1RawY.count, 16)
         XCTAssertTrue(prepared.pass1RawY.allSatisfy { $0 == nil })
     }
@@ -331,7 +337,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 64,
                                         neighborHorizonFilenames: [low, high],
                                         neighborOriginalFilenames: [],
-                                        neighborHomographies: [identity])
+                                        neighborEarthHomographies: [identity],
+                                        neighborStarHomographies: [identity])
         let defined = prepared.pass1RawY.compactMap { $0 }
         XCTAssertFalse(defined.isEmpty)
         let mean = Double(defined.reduce(0, +)) / Double(defined.count)
@@ -351,7 +358,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 48,
                                         neighborHorizonFilenames: [],
                                         neighborOriginalFilenames: [filenames[1]],
-                                        neighborHomographies: [identity])
+                                        neighborEarthHomographies: [identity],
+                                        neighborStarHomographies: [identity])
         XCTAssertTrue(prepared.neighborHBlurred.isEmpty,
                       "no current image means no error arrays to build")
     }
@@ -369,7 +377,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 48,
                                         neighborHorizonFilenames: [],
                                         neighborOriginalFilenames: [filenames[1], filenames[2]],
-                                        neighborHomographies: [identity, identity],
+                                        neighborEarthHomographies: [identity, identity],
+                                        neighborStarHomographies: [identity, identity],
                                         currentImage: current)
 
         XCTAssertEqual(prepared.neighborHBlurred.count, 2)
@@ -394,7 +403,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 32,
                                         neighborHorizonFilenames: [],
                                         neighborOriginalFilenames: [filenames[0]],
-                                        neighborHomographies: [identity],
+                                        neighborEarthHomographies: [identity],
+                                        neighborStarHomographies: [identity],
                                         currentImage: current)
 
         let array = try XCTUnwrap(prepared.neighborHBlurred.first)
@@ -412,7 +422,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 16,
                                         neighborHorizonFilenames: [],
                                         neighborOriginalFilenames: [],
-                                        neighborHomographies: [])
+                                        neighborEarthHomographies: [],
+                                        neighborStarHomographies: [])
         XCTAssertEqual(prepared.sampleHalfWidth, 13)
 
         // changing it afterwards must not retroactively change the prepared data
@@ -432,7 +443,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 32,
                                         neighborHorizonFilenames: [],
                                         neighborOriginalFilenames: [],
-                                        neighborHomographies: [],
+                                        neighborEarthHomographies: [],
+                                        neighborStarHomographies: [],
                                         currentImage: current,
                                         currentMergedHorizonY: merged)
         XCTAssertEqual(prepared.currentMergedHorizonY, merged)
@@ -441,6 +453,57 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
     }
 
     // MARK: - detectFromPrepared
+
+    // MARK: - the two passes take different homographies
+
+    /// Pass 1 moves a neighbour's *horizon* — a ground feature — so it must use the earth
+    /// homography and must ignore the star one entirely.
+    ///
+    /// This was one shared parameter until 2026-08-30 and the only caller filled it with star
+    /// homographies.  Measured on the aurora sequence's painted references, carrying one to the
+    /// next: earth 3.0 px mean absolute error against star's 118.5 px, star as bad as 575 px.
+    /// Pass 1 combines by per-column *minimum*, so an error that size does not average out —
+    /// the most wrongly-lifted neighbour wins every column.
+    func testPassOneUsesTheEarthHomographyAndNotTheStarOne() throws {
+        let harnessDir = FileManager.default.temporaryDirectory
+          .appendingPathComponent("HHDPassOne-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: harnessDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: harnessDir) }
+
+        // One neighbour whose horizon sits at row 40.
+        let maskPath = harnessDir.appendingPathComponent("neighbour.tiff").path
+        let mask = try XCTUnwrap(PixelatedImage.fromHorizonColumnY(
+                                   width: 64, height: 96,
+                                   columnY: [Int?](repeating: 40, count: 64)))
+        mask.mat.write(to: maskPath)
+
+        let detector = HomographyHorizonDetector()
+        let data = detector.prepare(
+          currentWidth: 64, currentHeight: 96,
+          neighborHorizonFilenames: [maskPath],
+          neighborOriginalFilenames: [],
+          neighborEarthHomographies: [translation(dy: 12)],
+          neighborStarHomographies: [translation(dy: -30)])
+
+        // 40 + 12 from the earth homography.  Taking the star one would land at 10, and taking
+        // neither at 40 — three answers a test that passed the same array twice cannot tell apart.
+        let landed = try XCTUnwrap(data.pass1RawY[32])
+        XCTAssertEqual(landed, 52, accuracy: 2,
+                       "the mask moved by the earth homography, not the star one")
+    }
+
+    /// And the converse: Pass 2 aligns *images* on the stars, so it must not be handed the earth
+    /// homography.  With no originals to warp there is nothing for it to do, whatever it is given.
+    func testPassTwoTakesTheStarHomographyAndProducesNothingWithoutOriginals() {
+        let detector = HomographyHorizonDetector()
+        let data = detector.prepare(
+          currentWidth: 8, currentHeight: 8,
+          neighborHorizonFilenames: [],
+          neighborOriginalFilenames: [],
+          neighborEarthHomographies: [identity],
+          neighborStarHomographies: [identity])
+        XCTAssertTrue(data.neighborHBlurred.isEmpty)
+    }
 
     /// Building `PreparedData` directly is how the pure half gets tested without any I/O.
     private func prepared(width: Int,
@@ -695,7 +758,8 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                         currentHeight: 32,
                                         neighborHorizonFilenames: [],
                                         neighborOriginalFilenames: [],
-                                        neighborHomographies: [])
+                                        neighborEarthHomographies: [],
+                                        neighborStarHomographies: [])
             XCTAssertEqual(data.pass1RawY.count, width, "width \(width)")
         }
     }
@@ -717,13 +781,15 @@ final class HomographyHorizonDetectorTests: FrameHarnessTestCase {
                                                      currentHeight: 96,
                                                      neighborHorizonFilenames: [maskPath],
                                                      neighborOriginalFilenames: [],
-                                                     neighborHomographies: [identity]))
+                                                     neighborEarthHomographies: [identity],
+                                        neighborStarHomographies: [identity]))
         let staged = try XCTUnwrap(detector.detectFromPrepared(
                                     detector.prepare(currentWidth: 64,
                                                      currentHeight: 96,
                                                      neighborHorizonFilenames: [maskPath],
                                                      neighborOriginalFilenames: [],
-                                                     neighborHomographies: [identity])))
+                                                     neighborEarthHomographies: [identity],
+                                        neighborStarHomographies: [identity])))
 
         XCTAssertEqual(HomographyHorizonDetector.horizonYPerColumn(in: combined),
                        HomographyHorizonDetector.horizonYPerColumn(in: staged))

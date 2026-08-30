@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "اس درجے پر فائل میں لکھیں:",
   "ui.max_keypoints": "زیادہ سے زیادہ کلیدی نکات:",
   "ui.max_log_lines": "زیادہ سے زیادہ لاگ سطریں",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "زیادہ سے زیادہ پکسل جتنا بہتر کیا گیا افق ملے ہوئے افق کی بنیادی لکیر سے نیچے جا سکتا ہے (0 = بند)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "زیادہ سے زیادہ پکسل جتنا بہتری آپ کے حوالہ جاتی افق کی پیش گوئی کردہ لکیر سے نیچے افق کو دھکیل سکتی ہے (0 = خودکار)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

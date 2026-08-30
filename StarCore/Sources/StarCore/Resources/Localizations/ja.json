@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "このレベルでファイルに記録:",
   "ui.max_keypoints": "最大キーポイント数:",
   "ui.max_log_lines": "最大ログ行数",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "精緻化した地平線が結合地平線の基準線より下に行ける最大ピクセル数 (0 = 無効)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "参照地平線が予測する線より下へ、精緻化が地平線を押し下げられる最大ピクセル数 (0 = 自動)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

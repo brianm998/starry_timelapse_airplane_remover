@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Journaliser dans un fichier au niveau :",
   "ui.max_keypoints": "Points clés max. :",
   "ui.max_log_lines": "Lignes de journal max.",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Nombre maximal de pixels dont l'horizon affiné peut descendre sous la ligne de base de l'horizon fusionné (0 = désactivé)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Nombre maximal de pixels dont l'affinage peut descendre l'horizon sous la ligne prédite par vos horizons de référence (0 = automatique)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

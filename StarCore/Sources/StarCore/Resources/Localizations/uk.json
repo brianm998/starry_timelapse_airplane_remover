@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Записувати у файл на рівні:",
   "ui.max_keypoints": "Макс. ключових точок:",
   "ui.max_log_lines": "Макс. рядків журналу",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Максимальна кількість пікселів, на яку уточнений горизонт може опуститися нижче базової лінії обʼєднаного горизонту (0 = вимкнено)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Максимальна кількість пікселів, на яку уточнення може опустити горизонт нижче лінії, передбаченої еталонними горизонтами (0 = автоматично)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

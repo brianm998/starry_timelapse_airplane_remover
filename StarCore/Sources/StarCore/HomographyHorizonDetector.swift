@@ -6,10 +6,19 @@ import StarCppBridge
 ///
 /// **Pass 1 – Warped-mask aggregation (temporal)**
 /// Warp each neighbour's per-frame horizon mask into the current frame's
-/// coordinate system using the star homography, then take the per-column
-/// *minimum* Y across all neighbours.  Using minimum (topmost horizon) rather
-/// than median means any single neighbour that correctly identifies a mountain
-/// peak as ground propagates that information to the current frame.
+/// coordinate system using the **earth** homography — the horizon is a ground
+/// feature, and on a moving sequence the ground and the sky do not move together —
+/// then take the per-column *minimum* Y across all neighbours.  Using minimum
+/// (topmost horizon) rather than median means any single neighbour that correctly
+/// identifies a mountain peak as ground propagates that information to the current
+/// frame.
+///
+/// That reasoning holds while the neighbours' detections are *conservative* — each
+/// one may miss a peak but none invents one.  It inverts when they are merely
+/// noisy: the minimum of eight noisy lines is the highest of eight, so one
+/// neighbour that placed the horizon far too high drags every column with it.  On
+/// material where detection is unreliable a median is the safer combiner, and
+/// nothing here has been measured against one.
 ///
 /// **Pass 2 – Alignment-error sky tracking (spatial)**
 /// Warp each neighbour's *original image* with the star homography and compute
@@ -186,7 +195,8 @@ public struct HomographyHorizonDetector {
       currentHeight: Int,
       neighborHorizonFilenames: [String],
       neighborOriginalFilenames: [String],
-      neighborHomographies: [[Double]],
+      neighborEarthHomographies: [[Double]],
+      neighborStarHomographies: [[Double]],
       currentImage: PixelatedImage? = nil,
       currentMergedHorizonY: [Int?] = []
     ) -> HorizonMask? {
@@ -195,7 +205,8 @@ public struct HomographyHorizonDetector {
           currentHeight:             currentHeight,
           neighborHorizonFilenames:  neighborHorizonFilenames,
           neighborOriginalFilenames: neighborOriginalFilenames,
-          neighborHomographies:      neighborHomographies,
+          neighborEarthHomographies: neighborEarthHomographies,
+          neighborStarHomographies:  neighborStarHomographies,
           currentImage:              currentImage,
           currentMergedHorizonY:     currentMergedHorizonY
         )
@@ -206,12 +217,26 @@ public struct HomographyHorizonDetector {
     ///
     /// This is the expensive step (disk I/O + homography warps + diff).
     /// The returned `PreparedData` is parameter-independent and can be reused.
+    /// The two passes need *opposite* homographies, which is why this takes two arrays.
+    ///
+    /// Pass 1 moves a neighbour's **horizon** into this frame, and the horizon is a feature of
+    /// the ground, so it wants the earth homography.  Pass 2's whole premise is that warping a
+    /// neighbour's image makes the *sky* line up and leaves the ground misaligned, so it wants
+    /// the star one.  They were a single parameter until 2026-08-30, and the only caller filled
+    /// it with star homographies — measured on the aurora sequence's painted references,
+    /// carrying one reference to the next: **earth 3.0 px mean absolute error, star 118.5 px**
+    /// over 24 pairs, with star as bad as 575 px.  Pass 1 combines its neighbours by per-column
+    /// *minimum*, so errors of that size do not average out; the most wrongly-lifted neighbour
+    /// wins every column.
+    ///
+    /// Nothing has ever run this outside tests, so that was latent rather than shipped.
     public func prepare(
       currentWidth: Int,
       currentHeight: Int,
       neighborHorizonFilenames: [String],
       neighborOriginalFilenames: [String],
-      neighborHomographies: [[Double]],
+      neighborEarthHomographies: [[Double]],
+      neighborStarHomographies: [[Double]],
       currentImage: PixelatedImage? = nil,
       currentMergedHorizonY: [Int?] = []
     ) -> PreparedData {
@@ -221,7 +246,7 @@ public struct HomographyHorizonDetector {
         // ------------------------------------------------------------------
         var perMaskColumnY: [[Int?]] = []
 
-        for (filename, homography) in zip(neighborHorizonFilenames, neighborHomographies) {
+        for (filename, homography) in zip(neighborHorizonFilenames, neighborEarthHomographies) {
             guard let mask = PixelatedImage(filename: filename)?.asHorizonMask else {
                 Log.d("HomographyHorizonDetector: could not load horizon mask \(filename)")
                 continue
@@ -257,7 +282,7 @@ public struct HomographyHorizonDetector {
 
         if let currentImage = currentImage, !neighborOriginalFilenames.isEmpty {
             Log.d("HomographyHorizonDetector: Pass 2 – preparing \(neighborOriginalFilenames.count) neighbours")
-            for (filename, homography) in zip(neighborOriginalFilenames, neighborHomographies) {
+            for (filename, homography) in zip(neighborOriginalFilenames, neighborStarHomographies) {
                 guard let neighborImage = PixelatedImage(filename: filename) else {
                     Log.d("HomographyHorizonDetector: could not load original image \(filename)")
                     continue

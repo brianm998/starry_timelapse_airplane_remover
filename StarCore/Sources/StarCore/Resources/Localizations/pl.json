@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Zapisuj do pliku na poziomie:",
   "ui.max_keypoints": "Maks. punktów kluczowych:",
   "ui.max_log_lines": "Maks. wierszy dziennika",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Maksymalna liczba pikseli, o jaką dopracowany horyzont może zejść poniżej linii bazowej scalonego horyzontu (0 = wyłączone)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Maksymalna liczba pikseli, o jaką dopracowanie może przesunąć horyzont poniżej linii przewidzianej przez horyzonty referencyjne (0 = automatycznie)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

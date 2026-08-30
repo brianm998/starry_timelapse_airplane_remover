@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Registrar em arquivo no nível:",
   "ui.max_keypoints": "Máx. de pontos-chave:",
   "ui.max_log_lines": "Máx. de linhas de log",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Máximo de pixels que o horizonte refinado pode descer abaixo da linha de base do horizonte mesclado (0 = desativado)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Máximo de pixels que o refinamento pode empurrar o horizonte abaixo da linha prevista pelos seus horizontes de referência (0 = automático)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

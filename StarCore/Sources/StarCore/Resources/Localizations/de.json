@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "In Datei protokollieren auf Stufe:",
   "ui.max_keypoints": "Max. Merkmalspunkte:",
   "ui.max_log_lines": "Max. Protokollzeilen",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Maximale Pixelzahl, um die der verfeinerte Horizont unter die Basislinie des zusammengeführten Horizonts gehen darf (0 = deaktiviert)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Maximale Pixelzahl, um die die Verfeinerung den Horizont unter die von den Referenzhorizonten vorhergesagte Linie schieben darf (0 = automatisch)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

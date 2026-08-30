@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Naar bestand loggen op niveau:",
   "ui.max_keypoints": "Max. kernpunten:",
   "ui.max_log_lines": "Max. logregels",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Maximaal aantal pixels dat de verfijnde horizon onder de basislijn van de samengevoegde horizon mag komen (0 = uit)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Maximaal aantal pixels dat de verfijning de horizon onder de door je referentiehorizonnen voorspelde lijn mag duwen (0 = automatisch)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",
