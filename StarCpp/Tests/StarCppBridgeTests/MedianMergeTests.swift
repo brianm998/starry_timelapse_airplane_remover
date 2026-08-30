@@ -95,25 +95,63 @@ final class MedianMergeTests: XCTestCase {
 
     // MARK: - tests
 
+    /// Neighbours that miss part of the frame, expressed the only way that now says so:
+    /// by warping them.
+    ///
+    /// These three tests are about what the merge does where few of its sources reached,
+    /// and they used to say "did not reach" by writing a zero into an *unwarped* source.
+    /// That worked while the kernel read coverage off the pixel values, and it stopped
+    /// meaning anything when coverage moved into a plane of its own: through
+    /// `medianMergeImage`, which warps nothing, a zero is now a source that is black,
+    /// not a source that is absent.  Warping is what puts a hole in a source, so these
+    /// go through the aligned merge and let it build the plane from the same
+    /// `warpPerspective` call it warps the pixels with.
+    ///
+    /// `dst(x, y) = src(x - tx, y)`, so a negative `tx` slides a source left and leaves
+    /// the rightmost `-tx` columns of the frame uncovered; `tx >= width` uncovers all of
+    /// it.
+    private func translation(x tx: Int) -> MatWrapper {
+        MatWrapper(homographyValues: [1, 0, Double(tx),
+                                      0, 1, 0,
+                                      0, 0, 1])
+    }
+
+    /// Merge `base` against neighbours holding `values`, each warped by its own
+    /// translation.  Neighbour indices start at 1 so the homography key, which is the
+    /// offset from `baseFrameIndex` 0, is the neighbour's own index.
+    private func alignedMerge(base: MatWrapper,
+                              neighbours: [(value: (Int, Int) -> UInt16, shiftX: Int)],
+                              named prefix: String) throws -> MatWrapper {
+        var infos: [AlignmentNeighborInfo] = []
+        var homography: [Int: MatWrapper] = [:]
+        for (k, neighbour) in neighbours.enumerated() {
+            let filename = try write(makeMat(neighbour.value), named: "\(prefix)-\(k)")
+            infos.append(AlignmentNeighborInfo(filename: filename, maskFilename: nil,
+                                               keypoints: nil, frameIndex: Int32(k + 1)))
+            homography[k + 1] = translation(x: neighbour.shiftX)
+        }
+        try assertSourcesLoad(infos.map(\.filename))
+        let result = try XCTUnwrap(ImageAligner.alignAndMedianMerge(
+          baseImage: base, baseFrameIndex: 0,
+          neighbors: infos, homography: homography,
+          outlierThreshold: Self.defaultPixelThreshold, includeAll: false,
+          loadConcurrency: 1))
+        XCTAssertEqual(result.warpCount, neighbours.count,
+                       "every neighbour has a homography and should have been warped")
+        return result.merged
+    }
+
     /// The shipped failure, at the geometry that produced it: a base frame plus eight
     /// aligned neighbours, where neighbour *k* has no data in the rightmost `2 * (k + 1)`
     /// columns.  Column 15 is covered by the base alone, column 0 by everything.  No output
     /// pixel may be black, because every column has at least the base frame's sample.
     func testEdgeColumnsCoveredByOnlyTheBaseFrameAreNotBlack() throws {
         let level: UInt16 = 30000
-        let base = makeMat { _, _ in level }
+        let merged = try alignedMerge(
+          base: makeMat { _, _ in level },
+          neighbours: (0..<8).map { k in ({ _, _ in level }, -2 * (k + 1)) },
+          named: "neighbour")
 
-        var filenames: [String] = []
-        for k in 0..<8 {
-            let blackFrom = width - 2 * (k + 1)
-            let neighbour = makeMat { x, _ in x >= blackFrom ? 0 : level }
-            filenames.append(try write(neighbour, named: "neighbour-\(k)"))
-        }
-
-        try assertSourcesLoad(filenames)
-        let merged = ImageAligner.medianMergeImage(base, withFilenames: filenames,
-                                                   outlierThreshold: Self.defaultPixelThreshold,
-                                                   includeAll: false)
         for (y, row) in try samples(of: merged).enumerated() {
             for (x, value) in row.enumerated() {
                 XCTAssertEqual(value, level,
@@ -124,26 +162,22 @@ final class MedianMergeTests: XCTestCase {
         }
     }
 
-    /// The same shape one source at a time: with `n` of the nine sources carrying a real
-    /// value and the rest zero, the merge has to return that value for every `n >= 1`.  The
-    /// old kernel returned it only for `n >= 4`.
-    func testASingleCoveredSourceStillDecidesThePixel(  ) throws {
+    /// The same shape one source at a time: with `n` of the nine sources reaching a pixel
+    /// and the rest warped away from it, the merge has to return their value for every
+    /// `n >= 1`.  The old kernel returned it only for `n >= 4`.
+    func testASingleCoveredSourceStillDecidesThePixel() throws {
         let level: UInt16 = 30000
 
         for covered in 1...9 {
-            let base = makeMat { _, _ in level }
-            var filenames: [String] = []
-            for k in 0..<8 {
-                // neighbours 0 ..< covered - 1 have data, the rest are fully warped out
-                let hasData = k < covered - 1
-                let neighbour = makeMat { _, _ in hasData ? level : 0 }
-                filenames.append(try write(neighbour, named: "n-\(covered)-\(k)"))
-            }
+            let merged = try alignedMerge(
+              base: makeMat { _, _ in level },
+              // neighbours 0 ..< covered - 1 land on the frame, the rest are warped
+              // clear of it entirely
+              neighbours: (0..<8).map { k in
+                  ({ _, _ in level }, k < covered - 1 ? 0 : self.width)
+              },
+              named: "n-\(covered)")
 
-            try assertSourcesLoad(filenames)
-            let merged = ImageAligner.medianMergeImage(base, withFilenames: filenames,
-                                                       outlierThreshold: Self.defaultPixelThreshold,
-                                                       includeAll: false)
             let values = Set(try samples(of: merged).flatMap { $0 })
             XCTAssertEqual(values, [level],
                            "with \(covered) of 9 sources covered the merge produced \(values.sorted())")
@@ -163,31 +197,23 @@ final class MedianMergeTests: XCTestCase {
         XCTAssertEqual(Set(try samples(of: merged).flatMap { $0 }), [0])
     }
 
-    /// Excluding the no-data zeros from the statistics must not cost the kernel its actual
-    /// job.  Here one neighbour carries an airplane trail — far brighter than the rest — in
-    /// a strip that is also partly uncovered.  The trail has to be rejected everywhere,
-    /// including in the columns where most sources are zero, which is exactly where the old
-    /// zero-inflated deviation made the threshold too loose to reject anything.
+    /// Leaving the sources that did not reach a pixel out of the statistics must not cost
+    /// the kernel its actual job.  Here one neighbour carries an airplane trail — far
+    /// brighter than the rest — and the columns to the right are reached by fewer and
+    /// fewer sources.  The trail has to be rejected everywhere, including where only it
+    /// and the base are present, which is the thinnest evidence the kernel can be asked
+    /// to reject on.
     func testABrightTrailIsRejectedEvenWhereCoverageIsThin() throws {
         let sky: UInt16 = 12000
         let trail: UInt16 = 60000
-        let base = makeMat { _, _ in sky }
+        let merged = try alignedMerge(
+          base: makeMat { _, _ in sky },
+          // neighbour 0 is the one carrying the trail, and it reaches furthest right
+          neighbours: (0..<8).map { k in
+              ({ _, _ in k == 0 ? trail : sky }, -2 * (k + 1))
+          },
+          named: "trail")
 
-        var filenames: [String] = []
-        for k in 0..<8 {
-            let blackFrom = width - 2 * (k + 1)
-            // neighbour 0 is the one with the trail across the full width
-            let neighbour = makeMat { x, _ in
-                if x >= blackFrom { return 0 }
-                return k == 0 ? trail : sky
-            }
-            filenames.append(try write(neighbour, named: "trail-\(k)"))
-        }
-
-        try assertSourcesLoad(filenames)
-        let merged = ImageAligner.medianMergeImage(base, withFilenames: filenames,
-                                                   outlierThreshold: Self.defaultPixelThreshold,
-                                                   includeAll: false)
         for (y, row) in try samples(of: merged).enumerated() {
             for (x, value) in row.enumerated() {
                 XCTAssertEqual(value, sky, "pixel (\(x), \(y)) kept \(value)")
@@ -326,20 +352,26 @@ final class MedianMergeTests: XCTestCase {
     /// another cannot see a source going missing, as long as it goes missing every time.
     /// What does reach the answer is the multiset. Modelled against the kernel:
     ///
-    ///   - all nine levels merge to 11500;
-    ///   - removing any of 11500, 12000, 12500, 13000 or 60000 gives 11000 instead;
-    ///   - a second copy of 10000, 10500 or 11000 gives 11000 instead.
+    ///   - all nine levels merge to 11000;
+    ///   - removing any of 0, 10000, 10500 or 11000 gives 11500 instead;
+    ///   - a second copy of 11500, 12000, 12500 or 13000 gives 11500 instead.
     ///
     /// Source `s` carries `levels[(s + x) % 9]` in column `x`, so over nine or more
     /// columns every source carries every level somewhere. Losing source `s` therefore
     /// removes a sensitive level in some column, and duplicating it adds one — either way
-    /// at least one column moves off 11500. Every column sees the same nine levels, so
-    /// the correct answer is 11500 everywhere, which makes the assertion a single value.
+    /// at least one column moves off 11000. Every column sees the same nine levels, so
+    /// the correct answer is 11000 everywhere, which makes the assertion a single value.
+    ///
+    /// The level of 0 is a source that is black here, not a source that is absent.  These
+    /// merges warp nothing, so every source covers every pixel and a zero is an
+    /// observation like any other — which is why the answer is 11000 and not the 11500
+    /// this expected until the kernel stopped reading coverage off the pixel values.
+    /// Keeping the 0 in the set is what pins that.
     private static let concurrencyLevels: [UInt16] =
       [0, 10000, 10500, 11000, 11500, 12000, 12500, 13000, 60000]
-    private static let concurrencyExpected: UInt16 = 11500
+    private static let concurrencyExpected: UInt16 = 11000
     /// What the merge produces when the multiset is one source short or one source long.
-    private static let concurrencyPerturbed: UInt16 = 11000
+    private static let concurrencyPerturbed: UInt16 = 11500
 
     private func concurrencyLevel(source: Int, column: Int) -> UInt16 {
         let levels = Self.concurrencyLevels
