@@ -19,4 +19,10 @@ releases/
 # Large GUI splash-screen assets — fetched from the `ci-assets` GitHub Release
 # in CI, kept locally for development. See the "Fetch large GUI assets" step
 # in .github/workflows/cli.yml for details on uploading / updating.
-gui/videos/
+#
+# No trailing slash: a worktree gets these by symlinking gui/videos at the main
+# checkout's copy rather than fetching them again, and git counts a symlink as a
+# file, so `gui/videos/` matched the directory in the main checkout and nothing at
+# all in a worktree. `git add -A` then committed the symlink — an absolute path
+# into one machine — which is how it reached a branch once already.
+gui/videos
