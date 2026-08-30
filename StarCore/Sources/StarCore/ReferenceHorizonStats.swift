@@ -186,11 +186,42 @@ public struct ReferenceHorizonFrameStats: Sendable {
     public let medianGroundBrightness: Double
 }
 
+/// A painted reference horizon reduced to the one thing most of the pipeline wants from it:
+/// where the line runs, column by column.
+///
+/// Separate from `ReferenceHorizonFrameStats` because producing that costs a full-resolution
+/// decode of the reference frame's *original* to fit the LAB Gaussians, and the search band
+/// detection wants needs none of it — only the line.  A sequence detecting 2000 frames would
+/// otherwise pay for those Gaussians before it had any use for them.
+public struct ReferenceHorizonCurve: Sendable {
+    public let frameIndex: Int
+    /// Per-column horizon Y, nil where the column has no defined horizon.
+    public let horizonYPerColumn: [Int?]
+
+    public init(frameIndex: Int, horizonYPerColumn: [Int?]) {
+        self.frameIndex = frameIndex
+        self.horizonYPerColumn = horizonYPerColumn
+    }
+}
+
+public extension ReferenceHorizonFrameStats {
+    /// The line alone, for the callers that only ever wanted that.
+    var curve: ReferenceHorizonCurve {
+        ReferenceHorizonCurve(frameIndex: frameIndex, horizonYPerColumn: horizonYPerColumn)
+    }
+}
+
 /// Module-level shared cache so stats for each reference frame are computed at most once.
 public let referenceHorizonStatsCache = ReferenceHorizonStatsCache()
 
 public actor ReferenceHorizonStatsCache {
     private var cache: [Int: ReferenceHorizonFrameStats] = [:]
+
+    /// Curves, kept beside the statistics rather than in a cache of their own so that
+    /// `clearStats` empties both.  Two caches over the same repaintable file is two chances
+    /// to serve a horizon the user has already corrected.
+    private var curves: [Int: ReferenceHorizonCurve] = [:]
+    private var curvesInFlight: [Int: Task<ReferenceHorizonCurve?, Never>] = [:]
 
     /// The computation already running for a frame, if there is one.
     ///
@@ -242,10 +273,35 @@ public actor ReferenceHorizonStatsCache {
         return stats
     }
 
+    /// The per-column line for `frameIndex`, decoded only if nothing else already has or is.
+    ///
+    /// Same collapsing as `stats(for:computedBy:)` and for the same reason: every frame of a
+    /// refinement span arrives at once wanting the same one or two references.
+    public func curve(
+      for frameIndex: Int,
+      computedBy compute: @escaping @Sendable () async -> ReferenceHorizonCurve?
+    ) async -> ReferenceHorizonCurve? {
+        if let cached = curves[frameIndex] { return cached }
+        if let running = curvesInFlight[frameIndex] { return await running.value }
+
+        let generation = invalidations[frameIndex] ?? 0
+        let task = Task.detached(priority: .userInitiated) { await compute() }
+        curvesInFlight[frameIndex] = task
+        let curve = await task.value
+
+        if (invalidations[frameIndex] ?? 0) == generation {
+            curvesInFlight.removeValue(forKey: frameIndex)
+            if let curve { curves[frameIndex] = curve }
+        }
+        return curve
+    }
+
     /// Forget a frame's stats: the reference horizon it describes has been repainted.
     public func clearStats(for frameIndex: Int) {
         cache.removeValue(forKey: frameIndex)
         inFlight.removeValue(forKey: frameIndex)
+        curves.removeValue(forKey: frameIndex)
+        curvesInFlight.removeValue(forKey: frameIndex)
         invalidations[frameIndex, default: 0] += 1
     }
 

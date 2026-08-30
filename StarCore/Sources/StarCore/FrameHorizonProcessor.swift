@@ -111,11 +111,44 @@ final public actor FrameHorizonProcessor {
     /// Harmless on a reference frame itself, whose painted mask lives in
     /// `horizonReference/` and wins over this file anyway; the cache it clears there is the
     /// point, since the frame was just repainted.
-    public func discardMergedHorizon() {
+    ///
+    /// The raw `.horizon` mask goes too on a moving sequence, because since `detectionPrior`
+    /// the references decide where detection *looks* — so a mask detected under the old
+    /// references is as stale as the merge built on it, and `HorizonDetectionOp.hasWorkToDo`
+    /// has no other way to know.  It is the expensive half of this: detection is ~4-7 s per
+    /// frame against a merge's fraction of a second, so a repaint bounded by references 150
+    /// frames apart is minutes rather than seconds.  Worth it — a mask detected against the
+    /// wrong band is the failure the prior exists to prevent, and keeping it would mean the
+    /// user's correction reached the merge and stopped there.
+    public func discardMergedHorizon() async {
         cachedFinalHorizonMask = nil
         imageAccessor.deleteImages(
           frameIndex: frameIndex,
           ofTypes: [.mergedHorizon],
+          atSizes: [.original, .preview]
+        )
+        await discardPriorGuidedDetection()
+    }
+
+    /// Delete this frame's raw `.horizon` mask when the references are what decided where it
+    /// was looked for.
+    ///
+    /// `detectionPrior` bands the detector's search with the painted references, so on a
+    /// moving sequence the saved mask is a function of them and a repaint makes it stale.
+    /// Nothing else notices: `HorizonDetectionOp.hasWorkToDo` asks only whether the file
+    /// exists, and `loadOrCreateHorizonMask` returns it unread if it does.
+    ///
+    /// A no-op on a static sequence, where the one shared reference is served directly and
+    /// detection never sees a prior at all.
+    private func discardPriorGuidedDetection() async {
+        let config = await configManager.config()
+        guard config.tripodHeadWasMoving,
+              config.useReferenceHorizonSmoothing,
+              config.useCombinedHorizonDetection
+        else { return }
+        imageAccessor.deleteImages(
+          frameIndex: frameIndex,
+          ofTypes: [.horizon],
           atSizes: [.original, .preview]
         )
     }
@@ -129,6 +162,12 @@ final public actor FrameHorizonProcessor {
         // Reference frames serve their painted mask directly; nothing to recompute.
         if (try await loadHorizonReferenceMask()) != nil { return }
         cachedFinalHorizonMask = nil
+        // The only caller is `HorizonRefinementOp`, which exists for exactly one reason — a
+        // reference was edited — so the detection those references guided is stale too and
+        // has to go before the merge asks for it.  This is what makes the recompute cost a
+        // detection per frame; see `discardMergedHorizon`, which is the same decision on the
+        // deferred path.
+        await discardPriorGuidedDetection()
         // Bypass loadOrCreateMergedHorizonMask's "load if exists" check and go
         // straight to creation.  createMergedHorizonMask saves with overwrite:true.
         cachedFinalHorizonMask = try await createMergedHorizonMask()
@@ -209,10 +248,16 @@ final public actor FrameHorizonProcessor {
         let config = await configManager.config()
 
         // Reference-horizon smoothing pass (moving sequences only).
-        // When enabled and user-defined reference horizons exist within
-        // referenceHorizonSmoothingMaxDistance frames, use them (interpolated
-        // per-column when bracketing) to filter statistically implausible
-        // column values and save as merged horizon.
+        // When user-defined reference horizons are near enough to say something about this
+        // frame, use them — carried in by the earth homographies where those exist, and
+        // interpolated per-column where they do not — to replace column values the
+        // detection got wrong, and save the result as the merged horizon.
+        //
+        // "Near enough" is a distance in frames only on the interpolated path.  A carried
+        // reference has had the ground motion between the two frames measured out of it, so
+        // holding it to the same 30-frame leash would throw away references that predict
+        // this frame's horizon to within a few pixels across the whole sequence — which, on
+        // a sparsely painted moving sequence, is most of them.
         if config.useReferenceHorizonSmoothing, config.tripodHeadWasMoving {
             let allStats = try await referenceHorizonsWithStats(
               maxCount: 2,
@@ -220,11 +265,13 @@ final public actor FrameHorizonProcessor {
               neighborhoodSize: config.referenceHorizonNeighborhoodSize
             )
             let maxDist = config.referenceHorizonSmoothingMaxDistance
-            let nearbyStats = allStats.filter { abs($0.frameIndex - frameIndex) <= maxDist }
-            if !nearbyStats.isEmpty,
-               let expectedY = interpolatedExpectedYPerColumn(
-                 from: nearbyStats, width: mask.image.width
-               ),
+            let expected = await expectedHorizonYPerColumn(
+              from: allStats.map(\.curve), width: mask.image.width
+            )
+            let withinReach = expected?.carriedByHomography == true
+              || allStats.contains { abs($0.frameIndex - frameIndex) <= maxDist }
+            if withinReach,
+               let expectedY = expected?.yPerColumn,
                let filtered = referenceSmoothedHorizonMask(
                  detected: mask, expectedYPerColumn: expectedY
                )
@@ -400,19 +447,29 @@ final public actor FrameHorizonProcessor {
 
     // MARK: - Reference horizon smoothing helpers
 
-    /// Returns the (frameIndex, mask) of the nearest user-defined reference horizon
-    /// within `maxDistance` frames of the current frame, or nil if none exists.
-    /// Filter a detected horizon mask using a per-column expected Y (from interpolated
-    /// bracketing reference horizons) to reject per-column Y values that are statistical
-    /// outliers.
+    /// Filter a detected horizon mask against the per-column Y the painted references say to
+    /// expect, replacing the columns the detection got wrong.
     ///
     /// For each column the delta between detected and expected horizon Y is computed.
-    /// Columns whose delta deviates more than 2 standard deviations from the mean
-    /// delta are replaced by the expected Y value.  This removes obviously wrong
-    /// detections without clamping the entire mask to the expected curve.
-    private func referenceSmoothedHorizonMask(
+    /// Columns further than `tolerance` from the expectedY — or, when the detection is
+    /// noisier than that, further than two standard deviations — are replaced by the
+    /// expected value.  Everything else keeps the detected line, so real terrain detail the
+    /// references bracket loosely survives.
+    ///
+    /// The comparison is against the expected Y itself, not against the *mean* deviation
+    /// from it, and that distinction is the whole behaviour of this filter.  Centring on the
+    /// mean measures how unusual a column's error is among the other columns' errors, which
+    /// is exactly blind to the failure it exists to catch: a detection that has found the
+    /// wrong edge entirely is wrong by a similar amount in every column, so its deviations
+    /// are tightly clustered, the standard deviation is small, and nothing is replaced.  On
+    /// this sequence's frame 119 the detected horizon sat 215 px above a reference painted
+    /// two frames earlier and this filter changed nothing at all; only `groundOnly` further
+    /// down the pipeline — which happens to drop the resulting black island because it does
+    /// not touch the bottom of the frame — kept that frame from shipping the wrong line.
+    func referenceSmoothedHorizonMask(
       detected: HorizonMask,
-      expectedYPerColumn: [Int?]
+      expectedYPerColumn: [Int?],
+      tolerance: Int = 20
     ) -> HorizonMask? {
         let w = detected.image.width
         let h = detected.image.height
@@ -435,7 +492,11 @@ final public actor FrameHorizonProcessor {
         let mean = deltas.reduce(0, +) / Double(deltas.count)
         let variance = deltas.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(deltas.count)
         let stddev = variance.squareRoot()
-        let threshold = 2.0 * max(stddev, 1.0) // at least 1 px to avoid clamping tiny natural variation
+        // Whichever is looser: the fixed tolerance, or two standard deviations of a
+        // detection that genuinely wanders more than that.  Taking the maximum keeps this a
+        // filter rather than a clamp — a detection that agrees with the references to within
+        // its own noise is left alone.
+        let threshold = max(Double(tolerance), 2.0 * max(stddev, 1.0))
 
         Log.d("frame \(frameIndex) referenceSmoothedHorizonMask: mean delta=\(String(format:"%.1f", mean)) stddev=\(String(format:"%.1f", stddev)) threshold=\(String(format:"%.1f", threshold))")
 
@@ -446,7 +507,7 @@ final public actor FrameHorizonProcessor {
             guard let dy = detectedY[x] else { continue }
             guard x < expectedYPerColumn.count, let ey = expectedYPerColumn[x] else { continue }
             let delta = Double(dy - ey)
-            if abs(delta - mean) > threshold {
+            if abs(delta) > threshold {
                 correctedY[x] = ey
                 replacedCount += 1
             }
@@ -466,9 +527,13 @@ final public actor FrameHorizonProcessor {
 
     // MARK: - Reference stats brightness refinement
 
-    /// Scan the sequence for reference horizon masks, return stats for up to `maxCount`
-    /// nearest frames.  Stats are cached in `referenceHorizonStatsCache`.
-    private func referenceHorizonsWithStats(maxCount: Int = 2, numBuckets: Int = 256, neighborhoodSize: Int = 1) async throws -> [ReferenceHorizonFrameStats] {
+    /// The painted reference masks nearest this frame, preferring a bracketing pair.
+    ///
+    /// Split out from `referenceHorizonsWithStats` because detection wants the same
+    /// references and none of the statistics: those cost a full-resolution decode of each
+    /// reference frame's original, which is worth paying once at merge time and not at all
+    /// for a search band.
+    private func nearestReferenceMasks(maxCount: Int) -> [(index: Int, maskPath: String)] {
         guard let imageSequence else { return [] }
         guard let mergedPath = imageAccessor.nameForImage(
                 frameIndex: frameIndex,
@@ -520,6 +585,35 @@ final public actor FrameHorizonProcessor {
         } else {
             ordered = Array(candidates.prefix(maxCount))
         }
+        return ordered.map { (index: $0.index, maskPath: $0.maskURL.path) }
+    }
+
+    /// The per-column horizon lines of the nearest painted references, and nothing else.
+    ///
+    /// What detection needs to know where to look.  Cached beside the statistics so a
+    /// repaint clears both, and so the frames of a refinement span — which all ask about
+    /// the same one or two references at the same moment — decode each mask once.
+    func referenceHorizonCurves(maxCount: Int = 2) async -> [ReferenceHorizonCurve] {
+        var result: [ReferenceHorizonCurve] = []
+        for candidate in nearestReferenceMasks(maxCount: maxCount) {
+            let maskPath = candidate.maskPath
+            let curve = await referenceHorizonStatsCache.curve(for: candidate.index) {
+                guard let maskImage = PixelatedImage(filename: maskPath)?.asHorizonMask
+                else { return nil }
+                return ReferenceHorizonCurve(
+                  frameIndex: candidate.index,
+                  horizonYPerColumn: HorizonScoring.extractHorizonYPerColumn(from: maskImage)
+                )
+            }
+            if let curve { result.append(curve) }
+        }
+        return result
+    }
+
+    /// Scan the sequence for reference horizon masks, return stats for up to `maxCount`
+    /// nearest frames.  Stats are cached in `referenceHorizonStatsCache`.
+    private func referenceHorizonsWithStats(maxCount: Int = 2, numBuckets: Int = 256, neighborhoodSize: Int = 1) async throws -> [ReferenceHorizonFrameStats] {
+        let ordered = nearestReferenceMasks(maxCount: maxCount)
 
         // Handed to the cache rather than run here and stored afterwards.  Every frame in a
         // refinement span asks for the same one or two references at the same moment, and
@@ -530,7 +624,7 @@ final public actor FrameHorizonProcessor {
         var result: [ReferenceHorizonFrameStats] = []
         for candidate in ordered {
             let candidateIndex = candidate.index
-            let maskPath = candidate.maskURL.path
+            let maskPath = candidate.maskPath
             let stats = await referenceHorizonStatsCache.stats(for: candidateIndex) {
                 guard let maskImage = PixelatedImage(filename: maskPath)?.asHorizonMask,
                       let mask = HorizonMask(maskImage),
@@ -560,17 +654,22 @@ final public actor FrameHorizonProcessor {
     /// reference Y data is available.
     ///
     /// For each column the result is the Y position the horizon is *expected* to occupy,
-    /// based on the user's manually-specified neighboring horizons.  This is the per-column
-    /// prior used by the smoothing filter and the brightness-refinement Y-position term.
+    /// based on the user's manually-specified neighboring horizons.
+    ///
+    /// The fallback half of `expectedHorizonYPerColumn`, which prefers carrying each
+    /// reference in by the measured ground motion and comes here for the columns — or the
+    /// sequences — where that is not available.  Interpolating a Y value column by column
+    /// assumes the ground only ever moved vertically between the two references, which on a
+    /// moving sequence is exactly the assumption that fails.
     func interpolatedExpectedYPerColumn(
-      from stats: [ReferenceHorizonFrameStats],
+      from references: [ReferenceHorizonCurve],
       width: Int
     ) -> [Int?]? {
-        guard !stats.isEmpty else { return nil }
-        let prev = stats.filter { $0.frameIndex < frameIndex }
-                        .max(by: { $0.frameIndex < $1.frameIndex })
-        let next = stats.filter { $0.frameIndex > frameIndex }
-                        .min(by: { $0.frameIndex < $1.frameIndex })
+        guard !references.isEmpty else { return nil }
+        let prev = references.filter { $0.frameIndex < frameIndex }
+                             .max(by: { $0.frameIndex < $1.frameIndex })
+        let next = references.filter { $0.frameIndex > frameIndex }
+                             .min(by: { $0.frameIndex < $1.frameIndex })
 
         var result = [Int?](repeating: nil, count: width)
         if let p = prev, let n = next {
@@ -591,17 +690,122 @@ final public actor FrameHorizonProcessor {
             return result
         }
         // Only one side has refs — use the nearest single ref's Y values.
-        let only = (prev ?? next) ?? stats.min(by: { abs($0.frameIndex - frameIndex) < abs($1.frameIndex - frameIndex) })!
+        let only = (prev ?? next) ?? references.min(by: { abs($0.frameIndex - frameIndex) < abs($1.frameIndex - frameIndex) })!
         let ys = only.horizonYPerColumn
         let cols = min(width, ys.count)
         for x in 0..<cols { result[x] = ys[x] }
         return result
     }
 
+    /// Where this frame's horizon is expected to be, and whether the alignment stage's
+    /// homographies were what put it there.
+    ///
+    /// The second half decides how far away a reference is still worth listening to.  A
+    /// reference whose ground transform into this frame is known stays accurate over
+    /// hundreds of frames; one that had to be interpolated decays within a few dozen, which
+    /// is what `referenceHorizonSmoothingMaxDistance` was set against.
+    struct ExpectedHorizon: Sendable {
+        let yPerColumn: [Int?]
+        let carriedByHomography: Bool
+    }
+
+    /// The per-column Y the horizon is expected to occupy in this frame, given the user's
+    /// painted reference horizons — the prior both the smoothing filter and the
+    /// brightness refinement are built on.
+    ///
+    /// Where alignment has already measured how the ground moved, each bracketing reference
+    /// is *carried* into this frame by composing the earth homographies between them
+    /// (`EarthHomographyChain`) and the two results are blended by frame distance.  That is
+    /// what makes a reference painted 150 frames away worth having on a moving sequence:
+    /// held out against this user's own 34 references, the composed warp predicts them to
+    /// within 3.1 px on average where interpolating their Y values manages 19.2 px, and the
+    /// gap widens with the gap between references — 30-44 px against 3-7 px across the
+    /// 300-frame ones.
+    ///
+    /// The warp is a strict improvement, never a replacement: a pan carries part of the
+    /// target frame outside anything the reference saw (around a tenth of the width at
+    /// 63-frame spacing), and a sequence that has not been aligned yet has no homographies
+    /// at all.  Both fall back to `interpolatedExpectedYPerColumn`, so the answer is never
+    /// worse than it was before this existed.
+    func expectedHorizonYPerColumn(
+      from references: [ReferenceHorizonCurve],
+      width: Int
+    ) async -> ExpectedHorizon? {
+        let interpolated = interpolatedExpectedYPerColumn(from: references, width: width)
+        func interpolatedResult() -> ExpectedHorizon? {
+            guard let interpolated else { return nil }
+            return ExpectedHorizon(yPerColumn: interpolated, carriedByHomography: false)
+        }
+        guard !references.isEmpty, width > 0 else { return interpolatedResult() }
+
+        let prev = references.filter { $0.frameIndex < frameIndex }
+                             .max(by: { $0.frameIndex < $1.frameIndex })
+        let next = references.filter { $0.frameIndex > frameIndex }
+                             .min(by: { $0.frameIndex < $1.frameIndex })
+
+        let database = configManager.homographyDatabase
+        func carried(_ reference: ReferenceHorizonCurve?) async -> [Double?]? {
+            guard let reference else { return nil }
+            guard let homography = await earthHomographyChain.transform(
+                    from: reference.frameIndex,
+                    to: frameIndex,
+                    database: database
+                  )
+            else { return nil }
+            return HorizonCurve.warp(
+              reference.horizonYPerColumn, with: homography, width: width
+            )
+        }
+
+        let warpedPrev = await carried(prev)
+        let warpedNext = await carried(next)
+        guard warpedPrev != nil || warpedNext != nil else {
+            Log.d("frame \(frameIndex) expectedHorizonYPerColumn: no earth homography chain "
+                    + "to either reference — interpolating")
+            return interpolatedResult()
+        }
+
+        // Weight by where this frame sits between the two, matching what the interpolation
+        // does: the nearer reference has had less time to be wrong.
+        let blend: Double
+        if let p = prev, let n = next, n.frameIndex > p.frameIndex {
+            blend = Double(frameIndex - p.frameIndex) / Double(n.frameIndex - p.frameIndex)
+        } else {
+            blend = warpedPrev == nil ? 1.0 : 0.0
+        }
+
+        var result = [Int?](repeating: nil, count: width)
+        var carriedCount = 0
+        for x in 0..<width {
+            let p = warpedPrev?[x]
+            let n = warpedNext?[x]
+            let value: Double?
+            switch (p, n) {
+            case let (py?, ny?): value = py * (1 - blend) + ny * blend
+            case let (py?, nil): value = py
+            case let (nil, ny?): value = ny
+            default: value = nil
+            }
+            if let value {
+                result[x] = Int(value.rounded())
+                carriedCount += 1
+            } else if let interpolated, x < interpolated.count {
+                result[x] = interpolated[x]
+            }
+        }
+        result = Self.fillEdgeNils(result)
+
+        Log.i("frame \(frameIndex) expectedHorizonYPerColumn: carried "
+                + "\(carriedCount)/\(width) columns from references "
+                + "\([prev?.frameIndex, next?.frameIndex].compactMap { $0 })")
+        return ExpectedHorizon(yPerColumn: result, carriedByHomography: carriedCount > 0)
+    }
+
     /// Per-pixel brightness + Y-position refinement of `detected` using reference frame stats.
     ///
-    /// For each column we have a per-column `expectedY[x]` derived from linear interpolation
-    /// between bracketing reference horizons.  Within `searchRadius` of `expectedY[x]` we
+    /// For each column we have a per-column `expectedY[x]` from `expectedHorizonYPerColumn`,
+    /// which carries the bracketing reference horizons in by the measured ground motion where
+    /// it can and interpolates them where it cannot.  Within `searchRadius` of `expectedY[x]` we
     /// blend a brightness-based sky score (from the reference histograms) with a Y-position
     /// score that snaps toward the expected Y as distance grows.  Pixels far from `expectedY`
     /// are dominated by the position prior; pixels near it are dominated by brightness so
@@ -609,12 +813,31 @@ final public actor FrameHorizonProcessor {
     ///
     /// Pixels outside `[expectedY[x] - searchRadius, expectedY[x] + searchRadius]` are
     /// copied unchanged from `detected`.
+    ///
+    /// `maxDownwardExtension` bounds how far *below* `expectedY[x]` the refinement may put the
+    /// boundary, and it is load bearing rather than defensive.  The two sides of the
+    /// comparison are not symmetric: the ground's colours are dark and tightly clustered
+    /// while the sky's are bright and spread wide, so a bright ground pixel — snow on a
+    /// ridge, which is most of this frame's terrain — sits far outside the ground
+    /// distribution and comfortably inside the sky one, and the likelihood ratio calls it
+    /// sky.  The error therefore only ever runs one way, ground into sky, walking the
+    /// boundary downhill until the position prior finally outweighs it around 20-25 px down.
+    ///
+    /// Measured on a reference frame against *its own* painted horizon, with its own
+    /// statistics and a perfect expected Y, the unbounded refinement still pushes 30% of
+    /// columns more than 2 px down and 5% more than 25 px, against 4% that move up at all.
+    /// On the three held-out references measured end to end it turns a 1.5-3.4 px prior into
+    /// a 13-15 px answer; bounded at a tenth of the search radius it lands at 4.0-5.0 px.
+    /// The bound is one-sided on purpose — capping upward movement as well measured worse,
+    /// because moving the line *up* is the direction that recovers a ridge the references
+    /// bracket badly, and it is not the direction that runs away.
     private func referenceStatsBrightnessRefinedHorizonMask(
       detected: HorizonMask,
       original: PixelatedImage,
       stats: [ReferenceHorizonFrameStats],
       expectedYPerColumn: [Int?],
       searchRadius: Int = 100,
+      maxDownwardExtension: Int? = nil,
       spikeRemovalEnabled: Bool = true,
       spikeMaxWidth: Int = 30,
       spikeMaxDeviationFraction: Double = 0.04,
@@ -648,6 +871,13 @@ final public actor FrameHorizonProcessor {
         // Inside this radius colour evidence still has meaningful weight; beyond it
         // position dominates and pixels snap toward the expected horizon.
         let positionFullRadius = Double(max(1, searchRadius / 2))
+
+        // Derived from the search radius rather than configured separately: it is a bound on
+        // the same band, and a sequence that widens the band wants the bound to widen with
+        // it.  A tenth of the shipped 100px radius is the value the held-out measurement in
+        // this method's doc comment settled on.
+        let downwardLimit = max(1, maxDownwardExtension ?? (searchRadius / 10))
+        var clampedColumns = 0
 
         let halfSize = neighborhoodSize / 2
 
@@ -715,7 +945,13 @@ final public actor FrameHorizonProcessor {
                 let combined = yWeight < 0.001
                     ? brightnessSkyScore
                     : (1.0 - yWeight) * brightnessSkyScore + yWeight * ySkyScore
-                let newVal: UInt8 = combined >= 0.5 ? 255 : 0
+                // Ground below the limit stays ground whatever its colour says.  See the
+                // doc comment: this is the only thing standing between a snowfield and a
+                // horizon that walks 25px down the ridge.
+                let newVal: UInt8 = (combined >= 0.5 && dy < Double(downwardLimit)) ? 255 : 0
+                if combined >= 0.5, dy >= Double(downwardLimit), y == expY + downwardLimit {
+                    clampedColumns += 1
+                }
                 let idx = y * w + x
                 if newVal != detectedBuf[idx] { refinedCount += 1 }
                 outputBytes[idx] = newVal
@@ -728,6 +964,7 @@ final public actor FrameHorizonProcessor {
         Log.i("frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: " +
               "refined \(refinedCount) pixels in band y=[\(minBandTop),\(maxBandBottom)] " +
               "expectedY=[\(expYMin),\(expYMax)] " +
+              "clamped \(clampedColumns)/\(w) columns at +\(downwardLimit)px " +
               "skyMedian=\(String(format:"%.4f", stats.first?.medianSkyBrightness ?? 0)) " +
               "groundMedian=\(String(format:"%.4f", stats.first?.medianGroundBrightness ?? 0))")
 
@@ -911,7 +1148,9 @@ final public actor FrameHorizonProcessor {
         )
         guard !stats.isEmpty else { return mask }
 
-        guard let expectedY = interpolatedExpectedYPerColumn(from: stats, width: mask.image.width)
+        guard let expectedY = await expectedHorizonYPerColumn(
+                from: stats.map(\.curve), width: mask.image.width
+              )?.yPerColumn
         else { return mask }
 
         guard let original = try? await imageAccessor.load(
@@ -2132,6 +2371,51 @@ final public actor FrameHorizonProcessor {
         }
     }
 
+    /// The search band the user's painted references imply for this frame, or nil when there
+    /// is nothing to imply one.
+    ///
+    /// Detection is the first place the references can be used and the place where using them
+    /// is worth the most.  Left to itself on this kind of frame — distant snowy ridge, aurora
+    /// overhead, stars scattered along the skyline — the detector is not slightly wrong, it is
+    /// looking at the wrong thing entirely: over frames 760-1600 of the aurora sequence the
+    /// saved masks put the horizon around row 2000-3000 where the truth is 3700-3880.  Nothing
+    /// downstream repairs that; the merge's ±100 px refinement band is nowhere near it, and the
+    /// only reason those frames did not ship a horizon 1500 px out is that `groundOnly` happened
+    /// to drop the resulting black island for not touching the bottom of the frame.
+    ///
+    /// Deliberately *only* a band.  The detector still runs, because the prior is a smooth line
+    /// carried from a reference painted somewhere else and the ridge in this frame has detail
+    /// that is not in it.
+    ///
+    /// Static sequences get nothing: they share one reference for the whole sequence, which
+    /// `loadHorizonReferenceMask` already returns outright before detection is reached.
+    private func detectionPrior(width: Int, config: Config) async -> CombinedHorizonDetector.Prior? {
+        guard config.tripodHeadWasMoving, config.useReferenceHorizonSmoothing else { return nil }
+        let references = await referenceHorizonCurves(maxCount: 2)
+        guard !references.isEmpty else { return nil }
+        guard let expected = await expectedHorizonYPerColumn(from: references, width: width)
+        else { return nil }
+
+        // Half the merge's refinement radius — 50 px at the shipped 100 — swept on two
+        // held-out references against a prior accurate to ~3 px:
+        //
+        //     radius      200     100      50      25
+        //     frame 532  69.9    43.9    15.3    11.4
+        //     frame 206  12.3    11.8     9.9    12.3
+        //
+        // The shape is the whole argument for keeping it narrow.  Widening the band does not
+        // let the detector find the horizon better; it lets it find *something else* — a cloud
+        // base, a snowfield's upper edge — and commit to it.  Tightening past 50 starts cutting
+        // off the ridge detail that is the only reason to run detection at all rather than use
+        // the prior, which is what frame 206 turning back up at 25 is.
+        let radius = max(config.referenceHorizonBrightnessRefinementSearchRadius / 2, 25)
+        Log.i("frame \(frameIndex) detection prior from references "
+                + "\(references.map(\.frameIndex)) (±\(radius)px, "
+                + "\(expected.carriedByHomography ? "carried" : "interpolated"))")
+        return CombinedHorizonDetector.Prior(yPerColumn: expected.yPerColumn,
+                                             searchRadius: radius)
+    }
+
     // this horizon mask is calculated based upon this frame only.
     // Uses adaptive parameter search: runs horizon detection at reduced resolution
     // with multiple parameter combinations, scores each result, then applies the
@@ -2181,7 +2465,10 @@ final public actor FrameHorizonProcessor {
             // Combined+RW pipeline: run Otsu, DP, SIOX in parallel, median-combine,
             // then refine with Random Walker. Best-performing method as of 2026-03.
             Log.i("frame \(frameIndex) using combined+RW horizon detection")
-            horizonMask = try await CombinedHorizonDetector.detect(image: original)
+            horizonMask = try await CombinedHorizonDetector.detect(
+              image: original,
+              prior: await detectionPrior(width: original.width, config: config)
+            )
         } else {
             // Legacy adaptive search: Otsu multi-crop + DP grid search
             let useAdaptiveSearch = config.horizonSearchCropBounds.count >= 2

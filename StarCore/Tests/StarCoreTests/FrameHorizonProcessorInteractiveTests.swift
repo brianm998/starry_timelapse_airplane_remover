@@ -124,14 +124,10 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
 
     // MARK: - interpolatedExpectedYPerColumn
 
-    private func stats(frameIndex: Int, horizonYPerColumn: [Int?]) -> ReferenceHorizonFrameStats {
-        ReferenceHorizonFrameStats(frameIndex: frameIndex,
-                                   skyGaussian: nil, groundGaussian: nil,
-                                   minHorizonY: horizonYPerColumn.compactMap { $0 }.min() ?? 0,
-                                   maxHorizonY: horizonYPerColumn.compactMap { $0 }.max() ?? 0,
-                                   horizonYPerColumn: horizonYPerColumn,
-                                   medianSkyBrightness: 0.4,
-                                   medianGroundBrightness: 0.1)
+    /// A painted reference reduced to its line — what both expected-horizon helpers take, and
+    /// what `referenceHorizonCurves` reads off a reference mask.
+    private func stats(frameIndex: Int, horizonYPerColumn: [Int?]) -> ReferenceHorizonCurve {
+        ReferenceHorizonCurve(frameIndex: frameIndex, horizonYPerColumn: horizonYPerColumn)
     }
 
     /// The point of this helper: a frame between two painted references gets a per-column horizon
@@ -410,6 +406,196 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
             XCTAssertGreaterThanOrEqual(y, 20 - 1,
                                         "column \(x) was confirmed sky down to row 20")
         }
+    }
+
+    // MARK: - expectedHorizonYPerColumn
+
+    /// Row-major translation, matching what the alignment stage stores.
+    private func translation(_ dx: Double, _ dy: Double) -> [Double] {
+        [1, 0, dx, 0, 1, dy, 0, 0, 1]
+    }
+
+    /// Give every frame in `range` the earth record a real run would have: the ground moves by
+    /// `(dx, dy)` per frame, so each frame's record carries the homography bringing each immediate
+    /// neighbour into it — forwards `(dx, dy)`, backwards the negative.
+    private func writeEarthSteps(
+      _ h: FrameHarness, over range: ClosedRange<Int>, dx: Double, dy: Double
+    ) async throws {
+        let manager = h.configManager
+        let database = await MainActor.run { manager.homographyDatabase }
+        for frame in range {
+            var warps: [AlignmentWarpInfoCodable] = []
+            if frame > range.lowerBound {
+                warps.append(AlignmentWarpInfoCodable(homography: translation(dx, dy),
+                                                      deviation: 1,
+                                                      alignmentState: .homographySuccess,
+                                                      frameIndex: frame - 1))
+            }
+            if frame < range.upperBound {
+                warps.append(AlignmentWarpInfoCodable(homography: translation(-dx, -dy),
+                                                      deviation: 1,
+                                                      alignmentState: .homographySuccess,
+                                                      frameIndex: frame + 1))
+            }
+            guard !warps.isEmpty else { continue }
+            try await database.write(
+              frameIndex: frame, type: .earth,
+              results: HomographyResultsCodable(for: frame, with: warps))
+        }
+        await earthHomographyChain.invalidate()
+    }
+
+    /// A ridge: a V of horizon Y values with its lowest point (the summit) at `peak`.
+    private func ridge(peakColumn: Int, width: Int) -> [Int?] {
+        (0..<width).map { Optional(4 + 2 * abs($0 - peakColumn)) }
+    }
+
+    /// With no homographies stored there is nothing to carry a reference with, so the answer is the
+    /// interpolation — which is what a sequence gets on its first run, before alignment.
+    func testWithoutHomographiesTheExpectedHorizonIsTheInterpolation() async throws {
+        let h = try await FrameHarness.make(frameCount: 5, width: 32, height: 32, named: "expnone")
+        harness = h
+        await earthHomographyChain.invalidate()
+        let expected = await processor(h, at: 2).expectedHorizonYPerColumn(
+          from: [stats(frameIndex: 0, horizonYPerColumn: Array(repeating: 10, count: 8)),
+                 stats(frameIndex: 4, horizonYPerColumn: Array(repeating: 50, count: 8))],
+          width: 8)
+        let result = try XCTUnwrap(expected)
+        XCTAssertFalse(result.carriedByHomography)
+        XCTAssertEqual(result.yPerColumn.compactMap { $0 }, Array(repeating: 30, count: 8))
+    }
+
+    /// The case the whole thing exists for.  A ridge sits still in the world while the camera pans
+    /// across it, so it is painted at column 4 on frame 0 and at column 12 on frame 4 — the same
+    /// mountain, eight columns further along.  Interpolating those two paintings column by column
+    /// averages the near side of one ridge with the far side of the other and produces a summit that
+    /// is nowhere; carrying each of them by the stored homographies puts both summits at column 8,
+    /// where the mountain actually is on frame 2.
+    func testAPanCarriesTheReferenceSidewaysRatherThanInterpolatingItsY() async throws {
+        let h = try await FrameHarness.make(frameCount: 5, width: 32, height: 32, named: "exppan")
+        harness = h
+        try await writeEarthSteps(h, over: 0...4, dx: 2, dy: 0)   // ground moves +2 columns per frame
+
+        let horizon = await processor(h, at: 2)
+        let references = [stats(frameIndex: 0, horizonYPerColumn: ridge(peakColumn: 4, width: 16)),
+                          stats(frameIndex: 4, horizonYPerColumn: ridge(peakColumn: 12, width: 16))]
+
+        let expected = await horizon.expectedHorizonYPerColumn(from: references, width: 16)
+        let result = try XCTUnwrap(expected)
+        XCTAssertTrue(result.carriedByHomography)
+
+        XCTAssertEqual(try XCTUnwrap(result.yPerColumn[8]), 4,
+                       "both references carry their summit to column 8")
+        XCTAssertEqual(try XCTUnwrap(result.yPerColumn[6]), 8,
+                       "and the flanks come with it")
+        XCTAssertEqual(try XCTUnwrap(result.yPerColumn[10]), 8)
+
+        let interpolatedOptional = await horizon.interpolatedExpectedYPerColumn(from: references,
+                                                                               width: 16)
+        let interpolated = try XCTUnwrap(interpolatedOptional)
+        XCTAssertEqual(try XCTUnwrap(interpolated[8]), 12,
+                       "interpolating puts nothing at all at the summit — this is what was shipping")
+    }
+
+    /// A pan leaves part of the target frame outside anything either reference saw.  Those columns
+    /// must still come back with a value — a nil there is a column the merged mask cannot classify —
+    /// and the fallback is the interpolation, then the nearest defined column.
+    func testColumnsThePanLeavesUncoveredFallBackRatherThanGoingNil() async throws {
+        let h = try await FrameHarness.make(frameCount: 3, width: 32, height: 32, named: "expedge")
+        harness = h
+        try await writeEarthSteps(h, over: 0...2, dx: 6, dy: 0)
+
+        let expected = await processor(h, at: 1).expectedHorizonYPerColumn(
+          from: [stats(frameIndex: 0, horizonYPerColumn: Array(repeating: 10, count: 16)),
+                 stats(frameIndex: 2, horizonYPerColumn: Array(repeating: 10, count: 16))],
+          width: 16)
+        let result = try XCTUnwrap(expected)
+        XCTAssertTrue(result.carriedByHomography)
+        XCTAssertEqual(result.yPerColumn.count, 16)
+        XCTAssertFalse(result.yPerColumn.contains(where: { $0 == nil }),
+                       "every column must end up with a value")
+    }
+
+    /// A vertical-only move is the one case the old interpolation already handled, so the carried
+    /// answer must agree with it — otherwise this change is a regression dressed as an improvement.
+    func testAVerticalOnlyMoveAgreesWithTheOldInterpolation() async throws {
+        let h = try await FrameHarness.make(frameCount: 5, width: 32, height: 32, named: "expvert")
+        harness = h
+        try await writeEarthSteps(h, over: 0...4, dx: 0, dy: 5)
+
+        let horizon = await processor(h, at: 2)
+        let stats = [stats(frameIndex: 0, horizonYPerColumn: Array(repeating: 10, count: 8)),
+                     stats(frameIndex: 4, horizonYPerColumn: Array(repeating: 30, count: 8))]
+        let carriedOptional = await horizon.expectedHorizonYPerColumn(from: stats, width: 8)
+        let carried = try XCTUnwrap(carriedOptional)
+        let interpolatedOptional = await horizon.interpolatedExpectedYPerColumn(from: stats, width: 8)
+        let interpolated = try XCTUnwrap(interpolatedOptional)
+        XCTAssertTrue(carried.carriedByHomography)
+        XCTAssertEqual(carried.yPerColumn.compactMap { $0 }, interpolated.compactMap { $0 })
+    }
+
+    // MARK: - referenceSmoothedHorizonMask
+
+    /// A binary horizon mask: sky (255) above the per-column boundary, ground (0) at and below.
+    private func maskImage(width: Int, height: Int, horizonY: [Int]) throws -> HorizonMask {
+        let image = try XCTUnwrap(PixelatedImage.fromHorizonColumnY(
+                                    width: width, height: height,
+                                    columnY: horizonY.map { Optional($0) }))
+        return try XCTUnwrap(HorizonMask(image))
+    }
+
+    /// The failure this filter was blind to.  A detection that has locked onto the wrong edge is
+    /// wrong by roughly the same amount in every column, so its deviations from the reference are
+    /// tightly clustered — and a test centred on the *mean* deviation therefore finds no outliers at
+    /// all and replaces nothing.  On the aurora sequence that left frame 119's horizon 215 px above a
+    /// reference painted two frames earlier, with this filter reporting success.
+    func testAUniformlyWrongDetectionIsReplacedByTheReference() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, width: 32, height: 32, named: "smoothbias")
+        harness = h
+        let detected = try maskImage(width: 64, height: 200, horizonY: Array(repeating: 40, count: 64))
+        let expected: [Int?] = Array(repeating: 120, count: 64)
+
+        let smoothedOptional = await processor(h).referenceSmoothedHorizonMask(
+                                 detected: detected, expectedYPerColumn: expected)
+        let smoothed = try XCTUnwrap(smoothedOptional)
+        let ys = HorizonScoring.extractHorizonYPerColumn(from: smoothed.image)
+        for x in 0..<64 {
+            XCTAssertEqual(try XCTUnwrap(ys[x]), 120,
+                           "column \(x) was 80px off the reference and should have been replaced")
+        }
+    }
+
+    /// It stays a filter, not a clamp: a detection that agrees with the references to within the
+    /// tolerance keeps its own line, so real terrain detail the references bracket loosely survives.
+    func testADetectionWithinToleranceIsLeftAlone() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, width: 32, height: 32, named: "smoothkeep")
+        harness = h
+        let detectedY = (0..<64).map { 100 + ($0 % 5) }   // wanders by 4px
+        let detected = try maskImage(width: 64, height: 200, horizonY: detectedY)
+        let expected: [Int?] = Array(repeating: 100, count: 64)
+
+        let smoothedOptional = await processor(h).referenceSmoothedHorizonMask(
+                                 detected: detected, expectedYPerColumn: expected)
+        let smoothed = try XCTUnwrap(smoothedOptional)
+        let ys = HorizonScoring.extractHorizonYPerColumn(from: smoothed.image)
+        XCTAssertEqual(ys.compactMap { $0 }, detectedY, "nothing was outside the tolerance")
+    }
+
+    /// One bad column among good ones is what the filter was always able to catch, and still must.
+    func testASingleOutlierColumnIsReplaced() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, width: 32, height: 32, named: "smoothspike")
+        harness = h
+        var detectedY = Array(repeating: 100, count: 64)
+        detectedY[20] = 30
+        let detected = try maskImage(width: 64, height: 200, horizonY: detectedY)
+        let expected: [Int?] = Array(repeating: 100, count: 64)
+
+        let smoothedOptional = await processor(h).referenceSmoothedHorizonMask(
+                                 detected: detected, expectedYPerColumn: expected)
+        let smoothed = try XCTUnwrap(smoothedOptional)
+        let ys = HorizonScoring.extractHorizonYPerColumn(from: smoothed.image)
+        XCTAssertEqual(try XCTUnwrap(ys[20]), 100, "the outlier took the reference's value")
+        XCTAssertEqual(try XCTUnwrap(ys[21]), 100)
     }
 
     /// Band mode is the alternative entry the painter uses before any refinement; it must produce a

@@ -1061,6 +1061,12 @@ final public actor FrameAlignmentProcessor {
     private func write(neighborEarthHomography: [AlignmentWarpInfoCodable]) async throws {
         let results = HomographyResultsCodable(for: frameIndex, with: neighborEarthHomography)
         try await configManager.homographyDatabase.write(frameIndex: frameIndex, type: .earth, results: results)
+        // `EarthHomographyChain` memoises what it reads, including the *absence* of a record — which
+        // is what every frame's record is on a first run, since the horizon merge happens before
+        // alignment.  Without this the chain would answer a later refinement out of that emptiness
+        // and the painted references would fall back to being interpolated for the life of the
+        // process.
+        await earthHomographyChain.invalidate()
         if let frame {
             let obs = await frame.getObserver()
             await obs?.set(earthAlignmentResults: results)
@@ -1109,6 +1115,7 @@ final public actor FrameAlignmentProcessor {
 
     public func removeNumberOfAlignedImagesForThisFrameFile() async throws {
         try? await configManager.homographyDatabase.deleteAll(frameIndex: frameIndex)
+        await earthHomographyChain.invalidate()
         // Also clean up any legacy JSON files from pre-DB runs
         if let dirname = imageAccessor.dirForImage(ofType: .starAligned, atSize: .original) {
             try? removeFiles(withSuffix: ".json", in: "\(dirname)/\(frameIndex)")

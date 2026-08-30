@@ -48,13 +48,59 @@ public enum CombinedHorizonDetector {
         public init() {}
     }
 
+    // MARK: - Prior
+
+    /// Where the horizon is already believed to be, and how far either side of that the
+    /// detector is allowed to look.
+    ///
+    /// On a moving sequence this comes from the user's painted reference horizons, carried
+    /// into this frame by the measured ground motion.  It changes the question each base
+    /// method is answering from "where in this 4000-row frame is the strongest sky/ground
+    /// boundary" — which on a snowy ridge under an aurora they answer wrong by up to 1500 px —
+    /// to "which of the edges in this 200-row band is it".
+    ///
+    /// It is a *constraint*, not an answer: the whole point of still running detection is that
+    /// the prior is a smooth line carried from another frame and the real ridge has detail the
+    /// references were painted too coarsely to hold.
+    public struct Prior: Sendable {
+        /// Expected horizon Y per column, in full-resolution image coordinates.
+        public let yPerColumn: [Int?]
+        /// How far above and below `yPerColumn` the true horizon may be.
+        public let searchRadius: Int
+
+        public init(yPerColumn: [Int?], searchRadius: Int) {
+            self.yPerColumn = yPerColumn
+            self.searchRadius = searchRadius
+        }
+
+        var definedY: [Int] { yPerColumn.compactMap { $0 } }
+
+        /// The prior's band as fractions of image height, for the base methods that take one.
+        /// Widened by the search radius at both ends and clamped into `[0, 1]`.
+        func searchFractions(imageHeight: Int) -> (top: Double, bottom: Double)? {
+            let ys = definedY
+            guard !ys.isEmpty, imageHeight > 0 else { return nil }
+            let top = Double(ys.min()! - searchRadius) / Double(imageHeight)
+            let bottom = Double(ys.max()! + searchRadius) / Double(imageHeight)
+            let clampedTop = max(0.0, min(0.98, top))
+            let clampedBottom = max(clampedTop + 0.02, min(1.0, bottom))
+            return (clampedTop, clampedBottom)
+        }
+    }
+
     // MARK: - Main entry point
 
     /// Run the full combined+RW pipeline on an image.
     /// Returns a HorizonMask with the detected horizon.
+    ///
+    /// `prior`, when given, narrows every base method's search to the band it describes,
+    /// discards any method whose answer lands outside that band anyway, and bounds the
+    /// combined curve before it seeds the Random Walker.  Without one the behaviour is
+    /// exactly as before.
     public static func detect(
         image: PixelatedImage,
-        params: Params = Params()
+        params: Params = Params(),
+        prior: Prior? = nil
     ) async throws -> HorizonMask {
         let imgW = image.width
         let imgH = image.height
@@ -64,14 +110,34 @@ public enum CombinedHorizonDetector {
         let sW = scaled.width
         let sH = scaled.height
 
+        // Whole-image defaults unless a prior says otherwise.  These are the values each
+        // base method already had baked in as its own default.
+        let band = prior?.searchFractions(imageHeight: imgH)
+        let searchTop = band?.top ?? 0.05
+        let searchBottom = band?.bottom ?? 0.95
+        var bandedParams = params
+        if let band {
+            bandedParams.sioxBandTopFraction = band.top
+            bandedParams.sioxBandBottomFraction = band.bottom
+            Log.i("CombinedHorizonDetector: prior bands the search to "
+                    + "[\(String(format: "%.3f", band.top)), \(String(format: "%.3f", band.bottom))] "
+                    + "of height (rows \(Int(band.top * Double(imgH)))-\(Int(band.bottom * Double(imgH))))")
+        }
+
         Log.i("CombinedHorizonDetector: image \(imgW)x\(imgH), working \(sW)x\(sH)")
 
         // Run base methods in parallel
-        async let otsuResult = runOtsu(scaled: scaled, image: image)
-        async let dpResult = runDP(scaled: scaled, image: image, params: params)
-        let sioxResult = runSIOX(scaled: scaled, image: image, params: params)
-        let gradResult = runGradProfile(scaled: scaled, image: image)
-        let texResult = runTexture(scaled: scaled, image: image)
+        async let otsuResult = runOtsu(scaled: scaled, image: image, prior: prior)
+        async let dpResult = runDP(scaled: scaled, image: image, params: bandedParams,
+                                   searchTopFraction: searchTop,
+                                   searchBottomFraction: searchBottom)
+        let sioxResult = runSIOX(scaled: scaled, image: image, params: bandedParams)
+        let gradResult = runGradProfile(scaled: scaled, image: image,
+                                        searchTopFraction: searchTop,
+                                        searchBottomFraction: searchBottom)
+        let texResult = runTexture(scaled: scaled, image: image,
+                                   searchTopFraction: searchTop,
+                                   searchBottomFraction: searchBottom)
 
         let otsuY = await otsuResult
         let dpY = await dpResult
@@ -157,11 +223,46 @@ public enum CombinedHorizonDetector {
             throw "CombinedHorizonDetector: all base methods failed"
         }
 
-        let combinedY = confidenceWeightedCombine(
+        // Weight each method by how much of it landed inside the prior's band, and drop the
+        // ones that mostly did not.  Banding the search is not enough on its own: a method
+        // that finds no edge in the band still returns *something* — the band's own edge, or
+        // a cloud base — and confidence scores it on smoothness and coverage, which a wrong
+        // answer can have in full.
+        if let prior {
+            let scored = methods.map { ($0, priorAgreement($0.horizonY, prior: prior)) }
+            let kept = scored.filter { $0.1 > 0.1 }
+            for (method, agreement) in scored where agreement <= 0.1 {
+                Log.w("CombinedHorizonDetector: \(method.name) excluded — only "
+                        + "\(String(format: "%.0f%%", agreement * 100)) of it lands within "
+                        + "\(prior.searchRadius)px of the prior")
+            }
+            if kept.isEmpty {
+                // Every method found the wrong edge.  The prior is what is left, and it is a
+                // far better answer than the best of five wrong ones.
+                Log.w("CombinedHorizonDetector: no base method agrees with the prior — using the prior")
+                methods = [WeightedMethod(name: "prior", horizonY: prior.yPerColumn, confidence: 1.0)]
+            } else {
+                methods = kept.map {
+                    WeightedMethod(name: $0.0.name, horizonY: $0.0.horizonY,
+                                   confidence: $0.0.confidence * $0.1)
+                }
+            }
+        }
+
+        var combinedY = confidenceWeightedCombine(
             methods.map { ($0.horizonY, $0.confidence) },
             outlierThreshold: params.outlierThreshold,
             imageHeight: imgH
         )
+
+        // Bound what seeds the Random Walker.  A surviving method can still be wrong in a
+        // patch of columns, and the RW grows its answer out of this line: a seed band placed
+        // over the wrong edge produces a confidently wrong mask, which is the failure that
+        // reaches the user.  Columns with no combined answer take the prior outright, so the
+        // walker is seeded across the full width.
+        if let prior {
+            combinedY = boundedByPrior(combinedY, prior: prior)
+        }
 
         Log.i("CombinedHorizonDetector: combined using \(methods.map { "\($0.name)(\(String(format: "%.2f", $0.confidence)))" }.joined(separator: ", "))")
 
@@ -203,13 +304,22 @@ public enum CombinedHorizonDetector {
     // MARK: - Base methods
 
     /// Run Otsu at multiple crop percentages and return per-column horizon Y at full resolution.
+    ///
+    /// Otsu's crop percentage has no band to be given — it decides how much of the top of the
+    /// frame to throw away before thresholding — so a prior enters through the *scoring*
+    /// instead: the sweep is unchanged and the crop whose result sits nearest the prior wins,
+    /// rather than the one nearest the middle of the frame.  Preferring the middle is a
+    /// reasonable guess with nothing else to go on and simply wrong once there is something.
     static func runOtsu(
         scaled: PixelatedImage,
-        image: PixelatedImage
+        image: PixelatedImage,
+        prior: Prior? = nil
     ) async -> [Int?]? {
         let cropSteps = stride(from: 10.0, through: 90.0, by: 5.0)
         var bestMask: PixelatedImage? = nil
         var bestScore = -1.0
+        // The prior is in full-resolution rows; this sweep scores at the working size.
+        let scaleY = Double(scaled.height) / Double(max(1, image.height))
 
         for crop in cropSteps {
             guard let mask = try? await scaled.horizonMask(
@@ -223,10 +333,19 @@ public enum CombinedHorizonDetector {
             guard !defined.isEmpty else { continue }
 
             let coverage = Double(defined.count) / Double(horizonY.count)
-            let avgY = Double(defined.reduce(0, +)) / Double(defined.count)
-            let heightFrac = avgY / Double(scaled.height)
-            let centerPenalty = 1.0 - abs(heightFrac - 0.5) * 2.0
-            let score = coverage * max(0.1, centerPenalty)
+            let score: Double
+            if let prior {
+                let scaledPrior = Prior(
+                  yPerColumn: prior.yPerColumn.map { $0.map { Int(Double($0) * scaleY) } },
+                  searchRadius: max(1, Int(Double(prior.searchRadius) * scaleY))
+                )
+                score = coverage * max(0.01, priorAgreement(horizonY, prior: scaledPrior))
+            } else {
+                let avgY = Double(defined.reduce(0, +)) / Double(defined.count)
+                let heightFrac = avgY / Double(scaled.height)
+                let centerPenalty = 1.0 - abs(heightFrac - 0.5) * 2.0
+                score = coverage * max(0.1, centerPenalty)
+            }
 
             if score > bestScore {
                 bestScore = score
@@ -257,7 +376,9 @@ public enum CombinedHorizonDetector {
     static func runDP(
         scaled: PixelatedImage,
         image: PixelatedImage,
-        params: Params
+        params: Params,
+        searchTopFraction: Double = 0.0,
+        searchBottomFraction: Double = 1.0
     ) async -> [Int?]? {
         var bestMask: PixelatedImage? = nil
         var bestScore = -1.0
@@ -268,7 +389,9 @@ public enum CombinedHorizonDetector {
                     guard let mask = try? scaled.dpHorizonDetect(
                         smoothnessLambda: lambda,
                         sobelWeight: sobelW,
-                        cannyWeight: cannyW
+                        cannyWeight: cannyW,
+                        searchTopFraction: searchTopFraction,
+                        searchBottomFraction: searchBottomFraction
                     ) else { continue }
 
                     let horizonY = extractHorizonY(from: mask)
@@ -1011,6 +1134,48 @@ public enum CombinedHorizonDetector {
     }
 
     // MARK: - Helpers
+
+    /// The fraction of a base method's defined columns that land within the prior's search
+    /// radius.  Zero when it has no defined columns at all.
+    ///
+    /// A fraction rather than a pass/fail, because a method is usually right over most of the
+    /// frame and lost over one stretch of it — that is worth keeping at reduced weight, and
+    /// `confidenceWeightedCombine`'s per-column median filtering handles the lost stretch.
+    static func priorAgreement(_ horizonY: [Int?], prior: Prior) -> Double {
+        var within = 0, total = 0
+        for x in 0..<min(horizonY.count, prior.yPerColumn.count) {
+            guard let y = horizonY[x], let expected = prior.yPerColumn[x] else { continue }
+            total += 1
+            if abs(y - expected) <= prior.searchRadius { within += 1 }
+        }
+        guard total > 0 else { return 0 }
+        return Double(within) / Double(total)
+    }
+
+    /// `horizonY` confined to the prior's band, with columns it left undefined taken from the
+    /// prior outright.
+    static func boundedByPrior(_ horizonY: [Int?], prior: Prior) -> [Int?] {
+        var result = horizonY
+        var boundedCount = 0
+        var filledCount = 0
+        for x in 0..<min(result.count, prior.yPerColumn.count) {
+            guard let expected = prior.yPerColumn[x] else { continue }
+            guard let y = result[x] else {
+                result[x] = expected
+                filledCount += 1
+                continue
+            }
+            let bounded = max(expected - prior.searchRadius,
+                              min(expected + prior.searchRadius, y))
+            if bounded != y { boundedCount += 1 }
+            result[x] = bounded
+        }
+        if boundedCount > 0 || filledCount > 0 {
+            Log.i("CombinedHorizonDetector: prior bounded \(boundedCount) columns and filled "
+                    + "\(filledCount) before Random Walker seeding")
+        }
+        return result
+    }
 
     /// Compute a confidence score for a horizon Y array: smoothness × coverage × plausibility.
     /// Returns a value in [0, 1] where higher = more confident.
