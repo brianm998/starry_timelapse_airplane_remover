@@ -258,12 +258,10 @@ class AppViewModel(
     // Accumulated answers, applied to the session config when the user opens Advanced or starts processing.
     private var startupHasHorizon = false
     private var startupCameraMoving = false
-    private var startupAllowEarth = false
 
     private fun resetStartupChoices() {
         startupHasHorizon = false
         startupCameraMoving = false
-        startupAllowEarth = false
     }
 
     /** Prompt 1 answer: does the sequence include a horizon? */
@@ -275,7 +273,6 @@ class AppViewModel(
     /** Prompt 2 answer: was the camera moving (false = static on a tripod)? */
     fun startupAnswerMoving(moving: Boolean) {
         startupCameraMoving = moving
-        startupAllowEarth = !moving // macOS defaults earth alignment on for static cameras
         _startupStep.value = when {
             !startupHasHorizon -> StartupStep.REMOVAL
             moving -> StartupStep.SELECT_MOVING_HORIZONS
@@ -378,7 +375,9 @@ class AppViewModel(
         val b = current.toBuilder()
             .setHorizonDetectionEnabled(startupHasHorizon)
             .setTripodHeadWasMoving(startupCameraMoving)
-            .setAllowEarthAlignment(startupAllowEarth)
+            // Earth alignment is on for both static and moving sequences now that the
+            // ground homography guard rejects the warps it used to apply blindly.
+            .setAllowEarthAlignment(true)
         cleanMethod?.let { b.setCleanMethod(it) }
         runCatching { sessions.updateConfig(b.build()) }
     }

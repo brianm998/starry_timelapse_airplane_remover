@@ -967,8 +967,9 @@ struct ProcessingSettingsView: View {
           showInfo: $showAlignmentAllowEarthAlignmentInfo,
           addSpacer: { addSpacer },
           infoText: """
-            Try using the experimental earth alignment for moving videos.
-            This can help to get rid of things like car headlights if the earth can be aligned properly.  Off by default for now.
+            Align the ground as well as the sky on moving videos.
+            This can help to get rid of things like car headlights if the earth can be aligned properly.  On by default.
+            Neighbor frames whose ground cannot be tracked confidently are left out of the merge, so a foreground too dark to align falls back to the unaligned ground rather than smearing.
             """
         ) {
             HStack {

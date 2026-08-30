@@ -728,8 +728,14 @@ public struct Config: Codable, Sendable {
     // reserved.
 
     // try to align earth on moving frames?
-    // turned off by default as it's still expermintal
-    public var allowEarthAlignment: Bool = false
+    // On by default.  This was off while ground alignment would apply whatever
+    // homography RANSAC returned, including the garbage warps a dark or crushed
+    // foreground produces.  The percentile stretch and the earth-only inlier
+    // ratio guard in ImageAligner.cpp now throw those out instead, so a ground
+    // that cannot be tracked drops out of the median merge rather than smearing
+    // the frame — the same result this switch being off used to give, arrived
+    // at per neighbour instead of per sequence.
+    public var allowEarthAlignment: Bool = true
 
     // --- Adaptive horizon detection parameters ---
 

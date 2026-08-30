@@ -132,7 +132,6 @@ struct MovingView: View {
                 Spacer()
                 Button {
                     viewModel.cameraMotion = .fixed
-                    viewModel.allowEarthAlignment = true // default to on for earth
                     if viewModel.horizonDetectionEnabled {
                         self.state = .selectHorizon
                     } else {

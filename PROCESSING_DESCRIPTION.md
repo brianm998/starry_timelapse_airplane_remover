@@ -114,10 +114,12 @@ be moving (`--moving-camera` on the CLI):
   neighbor frames in *both* sky and ground regions.
 - **Moving**: each frame's horizon merge depends only on its local neighbors
   ([`FrameGraphBuilder.swift:261`](StarCore/Sources/StarCore/FrameGraphBuilder.swift:261)).
-  Homography is per-frame with no global smoothing. Only the sky portion of
-  the clean reference is meaningful; the ground portion is left as the
-  original frame, which means subtraction below the horizon is effectively
-  always zero, and any ground-level outlier passes through untouched.
+  Homography is per-frame with no global smoothing. Earth alignment is on by
+  default here too, so the ground portion of the clean reference is built from
+  neighbor frames as well — except where the ground cannot be tracked
+  confidently, in which case that neighbor drops out and the ground falls back
+  to the original frame, subtracting to zero and letting ground-level outliers
+  through untouched.
 
 ### 2.2. Automatic vs Selective in Code
 
@@ -271,10 +273,11 @@ When earth alignment is available, two such stacks are built — one from
 sky-aligned warps, one from earth-aligned warps — and combined using the
 horizon mask in
 [`FrameAirplaneRemover.swift:5823`](StarCore/Sources/StarCore/FrameAirplaneRemover.swift:5823)
-via `PixelatedImage.apply()`. When earth alignment is *not* available
-(moving timelapse), the ground portion of the reference is just the
-original frame's ground, which by construction subtracts to zero — and
-that is precisely why ground transients leak through.
+via `PixelatedImage.apply()`. When earth alignment is *not* available —
+switched off, or every ground homography rejected for want of RANSAC
+consensus — the ground portion of the reference is just the original
+frame's ground, which by construction subtracts to zero, and that is
+precisely why ground transients leak through.
 
 ### 3.4. Outlier Subtraction
 
