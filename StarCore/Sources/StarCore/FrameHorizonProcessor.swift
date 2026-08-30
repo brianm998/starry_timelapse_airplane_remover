@@ -1296,14 +1296,35 @@ final public actor FrameHorizonProcessor {
             return
         }
 
-        // Need homography results for prepare().
-        var homographyResults = await frame?.getNeighborStarHomography()
-        if homographyResults == nil {
-            homographyResults = await frame?.readStarNeighborHomographyForThisFrame()
+        // Both kinds, because the two passes want opposite ones: the masks are ground and move
+        // with the earth homography, the images are being aligned on the sky and move with the
+        // star one.  A neighbour contributes only when it has both.
+        var starResults = await frame?.getNeighborStarHomography()
+        if starResults == nil {
+            starResults = await frame?.readStarNeighborHomographyForThisFrame()
         }
-        guard let homographyResults else {
+        guard let starResults else {
             Log.w("frame \(frameIndex) maybeTuneHorizonParameters: no star homography — cannot tune")
             return
+        }
+        var earthResults = await frame?.getNeighborEarthHomography()
+        if earthResults == nil {
+            earthResults = await frame?.readEarthNeighborHomographyForThisFrame()
+        }
+        guard let earthResults else {
+            Log.w("frame \(frameIndex) maybeTuneHorizonParameters: no earth homography — cannot tune")
+            return
+        }
+
+        func usable(_ warpInfo: AlignmentWarpInfoCodable) -> [Double]? {
+            guard warpInfo.alignmentState == .homographySuccess ||
+                  warpInfo.alignmentState == .usedExistingHomography
+            else { return nil }
+            return warpInfo.homography
+        }
+        var earthByNeighbor: [Int: [Double]] = [:]
+        for warpInfo in earthResults.neighborHomography {
+            if let homography = usable(warpInfo) { earthByNeighbor[warpInfo.frameIndex] = homography }
         }
 
         guard let mergedMask = try? await loadOrCreateMergedHorizonMask() else { return }
@@ -1312,14 +1333,13 @@ final public actor FrameHorizonProcessor {
 
         var neighborHorizonFilenames:   [String]   = []
         var neighborOriginalFilenames:  [String]   = []
-        var neighborHomographies:       [[Double]] = []
+        var neighborEarthHomographies:  [[Double]] = []
+        var neighborStarHomographies:   [[Double]] = []
 
-        for warpInfo in homographyResults.neighborHomography {
-            guard warpInfo.alignmentState == .homographySuccess ||
-                  warpInfo.alignmentState == .usedExistingHomography,
-                  let homography = warpInfo.homography
-            else { continue }
+        for warpInfo in starResults.neighborHomography {
+            guard let starHomography = usable(warpInfo) else { continue }
             let neighborIndex = warpInfo.frameIndex
+            guard let earthHomography = earthByNeighbor[neighborIndex] else { continue }
             guard let origFilename = imageAccessor.nameForImage(
                     frameIndex: neighborIndex, ofType: .original, atSize: .original),
                   let horizFilename = imageAccessor.nameForImage(
@@ -1327,10 +1347,11 @@ final public actor FrameHorizonProcessor {
             else { continue }
             neighborOriginalFilenames.append(origFilename)
             neighborHorizonFilenames.append(horizFilename)
-            neighborHomographies.append(homography)
+            neighborStarHomographies.append(starHomography)
+            neighborEarthHomographies.append(earthHomography)
         }
 
-        guard !neighborHomographies.isEmpty else { return }
+        guard !neighborStarHomographies.isEmpty else { return }
 
         let currentImage = try? await imageAccessor.load(
             frameIndex: frameIndex, type: .original, atSize: .original
@@ -1343,7 +1364,8 @@ final public actor FrameHorizonProcessor {
             currentHeight:             currentHeight,
             neighborHorizonFilenames:  neighborHorizonFilenames,
             neighborOriginalFilenames: neighborOriginalFilenames,
-            neighborHomographies:      neighborHomographies,
+            neighborEarthHomographies: neighborEarthHomographies,
+            neighborStarHomographies:  neighborStarHomographies,
             currentImage:              currentImage
         )
 
