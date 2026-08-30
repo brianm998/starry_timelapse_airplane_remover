@@ -2953,6 +2953,29 @@ public final class ImageSequenceViewModel {
                       overrideReprocessingType: type)
     }
 
+    /// The frames a run will actually touch, or nil if that is none of them.
+    ///
+    /// Callers are free to ask for more frames than the sequence has — the re-process
+    /// panel's "process the next N frames" does exactly that from anywhere but the first
+    /// frame, since N is capped against the length of the sequence rather than against what
+    /// is left of it.  A run's range has to be clamped to the frames that exist before
+    /// anything indexes into the array with it.
+    nonisolated static func processingRange(
+      from startIndex: Int,
+      to endIndex: Int?,
+      frameCount: Int
+    ) -> ClosedRange<Int>? {
+        guard frameCount > 0,
+              startIndex >= 0,
+              startIndex < frameCount
+        else { return nil }
+
+        let lastIndex = min(endIndex ?? frameCount - 1, frameCount - 1)
+        guard startIndex <= lastIndex else { return nil }
+
+        return startIndex...lastIndex
+    }
+
     func processFrames(
       from startIndex: Int,
       to endIndex: Int? = nil,
@@ -2967,18 +2990,24 @@ public final class ImageSequenceViewModel {
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
 
         Task.detached(priority: .medium) { [self] in
+            let frameCount = await self.frames.count
+            guard let range = Self.processingRange(from: startIndex,
+                                                   to: endIndex,
+                                                   frameCount: frameCount)
+            else {
+                Log.e("cannot process frames \(startIndex) to \(endIndex ?? frameCount-1) of \(frameCount)")
+                await MainActor.run { self.cancelProcessing() }
+                return
+            }
+            let lastIndex = range.upperBound
+            // The clamp only ever narrows the range a caller asked for, so a nil endIndex —
+            // which the processor reads as "to the end of the sequence" — stays nil.
+            let clampedEndIndex = endIndex == nil ? nil : lastIndex
+
             // Before the graph is built, which surveys the disk — and over this run's own
             // range only, so a reference whose span reaches past it stays pending for the
             // frames this run will not touch.
-            let lastIndex: Int
-            if let endIndex {
-                lastIndex = endIndex
-            } else {
-                lastIndex = await self.frames.count - 1
-            }
-            if startIndex <= lastIndex {
-                await self.applyPendingHorizonRefinementToRun(range: startIndex...lastIndex)
-            }
+            await self.applyPendingHorizonRefinementToRun(range: range)
 
             let reprocessingType: FrameReprocessingType
             if let override = overrideReprocessingType {
@@ -2989,9 +3018,7 @@ public final class ImageSequenceViewModel {
             Log.d("processAllFrames 1")
 
             if performClean {
-                var lastIndex = await frames.count - 1
-                if let endIndex { lastIndex = endIndex }
-                for i in startIndex...lastIndex {
+                for i in range {
                     if let frame = await frames[i].frame {
                         switch reprocessingType {
                         case .everything:
@@ -3019,7 +3046,7 @@ public final class ImageSequenceViewModel {
                 await self.process(
                   frame: frame,
                   startIndex: startIndex,
-                  endIndex: endIndex
+                  endIndex: clampedEndIndex
                 ) { processingState in
                     Task { @MainActor in
                         self.isProcessingFrames = false
