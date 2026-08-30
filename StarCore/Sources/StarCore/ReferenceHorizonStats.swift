@@ -192,11 +192,62 @@ public let referenceHorizonStatsCache = ReferenceHorizonStatsCache()
 public actor ReferenceHorizonStatsCache {
     private var cache: [Int: ReferenceHorizonFrameStats] = [:]
 
+    /// The computation already running for a frame, if there is one.
+    ///
+    /// A cache with only `stats(for:)` and `set(_:)` collapses nothing when every caller
+    /// arrives before the first has finished, and in a horizon refinement none of them
+    /// arrive later: every frame of the span starts at once, all miss, and all compute the
+    /// same numbers from the same one or two reference frames.  Measured in a real session,
+    /// one reference's stats were computed 20 times and another's 30, identical every time,
+    /// and each computation loads that reference frame's full-resolution original.
+    private var inFlight: [Int: Task<ReferenceHorizonFrameStats?, Never>] = [:]
+
+    /// Bumped by `clearStats`, so a computation already running when its reference was
+    /// repainted does not store the numbers it was about to produce.
+    private var invalidations: [Int: Int] = [:]
+
     public func stats(for frameIndex: Int) -> ReferenceHorizonFrameStats? { cache[frameIndex] }
     public func set(_ stats: ReferenceHorizonFrameStats) { cache[stats.frameIndex] = stats }
 
-    /// Up to `maxCount` cached entries nearest by frame distance to `target`.
-    public func clearStats(for frameIndex: Int) { cache.removeValue(forKey: frameIndex) }
+    /// The stats for `frameIndex`, computing them with `compute` only if nothing else
+    /// already has or is.
+    ///
+    /// A second caller for a frame whose computation is under way waits on that one rather
+    /// than starting its own — which is the whole of what this cache is for, and what
+    /// `stats(for:)` followed by `set(_:)` cannot do from separate tasks.
+    ///
+    /// `compute` runs detached rather than on this actor: it loads a full-resolution image
+    /// and scans it, and running that here would hold the cache shut against every other
+    /// frame for its duration — including the frames waiting to find out that it is already
+    /// running.
+    public func stats(
+      for frameIndex: Int,
+      computedBy compute: @escaping @Sendable () async -> ReferenceHorizonFrameStats?
+    ) async -> ReferenceHorizonFrameStats? {
+        if let cached = cache[frameIndex] { return cached }
+        if let running = inFlight[frameIndex] { return await running.value }
+
+        let generation = invalidations[frameIndex] ?? 0
+        let task = Task.detached(priority: .userInitiated) { await compute() }
+        inFlight[frameIndex] = task
+        let stats = await task.value
+
+        // Keep it only if it still describes the reference on disk.  A repaint while this
+        // ran bumped the count, and `clearStats` has already dropped the in-flight entry —
+        // so the next caller starts a fresh computation rather than being handed this.
+        if (invalidations[frameIndex] ?? 0) == generation {
+            inFlight.removeValue(forKey: frameIndex)
+            if let stats { cache[frameIndex] = stats }
+        }
+        return stats
+    }
+
+    /// Forget a frame's stats: the reference horizon it describes has been repainted.
+    public func clearStats(for frameIndex: Int) {
+        cache.removeValue(forKey: frameIndex)
+        inFlight.removeValue(forKey: frameIndex)
+        invalidations[frameIndex, default: 0] += 1
+    }
 
     /// Up to `maxCount` cached entries nearest by frame distance to `target`.
     public func nearestStats(to target: Int, maxCount: Int = 2) -> [ReferenceHorizonFrameStats] {

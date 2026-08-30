@@ -479,6 +479,113 @@ final class ReferenceHorizonStatsTests: XCTestCase {
         XCTAssertEqual(all.count, 100)
     }
 
+    // MARK: - Single flight
+
+    /// The point of the cache, and the thing `stats(for:)` + `set(_:)` cannot do from
+    /// separate tasks: every frame of a refinement span asks for the same reference at the
+    /// same moment, all of them miss, and all of them compute.  Measured in a real session
+    /// before this existed — one reference's stats computed 20 times, another's 30, each
+    /// computation loading that frame's full-resolution original.
+    func testConcurrentAskersShareOneComputation() async {
+        let cache = ReferenceHorizonStatsCache()
+        let counter = ComputationCounter()
+        let entry = stats(frameIndex: 4)
+
+        let results = await withTaskGroup(of: ReferenceHorizonFrameStats?.self) { group in
+            for _ in 0..<20 {
+                group.addTask {
+                    await cache.stats(for: 4) {
+                        await counter.increment()
+                        // Long enough that every asker is inside the actor before the first
+                        // finishes, which is the situation being tested.
+                        try? await Task.sleep(nanoseconds: 50_000_000)
+                        return entry
+                    }
+                }
+            }
+            var all: [ReferenceHorizonFrameStats?] = []
+            for await result in group { all.append(result) }
+            return all
+        }
+
+        let computations = await counter.count
+        XCTAssertEqual(computations, 1, "20 askers should share one computation")
+        XCTAssertEqual(results.count, 20)
+        XCTAssertTrue(results.allSatisfy { $0?.frameIndex == 4 },
+                      "every asker gets the answer, not just the one that computed it")
+    }
+
+    /// A second ask after the first has finished is a plain cache hit — it must not compute
+    /// again, and must not be waiting on a task that has already gone.
+    func testASecondAskAfterTheFirstFinishedDoesNotCompute() async {
+        let cache = ReferenceHorizonStatsCache()
+        let counter = ComputationCounter()
+        let entry = stats(frameIndex: 6)
+
+        for _ in 0..<3 {
+            _ = await cache.stats(for: 6) {
+                await counter.increment()
+                return entry
+            }
+        }
+        let computations = await counter.count
+        XCTAssertEqual(computations, 1)
+    }
+
+    /// A computation that produced nothing — an unreadable mask, a frame whose original will
+    /// not load — must not be remembered as an answer, or one bad read would poison the
+    /// frame for the rest of the session.
+    func testAComputationThatFailsIsNotCached() async {
+        let cache = ReferenceHorizonStatsCache()
+        let counter = ComputationCounter()
+
+        let first = await cache.stats(for: 8) {
+            await counter.increment()
+            return nil
+        }
+        XCTAssertNil(first)
+
+        let entry = stats(frameIndex: 8)
+        let second = await cache.stats(for: 8) {
+            await counter.increment()
+            return entry
+        }
+        XCTAssertEqual(second?.frameIndex, 8)
+        let computations = await counter.count
+        XCTAssertEqual(computations, 2, "the failure must not stand in for an answer")
+    }
+
+    /// The repaint case.  A reference cleared while its stats are being computed leaves that
+    /// computation describing paint the user has replaced, so what it produces must not be
+    /// stored — the next asker has to start again.
+    func testAClearWhileComputingThrowsTheResultAway() async {
+        let cache = ReferenceHorizonStatsCache()
+        let counter = ComputationCounter()
+        let stale = stats(frameIndex: 2)
+
+        async let asked: ReferenceHorizonFrameStats? = cache.stats(for: 2) {
+            await counter.increment()
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            return stale
+        }
+        // Let the computation start, then repaint underneath it.
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        await cache.clearStats(for: 2)
+        _ = await asked
+
+        let cached = await cache.stats(for: 2)
+        XCTAssertNil(cached, "the stats of a reference that has since been repainted")
+
+        let fresh = stats(frameIndex: 2)
+        let next = await cache.stats(for: 2) {
+            await counter.increment()
+            return fresh
+        }
+        XCTAssertEqual(next?.frameIndex, 2)
+        let computations = await counter.count
+        XCTAssertEqual(computations, 2, "the ask after the repaint must compute again")
+    }
+
     // MARK: - computeReferenceHorizonStats
 
     /// The happy path: a frame with a bright sky over dark ground, classified by a matching mask,
@@ -649,4 +756,10 @@ final class ReferenceHorizonStatsTests: XCTestCase {
             XCTAssertLessThanOrEqual(value, 1)
         }
     }
+}
+
+/// Counts how many times a test's computation closure actually ran.
+private actor ComputationCounter {
+    private(set) var count = 0
+    func increment() { count += 1 }
 }

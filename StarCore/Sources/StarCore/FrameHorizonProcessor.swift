@@ -521,27 +521,35 @@ final public actor FrameHorizonProcessor {
             ordered = Array(candidates.prefix(maxCount))
         }
 
+        // Handed to the cache rather than run here and stored afterwards.  Every frame in a
+        // refinement span asks for the same one or two references at the same moment, and
+        // computing first means all of them compute: measured at 20 and 30 identical
+        // computations of one reference, each loading that frame's full-resolution original.
+        let accessor = imageAccessor
+        let owningFrameIndex = frameIndex
         var result: [ReferenceHorizonFrameStats] = []
         for candidate in ordered {
-            if let cached = await referenceHorizonStatsCache.stats(for: candidate.index) {
-                result.append(cached)
-                continue
+            let candidateIndex = candidate.index
+            let maskPath = candidate.maskURL.path
+            let stats = await referenceHorizonStatsCache.stats(for: candidateIndex) {
+                guard let maskImage = PixelatedImage(filename: maskPath)?.asHorizonMask,
+                      let mask = HorizonMask(maskImage),
+                      let original = try? await accessor.load(
+                        frameIndex: candidateIndex,
+                        type: .original,
+                        atSize: .original
+                      )
+                else {
+                    Log.w("frame \(owningFrameIndex) referenceHorizonsWithStats: "
+                            + "skipping frame \(candidateIndex)")
+                    return nil
+                }
+                return original.computeReferenceHorizonStats(frameIndex: candidateIndex,
+                                                             mask: mask,
+                                                             numBuckets: numBuckets,
+                                                             neighborhoodSize: neighborhoodSize)
             }
-            guard let maskImage = PixelatedImage(filename: candidate.maskURL.path)?.asHorizonMask,
-                  let mask = HorizonMask(maskImage),
-                  let original = try? await imageAccessor.load(
-                    frameIndex: candidate.index,
-                    type: .original,
-                    atSize: .original
-                  )
-            else {
-                Log.w("frame \(frameIndex) referenceHorizonsWithStats: skipping frame \(candidate.index)")
-                continue
-            }
-            guard let stats = original.computeReferenceHorizonStats(frameIndex: candidate.index, mask: mask, numBuckets: numBuckets, neighborhoodSize: neighborhoodSize)
-            else { continue }
-            await referenceHorizonStatsCache.set(stats)
-            result.append(stats)
+            if let stats { result.append(stats) }
         }
         return result
     }
