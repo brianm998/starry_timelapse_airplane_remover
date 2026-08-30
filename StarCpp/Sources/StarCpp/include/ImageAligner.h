@@ -16,6 +16,11 @@ typedef struct {
 } AlignmentNeighborData;
 
 // --- Median merge ---
+//
+// Neither of these warps anything, so every source covers every pixel and every
+// value one of them holds is a real observation, a black one included.  That is
+// the difference between them and ia_align_and_median_merge below, which has holes
+// to describe and carries a coverage plane to describe them with.
 
 // Merge images from filenames. Returns new MatWrapperRef (caller must release).
 MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
