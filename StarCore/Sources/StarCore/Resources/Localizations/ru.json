@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Писать в файл на уровне:",
   "ui.max_keypoints": "Максимум ключевых точек:",
   "ui.max_log_lines": "Максимум строк журнала",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Максимум пикселей, на которые уточнённый горизонт может опуститься ниже базовой линии объединённого горизонта (0 = отключено)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Максимум пикселей, на которые уточнение может опустить горизонт ниже линии, предсказанной эталонными горизонтами (0 = автоматически)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

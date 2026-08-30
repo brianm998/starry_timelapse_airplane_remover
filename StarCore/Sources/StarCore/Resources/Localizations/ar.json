@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "السجل في ملف بمستوى:",
   "ui.max_keypoints": "أقصى عدد للنقاط المفتاحية:",
   "ui.max_log_lines": "أقصى عدد لأسطر السجل",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "أقصى عدد بكسلات يمكن للأفق المحسّن أن ينزل بها تحت خط أساس الأفق المدموج (0 = معطّل)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "أقصى عدد بكسلات يمكن للتحسين أن يدفع بها الأفق تحت الخط الذي تتوقّعه آفاقك المرجعية (0 = تلقائي)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

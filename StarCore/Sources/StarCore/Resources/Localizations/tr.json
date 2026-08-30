@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Şu düzeyde dosyaya yaz:",
   "ui.max_keypoints": "En fazla anahtar nokta:",
   "ui.max_log_lines": "En fazla günlük satırı",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "İyileştirilmiş ufkun, birleştirilmiş ufuk taban çizgisinin altına inebileceği en fazla piksel (0 = kapalı)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "İyileştirmenin, ufku referans ufuklarınızın öngördüğü çizginin altına itebileceği en fazla piksel (0 = otomatik)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

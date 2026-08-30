@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Log to file at level:",
   "ui.max_keypoints": "Max Keypoints:",
   "ui.max_log_lines": "Max Log Lines",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Max pixels the refined horizon may go below the merged horizon baseline (0 = disabled)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Max pixels the refinement may push the horizon below the line your reference horizons predict (0 = automatic)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

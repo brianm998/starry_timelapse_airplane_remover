@@ -534,6 +534,62 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
         XCTAssertEqual(carried.yPerColumn.compactMap { $0 }, interpolated.compactMap { $0 })
     }
 
+    // MARK: - the downward bound the horizon painter steps
+
+    /// Zero is what a sequence has before anyone touches the stepper, and it must mean
+    /// "derive it", not "no bound" — leaving the brightness refinement unbounded is the defect
+    /// the bound exists for.  A tenth of the shipped 100px search radius.
+    func testAnUnsetBoundIsDerivedFromTheSearchRadius() {
+        XCTAssertEqual(
+          HorizonTunedParameters.effectiveMaxDownwardExtension(configured: 0, searchRadius: 100),
+          10)
+        XCTAssertEqual(
+          HorizonTunedParameters.effectiveMaxDownwardExtension(configured: 0, searchRadius: 240),
+          24, "a sequence that widens the band widens the bound with it")
+    }
+
+    /// A value the user stepped to wins over the derivation, in both directions — the point of
+    /// the control is to be able to say something the default would not.
+    func testAConfiguredBoundWins() {
+        XCTAssertEqual(
+          HorizonTunedParameters.effectiveMaxDownwardExtension(configured: 40, searchRadius: 100),
+          40)
+        XCTAssertEqual(
+          HorizonTunedParameters.effectiveMaxDownwardExtension(configured: 3, searchRadius: 100),
+          3, "tighter than the derived default is a legitimate thing to want")
+    }
+
+    /// Never zero, whatever the radius: a bound of zero would pin the boundary to the expected
+    /// line exactly and take away every correction the refinement exists to make.
+    func testTheBoundIsNeverZero() {
+        XCTAssertEqual(
+          HorizonTunedParameters.effectiveMaxDownwardExtension(configured: 0, searchRadius: 0), 1)
+        XCTAssertEqual(
+          HorizonTunedParameters.effectiveMaxDownwardExtension(configured: 0, searchRadius: 5), 1)
+    }
+
+    /// The painter writes the stepper's value to `horizonReference/tuned_parameters.json`, and
+    /// the merge reads it from there.  Round-tripping it through the processor is the join
+    /// between the two — before this it was written and read by nothing.
+    func testTheStepperValueSurvivesToWhereTheRefinementReadsIt() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, width: 32, height: 32, named: "bound")
+        harness = h
+        let horizon = await processor(h)
+
+        var params = await horizon.loadTunedHorizonParameters()
+        XCTAssertEqual(params.maxDownwardExtension, 0, "nothing set yet")
+
+        params.maxDownwardExtension = 35
+        try await horizon.saveTunedHorizonParameters(params)
+
+        let reloaded = await horizon.loadTunedHorizonParameters()
+        XCTAssertEqual(reloaded.maxDownwardExtension, 35)
+        XCTAssertEqual(
+          HorizonTunedParameters.effectiveMaxDownwardExtension(
+            configured: reloaded.maxDownwardExtension, searchRadius: 100),
+          35)
+    }
+
     // MARK: - referenceSmoothedHorizonMask
 
     /// A binary horizon mask: sky (255) above the per-column boundary, ground (0) at and below.

@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Zapisovat do souboru na úrovni:",
   "ui.max_keypoints": "Max. klíčových bodů:",
   "ui.max_log_lines": "Max. řádků protokolu",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Nejvyšší počet pixelů, o které může zpřesněný horizont klesnout pod základní čáru sloučeného horizontu (0 = vypnuto)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Nejvyšší počet pixelů, o které smí zpřesnění posunout horizont pod čáru předpovězenou referenčními horizonty (0 = automaticky)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "Registra su file al livello:",
   "ui.max_keypoints": "Punti chiave max:",
   "ui.max_log_lines": "Righe di log max",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "Massimo numero di pixel di cui l'orizzonte affinato può scendere sotto la linea di base dell'orizzonte unito (0 = disattivato)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "Massimo numero di pixel di cui l'affinamento può spingere l'orizzonte sotto la linea prevista dai tuoi orizzonti di riferimento (0 = automatico)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

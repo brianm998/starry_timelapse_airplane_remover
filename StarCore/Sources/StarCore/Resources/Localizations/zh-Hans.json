@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "以此级别写入文件日志：",
   "ui.max_keypoints": "最大关键点数：",
   "ui.max_log_lines": "最大日志行数",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "精修后的地平线可低于合并地平线基线的最大像素数（0 = 停用）",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "精修可将地平线压到参考地平线预测的线以下的最大像素数（0 = 自动）",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "এই স্তরে ফাইলে লগ করুন:",
   "ui.max_keypoints": "সর্বোচ্চ কিপয়েন্ট:",
   "ui.max_log_lines": "সর্বোচ্চ লগ লাইন",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "পরিমার্জিত দিগন্ত মিলিত দিগন্তের ভিত্তিরেখার নিচে সর্বাধিক কত পিক্সেল যেতে পারে (০ = নিষ্ক্রিয়)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "আপনার রেফারেন্স দিগন্ত যে রেখার পূর্বাভাস দেয়, পরিমার্জন দিগন্তকে তার নিচে সর্বাধিক কত পিক্সেল নামাতে পারে (০ = স্বয়ংক্রিয়)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",

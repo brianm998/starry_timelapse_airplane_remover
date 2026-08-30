@@ -872,11 +872,12 @@ final public actor FrameHorizonProcessor {
         // position dominates and pixels snap toward the expected horizon.
         let positionFullRadius = Double(max(1, searchRadius / 2))
 
-        // Derived from the search radius rather than configured separately: it is a bound on
-        // the same band, and a sequence that widens the band wants the bound to widen with
-        // it.  A tenth of the shipped 100px radius is the value the held-out measurement in
-        // this method's doc comment settled on.
-        let downwardLimit = max(1, maxDownwardExtension ?? (searchRadius / 10))
+        // The horizon painter's `↓Npx` stepper when the user has set one, and otherwise a
+        // tenth of the search radius — a bound on the same band, so a sequence that widens
+        // the band widens the bound with it.  See the held-out measurement in this method's
+        // doc comment for where the tenth comes from.
+        let downwardLimit = HorizonTunedParameters.effectiveMaxDownwardExtension(
+          configured: maxDownwardExtension ?? 0, searchRadius: searchRadius)
         var clampedColumns = 0
 
         let halfSize = neighborhoodSize / 2
@@ -1163,12 +1164,20 @@ final public actor FrameHorizonProcessor {
             return mask
         }
 
+        // The horizon painter writes this into `horizonReference/tuned_parameters.json`, one
+        // file for the sequence.  Read per frame rather than cached: it is under a kilobyte
+        // and this is gating a full-resolution decode either way, and a stale copy would mean
+        // the stepper moved and nothing changed — which is what it did before it was wired to
+        // anything at all.
+        let tuned = loadTunedHorizonParameters()
+
         return referenceStatsBrightnessRefinedHorizonMask(
           detected: mask,
           original: original,
           stats: stats,
           expectedYPerColumn: expectedY,
           searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius,
+          maxDownwardExtension: tuned.maxDownwardExtension,
           spikeRemovalEnabled: config.horizonSpikeRemovalEnabled,
           spikeMaxWidth: config.horizonSpikeMaxWidth,
           spikeMaxDeviationFraction: config.horizonSpikeMaxDeviationFraction,

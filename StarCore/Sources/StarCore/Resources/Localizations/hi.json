@@ -432,7 +432,7 @@
   "ui.log_to_file_at_level_2": "इस स्तर पर फ़ाइल में लॉग करें:",
   "ui.max_keypoints": "अधिकतम कीपॉइंट:",
   "ui.max_log_lines": "अधिकतम लॉग पंक्तियाँ",
-  "ui.max_pixels_the_refined_horizon_may_go_below": "परिष्कृत क्षितिज संयुक्त क्षितिज की आधार रेखा से अधिकतम कितने पिक्सेल नीचे जा सकता है (0 = अक्षम)",
+  "ui.max_pixels_the_refined_horizon_may_go_below": "आपके संदर्भ क्षितिजों द्वारा अनुमानित रेखा से परिष्करण क्षितिज को अधिकतम कितने पिक्सेल नीचे धकेल सकता है (0 = स्वचालित)",
   "ui.maxbrightness": "MaxBrightness",
   "ui.maxbunchsize": "MaxBunchSize",
   "ui.maxhoughtransformcount": "MaxHoughTransformCount",
