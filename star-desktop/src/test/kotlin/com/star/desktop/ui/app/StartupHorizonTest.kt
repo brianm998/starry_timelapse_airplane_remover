@@ -39,6 +39,44 @@ class StartupHorizonTest {
         assertEquals(emptyList(), evenlySpacedFrameIndices(count = 3, total = 0))
     }
 
+    // resuming a selection the last session did not finish
+    // (macOS `ImageSequenceViewModel.startupHorizonResumeFrame`)
+
+    /** The case it exists for: stopped after painting two of five. */
+    @Test fun anUnfinishedSelectionResumesOnTheFrameItStoppedAt() {
+        assertEquals(50, startupHorizonResumeFrame(listOf(0, 25, 50, 75, 99), 2, frameCount = 100))
+    }
+
+    @Test fun theFirstAndLastFramesOfASelectionBothResume() {
+        assertEquals(0, startupHorizonResumeFrame(listOf(0, 25, 50, 75, 99), 0, frameCount = 100))
+        assertEquals(99, startupHorizonResumeFrame(listOf(0, 25, 50, 75, 99), 4, frameCount = 100))
+    }
+
+    /** The static flow records one frame, so that it resumes by the same route as a moving one. */
+    @Test fun aSingleFrameSelectionResumes() {
+        assertEquals(42, startupHorizonResumeFrame(listOf(42), 0, frameCount = 100))
+    }
+
+    /** Never asked for, or asked for and finished: both leave the list empty. */
+    @Test fun noRecordedSelectionDoesNotResume() {
+        assertEquals(null, startupHorizonResumeFrame(emptyList(), 0, frameCount = 100))
+        assertEquals(null, startupHorizonResumeFrame(emptyList(), 3, frameCount = 100))
+    }
+
+    /** A finished selection clears the list, so a position past the end is an inconsistent record. */
+    @Test fun aPositionOutsideTheListDoesNotResume() {
+        assertEquals(null, startupHorizonResumeFrame(listOf(0, 50, 99), 3, frameCount = 100))
+        assertEquals(null, startupHorizonResumeFrame(listOf(0, 50, 99), -1, frameCount = 100))
+    }
+
+    /** config.json outlives the frames it was written for: hand edited, or re-extracted shorter. */
+    @Test fun aFrameTheSequenceDoesNotHaveDoesNotResume() {
+        assertEquals(null, startupHorizonResumeFrame(listOf(0, 25, 900), 2, frameCount = 100))
+        assertEquals(null, startupHorizonResumeFrame(listOf(0, 25, 100), 2, frameCount = 100))
+        assertEquals(null, startupHorizonResumeFrame(listOf(-1), 0, frameCount = 100))
+        assertEquals(null, startupHorizonResumeFrame(listOf(0), 0, frameCount = 0))
+    }
+
     // the suggested count (macOS `suggestedMovingHorizonCount`)
 
     @Test fun suggestionScalesWithSequenceLength() {

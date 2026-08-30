@@ -107,12 +107,20 @@ class SequenceViewModel(
     private val _startupHorizonPosition = MutableStateFlow(0)
     val startupHorizonPosition: StateFlow<Int> = _startupHorizonPosition.asStateFlow()
 
-    /** Enter startup horizon-painting on [indices] (empty = the single current frame). */
-    fun beginStartupHorizon(indices: List<Int>) {
+    /**
+     * Enter startup horizon-painting on [indices], at [position] within them.
+     *
+     * [position] is 0 for a selection that is only just starting, and whatever the config
+     * recorded for one a previous session left unfinished — see `AppViewModel.onOpened`.
+     * The static flow passes a single frame rather than an empty list, so that it records
+     * and resumes by the same route; everything that tells the two flows apart asks for
+     * `size > 1`, and `startupHorizonHasMore` is false either way.
+     */
+    fun beginStartupHorizon(indices: List<Int>, position: Int = 0) {
         _startupHorizonIndices.value = indices
-        _startupHorizonPosition.value = 0
+        _startupHorizonPosition.value = position
         _horizonPainterStartup.value = true
-        indices.firstOrNull()?.let { setCurrentIndex(it) }
+        indices.getOrNull(position)?.let { setCurrentIndex(it) }
         _mode.value = InteractionMode.EDIT
         _horizonPaintMode.value = true
     }

@@ -189,6 +189,20 @@ message Config {
   // scratch files instead of holding them all. Output is identical either way.
   // 0 = always keep everything resident.
   optional int32  merge_streaming_threshold_mb                         = 49;
+  // Recorded state rather than a setting, and so not in the expert dialog: the frames the
+  // user chose to hand paint reference horizons on during the startup prompts, and how far
+  // through that list they got. An empty list means there is nothing unfinished. A client
+  // re-opening a session with one left over puts the painter back on
+  // startup_horizon_frame_indices[startup_horizon_frame_position] rather than going on to
+  // process, which would run the frames the user never reached with the automatic horizon
+  // detection they had already declined.
+  //
+  // The two are applied together and gated on the *position* being present. A repeated
+  // field cannot be `optional`, so an empty list is indistinguishable from an unset one —
+  // without the gate, any client that sent a config back without knowing about these would
+  // wipe the record.
+  repeated int32  startup_horizon_frame_indices                        = 51;
+  optional int32  startup_horizon_frame_position                       = 52;
 }
 
 enum CleanMethod {

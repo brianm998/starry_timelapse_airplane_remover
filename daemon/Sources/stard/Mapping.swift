@@ -243,6 +243,10 @@ enum Mapping {
         out.alignmentKeypointDetectionDivisor = c.alignmentKeypointDetectionDivisor
         out.maxConcurrentKeypointOps = Int32(c.maxConcurrentKeypointOps)
         out.mergeStreamingThresholdMb = Int32(c.mergeStreamingThresholdMB)
+        // Not an expert setting — recorded state.  Always sent, so a client that re-opens a
+        // session can see it left a hand-painted horizon selection unfinished.
+        out.startupHorizonFrameIndices = c.startupHorizonFrameIndices.map { Int32($0) }
+        out.startupHorizonFramePosition = Int32(c.startupHorizonFramePosition)
         return out
     }
 
@@ -295,6 +299,15 @@ enum Mapping {
         if p.hasHorizonReservationFloorMb { c.horizonReservationFloorMB = Int(p.horizonReservationFloorMb) }
         if p.hasMaxConcurrentKeypointOps { c.maxConcurrentKeypointOps = Int(p.maxConcurrentKeypointOps) }
         if p.hasMergeStreamingThresholdMb { c.mergeStreamingThresholdMB = Int(p.mergeStreamingThresholdMb) }
+        // The record of an unfinished hand-painted horizon selection, applied as a pair and
+        // gated on the position rather than on the list.  A repeated field cannot be
+        // `optional`, so an empty list reads the same as an absent one — without this gate
+        // a client that knows nothing about these would clear the record on every config
+        // update it sent, which is exactly the loss they exist to prevent.
+        if p.hasStartupHorizonFramePosition {
+            c.startupHorizonFrameIndices = p.startupHorizonFrameIndices.map { Int($0) }
+            c.startupHorizonFramePosition = Int(p.startupHorizonFramePosition)
+        }
     }
 
     // Build a VideoInfo from Swift Config's video fields (for use in Export.Video fallback).
