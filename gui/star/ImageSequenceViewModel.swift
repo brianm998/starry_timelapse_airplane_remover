@@ -388,6 +388,18 @@ public final class ImageSequenceViewModel {
     /// Persisted here so it survives the painter being closed and reopened.
     var horizonPainterIsErasing: Bool = false
 
+    /// Mirror `horizonPainterStartupFrameIndices` / `...FramePosition` into the config, so a
+    /// selection the user is part way through survives the session.
+    ///
+    /// Written on every step rather than once at the end, because the session this protects
+    /// against does not get to run any cleanup: it was killed, or quit, mid-paint.
+    private func recordStartupHorizonProgress() {
+        var cfg = config.config()
+        cfg.startupHorizonFrameIndices = horizonPainterStartupFrameIndices
+        cfg.startupHorizonFramePosition = horizonPainterStartupFramePosition
+        config.update(cfg)
+    }
+
     /// Called by the horizon painter toolbar when the user confirms a horizon
     /// during the startup flow — marks the reference saved and advances to the
     /// removal step.  For static sequences also sets the hasStaticReferenceHorizon flag.
@@ -408,6 +420,7 @@ public final class ImageSequenceViewModel {
         horizonPainterMode = .normal
         horizonPainterStartupFrameIndices = []
         horizonPainterStartupFramePosition = 0
+        recordStartupHorizonProgress()   // now empty: nothing left to resume
         startupState = .removal
         isShowingHorizonPainter = false
         shouldShowInitialInstructions = true
@@ -419,6 +432,7 @@ public final class ImageSequenceViewModel {
         horizonPainterMode = .normal
         horizonPainterStartupFrameIndices = []
         horizonPainterStartupFramePosition = 0
+        recordStartupHorizonProgress()   // the user backed out; there is nothing to resume
         startupState = .moving
         isShowingHorizonPainter = false
         shouldShowInitialInstructions = true
@@ -430,16 +444,89 @@ public final class ImageSequenceViewModel {
         let indices = Self.calculateFrameIndices(count: count, total: imageSequenceSize)
         horizonPainterStartupFrameIndices = indices
         horizonPainterStartupFramePosition = 0
+        recordStartupHorizonProgress()
         if let first = indices.first { currentIndex = first }
         horizonPainterMode = .startup
         shouldShowInitialInstructions = false
         isShowingHorizonPainter = true
     }
 
+    /// Begins the static single-horizon startup flow — `SelectHorizonView`'s "Yes".
+    ///
+    /// The one frame goes through the same list as the moving flow's several, so that an
+    /// interrupted session resumes by the same route.  A one element list changes nothing
+    /// downstream: everything that distinguishes the two flows asks for `count > 1`, and the
+    /// painter's "is there another frame after this one" test is false either way.
+    func startStaticHorizonStartupFlow() {
+        horizonPainterStartupFrameIndices = [currentIndex]
+        horizonPainterStartupFramePosition = 0
+        recordStartupHorizonProgress()
+        horizonPainterMode = .startup
+        shouldShowInitialInstructions = false
+        isShowingHorizonPainter = true
+    }
+
+    /// Re-open a hand-painted horizon selection the last session did not finish, putting the
+    /// painter back on the frame it stopped at.
+    ///
+    /// Returns whether it took over.  When it did, the caller must not raise the re-open
+    /// progress panel or start processing: the horizons the user asked to define are still
+    /// missing, and running without them silently substitutes the automatic detection they
+    /// had already turned down.
+    ///
+    /// The painted horizons themselves are already on disk in `horizonReference/`, so
+    /// nothing is re-painted — only the frames after `startupHorizonFramePosition` are
+    /// still to do.
+    func resumeStartupHorizonSelectionIfUnfinished() -> Bool {
+        let cfg = config.config()
+        let indices = cfg.startupHorizonFrameIndices
+        let position = cfg.startupHorizonFramePosition
+        guard let frameIndex = Self.startupHorizonResumeFrame(indices: indices,
+                                                              position: position,
+                                                              frameCount: frames.count)
+        else { return false }
+
+        Log.i("resuming hand painted horizon selection at \(position + 1) of \(indices.count)")
+
+        horizonPainterStartupFrameIndices = indices
+        horizonPainterStartupFramePosition = position
+        currentIndex = frameIndex
+        horizonPainterMode = .startup
+        shouldShowInitialInstructions = false
+        // The painter is an overlay on `FrameEditView`, which only exists in edit mode — a
+        // re-opened sequence starts in `.scrub`, where setting the flag below would show
+        // nothing at all.  Same trap as the sheets; see `enterEditMode`.
+        interactionMode = .edit
+        isShowingHorizonPainter = true
+        return true
+    }
+
+    /// The frame a recorded horizon selection should resume on, or nil when there is
+    /// nothing to resume.
+    ///
+    /// Nil for a selection that was never started (empty list) or that ran to the end (the
+    /// list is cleared then, so a position past it means the record is inconsistent) — and
+    /// for a frame the sequence does not have.  That last one is not paranoia for its own
+    /// sake: config.json can be hand edited, and a sequence can be re-extracted at a
+    /// different length while its config survives, either of which would trap on `frames[]`.
+    static func startupHorizonResumeFrame(indices: [Int],
+                                          position: Int,
+                                          frameCount: Int) -> Int?
+    {
+        guard position >= 0, position < indices.count else { return nil }
+        let frameIndex = indices[position]
+        guard frameIndex >= 0, frameIndex < frameCount else {
+            Log.w("startup horizon selection names frame \(frameIndex) of \(frameCount); not resuming")
+            return nil
+        }
+        return frameIndex
+    }
+
     /// Advances to the next frame in the startup horizon flow.  Called after the
     /// user hits Continue on a frame that still has successors.
     func advanceToNextStartupHorizonFrame() {
         horizonPainterStartupFramePosition += 1
+        recordStartupHorizonProgress()
         guard horizonPainterStartupFramePosition < horizonPainterStartupFrameIndices.count else { return }
         currentIndex = horizonPainterStartupFrameIndices[horizonPainterStartupFramePosition]
         // FrameEditView watches currentIndex while painter is open in startup mode

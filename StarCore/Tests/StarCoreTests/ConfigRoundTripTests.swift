@@ -142,6 +142,21 @@ final class ConfigRoundTripTests: XCTestCase {
                        + "<outputPath>/<basename>, and the resume renders a second output dir")
     }
 
+    /// The same failure shape, for the record of an unfinished hand-painted horizon
+    /// selection: lose it on resume and the sequence re-opens straight into processing, with
+    /// the frames the user never reached falling back to automatic horizon detection.
+    func testAnUnfinishedHorizonSelectionSurvivesResume() throws {
+        var saved = Config()
+        saved.startupHorizonFrameIndices = [0, 25, 50, 75, 99]
+        saved.startupHorizonFramePosition = 2
+
+        let decoded = try JSONDecoder().decode(Config.self,
+                                               from: try JSONEncoder().encode(saved))
+
+        XCTAssertEqual(decoded.startupHorizonFrameIndices, [0, 25, 50, 75, 99])
+        XCTAssertEqual(decoded.startupHorizonFramePosition, 2)
+    }
+
     // MARK: - building a config in which nothing is left at its default
 
     /// Values for the properties the generic perturbation cannot make up for itself: those
@@ -168,7 +183,8 @@ final class ConfigRoundTripTests: XCTestCase {
         try put("muxer", Self.other(than: Config().muxer))
         try put("frameRate", Self.other(than: Config().frameRate))
 
-        // dictionaries that default to empty: there is nothing in them to perturb
+        // collections that default to empty: there is nothing in them to perturb
+        try put("startupHorizonFrameIndices", [3, 9, 17])
         try put("pixelReplacementOverrides", [7: CleanMethod.selective])
         try put("staticNeighborFrameOverrides", [7: 21])
         try put("alignedNeighborFrameOverrides", [7: 13])

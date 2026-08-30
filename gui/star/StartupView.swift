@@ -312,9 +312,7 @@ struct SelectHorizonView: View {
                 Space(width: 20)
 
                 Button {
-                    viewModel.horizonPainterMode = .startup
-                    viewModel.shouldShowInitialInstructions = false
-                    viewModel.isShowingHorizonPainter = true
+                    viewModel.startStaticHorizonStartupFlow()
                 } label: {
                     Text(localized("ui.yes"))
                       .font(.title)

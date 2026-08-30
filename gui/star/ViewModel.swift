@@ -247,7 +247,15 @@ public final class ViewModel {
             guard let self else { return }
             do {
                 try await self.startup(withConfigFile: path)
-                await MainActor.run { self.imageSequence?.restartProcessing() }
+                await MainActor.run {
+                    guard let sequence = self.imageSequence else { return }
+                    // A run stopped part way through hand painting horizons resumes there
+                    // instead: the open above has already put the painter back up, and
+                    // processing now would run without the horizons the user asked to
+                    // define.  They start it themselves once the selection is finished.
+                    guard !sequence.isShowingHorizonPainter else { return }
+                    sequence.restartProcessing()
+                }
             } catch {
                 Log.e("cannot restart \(path): \(error)")
                 await MainActor.run { self.report(error: "\(error)") }
@@ -370,10 +378,12 @@ public final class ViewModel {
     /// Recent, or a dropped `.json`.
     ///
     /// This and `startup(withConfig:)` are the two ways a sequence is *re*-opened, and both
-    /// raise the progress panel: the config already carries the answers the startup
+    /// go through `raiseReopenStep`: the config already carries the answers the startup
     /// questionnaire asks for, so what there is left to tell the user is how far the last
-    /// run got and what to do about it.  `startup(withNewImageSequence:)` deliberately does
-    /// not — it builds a fresh config, so it has those questions to ask instead.
+    /// run got and what to do about it — unless it also carries a hand-painted horizon
+    /// selection that was never finished, which comes first.
+    /// `startup(withNewImageSequence:)` deliberately does neither — it builds a fresh
+    /// config, so it has the questionnaire's questions to ask instead.
     func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = jsonConfigFilename
@@ -401,14 +411,27 @@ public final class ViewModel {
         }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.applyUserPreferences()
-        imageSequenceViewModel.sequenceProgressModalShowing = true
+        raiseReopenStep(for: imageSequenceViewModel)
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         self.userPreferences.justOpened(filename: jsonConfigFilename)
     }
 
+    /// What a re-opened sequence shows first.
+    ///
+    /// Normally the progress panel — how far the last run got, and the one thing left to do
+    /// about it.  But a sequence whose hand-painted horizon selection was never finished has
+    /// something to do *before* that: the frames the user asked to paint are still waiting,
+    /// and a run started now would quietly fall back to the automatic horizon detection they
+    /// declined.  So that picks up where it stopped instead, and the progress panel waits
+    /// until the selection is done and the startup flow reaches its own removal step.
+    private func raiseReopenStep(for sequence: ImageSequenceViewModel) {
+        if sequence.resumeStartupHorizonSelectionIfUnfinished() { return }
+        sequence.sequenceProgressModalShowing = true
+    }
+
     /// Open a sequence from a config file that has already been parsed.  See
-    /// `startup(withConfigFile:)` for why this raises the progress panel too.
+    /// `startup(withConfigFile:)` for why this takes the same re-open step too.
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = config.config().imageSequenceDirname
@@ -432,7 +455,7 @@ public final class ViewModel {
         }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.applyUserPreferences()
-        imageSequenceViewModel.sequenceProgressModalShowing = true
+        raiseReopenStep(for: imageSequenceViewModel)
         loadingImageSequenceFilename = nil
         isLoadingImageSequence = false
         // just opened handled in InitialView where we know the full path
