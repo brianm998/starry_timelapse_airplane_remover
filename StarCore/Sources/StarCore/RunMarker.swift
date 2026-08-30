@@ -170,8 +170,9 @@ public struct RunMarker: Codable, Sendable, Equatable {
         // entirely the wrong remedy — and `outputWriteFailed` in particular means the run
         // was reported properly at the time, so there is nothing here to re-diagnose.
         //
-        // `artifactsInvalidated` is neither: it reports a settings change, says nothing
-        // about the machine, and is routine rather than a symptom. It can easily be the
+        // `artifactsInvalidated` is neither: it reports cached work being rebuilt — after
+        // a settings change, or after an upgrade that changed how it is built — says
+        // nothing about the machine, and is routine rather than a symptom. It can easily be the
         // last warning a run issued — it is posted early — so treating it as evidence of
         // anything would misdiagnose every run that happened to rebuild a stage.
         //

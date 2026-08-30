@@ -240,9 +240,13 @@ public final actor FrameGraphBuilder {
             return
         }
 
-        // Which settings, not just which stages: a run about to discard alignment should
-        // say what it is doing that for.  Logged before the opt-out below, because the
-        // list of what changed is exactly as interesting when nothing is being deleted.
+        // Which inputs, not just which stages: a run about to discard alignment should
+        // say what it is doing that for.  Not always a setting the user touched —
+        // `detectionAlgorithmVersion` moving means this build detects keypoints
+        // differently than the one that filled this temp directory.
+        //
+        // Logged before the opt-out below, because the list of what changed is exactly as
+        // interesting when nothing is being deleted.
         let differences = current.differences(from: stored)
         for stage in ArtifactStage.allCases {
             guard let changes = differences[stage] else { continue }
@@ -255,7 +259,7 @@ public final actor FrameGraphBuilder {
               ? changes.prefix(shown).joined(separator: ", ")
                   + ", and \(changes.count - shown) more"
               : changes.joined(separator: ", ")
-            Log.i("\(stage.logDescription) settings changed: \(described)")
+            Log.i("\(stage.logDescription) inputs changed: \(described)")
         }
         let described = ArtifactStage.allCases
           .filter { stale.contains($0) }
@@ -271,7 +275,7 @@ public final actor FrameGraphBuilder {
             // than a question asked again at the start of every subsequent run.  What that
             // costs is that the mixed sequence is now on record as consistent; that is the
             // choice the user made, and `reprocessOnSettingsChange` is how they unmake it.
-            Log.i("settings changed for \(described), but reprocessOnSettingsChange is " +
+            Log.i("inputs changed for \(described), but reprocessOnSettingsChange is " +
                   "off — keeping what is already written and processing the rest with " +
                   "the new settings")
             persistArtifactInputs(current,
@@ -282,7 +286,7 @@ public final actor FrameGraphBuilder {
         }
 
         Log.i("rebuilding \(described) — stages downstream of a change are stale too, " +
-              "since their inputs came from the old settings")
+              "since their inputs were built under the old ones")
         for stage in ArtifactStage.allCases where stale.contains(stage) {
             Log.d("  \(stage.rawValue): \(stage.artifactDescription)")
         }
