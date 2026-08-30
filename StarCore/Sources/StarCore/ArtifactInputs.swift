@@ -23,6 +23,9 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
     case horizon
     case mergedHorizon
     case keypoints
+    case alignment
+    case outliers
+    case output
 
     /// This stage plus everything that consumes it.
     ///
@@ -43,6 +46,35 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
         case .horizon:       return "horizon masks"
         case .mergedHorizon: return "merged horizon masks"
         case .keypoints:     return "keypoint sets"
+        case .alignment:     return "alignment results"
+        case .outliers:      return "outlier groups"
+        case .output:        return "output images"
+        }
+    }
+
+    /// What this stage leaves on disk — the other half of the setting-to-file mapping,
+    /// whose first half is `ArtifactInputs.current(from:)`.
+    ///
+    /// English, and for logs, like `logDescription`.  What actually deletes these is
+    /// `FrameGraphBuilder.invalidateStaleArtifacts`, and this is the list that switch has
+    /// to keep matching: a stage that records a setting but deletes nothing when it moves
+    /// is exactly the bug `ArtifactInputs` exists to fix, one level further down.
+    public var artifactDescription: String {
+        switch self {
+        case .horizon:
+            return "<temp>/*-horizon-*.tif (full size and preview)"
+        case .mergedHorizon:
+            return "<temp>/*-mergedHorizon-*.tif (full size and preview)"
+        case .keypoints:
+            return "<temp>/keypoints/*.yml, for both star and earth alignment"
+        case .alignment:
+            return "homography.db rows, the aligned-neighbour count file, and the " +
+                   "starAligned / earthAligned / subtraction images"
+        case .outliers:
+            return "<outliers>/<frame>/, the classified outlier group binary"
+        case .output:
+            return "the written output frame, and the autoProcessed / " +
+                   "autoSelectiveProcessed / selectiveProcessed previews beside it"
         }
     }
 }
@@ -94,6 +126,9 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             ArtifactStage.horizon.rawValue:       horizonInputs(config),
             ArtifactStage.mergedHorizon.rawValue: mergedHorizonInputs(config),
             ArtifactStage.keypoints.rawValue:     keypointInputs(config),
+            ArtifactStage.alignment.rawValue:     alignmentInputs(config),
+            ArtifactStage.outliers.rawValue:      outlierInputs(config),
+            ArtifactStage.output.rawValue:        outputInputs(config),
         ])
     }
 
@@ -195,6 +230,86 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             // Decides whether detection is masked with a horizon at all.
             "horizonDetectionEnabled":         str(config.horizonDetectionEnabled),
         ]
+    }
+
+    /// What `FrameAlignmentProcessor`, `HomographyOp` and `AlignmentValidationOp` read.
+    ///
+    /// The stored homography is fitted to the keypoints and to a particular set of
+    /// neighbours, so which neighbours and how many is an input to it, as is
+    /// `pixelThreshold` — the outlier threshold the aligned neighbours are median merged
+    /// under, which decides the pixels the merged neighbour ends up with.
+    ///
+    /// `alignmentNeighborDilateSize` and `alignmentNeighborThresholdValue` are absent on
+    /// purpose: they are `Config` fields with a `FocusedField` case each and no reader
+    /// anywhere in the pipeline.  Recording a setting nothing consumes would throw away
+    /// alignment when it moved, for no change in what came out.
+    private static func alignmentInputs(_ config: Config) -> [String: String] {
+        var inputs: [String: String] = [
+            "tripodHeadWasMoving":           str(config.tripodHeadWasMoving),
+            "allowEarthAlignment":           str(config.allowEarthAlignment),
+            "homographySmoothingEpsilon":    str(config.homographySmoothingEpsilon),
+            "pixelThreshold":                str(config.pixelThreshold),
+            "numberAlignedNeighborFrames":   str(config.numberAlignedNeighborFrames),
+            "numberStaticNeighborFrames":    str(config.numberStaticNeighborFrames),
+            "alignedNeighborFrameOverrides": str(config.alignedNeighborFrameOverrides),
+            "staticNeighborFrameOverrides":  str(config.staticNeighborFrameOverrides),
+            // Whether the merge is masked with a horizon, and so whether the sky and the
+            // ground are aligned separately at all.
+            "horizonDetectionEnabled":       str(config.horizonDetectionEnabled),
+        ]
+        // A fixed camera has no ground to align: the earth branch median merges the
+        // static neighbours instead, and reads none of the earth settings.
+        if !config.tripodHeadWasMoving {
+            inputs.removeValue(forKey: "allowEarthAlignment")
+        }
+        return inputs
+    }
+
+    /// What outlier detection reads.
+    ///
+    /// `detectionType` picks the blob processor — `FrameOutlierProcessor` reads it from
+    /// `constants` rather than from here, but it is `Config` that seeds those (see
+    /// `Session.swift` and the gui's `applySettings`), and it is `Config` that persists
+    /// it across runs.
+    ///
+    /// Recorded only for a clean method that has outliers at all: for `.automatic(false)`
+    /// no outlier group is ever written, so nothing about their detection can be stale.
+    private static func outlierInputs(_ config: Config) -> [String: String] {
+        var inputs: [String: String] = [
+            "cleanMethod": str(config.cleanMethod),
+        ]
+        guard config.cleanMethod.usesOutliers else { return inputs }
+
+        inputs["detectionType"] = config.detectionType.rawValue
+        inputs["ignoreLowerPixels"] = str(config.ignoreLowerPixels)
+        // The radius of neighbouring frames each group is classified against.
+        inputs["numberFinalProcessingNeighborsNeeded"] =
+          str(config.numberFinalProcessingNeighborsNeeded)
+        return inputs
+    }
+
+    /// What `FrameAirplaneRemover` reads while writing the finished frame.
+    ///
+    /// The last stage, so everything upstream cascades into it and only what it reads
+    /// *itself* belongs here: how the removed pixels are painted, which layer the frame is
+    /// composited from, and the per-frame clean method overrides the user sets from the
+    /// right panel.
+    private static func outputInputs(_ config: Config) -> [String: String] {
+        var inputs: [String: String] = [
+            "cleanMethod":                          str(config.cleanMethod),
+            "pixelReplacementOverrides":            str(config.pixelReplacementOverrides),
+            "outlierGroupPaintBorderPixels":        str(config.outlierGroupPaintBorderPixels),
+            "outlierGroupPaintBorderInnerWallPixels":
+              str(config.outlierGroupPaintBorderInnerWallPixels),
+            // Decides whether the sky is composited back over the ground at all.
+            "horizonDetectionEnabled":              str(config.horizonDetectionEnabled),
+        ]
+        // Which layer the sky is composited over — but only where there are two layers.
+        // A fixed camera never aligns the ground, whatever this says.
+        if config.tripodHeadWasMoving {
+            inputs["allowEarthAlignment"] = str(config.allowEarthAlignment)
+        }
+        return inputs
     }
 
     // MARK: - Comparison
@@ -319,5 +434,21 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     /// Sorted by key so an unordered dictionary cannot record two ways.
     private static func str(_ values: [Int: Int]) -> String {
         "[" + values.keys.sorted().map { "\($0):\(values[$0]!)" }.joined(separator: ",") + "]"
+    }
+
+    /// Spelled here rather than taken from `String(describing:)`, which is a debug
+    /// description and free to change with the compiler — this string is compared against
+    /// one written by an earlier version of star.
+    private static func str(_ value: CleanMethod) -> String {
+        switch value {
+        case .automatic(let selective): return "automatic(\(str(selective)))"
+        case .selective:                return "selective"
+        }
+    }
+
+    private static func str(_ values: [Int: CleanMethod]) -> String {
+        "[" + values.keys.sorted()
+                .map { "\($0):\(str(values[$0]!))" }
+                .joined(separator: ",") + "]"
     }
 }

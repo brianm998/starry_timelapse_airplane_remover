@@ -604,7 +604,11 @@ final public actor FrameOutlierProcessor {
 
     
     public func deleteOutliers() async throws {
-        try await outlierGroups?.removeOutliersBinary(from: self.outliersDirname)
+        // Through the type rather than through `outlierGroups?`: whether this frame's
+        // groups happen to be loaded in memory has nothing to do with whether there is a
+        // file to delete, and going through the optional meant a frame that had never been
+        // looked at kept its stale binary — which the next run loaded.
+        try OutlierGroups.removeOutliersBinary(from: await self.outliersDirname)
         outlierGroups = nil
     }
     

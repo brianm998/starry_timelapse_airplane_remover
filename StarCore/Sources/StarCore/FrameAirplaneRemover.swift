@@ -465,22 +465,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
           
-    /// Deletes star-alignment-related cached images and keypoint files for this
-    /// frame if they have already been computed.  Returns `true` when something
-    /// was invalidated so the caller knows whether to trigger reprocessing.
-    /// Only alignment files are removed; horizon masks are left intact.
-    public func invalidateStarAlignmentIfExists() async throws -> Bool {
-        /*
-        guard imageAccessor.imageExists(
-          frameIndex: frameIndex,
-          ofType: .starAligned,
-          atSize: .original
-          ) else { return false }
-         */
+    /// Deletes this frame's alignment products — the stored homography, the record of how
+    /// many neighbours were aligned, and the images derived from them — leaving the
+    /// horizon masks and the finished output alone.
+    ///
+    /// Split from `invalidateStarAlignmentIfExists`, which is this plus the merge output.
+    /// The two were one call because a stale alignment does make the output stale, and
+    /// that is still true — `ArtifactStage.alignment.andDownstream` includes `.output`.
+    /// What is not true is the converse: a setting that changes only how the removed
+    /// pixels are painted should redo the merge and keep the alignment, which is the
+    /// expensive half.
+    public func invalidateAlignmentIfExists() async throws -> Bool {
         imageAccessor.deleteImages(
           frameIndex: frameIndex,
-          ofTypes: [.starAligned, .earthAligned, .subtraction,
-                    .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final],
+          ofTypes: [.starAligned, .earthAligned, .subtraction],
           atSizes: [.original, .preview]
         )
         try await alignmentProcessor.removeNumberOfAlignedImagesForThisFrameFile()
@@ -490,6 +488,34 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         await alignmentProcessor.clearHomographyCache()
         self.state = .unprocessed
         return true
+    }
+
+    /// Deletes star-alignment-related cached images and keypoint files for this
+    /// frame if they have already been computed.  Returns `true` when something
+    /// was invalidated so the caller knows whether to trigger reprocessing.
+    /// Only alignment files are removed; horizon masks are left intact.
+    public func invalidateStarAlignmentIfExists() async throws -> Bool {
+        // Output first: `deleteMergeOutput` moves a `.complete` frame back one step, and
+        // the alignment call below then takes it all the way to `.unprocessed`, which is
+        // where a frame with neither is.
+        deleteMergeOutput()
+        return try await invalidateAlignmentIfExists()
+    }
+
+    /// Put this frame's state back to what a freshly opened sequence would give it, by the
+    /// same rule `init` uses.
+    ///
+    /// For after artifacts have been deleted underneath it.  Through the same two
+    /// predicates rather than a second rule spelled out here, so that a frame's state
+    /// after an invalidation and its state on the next open cannot disagree.
+    public func resetStateFromDisk(config: Config) {
+        if outputFileExistsOnDisk() {
+            self.set(state: .complete)
+        } else if outliersExistOnDisk(config: config) {
+            self.set(state: .userModified)
+        } else {
+            self.set(state: .unprocessed)
+        }
     }
     
 

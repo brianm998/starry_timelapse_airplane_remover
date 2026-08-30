@@ -198,12 +198,24 @@ public final actor FrameGraphBuilder {
     /// sequence's artifacts when asked to process a hundred frames of it would throw away
     /// work this run has no intention of redoing.
     ///
-    /// The alignment products go too, and they are the reason this warns the user rather
-    /// than only logging: a stored homography was fitted to the old keypoints and
-    /// `homography.db` is keyed by frame index alone, so there is no version of it to
-    /// keep. `invalidateStarAlignmentIfExists` drops it along with the images derived from
-    /// it, which includes rendered output the user can see.
-    private func invalidateStaleArtifacts(
+    /// Each stage takes only what it owns — `ArtifactStage.artifactDescription` says what
+    /// that is, and the cascade through `andDownstream` is what carries a change forward.
+    /// The split matters at both ends: a setting read only while the finished frame is
+    /// painted redoes the merge and keeps the alignment, which is the expensive half of a
+    /// run, and a setting read during detection still reaches the written output, which is
+    /// what the user can actually see.
+    ///
+    /// The alignment stage is why this warns the user rather than only logging: a stored
+    /// homography was fitted to the old keypoints and `homography.db` is keyed by frame
+    /// index alone, so there is no version of it to keep.
+    ///
+    /// All of it is skipped when `Config.reprocessOnSettingsChange` is off, which is the
+    /// answer to "some frames were processed with the old settings — redo them?" being no.
+    ///
+    /// Not `private` only so `ArtifactInvalidationTests` can drive it over a
+    /// `FrameHarness`: it deletes real files from real frames, which is not a thing to
+    /// verify by reading.
+    func invalidateStaleArtifacts(
       frames: [FrameAirplaneRemover],
       range: FrameGraphRange,
       framesByIndex: [Int: FrameAirplaneRemover],
@@ -229,7 +241,8 @@ public final actor FrameGraphBuilder {
         }
 
         // Which settings, not just which stages: a run about to discard alignment should
-        // say what it is doing that for.
+        // say what it is doing that for.  Logged before the opt-out below, because the
+        // list of what changed is exactly as interesting when nothing is being deleted.
         let differences = current.differences(from: stored)
         for stage in ArtifactStage.allCases {
             guard let changes = differences[stage] else { continue }
@@ -248,8 +261,31 @@ public final actor FrameGraphBuilder {
           .filter { stale.contains($0) }
           .map { $0.logDescription }
           .joined(separator: ", ")
+
+        guard config.reprocessOnSettingsChange else {
+            // The user was asked and said to keep what is already written.  The frames
+            // still to be processed get the new settings — nothing here is what applies
+            // them — and the ones already done keep the look they were given.
+            //
+            // The record is written all the same, so this is a decision taken once rather
+            // than a question asked again at the start of every subsequent run.  What that
+            // costs is that the mixed sequence is now on record as consistent; that is the
+            // choice the user made, and `reprocessOnSettingsChange` is how they unmake it.
+            Log.i("settings changed for \(described), but reprocessOnSettingsChange is " +
+                  "off — keeping what is already written and processing the rest with " +
+                  "the new settings")
+            persistArtifactInputs(current,
+                                  toTempOutputPath: config.tempOutputPath,
+                                  range: range,
+                                  frames: frames)
+            return
+        }
+
         Log.i("rebuilding \(described) — stages downstream of a change are stale too, " +
               "since their inputs came from the old settings")
+        for stage in ArtifactStage.allCases where stale.contains(stage) {
+            Log.d("  \(stage.rawValue): \(stage.artifactDescription)")
+        }
 
         // Same ranges the reuse survey uses, so a deleted artifact is always one this run
         // goes on to rebuild.
@@ -301,16 +337,30 @@ public final actor FrameGraphBuilder {
             // the file this just deleted for the rest of the process.
             await keypointCache.clear()
             Log.i("deleted \(deleted) stale keypoint file(s) and cleared the keypoint cache")
+        }
 
+        // The three stages below are in dependency order, and the order matters to the
+        // frame state as well as to the reading: `invalidateAlignmentIfExists` leaves a
+        // frame `.unprocessed`, and the two after it then find nothing left to move.  The
+        // state is put back from what is actually on disk at the end, for the frames where
+        // only some of this ran.
+        var touched: Set<Int> = []
+
+        if stale.contains(.alignment) {
             var invalidated = 0
             for frame in frames where range.output.contains(frame.frameIndex) {
-                if (try? await frame.invalidateStarAlignmentIfExists()) == true {
+                if (try? await frame.invalidateAlignmentIfExists()) == true {
                     invalidated += 1
+                    touched.insert(frame.frameIndex)
                 }
             }
             if invalidated > 0 {
                 Log.i("discarded the stored homography and the images derived from it " +
                       "for \(invalidated) frame(s); they will be re-aligned and re-rendered")
+                // A warning rather than only a log line: a stored homography was fitted to
+                // the old keypoints and `homography.db` is keyed by frame index alone, so
+                // there is no version of it to keep — this is the expensive thing being
+                // thrown away, and the user should hear about it.
                 await StarWarnings.shared.post(StarWarning(
                   kind: .artifactsInvalidated,
                   severity: .warning,
@@ -319,6 +369,37 @@ public final actor FrameGraphBuilder {
                   suggestion: localized("warning.artifacts_invalidated.suggestion")
                 ))
             }
+        }
+
+        if stale.contains(.outliers) {
+            var deleted = 0
+            for frame in frames where range.output.contains(frame.frameIndex) {
+                guard frame.outliersExistOnDisk(config: config) else { continue }
+                do {
+                    try await frame.deleteOutliers()
+                    deleted += 1
+                    touched.insert(frame.frameIndex)
+                } catch {
+                    Log.w("could not delete stale outliers for frame " +
+                          "\(frame.frameIndex): \(error)")
+                }
+            }
+            Log.i("deleted \(deleted) stale outlier group set(s)")
+        }
+
+        if stale.contains(.output) {
+            var deleted = 0
+            for frame in frames where range.output.contains(frame.frameIndex) {
+                guard frame.outputFileExistsOnDisk() else { continue }
+                await frame.deleteMergeOutput()
+                deleted += 1
+                touched.insert(frame.frameIndex)
+            }
+            Log.i("deleted \(deleted) stale output image(s)")
+        }
+
+        for frame in frames where touched.contains(frame.frameIndex) {
+            await frame.resetStateFromDisk(config: config)
         }
 
         persistArtifactInputs(current,
@@ -1180,6 +1261,42 @@ public final actor FrameGraphBuilder {
         queue.cancelAllOperations()
         previewQueue.cancelAllOperations()
         Log.i("FrameGraphBuilder: all operations cancelled")
+    }
+
+    /// Cancel everything, and wait until what was already running has stopped.
+    ///
+    /// `cancelAllOperations` only marks: an operation already executing runs on to its
+    /// next cancellation check, or to completion.  A caller about to build a *second*
+    /// graph over the same frames has to wait for that — the new graph starts by deleting
+    /// the artifacts a settings change invalidated, and the old graph's stragglers are
+    /// still writing some of them.
+    ///
+    /// Polled rather than `waitUntilAllOperationsAreFinished`, which blocks its thread;
+    /// this is an actor, and blocking it would stall every other call into it — including
+    /// the ones the operations themselves make on their way out.
+    ///
+    /// The preview queue is cancelled but not waited on: it draws thumbnails, and nothing
+    /// there writes an artifact the next graph would delete.
+    ///
+    /// Returns whether the queue actually drained.  The timeout is a backstop against a
+    /// wedged operation holding the caller forever; a run started anyway is worse than
+    /// waiting, but hanging is worse than both.
+    @discardableResult
+    public func cancelAllOperationsAndWait(
+      timeout: Duration = .seconds(120)
+    ) async -> Bool {
+        cancelAllOperations()
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while queue.operationCount > 0 {
+            guard ContinuousClock.now < deadline else {
+                Log.w("FrameGraphBuilder: \(queue.operationCount) operation(s) still " +
+                      "running \(timeout) after being cancelled; going ahead anyway")
+                return false
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        Log.i("FrameGraphBuilder: the operation queue has drained")
+        return true
     }
 
     public func debugPrint() {
