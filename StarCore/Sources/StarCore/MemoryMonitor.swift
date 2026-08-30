@@ -328,9 +328,10 @@ public actor MemoryMonitor {
         // something else is holding the memory. Without this the user sees an unexplained
         // slowdown — the run simply gets slower, with no warning until the machine drops
         // below the floor, which it may never do. Reusing `lowSystemMemory` rather than
-        // adding a kind because its two sentences already say exactly the right thing, and
-        // `StarWarnings` dedups by kind so a throttled run posts it once rather than per
-        // waiter.
+        // adding a kind because its two sentences already say exactly the right thing —
+        // memory is tight, so this reservation waits while everything already running
+        // carries on — and `StarWarnings` dedups by kind so a throttled run posts it once
+        // rather than per waiter.
         if reservedBytes + bytes > admissionBudget, reservedBytes + bytes <= budget {
             postWarning(StarWarning(
               kind: .lowSystemMemory,
