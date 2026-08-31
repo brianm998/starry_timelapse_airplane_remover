@@ -156,6 +156,78 @@ public actor MemoryMonitor {
     /// Count of admissions the reality brake has held back, for `stats()`.
     private var realityHolds: Int = 0
 
+    // MARK: - Realization
+
+    /// How much of the ledger has actually turned into resident memory, measured.
+    ///
+    /// Every reservation is one op's worst-case peak, measured alone in a fresh process:
+    /// a 24MP keypoint op reserves 5767MB and, on its own, really does peak there. The
+    /// ledger then sums those peaks, and a sum of independent peaks is not the joint peak
+    /// — concurrent ops reach theirs at different moments, and the allocator hands the
+    /// same pages back and forth between them. Measured on an 18-core 128GB machine
+    /// working a 6000x4000 sequence: ten keypoint ops in flight, 54.8GB on the ledger,
+    /// process footprint 16GB and its peak over the whole hour 21GB. The over-prediction
+    /// is not a rounding error, it is a factor of three.
+    ///
+    /// That matters because `effectiveBudget()` is denominated in *real* memory —
+    /// footprint plus what the machine can spare — so a ledger running 3x ahead of
+    /// reality saturates it at a third of the machine. The same run stalled every
+    /// reservation for 20-35s and held star to 9 of the 18 keypoint ops its cores could
+    /// have run, while 50GB sat available.
+    ///
+    /// So measure the over-prediction instead of arguing about it: `footprint /
+    /// reservedBytes` is the fraction of the ledger that has actually landed. It is
+    /// deliberately generous to safety in two ways — `footprint` includes everything star
+    /// holds that no reservation covers (the image cache, the keypoint cache, the gui
+    /// itself), and it is sticky at its peak — so both push the ratio *up*, toward less
+    /// overcommit.
+    ///
+    /// Self-limiting on the case that actually killed a machine: that run had 111GB
+    /// reserved against 85GB resident, a ratio of 0.77, which buys almost nothing. The
+    /// correction is only large when the gap is large.
+    private var realizedRatio: Double = 1.0
+
+    /// Floor on `realizedRatio`, so the correction can never exceed 4x on the unrealized
+    /// part of the ledger no matter what the probes say. Nothing measured has come close
+    /// to needing more than 3x, and a bound means a wrong probe reading costs throughput
+    /// rather than the machine.
+    private let minRealizedRatio: Double = 0.25
+
+    /// Below this the ratio is not sampled: with little on the ledger, `footprint` is
+    /// mostly star's baseline — the gui, the image cache, the keypoint cache — and the
+    /// ratio would be measuring that rather than op behaviour. It takes a few heavy ops in
+    /// flight before the sum-of-peaks over-prediction this corrects is even present.
+    ///
+    /// Proportional for the same reason `systemFloorBytes` is: 4GB at 128GB is a couple of
+    /// keypoint ops, and 4GB at 16GB is a quarter of the machine, which would mean the
+    /// correction never engaged there at all.
+    private let realizationSampleFloor: UInt64 =
+      UInt64(ProcessInfo.processInfo.physicalMemory) / 32
+
+    /// Asymmetric on purpose. A sample showing *more* of the ledger realized than we
+    /// thought is taken immediately and in full — that is the machine telling us the
+    /// overcommit is too generous, and there is no case for smoothing it. A sample
+    /// showing less is eased in, so a momentary trough between one op's peak and the
+    /// next's cannot open the gate wide.
+    private let realizationDecay: Double = 0.1
+
+    /// Fold the current footprint-to-ledger ratio into `realizedRatio`.
+    ///
+    /// Called wherever an admission decision is about to be made, which is also where
+    /// both probes are being read anyway.
+    private func observeRealization() {
+        guard reservedBytes >= realizationSampleFloor else { return }
+        let footprint = reality.processFootprint()
+        guard footprint > 0 else { return }
+        let sample = min(1.0, Double(footprint) / Double(reservedBytes))
+        if sample >= realizedRatio {
+            realizedRatio = sample
+        } else {
+            realizedRatio += (sample - realizedRatio) * realizationDecay
+        }
+        realizedRatio = min(1.0, max(minRealizedRatio, realizedRatio))
+    }
+
     public func setRealityProbe(_ probe: RealityProbe) { self.reality = probe }
 
     public func setSystemFloor(bytes: UInt64) { self.systemFloorBytes = bytes }
@@ -199,10 +271,27 @@ public actor MemoryMonitor {
     /// pages are charged to star either way, and a footprint that has not yet fallen back
     /// only makes this figure larger, not smaller.
     ///
-    /// Comparing a predictive ledger against a measured footprint is deliberate. A
-    /// reservation is an upper bound on what an op will allocate, so `reservedBytes` runs
-    /// ahead of `footprint` — mixing them errs toward admitting less, which is the side to
-    /// err on.
+    /// Comparing a predictive ledger against a measured footprint is deliberate, and it is
+    /// worth being precise about what the comparison means. Rearranged, `reserved + needed
+    /// <= footprint + spare` is `(reserved + needed - footprint) <= spare`: the part of the
+    /// ledger that has *not* yet become resident must fit in the memory the machine
+    /// actually has free. That is the right question, and both sides are like for like.
+    ///
+    /// What was wrong was assuming every unrealized byte will land. Each reservation is one
+    /// op's worst-case peak measured alone, and concurrent ops do not peak together, so the
+    /// unrealized term over-predicts — measured at 3x on the run that motivated this. So
+    /// scale it by the measured `realizedRatio`, which is the same rearrangement with the
+    /// correction applied to the term it belongs to:
+    ///
+    ///     (reserved + needed - footprint) * realizedRatio <= spare
+    ///     reserved + needed                               <= footprint + spare / realizedRatio
+    ///
+    /// Note what does *not* change. `spare` itself is never inflated — it is real memory,
+    /// measured, and the correction is applied to the prediction rather than to the fact.
+    /// The collapse behaviour is untouched: when the machine has nothing to spare this
+    /// still reduces to `footprint`, "keep what you have, start nothing new", because
+    /// dividing zero by anything is still zero. And `budget` is still the ceiling, so the
+    /// ledger cannot be talked past the structural limit however the ratio reads.
     ///
     /// Falls back to the static budget when either probe reads 0: that means the platform
     /// could not answer (see `memory_monitor.c`), not that the machine is empty.
@@ -217,7 +306,10 @@ public actor MemoryMonitor {
         // produce a tiny budget rather than the intended enormous one.
         guard footprint < ceiling else { return ceiling }
         let spare = available > systemFloorBytes ? available - systemFloorBytes : 0
-        return min(ceiling, footprint + spare)
+        // Bounded below by `minRealizedRatio`, so this multiplies `spare` by at most 4 and
+        // cannot overflow: 4 x physicalMemory is nowhere near UInt64.
+        let allowance = UInt64(Double(spare) / max(realizedRatio, minRealizedRatio))
+        return min(ceiling, footprint + allowance)
     }
 
     // MARK: - Waiter queue
@@ -308,6 +400,9 @@ public actor MemoryMonitor {
 
         startPressureMonitoringIfNeeded()
 
+        // Re-measure how much of the ledger is real before deciding on it.
+        observeRealization()
+
         // The ledger says there is room. Check reality agrees before believing it.
         let admissionBudget = effectiveBudget()
         if reservedBytes + bytes <= admissionBudget {
@@ -332,12 +427,27 @@ public actor MemoryMonitor {
         // memory is tight, so this reservation waits while everything already running
         // carries on — and `StarWarnings` dedups by kind so a throttled run posts it once
         // rather than per waiter.
-        if reservedBytes + bytes > admissionBudget, reservedBytes + bytes <= budget {
+        //
+        // The `spare` test is what keeps the sentence true. Being over `admissionBudget`
+        // means only that star's *ledger* is full, and on a large machine the ledger fills
+        // long before the machine does: a 128GB workstation with 50GB genuinely free posted
+        // "Only 50.3GB of memory is free on this machine" once a second for minutes,
+        // because the ledger's predicted peaks had saturated a budget denominated in real
+        // bytes. A warning that names a figure the user can see in Activity Monitor has to
+        // agree with it. So say it only when the machine really cannot fit this op right
+        // now — free memory, above the floor star leaves alone, is less than the op needs.
+        // Ledger-only stalls still reach the log line below, which is where a throughput
+        // question gets answered anyway.
+        let available = reality.systemAvailable()
+        let spare = available > systemFloorBytes ? available - systemFloorBytes : 0
+        if reservedBytes + bytes > admissionBudget, reservedBytes + bytes <= budget,
+           available > 0, spare < bytes
+        {
             postWarning(StarWarning(
               kind: .lowSystemMemory,
               severity: .warning,
               message: localized("warning.low_system_memory.message",
-                                 reality.systemAvailable().humanReadableBytes),
+                                 available.humanReadableBytes),
               suggestion: localized("warning.low_system_memory.suggestion")
             ))
         }
@@ -347,7 +457,12 @@ public actor MemoryMonitor {
               "reserved=\(reservedBytes / (1024*1024))MB, budget=\(admissionBudget / (1024*1024))MB" +
               (admissionBudget < budget
                  ? " (narrowed from \(budget / (1024*1024))MB — the rest of the machine is " +
-                   "holding memory star cannot have)"
+                   "holding memory star cannot have; " +
+                   "\(reality.systemAvailable() / (1024*1024))MB available, " +
+                   // The ratio is the other half of any "why is this stalling" question:
+                   // near 1.00 the ledger is real and the stall is the machine, well under
+                   // it the ledger is predicted peaks that are not landing together.
+                   "ledger realized=\(String(format: "%.2f", realizedRatio)))"
                  : ""))
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -397,6 +512,10 @@ public actor MemoryMonitor {
             (effective < budget ? " (of \(budget / (1024*1024))MB physical)" : "") + ", " +
             "footprint=\(footprint / (1024*1024))MB " +
             "(unaccounted \(unaccounted / (1024*1024))MB), " +
+            // The ledger-to-reality ratio the admission budget is being scaled by. A low
+            // figure is the normal state of a healthy parallel run, not a fault: it means
+            // the per-op peaks are not landing together.
+            "realized=\(String(format: "%.2f", realizedRatio)), " +
             "systemFree=\(reality.systemAvailable() / (1024*1024))MB, " +
             "floor=\(systemFloorBytes / (1024*1024))MB, " +
             "realityHolds=\(realityHolds)" +
@@ -667,6 +786,7 @@ public actor MemoryMonitor {
         }
 
         // Recomputed per drain rather than per waiter: it reads both probes.
+        observeRealization()
         let admissionBudget = effectiveBudget()
 
         // Rate-limited because this is the steady state of a throttled run, and

@@ -568,6 +568,154 @@ final class MemoryMonitorTests: XCTestCase {
                       "an over-full ledger is not a claim about the machine: \(posted)")
     }
 
+    // MARK: - correcting the ledger against what it actually costs
+    //
+    // Every reservation is one op's worst-case peak, measured alone in a fresh process. The
+    // ledger sums them, and a sum of independent peaks is not the joint peak: concurrent
+    // ops reach theirs at different moments. Measured on an 18-core 128GB machine working a
+    // 6000x4000 sequence — ten keypoint ops in flight, 54.8GB on the ledger, process
+    // footprint 16GB and its peak over the whole hour 21GB.
+    //
+    // That is not a harmless over-estimate, because `effectiveBudget()` is denominated in
+    // real bytes. The ledger saturated a 55GB effective budget while 50GB sat available;
+    // every reservation queued for 20-35s and star ran 9 of the 18 keypoint ops its cores
+    // could have. So the monitor measures how much of its own ledger is landing, and scales
+    // the unrealized part by it.
+
+    /// The point of the change, as a control pair. Both monitors see the same machine and
+    /// end up asking for the same total — 50% of RAM against a 35% effective budget. The
+    /// only difference is that the second one is given the chance to observe that its
+    /// ledger over-predicts by 3x before the second request arrives.
+    func testAnOverPredictingLedgerEarnsRoomThatOneBigRequestDoesNot() async {
+        let uncalibrated = await monitor(footprint: portion(10), available: portion(25))
+        await uncalibrated.setSystemFloor(bytes: 0)
+        await uncalibrated.configure(budgetFraction: 0.8)
+
+        let atOnce = await withTimeout(seconds: 2) {
+            await uncalibrated.reserve(bytes: portion(50))
+        }
+        XCTAssertFalse(atOnce,
+                       "with nothing measured yet, 50% must not fit a 35% effective budget")
+
+        let calibrated = await monitor(footprint: portion(10), available: portion(25))
+        await calibrated.setSystemFloor(bytes: 0)
+        await calibrated.configure(budgetFraction: 0.8)
+
+        let first = await withTimeout(seconds: 5) { await calibrated.reserve(bytes: portion(30)) }
+        XCTAssertTrue(first, "30% fits the 35% the machine can currently back")
+
+        // The ledger now holds 30% of RAM against a 10% footprint, so two thirds of it is
+        // predicted memory that has not appeared and, on the evidence, will not.
+        let second = await withTimeout(seconds: 5) { await calibrated.reserve(bytes: portion(20)) }
+        XCTAssertTrue(second,
+                      "a ledger measured to be running 3x ahead of the process must not " +
+                      "keep throttling the machine at a third of its memory")
+    }
+
+    /// The ratio is deliberately asymmetric, and this is the half that matters for safety:
+    /// it eases *downward*, so a momentary trough between one op's peak and the next's
+    /// cannot swing the gate open, but it snaps *upward* in one step. Upward is the machine
+    /// saying the overcommit is too generous, and there is no case for smoothing that.
+    ///
+    /// Asserted on the ratio `stats()` reports rather than on an admission, because the
+    /// admission arithmetic would only show the difference at one particular pair of sizes
+    /// and this is a property of the estimator.
+    func testTheCorrectionEasesOpenButClosesInOneStep() async {
+        let footprint = Counter()
+        footprint.set(portion(10))
+        let m = MemoryMonitor()
+        await m.setRealityProbe(.init(processFootprint: { footprint.value },
+                                      systemAvailable: { portion(25) }))
+        await m.setSystemFloor(bytes: 0)
+        await m.configure(budgetFraction: 0.8)
+
+        let admitted = await withTimeout(seconds: 5) { await m.reserve(bytes: portion(30)) }
+        XCTAssertTrue(admitted, "30% fits the 35% the machine can currently back")
+
+        // A waiter the ledger cannot satisfy, so the drain loop keeps running and keeps
+        // sampling a ledger that is three times the footprint backing it.
+        let doomed = Task { await m.reserve(bytes: portion(70)) }
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        doomed.cancel()
+
+        let easedOpen = await m.stats()
+        XCTAssertTrue(easedOpen.contains("realized=0."),
+                      "a ledger measured at 3x the footprint should have moved the ratio " +
+                      "off 1.00: \(easedOpen)")
+        XCTAssertFalse(easedOpen.contains("realized=0.33"),
+                       "and it should have got there gradually rather than in one step: " +
+                       "\(easedOpen)")
+
+        // The ops that were admitted turn out to allocate everything they reserved after
+        // all. One sample is all it takes to withdraw the whole allowance.
+        footprint.set(portion(30))
+        _ = await withTimeout(seconds: 2) { await m.reserve(bytes: portion(70)) }
+
+        let closed = await m.stats()
+        XCTAssertTrue(closed.contains("realized=1.00"),
+                      "a fully realized ledger must withdraw the correction at once, not " +
+                      "ease it back: \(closed)")
+    }
+
+    /// The correction can widen the admission budget up to the structural ceiling and no
+    /// further, whatever the ratio reads. That ceiling is the one thing standing between a
+    /// mis-reading probe and the machine, so it is not negotiable.
+    func testTheCorrectionCannotTalkTheLedgerPastTheStructuralBudget() async {
+        let m = await monitor(footprint: portion(10), available: portion(90))
+        await m.setSystemFloor(bytes: 0)
+        await m.configure(budgetFraction: 0.5)
+
+        let admitted = await withTimeout(seconds: 5) { await m.reserve(bytes: portion(30)) }
+        XCTAssertTrue(admitted)
+
+        // Ratio is now 0.33, so the uncorrected 10 + 90 becomes 10 + 270. Both are far past
+        // the 50% structural budget, which is what has to bind.
+        let refused = await withTimeout(seconds: 2) { await m.reserve(bytes: portion(30)) }
+        XCTAssertFalse(refused, "60% must not be admitted against a 50% structural budget")
+    }
+
+    /// The other end: a machine with nothing to spare still collapses to "keep what you
+    /// have, start nothing new". Dividing the spare by the ratio cannot conjure room out of
+    /// zero, and this is the property the whole gate rests on.
+    func testNoSpareMeansNoRoomHoweverFarTheLedgerIsRunningAhead() async {
+        let m = await monitor(footprint: portion(20), available: portion(5))
+        await m.setSystemFloor(bytes: portion(5))
+        await m.configure(budgetFraction: 0.8)
+
+        let admitted = await withTimeout(seconds: 5) { await m.reserve(bytes: portion(19)) }
+        XCTAssertTrue(admitted, "work inside the existing footprint is still admitted")
+
+        let refused = await withTimeout(seconds: 2) { await m.reserve(bytes: portion(10)) }
+        XCTAssertFalse(refused,
+                       "with the machine at its floor, an over-predicting ledger earns " +
+                       "nothing — there is no spare memory to scale")
+    }
+
+    /// The user-facing half of the same bug. A ledger-full stall on a machine with 50GB
+    /// genuinely free posted "Only 50.3GB of memory is free on this machine" once a second
+    /// for minutes. The stall was real; the sentence was not, and it names a figure the
+    /// user can read off Activity Monitor and disagree with.
+    func testAFullLedgerOnARoomyMachineDoesNotClaimTheMachineIsShort() async {
+        let m = await monitor(footprint: portion(20), available: portion(15))
+        await m.setSystemFloor(bytes: 0)
+        await m.configure(budgetFraction: 0.8)
+
+        // Fills the ledger to 30% against a 20% footprint, which measures the ratio at 2/3
+        // and settles the effective budget at 20 + 15/(2/3) = 42.5%.
+        await m.reserve(bytes: portion(30))
+
+        // 44% is past that, and comfortably inside the 80% structural budget — so this is
+        // the ledger refusing, on a machine with room for this op several times over.
+        let posted = await capturingWarnings(kind: .lowSystemMemory, atLeast: 0) {
+            let queued = Task { await m.reserve(bytes: portion(14)) }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            queued.cancel()
+        }
+        XCTAssertTrue(posted.isEmpty,
+                      "free memory that would hold this op outright is not a low-memory " +
+                      "condition, whatever the ledger says: \(posted)")
+    }
+
     // MARK: - bounding the forced-admission ratchet
     //
     // Forcing used to be unconditional: one waiter per `forcedAdmissionInterval`, forever,
@@ -720,6 +868,11 @@ private final class Counter: @unchecked Sendable {
     func add(_ bytes: UInt64) {
         lock.lock(); defer { lock.unlock() }
         storage += bytes
+    }
+
+    func set(_ bytes: UInt64) {
+        lock.lock(); defer { lock.unlock() }
+        storage = bytes
     }
 
     var value: UInt64 {
