@@ -2740,6 +2740,32 @@ public final class ImageSequenceViewModel {
         )
     }
     
+    /// Which rendered images this frame already has on disk.
+    ///
+    /// One `stat` per `FrameViewMode`, so sixteen per frame.  Kept off the main
+    /// actor: it is pure filesystem I/O and only the assignment of the result
+    /// needs the view model.  On a local disk this measured 0.112 ms a frame,
+    /// which is 56 ms of main-thread blocking across a 500 frame sequence and
+    /// considerably worse on a network volume.
+    private nonisolated static func existingImages(
+      for frame: FrameAirplaneRemover
+    ) async -> Set<FrameViewMode> {
+        let acc = frame.imageAccessor
+        let frameIndex = frame.frameIndex
+        return await Task.detached(priority: .utility) {
+            var existing: Set<FrameViewMode> = []
+            for type in FrameViewMode.allCases {
+                if acc.imageExists(frameIndex: frameIndex,
+                                   ofType: type,
+                                   atSize: .original)
+                {
+                    existing.insert(type)
+                }
+            }
+            return existing
+        }.value
+    }
+
     func refresh(frame: FrameAirplaneRemover) async {
         //        Log.d("refreshing frame \(frame.frameIndex)")
         
@@ -2749,19 +2775,8 @@ public final class ImageSequenceViewModel {
 
         // let outlierTask: Task<Void,Never>?
 
-        let acc = frame.imageAccessor
-
-        var existingImages: Set<FrameViewMode> = []
-        for type in FrameViewMode.allCases {
-            if acc.imageExists(frameIndex: frame.frameIndex,
-                               ofType: type,
-                               atSize: .original)
-            {
-                existingImages.insert(type)
-            }
-        }
-        
-        self.frames[frame.frameIndex].existingImages = existingImages
+        self.frames[frame.frameIndex].existingImages =
+          await ImageSequenceViewModel.existingImages(for: frame)
 
         //Log.d("done refreshing frame \(frame.frameIndex)")
     }
