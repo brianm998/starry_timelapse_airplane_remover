@@ -52,6 +52,7 @@ public class Processor {
         var updatedConfig = await configManager.config()
         updatedConfig.set(imageInfo: imageInfo)
         await configManager.update(updatedConfig)
+        await configManager.flush()   // update() writes asynchronously
     }
 
     public var frameCount: Int {

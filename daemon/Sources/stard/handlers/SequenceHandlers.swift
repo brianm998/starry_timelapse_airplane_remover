@@ -37,6 +37,9 @@ enum SequenceHandlers {
             }
             Mapping.applyExpertConfig(&config, from: proto)
             await session.configManager.update(config)
+            // The client is told the config is applied; make that include the
+            // file, since update() writes asynchronously now.
+            await session.configManager.flush()
             try await transport.respond(id: id, payload: Mapping.protoConfig(config).serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")

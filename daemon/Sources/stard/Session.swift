@@ -112,6 +112,7 @@ actor Session {
         var cfg = await configManager.config()
         cfg.hasStaticReferenceHorizon = enabled
         await configManager.update(cfg)   // saves to configJsonPath
+        await configManager.flush()       // ...asynchronously, so wait for it
     }
 
     // Start processing (calls frameGraphBuilder.build).
