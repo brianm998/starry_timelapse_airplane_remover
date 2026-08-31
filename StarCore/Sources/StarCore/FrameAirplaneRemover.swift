@@ -1170,7 +1170,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let horizonMask {
             // raise the mask with a gradient to allow replacement pixel values to come
             // from the earth aligned image when they are this close to the horizon
-            expendedHorizonMaskImage = horizonMask.image.raiseMaskBy(60) // XXX hardcoded constant
+            // ~300ms at 42MP, so off the cooperative pool like the rest of the
+            // native work.
+            let maskToRaise = horizonMask.image
+            expendedHorizonMaskImage = await NativeWork.run {
+                maskToRaise.raiseMaskBy(60) // XXX hardcoded constant
+            }
         }
         
         // remove every outlier in the list with pixels from the adjecent frames
@@ -1535,8 +1540,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // measured ~5% brightness step which a hard boundary draws as
                     // a second horizon.  The ramp climbs into sky both layers
                     // agree is clean, so blending there can introduce nothing.
-                    if let feathered = starAlignedMask.raiseMaskBy(
-                         Self.horizonFeatherPixels),
+                    let featherMask = starAlignedMask
+                    let featheredMask = await NativeWork.run {
+                        featherMask.raiseMaskBy(Self.horizonFeatherPixels)
+                    }
+                    if let feathered = featheredMask,
                        let blended = try? skyImage.blend(
                          mask: feathered,
                          with: earthImage
@@ -1986,8 +1994,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // layers whose brightness differs subtracts as a false edge.
                     let starAlignedMask =
                       await alignmentProcessor.starAlignedHorizonMask(from: horizon)
-                    if let feathered = starAlignedMask.raiseMaskBy(
-                         FrameAirplaneRemover.horizonFeatherPixels),
+                    let featherMask = starAlignedMask
+                    let featheredMask = await NativeWork.run {
+                        featherMask.raiseMaskBy(FrameAirplaneRemover.horizonFeatherPixels)
+                    }
+                    if let feathered = featheredMask,
                        let blended = try? skyImage.blend(
                          mask: feathered,
                          with: earth
@@ -2030,7 +2041,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frameIndex) got orig image \(image.description)")
             
 
-            subtractionImage = try image.subtract(imageToSubtract)
+            // ~214ms at 42MP; off the pool for the same reason.
+            let subtractBase = image
+            let subtractFrom = imageToSubtract
+            subtractionImage = try await NativeWork.run {
+                try subtractBase.subtract(subtractFrom)
+            }
 
             if config.writeOutlierGroupFiles {
                 // write out image of outlier amounts
