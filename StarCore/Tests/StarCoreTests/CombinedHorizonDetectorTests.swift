@@ -284,29 +284,128 @@ final class CombinedHorizonDetectorTests: XCTestCase {
         XCTAssertFalse(bottom > 0.05)
     }
 
-    /// Between 5% and 15% (and symmetrically at the bottom) the horizon is suspicious rather than
-    /// impossible, and gets a fixed 0.3 plausibility instead of zero.
-    func testTheSuspiciousBandGetsAReducedRatherThanZeroScore() {
-        let suspicious = CombinedHorizonDetector.horizonConfidence(flat(10), imageHeight: 100)
-        let centred = CombinedHorizonDetector.horizonConfidence(flat(50), imageHeight: 100)
-        XCTAssertGreaterThan(suspicious, 0)
-        XCTAssertLessThan(suspicious, centred)
-        XCTAssertEqual(suspicious / centred, 0.3, accuracy: 0.01,
-                       "the band applies a flat 0.3 plausibility factor")
+    /// The rejection ramp is continuous: 0.05 at the very edge, full marks once the horizon is
+    /// 8% of the frame height clear of it, and a straight line between.  The old shape was a pair
+    /// of plateaus — a flat 0.3 outside 15-85% of height — which put a 2x cliff at exactly 85%,
+    /// where this app's horizons actually live.
+    func testTheEdgeRejectionRampIsContinuous() {
+        let h = 100
+        let atFloor  = CombinedHorizonDetector.horizonConfidence(flat(2),  imageHeight: h)
+        let midRamp  = CombinedHorizonDetector.horizonConfidence(flat(5),  imageHeight: h)
+        let atCeiling = CombinedHorizonDetector.horizonConfidence(flat(8), imageHeight: h)
+        let clear    = CombinedHorizonDetector.horizonConfidence(flat(20), imageHeight: h)
 
-        let lowSuspicious = CombinedHorizonDetector.horizonConfidence(flat(88), imageHeight: 100)
-        XCTAssertEqual(lowSuspicious, suspicious, accuracy: 1e-9, "the band is symmetric")
+        XCTAssertEqual(atFloor, 0.05, accuracy: 1e-12)
+        XCTAssertEqual(midRamp, 0.5, accuracy: 1e-9, "halfway up the ramp")
+        XCTAssertEqual(atCeiling, 1.0, accuracy: 1e-9)
+        XCTAssertEqual(clear, atCeiling, accuracy: 1e-9, "flat once past the ramp")
+
+        // symmetric about the centre
+        XCTAssertEqual(CombinedHorizonDetector.horizonConfidence(flat(95), imageHeight: h),
+                       midRamp, accuracy: 1e-9)
     }
 
-    /// A centred horizon beats an off-centre one, which is what stops a method that found the top of a
-    /// mountain range from outweighing one that found the skyline.
-    func testACentredHorizonBeatsAnOffCentreOne() {
+    /// **Plausibility no longer prefers the middle of the frame.**  It used to peak at mid-height
+    /// and fall away either side, on the theory that it stopped a method that found the top of a
+    /// mountain range from outweighing one that found the skyline.  Measured, it did the opposite:
+    /// the ground truth of `stationary/03_21_2026-fx3-2` sits at 82% of frame height and of
+    /// `06_27_2022-a7riii-1` at 75%, and DP's correct answer on the a9 aurora sequence at 85-88% on
+    /// every frame checked — so the prior was penalising the right answer and rewarding detections
+    /// that had drifted toward the middle of the frame.  Nighttime timelapse is shot aimed up; a
+    /// centred horizon is not the normal case.  `continuity` is what distinguishes a failed
+    /// detection now.
+    func testAHorizonLowInTheFrameIsNotPenalisedForBeingLow() {
         let centred = CombinedHorizonDetector.horizonConfidence(flat(50), imageHeight: 100)
-        let high = CombinedHorizonDetector.horizonConfidence(flat(25), imageHeight: 100)
-        let low = CombinedHorizonDetector.horizonConfidence(flat(75), imageHeight: 100)
-        XCTAssertGreaterThan(centred, high)
-        XCTAssertGreaterThan(centred, low)
-        XCTAssertEqual(high, low, accuracy: 1e-9, "the plausibility ramp is symmetric about centre")
+        let low     = CombinedHorizonDetector.horizonConfidence(flat(85), imageHeight: 100)
+        let high    = CombinedHorizonDetector.horizonConfidence(flat(15), imageHeight: 100)
+
+        XCTAssertEqual(low, centred, accuracy: 1e-9)
+        XCTAssertEqual(high, centred, accuracy: 1e-9)
+    }
+
+    /// The 85% boundary specifically: it used to halve the score across a single row.
+    func testThereIsNoCliffAtEightyFivePercentOfHeight() {
+        let above = CombinedHorizonDetector.horizonConfidence(flat(3399, width: 200), imageHeight: 4000)
+        let below = CombinedHorizonDetector.horizonConfidence(flat(3401, width: 200), imageHeight: 4000)
+        XCTAssertEqual(above, below, accuracy: 1e-9,
+                       "two rows either side of 85% must not score differently")
+    }
+
+    // MARK: - continuity
+
+    /// A curve that teleports a large fraction of the frame height in one column is a failed
+    /// detection, and the *mean* difference cannot see it: on the real Otsu curve that motivated
+    /// this, two 2200-pixel jumps in a 6000-column 4000-row frame moved the mean by under a pixel.
+    func testACurveThatTeleportsIsPenalisedEvenThoughItsMeanDifferenceIsTiny() {
+        // flat at row 1208 except for a plateau at 3420 in the middle — the shape Otsu returns
+        // on a9 frame 1310, scaled to the same proportions.
+        var teleporting = [Int?](repeating: 1208, count: 6000)
+        for x in 2000..<4000 { teleporting[x] = 3420 }
+        let flatLine = flat(3400, width: 6000)
+
+        let jumpy = CombinedHorizonDetector.horizonConfidence(teleporting, imageHeight: 4000)
+        let smooth = CombinedHorizonDetector.horizonConfidence(flatLine, imageHeight: 4000)
+
+        XCTAssertLessThan(jumpy, 0.05,
+                          "a curve with two half-frame jumps must not clear the inclusion gate")
+        XCTAssertGreaterThan(smooth, 0.9)
+    }
+
+    /// A real skyline has cliff edges, so small jumps are free — the term only starts biting past
+    /// 2% of frame height.  Inside the tolerance the only cost is the pre-existing smoothness term,
+    /// which for a single step of this size is under 2%; just outside it, the same shape at ten
+    /// times the step is cut by more than half.
+    func testJumpsUpToTheToleranceAreFree() {
+        func stepped(by rows: Int) -> [Int?] {
+            var y = flat(2000, width: 200)
+            for x in 100..<200 { y[x] = 2000 + rows }
+            return y
+        }
+        let flatLine = CombinedHorizonDetector.horizonConfidence(flat(2000, width: 200),
+                                                                 imageHeight: 4000)
+        let inside  = CombinedHorizonDetector.horizonConfidence(stepped(by: 79), imageHeight: 4000)
+        let outside = CombinedHorizonDetector.horizonConfidence(stepped(by: 790), imageHeight: 4000)
+
+        XCTAssertGreaterThan(inside / flatLine, 0.97,
+                             "79/4000 is inside the 2% tolerance — only smoothness charges for it")
+        XCTAssertLessThan(outside / flatLine, 0.5,
+                          "790/4000 is well past it and continuity does the charging")
+    }
+
+    // MARK: - outlierReference
+
+    /// When the methods agree the clustering collapses to one group, and the reference is the
+    /// plain median of every entry — the behaviour this replaced, unchanged.
+    func testAgreeingMethodsGiveThePlainMedian() {
+        let entries: [(y: Int, weight: Double)] = [(100, 0.9), (140, 0.2), (160, 0.5), (200, 0.1)]
+        XCTAssertEqual(CombinedHorizonDetector.outlierReference(entries, threshold: 80), 160,
+                       "one cluster — sortedY[count/2], exactly as the median did")
+    }
+
+    /// When they split into groups further apart than the threshold, the heaviest group wins
+    /// rather than whichever value happens to sort into the middle.  This is a9 frame 1310 column
+    /// 0: SIOX 598, Otsu 1208, texture 1513, DP 3367, truth 3390.
+    func testTheHeaviestClusterWinsWhenTheMethodsDisagree() {
+        let entries: [(y: Int, weight: Double)] = [
+          (598, 0.05), (1208, 0.05), (1513, 0.13), (3367, 0.99),
+        ]
+        XCTAssertEqual(CombinedHorizonDetector.outlierReference(entries, threshold: 80), 3367)
+
+        // and the plain median would have picked the wrong one
+        XCTAssertEqual(entries.map(\.y).sorted()[entries.count / 2], 1513)
+    }
+
+    /// Weight, not count: three low-confidence methods agreeing do not outvote one confident one.
+    func testCountDoesNotOutweighConfidence() {
+        let entries: [(y: Int, weight: Double)] = [
+          (500, 0.06), (520, 0.06), (540, 0.06), (3000, 0.95),
+        ]
+        XCTAssertEqual(CombinedHorizonDetector.outlierReference(entries, threshold: 80), 3000)
+    }
+
+    /// Ties and single entries stay well defined.
+    func testASingleEntryIsItsOwnReference() {
+        XCTAssertEqual(CombinedHorizonDetector.outlierReference([(42, 0.5)], threshold: 80), 42)
     }
 
     /// A noisy horizon is penalised, which is the whole point of the smoothness factor.

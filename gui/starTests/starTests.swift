@@ -573,6 +573,93 @@ final class HorizonPaintStateTests: XCTestCase {
                           "the known sky floor must stay above the known ground ceiling")
     }
 
+    // MARK: - a gesture outside the band opens it
+
+    /// **The band is a search region, not a cap.**  `loadExistingHorizon` synthesises a band of
+    /// `margin` points either side of the saved curve, and the refinement pass will not let the
+    /// horizon leave it — so before this, a horizon that was wrong by more than `margin` could not
+    /// be corrected at all.  Painting sky well below the band bottom left `knownGroundCeiling`
+    /// pinned to that bottom, and the clamp at the end of the pass pulled the answer straight back
+    /// up to it.  That is the "it snaps back to where it was" report from a9 frame 1310, where the
+    /// detection was wrong by roughly 2000 px against a margin of 400.
+    func testPaintingSkyBelowTheBandOpensTheBandDownward() {
+        let paint = state(width: 200, height: 400)
+        paint.loadExistingHorizon([Int?](repeating: 100, count: 200), margin: 20)
+        XCTAssertEqual(paint.bandColumnBottom[100], 120, "precondition: the band ends at 120")
+
+        // paint sky down to row 300 — far below the band
+        paint.brushRadius = 10
+        paint.addStroke(at: CGPoint(x: 100, y: 290))
+        paint.commitRefinementGesture(isErasing: false)
+
+        guard let bottom = paint.bandColumnBottom[100],
+              let floor = paint.knownSkyFloor[100],
+              let ceiling = paint.knownGroundCeiling[100]
+        else { return XCTFail("the column should be fully defined") }
+
+        XCTAssertGreaterThanOrEqual(floor, 300, "the brushed rows are known sky")
+        XCTAssertGreaterThan(bottom, floor, "the band must have room below the new floor")
+        XCTAssertGreaterThan(ceiling, floor,
+                             "the ground ceiling must retract past the newly painted sky")
+    }
+
+    /// The same in the other direction: erasing above the band top opens it upward, so a horizon
+    /// detected far too low can be dragged up.
+    func testErasingAboveTheBandOpensTheBandUpward() {
+        let paint = state(width: 200, height: 400)
+        paint.loadExistingHorizon([Int?](repeating: 300, count: 200), margin: 20)
+        XCTAssertEqual(paint.bandColumnTop[100], 280, "precondition: the band starts at 280")
+
+        paint.isErasing = true
+        paint.brushRadius = 10
+        paint.addStroke(at: CGPoint(x: 100, y: 110))
+        paint.commitRefinementGesture(isErasing: true)
+
+        guard let top = paint.bandColumnTop[100],
+              let ceiling = paint.knownGroundCeiling[100],
+              let floor = paint.knownSkyFloor[100]
+        else { return XCTFail("the column should be fully defined") }
+
+        XCTAssertLessThanOrEqual(ceiling, 100, "the brushed rows are known ground")
+        XCTAssertLessThan(top, ceiling, "the band must have room above the new ceiling")
+        XCTAssertLessThan(floor, ceiling,
+                          "the sky floor must retract past the newly erased ground")
+    }
+
+    /// The band only opens where the brush actually went.
+    func testOpeningTheBandDoesNotDisturbUntouchedColumns() {
+        let paint = state(width: 200, height: 400)
+        paint.loadExistingHorizon([Int?](repeating: 100, count: 200), margin: 20)
+
+        paint.brushRadius = 5
+        paint.addStroke(at: CGPoint(x: 150, y: 290))
+        paint.commitRefinementGesture(isErasing: false)
+
+        XCTAssertEqual(paint.bandColumnBottom[10], 120, "column 10 keeps the synthesised band")
+        XCTAssertGreaterThan(paint.bandColumnBottom[150] ?? 0, 290)
+    }
+
+    /// The widened band still stops at the frame edge.
+    func testTheOpenedBandStaysInsideTheFrame() {
+        let paint = state(width: 200, height: 100)
+        paint.loadExistingHorizon([Int?](repeating: 50, count: 200), margin: 10)
+
+        paint.brushRadius = 30
+        paint.addStroke(at: CGPoint(x: 100, y: 95))
+        paint.commitRefinementGesture(isErasing: false)
+
+        XCTAssertEqual(paint.bandColumnBottom[100], 99, "clamped to the last row")
+
+        let up = state(width: 200, height: 100)
+        up.loadExistingHorizon([Int?](repeating: 50, count: 200), margin: 10)
+        up.isErasing = true
+        up.brushRadius = 30
+        up.addStroke(at: CGPoint(x: 100, y: 5))
+        up.commitRefinementGesture(isErasing: true)
+
+        XCTAssertEqual(up.bandColumnTop[100], 0, "clamped to the first row")
+    }
+
     func testColumnsUntouchedByAGestureAreLeftAlone() {
         let paint = state(width: 200, height: 100)
         paint.loadExistingHorizon([Int?](repeating: 50, count: 200), margin: 20)

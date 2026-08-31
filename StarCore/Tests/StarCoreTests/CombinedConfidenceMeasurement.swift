@@ -48,9 +48,10 @@ final class CombinedConfidenceMeasurement: XCTestCase {
         throw XCTSkip("no horizon reference fixtures present")
     }
 
-    /// `horizonConfidence` with the one line changed: differences taken between adjacent columns that
+    /// `horizonConfidence` with one thing changed: differences taken between adjacent columns that
     /// are *both* defined, rather than across the compacted array.  Everything else is identical, so
-    /// any difference in the result is attributable to the gap bridging alone.
+    /// any difference in the result is attributable to the gap bridging alone.  Both the smoothness
+    /// and the continuity term are fed from those differences, so both move together here.
     private func confidenceWithAdjacentDiffs(_ horizonY: [Int?], imageHeight: Int) -> Double {
         let defined = horizonY.compactMap { $0 }
         guard defined.count > horizonY.count / 20 else { return 0 }
@@ -68,17 +69,17 @@ final class CombinedConfidenceMeasurement: XCTestCase {
         let normalizedDiff = meanDiff / Double(max(1, imageHeight))
         let smoothness = 1.0 / (1.0 + normalizedDiff * 200.0)
 
+        // continuity sees the same bridged/unbridged distinction, so it takes the local diffs too
+        let maxJump = Double(diffs.max() ?? 0) / Double(max(1, imageHeight))
+        let continuity = 1.0 / (1.0 + max(0.0, maxJump - CombinedHorizonDetector.jumpTolerance)
+                                        * CombinedHorizonDetector.jumpFalloff)
+
         let avg = Double(defined.reduce(0, +)) / Double(defined.count)
         let heightFrac = avg / Double(imageHeight)
-        let plausibility: Double
-        if heightFrac < 0.05 || heightFrac > 0.95 {
-            plausibility = 0.0
-        } else if heightFrac < 0.15 || heightFrac > 0.85 {
-            plausibility = 0.3
-        } else {
-            plausibility = 1.0 - abs(heightFrac - 0.5) * 1.2
-        }
-        return coverage * smoothness * max(0.05, min(1.0, plausibility))
+        let edgeDistance = min(heightFrac, 1.0 - heightFrac)
+        let plausibility = (edgeDistance - CombinedHorizonDetector.edgeRejectFloor)
+          / (CombinedHorizonDetector.edgeRejectCeiling - CombinedHorizonDetector.edgeRejectFloor)
+        return coverage * smoothness * continuity * max(0.05, min(1.0, plausibility))
     }
 
     /// The longest run of consecutive nils, which is what determines how large a bridged jump can be.
