@@ -26,3 +26,10 @@ releases/
 # all in a worktree. `git add -A` then committed the symlink — an absolute path
 # into one machine — which is how it reached a branch once already.
 gui/videos
+# Horizon ground-truth fixtures (5.8GB / 1GB), used by HorizonScoringMeasurement,
+# CombinedConfidenceMeasurement and horizon_test_bench.  Never committed; a worktree
+# gets them by symlinking the main checkout's copies, and — as with gui/videos above —
+# no trailing slash, so the symlink is ignored too rather than being `git add -A`'d as
+# an absolute path into one machine.
+horizon_test_data
+small_horizon_test_data

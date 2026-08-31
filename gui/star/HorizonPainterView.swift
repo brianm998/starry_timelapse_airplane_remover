@@ -442,6 +442,20 @@ private func triggerObjectSelection(
         }
     }
 
+    // Keep the band consistent with the seeds it has to contain.  `commitRefinementGesture`
+    // widens the stored band under the brush itself, but the taper above pushes the locked
+    // boundary out into the margin columns as well, and the solver treats a column whose
+    // sky floor sits below its band bottom (or ground ceiling above its band top) as having
+    // no gap left to solve.
+    for col in affectedMin...affectedMax {
+        if let floor = localSkyFloor[col], let bottom = localBandBot[col], floor >= bottom {
+            localBandBot[col] = min(vh - 1, floor + 1)
+        }
+        if let ceiling = localGndCeiling[col], let top = localBandTop[col], ceiling <= top {
+            localBandTop[col] = max(0, ceiling - 1)
+        }
+    }
+
     let snappedHorizon: [Int?]?
     do {
         snappedHorizon = try await frame.computeRandomWalkerHorizon(
@@ -480,12 +494,23 @@ private func triggerObjectSelection(
     //   explicitly brushed — the horizon must be at or below that row.
     // • Erase (ground): knownGroundCeiling[col] is the highest ground row —
     //   the horizon must be above that row.
+    //
+    // The two constraints cannot both be satisfied if they ever cross, so apply the gesture
+    // that just happened *last* and let it win.  They should not cross —
+    // `commitRefinementGesture` retracts the opposing boundary and widens the band to make
+    // room — but the user's most recent stroke is the one instruction that must never be
+    // silently discarded, and ordering it last costs nothing when they agree.
     for col in 0..<vw {
         guard let y = merged[col] else { continue }
         var clampedY = y
-        if let sf = skyFloor[col]   { clampedY = max(clampedY, sf) }
-        if let gc = gndCeiling[col] { clampedY = min(clampedY, gc - 1) }
-        merged[col] = max(0, clampedY)
+        if isErasingGesture {
+            if let sf = skyFloor[col]   { clampedY = max(clampedY, sf) }
+            if let gc = gndCeiling[col] { clampedY = min(clampedY, gc - 1) }
+        } else {
+            if let gc = gndCeiling[col] { clampedY = min(clampedY, gc - 1) }
+            if let sf = skyFloor[col]   { clampedY = max(clampedY, sf) }
+        }
+        merged[col] = max(0, min(vh - 1, clampedY))
     }
 
     paintState.applyExpandedHorizonMask(merged)

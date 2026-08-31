@@ -1177,8 +1177,44 @@ public enum CombinedHorizonDetector {
         return result
     }
 
-    /// Compute a confidence score for a horizon Y array: smoothness × coverage × plausibility.
+    /// Compute a confidence score for a horizon Y array:
+    /// coverage × smoothness × continuity × plausibility.
     /// Returns a value in [0, 1] where higher = more confident.
+    ///
+    /// ## Why continuity is separate from smoothness
+    ///
+    /// `smoothness` is a function of the *mean* absolute column-to-column difference, so it is
+    /// dominated by the bulk of the curve and cannot see a small number of catastrophic jumps.
+    /// Measured on `LRT_08_15_2026-a9-1-aurora` frame 1310 (6000x4000), Otsu returns a curve that
+    /// sits at row 1208 across both edges of the frame and at row 3420 in the middle — it teleports
+    /// **52% of the frame height** twice — and its mean difference is 0.9 px, for a smoothness of
+    /// 0.955.  A perfectly flat line scores 0.999.  A horizon that jumps half the frame in one
+    /// column is not a horizon, and the mean is the wrong statistic to notice it with.
+    ///
+    /// `continuity` looks at the largest single-column jump instead, which separates the two cases
+    /// cleanly on every frame measured: on the ground-truth fixtures the truth curve and all five
+    /// base methods are under 2.5% of height, while the failing detections on the a9 sequence run
+    /// 16-79%.
+    ///
+    /// ## Why plausibility no longer prefers the centre of the frame
+    ///
+    /// It used to be a stepped ramp peaking at mid-frame: a flat 0.3 outside 15-85% of height, 0
+    /// outside 5-95%, and `1 - |frac - 0.5| * 1.2` in between.  Two things were wrong with it.
+    ///
+    /// The steps put a **2x discontinuity at exactly 85% of height**, and this app's horizons live
+    /// right there.  The ground truth of the two fixture sequences sits at 82.1% and 75.2%; DP's
+    /// (correct) answer on the a9 sequence sits at 85.1-87.8% on every frame measured, i.e. always
+    /// just over the cliff.  It scored 0.2993-0.2999 on all of them — the lowest of the five — while
+    /// Otsu and SIOX, wrong by up to 2200 px at the frame edges, scored 0.84-0.95.  A 4-pixel move
+    /// of a 4000-row frame's horizon halved the weight of the only method that was right.
+    ///
+    /// The centre preference was also simply false for the domain.  Nighttime timelapse is shot
+    /// with the camera aimed up; the horizon belongs low in the frame.  Nothing measured here has
+    /// its true horizon near the middle, so a prior that rewards the middle rewards being wrong.
+    ///
+    /// What survives is the part that was doing real work: a "horizon" jammed against the top or
+    /// bottom edge of the frame means the method found the frame boundary, not a skyline.  That is
+    /// now the whole term, and it is continuous.
     static func horizonConfidence(_ horizonY: [Int?], imageHeight: Int) -> Double {
         let defined = horizonY.compactMap { $0 }
         guard defined.count > horizonY.count / 20 else { return 0 }
@@ -1194,22 +1230,37 @@ public enum CombinedHorizonDetector {
         // A meanDiff of ~0.5% of height = very smooth, ~5% = quite rough
         let smoothness = 1.0 / (1.0 + normalizedDiff * 200.0)
 
-        // Plausibility: horizon should be in a reasonable range, not at top/bottom
+        // Continuity: the largest single-column jump, as a fraction of image height.
+        // Free below `jumpTolerance` — a real skyline has cliff edges — and falling away
+        // steeply above it.  At a 20% jump the factor is 0.12; at 50% it is 0.05.
+        let maxJump = Double(diffs.max() ?? 0) / Double(max(1, imageHeight))
+        let continuity = 1.0 / (1.0 + max(0.0, maxJump - jumpTolerance) * jumpFalloff)
+
+        // Plausibility: a horizon pressed against the top or bottom edge of the frame is the
+        // frame boundary, not a skyline.  No preference between the rest — see above.
         let avg = Double(defined.reduce(0, +)) / Double(defined.count)
         let heightFrac = avg / Double(imageHeight)
-        // Best at 0.5 (center), worst at 0 or 1
-        let plausibility: Double
-        if heightFrac < 0.05 || heightFrac > 0.95 {
-            plausibility = 0.0
-        } else if heightFrac < 0.15 || heightFrac > 0.85 {
-            plausibility = 0.3
-        } else {
-            plausibility = 1.0 - abs(heightFrac - 0.5) * 1.2
-        }
+        let edgeDistance = min(heightFrac, 1.0 - heightFrac)     // 0 at an edge, 0.5 at centre
+        let plausibility = (edgeDistance - edgeRejectFloor) / (edgeRejectCeiling - edgeRejectFloor)
         let clampedPlausibility = max(0.05, min(1.0, plausibility))
 
-        return coverage * smoothness * clampedPlausibility
+        return coverage * smoothness * continuity * clampedPlausibility
     }
+
+    /// Largest single-column jump, as a fraction of image height, that `continuity` does not
+    /// penalise at all.  The ground-truth horizons measured here peak at 0.08%, and the widest
+    /// jump any base method makes on them is 2.3%.
+    static let jumpTolerance = 0.02
+
+    /// How steeply `continuity` falls away past `jumpTolerance`.
+    static let jumpFalloff = 40.0
+
+    /// Below this distance from the nearest frame edge (as a fraction of height) the answer is
+    /// treated as a failed detection and scored to zero.
+    static let edgeRejectFloor = 0.02
+
+    /// At or beyond this distance from the nearest frame edge the answer is fully plausible.
+    static let edgeRejectCeiling = 0.08
 
     /// Compute per-column local smoothness weights for a horizon Y array.
     /// Each column gets a weight in (0, 1] based on how stable (non-spiky) the
@@ -1257,6 +1308,42 @@ public enum CombinedHorizonDetector {
         return result
     }
 
+    /// The value the outlier filter measures "far away" from, for one column.
+    ///
+    /// The obvious choice is the plain median, and that is what this was.  It assumes the methods
+    /// mostly agree and that at most a minority has slipped — true when they are all looking at the
+    /// same edge, false when they disagree about *which* edge is the horizon.  In that case the
+    /// median is just whichever answer happens to sort into the middle, and the filter then throws
+    /// away everything else, so a lone accurate method loses to a caucus of inaccurate ones no
+    /// matter how much confidence it carries.  Measured on `LRT_08_15_2026-a9-1-aurora` frame 1310,
+    /// column 0: SIOX says row 598, Otsu 1208, texture 1513, DP 3367, and the truth is 3390.  The
+    /// median picks 1513 and DP — the only one that is right, and by then the heaviest-weighted —
+    /// is dropped as the outlier.
+    ///
+    /// So split the entries wherever consecutive values are more than `threshold` apart, and take
+    /// the median of the heaviest resulting group: when the methods agree there is exactly one
+    /// group and this is the plain median of all the entries, bit for bit; when they split,
+    /// confidence decides which group the column is drawn from rather than the accident of sort
+    /// order.
+    ///
+    /// Returns 0 for no entries; the caller only reaches this with two or more.
+    static func outlierReference(_ entries: [(y: Int, weight: Double)], threshold: Int) -> Int {
+        guard !entries.isEmpty else { return 0 }
+        let sorted = entries.sorted { $0.y < $1.y }
+        var clusters: [[(y: Int, weight: Double)]] = []
+        for entry in sorted {
+            if let last = clusters.last?.last, entry.y - last.y <= threshold {
+                clusters[clusters.count - 1].append(entry)
+            } else {
+                clusters.append([entry])
+            }
+        }
+        let heaviest = clusters.max { a, b in
+            a.reduce(0.0) { $0 + $1.weight } < b.reduce(0.0) { $0 + $1.weight }
+        } ?? sorted
+        return heaviest[heaviest.count / 2].y
+    }
+
     /// Confidence-weighted combine: merge multiple horizon Y arrays, weighting
     /// each method's contribution by its global confidence × per-column local
     /// smoothness. This prevents a noisy detector from raising the noise floor at
@@ -1292,9 +1379,8 @@ public enum CombinedHorizonDetector {
                 continue
             }
 
-            // Compute median for outlier filtering (unweighted, for stability)
-            let sortedY = entries.map(\.y).sorted()
-            let med = sortedY[sortedY.count / 2]
+            // Pick the reference point the outlier filter measures against.
+            let med = outlierReference(entries, threshold: outlierThreshold)
 
             // Filter outliers
             let filtered = entries.filter { abs($0.y - med) <= outlierThreshold }

@@ -383,13 +383,33 @@ final class HorizonPaintState {
     /// SIOX never reclassifies known regions — only the remaining unknown gap
     /// between `knownSkyFloor` and `knownGroundCeiling` is subject to the
     /// colour-distance scan.
+    ///
+    /// ## The gesture widens the band
+    ///
+    /// The band is a *search* region, not a verdict, so a gesture that reaches outside it
+    /// pushes it open rather than being clipped by it.  Without that the painter could not
+    /// repair a badly wrong horizon at all: `loadExistingHorizon` synthesises a band of only
+    /// `margin` view-points either side of the saved curve, the solver is only allowed to
+    /// answer inside it, and the clamp at the end of the refinement pass pulls anything below
+    /// `knownGroundCeiling` — which is pinned to the band bottom — back up.  Painting sky over
+    /// a stretch of frame that the detector had called ground therefore snapped straight back
+    /// to where it started, which is exactly what a user hits when the detection is wrong by
+    /// more than the margin.  On a9 frame 1310 it was wrong by around 2000 px against a margin
+    /// of 400.
     func commitRefinementGesture(isErasing: Bool) {
         let vw = Int(viewWidth)
+        let vh = Int(viewHeight)
         for col in 0..<vw {
             guard gestureColumnBottom[col] != Int.min else { continue }
             let brushTop    = gestureColumnTop[col]
             let brushBottom = gestureColumnBottom[col]
+
             if isErasing {
+                // Open the band above the brush first, so the retraction below is not
+                // clipped back to the old search region.
+                if let top = bandColumnTop[col] {
+                    bandColumnTop[col] = min(top, max(0, min(vh - 1, brushTop - 1)))
+                }
                 // Erase → mark brushed rows as known ground: ceiling moves up.
                 if let current = knownGroundCeiling[col] {
                     knownGroundCeiling[col] = min(current, brushTop)
@@ -403,6 +423,10 @@ final class HorizonPaintState {
                     knownSkyFloor[col] = max(retracted, bandColumnTop[col] ?? 0)
                 }
             } else {
+                // Open the band below the brush first, for the same reason.
+                if let bottom = bandColumnBottom[col] {
+                    bandColumnBottom[col] = max(bottom, max(0, min(vh - 1, brushBottom + 1)))
+                }
                 // Paint → mark brushed rows as known sky: floor moves down.
                 if let current = knownSkyFloor[col] {
                     knownSkyFloor[col] = max(current, brushBottom)
