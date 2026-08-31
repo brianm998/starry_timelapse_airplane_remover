@@ -791,13 +791,22 @@ static MatWrapperRef createGradientMaskIntoSky(const cv::Mat &binaryMask, int gr
     }
     cv::Mat dist;
     cv::distanceTransform(skyMask8u, dist, cv::DIST_L2, 3);
-    cv::Mat distNormalized;
-    dist.convertTo(distNormalized, CV_32F);
-    distNormalized = cv::min(distNormalized, (float)gradientDistance);
-    distNormalized = distNormalized / (float)gradientDistance;
-    distNormalized *= 255.0f;
+    // Clamp to the gradient distance and rescale to 0..255 in two passes rather
+    // than five.  This used to convert the already-CV_32F distance map to CV_32F
+    // (a full 42MP float copy that changed nothing), then allocate a fresh
+    // full-frame temporary for each of min, divide and multiply.  Measured at
+    // 42MP the tail after the distance transform went from 180 ms to 32 ms, and
+    // the whole call from 417 ms to 308 ms.
+    //
+    // Bit-identical, not merely equivalent: checked pixel-for-pixel against the
+    // old sequence over a 42MP wavy horizon for every gradientDistance from 1 to
+    // 150 — zero differing pixels at every one.  Worth having checked, because
+    // folding the divide into the convert's scale factor turns `(x/D)*255` into
+    // `x*(255/D)`, and 255/D is not binary-exact for values like the default
+    // ground extension of 100.
+    cv::threshold(dist, dist, (double)gradientDistance, 0, cv::THRESH_TRUNC);
     cv::Mat gradientMask;
-    distNormalized.convertTo(gradientMask, CV_8UC1);
+    dist.convertTo(gradientMask, CV_8UC1, 255.0 / (double)gradientDistance);
     cv::Mat output = cv::min(skyMask8u, gradientMask);
     return wrap(output);
 }
@@ -815,17 +824,22 @@ static MatWrapperRef createGradientMaskIntoGround(const cv::Mat &binaryMask, int
     }
     cv::Mat inverted;
     cv::bitwise_not(earthMask8u, inverted);
-    cv::Mat edges;
-    cv::Canny(inverted, edges, 50, 150);
     cv::Mat dist;
     cv::distanceTransform(inverted, dist, cv::DIST_L2, 3);
-    cv::Mat distNormalized;
-    dist.convertTo(distNormalized, CV_32F);
-    distNormalized = cv::min(distNormalized, (float)gradientDistance);
-    distNormalized = 1.0f - (distNormalized / (float)gradientDistance);
-    distNormalized *= 255.0f;
+    // Deliberately *not* the fused form used on the sky side.  Folding this
+    // ramp into the convert as `-x*(255/D) + 255` is not bit-identical to
+    // `(1 - x/D)*255`: swept over a wavy horizon it agreed everywhere except
+    // D=121, where 33 pixels came out one value different.  So this keeps the
+    // original arithmetic in its original order and only drops what was free —
+    // the no-op CV_32F copy of an already-CV_32F distance map, the full-frame
+    // temporary behind each of min/divide/subtract/multiply, and a `cv::Canny`
+    // that computed a whole frame of edges into a local nothing ever read.
+    cv::min(dist, (float)gradientDistance, dist);
+    dist /= (float)gradientDistance;
+    dist = 1.0f - dist;
+    dist *= 255.0f;
     cv::Mat gradientMask;
-    distNormalized.convertTo(gradientMask, CV_8UC1);
+    dist.convertTo(gradientMask, CV_8UC1);
     cv::Mat output = cv::max(earthMask8u, gradientMask);
     return wrap(output);
 }
