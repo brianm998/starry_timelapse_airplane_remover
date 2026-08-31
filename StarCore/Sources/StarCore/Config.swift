@@ -80,8 +80,67 @@ public class ConfigManager {
         updateCallbacks.append(closure)
     }
     
+    /// Write the current config now, on the calling thread.
+    ///
+    /// Blocking, and deliberately so: this is the explicit "it must be on disk
+    /// when this returns" call, used by session setup and the quit path.
+    /// `update` no longer goes through it — see ``scheduleSave()``.
     public func save() {
         _config.writeJson(named: _jsonFilename, overwrite: true) 
+    }
+
+    /// Drives the coalescing background writer.  Non-nil while a drain is running.
+    private var saveTask: Task<Void, Never>?
+
+    /// Set by `scheduleSave`, cleared by the drain loop as it picks the work up.
+    private var savePending = false
+
+    /// Queue a write of the current config, off the main actor.
+    ///
+    /// `update` used to call `save()` inline.  Every settings control's `didSet`
+    /// ends in `update`, so each keystroke in the settings sheet did a JSON
+    /// encode of all 93 properties and a blocking file write on the main actor —
+    /// 0.66 ms on an idle disk, and unbounded while a run is saturating the very
+    /// directory being written to.
+    ///
+    /// Only one drain runs at a time and it re-reads `_config` on each pass
+    /// rather than writing a queued snapshot, so a burst of keystrokes collapses
+    /// into a single write of the newest value and no stale config can ever land
+    /// after a fresher one.
+    private func scheduleSave() {
+        savePending = true
+        guard saveTask == nil else { return }   // an in-flight drain will pick it up
+        saveTask = Task { @MainActor [weak self] in
+            while let self, self.savePending {
+                self.savePending = false
+                let snapshot = self._config
+                let filename = self._jsonFilename
+                await Task.detached(priority: .utility) {
+                    snapshot.writeJson(named: filename, overwrite: true)
+                }.value
+            }
+            self?.saveTask = nil
+        }
+    }
+
+    /// Wait for every queued write to reach disk.
+    ///
+    /// A fresh drain can start while this is waiting, hence the loop: it returns
+    /// only once nothing is outstanding.
+    public func flush() async {
+        while let task = saveTask {
+            await task.value
+        }
+    }
+
+    /// Write the current config now, for callers with no async context to await
+    /// from — `applicationWillTerminate` being the one that matters.
+    ///
+    /// Any drain still in flight writes `_config` as it stands when it gets
+    /// there, which is the same value or newer, so letting it run on is safe.
+    public func flushSynchronously() {
+        savePending = false
+        save()
     }
 
     public func jsonFilename() -> String { _jsonFilename }
@@ -89,6 +148,12 @@ public class ConfigManager {
     public func config() -> Config { _config }
 
     /// Replace the managed config and notify observers.
+    ///
+    /// The in-memory value and the observer callbacks are updated synchronously,
+    /// so anything reading `config()` or reacting to the change sees it before
+    /// this returns.  The **write is asynchronous and coalesced** — see
+    /// ``scheduleSave()``.  Callers that need the file on disk before they carry
+    /// on must `await flush()` (or `flushSynchronously()` with no async context).
     ///
     /// `save()` writes to the filename this manager was built with, wherever that points: a
     /// bare name lands under `tempOutputPath`, and a name carrying a directory names its own
@@ -103,7 +168,7 @@ public class ConfigManager {
     /// call sites.  `WriteJsonTests` pins the current behaviour at both layers.
     public func update(_ config: Config, save shouldSave: Bool = true) {
         self._config = config
-        if shouldSave { save() }
+        if shouldSave { scheduleSave() }
         for callback in updateCallbacks {
             callback(config)
         }

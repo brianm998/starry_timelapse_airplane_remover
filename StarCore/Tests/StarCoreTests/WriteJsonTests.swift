@@ -136,6 +136,7 @@ final class WriteJsonTests: XCTestCase {
         var updated = await manager.config()
         updated.imageWidth = 4240
         await manager.update(updated)          // save: true, the default
+        await manager.flush()                  // the write is async and coalesced
 
         let data = try Data(contentsOf: URL(fileURLWithPath: "\(sessionDir)/config.json"))
         let decoded = try JSONDecoder().decode(Config.self, from: data)
@@ -152,6 +153,7 @@ final class WriteJsonTests: XCTestCase {
         var updated = await manager.config()
         updated.imageWidth = 1234
         await manager.update(updated)
+        await manager.flush()                  // the write is async and coalesced
 
         let data = try Data(contentsOf: URL(fileURLWithPath: "\(tempPath)/config.json"))
         XCTAssertEqual(try JSONDecoder().decode(Config.self, from: data).imageWidth, 1234)

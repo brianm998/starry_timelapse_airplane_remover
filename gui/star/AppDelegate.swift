@@ -38,6 +38,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// blocking the main thread here risks the work not completing at all.
     func applicationWillTerminate(_ notification: Notification) {
         RunMarkerStore.finishWithoutWaiting()
+        // `ConfigManager.update` writes asynchronously so the settings sheet does
+        // not block the main thread on every keystroke, which leaves the last
+        // change possibly still queued at quit.  This hook is synchronous, so
+        // take the blocking write: it is one encode on the way out.
+        viewModel?.imageSequence?.config.flushSynchronously()
     }
 
     // Closing the main window goes through here so it mirrors Cmd-Q:

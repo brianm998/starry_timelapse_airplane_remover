@@ -367,6 +367,9 @@ struct StarCli: AsyncParsableCommand {
                     // back into the config file and a later resume without the flag
                     // keeps it
                     await configManager.update(config)
+                    // update()'s write is async and coalesced, and the cli can
+                    // reach its exit before one lands, so make this one wait.
+                    await configManager.flush()
                     // overwrite global constants constant
                     // not really thread safe,
                     // but we only do it here before starting any other threads.

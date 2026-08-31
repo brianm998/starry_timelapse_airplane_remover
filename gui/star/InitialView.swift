@@ -419,7 +419,7 @@ struct SplitRevealVideoView: View {
 //                  startPendulum()
               }
               .onDisappear {
-                  vm.pause()
+                  vm.teardown()
               }
         }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -475,21 +475,20 @@ struct SplitRevealVideoView: View {
 //        private let leftURL: URL
         private let rightURL: URL
 
+        /// Token for the end-of-item observer, so the registration can be torn
+        /// down with the view rather than outliving the process.
+        private var loopObserver: NSObjectProtocol?
+
+        /// Whether the view still wants this looping.  The observer checks it
+        /// before restarting: an end-of-item notification that lands after
+        /// `teardown()` would otherwise call `play()` and bring the player back
+        /// for the rest of the session.
+        private var isActive = false
+
         init(/*left: URL, */right: URL) {
             //self.leftURL = left
             self.rightURL = right
             loadAspectRatio()
-
-            [/*playerLeft, */playerRight].forEach { player in
-                NotificationCenter.default.addObserver(
-                  forName: .AVPlayerItemDidPlayToEndTime,
-                  object: player.currentItem,
-                  queue: .main
-                ) { _ in
-                    player.seek(to: .zero)
-                    player.play()
-                }
-            }
         }
 
         private func loadAspectRatio() {
@@ -543,25 +542,69 @@ struct SplitRevealVideoView: View {
 //            playerLeft.masterClock = masterClock
             playerRight.masterClock = masterClock
 
-            // Seek both exactly to zero before starting
+            observeEndOfItem(itemR)
+            isActive = true
+
+            // Seek exactly to zero before starting
             let zeroTime = CMTime(seconds: 0, preferredTimescale: 600)
-            let group = DispatchGroup()
-
-//            group.enter()
-//            playerLeft.seek(to: zeroTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
-            group.enter()
-            playerRight.seek(to: zeroTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in group.leave() }
-
-            group.notify(queue: .main) {
-                // Start them together
-//                self.playerLeft.play()
-                self.playerRight.play()
+            playerRight.seek(to: zeroTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.isActive else { return }
+//                    self.playerLeft.play()
+                    self.playerRight.play()
+                }
             }
         }
 
-        func pause() {
+        /// Restart the clip when it reaches the end.
+        ///
+        /// Registered against the item itself.  This used to pass
+        /// `player.currentItem` as the notification object, which is `nil` until
+        /// `prepareAndPlay` sets an item — so it matched the end of *every*
+        /// `AVPlayerItem` in the process, not just this one.
+        private func observeEndOfItem(_ item: AVPlayerItem) {
+            if let loopObserver { NotificationCenter.default.removeObserver(loopObserver) }
+            loopObserver = NotificationCenter.default.addObserver(
+              forName: .AVPlayerItemDidPlayToEndTime,
+              object: item,
+              queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.isActive else { return }
+                    // The completion-handler seek, not the bare `seek(to:)`.
+                    // That one blocks the calling thread until the seek
+                    // finishes, and this block runs on the main queue — so
+                    // every loop of a decorative video stalled the UI for as
+                    // long as the seek took.  While a sequence is processing
+                    // the machine is saturated and that is a long time: a
+                    // sample of a "not responding" Star had the main thread
+                    // spending 100% of five seconds inside this one seek.
+                    self.playerRight.seek(to: .zero,
+                                          toleranceBefore: .zero,
+                                          toleranceAfter: .zero) { [weak self] _ in
+                        MainActor.assumeIsolated {
+                            guard let self, self.isActive else { return }
+                            self.playerRight.play()
+                        }
+                    }
+                }
+            }
+        }
+
+        /// Stop playing and let go of the decoder.
+        ///
+        /// Pausing alone left the item in place, so CoreMedia kept a full set of
+        /// decode and audio-queue threads alive for the rest of the session
+        /// competing with processing for the machine.
+        func teardown() {
+            isActive = false
 //            playerLeft.pause()
             playerRight.pause()
+            playerRight.replaceCurrentItem(with: nil)
+            if let loopObserver {
+                NotificationCenter.default.removeObserver(loopObserver)
+                self.loopObserver = nil
+            }
         }
     }
 }
