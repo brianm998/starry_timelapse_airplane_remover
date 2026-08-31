@@ -19,7 +19,9 @@ final class OriginZeroLineTests: XCTestCase {
     private func group(boundsMin: Coord, boundsMax: Coord) -> OutlierGroup {
         OutlierGroup(id: 1, size: 1, brightness: 1000,
                      bounds: BoundingBox(min: boundsMin, max: boundsMax),
-                     frameIndex: 0, pixels: [], pixelSet: [])
+                     frameIndex: 0,
+                     imageWidth: 1000, imageHeight: 500,
+                     pixels: [], pixelSet: [])
     }
 
     /// The invariant: whatever line goes in, the absolute-coordinate line that comes out still

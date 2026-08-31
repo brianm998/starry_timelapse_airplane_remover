@@ -15,22 +15,11 @@ import StarCppBridge
 ///   - the `.isolated` exclusion list drifting changes which features that tree is trained on.
 final class OutlierGroupFeatureTests: XCTestCase {
 
-    /// `decisionTreeValueSync` force-unwraps these globals, so anything touching a feature value
-    /// has to set them first.  They are process-wide, so they are restored afterwards.
-    private var savedWidth: Double?
-    private var savedHeight: Double?
-
-    override func setUp() {
-        savedWidth = IMAGE_WIDTH
-        savedHeight = IMAGE_HEIGHT
-        IMAGE_WIDTH = 1000
-        IMAGE_HEIGHT = 500
-    }
-
-    override func tearDown() {
-        IMAGE_WIDTH = savedWidth
-        IMAGE_HEIGHT = savedHeight
-    }
+    /// The frame size every helper below builds against unless it says otherwise.
+    /// Feature values are fractions of it, so it has to be known to read any of them —
+    /// it just travels on the group now rather than in a process-wide global.
+    private static let frameWidth: Double = 1000
+    private static let frameHeight: Double = 500
 
     // MARK: - sortOrder is the identity
 
@@ -275,6 +264,8 @@ final class OutlierGroupFeatureTests: XCTestCase {
     /// than reporting anything — the two arguments are a single invariant that nothing checks.
     private func group(brightness: UInt,
                        bounds: BoundingBox,
+                       imageWidth: Double = OutlierGroupFeatureTests.frameWidth,
+                       imageHeight: Double = OutlierGroupFeatureTests.frameHeight,
                        filled: (Int, Int) -> Bool) -> OutlierGroup
     {
         var pixelSet: Set<SortablePixel> = []
@@ -291,11 +282,17 @@ final class OutlierGroupFeatureTests: XCTestCase {
             }
         }
         return OutlierGroup(id: 1, size: size, brightness: brightness, bounds: bounds,
-                            frameIndex: 0, pixels: pixels, pixelSet: pixelSet)
+                            frameIndex: 0,
+                            imageWidth: imageWidth, imageHeight: imageHeight,
+                            pixels: pixels, pixelSet: pixelSet)
     }
 
-    private func solidGroup(bounds: BoundingBox, brightness: UInt = 1000) -> OutlierGroup {
-        group(brightness: brightness, bounds: bounds) { _, _ in true }
+    private func solidGroup(bounds: BoundingBox,
+                            brightness: UInt = 1000,
+                            imageWidth: Double = OutlierGroupFeatureTests.frameWidth,
+                            imageHeight: Double = OutlierGroupFeatureTests.frameHeight) -> OutlierGroup {
+        group(brightness: brightness, bounds: bounds,
+              imageWidth: imageWidth, imageHeight: imageHeight) { _, _ in true }
     }
 
     /// A solid 10x10 box at [100, 50] on a 1000x500 frame, so every normalised value is a round
@@ -389,13 +386,11 @@ final class OutlierGroupFeatureTests: XCTestCase {
         let smallBounds = BoundingBox(min: Coord(x: 100, y: 50), max: Coord(x: 109, y: 59))
         let bigBounds = BoundingBox(min: Coord(x: 200, y: 100), max: Coord(x: 219, y: 119))
 
-        IMAGE_WIDTH = 1000; IMAGE_HEIGHT = 500
-        let small = solidGroup(bounds: smallBounds)
+        let small = solidGroup(bounds: smallBounds, imageWidth: 1000, imageHeight: 500)
         let smallValues = OutlierGroupFeature.allCases.filter { !$0.isAsync }
             .map { ($0, $0.decisionTreeValueSync(of: small)) }
 
-        IMAGE_WIDTH = 2000; IMAGE_HEIGHT = 1000
-        let big = solidGroup(bounds: bigBounds)
+        let big = solidGroup(bounds: bigBounds, imageWidth: 2000, imageHeight: 1000)
 
         for (feature, smallValue) in smallValues {
             // size scales with area, the rest with a single axis; both are covered by the
@@ -426,12 +421,13 @@ final class OutlierGroupFeatureTests: XCTestCase {
     /// transfer on this feature.
     func testHypotenuseIsDividedByAreaAndSoDoesNotTransferAcrossResolutions() {
         let bounds = BoundingBox(min: Coord(x: 0, y: 0), max: Coord(x: 9, y: 9))
-        let outlier = solidGroup(bounds: bounds)
 
-        IMAGE_WIDTH = 1000; IMAGE_HEIGHT = 500
-        let atSmall = OutlierGroupFeature.hypotenuse.decisionTreeValueSync(of: outlier)
-        IMAGE_WIDTH = 2000; IMAGE_HEIGHT = 1000
-        let atBig = OutlierGroupFeature.hypotenuse.decisionTreeValueSync(of: outlier)
+        // The same group on two frame sizes, which is now two groups: the size it is
+        // measured against travels with it.
+        let atSmall = OutlierGroupFeature.hypotenuse.decisionTreeValueSync(
+          of: solidGroup(bounds: bounds, imageWidth: 1000, imageHeight: 500))
+        let atBig = OutlierGroupFeature.hypotenuse.decisionTreeValueSync(
+          of: solidGroup(bounds: bounds, imageWidth: 2000, imageHeight: 1000))
 
         XCTAssertEqual(atSmall / atBig, 4, accuracy: 1e-9,
                        "quadrupling the frame area should quarter this feature")

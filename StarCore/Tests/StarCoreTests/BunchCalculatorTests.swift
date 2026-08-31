@@ -197,7 +197,8 @@ final class BunchCalculatorTests: XCTestCase {
     func testTheBunchFeaturesAreStableAcrossRuns() {
         let coords = [(0, 0), (1, 0), (4, 0), (7, 0), (30, 30), (31, 30), (34, 33)]
         let group = OutlierGroup(id: 1, size: UInt(coords.count), brightness: 1000,
-                                 bounds: bounds(coords), frameIndex: 0, pixels: [],
+                                 bounds: bounds(coords), frameIndex: 0,
+                                 imageWidth: 1000, imageHeight: 500, pixels: [],
                                  pixelSet: pixels(coords))
 
         let expected = calculateBunchData(from: group, maxPixelDistance: maxBunchDistance)
@@ -291,7 +292,8 @@ final class BunchCalculatorTests: XCTestCase {
                    + (0..<3).map { ($0 + 30, 0) }
                    + (0..<5).map { ($0 + 60, 0) }
         let group = OutlierGroup(id: 1, size: UInt(coords.count), brightness: 1000,
-                                 bounds: bounds(coords), frameIndex: 0, pixels: [],
+                                 bounds: bounds(coords), frameIndex: 0,
+                                 imageWidth: 1000, imageHeight: 500, pixels: [],
                                  pixelSet: pixels(coords))
 
         let (count, median, largest) = calculateBunchData(from: group, maxPixelDistance: 1)
@@ -304,7 +306,8 @@ final class BunchCalculatorTests: XCTestCase {
     func testASolidStreakIsOneBunchWhoseMedianIsItsSize() {
         let coords = (0..<20).map { ($0, 0) }
         let group = OutlierGroup(id: 1, size: 20, brightness: 1000,
-                                 bounds: bounds(coords), frameIndex: 0, pixels: [],
+                                 bounds: bounds(coords), frameIndex: 0,
+                                 imageWidth: 1000, imageHeight: 500, pixels: [],
                                  pixelSet: pixels(coords))
 
         let (count, median, largest) = calculateBunchData(from: group, maxPixelDistance: 1)
@@ -321,7 +324,8 @@ final class BunchCalculatorTests: XCTestCase {
 
         func data(_ coords: [(Int, Int)]) -> (Int, Int, Int) {
             let group = OutlierGroup(id: 1, size: UInt(coords.count), brightness: 1000,
-                                     bounds: bounds(coords), frameIndex: 0, pixels: [],
+                                     bounds: bounds(coords), frameIndex: 0,
+                                 imageWidth: 1000, imageHeight: 500, pixels: [],
                                      pixelSet: pixels(coords))
             return calculateBunchData(from: group, maxPixelDistance: 1)
         }
@@ -337,7 +341,8 @@ final class BunchCalculatorTests: XCTestCase {
                    + [(40, 0), (41, 0)]
                    + [(80, 0)]
         let group = OutlierGroup(id: 1, size: UInt(coords.count), brightness: 1000,
-                                     bounds: bounds(coords), frameIndex: 0, pixels: [],
+                                     bounds: bounds(coords), frameIndex: 0,
+                                 imageWidth: 1000, imageHeight: 500, pixels: [],
                                      pixelSet: pixels(coords))
         let (count, median, largest) = calculateBunchData(from: group, maxPixelDistance: 1)
         XCTAssertEqual(count, 3)

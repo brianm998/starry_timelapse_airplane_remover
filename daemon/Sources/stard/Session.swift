@@ -307,8 +307,6 @@ extension Session {
             maxImages: 40
         )
         let imageInfo = try await imageSequence.getImageInfo()
-        IMAGE_WIDTH = Double(imageInfo.imageWidth)
-        IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
         // Propagate the dimensions into the config too. FrameGraphBuilder.build derives
         // rawImageBytes from config.imageWidth/Height/BytesPerPixel, so leaving them at 0
@@ -382,8 +380,6 @@ extension Session {
             maxImages: 40
         )
         let imageInfo = try await imageSequence.getImageInfo()
-        IMAGE_WIDTH = Double(imageInfo.imageWidth)
-        IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
         // Propagate the dimensions into the config too. FrameGraphBuilder.build derives
         // rawImageBytes from config.imageWidth/Height/BytesPerPixel, so leaving them at 0
@@ -428,8 +424,6 @@ extension Session {
             maxImages: 40
         )
         let imageInfo = try await imageSequence.getImageInfo()
-        IMAGE_WIDTH = Double(imageInfo.imageWidth)
-        IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
         // Propagate the dimensions into the config too. FrameGraphBuilder.build derives
         // rawImageBytes from config.imageWidth/Height/BytesPerPixel, so leaving them at 0

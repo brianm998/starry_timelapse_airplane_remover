@@ -331,10 +331,6 @@ public actor NighttimeAirplaneRemover {
                 imageBytesPerPixel = imageInfo.imageBytesPerPixel
                 componentsPerPixel = imageInfo.componentsPerPixel
 
-                // in OutlierGroup.swift
-                IMAGE_WIDTH = Double(imageInfo.imageWidth)
-                IMAGE_HEIGHT = Double(imageInfo.imageHeight)
-
                 Log.d("first frame to get sizes: imageWidth \(String(describing: imageWidth)) imageHeight \(String(describing: imageHeight)) imageBytesPerPixel \(String(describing: imageBytesPerPixel))")
                 
             } catch {

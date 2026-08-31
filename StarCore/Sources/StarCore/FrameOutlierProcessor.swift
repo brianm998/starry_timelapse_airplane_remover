@@ -945,6 +945,10 @@ fileprivate class OutlierClassifier {
     {
         let frame = self.frame
         let frameIndex = frameIndex
+        // Captured before detaching, like `frame` above: the work below runs off
+        // this actor and cannot reach `self`.
+        let imageWidth = Double(frame.width)
+        let imageHeight = Double(frame.height)
         
         return await Task.detached(priority: .userInitiated) {
             return await withTaskGroup(of: ([OutlierSorter], TimeInterval, TimeInterval, Int).self) { taskGroup in
@@ -967,12 +971,14 @@ fileprivate class OutlierClassifier {
                             for blob in chunk {
 
                                 // make outlier group from this blob
-                                let outlierGroup = await blob.outlierGroup(at: frameIndex)
+                                let outlierGroup = await blob.outlierGroup(at: frameIndex,
+                                                                          imageWidth: imageWidth,
+                                                                          imageHeight: imageHeight)
 
                                 // vertical position on screen of the center of this outlier group
                                 // 0 is top
                                 // 1 is bottom
-                                let centerY = Double(outlierGroup.bounds.center.y)/Double(IMAGE_HEIGHT!)
+                                let centerY = Double(outlierGroup.bounds.center.y)/imageHeight
 
                                 /*
                                  to speed things up, smaller blobs are discarded.
