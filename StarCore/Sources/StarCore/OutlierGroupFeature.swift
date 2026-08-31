@@ -303,8 +303,8 @@ public enum OutlierGroupFeature: String,
     }
     
     public func decisionTreeValue(of group: OutlierGroup) async -> Double {
-        let height = IMAGE_HEIGHT!
-        let width = IMAGE_WIDTH!
+        let height = group.imageHeight
+        let width = group.imageWidth
 
         switch self {
         case .maxHoughTransformCount: // depends upon group.line
@@ -386,8 +386,8 @@ public enum OutlierGroupFeature: String,
     }
     
     public func decisionTreeValueSync(of group: OutlierGroup) -> Double {
-        let height = IMAGE_HEIGHT!
-        let width = IMAGE_WIDTH!
+        let height = group.imageHeight
+        let width = group.imageWidth
 
         switch self {
         case .size:

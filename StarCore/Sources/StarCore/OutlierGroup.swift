@@ -19,11 +19,6 @@ import logging
 import CoreGraphics
 #endif
 
-// these need to be setup at startup so the decision tree values are right
-// XXX these suck, find a better way
-nonisolated(unsafe) public var IMAGE_WIDTH: Double?
-nonisolated(unsafe) public var IMAGE_HEIGHT: Double?
-
 @MainActor
 public class OutlierRemovalObserver {
     public init() { }
@@ -52,6 +47,19 @@ public actor OutlierGroup: CustomStringConvertible,
     nonisolated public let size: UInt              // number of pixels in this outlier group
     nonisolated public let bounds: BoundingBox     // a bounding box on the image that contains this group
     nonisolated public let brightness: UInt        // the average amount per pixel of brightness over the limit 
+
+    // Dimensions of the frame this group came from.
+    //
+    // Feature values are fractions of the frame (a group's width is
+    // `bounds.width / imageWidth`), so the decision trees need these to mean
+    // anything.  They used to be process-global `IMAGE_WIDTH`/`IMAGE_HEIGHT`
+    // set once at startup, which is wrong for stard: one daemon serves many
+    // sessions, each session set the globals as it opened, and two sequences
+    // of different sizes open at once left the earlier one computing every
+    // feature against the later one's frame.  Silently wrong numbers, not a
+    // crash.  Per group, they cannot be clobbered by another sequence.
+    nonisolated public let imageWidth: Double
+    nonisolated public let imageHeight: Double
 
 
     // pixel value is zero if pixel is not part of group,
@@ -254,6 +262,8 @@ public actor OutlierGroup: CustomStringConvertible,
                 brightness: UInt,      // average brightness
                 bounds: BoundingBox,
                 frameIndex: Int,
+                imageWidth: Double,
+                imageHeight: Double,
                 pixels: [UInt16],
                 pixelSet: Set<SortablePixel>)
     {
@@ -262,6 +272,8 @@ public actor OutlierGroup: CustomStringConvertible,
         self.brightness = brightness
         self.bounds = bounds
         self.frameIndex = frameIndex
+        self.imageWidth = imageWidth
+        self.imageHeight = imageHeight
         self.pixels = pixels
         self.pixelSet = pixelSet
     }
@@ -550,10 +562,6 @@ public actor OutlierGroup: CustomStringConvertible,
         return ret
     }
 
-    public static var maxNearbyGroupDistance: Double {
-        IMAGE_WIDTH!/8 // XXX hardcoded constant
-    }
-    
     func blob() -> Blob {
         Blob(pixelSet, id: Int32(id), frameIndex: frameIndex)
     }

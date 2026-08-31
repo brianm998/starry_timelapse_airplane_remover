@@ -2030,8 +2030,6 @@ public final class ImageSequenceViewModel {
         let imageInfo = try await imageSequence.getImageInfo()
 
         // still needed by the decision trees :(
-        IMAGE_WIDTH = Double(imageInfo.imageWidth)
-        IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
         // most everything else uses the config for image sizes now
         var updatedConfig = self.config.config()

@@ -829,13 +829,18 @@ public actor Blob: CustomStringConvertible,
         }
     }
     
-    public func outlierGroup(at frameIndex: Int, withId id: UInt16? = nil) -> OutlierGroup {
+    public func outlierGroup(at frameIndex: Int,
+                            withId id: UInt16? = nil,
+                            imageWidth: Double,
+                            imageHeight: Double) -> OutlierGroup {
         if let _outlierGroup { return _outlierGroup }
         let group = OutlierGroup(id: id ?? UInt16(self.id),
                                  size: UInt(self.pixels.count),
                                  brightness: UInt(self.intensity()),
                                  bounds: self.boundingBox(),
                                  frameIndex: frameIndex,
+                                 imageWidth: imageWidth,
+                                 imageHeight: imageHeight,
                                  pixels: self.pixelValues,
                                  pixelSet: self.pixels)
         _outlierGroup = group

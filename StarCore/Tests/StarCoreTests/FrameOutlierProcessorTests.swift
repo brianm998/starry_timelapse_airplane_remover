@@ -33,7 +33,9 @@ final class FrameOutlierProcessorTests: FrameHarnessTestCase {
             }
         }
         return OutlierGroup(id: id, size: UInt(width * height), brightness: 1000,
-                            bounds: bounds, frameIndex: 0, pixels: pixels, pixelSet: pixelSet)
+                            bounds: bounds, frameIndex: 0,
+                            imageWidth: 1000, imageHeight: 500,
+                            pixels: pixels, pixelSet: pixelSet)
     }
 
     // MARK: - path derivation

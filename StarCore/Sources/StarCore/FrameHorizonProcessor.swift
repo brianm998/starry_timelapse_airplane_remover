@@ -320,11 +320,19 @@ final public actor FrameHorizonProcessor {
         
         let mergedHorizonImage: PixelatedImage?
         if config.tripodHeadWasMoving {
-            mergedHorizonImage = mask.image.medianMerge(
-                with: neighboringHorizons,
-                outlierThreshold: await configManager.config().pixelThreshold,
-                includeAll: true,
-                config: config)
+            // Off the cooperative pool; the threshold is read first because the
+            // closure cannot await.
+            let mergeThreshold = await configManager.config().pixelThreshold
+            let mergeMask = mask.image
+            let mergeNeighbors = neighboringHorizons
+            let mergeConfig = config
+            mergedHorizonImage = await NativeWork.run {
+                mergeMask.medianMerge(
+                  with: mergeNeighbors,
+                  outlierThreshold: mergeThreshold,
+                  includeAll: true,
+                  config: mergeConfig)
+            }
         } else if let accumulator = horizonAccumulator {
             // Use the running accumulator that was populated by HorizonDetectionOps.
             // Any frames not yet accumulated will be loaded from disk here.
@@ -333,7 +341,10 @@ final public actor FrameHorizonProcessor {
                 imageAccessor.nameForImage(frameIndex: idx, ofType: .horizon, atSize: .original)
             }
         } else {
-            mergedHorizonImage = PixelatedImage.accumulatedHorizonMask(fromFilenames: neighboringHorizons)
+            let accumulateFrom = neighboringHorizons
+            mergedHorizonImage = await NativeWork.run {
+                PixelatedImage.accumulatedHorizonMask(fromFilenames: accumulateFrom)
+            }
         }
         if let mergedHorizon = mergedHorizonImage {
             // Apply stats-based brightness refinement for moving sequences.
@@ -2080,15 +2091,28 @@ final public actor FrameHorizonProcessor {
             }
         }
 
-        // 3. Call Random Walker C++ implementation.
-        let horizonY = PixelatedImageBridge.randomWalkerHorizon(
-            original.mat,
-            bandTopY: bandTop,
-            bandBottomY: bandBottom,
-            skyFloorY: skyFloor,
-            groundCeilY: gndCeiling,
-            beta: beta
-        )
+        // 3. Call Random Walker C++ implementation, off the cooperative pool.
+        //
+        // This one is interactive: the horizon painter awaits it after every
+        // refinement gesture.  Holding a cooperative thread through a
+        // Gauss-Seidel diffusion solve makes the whole app's async work queue
+        // behind a brush stroke, which is the opposite of what the painter needs
+        // while a run is already using every other thread.
+        let solveMat = original.mat
+        // The seed arrays are built up mutably above; take immutable copies so
+        // the closure captures values rather than vars.
+        let solveBandTop = bandTop, solveBandBottom = bandBottom
+        let solveSkyFloor = skyFloor, solveGndCeiling = gndCeiling
+        let horizonY = await NativeWork.run {
+            PixelatedImageBridge.randomWalkerHorizon(
+                solveMat,
+                bandTopY: solveBandTop,
+                bandBottomY: solveBandBottom,
+                skyFloorY: solveSkyFloor,
+                groundCeilY: solveGndCeiling,
+                beta: beta
+            )
+        }
 
         // 4. Convert image pixel coords → view coords.
         var viewY = [Int?](repeating: nil, count: viewWidth)

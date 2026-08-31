@@ -41,8 +41,6 @@ public class Processor {
         let imageInfo = try await imageSequence.getImageInfo()
 
         // still needed by the decision trees :(
-        IMAGE_WIDTH = Double(imageInfo.imageWidth)
-        IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
         // Everything else reads image sizes from the config, and the memory gating
         // is useless without them: FrameGraphBuilder.build computes rawImageBytes

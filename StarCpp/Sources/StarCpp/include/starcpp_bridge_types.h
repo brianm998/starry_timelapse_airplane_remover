@@ -93,11 +93,18 @@ typedef struct {
 
 // --- Callback types ---
 
-// Image loader: given filename, should call completion with loaded image (or NULL)
-typedef void (*ImageLoaderCompletion)(MatWrapperRef image, void *context);
-typedef void (*ImageLoaderFunc)(const char *filename,
-                                ImageLoaderCompletion completion,
-                                void *context);
+// Image loader: given a filename, returns the loaded image or NULL.
+//
+// Synchronous by contract, and it has to stay that way.  `image_cache_load`
+// is called from deep inside ImageAligner on whatever thread is running the
+// merge — a Swift cooperative-pool thread, or an OpenCV GCD worker.  This
+// used to take a completion callback and block on a condition variable until
+// it fired, which only ever worked because the one registered loader happened
+// to call the completion before returning.  A loader that completed on
+// another thread would have parked the calling thread waiting for work that
+// may well need the very pool it is holding.  Returning the value directly
+// removes the option.
+typedef MatWrapperRef (*ImageLoaderFunc)(const char *filename);
 
 // Alignment progress callback
 typedef void (*AlignmentUpdateFunc)(int frameIndex,

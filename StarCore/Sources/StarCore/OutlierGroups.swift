@@ -78,7 +78,9 @@ public actor OutlierGroups {
                     Log.i("splitting group of size \(group.size) becasue it overlaps with bounds")
                     let blob = await group.blob()
                     await blob.removePixels(within: overlap)
-                    newMembers[id] = await blob.outlierGroup(at: frameIndex, withId: id)
+                    newMembers[id] = await blob.outlierGroup(at: frameIndex, withId: id,
+                                                          imageWidth: Double(config.imageWidth),
+                                                          imageHeight: Double(config.imageHeight))
                 }
             } else {
                 // this outlier doesn't overlap at all, keep it
@@ -95,7 +97,9 @@ public actor OutlierGroups {
                 } else {
                     let blob = await group.blob()
                     await blob.removePixels(within: overlap)
-                    newTrash[id] = await blob.outlierGroup(at: frameIndex, withId: id)
+                    newTrash[id] = await blob.outlierGroup(at: frameIndex, withId: id,
+                                                          imageWidth: Double(config.imageWidth),
+                                                          imageHeight: Double(config.imageHeight))
                 }
             } else {
                 // this outlier doesn't overlap at all, keep it
@@ -109,7 +113,9 @@ public actor OutlierGroups {
         for blob in blobs.values {
             maxID += 1
             let id = maxID
-            newMembers[id] = await blob.outlierGroup(at: frameIndex, withId: id)
+            newMembers[id] = await blob.outlierGroup(at: frameIndex, withId: id,
+                                                          imageWidth: Double(config.imageWidth),
+                                                          imageHeight: Double(config.imageHeight))
         }
         
         self.members = newMembers
@@ -260,7 +266,9 @@ public actor OutlierGroups {
         self.trash = [:]
         
         for (_, blob) in blobs {
-            let outlierGroup = await blob.outlierGroup(at: frameIndex)
+            let outlierGroup = await blob.outlierGroup(at: frameIndex,
+                                                       imageWidth: Double(config.imageWidth),
+                                                       imageHeight: Double(config.imageHeight))
             if let outlierGroupPaintData,
                let shouldRemove = outlierGroupPaintData[outlierGroup.id]
             {
@@ -271,7 +279,9 @@ public actor OutlierGroups {
 
         if let trashBlobs {
             for (_, blob) in trashBlobs {
-                let outlierGroup = await blob.outlierGroup(at: frameIndex)
+                let outlierGroup = await blob.outlierGroup(at: frameIndex,
+                                                       imageWidth: Double(config.imageWidth),
+                                                       imageHeight: Double(config.imageHeight))
                 self.trash[outlierGroup.id] = outlierGroup
             }
         }
@@ -345,7 +355,9 @@ public actor OutlierGroups {
                 let newPixels = await blobToSlice.slice(with: overlap)
                 newBlobPixels.formUnion(newPixels)
                 members.removeValue(forKey: key)
-                let newOutlierGroup = await blobToSlice.outlierGroup(at: frameIndex)
+                let newOutlierGroup = await blobToSlice.outlierGroup(at: frameIndex,
+                                                       imageWidth: Double(config.imageWidth),
+                                                       imageHeight: Double(config.imageHeight))
                 newOutlierGroups.append(newOutlierGroup)
             }
         }
@@ -359,7 +371,9 @@ public actor OutlierGroups {
                     let newPixels = await blobToSlice.slice(with: overlap)
                     newBlobPixels.formUnion(newPixels)
                     trash.removeValue(forKey: key)
-                    let newOutlierGroup = await blobToSlice.outlierGroup(at: frameIndex)
+                    let newOutlierGroup = await blobToSlice.outlierGroup(at: frameIndex,
+                                                       imageWidth: Double(config.imageWidth),
+                                                       imageHeight: Double(config.imageHeight))
                     newOutlierGroups.append(newOutlierGroup)
                 }
             }
@@ -370,7 +384,9 @@ public actor OutlierGroups {
             members[newOutlier.id] = newOutlier
         }
         if newBlobPixels.count > 0 {
-            let slicedOutlier = await Blob(newBlobPixels, id: Int32(maxKey), frameIndex: frameIndex).outlierGroup(at: frameIndex)
+            let slicedOutlier = await Blob(newBlobPixels, id: Int32(maxKey), frameIndex: frameIndex).outlierGroup(at: frameIndex,
+                                                       imageWidth: Double(config.imageWidth),
+                                                       imageHeight: Double(config.imageHeight))
             members[slicedOutlier.id] = slicedOutlier
             return true
         } else {
@@ -520,13 +536,13 @@ public actor OutlierGroups {
                  // paint the group bounds for help debugging
                  
                  for x in group.bounds.min.x...group.bounds.max.x {
-                 baseData[group.bounds.min.y*Int(IMAGE_WIDTH!)+x] = 0x8F
-                 baseData[group.bounds.max.y*Int(IMAGE_WIDTH!)+x] = 0x8F
+                 baseData[group.bounds.min.y*config.imageWidth+x] = 0x8F
+                 baseData[group.bounds.max.y*config.imageWidth+x] = 0x8F
                  }
 
                  for y in group.bounds.min.y...group.bounds.max.y {
-                 baseData[y*Int(IMAGE_WIDTH!)+group.bounds.min.x] = 0x8F
-                 baseData[y*Int(IMAGE_WIDTH!)+group.bounds.max.x] = 0x8F
+                 baseData[y*config.imageWidth+group.bounds.min.x] = 0x8F
+                 baseData[y*config.imageWidth+group.bounds.max.x] = 0x8F
                  }
                  */
                 //Log.d("group \(group.id) has bounds \(group.bounds)")

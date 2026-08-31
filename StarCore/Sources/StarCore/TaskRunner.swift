@@ -6,9 +6,26 @@ import logging
 public let defaultTaskMaster = TaskMaster(maxConcurrentTasks: TaskRunner.maxConcurrentTasks)
 
 public class TaskRunner {
-    // XXX getting this number right is hard
-    // too big and the swift runtime barfs underneath
-    // too small and the process runs without available cpu resources
+    // How many frame-level tasks run at once.
+    //
+    // The "too big and the swift runtime barfs underneath" this used to warn
+    // about was the cooperative thread pool starving: every concurrent frame
+    // held one of its (core-count many) threads blocked inside OpenCV, so
+    // going wide left the runtime with nothing to schedule its own async work
+    // on.  Backing off to three quarters of the cores kept enough free that it
+    // limped along.
+    //
+    // `NativeWork` moved that blocking work off the pool, so the runtime is no
+    // longer the constraint and this is free to be a throughput decision again.
+    // It is left where it was deliberately: raising it also raises peak memory
+    // and how far OpenCV fans out underneath (it picks the GCD backend and
+    // ignores cv::setNumThreads above 1, so each concurrent op brings its own
+    // workers — see medianMergeTyped in ImageAligner.cpp).  That wants a
+    // measured run, not a guess, and end-to-end runs on this hardware vary by
+    // ~90s on identical settings.
+    //
+    // Note `NativeWork.concurrencyLimit` reads this, so it still bounds the
+    // native work too — just without holding cooperative threads to do it.
     nonisolated(unsafe) public static var maxConcurrentTasks: UInt = determineMax() {
         didSet {
             Log.i("using maximum of \(maxConcurrentTasks) concurrent tasks")

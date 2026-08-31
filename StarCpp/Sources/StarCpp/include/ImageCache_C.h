@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 // Set the image loader callback.
-// The loader receives a filename and must call the completion with the loaded image.
+// The loader receives a filename and returns the loaded image, synchronously.
 void image_cache_set_loader(ImageLoaderFunc loader);
 
 // Load an image synchronously using the registered loader.
