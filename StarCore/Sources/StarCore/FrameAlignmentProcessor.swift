@@ -615,25 +615,34 @@ final public actor FrameAlignmentProcessor {
               "originalFile=\(originalFilename) " +
               "mask=\(horizonMask?.image.description ?? "<none>")")
 
-        if let results = ImageAligner.findFeatures(
-             baseImage: originalFrame.mat,
-             frameIndex: Int32(frameIndex),
+        // Off the cooperative pool: SIFT detection at full resolution holds a
+        // thread for a long time, and the pool cannot grow to replace it.
+        let baseMat = originalFrame.mat
+        let maskMat = horizonMask?.image.mat
+        let featureConfig = config
+        let featureIndex = self.frameIndex
+        let featureAlignmentType = alignmentType
+        let results = await NativeWork.run {
+            ImageAligner.findFeatures(
+             baseImage: baseMat,
+             frameIndex: Int32(featureIndex),
              matchMethod: .knnLowes,
-             mask: horizonMask?.image.mat,
-             alignmentType: alignmentType,
-             maxKeypoints: Int32(config.alignmentMaxKeypoints),
-             writeDebugImages: config.alignmentWriteDebugImages,
-             groundHorizonExtension: Int32(config.alignmentGroundHorizonExtension),
-             skyHorizonExtension: Int32(config.alignmentSkyHorizonExtension),
-             baseImageDilateSize: Int32(config.alignmentBaseImageDilateSize),
-             baseImageThresholdValue: Int32(config.alignmentBaseImageThresholdValue),
+             mask: maskMat,
+             alignmentType: featureAlignmentType,
+             maxKeypoints: Int32(featureConfig.alignmentMaxKeypoints),
+             writeDebugImages: featureConfig.alignmentWriteDebugImages,
+             groundHorizonExtension: Int32(featureConfig.alignmentGroundHorizonExtension),
+             skyHorizonExtension: Int32(featureConfig.alignmentSkyHorizonExtension),
+             baseImageDilateSize: Int32(featureConfig.alignmentBaseImageDilateSize),
+             baseImageThresholdValue: Int32(featureConfig.alignmentBaseImageThresholdValue),
              // A scale, not the divisor — `ia_find_features` treats anything >= 1.0 as
              // full resolution and says nothing, so handing it 1.5 would silently detect
              // at full size while keypointFilename named a reduced-scale cache file.
              // Config does the conversion and the clamping in one place.
-             detectionScale: config.keypointDetectionScale
+             detectionScale: featureConfig.keypointDetectionScale
            )
-        {
+        }
+        if let results {
             Log.d("frame \(frameIndex) got \(results.keypointCount) keypoints")
 
             if results.write(toFilename: fullPath) {
@@ -956,18 +965,28 @@ final public actor FrameAlignmentProcessor {
                 // frames: the warps never come back here, so each one can be
                 // spilled to scratch and released as it is produced. See
                 // Config.mergeStreamingThresholdMB for when that engages.
-                let result = ImageAligner.alignAndMedianMerge(
-                  baseImage: originalFrame.mat,
-                  baseFrameIndex: Int32(frameIndex),
-                  neighbors: neighbors,
-                  homography: homography,
-                  outlierThreshold: config.pixelThreshold,
-                  includeAll: false,
-                  scratchDir: config.tempOutputPath,
-                  streamingThresholdBytes:
-                    Int64(config.mergeStreamingThresholdMB) * 1024 * 1024,
-                  loadConcurrency: config.mergeLoadConcurrency
-                )
+                // Off the cooperative pool.  This is the longest single native
+                // call in the run — a full-resolution warp of every neighbour
+                // followed by the merge — and holding a cooperative thread for
+                // its duration is what starves the async plumbing around it.
+                let mergeBase = originalFrame.mat
+                let mergeNeighbors = neighbors
+                let mergeConfig = config
+                let mergeIndex = frameIndex
+                let result = await NativeWork.run {
+                    ImageAligner.alignAndMedianMerge(
+                      baseImage: mergeBase,
+                      baseFrameIndex: Int32(mergeIndex),
+                      neighbors: mergeNeighbors,
+                      homography: homography,
+                      outlierThreshold: mergeConfig.pixelThreshold,
+                      includeAll: false,
+                      scratchDir: mergeConfig.tempOutputPath,
+                      streamingThresholdBytes:
+                        Int64(mergeConfig.mergeStreamingThresholdMB) * 1024 * 1024,
+                      loadConcurrency: mergeConfig.mergeLoadConcurrency
+                    )
+                }
 
                 if let result {
                     Log.d("frame \(frameIndex) merged \(result.warpCount) aligned neighbors")
