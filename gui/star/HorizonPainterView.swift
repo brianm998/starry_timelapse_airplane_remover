@@ -40,6 +40,9 @@ struct HorizonPainterView: View {
     /// each time a new gesture ends so that only the latest stroke set's
     /// computation is ever in flight.
     @State private var expansionTask: Task<Void, Never>? = nil
+    /// True between a drag's first event and its end, so the marching ants can
+    /// stand still while the selection is actively being painted.
+    @State private var isDragging: Bool = false
 
     var body: some View {
         ZStack {
@@ -68,10 +71,24 @@ struct HorizonPainterView: View {
 
     // MARK: - Paint canvas
 
+    /// Whether the marching-ants dash phase should be advancing right now.
+    ///
+    /// Each tick re-strokes the whole selection outline twice with a dash
+    /// pattern, which at frame width measured 3-7 ms — around a tenth of a core
+    /// held continuously for an animation that is pure decoration.  There is no
+    /// point paying it when there is nothing to outline, and none during a drag
+    /// either: the outline still redraws as the brush moves (the canvas
+    /// invalidates on the paint state), it just does not also need the dashes
+    /// crawling while the shape underneath them is changing every event.
+    private var antsShouldAnimate: Bool {
+        !isDragging && !paintState.displayPath.isEmpty
+    }
+
     private var paintCanvas: some View {
         ZStack {
             paintMaskCanvas
-            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0,
+                                    paused: !antsShouldAnimate)) { timeline in
                 Canvas { context, size in
                     let t = timeline.date.timeIntervalSinceReferenceDate
                     drawMarchingAnts(&context, size: size, time: t)
@@ -190,10 +207,12 @@ struct HorizonPainterView: View {
         DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .onChanged { gesture in
                 guard paintState.phase != .computing else { return }
+                isDragging = true
                 paintState.addStroke(at: gesture.location)
                 mousePosition = gesture.location
             }
             .onEnded { gesture in
+                isDragging = false
                 guard paintState.phase != .computing else {
                     paintState.endSegment()
                     return
