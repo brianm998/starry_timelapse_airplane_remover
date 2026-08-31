@@ -416,10 +416,20 @@ final public actor FrameAlignmentProcessor {
 
         Log.d("frame \(frameIndex) has base keypoints \(baseKeypoints) and \(neighbors.count) neighbors")
 
-        if let result = ImageAligner.computeHomography(
-             baseKeypoints: baseKeypoints,
-             frameIndex: Int32(frameIndex),
-             neighbors: neighbors,
+        // Off the cooperative pool, like the other two.  The progress handler
+        // below is safe to fire from a non-cooperative thread: it builds a
+        // value and calls `set(state:)`, which is `nonisolated` and only
+        // spawns a Task, so it touches no actor state synchronously.
+        let homographyKeypoints = baseKeypoints
+        let homographyNeighbors = neighbors
+        let homographyConfig = config
+        let homographyIndex = self.frameIndex
+        let homographyAlignmentType = alignmentType
+        let result = await NativeWork.run { [self] in
+            ImageAligner.computeHomography(
+             baseKeypoints: homographyKeypoints,
+             frameIndex: Int32(homographyIndex),
+             neighbors: homographyNeighbors,
              // BFMatcher's knnMatch with Lowe's ratio test.  Fully
              // deterministic.  FLANN's KDTree uses random splits in its
              // internal RNG (not exposed via OpenCV) so the same input could
@@ -427,9 +437,9 @@ final public actor FrameAlignmentProcessor {
              // combined with RANSAC variance produced the intermittent
              // bad-homography frames.
              matchMethod: .knnLowes,
-             alignmentType: alignmentType,
-             maxKeypoints: Int32(config.alignmentMaxKeypoints),
-             writeDebugImages: config.alignmentWriteDebugImages,
+             alignmentType: homographyAlignmentType,
+             maxKeypoints: Int32(homographyConfig.alignmentMaxKeypoints),
+             writeDebugImages: homographyConfig.alignmentWriteDebugImages,
              handler: { frameIndex,
                         alignmentType,
                         alignmentStep,
@@ -459,7 +469,8 @@ final public actor FrameAlignmentProcessor {
                      self.set(state: processingState)
                  }
              })
-        {
+        }
+        if let result {
             Log.d("frame \(frameIndex) got homography result \(result)")
             let alignedWarps = result.warpInfo.map { $0.toCodable() }
             Log.d("frame \(frameIndex) alignedWarps \(alignedWarps)")
@@ -907,12 +918,20 @@ final public actor FrameAlignmentProcessor {
             // This is the heaviest merge in the pipeline: base plus
             // numberStaticNeighborFrames sources, all resident at once unless the
             // config lets it stream (~4.3GB vs a few hundred MB at 42MP).
-            if let mergedImage = originalFrame.medianMerge(
-                 with: self.getStaticNeighborFilenames(),
-                 outlierThreshold: pixelThreshold,
-                 config: config
-               )
-            {
+            // Off the cooperative pool for the same reason as the aligned merge
+            // below — this one is bigger still.
+            let staticBase = originalFrame
+            let staticNeighbors = self.getStaticNeighborFilenames()
+            let staticThreshold = pixelThreshold
+            let staticConfig = config
+            let mergedImage = await NativeWork.run {
+                staticBase.medianMerge(
+                  with: staticNeighbors,
+                  outlierThreshold: staticThreshold,
+                  config: staticConfig
+                )
+            }
+            if let mergedImage {
                 var horizonMask: HorizonMask? = nil
                 if config.horizonDetectionEnabled {
                     // use static merged horizons

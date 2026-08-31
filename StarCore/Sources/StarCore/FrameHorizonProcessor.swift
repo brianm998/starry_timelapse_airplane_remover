@@ -320,11 +320,19 @@ final public actor FrameHorizonProcessor {
         
         let mergedHorizonImage: PixelatedImage?
         if config.tripodHeadWasMoving {
-            mergedHorizonImage = mask.image.medianMerge(
-                with: neighboringHorizons,
-                outlierThreshold: await configManager.config().pixelThreshold,
-                includeAll: true,
-                config: config)
+            // Off the cooperative pool; the threshold is read first because the
+            // closure cannot await.
+            let mergeThreshold = await configManager.config().pixelThreshold
+            let mergeMask = mask.image
+            let mergeNeighbors = neighboringHorizons
+            let mergeConfig = config
+            mergedHorizonImage = await NativeWork.run {
+                mergeMask.medianMerge(
+                  with: mergeNeighbors,
+                  outlierThreshold: mergeThreshold,
+                  includeAll: true,
+                  config: mergeConfig)
+            }
         } else if let accumulator = horizonAccumulator {
             // Use the running accumulator that was populated by HorizonDetectionOps.
             // Any frames not yet accumulated will be loaded from disk here.
@@ -333,7 +341,10 @@ final public actor FrameHorizonProcessor {
                 imageAccessor.nameForImage(frameIndex: idx, ofType: .horizon, atSize: .original)
             }
         } else {
-            mergedHorizonImage = PixelatedImage.accumulatedHorizonMask(fromFilenames: neighboringHorizons)
+            let accumulateFrom = neighboringHorizons
+            mergedHorizonImage = await NativeWork.run {
+                PixelatedImage.accumulatedHorizonMask(fromFilenames: accumulateFrom)
+            }
         }
         if let mergedHorizon = mergedHorizonImage {
             // Apply stats-based brightness refinement for moving sequences.
