@@ -58,9 +58,31 @@ public struct HomographyResultsCodable: Codable, Sendable {
         return ret
     }
 
+    /// How `partitionWarps` sorted one frame's neighbor homographies.
+    ///
+    /// `suspect` is what the heuristics below distrust, not what is known to be wrong.
+    /// Every check in here is internal to this one frame's own set — magnitude, slope
+    /// uniformity, and residual from a line fit through its *own* neighbors — so a set
+    /// that is smooth but collectively at the wrong rate passes, and a correct set
+    /// measured while the pan rate is changing can be flagged.  Callers that can bring
+    /// outside evidence to bear should do so before discarding a suspect warp; see
+    /// `HomographyReciprocity` and `validateMovingStarAlignment`.
+    public struct WarpPartition: Sendable {
+        public let good: [AlignmentWarpInfoCodable]
+        public let suspect: [AlignmentWarpInfoCodable]
+    }
+
     // apply some basic heurstics to the neighbor homography to see if it looks ok
     // weeds out some obvously bad homographies
     public var alignmentLooksOk: Bool {
+        let partition = partitionWarps()
+        return !partition.good.isEmpty && partition.suspect.isEmpty
+    }
+
+    /// Sort this frame's neighbor homographies by the heuristics `alignmentLooksOk`
+    /// applies, but report the split instead of collapsing it to one Bool.  Same
+    /// checks, same thresholds — `alignmentLooksOk` is defined in terms of this.
+    public func partitionWarps() -> WarpPartition {
 
         var slopes: [Double] = []
 
@@ -162,8 +184,15 @@ public struct HomographyResultsCodable: Codable, Sendable {
             badWarps = neighborHomography
         }
 
-        return goodWarps.count != 0 && badWarps.count == 0
+        return WarpPartition(good: goodWarps, suspect: badWarps)
     }
+
+    // There is deliberately no way to drop individual neighbors from a set here.  It was
+    // built, used, measured and removed: a warp that disagrees with its partner is
+    // exactly what the merge kernel's outlier trimming absorbs, so dropping it gains no
+    // more sharpness than dropping a *correct* warp does and costs a sample everywhere.
+    // See `StarHomographyVerdict.keepAsMeasured` for the numbers.  A set is either
+    // trustworthy and used whole, or it is not and gets repaired.
 }
 
 /// Ordinary least-squares fit of `y = a·x + b`.  Returns `(0, mean(y))`

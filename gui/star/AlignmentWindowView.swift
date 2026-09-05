@@ -401,8 +401,23 @@ struct AlignmentDeviationChart: View {
                       .foregroundStyle(Color.byOffset(point.offset))
                       .foregroundStyle(by: .value(localized("ui.neighbor_offset"), group.offset))
                       .interpolationMethod(.linear)
-                      .opacity(point.isGood ? 1.0 : 0.4) // XXX doesn't work
                 }
+            }
+
+            // === Warps the alignment heuristics distrust ===
+            //
+            // A per-point `.opacity` on the LineMark above used to stand here, which is
+            // why it carried an "XXX doesn't work" — a LineMark's style applies to the
+            // segment it draws, so varying it per point cannot fade one reading out of a
+            // continuous line.  A mark of its own can be seen.
+            ForEach(points.filter { !$0.isGood }) { point in
+                PointMark(
+                  x: .value(localized("ui.frame_capitalised"), point.baseFrame),
+                  y: .value(localized("ui.deviation"), point.signedDeviation)
+                )
+                  .symbol(.circle)
+                  .symbolSize(28)
+                  .foregroundStyle(.red)
             }
 
             // === Current frame indicator ===
@@ -598,10 +613,39 @@ struct AlignmentDeviationChart: View {
     func makeDeviationPoints(
       frames: [[AlignmentWarpInfoCodable]]
     ) -> [DeviationPoint] {
+        AlignmentDeviationChart.deviationPoints(frames: frames)
+    }
+}
+
+extension AlignmentDeviationChart {
+
+    /// Flatten the per-frame neighbor sets into chart points, marking the warps the
+    /// alignment heuristics distrust.
+    ///
+    /// Internal rather than private so the starTests target can check the marking against
+    /// real homographies; nothing here touches the view or the environment.
+    static func deviationPoints(
+      frames: [[AlignmentWarpInfoCodable]]
+    ) -> [DeviationPoint] {
 
         var points: [DeviationPoint] = []
 
         for (baseFrameIndex, neighbors) in frames.enumerated() {
+            // Which of this frame's warps the alignment heuristics distrust.  This used
+            // to be hardcoded `true`, which made the tooltip's green/red deviation
+            // reading meaningless — every warp read as good, including the ones the
+            // pipeline went on to treat as doubtful.
+            //
+            // Distrusted is not the same as unused.  `validateMovingStarAlignment` keeps
+            // a frame's measured set whole as long as enough of it stands up and the
+            // cross-frame reciprocity check is satisfied, so a red reading here means
+            // "the per-frame heuristics did not like this one", not "this was thrown
+            // away" — see `HomographyResultsCodable.partitionWarps`.
+            let suspect = Set(
+              HomographyResultsCodable(for: baseFrameIndex, with: neighbors)
+                .partitionWarps().suspect.map(\.frameIndex)
+            )
+
             for neighbor in neighbors {
                 let offset = neighbor.frameIndex - baseFrameIndex
                 guard offset != 0 else { continue }
@@ -615,7 +659,7 @@ struct AlignmentDeviationChart: View {
                     offset: offset,
                     signedDeviation: signedDeviation,
                     alignmentState: neighbor.alignmentState,
-                    isGood: true
+                    isGood: !suspect.contains(neighbor.frameIndex)
                   )
                 )
             }
