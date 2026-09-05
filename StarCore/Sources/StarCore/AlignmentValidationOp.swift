@@ -355,15 +355,94 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         }
         Log.d("validateMovingStarAlignment (gap-fill approach) \(nonNilCount) homographies of \(entries.count) frames")
 
-        // Classify frames — nil homography is automatically bad.
-        let goodFlags: [Bool] = entries.map { entry in
-            guard let h = entry.homography else { return false }
-            return isGood(h)
+        let config = await configManager.config()
+
+        // The measured sets, captured before this pass rewrites anything, so that every
+        // consistency judgement below is made against what the aligner actually said
+        // rather than against a substitute an earlier iteration installed.
+        var indexByFrameIndex: [Int: Int] = [:]
+        for (index, entry) in entries.enumerated() {
+            indexByFrameIndex[entry.frame.frameIndex] = index
+        }
+        let measured: [HomographyResultsCodable?] = entries.map(\.homography)
+        func measuredSet(_ frameIndex: Int) -> HomographyResultsCodable? {
+            guard let index = indexByFrameIndex[frameIndex] else { return nil }
+            return measured[index]
         }
 
-        Log.d("found \(goodFlags.filter { $0 }.count) good flags out of \(entries.count)")
+        // Cross-frame consistency, when the frame size is known well enough to measure
+        // it.  Judged against every measured partner: the score is a median over a
+        // frame's neighbors, so a bad partner or two cannot condemn a good frame, and
+        // there are no classifications yet to restrict it to.
+        let probes = HomographyReciprocity.probePoints(width: config.imageWidth,
+                                                       height: config.imageHeight)
+        if probes == nil {
+            Log.w("skipping the star homography reciprocity check: frame size is " +
+                  "\(config.imageWidth)x\(config.imageHeight)")
+        }
+
+        // Classify frames — nil homography is automatically bad.  A frame that keeps its
+        // measured set may still have had doubtful neighbors pruned out of it.
+        var goodFlags = [Bool](repeating: false, count: entries.count)
+        var prunedWarps = 0, prunedFrames = 0, reciprocityRejections = 0, corroborated = 0
+
+        // Indexed rather than `enumerated()`, because the pruning branch writes back into
+        // `entries` and every decision has to be made from the `measured` snapshot.
+        for index in entries.indices {
+            let frame = entries[index].frame
+            switch classifyStarHomography(measured[index],
+                                          probes: probes,
+                                          partnerSet: measuredSet)
+            {
+            case .keepAsMeasured(let corroboratedWarps):
+                corroborated += corroboratedWarps
+                goodFlags[index] = true
+
+            case .keepPruned(let pruned, let corroboratedWarps, let dropped):
+                corroborated += corroboratedWarps
+                prunedWarps += dropped
+                prunedFrames += 1
+                Log.d("frame \(frame.frameIndex) keeping " +
+                      "\(pruned.neighborHomography.count) measured warps and dropping " +
+                      "\(dropped), instead of replacing the whole set")
+                entries[index].homography = pruned
+                await frame.set(neighborStarHomography: pruned)
+                goodFlags[index] = true
+
+            case .needsRepair(let reciprocityScore):
+                if let reciprocityScore {
+                    Log.i("frame \(frame.frameIndex) star homography rejected by " +
+                          "the reciprocity check: it disagrees with its neighbours' own " +
+                          "fits of the same pairs by " +
+                          "\(String(format: "%.2f", reciprocityScore))px, above " +
+                          "\(ReciprocityLimits.frameRejection)px")
+                    reciprocityRejections += 1
+                }
+            }
+        }
+
+        Log.i("moving star alignment: \(goodFlags.filter { $0 }.count) of " +
+              "\(entries.count) frames keep their measured homography " +
+              "(\(prunedFrames) of them with \(prunedWarps) doubtful warps pruned, " +
+              "\(corroborated) more kept because a partner frame agreed); " +
+              "\(reciprocityRejections) rejected by the reciprocity check")
+
+        // Only frames that kept their own measured homography vouch for anything: a
+        // frame still awaiting repair has nothing to say about its neighbours, and one
+        // already repaired would let a substitute corroborate the next substitute.
+        func goodPartnerSet(_ frameIndex: Int) -> HomographyResultsCodable? {
+            guard let index = indexByFrameIndex[frameIndex], goodFlags[index] else {
+                return nil
+            }
+            return measured[index]
+        }
+
+        // Donors come only from good-flagged frames, and classification never touches
+        // those again, so one snapshot taken here stays correct for the whole repair.
+        let donorSets: [HomographyResultsCodable?] = entries.map(\.homography)
 
         // Find contiguous bad segments
+        var gateKeeps = 0, repaired = 0
         var i = 0
         while i < entries.count {
 
@@ -379,19 +458,32 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             }
             let end = i - 1   // inclusive
 
-            /*
-             instead of taking the first 'good' homography,
-             look a the previous N 'good' homographies within M distance from i
-             choose the one with the median deviation among them all
-             */
-            let leftGood  = bestHomography(
+            // The nearest good frame on each side, not the median-deviation one among
+            // the next 20.
+            //
+            // Picking by median deviation put the donor in the *middle* of its 20 frame
+            // window, so on a moving sequence it was typically ~10 frames away, and a
+            // homography 10 frames away describes a different motion whenever the pan
+            // rate is not constant.  Measured on frames 481/482 of the 2103 frame
+            // a9-1-aurora sequence, whose pan was accelerating through a transient
+            // excursion: the median pick chose frames 471 and 492, both outside the
+            // excursion, and blending them gave tx slopes of -1.79 and -1.91 px/frame
+            // where the truth was -2.68 and -2.84 — wrong by up to 4.7px at offset +-4,
+            // enough that the merge's outlier trimming discarded the faint stars and the
+            // two frames rendered as brightest-stars-only.  Frames 480 and 483, the
+            // adjacent ones, were available and good the whole time; using them recovers
+            // the merge's star energy from 0.48 to 0.75 of the original, against 0.80 to
+            // 0.82 for a healthy frame.
+            let leftGood  = nearestGoodHomography(
               before: start,
-              in: entries,
+              in: donorSets,
+              goodFlags: goodFlags,
               checking: 20
             )
-            let rightGood = bestHomography(
+            let rightGood = nearestGoodHomography(
               after:  i-1,
-              in: entries,
+              in: donorSets,
+              goodFlags: goodFlags,
               checking: 20
             )
 
@@ -427,8 +519,22 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
                     // 4c️ Both sides good → interpolate
                 case (let lg?, let rg?):
-                    let alpha = Double(idx - start + 1) /
-                      Double(end - start + 2)
+                    // Weighted by where this frame actually sits between the two donors,
+                    // not by its position in the bad segment.  Those agree only when the
+                    // donors are equidistant from the segment's ends; when one side's
+                    // nearest good frame is further away than the other's — which is the
+                    // normal case at a sequence end or beside a run of failures — the
+                    // positional alpha pulls the result towards the further donor.
+                    let leftFrameIndex = lg.frameIndex
+                    let rightFrameIndex = rg.frameIndex
+                    let span = Double(rightFrameIndex - leftFrameIndex)
+                    // Clamped because the segment walk indexes `entries` positionally and
+                    // therefore already assumes frame index rises with array index; if
+                    // that ever stops holding, a donor on the wrong side must not
+                    // extrapolate past either of them.
+                    let alpha = span > 0
+                      ? min(max(Double(badFrame.frameIndex - leftFrameIndex) / span, 0), 1)
+                      : Double(idx - start + 1) / Double(end - start + 2)
 
                     newHomography = interpolateHomography(
                       lg, rg,
@@ -445,7 +551,38 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                         for: badFrame.frameIndex,
                         with: newHomography
                     )
+
+                    // The reciprocity gate.  A substitute is other frames' motion
+                    // stamped onto this one; a measured set is this frame's own, and the
+                    // heuristics that condemned it are all internal to it and can be
+                    // wrong about a real measurement.  So a measured set that the
+                    // cross-frame check independently vouches for is not given up unless
+                    // the substitute is demonstrably more consistent than it.
+                    //
+                    // Partners are restricted to frames classified good here, so a bad
+                    // segment's members do not vouch for each other.
+                    if let existing = measuredSet(badFrame.frameIndex), let probes {
+                        let existingScore = HomographyReciprocity.score(
+                          of: existing, partnerSet: goodPartnerSet, at: probes)
+                        let substituteScore = HomographyReciprocity.score(
+                          of: results, partnerSet: goodPartnerSet, at: probes)
+                        if !substituteDisplacesMeasured(measuredScore: existingScore,
+                                                        substituteScore: substituteScore)
+                        {
+                            func px(_ v: Double?) -> String {
+                                v.map { String(format: "%.2fpx", $0) } ?? "unmeasurable"
+                            }
+                            Log.i("frame \(badFrame.frameIndex) keeping its measured star " +
+                                  "homography: it agrees with its neighbours' own fits " +
+                                  "to \(px(existingScore)), where the substitute would " +
+                                  "be \(px(substituteScore))")
+                            gateKeeps += 1
+                            continue
+                        }
+                    }
+
                     entries[idx].homography = results
+                    repaired += 1
                     Log.d("frame \(badFrame.frameIndex) is getting newHomography \(newHomography)")
                     await badFrame.set(
                       neighborStarHomography: results
@@ -454,7 +591,11 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             }
         }
 
-        /* 
+        Log.i("moving star alignment: repaired \(repaired) frames from their nearest " +
+              "good neighbours; the reciprocity gate kept \(gateKeeps) measured sets " +
+              "that the internal heuristics had condemned")
+
+        /*
            XXX smoothing code disabled for now
            
         Log.d("validateMovingStarAlignment applying smoothing")
@@ -1071,37 +1212,179 @@ struct GapFillEntry {
     let neighborFrameIndices: [Int]
 }
 
-func bestHomography(
-  before index: Int,
-  in entries: [GapFillEntry],
-  checking checkCount: Int = 20
-) -> HomographyResultsCodable? {
-    if index <= 0 { return nil }
-    let startIndex = index > checkCount ? index - checkCount : 0
-    var homographyBasket: [HomographyResultsCodable] = []
-    for i in startIndex..<index {
-        if let h = entries[i].homography, h.alignmentLooksOk {
-            homographyBasket.append(h)
-        }
-    }
-    return bestMedianHomography(in: homographyBasket)
+/// Thresholds for the cross-frame consistency work in `validateMovingStarAlignment`.
+///
+/// Measured on the 2103 frame `11_30_2024-a9-1-aurora-topaz` sequence (moving, with an
+/// accelerating pan).  See `HomographyReciprocity` for what the score is.
+enum ReciprocityLimits {
+    /// A frame whose median disagreement with its partners exceeds this is treated as
+    /// bad however good it looks to `alignmentLooksOk`.
+    ///
+    /// The per-frame score ran p99.9 = 1.066px across that sequence, and the two frames
+    /// that actually rendered as brightest-stars-only sat at 2.17 and 2.14px, so
+    /// anything from about 1.2 to 2.1 separates them cleanly.  1.5 takes the middle of
+    /// that gap.
+    static let frameRejection: Double = 1.5
+
+    /// A warp `alignmentLooksOk` distrusts is kept anyway when the partner frame's own
+    /// fit of the same pair agrees within this.
+    ///
+    /// Per-warp disagreement over that sequence ran p50 0.146px, p90 0.667, p99 1.680.
+    /// The correct-but-flagged warps on frames 481/482 measured 0.04 to 0.89px, so 1.0
+    /// keeps all of them while staying under p99.
+    static let warpCorroboration: Double = 1.0
+
+    /// How much better a substitute has to score before it displaces a measured set that
+    /// the reciprocity check vouches for.  A margin rather than a bare comparison, so
+    /// that noise between two near-equal scores does not decide it.
+    static let substituteImprovement: Double = 0.9
+
+    /// Below this many surviving warps a frame is repaired rather than pruned.  Four is
+    /// where `alignmentLooksOk`'s own translation regression stops being over-fit, and
+    /// the fewest points a homography can be fitted from at all.
+    static let minimumKeptWarps = 4
 }
 
-func bestHomography(
-  after index: Int,
-  in entries: [GapFillEntry],
-  checking checkCount: Int = 20
-) -> HomographyResultsCodable? {
-    if index >= entries.count { return nil }
-    let startIndex = index+1
-    let endIndex = index + checkCount < entries.count ? index + checkCount : entries.count
-    var homographyBasket: [HomographyResultsCodable] = []
-    for i in startIndex..<endIndex {
-        if let h = entries[i].homography, h.alignmentLooksOk {
-            homographyBasket.append(h)
+/// What `classifyStarHomography` decided about one frame's measured homography set.
+enum StarHomographyVerdict {
+    /// Usable as measured.  Carries how many warps the internal heuristics distrusted but
+    /// a partner frame vouched for, for reporting only.
+    case keepAsMeasured(corroborated: Int)
+    /// Usable once the warps nothing corroborates are dropped.
+    case keepPruned(HomographyResultsCodable, corroborated: Int, dropped: Int)
+    /// Not usable.  Carries the reciprocity score when that is what condemned it, and nil
+    /// when the internal heuristics or a missing set did.
+    case needsRepair(reciprocityScore: Double?)
+}
+
+/// Decide whether one frame can keep the homography set the aligner measured for it.
+///
+/// Three things happen here, in order, and the order matters:
+///
+/// 1. `partitionWarps` says which of this frame's neighbor homographies its own internal
+///    heuristics distrust.  This used to be collapsed to one Bool, and one distrusted warp
+///    of eight discarded the whole set — frame 482 of the a9-1-aurora sequence lost eight
+///    correct homographies because a single one of them missed the slope band by 0.35%.
+/// 2. A distrusted warp that the partner frame's own independent fit of the same pair
+///    agrees with is kept anyway.  The two fits share no keypoints, no RANSAC draw and no
+///    base frame, so agreement to within a pixel is not something they arrive at by
+///    accident.  This is what holds a correct set together while the pan rate is changing,
+///    which is exactly when `deviation/frameDistance` stops being uniform and the slope
+///    band starts flagging real measurements.
+/// 3. The cross-frame check then gets the last word on whatever survived — including on
+///    sets the heuristics were perfectly happy with, which is the case they structurally
+///    cannot see: internally smooth, collectively at the wrong rate.
+///
+/// `probes` nil disables everything cross-frame, leaving the original behaviour of
+/// trusting `partitionWarps` alone.
+func classifyStarHomography(
+  _ homography: HomographyResultsCodable?,
+  probes: [(x: Double, y: Double)]?,
+  partnerSet: (Int) -> HomographyResultsCodable?
+) -> StarHomographyVerdict {
+    guard let homography,
+          homography.neighborHomography.contains(where: {
+              $0.alignmentState == .homographySuccess
+          })
+    else { return .needsRepair(reciprocityScore: nil) }
+
+    let partition = homography.partitionWarps()
+    guard !partition.good.isEmpty else { return .needsRepair(reciprocityScore: nil) }
+
+    // computed once, and used for both the corroboration decision and the frame's score
+    let perNeighbor = probes.map {
+        HomographyReciprocity.perNeighborDisagreement(
+          of: homography, partnerSet: partnerSet, at: $0)
+    } ?? [:]
+
+    var keep = Set(partition.good.map(\.frameIndex))
+    var corroborated = 0
+    for suspect in partition.suspect {
+        if let d = perNeighbor[suspect.frameIndex],
+           d <= ReciprocityLimits.warpCorroboration
+        {
+            keep.insert(suspect.frameIndex)
+            corroborated += 1
         }
     }
-    return bestMedianHomography(in: homographyBasket)
+
+    // Too little left to be worth keeping.
+    guard keep.count >= ReciprocityLimits.minimumKeptWarps else {
+        return .needsRepair(reciprocityScore: nil)
+    }
+
+    if let score = HomographyReciprocity.median(of: perNeighbor, restrictedTo: keep),
+       score > ReciprocityLimits.frameRejection
+    {
+        return .needsRepair(reciprocityScore: score)
+    }
+
+    let dropped = homography.neighborHomography.count - keep.count
+    guard dropped > 0 else { return .keepAsMeasured(corroborated: corroborated) }
+    return .keepPruned(homography.keeping(neighborFrameIndices: keep),
+                       corroborated: corroborated,
+                       dropped: dropped)
+}
+
+/// Whether a gap-fill substitute should displace the frame's own measured homography,
+/// given each one's reciprocity score (lower is more consistent, nil is unmeasurable).
+///
+/// The asymmetry is deliberate.  A substitute is some other frame's motion stamped onto
+/// this one, and every heuristic that condemned the measured set is internal to that set
+/// and can be wrong about a real measurement — that is how frames 481/482 of the
+/// a9-1-aurora sequence lost correct homographies to a blend of two frames ten away.  So
+/// a measured set the cross-frame check independently vouches for is only given up to a
+/// substitute that is demonstrably more consistent, and never to one that cannot be
+/// scored at all.
+func substituteDisplacesMeasured(
+  measuredScore: Double?,
+  substituteScore: Double?
+) -> Bool {
+    // Nothing vouches for the measured set, so the substitute is the better bet.
+    guard let measuredScore,
+          measuredScore <= ReciprocityLimits.frameRejection
+    else { return true }
+    guard let substituteScore else { return false }
+    return substituteScore < measuredScore * ReciprocityLimits.substituteImprovement
+}
+
+/// The nearest frame before `index` that kept its own measured homography.
+///
+/// Nearest, not best: on a moving sequence a homography's usefulness as a stand-in falls
+/// off with distance, because it describes the motion at the time it was measured.  The
+/// previous version of this ranked up to `checkCount` candidates by composite deviation
+/// and took the median, which by construction lands about `checkCount/2` frames away —
+/// see the comment at the call site for what that cost on frames 481/482.
+///
+/// `goodFlags` is what restricts this to measured sets: a frame still awaiting repair, or
+/// one already repaired, is not a donor, so substitutes never propagate down a sequence.
+func nearestGoodHomography(
+  before index: Int,
+  in homographies: [HomographyResultsCodable?],
+  goodFlags: [Bool],
+  checking checkCount: Int = 20
+) -> HomographyResultsCodable? {
+    guard index > 0 else { return nil }
+    let startIndex = index > checkCount ? index - checkCount : 0
+    for i in stride(from: min(index, homographies.count) - 1, through: startIndex, by: -1) {
+        if goodFlags[i], let h = homographies[i] { return h }
+    }
+    return nil
+}
+
+/// The nearest frame after `index` that kept its own measured homography.
+func nearestGoodHomography(
+  after index: Int,
+  in homographies: [HomographyResultsCodable?],
+  goodFlags: [Bool],
+  checking checkCount: Int = 20
+) -> HomographyResultsCodable? {
+    guard index < homographies.count - 1 else { return nil }
+    let endIndex = min(index + checkCount, homographies.count - 1)
+    for i in (max(index, -1) + 1)...endIndex {
+        if goodFlags[i], let h = homographies[i] { return h }
+    }
+    return nil
 }
 
 /// Copy `src`'s homography values onto a new neighbor list for the target
@@ -1338,22 +1621,14 @@ struct HomographyOffsetModel {
     }
 }
 
-// returns the best median homography sorted by composite deviation from identity
-func bestMedianHomography(
-  in homographies: [HomographyResultsCodable]
-) -> HomographyResultsCodable? {
-    if homographies.count == 0 { return nil }
-
-    let sorted = homographies.sorted() { $0.compositeDeviation < $1.compositeDeviation }
-
-    return sorted[sorted.count/2]
-}
-
-func isGood(_ r: HomographyResultsCodable) -> Bool {
-    r.alignmentLooksOk &&
-    r.neighborHomography.contains { $0.alignmentState == .homographySuccess }
-}
-
+// `bestMedianHomography` and `isGood` lived here.  The moving path was their only
+// caller: it classified frames with `isGood` and then, for each bad segment, ranked up
+// to 20 candidates on each side by `compositeDeviation` and took the median.  Both are
+// gone — the classification now reports which *warps* are doubtful rather than
+// condemning the frame for one of them (`partitionWarps`), and the donor is the nearest
+// good frame rather than the median-ranked one (`nearestGoodHomography`), because the
+// median pick systematically lands about ten frames away and ten frames is a different
+// motion whenever the pan rate is not constant.
 
 /// Interpolate two homography sets onto a third (target) frame, pairing
 /// entries by **offset** (`neighbor.frameIndex − selfFrameIndex`).  For each

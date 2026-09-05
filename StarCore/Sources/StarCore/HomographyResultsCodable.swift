@@ -58,9 +58,31 @@ public struct HomographyResultsCodable: Codable, Sendable {
         return ret
     }
 
+    /// How `partitionWarps` sorted one frame's neighbor homographies.
+    ///
+    /// `suspect` is what the heuristics below distrust, not what is known to be wrong.
+    /// Every check in here is internal to this one frame's own set — magnitude, slope
+    /// uniformity, and residual from a line fit through its *own* neighbors — so a set
+    /// that is smooth but collectively at the wrong rate passes, and a correct set
+    /// measured while the pan rate is changing can be flagged.  Callers that can bring
+    /// outside evidence to bear should do so before discarding a suspect warp; see
+    /// `HomographyReciprocity` and `validateMovingStarAlignment`.
+    public struct WarpPartition: Sendable {
+        public let good: [AlignmentWarpInfoCodable]
+        public let suspect: [AlignmentWarpInfoCodable]
+    }
+
     // apply some basic heurstics to the neighbor homography to see if it looks ok
     // weeds out some obvously bad homographies
     public var alignmentLooksOk: Bool {
+        let partition = partitionWarps()
+        return !partition.good.isEmpty && partition.suspect.isEmpty
+    }
+
+    /// Sort this frame's neighbor homographies by the heuristics `alignmentLooksOk`
+    /// applies, but report the split instead of collapsing it to one Bool.  Same
+    /// checks, same thresholds — `alignmentLooksOk` is defined in terms of this.
+    public func partitionWarps() -> WarpPartition {
 
         var slopes: [Double] = []
 
@@ -162,7 +184,22 @@ public struct HomographyResultsCodable: Codable, Sendable {
             badWarps = neighborHomography
         }
 
-        return goodWarps.count != 0 && badWarps.count == 0
+        return WarpPartition(good: goodWarps, suspect: badWarps)
+    }
+
+    /// This set restricted to the neighbor frame indices given, keeping each surviving
+    /// entry's measured matrix and deviation exactly as they are.
+    ///
+    /// Dropping one neighbor costs the merge one source — it looks its homography up by
+    /// offset (`ia_align_and_median_merge`) and simply has one fewer sample at each
+    /// pixel — where replacing the whole set substitutes another frame's motion for this
+    /// frame's.  Pruning is the smaller move of the two, so it is what a frame with a
+    /// couple of doubtful neighbors gets.
+    public func keeping(neighborFrameIndices keep: Set<Int>) -> HomographyResultsCodable {
+        HomographyResultsCodable(
+          for: frameIndex,
+          with: neighborHomography.filter { keep.contains($0.frameIndex) }
+        )
     }
 }
 
