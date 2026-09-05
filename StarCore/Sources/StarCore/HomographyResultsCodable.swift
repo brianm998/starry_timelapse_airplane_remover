@@ -187,20 +187,12 @@ public struct HomographyResultsCodable: Codable, Sendable {
         return WarpPartition(good: goodWarps, suspect: badWarps)
     }
 
-    /// This set restricted to the neighbor frame indices given, keeping each surviving
-    /// entry's measured matrix and deviation exactly as they are.
-    ///
-    /// Dropping one neighbor costs the merge one source — it looks its homography up by
-    /// offset (`ia_align_and_median_merge`) and simply has one fewer sample at each
-    /// pixel — where replacing the whole set substitutes another frame's motion for this
-    /// frame's.  Pruning is the smaller move of the two, so it is what a frame with a
-    /// couple of doubtful neighbors gets.
-    public func keeping(neighborFrameIndices keep: Set<Int>) -> HomographyResultsCodable {
-        HomographyResultsCodable(
-          for: frameIndex,
-          with: neighborHomography.filter { keep.contains($0.frameIndex) }
-        )
-    }
+    // There is deliberately no way to drop individual neighbors from a set here.  It was
+    // built, used, measured and removed: a warp that disagrees with its partner is
+    // exactly what the merge kernel's outlier trimming absorbs, so dropping it gains no
+    // more sharpness than dropping a *correct* warp does and costs a sample everywhere.
+    // See `StarHomographyVerdict.keepAsMeasured` for the numbers.  A set is either
+    // trustworthy and used whole, or it is not and gets repaired.
 }
 
 /// Ordinary least-squares fit of `y = a·x + b`.  Returns `(0, mean(y))`

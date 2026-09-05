@@ -384,7 +384,7 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         // Classify frames — nil homography is automatically bad.  A frame that keeps its
         // measured set may still have had doubtful neighbors pruned out of it.
         var goodFlags = [Bool](repeating: false, count: entries.count)
-        var prunedWarps = 0, prunedFrames = 0, reciprocityRejections = 0, corroborated = 0
+        var distrusted = 0, distrustedFrames = 0, reciprocityRejections = 0, corroborated = 0
 
         // Indexed rather than `enumerated()`, because the pruning branch writes back into
         // `entries` and every decision has to be made from the `measured` snapshot.
@@ -394,19 +394,15 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                                           probes: probes,
                                           partnerSet: measuredSet)
             {
-            case .keepAsMeasured(let corroboratedWarps):
+            case .keepAsMeasured(let corroboratedWarps, let distrustedWarps):
                 corroborated += corroboratedWarps
-                goodFlags[index] = true
-
-            case .keepPruned(let pruned, let corroboratedWarps, let dropped):
-                corroborated += corroboratedWarps
-                prunedWarps += dropped
-                prunedFrames += 1
-                Log.d("frame \(frame.frameIndex) keeping " +
-                      "\(pruned.neighborHomography.count) measured warps and dropping " +
-                      "\(dropped), instead of replacing the whole set")
-                entries[index].homography = pruned
-                await frame.set(neighborStarHomography: pruned)
+                if distrustedWarps > 0 {
+                    distrusted += distrustedWarps
+                    distrustedFrames += 1
+                    Log.d("frame \(frame.frameIndex) keeping its whole measured set, " +
+                          "\(distrustedWarps) of whose warps the internal heuristics " +
+                          "distrust and no partner vouched for")
+                }
                 goodFlags[index] = true
 
             case .needsRepair(let reciprocityScore):
@@ -422,9 +418,10 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         }
 
         Log.i("moving star alignment: \(goodFlags.filter { $0 }.count) of " +
-              "\(entries.count) frames keep their measured homography " +
-              "(\(prunedFrames) of them with \(prunedWarps) doubtful warps pruned, " +
-              "\(corroborated) more kept because a partner frame agreed); " +
+              "\(entries.count) frames keep their measured homography whole " +
+              "(\(corroborated) warps kept because a partner frame vouched for them, " +
+              "and \(distrusted) across \(distrustedFrames) frames kept despite " +
+              "nothing vouching for them); " +
               "\(reciprocityRejections) rejected by the reciprocity check")
 
         // Only frames that kept their own measured homography vouch for anything: a
@@ -1239,19 +1236,34 @@ enum ReciprocityLimits {
     /// that noise between two near-equal scores does not decide it.
     static let substituteImprovement: Double = 0.9
 
-    /// Below this many surviving warps a frame is repaired rather than pruned.  Four is
-    /// where `alignmentLooksOk`'s own translation regression stops being over-fit, and
-    /// the fewest points a homography can be fitted from at all.
-    static let minimumKeptWarps = 4
+    /// Below this many warps standing up to scrutiny, a frame is repaired rather than
+    /// kept.  Four is where `alignmentLooksOk`'s own translation regression stops being
+    /// over-fit, and the fewest points a homography can be fitted from at all.
+    ///
+    /// This is a measure of how much of a frame's set can be believed, not a list of
+    /// entries to write: a frame that clears it keeps its measured set whole.  Dropping
+    /// the warps that did not stand up was tried and measured, and it is a slightly bad
+    /// trade — see `StarHomographyVerdict.keepAsMeasured`.
+    static let minimumTrustedWarps = 4
 }
 
 /// What `classifyStarHomography` decided about one frame's measured homography set.
 enum StarHomographyVerdict {
-    /// Usable as measured.  Carries how many warps the internal heuristics distrusted but
-    /// a partner frame vouched for, for reporting only.
-    case keepAsMeasured(corroborated: Int)
-    /// Usable once the warps nothing corroborates are dropped.
-    case keepPruned(HomographyResultsCodable, corroborated: Int, dropped: Int)
+    /// Usable, and used whole — including any warps that did not individually stand up.
+    ///
+    /// Dropping those was the obvious next step and it is measurably the wrong one.  A
+    /// misaligned source is what the merge kernel's outlier trimming already exists to
+    /// absorb, so removing one buys no sharpness that removing a *correct* source would
+    /// not also buy, and it costs a sample everywhere.  Measured on four frames whose
+    /// worst warp disagreed with its partner by 1.1 to 10.3px: dropping it gained 1.0 to
+    /// 1.3% star sharpness in the merge and cost 3 to 5% background noise.  The control
+    /// settles it — dropping a warp that every measure agrees is *good*, from a healthy
+    /// frame, gives the same 0.5-1.0% sharper and 2.4-3.9% noisier.  The gain is
+    /// "one fewer source", nothing to do with alignment, and the noise it buys goes
+    /// straight into the reference the outlier detector subtracts.
+    ///
+    /// `corroborated` and `distrusted` are for reporting only.
+    case keepAsMeasured(corroborated: Int, distrusted: Int)
     /// Not usable.  Carries the reciprocity score when that is what condemned it, and nil
     /// when the internal heuristics or a missing set did.
     case needsRepair(reciprocityScore: Double?)
@@ -1297,33 +1309,33 @@ func classifyStarHomography(
           of: homography, partnerSet: partnerSet, at: $0)
     } ?? [:]
 
-    var keep = Set(partition.good.map(\.frameIndex))
+    var trusted = partition.good.count
     var corroborated = 0
     for suspect in partition.suspect {
         if let d = perNeighbor[suspect.frameIndex],
            d <= ReciprocityLimits.warpCorroboration
         {
-            keep.insert(suspect.frameIndex)
+            trusted += 1
             corroborated += 1
         }
     }
 
-    // Too little left to be worth keeping.
-    guard keep.count >= ReciprocityLimits.minimumKeptWarps else {
+    // Too little of the set stands up to believe any of it.  This is also the only gate
+    // left where reciprocity cannot speak — at a sequence end, or where the partners
+    // themselves failed to align, `perNeighbor` is too sparse for a median.
+    guard trusted >= ReciprocityLimits.minimumTrustedWarps else {
         return .needsRepair(reciprocityScore: nil)
     }
 
-    if let score = HomographyReciprocity.median(of: perNeighbor, restrictedTo: keep),
+    // Judged over the whole set, because the whole set is what gets written.
+    if let score = HomographyReciprocity.median(of: perNeighbor),
        score > ReciprocityLimits.frameRejection
     {
         return .needsRepair(reciprocityScore: score)
     }
 
-    let dropped = homography.neighborHomography.count - keep.count
-    guard dropped > 0 else { return .keepAsMeasured(corroborated: corroborated) }
-    return .keepPruned(homography.keeping(neighborFrameIndices: keep),
-                       corroborated: corroborated,
-                       dropped: dropped)
+    return .keepAsMeasured(corroborated: corroborated,
+                           distrusted: partition.suspect.count - corroborated)
 }
 
 /// Whether a gap-fill substitute should displace the frame's own measured homography,

@@ -115,18 +115,14 @@ enum HomographyReciprocity {
                minimumPartners: minimumPartners)
     }
 
-    /// The same median, over a `perNeighborDisagreement` map the caller already has —
-    /// optionally restricted to a subset of neighbors, which is how a pruned set is
-    /// scored without measuring it again.
+    /// The same median, over a `perNeighborDisagreement` map the caller already has, so
+    /// that a caller wanting both the per-warp numbers and the frame's score measures
+    /// only once.
     static func median(
       of perNeighbor: [Int: Double],
-      restrictedTo keep: Set<Int>? = nil,
       minimumPartners: Int = 4
     ) -> Double? {
-        let values = (keep == nil
-                        ? Array(perNeighbor.values)
-                        : perNeighbor.filter { keep!.contains($0.key) }.map(\.value))
-          .sorted()
+        let values = perNeighbor.values.sorted()
         guard values.count >= minimumPartners else { return nil }
         return values[values.count / 2]
     }

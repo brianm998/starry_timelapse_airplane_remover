@@ -529,40 +529,47 @@ final class HomographyReciprocityTests: XCTestCase {
         }
     }
 
-    /// Pruning keeps each surviving entry's own matrix and deviation, and drops only what
-    /// it was asked to.  A dropped neighbour costs the merge one source; replacing the set
-    /// costs it this frame's motion.
-    func testPruningKeepsTheSurvivorsUntouched() throws {
-        let measured = results(forFrame: 481, from: Incident.measured)
-        let keep = Set(measured.partitionWarps().good.map(\.frameIndex))
-        let pruned = measured.keeping(neighborFrameIndices: keep)
-
-        XCTAssertEqual(pruned.frameIndex, 481)
-        XCTAssertEqual(Set(pruned.neighborHomography.map(\.frameIndex)), keep)
-        for entry in pruned.neighborHomography {
-            let original = try XCTUnwrap(
-              measured.neighborHomography.first { $0.frameIndex == entry.frameIndex })
-            XCTAssertEqual(entry.homography, original.homography)
-            XCTAssertEqual(entry.deviation, original.deviation)
+    /// A frame that clears classification keeps its measured set **whole**, distrusted
+    /// warps included.
+    ///
+    /// Dropping the warps nothing vouches for was implemented, measured on this run, and
+    /// removed.  A warp that disagrees with its partner is what the merge kernel's
+    /// outlier trimming already absorbs, so dropping it buys 1.0-1.3% star sharpness and
+    /// costs 3-5% background noise in the merged reference — and the control settles the
+    /// interpretation: dropping a warp every measure agrees is *good*, from a healthy
+    /// frame, buys the same 0.5-1.0% sharper for 2.4-3.9% noisier.  The gain is "one
+    /// fewer source", unrelated to alignment, and the noise goes into the very image the
+    /// outlier detector subtracts.
+    func testAFrameKeepsItsWholeMeasuredSet() {
+        for frameIndex in 481...482 {
+            let measured = results(forFrame: frameIndex, from: Incident.measured)
+            guard case .keepAsMeasured = classifyStarHomography(
+                    measured, probes: probes, partnerSet: measuredPartner)
+            else { return XCTFail("frame \(frameIndex) should be kept") }
+            // nothing anywhere can trim a set down
+            XCTAssertEqual(measured.neighborHomography.count, 8, "frame \(frameIndex)")
         }
     }
 
-    /// Pruning to exactly the warps that passed does **not** make a set pass
-    /// `alignmentLooksOk`, and nothing may be built on the assumption that it does.
-    ///
-    /// The slope check is relative to the median slope *of the set being checked*, so
-    /// removing the low outliers raises the median and the surviving warp nearest the
-    /// floor drops through it.  On frame 481 the kept warps' ratios to the old median were
-    /// 0.926, 1.000, 1.030, 1.033 and 1.070; their own median is 1.030, which puts the
-    /// first of them at 0.899 against a 0.926 floor.  Chasing that to a fixed point would
-    /// just strip the set one warp at a time, so classification marks a pruned frame good
-    /// on the strength of how many measured warps survived and what the cross-frame check
-    /// says about them, and never re-asks this property.
-    func testPruningDoesNotRestoreAlignmentLooksOk() {
-        let measured = results(forFrame: 481, from: Incident.measured)
-        let keep = Set(measured.partitionWarps().good.map(\.frameIndex))
-        XCTAssertEqual(keep.count, 5)
-        XCTAssertFalse(measured.keeping(neighborFrameIndices: keep).alignmentLooksOk)
+    /// The distrusted warps are reported so a run can be audited, and separately from the
+    /// ones a partner vouched for.
+    func testDistrustedAndCorroboratedWarpsAreReportedSeparately() {
+        // frame 481: 3 warps flagged, all 3 corroborated by their partners
+        guard case .keepAsMeasured(let corroborated, let distrusted) =
+                classifyStarHomography(results(forFrame: 481, from: Incident.measured),
+                                       probes: probes, partnerSet: measuredPartner)
+        else { return XCTFail("frame 481 should be kept") }
+        XCTAssertEqual(corroborated, 3)
+        XCTAssertEqual(distrusted, 0)
+
+        // with no partner able to vouch for anything, the same 3 are simply distrusted —
+        // and the frame is still kept, because 5 warps still stand up
+        guard case .keepAsMeasured(let c2, let d2) =
+                classifyStarHomography(results(forFrame: 481, from: Incident.measured),
+                                       probes: probes, partnerSet: { _ in nil })
+        else { return XCTFail("frame 481 should still be kept") }
+        XCTAssertEqual(c2, 0)
+        XCTAssertEqual(d2, 3)
     }
 
     // MARK: - the gate
@@ -725,9 +732,10 @@ final class HomographyReciprocityTests: XCTestCase {
               probes: probes,
               partnerSet: measuredPartner)
             switch verdict {
-            case .keepAsMeasured(let corroborated):
+            case .keepAsMeasured(let corroborated, let distrusted):
                 XCTAssertEqual(corroborated, frameIndex == 481 ? 3 : 1,
                                "frame \(frameIndex)")
+                XCTAssertEqual(distrusted, 0, "frame \(frameIndex)")
             default:
                 XCTFail("frame \(frameIndex) should keep its measured homography, " +
                         "got \(verdict)")
@@ -743,12 +751,13 @@ final class HomographyReciprocityTests: XCTestCase {
               results(forFrame: frameIndex, from: Incident.measured),
               probes: probes,
               partnerSet: measuredPartner)
-            guard case .keepAsMeasured(let corroborated) = verdict else {
+            guard case .keepAsMeasured(let corroborated, let distrusted) = verdict else {
                 XCTFail("frame \(frameIndex) should keep its measured homography, " +
                         "got \(verdict)")
                 continue
             }
             XCTAssertEqual(corroborated, 0, "frame \(frameIndex)")
+            XCTAssertEqual(distrusted, 0, "frame \(frameIndex)")
         }
     }
 
@@ -785,24 +794,19 @@ final class HomographyReciprocityTests: XCTestCase {
         }
     }
 
-    /// And with the check disabled, the measured sets are the ones thrown away — the
-    /// original defect, reproduced.
-    func testWithoutProbesTheMeasuredSetsAreCondemned() {
+    /// With the check disabled, a distrusted warp has nothing to vouch for it, but the
+    /// frame is still kept whole as long as enough of its warps stand up on their own —
+    /// which is the part of the original defect that does not need the cross-frame check
+    /// to fix.
+    func testWithoutProbesTheMeasuredSetsAreStillKept() {
         for frameIndex in 481...482 {
-            let verdict = classifyStarHomography(
-              results(forFrame: frameIndex, from: Incident.measured),
-              probes: nil,
-              partnerSet: measuredPartner)
-            switch verdict {
-            case .keepPruned(let pruned, _, let dropped):
-                // frame 481 keeps 5 of 8, frame 482 keeps 7 of 8: still better than the
-                // old behaviour of replacing the set, but it does lose real measurements
-                XCTAssertEqual(dropped, frameIndex == 481 ? 3 : 1, "frame \(frameIndex)")
-                XCTAssertGreaterThanOrEqual(pruned.neighborHomography.count,
-                                            ReciprocityLimits.minimumKeptWarps)
-            default:
-                XCTFail("frame \(frameIndex): expected pruning, got \(verdict)")
-            }
+            guard case .keepAsMeasured(let corroborated, let distrusted) =
+                    classifyStarHomography(results(forFrame: frameIndex,
+                                                   from: Incident.measured),
+                                           probes: nil, partnerSet: measuredPartner)
+            else { return XCTFail("frame \(frameIndex) should still be kept") }
+            XCTAssertEqual(corroborated, 0, "frame \(frameIndex)")
+            XCTAssertEqual(distrusted, frameIndex == 481 ? 3 : 1, "frame \(frameIndex)")
         }
     }
 
@@ -827,16 +831,22 @@ final class HomographyReciprocityTests: XCTestCase {
         else { return XCTFail("a set with no successful alignment needs repair") }
     }
 
-    /// Pruning stops being the answer once too little of the measured set is left to
-    /// stand on: below `minimumKeptWarps` the frame goes for a full repair instead.
-    func testTooFewSurvivingWarpsFallsThroughToRepair() {
-        let measured = results(forFrame: 481, from: Incident.measured)
-        // keep only three of the eight, none of which any partner can corroborate
-        let thin = measured.keeping(
-          neighborFrameIndices: Set(measured.neighborHomography.prefix(3).map(\.frameIndex)))
-        XCTAssertEqual(thin.neighborHomography.count, 3)
+    /// Below `minimumTrustedWarps` warps standing up, the frame is repaired instead.
+    /// With no partner able to vouch for anything, a set of three is not enough.
+    func testTooFewTrustedWarpsFallsThroughToRepair() {
+        let three = HomographyResultsCodable(
+          for: 481,
+          with: [-2, -1, 1].map { offset in
+              // deliberately inconsistent slopes, so the heuristics distrust them all
+              AlignmentWarpInfoCodable(
+                homography: [1, 0, 2.5 * Double(offset) * Double(offset),
+                             0, 1, -6 * Double(offset),
+                             0, 0, 1],
+                alignmentState: .homographySuccess,
+                frameIndex: 481 + offset)
+          })
         guard case .needsRepair = classifyStarHomography(
-                thin, probes: probes, partnerSet: { _ in nil })
-        else { return XCTFail("three warps is not enough to keep") }
+                three, probes: probes, partnerSet: { _ in nil })
+        else { return XCTFail("three distrusted warps is not enough to keep") }
     }
 }
