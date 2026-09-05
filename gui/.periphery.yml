@@ -1,0 +1,12 @@
+project: star.xcodeproj
+retain_objc_accessible: true
+retain_public: true
+schemes:
+- KHTSwift
+- LoggingObjC
+- StarCore
+- star
+targets:
+- LoggingObjC.LoggingObjC
+- Star
+- StarCore.StarCore
