@@ -338,7 +338,7 @@ struct RemovalView: View {
     @State private var removeAirplanes: Bool = true
     @State private var removeSatellites: Bool = true
     @State private var removeMeteors: Bool = true
-    @State private var removeCars: Bool = false
+    @State private var removeCars: Bool = true
 
     /// Owned here rather than inside `KeypointDivisorStartupView` so that view can set the
     /// initial state from the machine's advice and still be collapsed by the user.
