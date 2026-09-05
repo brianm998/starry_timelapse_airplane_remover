@@ -241,7 +241,6 @@ struct ProcessingSettingsView: View {
 
     @State private var showAlignmentKeypointDivisorInfo = false
     @State private var showAlignmentWriteDebugImagesInfo = false
-    @State private var showAlignmentAllowEarthAlignmentInfo = false
     @State private var showUseReferenceHorizonSmoothingInfo = false
     @State private var showReferenceHorizonSmoothingMaxDistanceInfo = false
     @State private var showUseReferenceHorizonBrightnessRefinementInfo = false
@@ -284,7 +283,6 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo ||
         showAlignmentKeypointDivisorInfo ||
         showAlignmentWriteDebugImagesInfo ||
-        showAlignmentAllowEarthAlignmentInfo ||
         showUseReferenceHorizonSmoothingInfo ||
         showReferenceHorizonSmoothingMaxDistanceInfo ||
         showUseReferenceHorizonBrightnessRefinementInfo ||
@@ -331,7 +329,6 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo = true
         showAlignmentKeypointDivisorInfo = true
         showAlignmentWriteDebugImagesInfo = true
-        showAlignmentAllowEarthAlignmentInfo = true
         showUseReferenceHorizonSmoothingInfo = true
         showReferenceHorizonSmoothingMaxDistanceInfo = true
         showUseReferenceHorizonBrightnessRefinementInfo = true
@@ -378,7 +375,6 @@ struct ProcessingSettingsView: View {
         showAlignmentNeighborThresholdValueInfo = false
         showAlignmentKeypointDivisorInfo = false
         showAlignmentWriteDebugImagesInfo = false
-        showAlignmentAllowEarthAlignmentInfo = false
         showUseReferenceHorizonSmoothingInfo = false
         showReferenceHorizonSmoothingMaxDistanceInfo = false
         showUseReferenceHorizonBrightnessRefinementInfo = false
@@ -511,8 +507,6 @@ struct ProcessingSettingsView: View {
                                   self.alignmentBaseImageDilateSizeView
                                   Divider()
                                   self.alignmentBaseImageThresholdValueView
-                                  Divider()
-                                  self.alignmentAllowEarthAlignmentView
                                   Divider()
                                   self.alignmentKeypointDivisorView
                                   Divider()
@@ -1053,37 +1047,6 @@ struct ProcessingSettingsView: View {
             }
         }
     }
-
-    private var alignmentAllowEarthAlignmentView: some View {
-        @Bindable var viewModel = viewModel
-        return InfoTextInstructionGridRow(
-          showInfo: $showAlignmentAllowEarthAlignmentInfo,
-          addSpacer: { addSpacer },
-          infoText: """
-            Align the ground as well as the sky on moving videos.
-            This can help to get rid of things like car headlights if the earth can be aligned properly.  On by default.
-            Neighbor frames whose ground cannot be tracked confidently are left out of the merge, so a foreground too dark to align falls back to the unaligned ground rather than smearing.
-            """
-        ) {
-            HStack {
-                HStack {
-                    Spacer()
-                    Text(localized("ui.allow_earth_alignment"))
-                      .font(.title2)
-                      .foregroundColor(.white)
-                      .opacity(0.6)
-                }
-                HStack {
-                    Space(width: 10)
-                    Toggle(isOn: $viewModel.allowEarthAlignment) {
-                        Text("")
-                    }
-                    Spacer()
-                }
-            }
-        }
-    }
-
 
     private var alignmentBaseImageThresholdValueView: some View {
         @Bindable var viewModel = viewModel

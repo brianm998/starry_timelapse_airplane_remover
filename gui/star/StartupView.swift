@@ -338,6 +338,7 @@ struct RemovalView: View {
     @State private var removeAirplanes: Bool = true
     @State private var removeSatellites: Bool = true
     @State private var removeMeteors: Bool = true
+    @State private var removeCars: Bool = false
 
     /// Owned here rather than inside `KeypointDivisorStartupView` so that view can set the
     /// initial state from the machine's advice and still be collapsed by the user.
@@ -424,6 +425,9 @@ struct RemovalView: View {
                     Toggle(localized("ui.meteors"), isOn: $removeMeteors)
                       .font(.title)
                       .foregroundColor(.white)
+                    Toggle(localized("ui.cars"), isOn: $removeCars)
+                      .font(.title)
+                      .foregroundColor(.white)
                 }
             }
             Divider()
@@ -465,6 +469,7 @@ struct RemovalView: View {
                     withAnimation {
                         viewModel.shouldShowInitialInstructions = false
                         viewModel.cleanMethod = self.cleanMethod
+                        viewModel.allowEarthAlignment = removeCars
                         viewModel.processAll()
                     }
                 } label: {
