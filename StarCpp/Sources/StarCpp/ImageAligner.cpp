@@ -1441,6 +1441,73 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
 // moved the sky 4.9, 23.5 and 6.5px) — two of the three would have failed this test.
 // The sky also has no graceful fallback: a missing ground warp costs one source in a
 // median merge, a missing sky warp costs the frame.
+// Fit the transform relating two frames' correspondences: a full homography for the sky,
+// a 4-DOF similarity for the ground.
+//
+// The sky gets 8 degrees of freedom because it has the geometry to support them —
+// keypoints are stars, they cover the whole frame, and the fit is heavily
+// over-determined.  Measured, feeding the *identical* sky feature set in reversed order
+// moves the resulting warp's frame corners by 0.00-0.59px: RANSAC lands in the same place
+// however it samples, which is what a well-conditioned fit looks like.
+//
+// The ground has none of that.  It is the bottom of the frame, so its inliers sit in a
+// band measured at 87-98% of the frame width by **11-42% of its height** across seven
+// pairs on two sequences.  Points that flat do not constrain a homography's vertical and
+// perspective terms at all: the fit satisfies every inlier it sampled and is then free to
+// do anything above and below them, and it does.  The same reversed-order test moves the
+// ground warp 11.5-99.5px, and against phase correlation over the same band the fitted
+// warp came out 8-25x the true ground motion.
+//
+// That is degeneracy, not noise, and nothing downstream can see it.  In particular
+// groundConsensusIsUsable cannot: it reads an inlier *ratio*, which measured 0.87-0.88 on
+// exactly these fits — high **because** the model has enough freedom to explain whatever
+// RANSAC sampled.  A ratio asks whether the correspondences agree with the model, never
+// whether they constrain it.
+//
+// So the ground gets a model its evidence can carry.  Rotation, uniform scale and
+// translation is what a tripod that has settled, or a slow pan across distant terrain,
+// actually does to a foreground; the projective terms were only ever describing noise.
+// Same correspondences, same seed, forward against reversed, with phase correlation over
+// the ground band as independent truth:
+//
+//                      band      truth   homography fwd-rev / vs I   similarity fwd-rev / vs I
+//   a7iv  905->903   90%x17%      7.6         27.5 / 60.2                0.64 / 18.6
+//   a7iv  905->909   94%x12%     16.6         19.6 / 159.5               1.82 / 37.5
+//   a7iv  950->949   91%x12%      4.3         30.4 / 107.4               0.00 / 10.0
+//   a7iv  950->954   98%x11%     18.2         99.5 / 147.6               0.79 / 39.5
+//   a7sii 1205->1204 95%x42%      1.1         21.2 / 14.2                0.79 /  3.8
+//   a7sii 1205->1209 87%x28%      6.0         11.5 / 35.4                2.93 / 16.3
+//   a7sii 1220->1224 91%x18%      6.9         64.1 / 35.5                4.65 / 19.0
+//
+// 1-2 orders of magnitude more stable, and 2-5x closer to the measured motion on every
+// pair.  Affine's 6 DOF were tried and sit in between (0.75-31.3px, not stable enough),
+// and tightening the RANSAC threshold does not rescue the homography (10px: 99.3,
+// 3px: 66.3, 1.5px: 110.1 on the first pair) — the problem is the model, not the
+// tolerance.
+//
+// A "reject fits whose inliers are too flat" guard was the other candidate and was
+// rejected: the 42%-tall band above is still degenerate, so the cutoff would have to sit
+// high enough to throw away nearly every ground fit, including the ones a similarity
+// recovers cleanly.
+//
+// The 3x3 lift is so everything downstream — warpInto, the Lie-algebra smoothing,
+// homography.db, the deviation norm — keeps taking one kind of matrix.  A similarity is a
+// homography whose last row is (0,0,1); nothing has to know which fit produced it.
+static cv::Mat estimateAlignment(AlignmentType alignmentType,
+                                 const std::vector<cv::Point2f> &from,
+                                 const std::vector<cv::Point2f> &to,
+                                 std::vector<uchar> &inlierMask) {
+    if (alignmentType != AlignmentTypeEarth) {
+        return cv::findHomography(from, to, cv::RANSAC, 10, inlierMask);
+    }
+    cv::Mat A = cv::estimateAffinePartial2D(from, to, inlierMask, cv::RANSAC, 10);
+    if (A.empty()) return cv::Mat();
+    if (A.type() != CV_64F) A.convertTo(A, CV_64F);
+    cv::Mat H = cv::Mat::eye(3, 3, CV_64F);
+    A.copyTo(H(cv::Rect(0, 0, 3, 2)));
+    return H;
+}
+
 static constexpr double kMinGroundInlierRatio = 0.65;
 static constexpr int    kMinGroundInliers     = 20;
 
@@ -1599,8 +1666,8 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                         static_cast<uint64_t>(neighbors[ii].frameIndex);
                     cv::theRNG() = cv::RNG(rngSeed);
                     std::vector<uchar> inlierMask;
-                    cv::Mat H = cv::findHomography(ptsNeighbor, ptsBase, cv::RANSAC, 10,
-                                                   inlierMask);
+                    cv::Mat H = estimateAlignment(alignmentType, ptsNeighbor, ptsBase,
+                                                  inlierMask);
                     if (!H.empty() && H.type() != CV_64F) H.convertTo(H, CV_64F);
 
                     if (!H.empty() && H.rows == 3 && H.cols == 3 &&
