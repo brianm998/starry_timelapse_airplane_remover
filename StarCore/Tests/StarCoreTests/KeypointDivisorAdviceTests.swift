@@ -230,3 +230,128 @@ final class KeypointDivisorAdviceTests: XCTestCase {
         XCTAssertLessThan(after, a.frameConcurrency)
     }
 }
+
+/// Tests for `resolveAutomaticKeypointDivisor`, which turns the advice above into the
+/// divisor a run actually uses.
+///
+/// Separate from the advice tests because the hazard is different. The arithmetic is
+/// already covered there; what can go wrong here is the *gate* — resolving twice,
+/// resolving over a value someone chose, or failing to resolve at all because nothing
+/// called it. Each of those is silent: the run simply detects at the wrong scale, and the
+/// only visible symptom is softness or a machine that sits waiting on RAM.
+final class AutomaticKeypointDivisorTests: XCTestCase {
+
+    private static let iMacProMemory: UInt64 = 128 * 1024 * 1024 * 1024
+
+    private func imageInfo(megapixels: Double) -> ImageInfo {
+        let height = (megapixels * 1_000_000 / 1.5).squareRoot()
+        return ImageInfo(imageWidth: Int((height * 1.5).rounded()),
+                         imageHeight: Int(height.rounded()),
+                         imageBytesPerPixel: 6,
+                         imageBitsPerComponent: 16,
+                         componentsPerPixel: 3,
+                         fileExtension: "tiff")
+    }
+
+    /// A config with a frame size and nothing else decided.
+    ///
+    /// Dimensions go in directly rather than through `set(imageInfo:)`, because that
+    /// resolves against whatever machine the test is running on — which is not the
+    /// machine any of these cases is about. The resolver is then called explicitly with
+    /// the memory under test. `testSetImageInfoResolves` covers the wiring separately.
+    private func configured(megapixels: Double,
+                            cores: Int = 36,
+                            memory: UInt64 = AutomaticKeypointDivisorTests.iMacProMemory,
+                            before: (inout Config) -> Void = { _ in }) -> Config {
+        var c = Config()
+        c.numberOfFramesToProcessConcurrently = cores
+        let info = imageInfo(megapixels: megapixels)
+        c.imageWidth = info.imageWidth
+        c.imageHeight = info.imageHeight
+        c.imageBytesPerPixel = info.imageBytesPerPixel
+        c.imageBitsPerComponent = info.imageBitsPerComponent
+        before(&c)
+        c.resolveAutomaticKeypointDivisor(physicalMemory: memory)
+        return c
+    }
+
+    /// The case this change exists for: above the crossover, a run that says nothing gets
+    /// the reduced divisor instead of grinding at full resolution with cores idle.
+    func testLargeFramesGetTheRecommendedDivisorWithoutBeingAsked() {
+        let c = configured(megapixels: 42)
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor,
+                       Config.recommendedReducedKeypointDivisor,
+                       "42MP on a 128GB machine is the case the advice fires on, so a "
+                       + "config nobody touched should come out reduced")
+        XCTAssertTrue(c.keypointDivisorWasChosen)
+    }
+
+    /// Below the crossover a divisor buys no concurrency, so it must not be applied —
+    /// it would cost alignment precision for nothing.
+    func testSmallFramesAreLeftAtFullResolution() {
+        let c = configured(megapixels: 12)
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.0,
+                       "12MP runs full resolution comfortably on this machine; reducing "
+                       + "it would trade sharpness for no concurrency at all")
+    }
+
+    /// `--keypoint-divisor 1`, or the startup prompt's full-resolution option, has to
+    /// survive. This is the regression that would make the flag look broken.
+    func testAnExplicitChoiceIsNotOverridden() {
+        for chosen in [1.0, 1.25, 2.0] {
+            let c = configured(megapixels: 42) { $0.alignmentKeypointDetectionDivisor = chosen
+                                                 $0.keypointDivisorWasChosen = true }
+            XCTAssertEqual(c.alignmentKeypointDetectionDivisor, chosen,
+                           "a divisor of \(chosen) was asked for and must not be "
+                           + "second-guessed by the advice")
+        }
+    }
+
+    /// Resolving twice would be free on an unchanged machine and wrong on a changed one:
+    /// feature files are keyed by divisor, so a resume that re-derived a different value
+    /// would orphan every cached keypoint mid-sequence.
+    func testResolvingIsIdempotent() {
+        var c = configured(megapixels: 42)
+        let first = c.alignmentKeypointDetectionDivisor
+        // a machine with far less free memory would advise differently if asked again
+        c.resolveAutomaticKeypointDivisor(physicalMemory: 8 * 1024 * 1024 * 1024)
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, first,
+                       "the decision is taken once and persisted; asking again on a "
+                       + "different machine must not move it")
+    }
+
+    /// Without dimensions there is nothing to judge, and settling the decision on no
+    /// evidence would lock in full resolution before the frame size is even known.
+    func testNothingIsDecidedBeforeTheFrameSizeIsKnown() {
+        var c = Config()
+        c.resolveAutomaticKeypointDivisor(physicalMemory: Self.iMacProMemory)
+        XCTAssertFalse(c.keypointDivisorWasChosen,
+                       "no imageInfo means no advice, so the decision stays open")
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.0)
+    }
+
+    /// The resolver is useless if nothing calls it, and `set(imageInfo:)` is the one
+    /// point every client goes through. Asserted against this machine's own memory,
+    /// because that is what the production call uses.
+    func testSetImageInfoResolves() {
+        var c = Config()
+        XCTAssertFalse(c.keypointDivisorWasChosen)
+        c.set(imageInfo: imageInfo(megapixels: 42))
+        XCTAssertTrue(c.keypointDivisorWasChosen,
+                      "set(imageInfo:) is where the decision gets taken; if it stays "
+                      + "open here, no client takes it at all")
+    }
+
+    /// A config.json carrying a divisor is a decision an earlier run already took.
+    func testADecodedConfigKeepsItsDivisor() throws {
+        var saved = configured(megapixels: 42)
+        saved.alignmentKeypointDetectionDivisor = 1.0
+        saved.keypointDivisorWasChosen = true
+        let data = try JSONEncoder().encode(saved)
+        var reloaded = try JSONDecoder().decode(Config.self, from: data)
+        reloaded.set(imageInfo: imageInfo(megapixels: 42))
+        XCTAssertEqual(reloaded.alignmentKeypointDetectionDivisor, 1.0,
+                       "a resume must detect at the scale its cached feature files were "
+                       + "computed at, whatever this machine would advise today")
+    }
+}

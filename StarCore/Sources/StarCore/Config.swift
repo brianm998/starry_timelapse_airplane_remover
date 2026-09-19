@@ -1012,6 +1012,24 @@ public struct Config: Codable, Sendable {
     /// two different divisors must never be matched against each other.
     public var alignmentKeypointDetectionDivisor: Double = 1.0
 
+    /// Whether `alignmentKeypointDetectionDivisor` has been decided for this sequence,
+    /// and so must not be decided again.
+    ///
+    /// False only on a config nobody has run yet. `set(imageInfo:)` resolves the divisor
+    /// the first time a frame size is known and sets this, and every surface that lets a
+    /// value in — the cli flag, the daemon's protobuf, the macOS settings, a config.json
+    /// that already carries one — sets it too. So it separates "1.0 because that is the
+    /// inline default" from "1.0 because that is the answer", which is the whole
+    /// distinction `resolveAutomaticKeypointDivisor` turns on.
+    ///
+    /// It also keeps a resume stable. Feature files are keyed by divisor
+    /// (`keypointFilename`), so a sequence that changed divisors between runs would find
+    /// none of its cached keypoints and redetect every frame — and worse, a half-finished
+    /// run's alignment would be built from two incompatible descriptor sets. Once the
+    /// first run persists the decision, later runs read it back rather than re-deriving
+    /// it from a machine that may now have different memory free.
+    public var keypointDivisorWasChosen: Bool = false
+
     /// The fraction of full resolution to hand the detector, which is what the C++ wants.
     ///
     /// One conversion site for the whole pipeline, and it clamps rather than trusting the
@@ -1166,6 +1184,59 @@ public struct Config: Codable, Sendable {
         self.imageBytesPerPixel = imageInfo.imageBytesPerPixel
         self.imageBitsPerComponent = imageInfo.imageBitsPerComponent
         self.fileExtension = imageInfo.fileExtension
+
+        // The first point at which there is a resolution to judge, and the only one every
+        // client goes through — cli, daemon, gui and the test harness all call this
+        // before anything reads the config. FrameGraphBuilder refuses to build without
+        // it, so there is no path that reaches keypoint detection having skipped this.
+        resolveAutomaticKeypointDivisor()
+    }
+
+    /// Pick the keypoint divisor for this sequence, if nobody has picked one.
+    ///
+    /// The policy is `keypointDivisorAdvice`, which is not a new heuristic: it asks
+    /// whether the memory budget or the core count is what limits keypoint concurrency at
+    /// full resolution. Below that crossover a divisor buys a little per-op speed and no
+    /// concurrency, so full resolution stays the answer and nothing changes. At or above
+    /// it the budget is binding and the machine sits waiting on RAM with cores idle — on
+    /// a 128GB 18-core iMac Pro, 42MP frames fit 10 keypoint ops where 18 would run.
+    ///
+    /// `recommendedReducedKeypointDivisor` (1.5) rather than 2: 1.5 recovers 2.25x of the
+    /// 4x that 2 does, and at 42MP 1.5 was indistinguishable from full resolution side by
+    /// side while 2 was visibly softer. See that constant, and
+    /// `alignmentKeypointDetectionDivisor` for why softness is what a coarser divisor
+    /// costs.
+    ///
+    /// This is what the macOS startup prompt already did in
+    /// `KeypointDivisorStartupView.applyAdviceOnce`. Moving it here is what gives the cli
+    /// and the daemon the same default; the prompt still runs, still shows the value and
+    /// still lets it be changed before the run starts, it just no longer finds anything
+    /// to apply.
+    ///
+    /// `physicalMemory` is a parameter so tests can ask about a machine they are not
+    /// running on; nothing in the pipeline passes it.
+    mutating public func resolveAutomaticKeypointDivisor(
+      physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory
+    ) {
+        guard !keypointDivisorWasChosen else { return }
+        // nil means set(imageInfo:) has not run and there is nothing to judge. Leave the
+        // decision open rather than settling it on no evidence.
+        guard let advice = keypointDivisorAdvice(physicalMemory: physicalMemory) else { return }
+
+        keypointDivisorWasChosen = true
+        guard advice.reduceRecommended else { return }
+        alignmentKeypointDetectionDivisor = advice.recommendedDivisor
+
+        // Said out loud, because on the cli this is the only place it is said at all —
+        // there is no prompt, and a run that quietly detected at two thirds when the user
+        // expected full resolution would be indistinguishable from a bug.
+        let mp = { (pixels: Int) in String(format: "%.1f", Double(pixels) / 1_000_000) }
+        Log.i("frames are \(mp(advice.imagePixels))MP against a "
+            + "\(mp(advice.thresholdPixels))MP full resolution limit on this machine "
+            + "(\(advice.fullResolutionConcurrency) of \(advice.frameConcurrency) "
+            + "keypoint ops fit), defaulting the keypoint divisor to "
+            + "\(advice.recommendedDivisor). Pass --keypoint-divisor 1 for full "
+            + "resolution.")
     }
 
     /// Decode a config.json, tolerating keys it does not contain.
@@ -1280,13 +1351,21 @@ public struct Config: Codable, Sendable {
         if let divisor = try? c.decodeIfPresent(Double.self,
                                                 forKey: .alignmentKeypointDetectionDivisor) {
             self.alignmentKeypointDetectionDivisor = divisor
+            self.keypointDivisorWasChosen = true
         } else if let legacy = try? decoder.container(keyedBy: LegacyCodingKeys.self)
                     .decodeIfPresent(Bool.self, forKey: .alignmentHalfResolutionKeypoints) {
             // CodingKeys is synthesized from the stored property names, so renaming the
             // property renamed the on-disk key and the old one is no longer a case. A
             // second container keyed by its own enum is how the old name stays readable.
             self.alignmentKeypointDetectionDivisor = legacy ? 2.0 : 1.0
+            self.keypointDivisorWasChosen = true
         }
+        // Written by any star new enough to have the flag, and it wins over the inference
+        // above: a config saved before `set(imageInfo:)` ever ran carries a divisor of 1.0
+        // that nobody chose, and re-deriving it is right rather than honouring it.
+        self.keypointDivisorWasChosen =
+          try c.decodeIfPresent(Bool.self, forKey: .keypointDivisorWasChosen)
+          ?? self.keypointDivisorWasChosen
         self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
         self.mergeLoadConcurrency = try c.decodeIfPresent(Int.self, forKey: .mergeLoadConcurrency) ?? self.mergeLoadConcurrency
         self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
