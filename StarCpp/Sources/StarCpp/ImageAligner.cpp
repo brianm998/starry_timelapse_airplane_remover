@@ -1319,7 +1319,43 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             cv::pow(baseImageProcessed, 0.5, baseImageProcessed);
             baseImageProcessed.convertTo(baseImageProcessed, CV_8U, 255.0);
             cv::Ptr<cv::AKAZE> akazeBase = cv::AKAZE::create();
-            akazeBase->setThreshold(1e-5);
+
+            // 1e-4, not the 1e-5 this was, and not OpenCV's 1e-3 default.
+            //
+            // Every keypoint past `maxKeypoints` is thrown away by retainBest below, so
+            // the only thing the threshold has to do is leave comfortably more than that
+            // cap standing.  1e-5 is AKAZE's `min_dthreshold` — the floor, not a choice —
+            // and it leaves far more than comfortably more: on a 7008x4672 frame with a
+            // real horizon mask it detects 105,792 candidates to keep 2,000, and the
+            // extrema search for the other 103,792 is pure waste.
+            //
+            // Measured across three sequences (detect core-ms / raw candidates, against
+            // the shipped preprocessing and real horizon masks):
+            //
+            //                         1e-5           1e-4            5e-4
+            //   a7iv-1  7008x4672   27,538/105,792  15,746/80,714   12,160/31,120
+            //   a7sii-1 4240x2832    8,426/ 56,468   4,307/15,860    6,137/ 2,230
+            //
+            // The retained 2,000 are *the same detections* at 1e-4 — identical position,
+            // size, angle, response, octave and descriptor, verified byte for byte on
+            // both sequences — because the threshold only removes candidates that ranked
+            // below the cap anyway.  What it buys is about 2x off the detect half.
+            //
+            // The saving plateaus immediately (5e-5, 1e-4 and 2e-4 all land within noise
+            // of each other), because what is left is the nonlinear diffusion pyramid,
+            // which costs the same whatever the threshold.  So there is nothing to win by
+            // going higher and a real margin to lose: at 5e-4 the a7sii frame detects
+            // 2,230 against a cap of 2,000 and the retained set starts to change, and at
+            // 1e-3 it finds 1,244 and misses the cap entirely.  1e-4 keeps roughly 8x the
+            // cap on the thinnest ground measured here.
+            //
+            // The margin is what matters, not the speed, because the frames this could
+            // hurt are the ones with almost no ground detail to begin with — see
+            // toGray8UWithMask above for the 24MP frame that yielded 913 keypoints in a
+            // 163px band.  A ground that thin already fails groundConsensusIsUsable and
+            // drops out of the earth merge, so what is at stake is the margin before that
+            // happens, which is why this sits two decades below where the saving stops.
+            akazeBase->setThreshold(1e-4);
 
             // AKAZE has no nfeatures equivalent, so maxKeypoints has to be applied by
             // hand — it was reaching this function and being ignored, leaving earth
