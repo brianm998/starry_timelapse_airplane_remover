@@ -23,8 +23,15 @@ typedef struct {
 // to describe and carries a coverage plane to describe them with.
 
 // Merge images from filenames. Returns new MatWrapperRef (caller must release).
+//
+// useGPU asks for the Metal-accelerated median-merge kernel when one is
+// registered and the machine has hardware for it (see GPUOps_C.h); the CPU
+// kernel always runs otherwise, unchanged. GPU output uses exact integer
+// arithmetic rather than the CPU kernel's double-precision Welford recurrence
+// — a small, deliberate difference, not a bug — see GPU_IMPLEMENTATION_GUIDE.md.
 MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
-                                        double outlierThreshold, bool includeAll);
+                                        double outlierThreshold, bool includeAll,
+                                        bool useGPU);
 
 // Merge a base image + additional filenames.
 //
@@ -44,12 +51,18 @@ MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
 // so source order does not reach the answer, and the sources are collected in file
 // order regardless.  The streaming path ignores it and stays serial: holding one
 // source at a time is what it is for.
+//
+// useGPU: see ia_median_merge_filenames above. It only ever applies to the
+// all-resident path — the streaming path (medianImageStreaming) stays
+// CPU-only, since it exists for source counts too large to hold on the GPU
+// (or in RAM) at once anyway.
 MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char **filenames, int count,
                                                     double outlierThreshold, bool includeAll,
                                                     const char *scratchDir,
                                                     int64_t streamingThresholdBytes,
-                                                    int loadConcurrency);
+                                                    int loadConcurrency,
+                                                    bool useGPU);
 
 // --- Feature detection ---
 
@@ -119,6 +132,10 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 //
 // outWarpCount (nullable) receives how many neighbours made it into the merge.
 // Returns NULL if that count is zero, or on error; caller must release the result.
+//
+// useGPU: see ia_median_merge_filenames above — applies to both the warp of
+// each neighbour and the final merge, and only on the all-resident path; the
+// streaming path (spiller.merge) stays CPU-only.
 MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIndex,
                                         const AlignmentNeighborData *neighbors,
                                         int neighborCount,
@@ -129,6 +146,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                         const char *scratchDir,
                                         int64_t streamingThresholdBytes,
                                         int loadConcurrency,
+                                        bool useGPU,
                                         int *outWarpCount,
                                         const char **errorMsg);
 

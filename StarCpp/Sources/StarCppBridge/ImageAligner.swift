@@ -16,11 +16,17 @@ public enum ImageAligner {
     /// result — the merge sorts each pixel's samples before using them, so source order
     /// never reaches the answer, and the sources are collected in file order anyway.
     /// Ignored on the streaming path, which stays serial by design.
+    ///
+    /// `useGPU` only ever applies to the all-resident path (never streaming), and even
+    /// there is a request, not a guarantee — see `GPUCapability`. On by default so a
+    /// caller that does not think about GPU acceleration gets it when the machine
+    /// supports it, same as `Config.useGPU`'s own default.
     public static func medianMergeImage(_ image: MatWrapper, withFilenames filenames: [String],
                                          outlierThreshold: Double, includeAll: Bool,
                                          scratchDir: String? = nil,
                                          streamingThresholdBytes: Int64 = 0,
-                                         loadConcurrency: Int = 1) -> MatWrapper {
+                                         loadConcurrency: Int = 1,
+                                         useGPU: Bool = true) -> MatWrapper {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
@@ -31,20 +37,22 @@ public enum ImageAligner {
                                                   outlierThreshold, includeAll,
                                                   scratchDir,
                                                   streamingThresholdBytes,
-                                                  Int32(loadConcurrency))
+                                                  Int32(loadConcurrency),
+                                                  useGPU)
         }
         return MatWrapper(ref: r!)
     }
 
     public static func medianMergeFilenames(_ filenames: [String],
                                              outlierThreshold: Double,
-                                             includeAll: Bool) -> MatWrapper {
+                                             includeAll: Bool,
+                                             useGPU: Bool = true) -> MatWrapper {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
         let r = ptrs.withUnsafeMutableBufferPointer { buf in
             ia_median_merge_filenames(buf.baseAddress, Int32(buf.count),
-                                      outlierThreshold, includeAll)
+                                      outlierThreshold, includeAll, useGPU)
         }
         return MatWrapper(ref: r!)
     }
@@ -153,7 +161,8 @@ public enum ImageAligner {
                                             includeAll: Bool,
                                             scratchDir: String? = nil,
                                             streamingThresholdBytes: Int64 = 0,
-                                            loadConcurrency: Int = 1)
+                                            loadConcurrency: Int = 1,
+                                            useGPU: Bool = true)
       -> (merged: MatWrapper, warpCount: Int)?
     {
         let cNeighbors = neighbors.map { n in
@@ -187,6 +196,7 @@ public enum ImageAligner {
                                                scratchDir,
                                                streamingThresholdBytes,
                                                Int32(loadConcurrency),
+                                               useGPU,
                                                &warpCount, &errMsg)
                 }
             }

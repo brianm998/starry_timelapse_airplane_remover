@@ -1003,7 +1003,8 @@ final public actor FrameAlignmentProcessor {
                       scratchDir: mergeConfig.tempOutputPath,
                       streamingThresholdBytes:
                         Int64(mergeConfig.mergeStreamingThresholdMB) * 1024 * 1024,
-                      loadConcurrency: mergeConfig.mergeLoadConcurrency
+                      loadConcurrency: mergeConfig.mergeLoadConcurrency,
+                      useGPU: mergeConfig.useGPU
                     )
                 }
 
