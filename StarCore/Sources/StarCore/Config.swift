@@ -3,6 +3,7 @@ import Foundation
 import FoundationNetworking   // URLSession, URLRequest live here on Linux
 #endif
 import logging
+import StarCppBridge
 #if canImport(SwiftUI)
 import SwiftUI
 #endif
@@ -355,6 +356,29 @@ public struct Config: Codable, Sendable {
     /// output is produced, which is what `Config` is for, and it has to reach
     /// `FrameGraphBuilder` through the `ConfigManager` every client already has.
     public var reprocessOnSettingsChange: Bool = true
+
+    /// Whether to use GPU acceleration (Metal, on macOS) for the alignment warp and
+    /// median-merge kernels, when the machine has hardware that supports it.
+    ///
+    /// On by default. This is a request, not a guarantee: `GPUCapability.isAvailable`
+    /// still gates every call site, so a machine with no usable GPU (or a non-macOS
+    /// build, until another backend lands) silently runs the CPU path regardless of
+    /// this setting. See `GPUCapability` for how a client shows the user which case
+    /// they are in — this flag alone cannot tell them, because "off" and "on but
+    /// unsupported" both end up running on the CPU.
+    public var useGPU: Bool = true
+
+    /// A localized, user-facing sentence describing whether this machine has GPU
+    /// hardware `useGPU` can actually use — independent of whether `useGPU` itself is
+    /// currently on or off, so a client can show it right next to the toggle and make
+    /// "on but unsupported" visibly different from "off". See `GPUCapability` for the
+    /// hardware probe this reads.
+    public static func gpuAccelerationStatusText() -> String {
+        if let device = GPUCapability.deviceName() {
+            return localized("ui.gpu_status_supported", device)
+        }
+        return localized("ui.gpu_status_unsupported")
+    }
 
     // how far in each direction do we go when doing final processing?
     // used for OutlierGroupFeature data
@@ -1190,6 +1214,26 @@ public struct Config: Codable, Sendable {
         // before anything reads the config. FrameGraphBuilder refuses to build without
         // it, so there is no path that reaches keypoint detection having skipped this.
         resolveAutomaticKeypointDivisor()
+        logGPUAccelerationStatus()
+    }
+
+    /// Say, once per run, whether the alignment/merge kernels will actually run on the
+    /// GPU. `useGPU` alone cannot answer that: a machine with no supported GPU (or a
+    /// non-macOS build, until another backend lands — see `GPUCapability`) runs the CPU
+    /// path regardless of this setting, and a user reading only "GPU acceleration: on"
+    /// in their own settings would have no way to know that. Logged from `set(imageInfo:)`
+    /// for the same reason `resolveAutomaticKeypointDivisor` is: every client passes
+    /// through there before anything else touches the config.
+    private func logGPUAccelerationStatus() {
+        guard useGPU else {
+            Log.i("GPU acceleration is off; using the CPU path.")
+            return
+        }
+        if let device = GPUCapability.deviceName() {
+            Log.i("GPU acceleration is on (\(device)).")
+        } else {
+            Log.i("GPU acceleration is on but no supported GPU was found; using the CPU path.")
+        }
     }
 
     /// Pick the keypoint divisor for this sequence, if nobody has picked one.
@@ -1294,6 +1338,7 @@ public struct Config: Codable, Sendable {
         self.writeFrameThumbnailFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameThumbnailFiles) ?? self.writeFrameThumbnailFiles
         self.writeOutputFiles = try c.decodeIfPresent(Bool.self, forKey: .writeOutputFiles) ?? self.writeOutputFiles
         self.reprocessOnSettingsChange = try c.decodeIfPresent(Bool.self, forKey: .reprocessOnSettingsChange) ?? self.reprocessOnSettingsChange
+        self.useGPU = try c.decodeIfPresent(Bool.self, forKey: .useGPU) ?? self.useGPU
 
         self.ignoreLowerPixels = try c.decodeIfPresent(Int.self, forKey: .ignoreLowerPixels) ?? self.ignoreLowerPixels
 

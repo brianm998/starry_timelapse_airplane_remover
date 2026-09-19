@@ -59,6 +59,7 @@ final class ConfigOverridesTests: XCTestCase {
       "--write-outlier-group-files",
       "--write-outlier-classification-values",
       "--no-skip-output-files",
+      "--no-use-gpu",
       "--no-horizon",
       "--moving-camera",
       "--keypoint-divisor", "1.5",
@@ -84,6 +85,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.writeOutlierGroupFiles, true)
         XCTAssertEqual(c.writeOutlierClassificationValues, true)
         XCTAssertEqual(c.writeOutputFiles, true, "--no-skip-output-files turns rendering on")
+        XCTAssertEqual(c.useGPU, false, "--no-use-gpu turns it off")
         XCTAssertEqual(c.horizonDetectionEnabled, false, "--no-horizon turns it off")
         XCTAssertEqual(c.tripodHeadWasMoving, true)
         XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.5)
@@ -222,6 +224,26 @@ final class ConfigOverridesTests: XCTestCase {
         try StarCli.parse(["--no-skip-output-files", "/some/star_temp_seq/config.json"])
             .configOverrides.apply(to: &renderedAgain)
         XCTAssertTrue(renderedAgain.writeOutputFiles, "and the --no- form is the way back")
+    }
+
+    func testUseGPUHasThreeStatesAndNeedsAllOfThem() throws {
+        var disabled = Config()
+        XCTAssertTrue(disabled.useGPU, "GPU acceleration is on by default")
+        try StarCli.parse(["--no-use-gpu", "/some/seq"]).configOverrides.apply(to: &disabled)
+        XCTAssertFalse(disabled.useGPU, "--no-use-gpu turns it off")
+
+        var unmentioned = Config()
+        unmentioned.useGPU = false
+        try StarCli.parse(["/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &unmentioned)
+        XCTAssertFalse(unmentioned.useGPU,
+                       "a resume that repeats no flags keeps what the config holds")
+
+        var enabledAgain = Config()
+        enabledAgain.useGPU = false
+        try StarCli.parse(["--use-gpu", "/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &enabledAgain)
+        XCTAssertTrue(enabledAgain.useGPU, "and the plain form is the way back")
     }
 
     /// `-s` only does anything because `Processor` hands the config field to every frame.

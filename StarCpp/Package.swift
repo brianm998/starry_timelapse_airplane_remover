@@ -22,6 +22,11 @@ let platformLinkerSettings: [LinkerSetting] = [
     .unsafeFlags(["-L\(opencvLibPath)", "-Xlinker", opencvLib]),
     .linkedLibrary("opencv2"),
 ]
+// GPUCapability/GPUOps (StarCppBridge, pure Swift) call into Metal directly —
+// see GPU_IMPLEMENTATION_GUIDE.md. Only StarCppBridge needs this; the C++
+// StarCpp target stays Metal-free and calls a registered function pointer
+// instead (GPUOps_C.h), matching the "no ObjC++ in StarCpp" rule.
+let bridgeSwiftLinkerSettings: [LinkerSetting] = [.linkedFramework("Metal")]
 // Eigen is installed via Homebrew on macOS (arm: /opt/homebrew, intel: /usr/local)
 let starcppCXXSettings: [CXXSetting] = [
     .unsafeFlags([
@@ -63,6 +68,10 @@ let gccArchDir = "aarch64-linux-gnu"
 #else
 let gccArchDir = "linux-gnu"   // fallback; harmless if it doesn't exist
 #endif
+
+// No Metal on Linux; GPUCapability.isAvailable() returns false and StarCppBridge
+// links nothing extra here.
+let bridgeSwiftLinkerSettings: [LinkerSetting] = []
 
 let platformLinkerSettings: [LinkerSetting] = [
     .unsafeFlags([
@@ -128,6 +137,9 @@ let platformLinkerSettings: [LinkerSetting] = [
         "-Xlinker", "/WHOLEARCHIVE:\(opencvLib)",
     ]),
 ]
+// No Metal on Windows; GPUCapability.isAvailable() returns false and
+// StarCppBridge links nothing extra here.
+let bridgeSwiftLinkerSettings: [LinkerSetting] = []
 
 // Eigen3 headers — unzip to C:\eigen3 (see windows_start.txt step 5f).
 // MSVC headers are found automatically; no need to list them explicitly.
@@ -156,6 +168,7 @@ let platformLinkerSettings: [LinkerSetting] = [
     .unsafeFlags(["-L\(opencvLibPath)", "-Xlinker", opencvLib]),
     .linkedLibrary("opencv2"),
 ]
+let bridgeSwiftLinkerSettings: [LinkerSetting] = []
 let starcppCXXSettings: [CXXSetting] = []
 let bridgeCXXSettings: [CXXSetting] = [
     .unsafeFlags(["-I../opencv/include"]),
@@ -192,7 +205,8 @@ let package = Package(
                     "StarCpp",
                     .product(name: "logging", package: "logging"),
                 ],
-                path: "Sources/StarCppBridge"
+                path: "Sources/StarCppBridge",
+                linkerSettings: bridgeSwiftLinkerSettings
         ),
         // The geometry in StarCppBridge (Line, StandardLine, DoubleCoord) is pure Swift
         // and every horizon/blob decision downstream is built on it, so it is worth

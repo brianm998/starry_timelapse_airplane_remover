@@ -55,6 +55,10 @@ struct ConfigOverrides {
     var writeOutlierClassificationValues: Bool?
     /// `-s`, inverted: the flag turns writing the output images off.
     var writeOutputFiles: Bool?
+    /// `--use-gpu` / `--no-use-gpu`. Also tri-state and for the same reason as
+    /// `writeOutputFiles`: it is the one alignment flag that can turn something off
+    /// rather than only add or raise something, so a saved `false` needs a way back.
+    var useGPU: Bool?
     /// `--no-horizon`, inverted: the flag turns horizon detection off.
     var horizonDetectionEnabled: Bool?
     var tripodHeadWasMoving: Bool?
@@ -84,6 +88,7 @@ struct ConfigOverrides {
             config.writeOutlierClassificationValues = writeOutlierClassificationValues
         }
         if let writeOutputFiles { config.writeOutputFiles = writeOutputFiles }
+        if let useGPU { config.useGPU = useGPU }
         if let horizonDetectionEnabled {
             config.horizonDetectionEnabled = horizonDetectionEnabled
         }
