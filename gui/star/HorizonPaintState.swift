@@ -81,7 +81,23 @@ final class HorizonPaintState {
     // MARK: - Phase
 
     /// Current phase of the three-step workflow: band → compute → refine.
-    private(set) var phase: HorizonPainterPhase = .bandSelection
+    ///
+    /// Entering band selection turns erasing off.  The band is always additive, and
+    /// `isErasing`'s own setter can only refuse a value it is *given* — it cannot
+    /// notice the phase moving out from under a value it already holds.  That is
+    /// exactly what a frame advance does: `resetForNewFrame` deliberately restores
+    /// the toggle while the phase is `.computing`, and the phase then settles on
+    /// `.bandSelection` whenever the new frame has no saved horizon to load.  The
+    /// band-selection toolbar has no sky/ground buttons, so a band left in erase
+    /// mode paints nothing at all — the strokes still accumulate the band, so the
+    /// coverage percentage climbs, but nothing is ever added to the painted region
+    /// and the canvas stays empty.  Nothing in that phase could turn it back off
+    /// either, which is why Reset was the only way out.
+    private(set) var phase: HorizonPainterPhase = .bandSelection {
+        didSet {
+            if phase == .bandSelection { isErasing = false }
+        }
+    }
 
     /// Transition to the given phase.  Used by the view layer to move to
     /// `.computing` once the band is complete.
@@ -208,6 +224,32 @@ final class HorizonPaintState {
     /// that a stale in-flight expansion can detect it was superseded and skip
     /// updating `expandedPath`.
     private(set) var expansionGeneration: Int = 0
+
+    /// Monotonically increasing counter identifying the painting **session** —
+    /// one frame's worth of work.  Incremented by ``clear()``, which both the
+    /// Reset button and the startup flow's frame advance go through.
+    ///
+    /// Unlike ``expansionGeneration`` this does *not* move on every stroke, so
+    /// the several refinement passes that legitimately run concurrently (each
+    /// merging its own columns) all still count as current.  It moves only when
+    /// the state they were computed against has ceased to exist.
+    ///
+    /// The startup flow reuses one `HorizonPaintState` across every frame the
+    /// user paints, so an async pass that is still in flight when the frame
+    /// advances resumes holding a live reference to the *next* frame's state.
+    /// Applying its result there left the new frame showing the previous
+    /// frame's horizon as its selection — and, because `apply` only moves
+    /// `previewHorizonY` in columns that already have a value and `displayPath`
+    /// prefers `expandedPath` over the raw strokes, the new band painted over
+    /// the top of it barely showed.  It also seeded `lastHorizonY`, which is
+    /// what a save writes, so the wrong horizon could be saved for the frame.
+    private(set) var sessionGeneration: Int = 0
+
+    /// `true` when `generation` still names the painting session on screen.
+    ///
+    /// Async work captures ``sessionGeneration`` before it suspends and checks
+    /// it here before writing anything back.
+    func isCurrentSession(_ generation: Int) -> Bool { generation == sessionGeneration }
 
     /// The path to display: expanded (object-selection result) when available,
     /// raw painted strokes otherwise.
@@ -588,6 +630,11 @@ final class HorizonPaintState {
         // Restore *after* the phase, not before: isErasing's didSet forces the value back to
         // false while the phase is still .bandSelection, which is what clear() just set it to.
         // Assigning it first therefore lost the toggle on every frame advance.
+        //
+        // It only survives as far as the phase the load settles on: a new frame with a saved
+        // horizon goes to .refinement and keeps the toggle, while one that has to be banded
+        // from scratch goes to .bandSelection, which drops it again.  Erasing has no meaning
+        // there and no control to turn it off — see `phase`.
         isErasing = savedIsErasing
     }
 
@@ -609,6 +656,7 @@ final class HorizonPaintState {
         gestureColumnBottom = [Int](repeating: Int.min,  count: vw)
         gestureColumnTop    = [Int](repeating: Int.max,  count: vw)
         expansionGeneration += 1
+        sessionGeneration   += 1
         isNewSegment = true
     }
 

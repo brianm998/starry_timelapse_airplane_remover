@@ -278,6 +278,57 @@ final class HorizonPaintStateTests: XCTestCase {
         XCTAssertTrue(paint.isErasing)
     }
 
+    /// Refusing the *assignment* is not enough: the phase also moves under a value already
+    /// held.  A frame advance restores the toggle while the phase is `.computing`, and the
+    /// phase then settles on `.bandSelection` for any frame with no saved horizon to load.
+    ///
+    /// Left on, the band paints nothing: every stroke takes the erase path, which has no
+    /// painted region to clip, so the canvas stays empty while the coverage percentage
+    /// climbs.  The band-selection toolbar has no sky/ground buttons either, so the only
+    /// way back out was Reset — which is exactly the report this pins down.
+    func testReturningToBandSelectionTurnsErasingBackOff() {
+        let paint = state()
+        paint.setPhase(.refinement)
+        paint.isErasing = true
+
+        paint.setPhase(.bandSelection)
+
+        XCTAssertFalse(paint.isErasing, "the band is always additive")
+    }
+
+    /// The whole path the startup flow actually takes: erase on the frame just finished,
+    /// advance, and the new frame turns out to need a band painted from scratch.
+    func testAFrameAdvanceIntoBandSelectionDoesNotLeaveTheEraserOn() {
+        let paint = state()
+        paint.setPhase(.refinement)
+        paint.isErasing = true
+
+        paint.resetForNewFrame()
+        XCTAssertTrue(paint.isErasing, "still carried while the load is in flight")
+
+        paint.setPhase(.bandSelection)   // no saved horizon for the new frame
+        XCTAssertFalse(paint.isErasing)
+
+        paint.brushRadius = 20
+        paint.addStroke(at: CGPoint(x: 100, y: 50))
+        XCTAssertTrue(paint.isPainted(vx: 100, vy: 50),
+                      "the first stroke on the new frame has to paint")
+    }
+
+    /// The other half of the advance: a frame that *does* have a saved horizon lands in
+    /// refinement, where the toggle is a tool setting and has to survive.
+    func testAFrameAdvanceIntoRefinementKeepsTheEraser() {
+        let paint = state()
+        paint.setPhase(.refinement)
+        paint.isErasing = true
+
+        paint.resetForNewFrame()
+        paint.loadExistingHorizon([Int?](repeating: 50, count: 200), margin: 20)
+
+        XCTAssertEqual(paint.phase, .refinement)
+        XCTAssertTrue(paint.isErasing)
+    }
+
     // MARK: - strokes
 
     func testAStrokeIsRecordedWithTheCurrentBrush() {
@@ -751,6 +802,51 @@ final class HorizonPaintStateTests: XCTestCase {
         let before = paint.expansionGeneration
         paint.clear()
         XCTAssertGreaterThan(paint.expansionGeneration, before)
+    }
+
+    // MARK: - the session counter
+
+    /// One paint state serves every frame of the startup flow, so an async detection pass
+    /// that is still running when the frame advances comes back holding a live reference to
+    /// the *next* frame's state.  Writing its horizon there showed the previous frame's
+    /// selection over the new frame, left the new band barely able to draw over it (a
+    /// stroke only moves `previewHorizonY` where it already has a value, and `displayPath`
+    /// prefers the expanded path to the raw strokes), and seeded the `lastHorizonY` that a
+    /// save writes.  The session counter is how the pass knows not to.
+    func testAFrameAdvanceRetiresTheSession() {
+        let paint = state()
+        let session = paint.sessionGeneration
+        XCTAssertTrue(paint.isCurrentSession(session))
+
+        paint.resetForNewFrame()
+
+        XCTAssertFalse(paint.isCurrentSession(session),
+                       "work started for the previous frame is no longer current")
+        XCTAssertTrue(paint.isCurrentSession(paint.sessionGeneration))
+    }
+
+    func testResetRetiresTheSession() {
+        let paint = state()
+        let session = paint.sessionGeneration
+        paint.clear()
+        XCTAssertFalse(paint.isCurrentSession(session))
+    }
+
+    /// Unlike the expansion generation, painting must *not* retire the session: several
+    /// refinement passes legitimately run at once, each merging only its own columns, and
+    /// every one of them has to be allowed to land.
+    func testPaintingDoesNotRetireTheSession() {
+        let paint = state()
+        paint.setPhase(.refinement)
+        let session = paint.sessionGeneration
+
+        paint.brushRadius = 20
+        paint.addStroke(at: CGPoint(x: 50, y: 50))
+        paint.endSegment()
+        paint.addStroke(at: CGPoint(x: 150, y: 50))
+
+        XCTAssertTrue(paint.isCurrentSession(session),
+                      "a stroke supersedes an expansion, not the whole session")
     }
 
     func testClearingLetsGapFillingStartFreshRatherThanJoiningToTheOldStrokes() {

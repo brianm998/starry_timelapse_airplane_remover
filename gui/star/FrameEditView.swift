@@ -189,20 +189,29 @@ struct FrameEditView: View {
     }
 
     /// Async-loads the saved horizon reference for the current frame into `ps`.
+    ///
+    /// The load outliving what it was started for is a real case: the startup flow reuses
+    /// one paint state across every frame, and Reset restarts the session in place, so a
+    /// slow load can return to find the state it was for already gone.  Writing to it then
+    /// would put one frame's saved horizon on another frame, or drag a state the user has
+    /// just reset back into refinement.  `sessionGeneration` says whether that happened.
     private func loadHorizonReferenceInto(_ ps: HorizonPaintState) {
         let frameView = viewModel.currentFrameView
         let w = Int(viewModel.frameWidth)
         let h = Int(viewModel.frameHeight)
+        let session = ps.sessionGeneration
 
         Task { @MainActor in
             guard let frame = frameView.frame else {
-                ps.setPhase(.bandSelection)
+                if ps.isCurrentSession(session) { ps.setPhase(.bandSelection) }
                 return
             }
-            if let existingY = try? await frame.loadBestExistingHorizonAsViewY(
+            let existingY = try? await frame.loadBestExistingHorizonAsViewY(
                 viewWidth:  w,
                 viewHeight: h
-            ) {
+            )
+            guard ps.isCurrentSession(session) else { return }
+            if let existingY {
                 let margin = max(50, h / 10)
                 ps.loadExistingHorizon(existingY, margin: margin)
             } else {

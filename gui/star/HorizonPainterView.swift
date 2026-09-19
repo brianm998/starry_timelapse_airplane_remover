@@ -323,6 +323,10 @@ private func triggerBandComputation(
     let bandBottom = paintState.bandColumnBottom
     let vw = Int(paintState.viewWidth)
     let vh = Int(paintState.viewHeight)
+    // The session this band belongs to.  The startup flow reuses one paint state
+    // across frames, so by the time the detector answers the user may have moved
+    // on — see `HorizonPaintState.sessionGeneration`.
+    let session = paintState.sessionGeneration
 
     guard let frame = frameView.frame else {
         paintState.setPhase(.bandSelection)
@@ -341,7 +345,16 @@ private func triggerBandComputation(
         )
     } catch {
         Log.w("HorizonPainterView: band computation failed: \(error)")
-        paintState.setPhase(.bandSelection)
+        paintState.endExpanding()
+        // Only send the *current* session back to band selection: a failure
+        // belonging to a frame the user has already left must not disturb the
+        // one now on screen.
+        if paintState.isCurrentSession(session) { paintState.setPhase(.bandSelection) }
+        return
+    }
+
+    guard paintState.isCurrentSession(session) else {
+        Log.d("HorizonPainterView: dropping band computation from a finished session")
         paintState.endExpanding()
         return
     }
@@ -378,6 +391,9 @@ private func triggerObjectSelection(
 
     let bandTop = paintState.bandColumnTop
     let bandBot = paintState.bandColumnBottom
+
+    // The session these seeds belong to — see `HorizonPaintState.sessionGeneration`.
+    let session = paintState.sessionGeneration
 
     // Gesture was already committed to the known-region map synchronously in
     // paintGesture.onEnded, before this Task was queued.  Snapshot the current
@@ -492,6 +508,7 @@ private func triggerObjectSelection(
     }
 
     guard !Task.isCancelled,
+          paintState.isCurrentSession(session),
           let local = snappedHorizon
     else {
         paintState.endExpanding()
@@ -796,7 +813,7 @@ struct HorizonPainterToolbarView: View {
             }
         }
         .buttonStyle(.borderedProminent)
-        .disabled(paintState.lastHorizonY == nil || isSaving || paintState.isExpanding)
+        .disabled(!canSave)
         .help(viewModel.horizonPainterMode == .startup
               ? localized("ui.save_horizon_continue")
               : localized("ui.save_horizon_reference"))
@@ -981,7 +998,7 @@ struct HorizonPainterToolbarView: View {
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
 
         Button("") {
-            if paintState.phase == .refinement { Task { await saveHorizonReference() } }
+            if canSave { Task { await saveHorizonReference() } }
         }
         .keyboardShortcut(.return, modifiers: [])
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
@@ -989,8 +1006,24 @@ struct HorizonPainterToolbarView: View {
 
     // MARK: - Save
 
+    /// Whether saving is allowed right now — the condition the Save/Next button is
+    /// enabled by, and the one the Return key has to share.
+    ///
+    /// Return used to ask only for the refinement phase.  Pressed while a detection
+    /// pass was still running it saved the horizon from *before* that pass and, in the
+    /// startup flow, advanced to the next frame with the pass still in flight, whose
+    /// result then landed on the next frame's paint state.  Pressed twice it ran two
+    /// saves at once and advanced two frames for one horizon.
+    private var canSave: Bool {
+        paintState.phase == .refinement
+          && paintState.lastHorizonY != nil
+          && !isSaving
+          && !paintState.isExpanding
+    }
+
     @MainActor
     private func saveHorizonReference() async {
+        guard !isSaving else { return }
         // Allow saving when the horizon was auto-detected from band strokes OR
         // was loaded from an existing reference (lastHorizonY set, strokes empty).
         guard paintState.hasStrokes || paintState.lastHorizonY != nil else { return }
