@@ -1523,6 +1523,9 @@ public final class ImageSequenceViewModel {
         didSet {
             var realConfig = config.config()
             realConfig.alignmentKeypointDetectionDivisor = alignmentKeypointDetectionDivisor
+            // Whether it came from the startup prompt or from Advanced settings, someone
+            // picked this, so Config must not pick again underneath it.
+            realConfig.keypointDivisorWasChosen = true
             config.update(realConfig)
         }
     }

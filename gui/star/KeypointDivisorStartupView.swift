@@ -32,7 +32,7 @@ struct KeypointDivisorStartupView: View {
 
     /// Guards the one-shot default. `onAppear` can fire more than once for the same view,
     /// and re-running this would stomp a choice the user just made.
-    @State private var hasAppliedAdvice = false
+    @State private var hasConfigured = false
 
     private struct Preset {
         let divisor: Double
@@ -88,7 +88,7 @@ struct KeypointDivisorStartupView: View {
             }
         }
           .frame(maxWidth: 640, alignment: .leading)
-          .onAppear { applyAdviceOnce() }
+          .onAppear { configureOnFirstAppearance() }
           .onChange(of: customText) { applyCustomTextIfValid() }
           .onChange(of: divisor) {
               // Resync the field when a preset moved the value, but never while it is
@@ -249,25 +249,22 @@ struct KeypointDivisorStartupView: View {
         return abs(advice.recommendedDivisor - value) < 0.005
     }
 
-    /// The default, applied once when this prompt first appears.
+    /// Set up this section the first time it appears.
     ///
-    /// Only overrides a divisor still sitting at full resolution. Someone who already set
-    /// a value in Advanced settings, or is reopening a sequence whose config carries one,
-    /// keeps it — and gets this section expanded so they can see what it is rather than
-    /// having it hidden behind a collapsed title.
-    private func applyAdviceOnce() {
-        guard !hasAppliedAdvice else { return }
-        hasAppliedAdvice = true
-
-        if let advice, advice.reduceRecommended, divisor <= 1.0 {
-            viewModel.alignmentKeypointDetectionDivisor = advice.recommendedDivisor
-            Log.i("frames are \(Self.megapixels(advice.imagePixels))MP against a "
-                + "\(Self.megapixels(advice.thresholdPixels))MP full resolution limit on "
-                + "this machine (\(advice.fullResolutionConcurrency) of "
-                + "\(advice.frameConcurrency) keypoint ops fit), defaulting the keypoint "
-                + "divisor to \(advice.recommendedDivisor)")
-        }
-
+    /// It used to apply the recommended divisor as well.
+    /// `Config.resolveAutomaticKeypointDivisor` does that now, from `set(imageInfo:)`,
+    /// so the cli and the daemon get the same default instead of it living in one
+    /// client's startup view — and it logs the reasoning there too. By the time this
+    /// runs the value is already whatever the advice asked for, so there is nothing
+    /// left here to apply.
+    ///
+    /// What remains is presentation: seed the custom field, and open the section
+    /// whenever it holds something worth seeing — a reduction this machine needs, or a
+    /// value somebody already set. Someone who wants full resolution back changes it
+    /// here, which marks it chosen and stops `Config` deciding again.
+    private func configureOnFirstAppearance() {
+        guard !hasConfigured else { return }
+        hasConfigured = true
         customText = Self.format(divisor)
         isExpanded = advice?.reduceRecommended == true || divisor > 1.0
     }

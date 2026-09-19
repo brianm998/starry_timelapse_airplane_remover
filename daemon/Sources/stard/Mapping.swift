@@ -287,6 +287,10 @@ enum Mapping {
         // let it through as if it meant something.
         if p.hasAlignmentKeypointDetectionDivisor {
             c.alignmentKeypointDetectionDivisor = p.alignmentKeypointDetectionDivisor
+            // A client that sent a divisor has chosen one; `set(imageInfo:)` must not
+            // then choose a different one over the top of it.  A client that sent none
+            // leaves the field absent and gets the automatic default.
+            c.keypointDivisorWasChosen = true
         }
         // These three all have a meaningful 0, which is why they are `optional` in the
         // proto and read through `has…` here rather than relying on a proto3 zero:

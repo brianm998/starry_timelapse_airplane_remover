@@ -90,6 +90,10 @@ struct ConfigOverrides {
         if let tripodHeadWasMoving { config.tripodHeadWasMoving = tripodHeadWasMoving }
         if let alignmentKeypointDetectionDivisor {
             config.alignmentKeypointDetectionDivisor = alignmentKeypointDetectionDivisor
+            // --keypoint-divisor is a decision, so it stops set(imageInfo:) making one.
+            // Without this, typing `--keypoint-divisor 1` to ask for full resolution on a
+            // machine the advice wants reduced would be silently overridden by it.
+            config.keypointDivisorWasChosen = true
         }
         if let mergeStreamingThresholdMB {
             config.mergeStreamingThresholdMB = mergeStreamingThresholdMB
