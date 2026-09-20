@@ -653,7 +653,7 @@ final public actor FrameAlignmentProcessor {
              detectionScale: featureConfig.keypointDetectionScale,
              // Ignored on the earth branch. Off by default — see
              // Config.useGPUForSIFT's doc comment for why this is a separate,
-             // more cautious flag than Config.useGPU.
+             // more cautious flag than Config.useGPUForMerge.
              useGPUForSift: featureConfig.useGPUForSIFT,
              // Ignored on the sky branch. Off by default — see
              // Config.useGPUForAKAZE's doc comment.
@@ -1011,7 +1011,7 @@ final public actor FrameAlignmentProcessor {
                       streamingThresholdBytes:
                         Int64(mergeConfig.mergeStreamingThresholdMB) * 1024 * 1024,
                       loadConcurrency: mergeConfig.mergeLoadConcurrency,
-                      useGPU: mergeConfig.useGPU
+                      useGPU: mergeConfig.useGPUForMerge
                     )
                 }
 

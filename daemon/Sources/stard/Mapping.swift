@@ -243,7 +243,7 @@ enum Mapping {
         out.alignmentKeypointDetectionDivisor = c.alignmentKeypointDetectionDivisor
         out.maxConcurrentKeypointOps = Int32(c.maxConcurrentKeypointOps)
         out.mergeStreamingThresholdMb = Int32(c.mergeStreamingThresholdMB)
-        out.useGpuAcceleration = c.useGPU
+        out.useGpuAcceleration = c.useGPUForMerge
         // Read-only: not a Config field, so there is nothing for applyExpertConfig to
         // apply it back onto — computed fresh on every outgoing Config so a client
         // always shows the daemon's own machine's hardware, not a stale answer from
@@ -309,7 +309,7 @@ enum Mapping {
         if p.hasHorizonReservationFloorMb { c.horizonReservationFloorMB = Int(p.horizonReservationFloorMb) }
         if p.hasMaxConcurrentKeypointOps { c.maxConcurrentKeypointOps = Int(p.maxConcurrentKeypointOps) }
         if p.hasMergeStreamingThresholdMb { c.mergeStreamingThresholdMB = Int(p.mergeStreamingThresholdMb) }
-        if p.hasUseGpuAcceleration { c.useGPU = p.useGpuAcceleration }
+        if p.hasUseGpuAcceleration { c.useGPUForMerge = p.useGpuAcceleration }
         // gpu_hardware_available is read-only (see protoConfig) and deliberately not
         // applied here — it describes hardware, not a setting a client can choose.
         // The record of an unfinished hand-painted horizon selection, applied as a pair and

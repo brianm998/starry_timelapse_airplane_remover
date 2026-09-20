@@ -87,7 +87,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.writeOutlierGroupFiles, true)
         XCTAssertEqual(c.writeOutlierClassificationValues, true)
         XCTAssertEqual(c.writeOutputFiles, true, "--no-skip-output-files turns rendering on")
-        XCTAssertEqual(c.useGPU, false, "--no-use-gpu turns it off")
+        XCTAssertEqual(c.useGPUForMerge, false, "--no-use-gpu turns it off")
         XCTAssertEqual(c.useGPUForSIFT, true, "--use-gpu-for-sift turns it on")
         XCTAssertEqual(c.useGPUForAKAZE, true, "--use-gpu-for-akaze turns it on")
         XCTAssertEqual(c.horizonDetectionEnabled, false, "--no-horizon turns it off")
@@ -232,30 +232,31 @@ final class ConfigOverridesTests: XCTestCase {
 
     func testUseGPUHasThreeStatesAndNeedsAllOfThem() throws {
         var disabled = Config()
-        XCTAssertTrue(disabled.useGPU, "GPU acceleration is on by default")
+        XCTAssertTrue(disabled.useGPUForMerge, "GPU acceleration is on by default")
         try StarCli.parse(["--no-use-gpu", "/some/seq"]).configOverrides.apply(to: &disabled)
-        XCTAssertFalse(disabled.useGPU, "--no-use-gpu turns it off")
+        XCTAssertFalse(disabled.useGPUForMerge, "--no-use-gpu turns it off")
 
         var unmentioned = Config()
-        unmentioned.useGPU = false
+        unmentioned.useGPUForMerge = false
         try StarCli.parse(["/some/star_temp_seq/config.json"])
             .configOverrides.apply(to: &unmentioned)
-        XCTAssertFalse(unmentioned.useGPU,
+        XCTAssertFalse(unmentioned.useGPUForMerge,
                        "a resume that repeats no flags keeps what the config holds")
 
         var enabledAgain = Config()
-        enabledAgain.useGPU = false
+        enabledAgain.useGPUForMerge = false
         try StarCli.parse(["--use-gpu", "/some/star_temp_seq/config.json"])
             .configOverrides.apply(to: &enabledAgain)
-        XCTAssertTrue(enabledAgain.useGPU, "and the plain form is the way back")
+        XCTAssertTrue(enabledAgain.useGPUForMerge, "and the plain form is the way back")
     }
 
     /// Same shape as `testUseGPUHasThreeStatesAndNeedsAllOfThem`, but the default runs the
-    /// other way: `useGPUForSIFT` starts off, unlike `useGPU`, so the flag this cli-only
-    /// override needs a way back from is the saved-`true` case, not the saved-`false` one.
+    /// other way: `useGPUForSIFT` starts off, unlike `useGPUForMerge`, so the flag this
+    /// cli-only override needs a way back from is the saved-`true` case, not the
+    /// saved-`false` one.
     func testUseGPUForSiftHasThreeStatesAndNeedsAllOfThem() throws {
         var enabled = Config()
-        XCTAssertFalse(enabled.useGPUForSIFT, "off by default, unlike useGPU")
+        XCTAssertFalse(enabled.useGPUForSIFT, "off by default, unlike useGPUForMerge")
         try StarCli.parse(["--use-gpu-for-sift", "/some/seq"]).configOverrides.apply(to: &enabled)
         XCTAssertTrue(enabled.useGPUForSIFT, "--use-gpu-for-sift turns it on")
 
@@ -276,7 +277,7 @@ final class ConfigOverridesTests: XCTestCase {
     /// Same shape again, for `Config.useGPUForAKAZE`.
     func testUseGPUForAKAZEHasThreeStatesAndNeedsAllOfThem() throws {
         var enabled = Config()
-        XCTAssertFalse(enabled.useGPUForAKAZE, "off by default, unlike useGPU")
+        XCTAssertFalse(enabled.useGPUForAKAZE, "off by default, unlike useGPUForMerge")
         try StarCli.parse(["--use-gpu-for-akaze", "/some/seq"]).configOverrides.apply(to: &enabled)
         XCTAssertTrue(enabled.useGPUForAKAZE, "--use-gpu-for-akaze turns it on")
 

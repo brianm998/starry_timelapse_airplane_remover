@@ -55,12 +55,14 @@ struct ConfigOverrides {
     var writeOutlierClassificationValues: Bool?
     /// `-s`, inverted: the flag turns writing the output images off.
     var writeOutputFiles: Bool?
-    /// `--use-gpu` / `--no-use-gpu`. Also tri-state and for the same reason as
-    /// `writeOutputFiles`: it is the one alignment flag that can turn something off
-    /// rather than only add or raise something, so a saved `false` needs a way back.
-    var useGPU: Bool?
+    /// `--use-gpu` / `--no-use-gpu`, maps to `Config.useGPUForMerge`. Also tri-state
+    /// and for the same reason as `writeOutputFiles`: it is the one alignment flag
+    /// that can turn something off rather than only add or raise something, so a
+    /// saved `false` needs a way back. The Swift property here and on `Config` is
+    /// named `useGPUForMerge`, not the flag text, which stays `--use-gpu`.
+    var useGPUForMerge: Bool?
     /// `--use-gpu-for-sift` / `--no-use-gpu-for-sift`. Off by default, unlike
-    /// `useGPU` — see `Config.useGPUForSIFT`'s doc comment. Deliberately not
+    /// `useGPUForMerge` — see `Config.useGPUForSIFT`'s doc comment. Deliberately not
     /// exposed anywhere but the cli today: this is how it gets reviewed on
     /// real sequences before it earns a place in the gui/Kotlin settings UIs.
     var useGPUForSift: Bool?
@@ -96,7 +98,7 @@ struct ConfigOverrides {
             config.writeOutlierClassificationValues = writeOutlierClassificationValues
         }
         if let writeOutputFiles { config.writeOutputFiles = writeOutputFiles }
-        if let useGPU { config.useGPU = useGPU }
+        if let useGPUForMerge { config.useGPUForMerge = useGPUForMerge }
         if let useGPUForSift { config.useGPUForSIFT = useGPUForSift }
         if let useGPUForAKAZE { config.useGPUForAKAZE = useGPUForAKAZE }
         if let horizonDetectionEnabled {

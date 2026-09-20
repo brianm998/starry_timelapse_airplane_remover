@@ -133,6 +133,15 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 ExpertGroup("Horizon", HORIZON_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
                 ExpertGroup("Memory", MEMORY_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
                 SettingGroup("Performance") {
+                    // Only one GPU toggle is exposed to this client today (the other two,
+                    // keypoint detection for SIFT/AKAZE, are cli-only) -- but even one toggle
+                    // reads as "GPU for everything" unless something says otherwise, so this
+                    // note is not waiting on a second toggle to earn its place.
+                    Text(
+                        "GPU acceleration below applies to the alignment/merge step only, not "
+                            + "to keypoint detection or any other step.",
+                        color = StarColors.textDisabled, fontSize = 10.sp,
+                    )
                     // Only the daemon's own machine's hardware is known here; a client's own
                     // machine may differ, so this reflects what the *daemon* can actually do.
                     // Absent (older daemon) means "unknown," not "unsupported" -- do not disable.
@@ -141,7 +150,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                         if (!f.has(cfg)) { UnsupportedRow(f.label, daemonVersion); return@forEach }
                         when (f) {
                             is BoolField -> {
-                                val gpuGated = f.label == GPU_ACCELERATION_LABEL && gpuUnsupported
+                                val gpuGated = f.label == GPU_FOR_MERGE_LABEL && gpuUnsupported
                                 ToggleRow(
                                     f.label,
                                     if (gpuGated) false else (boolEdits[f.label] ?: f.get(cfg)),
@@ -313,10 +322,13 @@ internal val MEMORY_FIELDS: List<ExpertField> = listOf(
 // fresh by the daemon from its own machine's hardware, and rendered separately below
 // rather than through ExpertGroup's editable/unsupported-row machinery, which assumes
 // every field is something the user can set.
-internal const val GPU_ACCELERATION_LABEL = "Use GPU acceleration"
+// Labeled "for Align & Merge," not a plain "GPU acceleration," so it reads as one specific
+// step rather than a master switch -- it wires to the wire-stable `useGpuAcceleration` proto
+// field/StarCore `Config.useGPUForMerge` regardless; only the label users see changed.
+internal const val GPU_FOR_MERGE_LABEL = "Use GPU for Align & Merge"
 
 internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
-    BoolField(GPU_ACCELERATION_LABEL, { it.useGpuAcceleration }, { b, v -> b.setUseGpuAcceleration(v) }, { it.hasUseGpuAcceleration() }),
+    BoolField(GPU_FOR_MERGE_LABEL, { it.useGpuAcceleration }, { b, v -> b.setUseGpuAcceleration(v) }, { it.hasUseGpuAcceleration() }),
 )
 
 @Composable
@@ -364,7 +376,7 @@ private fun UnsupportedRow(label: String, daemonVersion: String?) {
 /// The GPU-hardware equivalent of `UnsupportedRow`: not a setting, so there is
 /// nothing to toggle, but the reason has nothing to do with the daemon's version
 /// either -- it is whether the daemon's own machine has a supported GPU at all.
-/// "Use GPU acceleration" is forced off and disabled above whenever this reads
+/// "Use GPU for Align & Merge" is forced off and disabled above whenever this reads
 /// "not supported," so this row is what tells the user why -- without it, a
 /// toggle that suddenly can't be turned on would look broken rather than moot.
 @Composable

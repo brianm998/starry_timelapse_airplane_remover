@@ -264,7 +264,7 @@ struct ProcessingSettingsView: View {
     @State private var showMergeMultiplierInfo = false
     @State private var showHorizonMultiplierInfo = false
     @State private var showHorizonFloorInfo = false
-    @State private var showUseGPUInfo = false
+    @State private var showUseGPUForMergeInfo = false
     @State private var showUseGPUForSIFTInfo = false
     @State private var showUseGPUForAKAZEInfo = false
 
@@ -311,7 +311,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo ||
         showHorizonMultiplierInfo ||
         showHorizonFloorInfo ||
-        showUseGPUInfo ||
+        showUseGPUForMergeInfo ||
         showUseGPUForSIFTInfo ||
         showUseGPUForAKAZEInfo
     }
@@ -360,7 +360,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo = true
         showHorizonMultiplierInfo = true
         showHorizonFloorInfo = true
-        showUseGPUInfo = true
+        showUseGPUForMergeInfo = true
         showUseGPUForSIFTInfo = true
         showUseGPUForAKAZEInfo = true
     }
@@ -409,7 +409,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo = false
         showHorizonMultiplierInfo = false
         showHorizonFloorInfo = false
-        showUseGPUInfo = false
+        showUseGPUForMergeInfo = false
         showUseGPUForSIFTInfo = false
         showUseGPUForAKAZEInfo = false
     }
@@ -501,7 +501,7 @@ struct ProcessingSettingsView: View {
                       Divider()
                       DisclosureGroup(isExpanded: $showGPUSettingsExpanded) {
                           Grid {
-                              self.useGPUView
+                              self.useGPUForMergeView
                               Divider()
                               self.useGPUForSIFTView
                               Divider()
@@ -513,6 +513,14 @@ struct ProcessingSettingsView: View {
                                 .font(.title2)
                                 .foregroundColor(.white)
                                 .opacity(0.6)
+                              // Each toggle below is independent — see ui.gpu_settings_scope_note.
+                              // Without this, "GPU Settings" reads as one on/off switch for the
+                              // whole pipeline, which is exactly the misreading useGPUForMerge
+                              // (née useGPU) was renamed to avoid at the property-name level.
+                              Text(localized("ui.gpu_settings_scope_note"))
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .opacity(0.5)
                               Text(Config.gpuAccelerationStatusText())
                                 .font(.caption)
                                 .foregroundColor(.white)
@@ -1282,22 +1290,29 @@ struct ProcessingSettingsView: View {
     /// toggle — see `Config.gpuAccelerationStatusText()`. Not gated by scene type or camera
     /// motion like most rows in this file; whether the GPU kernels apply is a per-machine
     /// question, not a per-sequence one.
-    private var useGPUView: some View {
+    ///
+    /// Named (and labeled) "for merge," not a plain "GPU acceleration," so it reads as one
+    /// of three independent toggles rather than a master switch — see
+    /// `Config.useGPUForMerge`'s doc comment for why the property itself was renamed away
+    /// from `useGPU`.
+    private var useGPUForMergeView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(
-          showInfo: $showUseGPUInfo,
+          showInfo: $showUseGPUForMergeInfo,
           addSpacer: { addSpacer },
           infoText: """
             Uses the GPU (Metal) for the alignment warp and median-merge steps of \
-            processing, when this Mac has hardware that supports it. Turning this off always \
-            uses the CPU instead, which is slower but produces output that is not affected by \
-            the small numeric differences the GPU path documents for the merge step.
+            processing ONLY, when this Mac has hardware that supports it. Keypoint detection \
+            (the two toggles below, SIFT and AKAZE) is controlled separately and is not \
+            affected by this one either way. Turning this off always uses the CPU instead for \
+            warp/merge, which is slower but produces output that is not affected by the small \
+            numeric differences the GPU path documents for the merge step.
             """
         ) {
             HStack {
                 HStack {
                     Spacer()
-                    Text(localized("ui.use_gpu_acceleration"))
+                    Text(localized("ui.use_gpu_for_merge"))
                       .font(.title2)
                       .foregroundColor(.white)
                       .opacity(0.6)
@@ -1305,8 +1320,8 @@ struct ProcessingSettingsView: View {
                 HStack {
                     Space(width: 10)
                     Toggle(isOn: Binding(
-                      get: { Config.isGPUHardwareAvailable && viewModel.useGPU },
-                      set: { viewModel.useGPU = $0 }
+                      get: { Config.isGPUHardwareAvailable && viewModel.useGPUForMerge },
+                      set: { viewModel.useGPUForMerge = $0 }
                     )) {
                         Text("")
                     }
@@ -1317,7 +1332,7 @@ struct ProcessingSettingsView: View {
         .disabled(!Config.isGPUHardwareAvailable)
     }
 
-    /// Off by default, unlike `useGPU` — see `Config.useGPUForSIFT`'s doc comment for why it
+    /// Off by default, unlike `useGPUForMerge` — see `Config.useGPUForSIFT`'s doc comment for why it
     /// ships behind its own toggle instead of being folded into the one above. Disabled the
     /// same way as `useGPUView` when this machine has no supported GPU.
     private var useGPUForSIFTView: some View {
@@ -1356,7 +1371,7 @@ struct ProcessingSettingsView: View {
         .disabled(!Config.isGPUHardwareAvailable)
     }
 
-    /// Off by default, unlike `useGPU` — see `Config.useGPUForAKAZE`'s doc comment for why it
+    /// Off by default, unlike `useGPUForMerge` — see `Config.useGPUForAKAZE`'s doc comment for why it
     /// ships behind its own toggle instead of being folded into the one above. Disabled the
     /// same way as `useGPUView` when this machine has no supported GPU.
     private var useGPUForAKAZEView: some View {
