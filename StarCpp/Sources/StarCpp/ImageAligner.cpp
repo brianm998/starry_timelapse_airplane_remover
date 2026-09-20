@@ -55,6 +55,7 @@ static MatWrapperRef wrapReadOnly(const cv::Mat& mat) {
 // header Swift sees.
 extern "C" GPUWarpFunc gpu_ops_get_warp(void);
 extern "C" GPUMedianMergeFunc gpu_ops_get_median_merge(void);
+extern "C" GPUAlignedMergeFunc gpu_ops_get_aligned_merge(void);
 
 static cv::Mat ensure8U(const cv::Mat& input) {
     if (input.depth() == CV_8U) return input;
@@ -1900,6 +1901,123 @@ static cv::Mat warpCoverage(const cv::Mat &probe, const cv::Mat &H, bool useGPU)
     return warpInto(probe, H, useGPU);
 }
 
+// Attempts the batched GPU aligned merge for one frame's RESIDENT (all-in-memory)
+// path only — see GPU_MERGE_BATCHING_FIX.md and GPUOps.swift's MetalGPUBackend.
+// alignedMerge for why this exists and how it is implemented. Decodes every
+// neighbour concurrently, exactly as the CPU resident path does (forEachMergeSource,
+// bounded by loadConcurrency), filters out any that have no homography, failed to
+// decode, or do not match the base's geometry, converts each surviving neighbour's
+// homography to a flattened row-major 3x3 double array, and hands the base plus
+// every surviving neighbour's still-unwarped pixels to the registered
+// GPUAlignedMergeFunc in a single call — one Metal command buffer does every warp
+// and the final merge together, instead of `neighborCount * 2 + 1` separate
+// round-trips.
+//
+// Returns nullptr on any failure or unsupported case, including "no handler
+// registered" and "zero neighbours survived filtering" — the caller then runs the
+// existing per-neighbour CPU path for the whole frame (which independently performs
+// the same filtering and would reach the same "nothing to merge" conclusion in the
+// zero-survivors case, so falling through there is correct, just not free — an
+// acceptable cost for what should be a rare edge case, not the common path).
+// `*outWarpCount` is only meaningful when this returns non-null.
+static MatWrapperRef tryGPUAlignedMerge(const cv::Mat &base, int baseFrameIndex,
+                                        const AlignmentNeighborData *neighbors, int neighborCount,
+                                        const int *homographyKeys, MatWrapperRef *homographyValues,
+                                        int homographyCount,
+                                        double outlierThreshold, bool includeAll,
+                                        int loadConcurrency, int *outWarpCount) {
+    GPUAlignedMergeFunc gpuAlignedMerge = gpu_ops_get_aligned_merge();
+    if (!gpuAlignedMerge) return nullptr;
+    // The merge kernel this reuses internally (median_merge_u8/u16, see GPUOps.swift)
+    // has a fixed-size 17-element stack array — the same cap GPUMedianMergeFunc
+    // already enforces for the un-batched, single-call GPU merge used elsewhere in
+    // this file. Bailing before any decoding happens (rather than discovering this
+    // only after loading every neighbour) keeps the common "GPU unavailable/
+    // inapplicable" case just as cheap as it always was.
+    if (neighborCount < 0 || neighborCount + 1 > 17) return nullptr;
+
+    // One loaded neighbour, pending the same filtering warpNeighbour already does:
+    // present iff it has a homography, decoded successfully, and matches the base's
+    // rows/cols/type. `neighbor` is owned (released below); `homography` is not
+    // (borrowed from `homographyValues`, exactly like `H` in warpNeighbour).
+    struct LoadedNeighbour {
+        MatWrapperRef neighbor = nullptr;
+        MatWrapperRef homography = nullptr;
+        std::string note;
+        bool present = false;
+    };
+    std::vector<LoadedNeighbour> loaded((size_t)std::max(neighborCount, 0));
+    forEachMergeSource(neighborCount, loadConcurrency, [&](int i) {
+        LoadedNeighbour &out = loaded[(size_t)i];
+        MatWrapperRef H = homographyForOffset(neighbors[i].frameIndex - baseFrameIndex,
+                                              homographyKeys, homographyValues, homographyCount);
+        if (!H) return;
+
+        MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
+        if (!neighbor) return;
+
+        // Geometry is checked here, before warping, rather than after (as
+        // warpNeighbour does) — this path never warps on the CPU, so there is no
+        // post-warp cv::Mat to check, and warpInto never changes a source's rows/
+        // cols anyway (its output is always `src.size()`), so checking the raw
+        // neighbour against the base is exactly equivalent.
+        if (neighbor->mat.rows != base.rows || neighbor->mat.cols != base.cols ||
+            neighbor->mat.type() != base.type()) {
+            out.note = std::string("aligned merge: ") + neighbors[i].filename +
+                       " does not match the base geometry";
+            mat_wrapper_release(neighbor);
+            return;
+        }
+
+        out.neighbor = neighbor;
+        out.homography = H;
+        out.present = true;
+    });
+
+    std::vector<MatWrapperRef> presentNeighbours;
+    std::vector<double> homographies;  // flattened row-major 3x3 per surviving neighbour
+    presentNeighbours.reserve(loaded.size());
+    homographies.reserve(loaded.size() * 9);
+    for (auto &l : loaded) {
+        if (!l.note.empty()) Log_w("%s", l.note.c_str());
+        if (!l.present) continue;
+
+        // Same CV_64F-and-3x3 precondition warpInto's own GPU branch already checks
+        // before calling GPUWarpFunc — a homography that fails it here falls back to
+        // the whole-frame CPU path below, rather than silently dropping just this one
+        // neighbour, since that would make the GPU and CPU paths disagree on which
+        // neighbours contribute.
+        cv::Mat H64 = l.homography->mat;
+        if (H64.type() != CV_64F) l.homography->mat.convertTo(H64, CV_64F);
+        if (!H64.isContinuous() || H64.rows != 3 || H64.cols != 3) {
+            for (MatWrapperRef n : presentNeighbours) mat_wrapper_release(n);
+            mat_wrapper_release(l.neighbor);
+            return nullptr;
+        }
+
+        presentNeighbours.push_back(l.neighbor);
+        const double *h = H64.ptr<double>();
+        homographies.insert(homographies.end(), h, h + 9);
+    }
+
+    MatWrapperRef result = nullptr;
+    if (!presentNeighbours.empty()) {
+        cv::Mat output(base.rows, base.cols, base.type());
+        MatWrapperRef baseRef = wrapReadOnly(base);
+        MatWrapperRef dstRef = wrapReadOnly(output);
+        const bool ok = gpuAlignedMerge(baseRef, presentNeighbours.data(), (int)presentNeighbours.size(),
+                                        homographies.data(), outlierThreshold, includeAll, dstRef);
+        mat_wrapper_release(baseRef);
+        mat_wrapper_release(dstRef);
+        if (ok) {
+            result = wrap(output);
+            if (outWarpCount) *outWarpCount = (int)presentNeighbours.size();
+        }
+    }
+
+    for (MatWrapperRef n : presentNeighbours) mat_wrapper_release(n);
+    return result;
+}
 
 MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIndex,
                                         const AlignmentNeighborData *neighbors,
@@ -1970,7 +2088,17 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
         // rather than straight to the log, because on the resident path this runs on
         // several threads at once and the lines would interleave with each other and
         // with other frames'.
-        auto warpNeighbour = [&](int i, MergeSource &out) {
+        //
+        // `useGPUForThisWarp` is passed explicitly rather than closing over the
+        // outer `useGPU`: the streaming branch below still wants this lambda's
+        // original per-neighbour behaviour (unchanged by this file's batched-GPU
+        // work — see tryGPUAlignedMerge's doc comment for why only the resident
+        // path gets the batched entry point), while the resident branch's CPU
+        // fallback — reached only once a batched GPU attempt has already failed
+        // for the whole frame — must force this to false so it does not also
+        // retry the old, slow one-round-trip-per-warp GPU shape this change
+        // replaces.
+        auto warpNeighbour = [&](int i, MergeSource &out, bool useGPUForThisWarp) {
             // The homography first: a neighbour without one contributes nothing, and
             // decoding it to find that out costs a full-resolution decode per source
             // per frame — the whole sequence's worth on footage where the ground
@@ -1983,7 +2111,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
             MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
             if (!neighbor) return;
 
-            cv::Mat warped = warpInto(neighbor->mat, H->mat, useGPU);
+            cv::Mat warped = warpInto(neighbor->mat, H->mat, useGPUForThisWarp);
             mat_wrapper_release(neighbor);
 
             if (warped.rows != base.rows || warped.cols != base.cols ||
@@ -2001,7 +2129,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
             // Skipped entirely under includeAll, which counts every source at every
             // pixel and never asks.
             if (!includeAll) {
-                cv::Mat covered = warpCoverage(coverageProbe, H->mat, useGPU);
+                cv::Mat covered = warpCoverage(coverageProbe, H->mat, useGPUForThisWarp);
                 cv::bitwise_not(covered, covered);  // 255 where the warp reached nothing
                 std::lock_guard<std::mutex> lock(missesMutex);
                 cv::add(misses, cv::Scalar(1), misses, covered);
@@ -2016,9 +2144,15 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
             // Serial on purpose.  Each warp is spilled and freed within the iteration
             // that produced it — that release is the whole point of fusing the merge
             // into the alignment, and workers in flight would each hold one.
+            //
+            // Deliberately NOT touched by the batched-GPU work below: a fully-batched
+            // command buffer holding every neighbour's warp at once works against the
+            // memory discipline streaming exists for (only one warp ever resident) —
+            // see GPU_MERGE_BATCHING_FIX.md ยง6. This keeps calling warpInto/
+            // warpCoverage exactly as before, one GPU (or CPU) round-trip at a time.
             for (int i = 0; i < neighborCount; ++i) {
                 MergeSource src;
-                warpNeighbour(i, src);
+                warpNeighbour(i, src, useGPU);
                 if (!src.note.empty()) Log_w("%s", src.note.c_str());
                 if (!src.present) continue;
                 if (!spiller.add(src.mat)) {   // logs its own failure
@@ -2028,11 +2162,42 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                 warpCount++;
             }
         } else {
+            // When useGPU is set, try the batched GPU aligned merge first: one Metal
+            // command buffer carries every neighbour's warp plus this frame's own
+            // median merge, replacing what used to be `neighborCount * 2 + 1`
+            // separate GPU round-trips (warpInto and warpCoverage per neighbour, then
+            // a final merge call) with one. See GPUOps.swift's MetalGPUBackend.
+            // alignedMerge for the Metal-side implementation and
+            // GPU_MERGE_BATCHING_FIX.md for why that round-trip count was the whole
+            // regression, not the kernel work itself.
+            //
+            // No partial fallback: if this fails for any reason (no handler
+            // registered, more sources than the kernel's 17-source cap, or the
+            // dispatch itself failing), every neighbour is re-warped from scratch on
+            // the CPU below — matching the convention SIFTDetector.cpp /
+            // AKAZEDetector.cpp already use for their own GPU pipelines. There is no
+            // attempt to reuse a partially-completed GPU buffer, and the per-neighbour
+            // loop below is forced to `useGPUForThisWarp: false` so it cannot also
+            // retry the old, slow per-neighbour GPU shape this replaces. The final
+            // medianImageFromMats call past the end of this if/else still honours
+            // `useGPU` as it always has — that is a single round-trip either way,
+            // never the thing this fix is about.
+            if (useGPU) {
+                int gpuWarpCount = 0;
+                if (MatWrapperRef gpuResult = tryGPUAlignedMerge(
+                      base, baseFrameIndex, neighbors, neighborCount,
+                      homographyKeys, homographyValues, homographyCount,
+                      outlierThreshold, includeAll, loadConcurrency, &gpuWarpCount)) {
+                    if (outWarpCount) *outWarpCount = gpuWarpCount;
+                    return gpuResult;
+                }
+            }
+
             // The resident path is going to hold every warp anyway, so producing them
             // concurrently costs only the sources in flight.
             std::vector<MergeSource> sources((size_t)std::max(neighborCount, 0));
             forEachMergeSource(neighborCount, loadConcurrency, [&](int i) {
-                warpNeighbour(i, sources[(size_t)i]);
+                warpNeighbour(i, sources[(size_t)i], /*useGPUForThisWarp=*/false);
             });
             for (auto &src : sources) {
                 if (!src.note.empty()) Log_w("%s", src.note.c_str());

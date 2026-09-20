@@ -184,9 +184,13 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 // outWarpCount (nullable) receives how many neighbours made it into the merge.
 // Returns NULL if that count is zero, or on error; caller must release the result.
 //
-// useGPU: see ia_median_merge_filenames above — applies to both the warp of
-// each neighbour and the final merge, and only on the all-resident path; the
-// streaming path (spiller.merge) stays CPU-only.
+// useGPU: see ia_median_merge_filenames above, and only on the all-resident
+// path; the streaming path (spiller.merge) stays CPU-only. On the resident
+// path this reaches for a single batched GPU aligned merge — every neighbour's
+// warp plus the final merge on one Metal command buffer (see GPUOps_C.h's
+// GPUAlignedMergeFunc and GPU_MERGE_BATCHING_FIX.md) — rather than warping
+// each neighbour with its own separate GPU round-trip; on any failure the
+// whole frame's neighbours are re-warped on the CPU, no partial fallback.
 MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIndex,
                                         const AlignmentNeighborData *neighbors,
                                         int neighborCount,
