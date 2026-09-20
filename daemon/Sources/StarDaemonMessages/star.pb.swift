@@ -1527,9 +1527,14 @@ public struct Star_V1_Config: @unchecked Sendable {
   public mutating func clearStartupHorizonFramePosition() {_uniqueStorage()._startupHorizonFramePosition = nil}
 
   /// Whether to use GPU acceleration (Metal, on supported Macs) for the alignment
-  /// warp and median-merge kernels. On by default; StarCore.GPUCapability still
-  /// gates every call site, so this alone does not mean GPU work is actually
-  /// happening on the machine running the daemon -- see gpu_hardware_available.
+  /// warp and median-merge kernels ONLY -- keypoint detection (SIFT/AKAZE) has its
+  /// own separate, cli-only flags on the StarCore side and is unaffected by this
+  /// one. On by default; StarCore.GPUCapability still gates every call site, so
+  /// this alone does not mean GPU work is actually happening on the machine
+  /// running the daemon -- see gpu_hardware_available. Maps to StarCore
+  /// Config.useGPUForMerge; the field keeps its original wire name (renaming a
+  /// proto field is a needless break) even though the Swift property was renamed
+  /// from the equally generic-sounding `useGPU`.
   public var useGpuAcceleration: Bool {
     get {_storage._useGpuAcceleration ?? false}
     set {_uniqueStorage()._useGpuAcceleration = newValue}

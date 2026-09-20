@@ -1014,7 +1014,7 @@ extension PixelatedImage {
             scratchDir: config?.tempOutputPath,
             streamingThresholdBytes: Int64(config?.mergeStreamingThresholdMB ?? 0) * 1024 * 1024,
             loadConcurrency: config?.mergeLoadConcurrency ?? 1,
-            useGPU: config?.useGPU ?? true
+            useGPU: config?.useGPUForMerge ?? true
         )
         return PixelatedImage(mat: mat)
     }

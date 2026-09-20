@@ -13,10 +13,11 @@ public enum GPUCapability: Sendable {
 
     /// Whether this process can run the Metal-accelerated warp/median-merge kernels.
     ///
-    /// `Config.useGPU` is a request; this is the other half of the decision every
-    /// call site actually makes. A user can leave `useGPU` on by default and still
-    /// run entirely on the CPU, silently, on a machine this returns false for — the
-    /// GUI's job is to say so (see `statusDescription`), not to make this true.
+    /// `Config.useGPUForMerge` is a request; this is the other half of the decision
+    /// every call site actually makes. A user can leave `useGPUForMerge` on by
+    /// default and still run entirely on the CPU, silently, on a machine this
+    /// returns false for — the GUI's job is to say so (see `statusDescription`),
+    /// not to make this true.
     public static func isAvailable() -> Bool {
         #if canImport(Metal) && os(macOS)
         return MTLCreateSystemDefaultDevice() != nil

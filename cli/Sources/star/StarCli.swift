@@ -254,10 +254,15 @@ struct StarCli: AsyncParsableCommand {
           help: ArgumentHelp(localized("cli.help.skip_output_files")))
     var skipOutputFiles: Bool?
 
+    // Flag text stays `--use-gpu` (not renamed to match `useGPUForMerge` below) so
+    // existing scripts and saved shell history keep working; the Swift property is
+    // renamed because that is what showed up as a misleadingly generic name in code
+    // and in `Config`, not the flag itself, whose help text already says "alignment
+    // warp and median-merge kernels."
     @Flag(name: [.customLong("use-gpu")],
           inversion: .prefixedNo,
           help: ArgumentHelp(localized("cli.help.use_gpu")))
-    var useGPU: Bool?
+    var useGPUForMerge: Bool?
 
     @Flag(name: [.customLong("use-gpu-for-sift")],
           inversion: .prefixedNo,
@@ -288,7 +293,7 @@ struct StarCli: AsyncParsableCommand {
           writeOutputFiles: skipOutputFiles.map { !$0 },
           // --use-gpu / --no-use-gpu: also tri-state, so a saved false survives a resume
           // that does not repeat the flag, same reasoning as writeOutputFiles above.
-          useGPU: useGPU,
+          useGPUForMerge: useGPUForMerge,
           useGPUForSift: useGPUForSift,
           useGPUForAKAZE: useGPUForAKAZE,
           horizonDetectionEnabled: noHorizon ? false : nil,

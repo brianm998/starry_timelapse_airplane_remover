@@ -20,7 +20,7 @@ public enum ImageAligner {
     /// `useGPU` only ever applies to the all-resident path (never streaming), and even
     /// there is a request, not a guarantee — see `GPUCapability`. On by default so a
     /// caller that does not think about GPU acceleration gets it when the machine
-    /// supports it, same as `Config.useGPU`'s own default.
+    /// supports it, same as `Config.useGPUForMerge`'s own default.
     public static func medianMergeImage(_ image: MatWrapper, withFilenames filenames: [String],
                                          outlierThreshold: Double, includeAll: Bool,
                                          scratchDir: String? = nil,

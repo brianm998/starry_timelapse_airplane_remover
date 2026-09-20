@@ -358,7 +358,12 @@ public struct Config: Codable, Sendable {
     public var reprocessOnSettingsChange: Bool = true
 
     /// Whether to use GPU acceleration (Metal, on macOS) for the alignment warp and
-    /// median-merge kernels, when the machine has hardware that supports it.
+    /// median-merge kernels specifically, when the machine has hardware that supports
+    /// it — and *only* those two steps. Named `useGPUForMerge` rather than a plain
+    /// `useGPU` precisely so it cannot be misread as a single master switch: keypoint
+    /// detection has its own separate flags below (`useGPUForSIFT`, `useGPUForAKAZE`),
+    /// each with its own default and its own risk profile, and turning this one on or
+    /// off has no effect on them.
     ///
     /// On by default. This is a request, not a guarantee: `GPUCapability.isAvailable`
     /// still gates every call site, so a machine with no usable GPU (or a non-macOS
@@ -366,24 +371,24 @@ public struct Config: Codable, Sendable {
     /// this setting. See `GPUCapability` for how a client shows the user which case
     /// they are in — this flag alone cannot tell them, because "off" and "on but
     /// unsupported" both end up running on the CPU.
-    public var useGPU: Bool = true
+    public var useGPUForMerge: Bool = true
 
     /// Whether to use a from-scratch, GPU-accelerated reimplementation of SIFT's
     /// Gaussian scale-space pyramid for sky (star) keypoint detection, in place of
     /// OpenCV's own `cv::SIFT`.
     ///
-    /// Off by default, unlike `useGPU` — deliberately separate from it. OpenCV's
-    /// SIFT internals (pyramid construction, extremum refinement, orientation,
-    /// descriptor computation) are not exposed by any public API, so accelerating
-    /// the pyramid (the ~100% of SIFT's cost the guide measured) required porting
-    /// the surrounding algorithm by hand from OpenCV's real source rather than
-    /// calling into it — a materially larger behavioral-drift risk than Tier 1's
-    /// warp/median-merge kernels, which call the real `cv::warpPerspective`
+    /// Off by default, unlike `useGPUForMerge` — deliberately separate from it.
+    /// OpenCV's SIFT internals (pyramid construction, extremum refinement,
+    /// orientation, descriptor computation) are not exposed by any public API, so
+    /// accelerating the pyramid (the ~100% of SIFT's cost the guide measured)
+    /// required porting the surrounding algorithm by hand from OpenCV's real source
+    /// rather than calling into it — a materially larger behavioral-drift risk than
+    /// Tier 1's warp/median-merge kernels, which call the real `cv::warpPerspective`
     /// boundary logic and only replace arithmetic. This is why it ships behind its
-    /// own flag rather than folded into `useGPU`: turning `useGPU` on should not
-    /// silently opt a sequence into a still-young keypoint detector.
+    /// own flag rather than folded into `useGPUForMerge`: turning that one on should
+    /// not silently opt a sequence into a still-young keypoint detector.
     ///
-    /// Still requires `GPUCapability.isAvailable()`, same as `useGPU`.
+    /// Still requires `GPUCapability.isAvailable()`, same as `useGPUForMerge`.
     public var useGPUForSIFT: Bool = false
 
     /// Whether to use a from-scratch, GPU-accelerated reimplementation of
@@ -391,21 +396,21 @@ public struct Config: Codable, Sendable {
     /// keypoint detection, in place of OpenCV's own `cv::AKAZE`.
     ///
     /// Off by default, for exactly the same reason as `useGPUForSIFT` and
-    /// gated separately from both it and `useGPU`: OpenCV's AKAZE internals
-    /// are not exposed by any public API either, so this is another
+    /// gated separately from both it and `useGPUForMerge`: OpenCV's AKAZE
+    /// internals are not exposed by any public API either, so this is another
     /// from-scratch port validated against real `cv::AKAZE` rather than a
     /// call into it, and it carries the same larger behavioral-drift risk as
-    /// the SIFT port — a still-young keypoint detector that `useGPU` alone
-    /// must not silently opt a sequence into.
+    /// the SIFT port — a still-young keypoint detector that `useGPUForMerge`
+    /// alone must not silently opt a sequence into.
     ///
-    /// Still requires `GPUCapability.isAvailable()`, same as `useGPU`.
+    /// Still requires `GPUCapability.isAvailable()`, same as `useGPUForMerge`.
     public var useGPUForAKAZE: Bool = false
 
     /// A localized, user-facing sentence describing whether this machine has GPU
-    /// hardware `useGPU` can actually use — independent of whether `useGPU` itself is
-    /// currently on or off, so a client can show it right next to the toggle and make
-    /// "on but unsupported" visibly different from "off". See `GPUCapability` for the
-    /// hardware probe this reads.
+    /// hardware any of the `useGPUFor*` flags can actually use — independent of
+    /// whether any one of them is currently on or off, so a client can show it right
+    /// next to each toggle and make "on but unsupported" visibly different from
+    /// "off". See `GPUCapability` for the hardware probe this reads.
     public static func gpuAccelerationStatusText() -> String {
         if let device = GPUCapability.deviceName() {
             return localized("ui.gpu_status_supported", device)
@@ -413,10 +418,10 @@ public struct Config: Codable, Sendable {
         return localized("ui.gpu_status_unsupported")
     }
 
-    /// Whether this machine has hardware `useGPU` can actually use. A thin
-    /// re-export of `GPUCapability.isAvailable()` for clients (the daemon's
-    /// `Mapping.swift`, in particular) that only import `StarCore` rather than
-    /// `StarCppBridge` directly.
+    /// Whether this machine has hardware any of the `useGPUFor*` flags can actually
+    /// use. A thin re-export of `GPUCapability.isAvailable()` for clients (the
+    /// daemon's `Mapping.swift`, in particular) that only import `StarCore` rather
+    /// than `StarCppBridge` directly.
     public static var isGPUHardwareAvailable: Bool { GPUCapability.isAvailable() }
 
     // how far in each direction do we go when doing final processing?
@@ -1257,21 +1262,22 @@ public struct Config: Codable, Sendable {
     }
 
     /// Say, once per run, whether the alignment/merge kernels will actually run on the
-    /// GPU. `useGPU` alone cannot answer that: a machine with no supported GPU (or a
-    /// non-macOS build, until another backend lands — see `GPUCapability`) runs the CPU
-    /// path regardless of this setting, and a user reading only "GPU acceleration: on"
-    /// in their own settings would have no way to know that. Logged from `set(imageInfo:)`
-    /// for the same reason `resolveAutomaticKeypointDivisor` is: every client passes
-    /// through there before anything else touches the config.
+    /// GPU. `useGPUForMerge` alone cannot answer that: a machine with no supported GPU
+    /// (or a non-macOS build, until another backend lands — see `GPUCapability`) runs
+    /// the CPU path regardless of this setting, and a user reading only "GPU
+    /// acceleration: on" in their own settings would have no way to know that. Logged
+    /// from `set(imageInfo:)` for the same reason `resolveAutomaticKeypointDivisor` is:
+    /// every client passes through there before anything else touches the config.
     private func logGPUAccelerationStatus() {
-        guard useGPU else {
-            Log.i("GPU acceleration is off; using the CPU path.")
+        guard useGPUForMerge else {
+            Log.i("GPU acceleration for the alignment/merge step is off; using the CPU path.")
             return
         }
         if let device = GPUCapability.deviceName() {
-            Log.i("GPU acceleration is on (\(device)).")
+            Log.i("GPU acceleration for the alignment/merge step is on (\(device)).")
         } else {
-            Log.i("GPU acceleration is on but no supported GPU was found; using the CPU path.")
+            Log.i("GPU acceleration for the alignment/merge step is on but no supported GPU "
+                  + "was found; using the CPU path.")
         }
     }
 
@@ -1349,6 +1355,9 @@ public struct Config: Codable, Sendable {
     private enum LegacyCodingKeys: String, CodingKey {
         /// Replaced by `alignmentKeypointDetectionDivisor`; true meant a divisor of 2.0.
         case alignmentHalfResolutionKeypoints
+        /// Replaced by `useGPUForMerge` when the flag was renamed so it could not be
+        /// misread as a single GPU-for-everything switch.
+        case useGPU
     }
 
     public init(from decoder: Decoder) throws {
@@ -1377,7 +1386,13 @@ public struct Config: Codable, Sendable {
         self.writeFrameThumbnailFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameThumbnailFiles) ?? self.writeFrameThumbnailFiles
         self.writeOutputFiles = try c.decodeIfPresent(Bool.self, forKey: .writeOutputFiles) ?? self.writeOutputFiles
         self.reprocessOnSettingsChange = try c.decodeIfPresent(Bool.self, forKey: .reprocessOnSettingsChange) ?? self.reprocessOnSettingsChange
-        self.useGPU = try c.decodeIfPresent(Bool.self, forKey: .useGPU) ?? self.useGPU
+        if let value = try c.decodeIfPresent(Bool.self, forKey: .useGPUForMerge) {
+            self.useGPUForMerge = value
+        } else if let legacy = try? decoder.container(keyedBy: LegacyCodingKeys.self)
+                    .decodeIfPresent(Bool.self, forKey: .useGPU) {
+            // Pre-rename config.json still has the old key; see `LegacyCodingKeys.useGPU`.
+            self.useGPUForMerge = legacy
+        }
         self.useGPUForSIFT = try c.decodeIfPresent(Bool.self, forKey: .useGPUForSIFT) ?? self.useGPUForSIFT
         self.useGPUForAKAZE = try c.decodeIfPresent(Bool.self, forKey: .useGPUForAKAZE) ?? self.useGPUForAKAZE
 

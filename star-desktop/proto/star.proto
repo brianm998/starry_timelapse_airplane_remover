@@ -213,9 +213,14 @@ message Config {
   repeated int32  startup_horizon_frame_indices                        = 51;
   optional int32  startup_horizon_frame_position                       = 52;
   // Whether to use GPU acceleration (Metal, on supported Macs) for the alignment
-  // warp and median-merge kernels. On by default; StarCore.GPUCapability still
-  // gates every call site, so this alone does not mean GPU work is actually
-  // happening on the machine running the daemon -- see gpu_hardware_available.
+  // warp and median-merge kernels ONLY -- keypoint detection (SIFT/AKAZE) has its
+  // own separate, cli-only flags on the StarCore side and is unaffected by this
+  // one. On by default; StarCore.GPUCapability still gates every call site, so
+  // this alone does not mean GPU work is actually happening on the machine
+  // running the daemon -- see gpu_hardware_available. Maps to StarCore
+  // Config.useGPUForMerge; the field keeps its original wire name (renaming a
+  // proto field is a needless break) even though the Swift property was renamed
+  // from the equally generic-sounding `useGPU`.
   optional bool   use_gpu_acceleration                                 = 53;
   // Read-only: whether the daemon's own machine has hardware use_gpu_acceleration
   // can actually use. Always sent by the daemon, computed fresh each time (it is

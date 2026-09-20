@@ -52,7 +52,7 @@ public enum GPUOps {
         )
         // Separate registration call, deliberately — see GPUOps_C.h: this backend
         // is gated by its own Config.useGPUForSIFT flag, off by default, not by
-        // Config.useGPU above.
+        // Config.useGPUForMerge above.
         gpu_ops_set_sift_pyramid_handler { base, doubleImageSize, sigma, nOctaves, nOctaveLayers, outPyramid in
             guard let backend = activeBackend, let base, let outPyramid else { return false }
             return backend.buildSiftPyramid(base: base, doubleImageSize: doubleImageSize, sigma: sigma,

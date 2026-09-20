@@ -279,11 +279,11 @@ final class MappingTests: XCTestCase {
     /// so `applyExpertConfig` must never try to apply it onto anything.
     func testGPUAccelerationIsSentAndAppliedButHardwareAvailabilityIsReadOnly() {
         var enabled = Config()
-        enabled.useGPU = true
+        enabled.useGPUForMerge = true
         XCTAssertTrue(Mapping.protoConfig(enabled).useGpuAcceleration)
 
         var disabled = Config()
-        disabled.useGPU = false
+        disabled.useGPUForMerge = false
         let proto = Mapping.protoConfig(disabled)
         XCTAssertFalse(proto.useGpuAcceleration)
         // Sent unconditionally, whatever this test machine's own hardware is —
@@ -291,16 +291,16 @@ final class MappingTests: XCTestCase {
         XCTAssertTrue(proto.hasGpuHardwareAvailable)
 
         var target = Config()
-        target.useGPU = true
+        target.useGPUForMerge = true
         var incoming = Star_V1_Config()
         incoming.useGpuAcceleration = false
         Mapping.applyExpertConfig(&target, from: incoming)
-        XCTAssertFalse(target.useGPU, "an explicit false from the client must apply")
+        XCTAssertFalse(target.useGPUForMerge, "an explicit false from the client must apply")
 
         var untouched = Config()
-        untouched.useGPU = true
+        untouched.useGPUForMerge = true
         Mapping.applyExpertConfig(&untouched, from: Star_V1_Config())
-        XCTAssertTrue(untouched.useGPU, "an absent field must not overwrite the existing value")
+        XCTAssertTrue(untouched.useGPUForMerge, "an absent field must not overwrite the existing value")
     }
 
     func testTheStarVersionIsReportedSoTheClientCanCheckIt() {

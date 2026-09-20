@@ -955,10 +955,10 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    var useGPU: Bool {
+    var useGPUForMerge: Bool {
         didSet {
             var realConfig = config.config()
-            realConfig.useGPU = useGPU
+            realConfig.useGPUForMerge = useGPUForMerge
             config.update(realConfig)
         }
     }
@@ -2018,7 +2018,7 @@ public final class ImageSequenceViewModel {
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
         self.allowEarthAlignment = config.allowEarthAlignment
         self.useReferenceHorizonSmoothing = config.useReferenceHorizonSmoothing
-        self.useGPU = config.useGPU
+        self.useGPUForMerge = config.useGPUForMerge
         self.useGPUForSIFT = config.useGPUForSIFT
         self.useGPUForAKAZE = config.useGPUForAKAZE
         self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance
