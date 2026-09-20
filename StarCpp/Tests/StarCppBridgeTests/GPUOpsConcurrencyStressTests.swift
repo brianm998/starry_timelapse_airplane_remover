@@ -165,4 +165,149 @@ final class GPUOpsConcurrencyStressTests: XCTestCase {
             }
         }
     }
+
+    /// Follow-up to a second real-run report, after `gpuSlots` fixed the crash:
+    /// GPU merge "seemed to take a long time, perhaps longer than the non-GPU
+    /// version" on the same 20-frame 42MP sequence at full concurrency. The
+    /// test above only exercises `medianMergeImage` — the *un-aligned* merge,
+    /// one GPU call per job. Production's real per-frame path
+    /// (`ImageAligner.alignAndMedianMerge`, what `FrameAlignmentProcessor`
+    /// actually calls) is far busier: `ia_align_and_median_merge`
+    /// (ImageAligner.cpp) calls `warpInto` *and* `warpCoverage` (literally the
+    /// same function, called twice) per neighbour before the final merge, so
+    /// star's default 8 neighbours means 17 separate GPU round-trips per
+    /// frame, all funnelled through the same `gpuSlots` this file's other test
+    /// found fast for 1-round-trip-per-job. This measures the real shape:
+    /// 18 concurrent frames x 17 GPU calls = 306 total round-trips through
+    /// `gpuSlots`, at real 42MP scale, GPU against CPU.
+    ///
+    /// Run with `swift test -c release`: this file's 42MP fixtures are filled
+    /// by a plain per-pixel Swift loop, and unoptimized (`-Onone`, `swift
+    /// test`'s default) that loop alone measured ~15s for one 42MP frame —
+    /// debug-mode Swift, not GPU or CPU merge cost, so a debug run makes
+    /// fixture setup look like the bottleneck and takes >20 minutes for no
+    /// reason. `_isDebugAssertConfiguration()` skips this rather than
+    /// silently eating that time again.
+    func testRealisticAlignedMergeThroughputAtConcurrency() throws {
+        try XCTSkipIf(_isDebugAssertConfiguration(),
+                      "run with 'swift test -c release' -- see doc comment")
+        let width = 7016, height = 5988  // ~42MP, matching the reported sequence
+        let neighborsPerFrame = 8
+        let concurrentFrames = 18
+        let neighborPoolSize = 10  // reused across jobs, like real consecutive frames share neighbours
+        let scratchDir = scratch!
+
+        let setupStart = Date()
+        nonisolated(unsafe) let poolFilenames = UnsafeMutablePointer<String>.allocate(capacity: neighborPoolSize)
+        poolFilenames.initialize(repeating: "", count: neighborPoolSize)
+        defer { poolFilenames.deinitialize(count: neighborPoolSize); poolFilenames.deallocate() }
+        DispatchQueue.concurrentPerform(iterations: neighborPoolSize) { i in
+            let mat = Self.makeMat(width: width, height: height, seed: UInt32(i + 1))
+            let path = scratchDir.appendingPathComponent("pool-\(i).tiff").path
+            XCTAssertTrue(mat.write(to: path))
+            poolFilenames[i] = path
+        }
+        let pool = (0..<neighborPoolSize).map { poolFilenames[$0] }
+        let bases = (0..<concurrentFrames).map { Self.makeMat(width: width, height: height, seed: UInt32($0 * 1000)) }
+        // Frame-index-relative, not content-relative, so one identity homography
+        // dict (offsets 1...neighborsPerFrame) is valid for every job -- each job's
+        // base is always "frame 0" and its neighbours "frame 1..neighborsPerFrame".
+        let identity = MatWrapper(homographyValues: [1, 0, 0, 0, 1, 0, 0, 0, 1])
+        let homography = Dictionary(uniqueKeysWithValues: (1...neighborsPerFrame).map { ($0, identity) })
+        print("STRESS setup (writing \(neighborPoolSize) pool fixture files at \(width)x\(height)) took "
+              + "\(Date().timeIntervalSince(setupStart))s")
+
+        func runAll(useGPU: Bool, frameCount: Int) -> TimeInterval {
+            let expectation = expectation(description: "every aligned merge finishes (useGPU: \(useGPU))")
+            expectation.expectedFulfillmentCount = frameCount
+            let start = Date()
+            for taskIdx in 0..<frameCount {
+                let neighbors = (0..<neighborsPerFrame).map { n -> AlignmentNeighborInfo in
+                    let poolIdx = (taskIdx + n) % neighborPoolSize
+                    return AlignmentNeighborInfo(filename: pool[poolIdx], maskFilename: nil,
+                                                 keypoints: nil, frameIndex: Int32(n + 1))
+                }
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let result = ImageAligner.alignAndMedianMerge(
+                      baseImage: bases[taskIdx], baseFrameIndex: 0, neighbors: neighbors,
+                      homography: homography, outlierThreshold: 3.0, includeAll: true, useGPU: useGPU)
+                    XCTAssertNotNil(result, "task \(taskIdx) (useGPU: \(useGPU)) produced no result at all")
+                    XCTAssertEqual(result?.warpCount, neighborsPerFrame,
+                                   "task \(taskIdx) (useGPU: \(useGPU)) warped fewer neighbours than it was given")
+                    expectation.fulfill()
+                }
+            }
+            // Generous for the same reason as the test above: this measures
+            // throughput, but still must not hang forever if something is wrong.
+            wait(for: [expectation], timeout: 600)
+            return Date().timeIntervalSince(start)
+        }
+
+        // Isolated (frameCount: 1) first: no `gpuSlots` contention is even
+        // possible with a single caller, so this isolates "are 17 small GPU
+        // round-trips inherently slower than one CPU call" from "does
+        // gpuSlots serialize concurrent callers too tightly." If GPU is
+        // already slower than CPU here, gpuSlots is not the (sole) story.
+        let gpuSolo = runAll(useGPU: true, frameCount: 1)
+        let cpuSolo = runAll(useGPU: false, frameCount: 1)
+        print("STRESS aligned-merge SOLO (1 frame, no concurrency): "
+              + "GPU \(gpuSolo)s, CPU \(cpuSolo)s, ratio \(gpuSolo / cpuSolo)")
+
+        let gpuSeconds = runAll(useGPU: true, frameCount: concurrentFrames)
+        print("STRESS aligned-merge GPU: \(concurrentFrames) frames x \(neighborsPerFrame) neighbours "
+              + "finished in \(gpuSeconds)s")
+        let cpuSeconds = runAll(useGPU: false, frameCount: concurrentFrames)
+        print("STRESS aligned-merge CPU: \(concurrentFrames) frames x \(neighborsPerFrame) neighbours "
+              + "finished in \(cpuSeconds)s")
+        print("STRESS aligned-merge GPU/CPU ratio: \(gpuSeconds / cpuSeconds) "
+              + "(> 1 means GPU was slower, which is the thing being investigated)")
+    }
+
+    /// Isolates one round-trip's real, end-to-end wall-clock cost -- allocate,
+    /// pack, submit, block on `waitUntilCompleted`, read back -- against
+    /// GPU_IMPLEMENTATION_GUIDE.md's own "warp: 0.99ms" figure. Ten
+    /// sequential, single-threaded calls (no concurrency, no `gpuSlots`
+    /// contention with only one caller, no other work in between) at real
+    /// 42MP scale.
+    ///
+    /// Measured: GPU averaged ~298ms/call, CPU ~118ms/call -- GPU is slower
+    /// by 2.5x for one warp, alone, with no contention at all. That rules out
+    /// `gpuSlots` and concurrency as the (sole) explanation for the
+    /// realistic-throughput test above being slower on GPU: this backend's
+    /// per-call round-trip overhead (a fresh `.storageModeShared` buffer
+    /// allocation, a new `MTLCommandBuffer`, a synchronous
+    /// `waitUntilCompleted`, a `memcpy` back out) is, on its own, larger than
+    /// the CPU cost of the same 42MP warp. The guide's 0.99ms almost
+    /// certainly measured GPU-side kernel execution alone, not this. That gap
+    /// is also the architectural difference from the SIFT/AKAZE pyramid
+    /// builders, which stayed fast: those pay this same fixed overhead only
+    /// *once* per frame, for a whole chain of dispatches on one command
+    /// buffer, where `ia_align_and_median_merge`'s 8-neighbour star merge
+    /// pays it 17 times (`warpInto` + `warpCoverage` per neighbour, plus the
+    /// final merge).
+    ///
+    /// Run with `swift test -c release` -- see the doc comment on
+    /// `testRealisticAlignedMergeThroughputAtConcurrency` above for why.
+    func testSingleWarpRoundTripCostAtRealScale() throws {
+        try XCTSkipIf(_isDebugAssertConfiguration(),
+                      "run with 'swift test -c release' -- see doc comment")
+        let width = 7016, height = 5988
+        let src = Self.makeMat(width: width, height: height, seed: 1)
+        let identity = MatWrapper(homographyValues: [1, 0, 0, 0, 1, 0, 0, 0, 1])
+
+        func timeCalls(useGPU: Bool, count: Int) -> [TimeInterval] {
+            (0..<count).map { _ in
+                let start = Date()
+                _ = ImageAligner.debugWarp(src, homography: identity, useGPU: useGPU)
+                return Date().timeIntervalSince(start)
+            }
+        }
+
+        let gpuTimes = timeCalls(useGPU: true, count: 10)
+        let cpuTimes = timeCalls(useGPU: false, count: 10)
+        print("STRESS single warp round-trip, GPU (10 calls): \(gpuTimes)")
+        print("STRESS single warp round-trip, CPU (10 calls): \(cpuTimes)")
+        print("STRESS single warp round-trip GPU mean: \(gpuTimes.reduce(0, +) / Double(gpuTimes.count))s, "
+              + "CPU mean: \(cpuTimes.reduce(0, +) / Double(cpuTimes.count))s")
+    }
 }
