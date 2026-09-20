@@ -38,6 +38,12 @@ public actor ImageCache {
         StarCppBridge.ImageCache.setLoader { filename in
             MatWrapper.load(fromFilename: filename)
         }
+        // Same reasoning as the loader above: every client touches `imageCache`
+        // before doing any real work, so this is where the GPU backend (if this
+        // machine has one) gets registered with warpInto/medianImageFromMats,
+        // once, for the whole process. A no-op on a machine GPUCapability says no
+        // to — see GPUOps.swift.
+        GPUOps.registerIfAvailable()
     }
 
     public func add(image: PixelatedImage, named filename: String) {

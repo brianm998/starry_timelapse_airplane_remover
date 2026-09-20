@@ -262,6 +262,14 @@ public enum ImageAligner {
         let r = ia_masked_stretch_to_gray8(image.ref, mask?.ref)
         return r.map { MatWrapper(ref: $0) }
     }
+
+    /// Test-only: the raw warp, with no merge picking a value around it. See
+    /// `ia_debug_warp`'s comment for why this exists and where it does not belong.
+    public static func debugWarp(_ src: MatWrapper, homography: MatWrapper,
+                                 useGPU: Bool) -> MatWrapper? {
+        let r = ia_debug_warp(src.ref, homography.ref, useGPU)
+        return r.map { MatWrapper(ref: $0) }
+    }
 }
 
 // MARK: - Supporting types

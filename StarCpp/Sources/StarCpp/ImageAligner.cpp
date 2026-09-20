@@ -2040,3 +2040,13 @@ MatWrapperRef ia_masked_stretch_to_gray8(MatWrapperRef image, MatWrapperRef mask
     } KHT_CATCH_LOG("ia_masked_stretch_to_gray8")
     return nullptr;
 }
+
+MatWrapperRef ia_debug_warp(MatWrapperRef src, MatWrapperRef homography, bool useGPU) {
+    if (!src || !homography || homography->mat.rows != 3 || homography->mat.cols != 3) {
+        return nullptr;
+    }
+    try {
+        return wrap(warpInto(src->mat, homography->mat, useGPU));
+    } KHT_CATCH_LOG("ia_debug_warp")
+    return nullptr;
+}

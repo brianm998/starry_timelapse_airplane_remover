@@ -187,6 +187,20 @@ MatWrapperRef ia_gradient_mask_into_ground(MatWrapperRef binaryMask, int gradien
 // Caller must release the returned ref.  `mask` may be null.
 MatWrapperRef ia_masked_stretch_to_gray8(MatWrapperRef image, MatWrapperRef mask);
 
+// --- Test-only: the raw warp, without a merge around it ---
+
+// Exposes warpInto directly — every other entry point folds it into a merge
+// (ia_align_and_median_merge), which picks a value from a small sorted set and
+// so cannot be used to measure the warp's own accuracy in isolation: it and
+// whatever it is merged against fight for which one the merge picks, which
+// dominates any actual difference in the warp itself. This exists for exactly
+// that measurement (see GPUOpsTests.swift) and is not meant to be a stable
+// part of the C API otherwise.
+//
+// `homography` must be a 3x3 CV_64F MatWrapper. Returns NULL on a bad input;
+// caller must release the result.
+MatWrapperRef ia_debug_warp(MatWrapperRef src, MatWrapperRef homography, bool useGPU);
+
 #ifdef __cplusplus
 }
 #endif
