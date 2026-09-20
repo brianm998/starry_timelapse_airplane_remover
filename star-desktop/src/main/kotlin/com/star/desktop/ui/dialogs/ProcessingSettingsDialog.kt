@@ -133,16 +133,27 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 ExpertGroup("Horizon", HORIZON_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
                 ExpertGroup("Memory", MEMORY_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
                 SettingGroup("Performance") {
+                    // Only the daemon's own machine's hardware is known here; a client's own
+                    // machine may differ, so this reflects what the *daemon* can actually do.
+                    // Absent (older daemon) means "unknown," not "unsupported" -- do not disable.
+                    val gpuUnsupported = cfg.hasGpuHardwareAvailable() && !cfg.gpuHardwareAvailable
                     PERFORMANCE_FIELDS.forEach { f ->
                         if (!f.has(cfg)) { UnsupportedRow(f.label, daemonVersion); return@forEach }
                         when (f) {
-                            is BoolField -> ToggleRow(f.label, boolEdits[f.label] ?: f.get(cfg)) { boolEdits[f.label] = it }
+                            is BoolField -> {
+                                val gpuGated = f.label == GPU_ACCELERATION_LABEL && gpuUnsupported
+                                ToggleRow(
+                                    f.label,
+                                    if (gpuGated) false else (boolEdits[f.label] ?: f.get(cfg)),
+                                    enabled = !gpuGated,
+                                ) { boolEdits[f.label] = it }
+                            }
                             else -> Unit
                         }
                     }
                     // Read-only hardware fact, not a setting -- shown so "on but this Mac has
-                    // no supported GPU" is never mistaken for "off". Only the daemon's own
-                    // machine's hardware is known here; a client's own machine may differ.
+                    // no supported GPU" is never mistaken for "off", and why the toggle above
+                    // is greyed out and forced off when unsupported.
                     if (cfg.hasGpuHardwareAvailable()) {
                         GPUHardwareStatusRow(cfg.gpuHardwareAvailable)
                     }
@@ -208,10 +219,10 @@ private fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect:
 }
 
 @Composable
-private fun ToggleRow(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
+private fun ToggleRow(label: String, value: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = StarColors.textPrimary, fontSize = 13.sp)
-        Switch(checked = value, onCheckedChange = onChange)
+        Text(label, color = if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 13.sp)
+        Switch(checked = value, onCheckedChange = onChange, enabled = enabled)
     }
 }
 
@@ -302,8 +313,10 @@ internal val MEMORY_FIELDS: List<ExpertField> = listOf(
 // fresh by the daemon from its own machine's hardware, and rendered separately below
 // rather than through ExpertGroup's editable/unsupported-row machinery, which assumes
 // every field is something the user can set.
+internal const val GPU_ACCELERATION_LABEL = "Use GPU acceleration"
+
 internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
-    BoolField("Use GPU acceleration", { it.useGpuAcceleration }, { b, v -> b.setUseGpuAcceleration(v) }, { it.hasUseGpuAcceleration() }),
+    BoolField(GPU_ACCELERATION_LABEL, { it.useGpuAcceleration }, { b, v -> b.setUseGpuAcceleration(v) }, { it.hasUseGpuAcceleration() }),
 )
 
 @Composable
@@ -351,9 +364,9 @@ private fun UnsupportedRow(label: String, daemonVersion: String?) {
 /// The GPU-hardware equivalent of `UnsupportedRow`: not a setting, so there is
 /// nothing to toggle, but the reason has nothing to do with the daemon's version
 /// either -- it is whether the daemon's own machine has a supported GPU at all.
-/// Distinguishing the two matters: "Use GPU acceleration" can read "on" while
-/// this reads "not supported," and that combination means the daemon is
-/// silently running the CPU path, not that the setting did nothing.
+/// "Use GPU acceleration" is forced off and disabled above whenever this reads
+/// "not supported," so this row is what tells the user why -- without it, a
+/// toggle that suddenly can't be turned on would look broken rather than moot.
 @Composable
 private fun GPUHardwareStatusRow(available: Boolean) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

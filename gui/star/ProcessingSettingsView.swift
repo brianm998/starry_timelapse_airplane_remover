@@ -265,7 +265,14 @@ struct ProcessingSettingsView: View {
     @State private var showHorizonMultiplierInfo = false
     @State private var showHorizonFloorInfo = false
     @State private var showUseGPUInfo = false
+    @State private var showUseGPUForSIFTInfo = false
+    @State private var showUseGPUForAKAZEInfo = false
 
+    /// Expanded by default, unlike the Expert Settings disclosure groups below: GPU
+    /// acceleration is a mainstream performance setting most users care about, not an
+    /// expert-only tuning knob, so it should not need "Show expert settings" plus another
+    /// click to even see.
+    @State private var showGPUSettingsExpanded = true
 
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
@@ -304,7 +311,9 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo ||
         showHorizonMultiplierInfo ||
         showHorizonFloorInfo ||
-        showUseGPUInfo
+        showUseGPUInfo ||
+        showUseGPUForSIFTInfo ||
+        showUseGPUForAKAZEInfo
     }
     
     private func showAll() {
@@ -352,6 +361,8 @@ struct ProcessingSettingsView: View {
         showHorizonMultiplierInfo = true
         showHorizonFloorInfo = true
         showUseGPUInfo = true
+        showUseGPUForSIFTInfo = true
+        showUseGPUForAKAZEInfo = true
     }
 
     private func hideAll() {
@@ -399,6 +410,8 @@ struct ProcessingSettingsView: View {
         showHorizonMultiplierInfo = false
         showHorizonFloorInfo = false
         showUseGPUInfo = false
+        showUseGPUForSIFTInfo = false
+        showUseGPUForAKAZEInfo = false
     }
     
     /// Whether the "already processed frames have different settings" confirmation is up.
@@ -484,6 +497,29 @@ struct ProcessingSettingsView: View {
                       self.cameraMotionGridRow
                       Divider()
                       self.processingMethodGridRow
+
+                      Divider()
+                      DisclosureGroup(isExpanded: $showGPUSettingsExpanded) {
+                          Grid {
+                              self.useGPUView
+                              Divider()
+                              self.useGPUForSIFTView
+                              Divider()
+                              self.useGPUForAKAZEView
+                          }
+                      } label: {
+                          VStack(alignment: .leading, spacing: 2) {
+                              Text(localized("ui.gpu_settings"))
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .opacity(0.6)
+                              Text(Config.gpuAccelerationStatusText())
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .opacity(0.5)
+                          }
+                      }
+                      .tint(.blue)
 
                       if viewModel.showExpertSettings {
                           Divider()
@@ -579,8 +615,6 @@ struct ProcessingSettingsView: View {
                                   self.horizonMultiplierView
                                   Divider()
                                   self.horizonFloorView
-                                  Divider()
-                                  self.useGPUView
                               }
                           } label: {
                               Text(localized("ui.memory_settings"))
@@ -1241,12 +1275,13 @@ struct ProcessingSettingsView: View {
         .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
     }
 
-    /// The hardware line below the toggle is what keeps "on" from being mistaken for "GPU
-    /// work is actually happening": `useGPU` alone cannot tell the difference between "off"
-    /// and "on but this Mac has no supported GPU," both of which run on the CPU — see
-    /// `Config.gpuAccelerationStatusText()`. Not gated by scene type or camera motion like
-    /// its neighbours in this group; whether the GPU kernels apply is a per-machine question,
-    /// not a per-sequence one.
+    /// This whole group is disabled (and each toggle forced to display off, not merely
+    /// dimmed-while-still-checked) whenever `Config.isGPUHardwareAvailable` is false, so "off"
+    /// and "on but this Mac has no supported GPU" never look the same as "genuinely on." The
+    /// hardware status line lives once, on the group's label, rather than repeated under each
+    /// toggle — see `Config.gpuAccelerationStatusText()`. Not gated by scene type or camera
+    /// motion like most rows in this file; whether the GPU kernels apply is a per-machine
+    /// question, not a per-sequence one.
     private var useGPUView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(
@@ -1259,29 +1294,105 @@ struct ProcessingSettingsView: View {
             the small numeric differences the GPU path documents for the merge step.
             """
         ) {
-            VStack(alignment: .leading, spacing: 4) {
+            HStack {
                 HStack {
-                    HStack {
-                        Spacer()
-                        Text(localized("ui.use_gpu_acceleration"))
-                          .font(.title2)
-                          .foregroundColor(.white)
-                          .opacity(0.6)
-                    }
-                    HStack {
-                        Space(width: 10)
-                        Toggle(isOn: $viewModel.useGPU) {
-                            Text("")
-                        }
-                        Spacer()
-                    }
+                    Spacer()
+                    Text(localized("ui.use_gpu_acceleration"))
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
                 }
-                Text(Config.gpuAccelerationStatusText())
-                  .font(.caption)
-                  .foregroundColor(.white)
-                  .opacity(0.5)
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: Binding(
+                      get: { Config.isGPUHardwareAvailable && viewModel.useGPU },
+                      set: { viewModel.useGPU = $0 }
+                    )) {
+                        Text("")
+                    }
+                    Spacer()
+                }
             }
         }
+        .disabled(!Config.isGPUHardwareAvailable)
+    }
+
+    /// Off by default, unlike `useGPU` — see `Config.useGPUForSIFT`'s doc comment for why it
+    /// ships behind its own toggle instead of being folded into the one above. Disabled the
+    /// same way as `useGPUView` when this machine has no supported GPU.
+    private var useGPUForSIFTView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showUseGPUForSIFTInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Uses a from-scratch, GPU-accelerated reimplementation of SIFT's scale-space \
+            pyramid for sky (star) keypoint detection, in place of OpenCV's own SIFT. Off by \
+            default: this is a hand-ported reimplementation rather than a call into OpenCV, so \
+            it carries more behavioral-drift risk than the warp/merge kernels above. Requires \
+            GPU hardware regardless of this setting.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text(localized("ui.use_gpu_for_sift"))
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: Binding(
+                      get: { Config.isGPUHardwareAvailable && viewModel.useGPUForSIFT },
+                      set: { viewModel.useGPUForSIFT = $0 }
+                    )) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .disabled(!Config.isGPUHardwareAvailable)
+    }
+
+    /// Off by default, unlike `useGPU` — see `Config.useGPUForAKAZE`'s doc comment for why it
+    /// ships behind its own toggle instead of being folded into the one above. Disabled the
+    /// same way as `useGPUView` when this machine has no supported GPU.
+    private var useGPUForAKAZEView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showUseGPUForAKAZEInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Uses a from-scratch, GPU-accelerated reimplementation of AKAZE's scale-space \
+            pyramid for earth (ground) keypoint detection, in place of OpenCV's own AKAZE. \
+            Off by default: this is a hand-ported reimplementation rather than a call into \
+            OpenCV, so it carries more behavioral-drift risk than the warp/merge kernels \
+            above. Requires GPU hardware regardless of this setting.
+            """
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text(localized("ui.use_gpu_for_akaze"))
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: Binding(
+                      get: { Config.isGPUHardwareAvailable && viewModel.useGPUForAKAZE },
+                      set: { viewModel.useGPUForAKAZE = $0 }
+                    )) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .disabled(!Config.isGPUHardwareAvailable)
     }
 
     private var useReferenceHorizonSmoothingView: some View {
