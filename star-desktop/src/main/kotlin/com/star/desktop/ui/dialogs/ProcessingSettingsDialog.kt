@@ -132,6 +132,21 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 ExpertGroup("Alignment", ALIGNMENT_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
                 ExpertGroup("Horizon", HORIZON_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
                 ExpertGroup("Memory", MEMORY_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
+                SettingGroup("Performance") {
+                    PERFORMANCE_FIELDS.forEach { f ->
+                        if (!f.has(cfg)) { UnsupportedRow(f.label, daemonVersion); return@forEach }
+                        when (f) {
+                            is BoolField -> ToggleRow(f.label, boolEdits[f.label] ?: f.get(cfg)) { boolEdits[f.label] = it }
+                            else -> Unit
+                        }
+                    }
+                    // Read-only hardware fact, not a setting -- shown so "on but this Mac has
+                    // no supported GPU" is never mistaken for "off". Only the daemon's own
+                    // machine's hardware is known here; a client's own machine may differ.
+                    if (cfg.hasGpuHardwareAvailable()) {
+                        GPUHardwareStatusRow(cfg.gpuHardwareAvailable)
+                    }
+                }
             }
 
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
@@ -148,7 +163,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                         // Unsupported fields are skipped: they render as read-only so there
                         // should be no edit to apply, and sending one to a daemon that does
                         // not know the field would be a silent no-op at best.
-                        (ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS).filter { it.has(cfg) }.forEach { f ->
+                        (ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + PERFORMANCE_FIELDS).filter { it.has(cfg) }.forEach { f ->
                             when (f) {
                                 is BoolField -> boolEdits[f.label]?.let { f.set(b, it) }
                                 is IntField -> textEdits[f.label]?.toIntOrNull()?.let { f.set(b, it.coerceIn(f.min, f.max)) }
@@ -282,6 +297,15 @@ internal val MEMORY_FIELDS: List<ExpertField> = listOf(
     IntField("Merge streaming MB", { it.mergeStreamingThresholdMb }, { b, v -> b.setMergeStreamingThresholdMb(v) }, 0, 65536, { it.hasMergeStreamingThresholdMb() }),
 )
 
+// On by default in StarCore's own Config, so a daemon this dialog talks to always sends
+// it. `gpu_hardware_available` is not an ExpertField at all -- it is read-only, computed
+// fresh by the daemon from its own machine's hardware, and rendered separately below
+// rather than through ExpertGroup's editable/unsupported-row machinery, which assumes
+// every field is something the user can set.
+internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
+    BoolField("Use GPU acceleration", { it.useGpuAcceleration }, { b, v -> b.setUseGpuAcceleration(v) }, { it.hasUseGpuAcceleration() }),
+)
+
 @Composable
 private fun ExpertGroup(
     title: String,
@@ -319,6 +343,23 @@ private fun UnsupportedRow(label: String, daemonVersion: String?) {
         Text(label, color = StarColors.textDisabled, fontSize = 12.sp, modifier = Modifier.weight(1f))
         Text(
             if (daemonVersion == null) "needs a newer engine" else "needs an engine newer than $daemonVersion",
+            color = StarColors.textDisabled, fontSize = 10.sp,
+        )
+    }
+}
+
+/// The GPU-hardware equivalent of `UnsupportedRow`: not a setting, so there is
+/// nothing to toggle, but the reason has nothing to do with the daemon's version
+/// either -- it is whether the daemon's own machine has a supported GPU at all.
+/// Distinguishing the two matters: "Use GPU acceleration" can read "on" while
+/// this reads "not supported," and that combination means the daemon is
+/// silently running the CPU path, not that the setting did nothing.
+@Composable
+private fun GPUHardwareStatusRow(available: Boolean) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            if (available) "GPU acceleration is supported on this machine."
+            else "No supported GPU was found on this machine. Processing uses the CPU.",
             color = StarColors.textDisabled, fontSize = 10.sp,
         )
     }
