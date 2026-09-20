@@ -273,6 +273,36 @@ final class MappingTests: XCTestCase {
         XCTAssertEqual(Mapping.detectionType(from: proto.detectionType), .excessive)
     }
 
+    /// `useGpuAcceleration` is a normal expert setting (always sent, applied back
+    /// when present). `gpuHardwareAvailable` is not a `Config` field at all — it is
+    /// computed fresh from this machine's own hardware on every outgoing `Config`,
+    /// so `applyExpertConfig` must never try to apply it onto anything.
+    func testGPUAccelerationIsSentAndAppliedButHardwareAvailabilityIsReadOnly() {
+        var enabled = Config()
+        enabled.useGPU = true
+        XCTAssertTrue(Mapping.protoConfig(enabled).useGpuAcceleration)
+
+        var disabled = Config()
+        disabled.useGPU = false
+        let proto = Mapping.protoConfig(disabled)
+        XCTAssertFalse(proto.useGpuAcceleration)
+        // Sent unconditionally, whatever this test machine's own hardware is —
+        // only that the field made it onto the wire, not which value it carries.
+        XCTAssertTrue(proto.hasGpuHardwareAvailable)
+
+        var target = Config()
+        target.useGPU = true
+        var incoming = Star_V1_Config()
+        incoming.useGpuAcceleration = false
+        Mapping.applyExpertConfig(&target, from: incoming)
+        XCTAssertFalse(target.useGPU, "an explicit false from the client must apply")
+
+        var untouched = Config()
+        untouched.useGPU = true
+        Mapping.applyExpertConfig(&untouched, from: Star_V1_Config())
+        XCTAssertTrue(untouched.useGPU, "an absent field must not overwrite the existing value")
+    }
+
     func testTheStarVersionIsReportedSoTheClientCanCheckIt() {
         let proto = Mapping.protoConfig(Config())
         XCTAssertFalse(proto.starVersion.isEmpty, "the client compares this against its own")

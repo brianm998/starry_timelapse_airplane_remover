@@ -210,6 +210,17 @@ message Config {
   // wipe the record.
   repeated int32  startup_horizon_frame_indices                        = 51;
   optional int32  startup_horizon_frame_position                       = 52;
+  // Whether to use GPU acceleration (Metal, on supported Macs) for the alignment
+  // warp and median-merge kernels. On by default; StarCore.GPUCapability still
+  // gates every call site, so this alone does not mean GPU work is actually
+  // happening on the machine running the daemon -- see gpu_hardware_available.
+  optional bool   use_gpu_acceleration                                 = 53;
+  // Read-only: whether the daemon's own machine has hardware use_gpu_acceleration
+  // can actually use. Always sent by the daemon, computed fresh each time (it is
+  // not a Config field on the StarCore side); a client applying a Config back
+  // must never send this on, since there is nothing on the StarCore side for it
+  // to set.
+  optional bool   gpu_hardware_available                               = 54;
 }
 
 enum CleanMethod {

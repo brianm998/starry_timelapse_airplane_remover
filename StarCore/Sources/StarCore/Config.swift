@@ -380,6 +380,12 @@ public struct Config: Codable, Sendable {
         return localized("ui.gpu_status_unsupported")
     }
 
+    /// Whether this machine has hardware `useGPU` can actually use. A thin
+    /// re-export of `GPUCapability.isAvailable()` for clients (the daemon's
+    /// `Mapping.swift`, in particular) that only import `StarCore` rather than
+    /// `StarCppBridge` directly.
+    public static var isGPUHardwareAvailable: Bool { GPUCapability.isAvailable() }
+
     // how far in each direction do we go when doing final processing?
     // used for OutlierGroupFeature data
     public var numberFinalProcessingNeighborsNeeded = 2 // in each direction

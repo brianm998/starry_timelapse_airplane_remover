@@ -1526,6 +1526,33 @@ public struct Star_V1_Config: @unchecked Sendable {
   /// Clears the value of `startupHorizonFramePosition`. Subsequent reads from it will return its default value.
   public mutating func clearStartupHorizonFramePosition() {_uniqueStorage()._startupHorizonFramePosition = nil}
 
+  /// Whether to use GPU acceleration (Metal, on supported Macs) for the alignment
+  /// warp and median-merge kernels. On by default; StarCore.GPUCapability still
+  /// gates every call site, so this alone does not mean GPU work is actually
+  /// happening on the machine running the daemon -- see gpu_hardware_available.
+  public var useGpuAcceleration: Bool {
+    get {_storage._useGpuAcceleration ?? false}
+    set {_uniqueStorage()._useGpuAcceleration = newValue}
+  }
+  /// Returns true if `useGpuAcceleration` has been explicitly set.
+  public var hasUseGpuAcceleration: Bool {_storage._useGpuAcceleration != nil}
+  /// Clears the value of `useGpuAcceleration`. Subsequent reads from it will return its default value.
+  public mutating func clearUseGpuAcceleration() {_uniqueStorage()._useGpuAcceleration = nil}
+
+  /// Read-only: whether the daemon's own machine has hardware use_gpu_acceleration
+  /// can actually use. Always sent by the daemon, computed fresh each time (it is
+  /// not a Config field on the StarCore side); a client applying a Config back
+  /// must never send this on, since there is nothing on the StarCore side for it
+  /// to set.
+  public var gpuHardwareAvailable: Bool {
+    get {_storage._gpuHardwareAvailable ?? false}
+    set {_uniqueStorage()._gpuHardwareAvailable = newValue}
+  }
+  /// Returns true if `gpuHardwareAvailable` has been explicitly set.
+  public var hasGpuHardwareAvailable: Bool {_storage._gpuHardwareAvailable != nil}
+  /// Clears the value of `gpuHardwareAvailable`. Subsequent reads from it will return its default value.
+  public mutating func clearGpuHardwareAvailable() {_uniqueStorage()._gpuHardwareAvailable = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3576,7 +3603,7 @@ extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -3628,6 +3655,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _mergeStreamingThresholdMb: Int32? = nil
     var _startupHorizonFrameIndices: [Int32] = []
     var _startupHorizonFramePosition: Int32? = nil
+    var _useGpuAcceleration: Bool? = nil
+    var _gpuHardwareAvailable: Bool? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -3687,6 +3716,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _mergeStreamingThresholdMb = source._mergeStreamingThresholdMb
       _startupHorizonFrameIndices = source._startupHorizonFrameIndices
       _startupHorizonFramePosition = source._startupHorizonFramePosition
+      _useGpuAcceleration = source._useGpuAcceleration
+      _gpuHardwareAvailable = source._gpuHardwareAvailable
     }
   }
 
@@ -3754,6 +3785,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 50: try { try decoder.decodeSingularDoubleField(value: &_storage._alignmentKeypointDetectionDivisor) }()
         case 51: try { try decoder.decodeRepeatedInt32Field(value: &_storage._startupHorizonFrameIndices) }()
         case 52: try { try decoder.decodeSingularInt32Field(value: &_storage._startupHorizonFramePosition) }()
+        case 53: try { try decoder.decodeSingularBoolField(value: &_storage._useGpuAcceleration) }()
+        case 54: try { try decoder.decodeSingularBoolField(value: &_storage._gpuHardwareAvailable) }()
         default: break
         }
       }
@@ -3913,6 +3946,12 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       try { if let v = _storage._startupHorizonFramePosition {
         try visitor.visitSingularInt32Field(value: v, fieldNumber: 52)
       } }()
+      try { if let v = _storage._useGpuAcceleration {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 53)
+      } }()
+      try { if let v = _storage._gpuHardwareAvailable {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 54)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -3971,6 +4010,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._mergeStreamingThresholdMb != rhs_storage._mergeStreamingThresholdMb {return false}
         if _storage._startupHorizonFrameIndices != rhs_storage._startupHorizonFrameIndices {return false}
         if _storage._startupHorizonFramePosition != rhs_storage._startupHorizonFramePosition {return false}
+        if _storage._useGpuAcceleration != rhs_storage._useGpuAcceleration {return false}
+        if _storage._gpuHardwareAvailable != rhs_storage._gpuHardwareAvailable {return false}
         return true
       }
       if !storagesAreEqual {return false}
