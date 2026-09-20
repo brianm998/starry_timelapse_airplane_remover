@@ -90,6 +90,44 @@ private nonisolated(unsafe) var activeBackend: MetalGPUBackend?
 private final class MetalGPUBackend: @unchecked Sendable {
     let device: MTLDevice
     let queue: MTLCommandQueue
+
+    /// Bounds how many of this backend's entry points (warp, medianMerge, the
+    /// two pyramid builders) can be inside Metal at once, across every caller.
+    ///
+    /// GPU_IMPLEMENTATION_GUIDE.md ยง4 says this outright — "The GPU is one
+    /// resource shared by 18 concurrent frames. Serialise work through a
+    /// single queue with bounded in-flight buffers, or you will move the
+    /// memory-pressure problem from RAM to VRAM and gain nothing" — but no
+    /// entry point here actually did it: `NativeWork.concurrencyLimit` bounds
+    /// how many *native calls* run at once (it exists to protect the Swift
+    /// cooperative thread pool, not the GPU), which on this 18-core iMac Pro
+    /// is ~14 by design. Every one of those, hitting medianMerge at 42MP with
+    /// up to 17 sources, allocates and `memcpy`s a multi-hundred-MB-to-multi-GB
+    /// `.storageModeShared` buffer and pushes it across PCIe — this machine's
+    /// Vega 64 has no unified memory, so that crossing is real, measured
+    /// (GPU_IMPLEMENTATION_GUIDE.md: 11.5 GB/s shared→private) traffic, not a
+    /// pointer handoff. 14-way concurrent multi-GB allocation-and-transfer
+    /// against one discrete GPU is exactly the "flail" a real run reported —
+    /// severe slowdown and, per the same report, a plausible contributor to a
+    /// crash (this bypasses `MemoryMonitor`'s reservation ledger entirely, so
+    /// its multi-GB transient spikes are invisible to the accounting that
+    /// gates admission elsewhere).
+    ///
+    /// 2 is deliberately conservative — enough that one call's CPU-side pack
+    /// can overlap the previous call's GPU execution, not a target tuned by
+    /// measurement. Revisit with a real concurrent-frame benchmark before
+    /// raising it; the failure mode this exists to prevent only shows up
+    /// under real frame concurrency, not the isolated single-call benchmarks
+    /// GPU_IMPLEMENTATION_GUIDE.md's numbers table reports.
+    private let gpuSlots = DispatchSemaphore(value: 2)
+
+    /// Runs `body` inside `gpuSlots`. Every public entry point below must go
+    /// through this rather than calling into Metal directly.
+    private func withGPUSlot<T>(_ body: () -> T) -> T {
+        gpuSlots.wait()
+        defer { gpuSlots.signal() }
+        return body()
+    }
     let warpU8: MTLComputePipelineState
     let warpU16: MTLComputePipelineState
     let medianU8: MTLComputePipelineState
@@ -162,6 +200,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// pure in/out-of-bounds test, which is what the "zero means no data"
     /// invariant the merge depends on actually needs.
     func warp(src: MatWrapperRef, homography: UnsafePointer<Double>, dst: MatWrapperRef) -> Bool {
+        withGPUSlot { warpImpl(src: src, homography: homography, dst: dst) }
+    }
+
+    private func warpImpl(src: MatWrapperRef, homography: UnsafePointer<Double>, dst: MatWrapperRef) -> Bool {
         let rows = Int(mat_wrapper_rows(src))
         let cols = Int(mat_wrapper_cols(src))
         let channels = Int(mat_wrapper_channels(src))
@@ -243,6 +285,15 @@ private final class MetalGPUBackend: @unchecked Sendable {
     func medianMerge(sources: UnsafeMutablePointer<MatWrapperRef?>, count: Int,
                      misses: MatWrapperRef?, outlierThreshold: Double, includeAll: Bool,
                      dst: MatWrapperRef) -> Bool {
+        withGPUSlot {
+            medianMergeImpl(sources: sources, count: count, misses: misses,
+                            outlierThreshold: outlierThreshold, includeAll: includeAll, dst: dst)
+        }
+    }
+
+    private func medianMergeImpl(sources: UnsafeMutablePointer<MatWrapperRef?>, count: Int,
+                                 misses: MatWrapperRef?, outlierThreshold: Double, includeAll: Bool,
+                                 dst: MatWrapperRef) -> Bool {
         guard count > 0, count <= 17, let first = sources[0] else { return false }
         let rows = Int(mat_wrapper_rows(first))
         let cols = Int(mat_wrapper_cols(first))
@@ -262,53 +313,52 @@ private final class MetalGPUBackend: @unchecked Sendable {
         default: return false
         }
 
+        // Allocate the Metal buffers first and `memcpy` straight into their
+        // `.contents()`, rather than packing into a Swift `[UInt8]` and handing
+        // that to `makeBuffer(bytes:...)` (which copies it again itself). At up
+        // to 17 sources and 42MP that second copy was a real multi-hundred-MB
+        // duplicate allocation and pass, on top of the one PCIe crossing this
+        // data already has to make to reach a discrete GPU's `.storageModeShared`
+        // memory — see `gpuSlots`'s doc comment for the concurrent-frame cost of
+        // that crossing.
         let rowBytes = cols * channels * bytesPerComponent
-        var packedSources = [UInt8](repeating: 0, count: rowBytes * rows * count)
-        let ok = packedSources.withUnsafeMutableBytes { raw -> Bool in
-            for i in 0..<count {
-                guard let s = sources[i],
-                      Int(mat_wrapper_rows(s)) == rows, Int(mat_wrapper_cols(s)) == cols,
-                      Int(mat_wrapper_channels(s)) == channels,
-                      mat_wrapper_bits_per_component(s) == bitsPerComponent,
-                      let ptr = mat_wrapper_data_ptr(s)
-                else { return false }
-                let step = Int(mat_wrapper_step(s))
-                let base = raw.baseAddress!.advanced(by: i * rowBytes * rows)
-                for y in 0..<rows {
-                    memcpy(base.advanced(by: y * rowBytes), ptr.advanced(by: y * step), rowBytes)
-                }
+        guard let srcBuf = device.makeBuffer(length: rowBytes * rows * count, options: .storageModeShared),
+              let missesBuf = device.makeBuffer(length: max(1, cols * rows), options: .storageModeShared),
+              let dstBuf = device.makeBuffer(length: rowBytes * rows, options: .storageModeShared),
+              let cmdBuf = queue.makeCommandBuffer(),
+              let encoder = cmdBuf.makeComputeCommandEncoder()
+        else { return false }
+
+        let srcBase = srcBuf.contents()
+        for i in 0..<count {
+            guard let s = sources[i],
+                  Int(mat_wrapper_rows(s)) == rows, Int(mat_wrapper_cols(s)) == cols,
+                  Int(mat_wrapper_channels(s)) == channels,
+                  mat_wrapper_bits_per_component(s) == bitsPerComponent,
+                  let ptr = mat_wrapper_data_ptr(s)
+            else { return false }
+            let step = Int(mat_wrapper_step(s))
+            let base = srcBase.advanced(by: i * rowBytes * rows)
+            for y in 0..<rows {
+                memcpy(base.advanced(by: y * rowBytes), ptr.advanced(by: y * step), rowBytes)
             }
-            return true
         }
-        guard ok else { return false }
 
         // includeAll never allocates a coverage plane on the C++ side (misses ==
         // nullptr), and the kernel is told so via `includeAllFlag` rather than by
         // inferring it from a null buffer — Metal has no null-buffer convention as
-        // clean as C's, so a real (tiny, unread) buffer stands in.
-        var missesPacked = [UInt8](repeating: 0, count: max(1, cols * rows))
+        // clean as C's, so a real (tiny, unread, zeroed) buffer stands in.
+        memset(missesBuf.contents(), 0, max(1, cols * rows))
         if let misses {
             guard Int(mat_wrapper_rows(misses)) == rows, Int(mat_wrapper_cols(misses)) == cols,
                   let mptr = mat_wrapper_data_ptr(misses)
             else { return false }
             let mstep = Int(mat_wrapper_step(misses))
-            missesPacked.withUnsafeMutableBytes { raw in
-                for y in 0..<rows {
-                    memcpy(raw.baseAddress!.advanced(by: y * cols), mptr.advanced(by: y * mstep), cols)
-                }
+            let missesBase = missesBuf.contents()
+            for y in 0..<rows {
+                memcpy(missesBase.advanced(by: y * cols), mptr.advanced(by: y * mstep), cols)
             }
         }
-
-        guard let srcBuf = packedSources.withUnsafeBytes({ raw in
-                  device.makeBuffer(bytes: raw.baseAddress!, length: raw.count, options: .storageModeShared)
-              }),
-              let missesBuf = missesPacked.withUnsafeBytes({ raw in
-                  device.makeBuffer(bytes: raw.baseAddress!, length: raw.count, options: .storageModeShared)
-              }),
-              let dstBuf = device.makeBuffer(length: rowBytes * rows, options: .storageModeShared),
-              let cmdBuf = queue.makeCommandBuffer(),
-              let encoder = cmdBuf.makeComputeCommandEncoder()
-        else { return false }
 
         var width = Int32(cols), height = Int32(rows), chans = Int32(channels)
         var sourceCount = Int32(count)
@@ -375,6 +425,15 @@ private final class MetalGPUBackend: @unchecked Sendable {
     func buildSiftPyramid(base: MatWrapperRef, doubleImageSize: Bool, sigma: Double,
                           nOctaves: Int, nOctaveLayers: Int,
                           outPyramid: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
+        withGPUSlot {
+            buildSiftPyramidImpl(base: base, doubleImageSize: doubleImageSize, sigma: sigma,
+                                 nOctaves: nOctaves, nOctaveLayers: nOctaveLayers, outPyramid: outPyramid)
+        }
+    }
+
+    private func buildSiftPyramidImpl(base: MatWrapperRef, doubleImageSize: Bool, sigma: Double,
+                                      nOctaves: Int, nOctaveLayers: Int,
+                                      outPyramid: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
         guard nOctaves > 0, nOctaveLayers > 0 else { return false }
         guard mat_wrapper_bits_per_component(base) == 32, mat_wrapper_channels(base) == 1 else {
             return false  // SIFTDetector.cpp always hands this CV_32FC1; anything else is a caller bug
@@ -521,6 +580,19 @@ private final class MetalGPUBackend: @unchecked Sendable {
                           tstepsCount: Int, kcontrastBase: Float,
                           outLt: UnsafeMutablePointer<MatWrapperRef?>,
                           outLsmooth: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
+        withGPUSlot {
+            buildAkazePyramidImpl(img: img, soffset: soffset, levels: levels, levelCount: levelCount,
+                                  stepCounts: stepCounts, tsteps: tsteps, tstepsCount: tstepsCount,
+                                  kcontrastBase: kcontrastBase, outLt: outLt, outLsmooth: outLsmooth)
+        }
+    }
+
+    private func buildAkazePyramidImpl(img: MatWrapperRef, soffset: Float,
+                                       levels: UnsafePointer<GPUAkazeLevelInfo>, levelCount: Int,
+                                       stepCounts: UnsafePointer<Int32>, tsteps: UnsafePointer<Float>?,
+                                       tstepsCount: Int, kcontrastBase: Float,
+                                       outLt: UnsafeMutablePointer<MatWrapperRef?>,
+                                       outLsmooth: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
         guard levelCount > 1 else { return false }  // the trivial 1-level case never reaches here
         guard mat_wrapper_bits_per_component(img) == 32, mat_wrapper_channels(img) == 1 else {
             return false  // AKAZEDetector.cpp always hands this CV_32FC1; anything else is a caller bug
