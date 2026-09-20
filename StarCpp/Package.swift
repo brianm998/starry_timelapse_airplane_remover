@@ -26,7 +26,10 @@ let platformLinkerSettings: [LinkerSetting] = [
 // see GPU_IMPLEMENTATION_GUIDE.md. Only StarCppBridge needs this; the C++
 // StarCpp target stays Metal-free and calls a registered function pointer
 // instead (GPUOps_C.h), matching the "no ObjC++ in StarCpp" rule.
-let bridgeSwiftLinkerSettings: [LinkerSetting] = [.linkedFramework("Metal")]
+let bridgeSwiftLinkerSettings: [LinkerSetting] = [
+    .linkedFramework("Metal"),
+    .linkedFramework("MetalPerformanceShaders"),
+]
 // Eigen is installed via Homebrew on macOS (arm: /opt/homebrew, intel: /usr/local)
 let starcppCXXSettings: [CXXSetting] = [
     .unsafeFlags([

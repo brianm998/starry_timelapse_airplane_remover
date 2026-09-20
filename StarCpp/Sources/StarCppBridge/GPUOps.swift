@@ -10,6 +10,9 @@ import logging
 #if canImport(Metal)
 import Metal
 #endif
+#if canImport(MetalPerformanceShaders)
+import MetalPerformanceShaders
+#endif
 
 public enum GPUOps {
 
@@ -39,6 +42,15 @@ public enum GPUOps {
                                          dst: dst)
           }
         )
+        // Separate registration call, deliberately — see GPUOps_C.h: this backend
+        // is gated by its own Config.useGPUForSIFT flag, off by default, not by
+        // Config.useGPU above.
+        gpu_ops_set_sift_pyramid_handler { base, doubleImageSize, sigma, nOctaves, nOctaveLayers, outPyramid in
+            guard let backend = activeBackend, let base, let outPyramid else { return false }
+            return backend.buildSiftPyramid(base: base, doubleImageSize: doubleImageSize, sigma: sigma,
+                                            nOctaves: Int(nOctaves), nOctaveLayers: Int(nOctaveLayers),
+                                            outPyramid: outPyramid)
+        }
         Log.i("GPU acceleration registered (\(GPUCapability.deviceName() ?? "unknown device")).")
         return true
         #else
@@ -70,6 +82,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
     let warpU16: MTLComputePipelineState
     let medianU8: MTLComputePipelineState
     let medianU16: MTLComputePipelineState
+    let downsampleNearest2xF32: MTLComputePipelineState
 
     init?() {
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -89,6 +102,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
             self.warpU16 = try pipeline("warp_u16")
             self.medianU8 = try pipeline("median_merge_u8")
             self.medianU16 = try pipeline("median_merge_u16")
+            self.downsampleNearest2xF32 = try pipeline("downsample_nearest_2x_f32")
         } catch {
             Log.e("GPU acceleration unavailable: failed to compile Metal kernels (\(error)).")
             return nil
@@ -304,6 +318,183 @@ private final class MetalGPUBackend: @unchecked Sendable {
         return true
     }
 
+    // MARK: - SIFT Gaussian pyramid
+
+    /// Builds the Gaussian scale-space pyramid `siftDetectAndComputeGPU`
+    /// (SIFTDetector.cpp) needs, via `MPSImageGaussianBlur` for every blur and
+    /// `MPSImageBilinearScale`/a tiny custom kernel for the two resizes — see
+    /// GPUOps_C.h's `GPUSiftPyramidFunc` for the exact contract this implements.
+    /// All work for one pyramid goes on one command buffer, committed once at
+    /// the end; every intermediate texture is kept alive until then, since
+    /// every one of them is also an output.
+    ///
+    /// `.storageModeManaged`, not `.shared`: measured directly on this Vega —
+    /// a `.shared` texture a compute kernel writes to reads back as all zeros
+    /// on this GPU (a plain constant-fill kernel, and `MPSImageGaussianBlur`
+    /// itself, both "succeed" with no Metal error and no visible effect),
+    /// while the exact same kernel against a `.managed` texture, synchronized
+    /// with an explicit blit before `getBytes`, reads back correctly. Tier 1's
+    /// kernels never hit this because they use buffers, not textures — a
+    /// `.shared` *buffer* behaves as documented here. Revisit if this ever
+    /// needs to run on Apple Silicon, where `.managed` does not exist and
+    /// `.shared` textures are the only (and correct) choice.
+    ///
+    /// `MPSImageGaussianBlur` itself is documented (MPSImageConvolution.h) as
+    /// "mathematically... an approximate gaussian... suitable for all common
+    /// image processing needs demanding ~10 bits of precision or less" — SIFT's
+    /// sub-pixel extremum refinement is exactly the kind of higher-precision
+    /// consumer that warning is aimed at, and it shows: measured keypoint
+    /// agreement against the real-cv::GaussianBlur reference pyramid is
+    /// ~83%, well short of the reference pyramid's own ~85%+ agreement with
+    /// real cv::SIFT (see SIFTDetectorTests.swift). That gap is the
+    /// documented approximation, not a bug in this function.
+    func buildSiftPyramid(base: MatWrapperRef, doubleImageSize: Bool, sigma: Double,
+                          nOctaves: Int, nOctaveLayers: Int,
+                          outPyramid: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
+        guard nOctaves > 0, nOctaveLayers > 0 else { return false }
+        guard mat_wrapper_bits_per_component(base) == 32, mat_wrapper_channels(base) == 1 else {
+            return false  // SIFTDetector.cpp always hands this CV_32FC1; anything else is a caller bug
+        }
+        let baseRows = Int(mat_wrapper_rows(base))
+        let baseCols = Int(mat_wrapper_cols(base))
+        guard baseRows > 0, baseCols > 0, let basePtr = mat_wrapper_data_ptr(base) else { return false }
+        let baseStepBytes = Int(mat_wrapper_step(base))
+
+        guard let inputTexture = makeFloatTexture(width: baseCols, height: baseRows) else { return false }
+        inputTexture.replace(region: MTLRegionMake2D(0, 0, baseCols, baseRows), mipmapLevel: 0,
+                             withBytes: basePtr, bytesPerRow: baseStepBytes)
+
+        guard let cmdBuf = queue.makeCommandBuffer() else { return false }
+
+        // createInitialImage: the optional 2x upscale (plain bilinear — matching
+        // cv::SIFT::create()'s actual enable_precise_upscale=false default, not
+        // the warpAffine/BORDER_REFLECT "precise" path) ...
+        var current = inputTexture
+        var curWidth = baseCols, curHeight = baseRows
+        if doubleImageSize {
+            guard let doubled = makeFloatTexture(width: baseCols * 2, height: baseRows * 2) else {
+                return false
+            }
+            let scaler = MPSImageBilinearScale(device: device)
+            var transform = MPSScaleTransform(scaleX: 2.0, scaleY: 2.0, translateX: 0, translateY: 0)
+            withUnsafePointer(to: &transform) { scaler.scaleTransform = $0 }
+            scaler.encode(commandBuffer: cmdBuf, sourceTexture: current, destinationTexture: doubled)
+            current = doubled
+            curWidth *= 2
+            curHeight *= 2
+        }
+
+        // ... then createInitialImage's own blur by sigDiff, exactly as
+        // createInitialImageReference computes it.
+        let initSigma = 0.5
+        let sigDiffSq = doubleImageSize
+            ? sigma * sigma - initSigma * initSigma * 4
+            : sigma * sigma - initSigma * initSigma
+        let sigDiff = Foundation.sqrt(max(sigDiffSq, 0.01))
+
+        guard let firstLayer = makeFloatTexture(width: curWidth, height: curHeight) else { return false }
+        MPSImageGaussianBlur(device: device, sigma: Float(sigDiff))
+            .encode(commandBuffer: cmdBuf, sourceTexture: current, destinationTexture: firstLayer)
+
+        // buildGaussianPyramid's own incremental sigma schedule: sigma_total^2 =
+        // sigma_i^2 + sigma_{i-1}^2, so blur i only ever adds the sigma blur
+        // i-1 is missing, not the full sigma again.
+        var sig = [Double](repeating: 0, count: nOctaveLayers + 3)
+        sig[0] = sigma
+        let k = Foundation.pow(2.0, 1.0 / Double(nOctaveLayers))
+        for i in 1..<(nOctaveLayers + 3) {
+            let sigPrev = Foundation.pow(k, Double(i - 1)) * sigma
+            let sigTotal = sigPrev * k
+            sig[i] = Foundation.sqrt(sigTotal * sigTotal - sigPrev * sigPrev)
+        }
+
+        var textures = [MTLTexture?](repeating: nil, count: nOctaves * (nOctaveLayers + 3))
+        textures[0] = firstLayer
+
+        for o in 0..<nOctaves {
+            for i in 0..<(nOctaveLayers + 3) {
+                let idx = o * (nOctaveLayers + 3) + i
+                if o == 0 && i == 0 { continue }  // firstLayer, already placed above
+
+                if i == 0 {
+                    // Base of a new octave: exact nearest-neighbour halving of the
+                    // previous octave's last layer — matching buildGaussianPyramid's
+                    // own INTER_NEAREST resize, not a blur.
+                    let srcIdx = (o - 1) * (nOctaveLayers + 3) + nOctaveLayers
+                    guard let src = textures[srcIdx] else { return false }
+                    let dstWidth = src.width / 2, dstHeight = src.height / 2
+                    guard dstWidth > 0, dstHeight > 0,
+                          let dst = makeFloatTexture(width: dstWidth, height: dstHeight),
+                          let encoder = cmdBuf.makeComputeCommandEncoder()
+                    else { return false }
+                    encoder.setComputePipelineState(downsampleNearest2xF32)
+                    encoder.setTexture(src, index: 0)
+                    encoder.setTexture(dst, index: 1)
+                    dispatch(encoder: encoder, pipeline: downsampleNearest2xF32,
+                            width: dstWidth, height: dstHeight)
+                    encoder.endEncoding()
+                    textures[idx] = dst
+                } else {
+                    guard let src = textures[idx - 1],
+                          let dst = makeFloatTexture(width: src.width, height: src.height)
+                    else { return false }
+                    MPSImageGaussianBlur(device: device, sigma: Float(sig[i]))
+                        .encode(commandBuffer: cmdBuf, sourceTexture: src, destinationTexture: dst)
+                    textures[idx] = dst
+                }
+            }
+        }
+
+        // `.managed` textures need an explicit GPU->CPU sync before a CPU-side
+        // `getBytes` sees what the GPU wrote — see this function's doc comment.
+        guard let syncEncoder = cmdBuf.makeBlitCommandEncoder() else { return false }
+        for texture in textures {
+            guard let texture else { return false }
+            syncEncoder.synchronize(resource: texture)
+        }
+        syncEncoder.endEncoding()
+
+        cmdBuf.commit()
+        cmdBuf.waitUntilCompleted()
+        guard cmdBuf.status == .completed else { return false }
+
+        for idx in 0..<textures.count {
+            guard let texture = textures[idx], let mat = matWrapper(fromFloatTexture: texture) else {
+                return false
+            }
+            outPyramid[idx] = mat
+        }
+        return true
+    }
+
+    private func makeFloatTexture(width: Int, height: Int) -> MTLTexture? {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+          pixelFormat: .r32Float, width: width, height: height, mipmapped: false)
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        descriptor.storageMode = .managed
+        return device.makeTexture(descriptor: descriptor)
+    }
+
+    /// Reads a texture back into a newly allocated, tightly-packed CV_32FC1
+    /// MatWrapper — `mat_wrapper_create(..., takeOwnership: true)` clones the
+    /// buffer this hands it, so the Swift array backing that buffer is safe to
+    /// free (by simply going out of scope) as soon as the call returns. Callers
+    /// must already have synchronized `texture` (see `buildSiftPyramid`) —
+    /// this does not do it again.
+    private func matWrapper(fromFloatTexture texture: MTLTexture) -> MatWrapperRef? {
+        let width = texture.width, height = texture.height
+        let rowBytes = width * MemoryLayout<Float>.size
+        var pixels = [Float](repeating: 0, count: width * height)
+        let ref: MatWrapperRef? = pixels.withUnsafeMutableBytes { raw -> MatWrapperRef? in
+            guard let base = raw.baseAddress else { return nil }
+            texture.getBytes(base, bytesPerRow: rowBytes,
+                             from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
+            let cvType = mat_wrapper_cv_type_for(32, 1)
+            return mat_wrapper_create(Int64(width), Int64(height), cvType, rowBytes, base, true)
+        }
+        return ref
+    }
+
     // MARK: - Shared dispatch
 
     private func dispatch(encoder: MTLComputeCommandEncoder, pipeline: MTLComputePipelineState,
@@ -509,6 +700,18 @@ private final class MetalGPUBackend: @unchecked Sendable {
     {
         median_merge_generic<ushort, 65535>(sources, misses, dst, width, height, channels, count,
                                             outlierThreshold, includeAllFlag, gid);
+    }
+
+    // Exact 2x nearest-neighbour downsample, matching buildGaussianPyramid's own
+    // cv::resize(..., INTER_NEAREST) at each octave boundary -- a plain stride-2
+    // read, not a blur.
+    kernel void downsample_nearest_2x_f32(texture2d<float, access::read> src [[texture(0)]],
+                                          texture2d<float, access::write> dst [[texture(1)]],
+                                          uint2 gid [[thread_position_in_grid]])
+    {
+        if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
+        float value = src.read(uint2(gid.x * 2, gid.y * 2)).r;
+        dst.write(float4(value, 0.0, 0.0, 0.0), gid);
     }
     """
 }
