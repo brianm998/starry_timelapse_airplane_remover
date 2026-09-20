@@ -9,12 +9,15 @@
 // something the type system enforces.
 static std::atomic<GPUWarpFunc> g_gpuWarp{nullptr};
 static std::atomic<GPUMedianMergeFunc> g_gpuMedianMerge{nullptr};
+static std::atomic<GPUAlignedMergeFunc> g_gpuAlignedMerge{nullptr};
 static std::atomic<GPUSiftPyramidFunc> g_gpuSiftPyramid{nullptr};
 static std::atomic<GPUAkazePyramidFunc> g_gpuAkazePyramid{nullptr};
 
-void gpu_ops_set_handlers(GPUWarpFunc warp, GPUMedianMergeFunc medianMerge) {
+void gpu_ops_set_handlers(GPUWarpFunc warp, GPUMedianMergeFunc medianMerge,
+                          GPUAlignedMergeFunc alignedMerge) {
     g_gpuWarp.store(warp, std::memory_order_release);
     g_gpuMedianMerge.store(medianMerge, std::memory_order_release);
+    g_gpuAlignedMerge.store(alignedMerge, std::memory_order_release);
 }
 
 bool gpu_ops_warp_available(void) {
@@ -23,6 +26,10 @@ bool gpu_ops_warp_available(void) {
 
 bool gpu_ops_median_merge_available(void) {
     return g_gpuMedianMerge.load(std::memory_order_acquire) != nullptr;
+}
+
+bool gpu_ops_aligned_merge_available(void) {
+    return g_gpuAlignedMerge.load(std::memory_order_acquire) != nullptr;
 }
 
 void gpu_ops_set_sift_pyramid_handler(GPUSiftPyramidFunc handler) {
@@ -50,6 +57,9 @@ extern "C" GPUWarpFunc gpu_ops_get_warp(void) {
 }
 extern "C" GPUMedianMergeFunc gpu_ops_get_median_merge(void) {
     return g_gpuMedianMerge.load(std::memory_order_acquire);
+}
+extern "C" GPUAlignedMergeFunc gpu_ops_get_aligned_merge(void) {
+    return g_gpuAlignedMerge.load(std::memory_order_acquire);
 }
 extern "C" GPUSiftPyramidFunc gpu_ops_get_sift_pyramid_handler(void) {
     return g_gpuSiftPyramid.load(std::memory_order_acquire);
