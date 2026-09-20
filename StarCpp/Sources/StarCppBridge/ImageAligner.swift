@@ -68,7 +68,8 @@ public enum ImageAligner {
                                      baseImageDilateSize: Int32,
                                      baseImageThresholdValue: Int32,
                                      detectionScale: Double = 1.0,
-                                     useGPUForSift: Bool = false) -> OCVFeatureSet? {
+                                     useGPUForSift: Bool = false,
+                                     useGPUForAKAZE: Bool = false) -> OCVFeatureSet? {
         var errMsg: UnsafePointer<CChar>?
         guard let r = ia_find_features(baseImage.ref, frameIndex,
                                         matchMethod, mask?.ref,
@@ -80,6 +81,7 @@ public enum ImageAligner {
                                         baseImageThresholdValue,
                                         detectionScale,
                                         useGPUForSift,
+                                        useGPUForAKAZE,
                                         &errMsg) else { return nil }
         return OCVFeatureSet(ref: r)
     }
@@ -102,6 +104,29 @@ public enum ImageAligner {
     public static func debugSiftOpenCV(_ img: MatWrapper, mask: MatWrapper?,
                                        nfeatures: Int32) -> OCVFeatureSet? {
         ia_debug_sift_opencv(img.ref, mask?.ref, nfeatures).map { OCVFeatureSet(ref: $0) }
+    }
+
+    /// Test-only: the from-scratch AKAZE port directly, without cv::AKAZE as a
+    /// fallback — see `ia_debug_akaze_reference`/`ia_debug_akaze_gpu`'s
+    /// comments for why these exist. `img` must be CV_8U grayscale.
+    public static func debugAkazeReference(_ img: MatWrapper, mask: MatWrapper?,
+                                           maxKeypoints: Int32, threshold: Float) -> OCVFeatureSet? {
+        ia_debug_akaze_reference(img.ref, mask?.ref, maxKeypoints, threshold)
+          .map { OCVFeatureSet(ref: $0) }
+    }
+
+    public static func debugAkazeGPU(_ img: MatWrapper, mask: MatWrapper?,
+                                     maxKeypoints: Int32, threshold: Float) -> OCVFeatureSet? {
+        ia_debug_akaze_gpu(img.ref, mask?.ref, maxKeypoints, threshold)
+          .map { OCVFeatureSet(ref: $0) }
+    }
+
+    /// Real cv::AKAZE, called directly with the same raw-input contract as
+    /// `debugAkazeReference`/`debugAkazeGPU` — see `ia_debug_akaze_opencv`.
+    public static func debugAkazeOpenCV(_ img: MatWrapper, mask: MatWrapper?,
+                                        maxKeypoints: Int32, threshold: Float) -> OCVFeatureSet? {
+        ia_debug_akaze_opencv(img.ref, mask?.ref, maxKeypoints, threshold)
+          .map { OCVFeatureSet(ref: $0) }
     }
 
     public static func computeHomography(baseKeypoints: OCVFeatureSet,

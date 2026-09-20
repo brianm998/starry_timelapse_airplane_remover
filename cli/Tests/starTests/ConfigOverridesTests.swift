@@ -61,6 +61,7 @@ final class ConfigOverridesTests: XCTestCase {
       "--no-skip-output-files",
       "--no-use-gpu",
       "--use-gpu-for-sift",
+      "--use-gpu-for-akaze",
       "--no-horizon",
       "--moving-camera",
       "--keypoint-divisor", "1.5",
@@ -88,6 +89,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.writeOutputFiles, true, "--no-skip-output-files turns rendering on")
         XCTAssertEqual(c.useGPU, false, "--no-use-gpu turns it off")
         XCTAssertEqual(c.useGPUForSIFT, true, "--use-gpu-for-sift turns it on")
+        XCTAssertEqual(c.useGPUForAKAZE, true, "--use-gpu-for-akaze turns it on")
         XCTAssertEqual(c.horizonDetectionEnabled, false, "--no-horizon turns it off")
         XCTAssertEqual(c.tripodHeadWasMoving, true)
         XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.5)
@@ -271,6 +273,27 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertFalse(disabledAgain.useGPUForSIFT, "and the --no- form is the way back")
     }
 
+    /// Same shape again, for `Config.useGPUForAKAZE`.
+    func testUseGPUForAKAZEHasThreeStatesAndNeedsAllOfThem() throws {
+        var enabled = Config()
+        XCTAssertFalse(enabled.useGPUForAKAZE, "off by default, unlike useGPU")
+        try StarCli.parse(["--use-gpu-for-akaze", "/some/seq"]).configOverrides.apply(to: &enabled)
+        XCTAssertTrue(enabled.useGPUForAKAZE, "--use-gpu-for-akaze turns it on")
+
+        var unmentioned = Config()
+        unmentioned.useGPUForAKAZE = true
+        try StarCli.parse(["/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &unmentioned)
+        XCTAssertTrue(unmentioned.useGPUForAKAZE,
+                      "a resume that repeats no flags keeps what the config holds")
+
+        var disabledAgain = Config()
+        disabledAgain.useGPUForAKAZE = true
+        try StarCli.parse(["--no-use-gpu-for-akaze", "/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &disabledAgain)
+        XCTAssertFalse(disabledAgain.useGPUForAKAZE, "and the --no- form is the way back")
+    }
+
     /// `-s` only does anything because `Processor` hands the config field to every frame.
     /// Checking `run()`/`process()` for real needs an image sequence on disk and then
     /// processes it, so this is the syntactic property instead — the same approach the
@@ -343,7 +366,7 @@ final class ConfigOverridesTests: XCTestCase {
         let overrides = try StarCli.parse(Self.everyFlag).configOverrides
         let fields = Mirror(reflecting: overrides).children
 
-        XCTAssertGreaterThanOrEqual(fields.count, 16,
+        XCTAssertGreaterThanOrEqual(fields.count, 17,
                                     "only found \(fields.count) overrides; if the struct "
                                     + "shrank, the tests above are checking less than "
                                     + "they look like they are")

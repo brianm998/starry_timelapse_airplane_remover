@@ -6,6 +6,7 @@
 #include "MatWrapperImpl.hpp"
 #include "OCVFeatureSetImpl.hpp"
 #include "SIFTDetector.h"
+#include "AKAZEDetector.h"
 #include "logging_impl.hpp"
 
 #include <opencv2/core.hpp>
@@ -1259,6 +1260,7 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                    int baseImageThresholdValue,
                                    double detectionScale,
                                    bool useGPUForSift,
+                                   bool useGPUForAKAZE,
                                    const char **errorMsg) {
     if (!baseImage) { if (errorMsg) *errorMsg = "null base image"; return nullptr; }
     try {
@@ -1372,6 +1374,32 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             baseImageProcessed.convertTo(baseImageProcessed, CV_32F, 1.0/255.0);
             cv::pow(baseImageProcessed, 0.5, baseImageProcessed);
             baseImageProcessed.convertTo(baseImageProcessed, CV_8U, 255.0);
+
+            // Kept as a plain constant (not just AKAZE's setThreshold argument
+            // below) because the from-scratch GPU port below needs the exact
+            // same value — see the long comment on it a few lines down.
+            const float earthDetectorThreshold = 1e-4f;
+
+            // useGPUForAKAZE: try the from-scratch GPU-accelerated port first —
+            // see AKAZEDetector.cpp for why this exists as a separate
+            // implementation rather than a hook into real cv::AKAZE, and
+            // Config.useGPUForAKAZE's doc comment for why it defaults off and
+            // is gated separately from Config.useGPU and Config.useGPUForSIFT.
+            // Any failure (no GPU handler registered, or the handler itself
+            // failing) falls back to real cv::AKAZE wholesale — not partially,
+            // since there is no seam to fall back within a hand-ported
+            // pipeline once it is committed to.
+            bool usedGPUPort = false;
+            if (useGPUForAKAZE) {
+                usedGPUPort = star_akaze::akazeDetectAndComputeGPU(
+                  baseImageProcessed, detectionMask, maxKeypoints, earthDetectorThreshold,
+                  keypoints, descriptors);
+            }
+            if (usedGPUPort) {
+                // Falls through to the coordinate-mapping/return code below,
+                // exactly like real cv::AKAZE's output would.
+            } else {
+
             cv::Ptr<cv::AKAZE> akazeBase = cv::AKAZE::create();
 
             // 1e-4, not the 1e-5 this was, and not OpenCV's 1e-3 default.
@@ -1409,7 +1437,7 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             // 163px band.  A ground that thin already fails groundConsensusIsUsable and
             // drops out of the earth merge, so what is at stake is the margin before that
             // happens, which is why this sits two decades below where the saving stops.
-            akazeBase->setThreshold(1e-4);
+            akazeBase->setThreshold(earthDetectorThreshold);
 
             // AKAZE has no nfeatures equivalent, so maxKeypoints has to be applied by
             // hand — it was reaching this function and being ignored, leaving earth
@@ -1429,6 +1457,8 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             }
             // compute() drops any keypoint it cannot describe, so the two stay in step.
             akazeBase->compute(baseImageProcessed, keypoints, descriptors);
+
+            } // usedGPUPort fallback
         } else {
             // useGPUForSift: try the from-scratch GPU-accelerated port first — see
             // SIFTDetector.cpp for why this exists as a separate implementation
@@ -2105,5 +2135,60 @@ OCVFeatureSetRef ia_debug_sift_opencv(MatWrapperRef img, MatWrapperRef mask, int
         sift->detectAndCompute(img->mat, mask ? mask->mat : cv::Mat(), keypoints, descriptors);
         return new OCVFeatureSetImpl(keypoints, descriptors);
     } KHT_CATCH_LOG("ia_debug_sift_opencv")
+    return nullptr;
+}
+
+OCVFeatureSetRef ia_debug_akaze_reference(MatWrapperRef img, MatWrapperRef mask,
+                                          int maxKeypoints, float threshold) {
+    if (!img || img->mat.empty()) return nullptr;
+    try {
+        std::vector<cv::KeyPoint> keypoints;
+        cv::Mat descriptors;
+        if (!star_akaze::akazeDetectAndComputeReference(
+              img->mat, mask ? mask->mat : cv::Mat(), maxKeypoints, threshold,
+              keypoints, descriptors)) {
+            return nullptr;
+        }
+        return new OCVFeatureSetImpl(keypoints, descriptors);
+    } KHT_CATCH_LOG("ia_debug_akaze_reference")
+    return nullptr;
+}
+
+OCVFeatureSetRef ia_debug_akaze_gpu(MatWrapperRef img, MatWrapperRef mask,
+                                    int maxKeypoints, float threshold) {
+    if (!img || img->mat.empty()) return nullptr;
+    try {
+        std::vector<cv::KeyPoint> keypoints;
+        cv::Mat descriptors;
+        if (!star_akaze::akazeDetectAndComputeGPU(
+              img->mat, mask ? mask->mat : cv::Mat(), maxKeypoints, threshold,
+              keypoints, descriptors)) {
+            return nullptr;
+        }
+        return new OCVFeatureSetImpl(keypoints, descriptors);
+    } KHT_CATCH_LOG("ia_debug_akaze_gpu")
+    return nullptr;
+}
+
+// Mirrors this codebase's own earth branch above exactly (detect, cap by
+// response, then describe) rather than a single detectAndCompute call, since
+// that two-step shape — not AKAZE's own unused max_points — is what this
+// codebase actually runs and what akazeDetectAndCompute{Reference,GPU} above
+// are being compared against.
+OCVFeatureSetRef ia_debug_akaze_opencv(MatWrapperRef img, MatWrapperRef mask,
+                                       int maxKeypoints, float threshold) {
+    if (!img || img->mat.empty()) return nullptr;
+    try {
+        std::vector<cv::KeyPoint> keypoints;
+        cv::Mat descriptors;
+        cv::Ptr<cv::AKAZE> akaze = cv::AKAZE::create();
+        akaze->setThreshold(threshold);
+        akaze->detect(img->mat, keypoints, mask ? mask->mat : cv::Mat());
+        if (maxKeypoints > 0 && (int)keypoints.size() > maxKeypoints) {
+            cv::KeyPointsFilter::retainBest(keypoints, maxKeypoints);
+        }
+        akaze->compute(img->mat, keypoints, descriptors);
+        return new OCVFeatureSetImpl(keypoints, descriptors);
+    } KHT_CATCH_LOG("ia_debug_akaze_opencv")
     return nullptr;
 }

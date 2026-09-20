@@ -10,6 +10,7 @@
 static std::atomic<GPUWarpFunc> g_gpuWarp{nullptr};
 static std::atomic<GPUMedianMergeFunc> g_gpuMedianMerge{nullptr};
 static std::atomic<GPUSiftPyramidFunc> g_gpuSiftPyramid{nullptr};
+static std::atomic<GPUAkazePyramidFunc> g_gpuAkazePyramid{nullptr};
 
 void gpu_ops_set_handlers(GPUWarpFunc warp, GPUMedianMergeFunc medianMerge) {
     g_gpuWarp.store(warp, std::memory_order_release);
@@ -32,6 +33,14 @@ bool gpu_ops_sift_pyramid_available(void) {
     return g_gpuSiftPyramid.load(std::memory_order_acquire) != nullptr;
 }
 
+void gpu_ops_set_akaze_pyramid_handler(GPUAkazePyramidFunc handler) {
+    g_gpuAkazePyramid.store(handler, std::memory_order_release);
+}
+
+bool gpu_ops_akaze_pyramid_available(void) {
+    return g_gpuAkazePyramid.load(std::memory_order_acquire) != nullptr;
+}
+
 // Not part of the public C API in GPUOps_C.h — these two hand out the actual
 // function pointer rather than just whether one is set, which only
 // ImageAligner.cpp needs (to make the call), so they are forward-declared
@@ -44,4 +53,7 @@ extern "C" GPUMedianMergeFunc gpu_ops_get_median_merge(void) {
 }
 extern "C" GPUSiftPyramidFunc gpu_ops_get_sift_pyramid_handler(void) {
     return g_gpuSiftPyramid.load(std::memory_order_acquire);
+}
+extern "C" GPUAkazePyramidFunc gpu_ops_get_akaze_pyramid_handler(void) {
+    return g_gpuAkazePyramid.load(std::memory_order_acquire);
 }

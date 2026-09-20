@@ -654,7 +654,10 @@ final public actor FrameAlignmentProcessor {
              // Ignored on the earth branch. Off by default — see
              // Config.useGPUForSIFT's doc comment for why this is a separate,
              // more cautious flag than Config.useGPU.
-             useGPUForSift: featureConfig.useGPUForSIFT
+             useGPUForSift: featureConfig.useGPUForSIFT,
+             // Ignored on the sky branch. Off by default — see
+             // Config.useGPUForAKAZE's doc comment.
+             useGPUForAKAZE: featureConfig.useGPUForAKAZE
            )
         }
         if let results {
