@@ -19,6 +19,7 @@
   // names (_open / _close / _commit) and has no fsync. Map the POSIX names we
   // use below onto the MSVC equivalents so the call sites stay portable.
   #include <io.h>
+  #include <process.h>
   static inline int fsync(int fd) { return _commit(fd); }
   #ifndef open
     #define open  _open
@@ -26,13 +27,18 @@
   #ifndef close
     #define close _close
   #endif
+  static inline long currentProcessId() { return _getpid(); }
 #else
   #include <unistd.h>
+  static inline long currentProcessId() { return static_cast<long>(getpid()); }
 #endif
 
 // Static member definitions
 std::atomic<uint64_t> MatWrapperImpl::totalBytes_{0};
 std::atomic<uint64_t> MatWrapperImpl::totalInstances_{0};
+
+// Disambiguates concurrent writes to the same destination path, below.
+static std::atomic<uint64_t> writeSequence_{0};
 
 static cv::Mat ensure8U(const cv::Mat& input) {
     if (input.depth() == CV_8U) return input;
@@ -424,59 +430,76 @@ bool mat_wrapper_owns_data(MatWrapperRef ref) {
 
 // --- Operations ---
 
+// Writes `mat` to `fname` via a uniquely-named temp file, fsync, and an atomic rename —
+// shared by every encoder here (TIFF output, JPEG previews) so none of them can regress
+// back to a direct in-place write.
+//
+// The temp filename is unique per call, not just per destination: two writers targeting
+// the same path used to share one deterministic `<name>.tmp.<ext>` temp file (or, for the
+// jpeg path, no temp file at all), so nothing stopped their imwrite calls from interleaving
+// into one corrupt file before either writer's rename ever ran — the rename can't protect
+// against a collision that already happened one step earlier. The pid+sequence suffix means
+// concurrent writers (same process or two) always get their own temp file, so the worst
+// that can happen is a clean last-one-wins at the rename.
+static bool writeMatAtomically(const cv::Mat &mat, const std::string &fname,
+                               const std::vector<int> &params, const char *logLabel) {
+    if (mat.empty()) {
+        Log_w("%s: not writing empty mat to %s", logLabel, fname.c_str());
+        return false;
+    }
+
+    std::string extension, base;
+    size_t dotPos = fname.find_last_of('.');
+    size_t slashPos = fname.find_last_of("/\\");
+    if (dotPos != std::string::npos && (slashPos == std::string::npos || dotPos > slashPos)) {
+        extension = fname.substr(dotPos + 1);
+        base = fname.substr(0, dotPos);
+    } else {
+        base = fname;
+    }
+
+    std::string unique = std::to_string(currentProcessId()) + "-" +
+      std::to_string(writeSequence_.fetch_add(1, std::memory_order_relaxed));
+    std::string tmp = extension.empty()
+      ? fname + ".tmp." + unique
+      : base + ".tmp." + unique + "." + extension;
+
+    // imwrite returns false rather than throwing for some failures (an unsupported
+    // extension, an encoder that could not be initialised), so the return value has to
+    // be checked as well as the exception caught. A full disk usually throws, but not
+    // always — and either way the caller has to be told.
+    if (!cv::imwrite(tmp, mat, params)) {
+        Log_e("%s: imwrite failed for %s", logLabel, fname.c_str());
+        std::error_code ignored;
+        std::filesystem::remove(tmp, ignored);
+        return false;
+    }
+
+    int fd = open(tmp.c_str(), O_RDONLY);
+    if (fd >= 0) { fsync(fd); close(fd); }
+
+    // std::filesystem::rename replaces an existing destination atomically
+    // on every platform we support (POSIX rename(2) does this natively;
+    // the MS STL implements it via MoveFileExW with MOVEFILE_REPLACE_EXISTING).
+    // POSIX rename(3) would also replace, but Windows' CRT rename(3) fails
+    // with EEXIST if the destination already exists — which is why we don't
+    // use the plain C call here.
+    std::error_code ec;
+    std::filesystem::rename(tmp, fname, ec);
+    if (ec) {
+        Log_e("%s: rename failed for %s: %s", logLabel, fname.c_str(), ec.message().c_str());
+        std::error_code ignored;
+        std::filesystem::remove(tmp, ignored);
+        return false;
+    }
+    return true;
+}
+
 bool mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
     if (!ref) return false;
     try {
         Log_d("writeTo: %s", filename);
-        std::string fname(filename);
-
-        // Extract extension for temp file
-        std::string extension, base;
-        size_t dotPos = fname.find_last_of('.');
-        size_t slashPos = fname.find_last_of("/\\");
-        if (dotPos != std::string::npos && (slashPos == std::string::npos || dotPos > slashPos)) {
-            extension = fname.substr(dotPos + 1);
-            base = fname.substr(0, dotPos);
-        } else {
-            base = fname;
-        }
-
-        std::string tmp = extension.empty() ? fname + ".tmp" : base + ".tmp." + extension;
-
-        if (ref->mat.empty()) {
-            Log_w("not writing empty mat to %s", filename);
-            return false;
-        }
-
-        // imwrite returns false rather than throwing for some failures (an unsupported
-        // extension, an encoder that could not be initialised), so the return value has to
-        // be checked as well as the exception caught. A full disk usually throws, but not
-        // always — and either way the caller has to be told.
-        if (!cv::imwrite(tmp, ref->mat)) {
-            Log_e("writeTo: imwrite failed for %s", filename);
-            std::error_code ignored;
-            std::filesystem::remove(tmp, ignored);
-            return false;
-        }
-
-        int fd = open(tmp.c_str(), O_RDONLY);
-        if (fd >= 0) { fsync(fd); close(fd); }
-
-        // std::filesystem::rename replaces an existing destination atomically
-        // on every platform we support (POSIX rename(2) does this natively;
-        // the MS STL implements it via MoveFileExW with MOVEFILE_REPLACE_EXISTING).
-        // POSIX rename(3) would also replace, but Windows' CRT rename(3) fails
-        // with EEXIST if the destination already exists — which is why we don't
-        // use the plain C call here.
-        std::error_code ec;
-        std::filesystem::rename(tmp, fname, ec);
-        if (ec) {
-            Log_e("writeTo: rename failed for %s: %s", filename, ec.message().c_str());
-            std::error_code ignored;
-            std::filesystem::remove(tmp, ignored);
-            return false;
-        }
-        return true;
+        return writeMatAtomically(ref->mat, std::string(filename), {}, "writeTo");
     } catch (const cv::Exception &e) {
         // Where a full disk usually lands: libtiff fails to write, OpenCV turns that into
         // a cv::Exception. Caught and logged here since it must not cross the extern "C"
@@ -494,11 +517,7 @@ bool mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality, const char *file
     try {
         cv::Mat eightBit = ensure8U(ref->mat);
         std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, (int)quality};
-        if (!cv::imwrite(std::string(filename), eightBit, params)) {
-            Log_e("saveJpeg: imwrite failed for %s", filename);
-            return false;
-        }
-        return true;
+        return writeMatAtomically(eightBit, std::string(filename), params, "saveJpeg");
     } KHT_CATCH_LOG("mat_wrapper_save_jpeg")
     return false;
 }

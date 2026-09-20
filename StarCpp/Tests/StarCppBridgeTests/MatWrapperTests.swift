@@ -38,6 +38,19 @@ final class MatWrapperTests: XCTestCase {
                           takeOwnership: true)
     }
 
+    /// Every pixel set to `value`, so a load can tell which of several concurrent writers'
+    /// content actually landed on disk.
+    private func makeUniformEightBitGray(width: Int, height: Int, value: UInt8) -> MatWrapper {
+        let count = width * height
+        let data = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
+        for i in 0..<count { data[i] = value }
+        return MatWrapper(width: width, height: height,
+                          cvType: MatWrapper.cvType(forBitsPerComponent: 8, componentsPerPixel: 1),
+                          bytesPerRow: width,
+                          data: UnsafeMutableRawPointer(data),
+                          takeOwnership: true)
+    }
+
     private func makeSixteenBitColor(width: Int, height: Int) -> MatWrapper {
         let count = width * height * 3
         let data = UnsafeMutablePointer<UInt16>.allocate(capacity: count)
@@ -490,6 +503,75 @@ final class MatWrapperTests: XCTestCase {
                 XCTAssertEqual(grayPixel(loaded, row: row, col: col),
                                grayPixel(original, row: row, col: col),
                                "pixel [\(col), \(row)] changed on the way through png")
+            }
+        }
+    }
+
+    /// Reproduces a corrupted `earth-aligned` frame seen in production: two writers racing
+    /// to the same destination path shared a deterministic `<name>.tmp.<ext>` temp file, so
+    /// their `cv::imwrite` calls interleaved into one file with garbage LZW strips before
+    /// either writer's atomic rename ever ran — the rename can't protect against a
+    /// collision that already happened one step earlier, at the temp file itself. Each
+    /// writer's temp filename now carries a pid+sequence suffix, so this has to keep
+    /// producing a file that loads cleanly and holds exactly one writer's content, never a
+    /// mix, no matter how the writes interleave in time.
+    func testConcurrentWritesToTheSamePathNeverProduceACorruptFile() throws {
+        let path = scratch.appendingPathComponent("racing.tif").path
+        let width = 256, height = 256
+        let writerCount = 12
+
+        DispatchQueue.concurrentPerform(iterations: writerCount) { i in
+            let image = self.makeUniformEightBitGray(width: width, height: height,
+                                                      value: UInt8(i))
+            _ = image.write(to: path)
+        }
+
+        let loaded = try XCTUnwrap(MatWrapper.load(fromFilename: path),
+                                   "the file must still load after concurrent writers, " +
+                                   "not decode-fail like the corrupted production frame")
+        XCTAssertEqual(loaded.cols, width)
+        XCTAssertEqual(loaded.rows, height)
+
+        // Whichever writer's rename landed last, its content must be uniform throughout —
+        // any mix of two writers' pixel values would mean their temp files collided again.
+        let firstPixel = grayPixel(loaded, row: 0, col: 0)
+        for row in 0..<height {
+            for col in 0..<width {
+                XCTAssertEqual(grayPixel(loaded, row: row, col: col), firstPixel,
+                               "pixel [\(col), \(row)] came from a different writer than " +
+                               "[0, 0] — the writers' temp files collided")
+            }
+        }
+    }
+
+    /// The jpeg preview path used to write straight to its destination with no temp file at
+    /// all, which is even more exposed to this than the tiff path was: two writers hitting
+    /// `cv::imwrite` on the same final name directly can each truncate the other's
+    /// in-progress file. It now goes through the same atomic temp-file-then-rename helper.
+    func testConcurrentJpegWritesToTheSamePathNeverProduceACorruptFile() throws {
+        let path = scratch.appendingPathComponent("racing.jpg").path
+        let width = 256, height = 256
+        let writerCount = 12
+
+        DispatchQueue.concurrentPerform(iterations: writerCount) { i in
+            let image = self.makeUniformEightBitGray(width: width, height: height,
+                                                      value: UInt8(i * 20))
+            image.saveJpeg(quality: 90, filename: path)
+        }
+
+        let loaded = try XCTUnwrap(MatWrapper.load(fromFilename: path),
+                                   "the file must still load after concurrent writers")
+        XCTAssertEqual(loaded.cols, width)
+        XCTAssertEqual(loaded.rows, height)
+
+        // A uniform image should stay uniform through jpeg unless two writers' temp
+        // files collided and interleaved their DCT blocks together.
+        let firstPixel = grayPixel(loaded, row: 0, col: 0)
+        for row in 0..<height {
+            for col in 0..<width {
+                XCTAssertEqual(grayPixel(loaded, row: row, col: col), firstPixel,
+                               "pixel [\(col), \(row)] came from a different writer than " +
+                               "[0, 0] — the writers' temp files collided")
             }
         }
     }

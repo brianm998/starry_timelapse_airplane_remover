@@ -430,13 +430,22 @@ public struct ImageAccessor: Sendable {
                                            atSize: size)
             {
                 switch size {
-                case .original:
+                case .original where type == .final:
                     // The user's actual product. A failure here is recorded rather than
                     // discarded — before the write path could report one, a full disk meant
                     // star worked through the whole sequence, wrote nothing, and exited 0.
                     if !image.writeTIFFEncoding(toFilename: filename) {
                         await OutputWriteFailures.shared.record(path: filename,
                                                                 frameIndex: frameIndex)
+                    }
+                case .original:
+                    // Every other type saved at original size (earthAligned, starAligned,
+                    // autoProcessed, ...) is an intermediate cache file under tempOutputPath,
+                    // not the delivered output. A write failure there is worth a log line —
+                    // it'll just be recreated next run — but not the critical "disk full,
+                    // your render is at risk" alert that OutputWriteFailures raises.
+                    if !image.writeTIFFEncoding(toFilename: filename) {
+                        Log.w("frame \(frameIndex) failed to write intermediate image of type \(type) to \(filename)")
                     }
                 default:
                     // everything but originals gets downscaled and saved as a jpeg
