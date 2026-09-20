@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "औसतन {0} सेकंड",
+  "ui.back": "वापस",
   "ui.base_image_dilation_size": "आधार इमेज का डाइलेशन आकार:",
   "ui.base_image_threshold": "आधार इमेज की सीमा:",
   "ui.bit_depths": "बिट गहराई: {0}",

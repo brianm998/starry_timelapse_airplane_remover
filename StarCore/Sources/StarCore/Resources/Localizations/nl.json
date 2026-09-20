@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "gemiddeld {0} s",
+  "ui.back": "Terug",
   "ui.base_image_dilation_size": "Dilatatiegrootte basisafbeelding:",
   "ui.base_image_threshold": "Drempel basisafbeelding:",
   "ui.bit_depths": "bitdieptes: {0}",

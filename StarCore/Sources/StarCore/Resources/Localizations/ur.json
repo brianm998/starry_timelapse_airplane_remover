@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "اوسطاً {0} سیکنڈ",
+  "ui.back": "واپس",
   "ui.base_image_dilation_size": "بنیادی تصویر کے پھیلاؤ کا حجم:",
   "ui.base_image_threshold": "بنیادی تصویر کی حد:",
   "ui.bit_depths": "بٹ گہرائیاں: {0}",

@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "im Mittel {0} Sek.",
+  "ui.back": "Zurück",
   "ui.base_image_dilation_size": "Dilatationsgröße des Basisbildes:",
   "ui.base_image_threshold": "Schwellwert des Basisbildes:",
   "ui.bit_depths": "Bittiefen: {0}",

@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "rata-rata {0} dtk",
+  "ui.back": "Kembali",
   "ui.base_image_dilation_size": "Ukuran dilasi gambar dasar:",
   "ui.base_image_threshold": "Ambang gambar dasar:",
   "ui.bit_depths": "kedalaman bit: {0}",

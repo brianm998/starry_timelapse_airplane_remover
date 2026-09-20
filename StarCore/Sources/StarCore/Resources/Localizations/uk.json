@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "у середньому {0} с",
+  "ui.back": "Назад",
   "ui.base_image_dilation_size": "Розмір дилатації базового зображення:",
   "ui.base_image_threshold": "Поріг базового зображення:",
   "ui.bit_depths": "бітові глибини: {0}",

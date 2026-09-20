@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "平均 {0} 秒",
+  "ui.back": "戻る",
   "ui.base_image_dilation_size": "ベース画像の膨張サイズ:",
   "ui.base_image_threshold": "ベース画像のしきい値:",
   "ui.bit_depths": "ビット深度: {0}",

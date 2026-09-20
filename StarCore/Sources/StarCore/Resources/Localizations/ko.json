@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "평균 {0}초",
+  "ui.back": "뒤로",
   "ui.base_image_dilation_size": "기준 이미지 팽창 크기:",
   "ui.base_image_threshold": "기준 이미지 임계값:",
   "ui.bit_depths": "비트 심도: {0}",

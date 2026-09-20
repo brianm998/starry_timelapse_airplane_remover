@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "průměrně {0} s",
+  "ui.back": "Zpět",
   "ui.base_image_dilation_size": "Velikost dilatace základního obrázku:",
   "ui.base_image_threshold": "Práh základního obrázku:",
   "ui.bit_depths": "bitové hloubky: {0}",

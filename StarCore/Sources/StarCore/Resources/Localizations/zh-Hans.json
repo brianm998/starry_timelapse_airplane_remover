@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "平均 {0} 秒",
+  "ui.back": "返回",
   "ui.base_image_dilation_size": "基准图像膨胀尺寸：",
   "ui.base_image_threshold": "基准图像阈值：",
   "ui.bit_depths": "位深：{0}",
