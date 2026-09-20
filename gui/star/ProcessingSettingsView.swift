@@ -264,6 +264,7 @@ struct ProcessingSettingsView: View {
     @State private var showMergeMultiplierInfo = false
     @State private var showHorizonMultiplierInfo = false
     @State private var showHorizonFloorInfo = false
+    @State private var showUseGPUInfo = false
 
 
     private var addSpacer: Bool {
@@ -302,7 +303,8 @@ struct ProcessingSettingsView: View {
         showOutlierMultiplierInfo ||
         showMergeMultiplierInfo ||
         showHorizonMultiplierInfo ||
-        showHorizonFloorInfo
+        showHorizonFloorInfo ||
+        showUseGPUInfo
     }
     
     private func showAll() {
@@ -349,6 +351,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo = true
         showHorizonMultiplierInfo = true
         showHorizonFloorInfo = true
+        showUseGPUInfo = true
     }
 
     private func hideAll() {
@@ -395,6 +398,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo = false
         showHorizonMultiplierInfo = false
         showHorizonFloorInfo = false
+        showUseGPUInfo = false
     }
     
     /// Whether the "already processed frames have different settings" confirmation is up.
@@ -575,6 +579,8 @@ struct ProcessingSettingsView: View {
                                   self.horizonMultiplierView
                                   Divider()
                                   self.horizonFloorView
+                                  Divider()
+                                  self.useGPUView
                               }
                           } label: {
                               Text(localized("ui.memory_settings"))
@@ -1233,6 +1239,49 @@ struct ProcessingSettingsView: View {
             }
         }
         .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
+    }
+
+    /// The hardware line below the toggle is what keeps "on" from being mistaken for "GPU
+    /// work is actually happening": `useGPU` alone cannot tell the difference between "off"
+    /// and "on but this Mac has no supported GPU," both of which run on the CPU — see
+    /// `Config.gpuAccelerationStatusText()`. Not gated by scene type or camera motion like
+    /// its neighbours in this group; whether the GPU kernels apply is a per-machine question,
+    /// not a per-sequence one.
+    private var useGPUView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showUseGPUInfo,
+          addSpacer: { addSpacer },
+          infoText: """
+            Uses the GPU (Metal) for the alignment warp and median-merge steps of \
+            processing, when this Mac has hardware that supports it. Turning this off always \
+            uses the CPU instead, which is slower but produces output that is not affected by \
+            the small numeric differences the GPU path documents for the merge step.
+            """
+        ) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    HStack {
+                        Spacer()
+                        Text(localized("ui.use_gpu_acceleration"))
+                          .font(.title2)
+                          .foregroundColor(.white)
+                          .opacity(0.6)
+                    }
+                    HStack {
+                        Space(width: 10)
+                        Toggle(isOn: $viewModel.useGPU) {
+                            Text("")
+                        }
+                        Spacer()
+                    }
+                }
+                Text(Config.gpuAccelerationStatusText())
+                  .font(.caption)
+                  .foregroundColor(.white)
+                  .opacity(0.5)
+            }
+        }
     }
 
     private var useReferenceHorizonSmoothingView: some View {
