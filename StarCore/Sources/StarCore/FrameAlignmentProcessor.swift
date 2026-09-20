@@ -650,7 +650,11 @@ final public actor FrameAlignmentProcessor {
              // full resolution and says nothing, so handing it 1.5 would silently detect
              // at full size while keypointFilename named a reduced-scale cache file.
              // Config does the conversion and the clamping in one place.
-             detectionScale: featureConfig.keypointDetectionScale
+             detectionScale: featureConfig.keypointDetectionScale,
+             // Ignored on the earth branch. Off by default — see
+             // Config.useGPUForSIFT's doc comment for why this is a separate,
+             // more cautious flag than Config.useGPU.
+             useGPUForSift: featureConfig.useGPUForSIFT
            )
         }
         if let results {
@@ -1003,7 +1007,8 @@ final public actor FrameAlignmentProcessor {
                       scratchDir: mergeConfig.tempOutputPath,
                       streamingThresholdBytes:
                         Int64(mergeConfig.mergeStreamingThresholdMB) * 1024 * 1024,
-                      loadConcurrency: mergeConfig.mergeLoadConcurrency
+                      loadConcurrency: mergeConfig.mergeLoadConcurrency,
+                      useGPU: mergeConfig.useGPU
                     )
                 }
 

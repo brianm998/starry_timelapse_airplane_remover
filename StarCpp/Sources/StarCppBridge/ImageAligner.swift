@@ -16,11 +16,17 @@ public enum ImageAligner {
     /// result — the merge sorts each pixel's samples before using them, so source order
     /// never reaches the answer, and the sources are collected in file order anyway.
     /// Ignored on the streaming path, which stays serial by design.
+    ///
+    /// `useGPU` only ever applies to the all-resident path (never streaming), and even
+    /// there is a request, not a guarantee — see `GPUCapability`. On by default so a
+    /// caller that does not think about GPU acceleration gets it when the machine
+    /// supports it, same as `Config.useGPU`'s own default.
     public static func medianMergeImage(_ image: MatWrapper, withFilenames filenames: [String],
                                          outlierThreshold: Double, includeAll: Bool,
                                          scratchDir: String? = nil,
                                          streamingThresholdBytes: Int64 = 0,
-                                         loadConcurrency: Int = 1) -> MatWrapper {
+                                         loadConcurrency: Int = 1,
+                                         useGPU: Bool = true) -> MatWrapper {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
@@ -31,20 +37,22 @@ public enum ImageAligner {
                                                   outlierThreshold, includeAll,
                                                   scratchDir,
                                                   streamingThresholdBytes,
-                                                  Int32(loadConcurrency))
+                                                  Int32(loadConcurrency),
+                                                  useGPU)
         }
         return MatWrapper(ref: r!)
     }
 
     public static func medianMergeFilenames(_ filenames: [String],
                                              outlierThreshold: Double,
-                                             includeAll: Bool) -> MatWrapper {
+                                             includeAll: Bool,
+                                             useGPU: Bool = true) -> MatWrapper {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
         let r = ptrs.withUnsafeMutableBufferPointer { buf in
             ia_median_merge_filenames(buf.baseAddress, Int32(buf.count),
-                                      outlierThreshold, includeAll)
+                                      outlierThreshold, includeAll, useGPU)
         }
         return MatWrapper(ref: r!)
     }
@@ -59,7 +67,8 @@ public enum ImageAligner {
                                      skyHorizonExtension: Int32,
                                      baseImageDilateSize: Int32,
                                      baseImageThresholdValue: Int32,
-                                     detectionScale: Double = 1.0) -> OCVFeatureSet? {
+                                     detectionScale: Double = 1.0,
+                                     useGPUForSift: Bool = false) -> OCVFeatureSet? {
         var errMsg: UnsafePointer<CChar>?
         guard let r = ia_find_features(baseImage.ref, frameIndex,
                                         matchMethod, mask?.ref,
@@ -70,8 +79,29 @@ public enum ImageAligner {
                                         baseImageDilateSize,
                                         baseImageThresholdValue,
                                         detectionScale,
+                                        useGPUForSift,
                                         &errMsg) else { return nil }
         return OCVFeatureSet(ref: r)
+    }
+
+    /// Test-only: the from-scratch SIFT port directly, without cv::SIFT as a
+    /// fallback — see `ia_debug_sift_reference`/`ia_debug_sift_gpu`'s comments
+    /// for why these exist. `img` must be CV_8U grayscale.
+    public static func debugSiftReference(_ img: MatWrapper, mask: MatWrapper?,
+                                          nfeatures: Int32) -> OCVFeatureSet? {
+        ia_debug_sift_reference(img.ref, mask?.ref, nfeatures).map { OCVFeatureSet(ref: $0) }
+    }
+
+    public static func debugSiftGPU(_ img: MatWrapper, mask: MatWrapper?,
+                                    nfeatures: Int32) -> OCVFeatureSet? {
+        ia_debug_sift_gpu(img.ref, mask?.ref, nfeatures).map { OCVFeatureSet(ref: $0) }
+    }
+
+    /// Real cv::SIFT, called directly with the same raw-input contract as
+    /// `debugSiftReference`/`debugSiftGPU` — see `ia_debug_sift_opencv`.
+    public static func debugSiftOpenCV(_ img: MatWrapper, mask: MatWrapper?,
+                                       nfeatures: Int32) -> OCVFeatureSet? {
+        ia_debug_sift_opencv(img.ref, mask?.ref, nfeatures).map { OCVFeatureSet(ref: $0) }
     }
 
     public static func computeHomography(baseKeypoints: OCVFeatureSet,
@@ -153,7 +183,8 @@ public enum ImageAligner {
                                             includeAll: Bool,
                                             scratchDir: String? = nil,
                                             streamingThresholdBytes: Int64 = 0,
-                                            loadConcurrency: Int = 1)
+                                            loadConcurrency: Int = 1,
+                                            useGPU: Bool = true)
       -> (merged: MatWrapper, warpCount: Int)?
     {
         let cNeighbors = neighbors.map { n in
@@ -187,6 +218,7 @@ public enum ImageAligner {
                                                scratchDir,
                                                streamingThresholdBytes,
                                                Int32(loadConcurrency),
+                                               useGPU,
                                                &warpCount, &errMsg)
                 }
             }
@@ -250,6 +282,14 @@ public enum ImageAligner {
     public static func maskedStretchToGray8(_ image: MatWrapper,
                                             mask: MatWrapper?) -> MatWrapper? {
         let r = ia_masked_stretch_to_gray8(image.ref, mask?.ref)
+        return r.map { MatWrapper(ref: $0) }
+    }
+
+    /// Test-only: the raw warp, with no merge picking a value around it. See
+    /// `ia_debug_warp`'s comment for why this exists and where it does not belong.
+    public static func debugWarp(_ src: MatWrapper, homography: MatWrapper,
+                                 useGPU: Bool) -> MatWrapper? {
+        let r = ia_debug_warp(src.ref, homography.ref, useGPU)
         return r.map { MatWrapper(ref: $0) }
     }
 }

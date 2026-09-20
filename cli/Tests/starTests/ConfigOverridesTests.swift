@@ -59,6 +59,8 @@ final class ConfigOverridesTests: XCTestCase {
       "--write-outlier-group-files",
       "--write-outlier-classification-values",
       "--no-skip-output-files",
+      "--no-use-gpu",
+      "--use-gpu-for-sift",
       "--no-horizon",
       "--moving-camera",
       "--keypoint-divisor", "1.5",
@@ -84,6 +86,8 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.writeOutlierGroupFiles, true)
         XCTAssertEqual(c.writeOutlierClassificationValues, true)
         XCTAssertEqual(c.writeOutputFiles, true, "--no-skip-output-files turns rendering on")
+        XCTAssertEqual(c.useGPU, false, "--no-use-gpu turns it off")
+        XCTAssertEqual(c.useGPUForSIFT, true, "--use-gpu-for-sift turns it on")
         XCTAssertEqual(c.horizonDetectionEnabled, false, "--no-horizon turns it off")
         XCTAssertEqual(c.tripodHeadWasMoving, true)
         XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.5)
@@ -224,6 +228,49 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertTrue(renderedAgain.writeOutputFiles, "and the --no- form is the way back")
     }
 
+    func testUseGPUHasThreeStatesAndNeedsAllOfThem() throws {
+        var disabled = Config()
+        XCTAssertTrue(disabled.useGPU, "GPU acceleration is on by default")
+        try StarCli.parse(["--no-use-gpu", "/some/seq"]).configOverrides.apply(to: &disabled)
+        XCTAssertFalse(disabled.useGPU, "--no-use-gpu turns it off")
+
+        var unmentioned = Config()
+        unmentioned.useGPU = false
+        try StarCli.parse(["/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &unmentioned)
+        XCTAssertFalse(unmentioned.useGPU,
+                       "a resume that repeats no flags keeps what the config holds")
+
+        var enabledAgain = Config()
+        enabledAgain.useGPU = false
+        try StarCli.parse(["--use-gpu", "/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &enabledAgain)
+        XCTAssertTrue(enabledAgain.useGPU, "and the plain form is the way back")
+    }
+
+    /// Same shape as `testUseGPUHasThreeStatesAndNeedsAllOfThem`, but the default runs the
+    /// other way: `useGPUForSIFT` starts off, unlike `useGPU`, so the flag this cli-only
+    /// override needs a way back from is the saved-`true` case, not the saved-`false` one.
+    func testUseGPUForSiftHasThreeStatesAndNeedsAllOfThem() throws {
+        var enabled = Config()
+        XCTAssertFalse(enabled.useGPUForSIFT, "off by default, unlike useGPU")
+        try StarCli.parse(["--use-gpu-for-sift", "/some/seq"]).configOverrides.apply(to: &enabled)
+        XCTAssertTrue(enabled.useGPUForSIFT, "--use-gpu-for-sift turns it on")
+
+        var unmentioned = Config()
+        unmentioned.useGPUForSIFT = true
+        try StarCli.parse(["/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &unmentioned)
+        XCTAssertTrue(unmentioned.useGPUForSIFT,
+                      "a resume that repeats no flags keeps what the config holds")
+
+        var disabledAgain = Config()
+        disabledAgain.useGPUForSIFT = true
+        try StarCli.parse(["--no-use-gpu-for-sift", "/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &disabledAgain)
+        XCTAssertFalse(disabledAgain.useGPUForSIFT, "and the --no- form is the way back")
+    }
+
     /// `-s` only does anything because `Processor` hands the config field to every frame.
     /// Checking `run()`/`process()` for real needs an image sequence on disk and then
     /// processes it, so this is the syntactic property instead — the same approach the
@@ -296,7 +343,7 @@ final class ConfigOverridesTests: XCTestCase {
         let overrides = try StarCli.parse(Self.everyFlag).configOverrides
         let fields = Mirror(reflecting: overrides).children
 
-        XCTAssertGreaterThanOrEqual(fields.count, 14,
+        XCTAssertGreaterThanOrEqual(fields.count, 16,
                                     "only found \(fields.count) overrides; if the struct "
                                     + "shrank, the tests above are checking less than "
                                     + "they look like they are")

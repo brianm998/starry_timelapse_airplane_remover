@@ -955,6 +955,14 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var useGPU: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.useGPU = useGPU
+            config.update(realConfig)
+        }
+    }
+
     var referenceHorizonSmoothingMaxDistance: Int {
         didSet {
             var realConfig = config.config()
@@ -1994,6 +2002,7 @@ public final class ImageSequenceViewModel {
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
         self.allowEarthAlignment = config.allowEarthAlignment
         self.useReferenceHorizonSmoothing = config.useReferenceHorizonSmoothing
+        self.useGPU = config.useGPU
         self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance
         self.useReferenceHorizonBrightnessRefinement = config.useReferenceHorizonBrightnessRefinement
         self.referenceHorizonBrightnessRefinementSearchRadius = config.referenceHorizonBrightnessRefinementSearchRadius

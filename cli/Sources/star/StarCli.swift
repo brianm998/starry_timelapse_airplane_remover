@@ -254,6 +254,16 @@ struct StarCli: AsyncParsableCommand {
           help: ArgumentHelp(localized("cli.help.skip_output_files")))
     var skipOutputFiles: Bool?
 
+    @Flag(name: [.customLong("use-gpu")],
+          inversion: .prefixedNo,
+          help: ArgumentHelp(localized("cli.help.use_gpu")))
+    var useGPU: Bool?
+
+    @Flag(name: [.customLong("use-gpu-for-sift")],
+          inversion: .prefixedNo,
+          help: ArgumentHelp(localized("cli.help.use_gpu_for_sift")))
+    var useGPUForSift: Bool?
+
     @Argument(help: ArgumentHelp(localized("cli.help.image_sequence_dirname")))
     var imageSequenceDirname: String?
 
@@ -271,6 +281,10 @@ struct StarCli: AsyncParsableCommand {
           writeOutlierClassificationValues: shouldWriteOutlierClassificationValues ? true : nil,
           // -s is the tri-state one: nil when neither it nor its --no- form was typed
           writeOutputFiles: skipOutputFiles.map { !$0 },
+          // --use-gpu / --no-use-gpu: also tri-state, so a saved false survives a resume
+          // that does not repeat the flag, same reasoning as writeOutputFiles above.
+          useGPU: useGPU,
+          useGPUForSift: useGPUForSift,
           horizonDetectionEnabled: noHorizon ? false : nil,
           tripodHeadWasMoving: movingCamera ? true : nil,
           alignmentKeypointDetectionDivisor: keypointDivisor,

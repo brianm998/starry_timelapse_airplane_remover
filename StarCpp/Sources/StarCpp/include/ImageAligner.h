@@ -23,8 +23,15 @@ typedef struct {
 // to describe and carries a coverage plane to describe them with.
 
 // Merge images from filenames. Returns new MatWrapperRef (caller must release).
+//
+// useGPU asks for the Metal-accelerated median-merge kernel when one is
+// registered and the machine has hardware for it (see GPUOps_C.h); the CPU
+// kernel always runs otherwise, unchanged. GPU output uses exact integer
+// arithmetic rather than the CPU kernel's double-precision Welford recurrence
+// — a small, deliberate difference, not a bug — see GPU_IMPLEMENTATION_GUIDE.md.
 MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
-                                        double outlierThreshold, bool includeAll);
+                                        double outlierThreshold, bool includeAll,
+                                        bool useGPU);
 
 // Merge a base image + additional filenames.
 //
@@ -44,12 +51,18 @@ MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
 // so source order does not reach the answer, and the sources are collected in file
 // order regardless.  The streaming path ignores it and stays serial: holding one
 // source at a time is what it is for.
+//
+// useGPU: see ia_median_merge_filenames above. It only ever applies to the
+// all-resident path — the streaming path (medianImageStreaming) stays
+// CPU-only, since it exists for source counts too large to hold on the GPU
+// (or in RAM) at once anyway.
 MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char **filenames, int count,
                                                     double outlierThreshold, bool includeAll,
                                                     const char *scratchDir,
                                                     int64_t streamingThresholdBytes,
-                                                    int loadConcurrency);
+                                                    int loadConcurrency,
+                                                    bool useGPU);
 
 // --- Feature detection ---
 
@@ -78,7 +91,35 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                   // so feature sets detected at different scales must
                                   // not be matched against each other.
                                   double detectionScale,
+                                  // Sky alignment only, ignored for earth: use the
+                                  // from-scratch GPU-accelerated SIFT reimplementation
+                                  // (see SIFTDetector.cpp) instead of real cv::SIFT, when
+                                  // a GPU pyramid handler is registered and this is true
+                                  // (Config.useGPUForSIFT). Falls back to real cv::SIFT
+                                  // — not partially, entirely — on any failure.
+                                  bool useGPUForSift,
                                   const char **errorMsg);
+
+// --- Test-only: the from-scratch SIFT port, without the cv::SIFT fallback ---
+//
+// Exposes SIFTDetector's two entry points directly so tests can compare them
+// against each other and against real cv::SIFT (via ia_find_features with
+// useGPUForSift=false) without depending on GPU availability to exercise the
+// ported algorithm at all. `img` must be CV_8U grayscale (matching what
+// ia_find_features hands cv::SIFT); `mask` may be null. Returns NULL if the
+// requested backend (GPU pyramid) is unavailable — `reference` never fails
+// this way, since it needs no GPU. Not meant to be a stable part of the C API
+// otherwise; see GPUOpsTests.swift / SIFTDetectorTests.swift.
+OCVFeatureSetRef ia_debug_sift_reference(MatWrapperRef img, MatWrapperRef mask, int nfeatures);
+OCVFeatureSetRef ia_debug_sift_gpu(MatWrapperRef img, MatWrapperRef mask, int nfeatures);
+
+// Real cv::SIFT::create(nfeatures)->detectAndCompute(img, mask, ...), called
+// directly with none of ia_find_features's mask/scale preprocessing — the
+// same raw-input contract as the two entries above, so all three can be
+// compared on identical inputs to isolate "does the ported algorithm match
+// real SIFT" from any question about the rest of ia_find_features's pipeline
+// (which is unchanged and not what this is testing).
+OCVFeatureSetRef ia_debug_sift_opencv(MatWrapperRef img, MatWrapperRef mask, int nfeatures);
 
 // --- Homography computation ---
 
@@ -119,6 +160,10 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 //
 // outWarpCount (nullable) receives how many neighbours made it into the merge.
 // Returns NULL if that count is zero, or on error; caller must release the result.
+//
+// useGPU: see ia_median_merge_filenames above — applies to both the warp of
+// each neighbour and the final merge, and only on the all-resident path; the
+// streaming path (spiller.merge) stays CPU-only.
 MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIndex,
                                         const AlignmentNeighborData *neighbors,
                                         int neighborCount,
@@ -129,6 +174,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                         const char *scratchDir,
                                         int64_t streamingThresholdBytes,
                                         int loadConcurrency,
+                                        bool useGPU,
                                         int *outWarpCount,
                                         const char **errorMsg);
 
@@ -168,6 +214,20 @@ MatWrapperRef ia_gradient_mask_into_ground(MatWrapperRef binaryMask, int gradien
 // the difference between a ground full of keypoints and one holding none.
 // Caller must release the returned ref.  `mask` may be null.
 MatWrapperRef ia_masked_stretch_to_gray8(MatWrapperRef image, MatWrapperRef mask);
+
+// --- Test-only: the raw warp, without a merge around it ---
+
+// Exposes warpInto directly — every other entry point folds it into a merge
+// (ia_align_and_median_merge), which picks a value from a small sorted set and
+// so cannot be used to measure the warp's own accuracy in isolation: it and
+// whatever it is merged against fight for which one the merge picks, which
+// dominates any actual difference in the warp itself. This exists for exactly
+// that measurement (see GPUOpsTests.swift) and is not meant to be a stable
+// part of the C API otherwise.
+//
+// `homography` must be a 3x3 CV_64F MatWrapper. Returns NULL on a bad input;
+// caller must release the result.
+MatWrapperRef ia_debug_warp(MatWrapperRef src, MatWrapperRef homography, bool useGPU);
 
 #ifdef __cplusplus
 }

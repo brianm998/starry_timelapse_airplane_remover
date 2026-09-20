@@ -1,9 +1,11 @@
 // ImageAligner.cpp — Pure C++ implementation of image alignment operations
 #include "ImageAligner.h"
 #include "ImageCache_C.h"
+#include "GPUOps_C.h"
 #include "MatWrapper.h"
 #include "MatWrapperImpl.hpp"
 #include "OCVFeatureSetImpl.hpp"
+#include "SIFTDetector.h"
 #include "logging_impl.hpp"
 
 #include <opencv2/core.hpp>
@@ -33,6 +35,25 @@
 static MatWrapperRef wrap(const cv::Mat& mat) {
     return new MatWrapperImpl(MatWrapperImpl::Adopt{}, mat);
 }
+
+// Wraps `mat`'s existing buffer with no copy and no ownership transfer — the
+// returned ref's mat.u is null, so mat_wrapper_release on it never touches
+// `mat`'s own refcount or lifetime. Only ever used to hand a GPU handler a view
+// into a cv::Mat this function already owns for the duration of the call
+// (never returned, never retained past it): a per-neighbour warp source, a
+// merge's sources/misses/output, all of which stay alive for as long as the
+// registered Swift closure runs synchronously on this thread.
+static MatWrapperRef wrapReadOnly(const cv::Mat& mat) {
+    return new MatWrapperImpl((int)mat.rows, (int)mat.cols, mat.type(),
+                              const_cast<uchar*>(mat.data), mat.step[0]);
+}
+
+// GPUOps_C.h declares only whether a handler is registered; ImageAligner.cpp is
+// the one place that actually needs to call one, so these two (defined in
+// GPUOps_C.cpp) are forward-declared here rather than added to the public
+// header Swift sees.
+extern "C" GPUWarpFunc gpu_ops_get_warp(void);
+extern "C" GPUMedianMergeFunc gpu_ops_get_median_merge(void);
 
 static cv::Mat ensure8U(const cv::Mat& input) {
     if (input.depth() == CV_8U) return input;
@@ -432,7 +453,8 @@ static void medianMergeTyped(cv::Mat &output, const std::vector<cv::Mat>& mats,
 
 static MatWrapperRef medianImageFromMats(const std::vector<cv::Mat>& mats,
                                           double k, bool includeAll,
-                                          const cv::Mat &misses = cv::Mat()) {
+                                          const cv::Mat &misses = cv::Mat(),
+                                          bool useGPU = false) {
     if (mats.empty()) return wrap(cv::Mat());
 
     const cv::Mat& first = mats[0];
@@ -453,6 +475,35 @@ static MatWrapperRef medianImageFromMats(const std::vector<cv::Mat>& mats,
     }
 
     cv::Mat output(rows, cols, first.type());
+
+    // GPU path: exact-integer sigma-clip median, registered (or not) from
+    // StarCppBridge/GPUOps.swift — see GPUOps_C.h for why this differs, in a
+    // small documented way, from medianMergeTyped's double Welford below.
+    // uchar/uint16_t are medianMergeTyped's only two instantiations (see
+    // clamp_cast_int above), so there is nothing to gain offering the GPU path
+    // any other depth.
+    if (useGPU && (depth == CV_8U || depth == CV_16U)) {
+        if (GPUMedianMergeFunc gpuMerge = gpu_ops_get_median_merge()) {
+            std::vector<MatWrapperRef> sourceRefs;
+            sourceRefs.reserve(mats.size());
+            for (const auto &m : mats) sourceRefs.push_back(wrapReadOnly(m));
+            MatWrapperRef missesRef = misses.empty() ? nullptr : wrapReadOnly(misses);
+            MatWrapperRef dstRef = wrapReadOnly(output);
+
+            const bool ok = gpuMerge(sourceRefs.data(), (int)sourceRefs.size(), missesRef,
+                                     k, includeAll, dstRef);
+
+            for (MatWrapperRef ref : sourceRefs) mat_wrapper_release(ref);
+            if (missesRef) mat_wrapper_release(missesRef);
+            mat_wrapper_release(dstRef);
+
+            if (ok) return wrap(output);
+            // Fall through to the CPU kernel below on failure. It overwrites every
+            // pixel of `output` unconditionally, so a partial GPU attempt cannot
+            // leak through — no re-zeroing needed here, unlike warpInto.
+        }
+    }
+
     const CoverageMisses cover{misses};
     if (depth == CV_8U) medianMergeTyped<uchar>(output, mats, k, includeAll, rows, cols, ch, cover);
     else if (depth == CV_16U) medianMergeTyped<uint16_t>(output, mats, k, includeAll, rows, cols, ch, cover);
@@ -989,7 +1040,8 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize, int thresholdVa
 // --- Public API ---
 
 MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
-                                         double outlierThreshold, bool includeAll) {
+                                         double outlierThreshold, bool includeAll,
+                                         bool useGPU) {
     try {
         std::vector<cv::Mat> mats;
         for (int i = 0; i < count; i++) {
@@ -998,7 +1050,7 @@ MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
             // outlives the release below. medianImageFromMats only reads its inputs.
             if (img) { mats.push_back(img->mat); mat_wrapper_release(img); }
         }
-        return medianImageFromMats(mats, outlierThreshold, includeAll);
+        return medianImageFromMats(mats, outlierThreshold, includeAll, cv::Mat(), useGPU);
     } KHT_CATCH_LOG("ia_median_merge_filenames")
     return nullptr;
 }
@@ -1020,7 +1072,8 @@ MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     double outlierThreshold, bool includeAll,
                                                     const char *scratchDir,
                                                     int64_t streamingThresholdBytes,
-                                                    int loadConcurrency) {
+                                                    int loadConcurrency,
+                                                    bool useGPU) {
     try {
         // The all-resident path below holds every source at once.  When that would
         // exceed the threshold, stream from scratch files instead: same result,
@@ -1059,7 +1112,7 @@ MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
         // in index order, so the merge sees what the serial loop handed it
         for (auto &src : sources) if (src.present) mats.push_back(src.mat);
 
-        return medianImageFromMats(mats, outlierThreshold, includeAll);
+        return medianImageFromMats(mats, outlierThreshold, includeAll, cv::Mat(), useGPU);
     } KHT_CATCH_LOG("ia_median_merge_image_with_filenames")
     return nullptr;
 }
@@ -1205,6 +1258,7 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                    int baseImageDilateSize,
                                    int baseImageThresholdValue,
                                    double detectionScale,
+                                   bool useGPUForSift,
                                    const char **errorMsg) {
     if (!baseImage) { if (errorMsg) *errorMsg = "null base image"; return nullptr; }
     try {
@@ -1376,8 +1430,23 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             // compute() drops any keypoint it cannot describe, so the two stay in step.
             akazeBase->compute(baseImageProcessed, keypoints, descriptors);
         } else {
-            cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
-            siftBase->detectAndCompute(detectGray, detectionMask, keypoints, descriptors);
+            // useGPUForSift: try the from-scratch GPU-accelerated port first — see
+            // SIFTDetector.cpp for why this exists as a separate implementation
+            // rather than a hook into real cv::SIFT, and Config.useGPUForSIFT's
+            // doc comment for why it defaults off and is gated separately from
+            // Config.useGPU. Any failure (no GPU handler registered, or the
+            // handler itself failing) falls back to real cv::SIFT wholesale —
+            // not partially, since there is no seam to fall back within a
+            // hand-ported pipeline once it is committed to.
+            bool usedGPUPort = false;
+            if (useGPUForSift) {
+                usedGPUPort = star_sift::siftDetectAndComputeGPU(
+                  detectGray, detectionMask, maxKeypoints, keypoints, descriptors);
+            }
+            if (!usedGPUPort) {
+                cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
+                siftBase->detectAndCompute(detectGray, detectionMask, keypoints, descriptors);
+            }
         }
 
         // Map keypoints back into full-resolution coordinates.  Descriptors are left
@@ -1714,7 +1783,7 @@ static MatWrapperRef homographyForOffset(int offset, const int *keys,
     return nullptr;
 }
 
-static cv::Mat warpInto(const cv::Mat &src, const cv::Mat &H) {
+static cv::Mat warpInto(const cv::Mat &src, const cv::Mat &H, bool useGPU) {
     // Zero means "this neighbour has no sample here" to the merge downstream, and every
     // destination pixel the warp does not cover has to end up saying exactly that.
     //
@@ -1745,6 +1814,32 @@ static cv::Mat warpInto(const cv::Mat &src, const cv::Mat &H) {
     // on a 4-neighbour 12MP merge, three runs each: 0.89/0.97/0.97s here, 1.12/1.49/1.62s
     // for plain BORDER_CONSTANT with the fringe left in, 1.78/1.82/1.90s for the mask.
     cv::Mat warped = cv::Mat::zeros(src.size(), src.type());
+
+    // GPU path: a Metal kernel reproducing OpenCV's fixed-point INTER_LINEAR +
+    // BORDER_TRANSPARENT bilinear resample, registered (or not) from
+    // StarCppBridge/GPUOps.swift at process startup — see GPUOps_C.h. `useGPU`
+    // being true only means the caller's Config asked for it; the handler itself
+    // checks GPUCapability and returns false immediately when there is no usable
+    // device, so this is never the only path to a result.
+    if (useGPU) {
+        if (GPUWarpFunc gpuWarp = gpu_ops_get_warp()) {
+            cv::Mat H64 = H;
+            if (H64.type() != CV_64F) H.convertTo(H64, CV_64F);
+            if (H64.isContinuous() && H64.rows == 3 && H64.cols == 3) {
+                MatWrapperRef srcRef = wrapReadOnly(src);
+                MatWrapperRef dstRef = wrapReadOnly(warped);
+                const bool ok = gpuWarp(srcRef, H64.ptr<double>(), dstRef);
+                mat_wrapper_release(srcRef);
+                mat_wrapper_release(dstRef);
+                if (ok) return warped;
+                // The handler may have written some, but not all, of `warped`
+                // before failing — never let a partial GPU attempt leak into
+                // the CPU path below, which assumes a fresh zeroed destination.
+                warped.setTo(cv::Scalar::all(0));
+            }
+        }
+    }
+
     cv::warpPerspective(src, warped, H, src.size(),
                         cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
     return warped;
@@ -1766,11 +1861,13 @@ static cv::Mat warpInto(const cv::Mat &src, const cv::Mat &H) {
 // would cost nothing at all — but it means reimplementing OpenCV's boundary rule,
 // and that rule is a detail of the copy of OpenCV in the tree.  Deriving it from
 // the same call cannot drift from it.
-static cv::Mat warpCoverage(const cv::Mat &probe, const cv::Mat &H) {
-    cv::Mat covered = cv::Mat::zeros(probe.size(), probe.type());
-    cv::warpPerspective(probe, covered, H, probe.size(),
-                        cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
-    return covered;
+//
+// Literally the same call, now: this used to duplicate warpInto's body rather
+// than call it, which was a second place a GPU (or any other) reimplementation
+// of the warp could drift from the image path it has to stay consistent with.
+// Delegating makes that impossible instead of merely documented.
+static cv::Mat warpCoverage(const cv::Mat &probe, const cv::Mat &H, bool useGPU) {
+    return warpInto(probe, H, useGPU);
 }
 
 
@@ -1784,6 +1881,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                         const char *scratchDir,
                                         int64_t streamingThresholdBytes,
                                         int loadConcurrency,
+                                        bool useGPU,
                                         int *outWarpCount,
                                         const char **errorMsg) {
     if (outWarpCount) *outWarpCount = 0;
@@ -1855,7 +1953,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
             MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
             if (!neighbor) return;
 
-            cv::Mat warped = warpInto(neighbor->mat, H->mat);
+            cv::Mat warped = warpInto(neighbor->mat, H->mat, useGPU);
             mat_wrapper_release(neighbor);
 
             if (warped.rows != base.rows || warped.cols != base.cols ||
@@ -1873,7 +1971,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
             // Skipped entirely under includeAll, which counts every source at every
             // pixel and never asks.
             if (!includeAll) {
-                cv::Mat covered = warpCoverage(coverageProbe, H->mat);
+                cv::Mat covered = warpCoverage(coverageProbe, H->mat, useGPU);
                 cv::bitwise_not(covered, covered);  // 255 where the warp reached nothing
                 std::lock_guard<std::mutex> lock(missesMutex);
                 cv::add(misses, cv::Scalar(1), misses, covered);
@@ -1923,7 +2021,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
         mats.reserve(warps.size() + 1);
         mats.push_back(base);
         mats.insert(mats.end(), warps.begin(), warps.end());
-        return medianImageFromMats(mats, outlierThreshold, includeAll, misses);
+        return medianImageFromMats(mats, outlierThreshold, includeAll, misses, useGPU);
     } catch (const cv::Exception &e) {
         if (errorMsg) *errorMsg = "OpenCV exception in aligned merge";
         Log_e("Error: %s", e.what());
@@ -1957,5 +2055,55 @@ MatWrapperRef ia_masked_stretch_to_gray8(MatWrapperRef image, MatWrapperRef mask
     try {
         return wrap(toGray8UWithMask(image->mat, mask ? mask->mat : cv::Mat()));
     } KHT_CATCH_LOG("ia_masked_stretch_to_gray8")
+    return nullptr;
+}
+
+MatWrapperRef ia_debug_warp(MatWrapperRef src, MatWrapperRef homography, bool useGPU) {
+    if (!src || !homography || homography->mat.rows != 3 || homography->mat.cols != 3) {
+        return nullptr;
+    }
+    try {
+        return wrap(warpInto(src->mat, homography->mat, useGPU));
+    } KHT_CATCH_LOG("ia_debug_warp")
+    return nullptr;
+}
+
+OCVFeatureSetRef ia_debug_sift_reference(MatWrapperRef img, MatWrapperRef mask, int nfeatures) {
+    if (!img || img->mat.empty()) return nullptr;
+    try {
+        std::vector<cv::KeyPoint> keypoints;
+        cv::Mat descriptors;
+        if (!star_sift::siftDetectAndComputeReference(
+              img->mat, mask ? mask->mat : cv::Mat(), nfeatures, keypoints, descriptors)) {
+            return nullptr;
+        }
+        return new OCVFeatureSetImpl(keypoints, descriptors);
+    } KHT_CATCH_LOG("ia_debug_sift_reference")
+    return nullptr;
+}
+
+OCVFeatureSetRef ia_debug_sift_gpu(MatWrapperRef img, MatWrapperRef mask, int nfeatures) {
+    if (!img || img->mat.empty()) return nullptr;
+    try {
+        std::vector<cv::KeyPoint> keypoints;
+        cv::Mat descriptors;
+        if (!star_sift::siftDetectAndComputeGPU(
+              img->mat, mask ? mask->mat : cv::Mat(), nfeatures, keypoints, descriptors)) {
+            return nullptr;
+        }
+        return new OCVFeatureSetImpl(keypoints, descriptors);
+    } KHT_CATCH_LOG("ia_debug_sift_gpu")
+    return nullptr;
+}
+
+OCVFeatureSetRef ia_debug_sift_opencv(MatWrapperRef img, MatWrapperRef mask, int nfeatures) {
+    if (!img || img->mat.empty()) return nullptr;
+    try {
+        std::vector<cv::KeyPoint> keypoints;
+        cv::Mat descriptors;
+        cv::Ptr<cv::SIFT> sift = cv::SIFT::create(nfeatures);
+        sift->detectAndCompute(img->mat, mask ? mask->mat : cv::Mat(), keypoints, descriptors);
+        return new OCVFeatureSetImpl(keypoints, descriptors);
+    } KHT_CATCH_LOG("ia_debug_sift_opencv")
     return nullptr;
 }
