@@ -68,7 +68,33 @@ final class SettingsWiringTests: XCTestCase {
         }
     }
 
-    /// property name -> the single Config field its didSet writes.
+    /// Properties whose `didSet` legitimately writes more than one `Config` field, together
+    /// with the complete set of fields each one is expected to write. The pairing below
+    /// matches a property to a field by finding the single field its `didSet` writes, so a
+    /// second write is ordinarily a bug (two controls silently fighting over which field is
+    /// "the" one) — this is the explicit exception list for the writes that are not.
+    ///
+    /// `primary` is the field paired against the loader (see `configLoaders`) for the other
+    /// checks below; it is the field the property is actually *for*; `all` is exactly what
+    /// the didSet must write, so an unexpected third write still fails loudly instead of
+    /// being silently absorbed.
+    ///
+    /// - `alignmentKeypointDetectionDivisor` also sets `keypointDivisorWasChosen`, so the
+    ///   automatic keypoint-divisor advice never overrides a value the user (or the startup
+    ///   prompt) already chose explicitly — the same two-field pattern the cli uses in
+    ///   `ConfigOverrides.swift` and the daemon in `Mapping.swift`. Added by 9f09e6b7.
+    private struct MultiFieldWrite {
+        let primary: String
+        let all: Set<String>
+    }
+    private static let knownMultiFieldWriters: [String: MultiFieldWrite] = [
+        "alignmentKeypointDetectionDivisor": MultiFieldWrite(
+            primary: "alignmentKeypointDetectionDivisor",
+            all: ["alignmentKeypointDetectionDivisor", "keypointDivisorWasChosen"]),
+    ]
+
+    /// property name -> the single Config field its didSet writes (or, for the properties
+    /// listed in `knownMultiFieldWriters`, the primary one of several).
     private func configWriters(in source: String) -> [String: String] {
         var writers: [String: String] = [:]
         // var NAME: TYPE {  didSet {  ... realConfig.FIELD = ... } }
@@ -78,9 +104,19 @@ final class SettingsWiringTests: XCTestCase {
             guard let name = b[1], let body = b[2] else { continue }
             let written = matches(#"realConfig\.(\w+)\s*="#, in: body).compactMap { $0[1] }
             guard let first = written.first else { continue }   // didSet that touches no config
-            XCTAssertEqual(Set(written).count, 1,
-                           "\(name): didSet writes more than one Config field \(Set(written)), "
-                           + "which this check cannot pair unambiguously")
+            let writtenSet = Set(written)
+            if let expected = Self.knownMultiFieldWriters[name] {
+                XCTAssertEqual(writtenSet, expected.all,
+                               "\(name): expected the documented multi-field write "
+                               + "\(expected.all.sorted()), found \(writtenSet.sorted()) instead — "
+                               + "update knownMultiFieldWriters if this change is intentional")
+                writers[name] = expected.primary
+                continue
+            }
+            XCTAssertEqual(writtenSet.count, 1,
+                           "\(name): didSet writes more than one Config field \(writtenSet), "
+                           + "which this check cannot pair unambiguously — if that is "
+                           + "intentional, add \(name) to knownMultiFieldWriters")
             writers[name] = first
         }
         return writers
