@@ -73,6 +73,44 @@ void gpu_ops_set_handlers(GPUWarpFunc warp, GPUMedianMergeFunc medianMerge);
 bool gpu_ops_warp_available(void);
 bool gpu_ops_median_merge_available(void);
 
+// Builds the Gaussian scale-space pyramid a from-scratch reimplementation of
+// SIFT needs — see siftDetectAndCompute in ImageAligner.cpp, which exists
+// because OpenCV's own SIFT internals are not exposed by any public API, so
+// there is no seam to hand a GPU-built pyramid into "OpenCV's real SIFT."
+// This covers exactly the two steps OpenCV's own profiling puts at ~100% of
+// SIFT's cost: `createInitialImage`'s upscale-and-blur and
+// `buildGaussianPyramid`'s per-octave/layer blur cascade. Everything after
+// (DoG, extrema, orientation, descriptors) is comparatively cheap — O(pixels)
+// once versus O(pixels) times 55 blurs — and stays on the CPU as a faithful,
+// unhurried port instead.
+//
+// `base` is CV_32FC1: the plain float cast of the CV_8U detection image, with
+// no blur and no upscale applied yet (i.e. SIFT's `gray_fpt`, before
+// `createInitialImage` touches it). `doubleImageSize` mirrors SIFT's
+// `firstOctave < 0` case; this codebase never supplies pre-computed keypoints
+// to SIFT, so it is always true in practice, but the handler must honour it
+// either way. `sigma` is SIFT's own sigma parameter (1.6 by default).
+//
+// `outPyramid` must point to a caller-allocated array of exactly
+// `nOctaves * (nOctaveLayers + 3)` slots, laid out exactly like OpenCV's own
+// `pyr[o*(nOctaveLayers+3) + i]` — octave-major, layer-minor. On success every
+// slot holds a newly allocated CV_32FC1 MatWrapperRef (caller must release
+// each one); on failure the array is left untouched and every slot must be
+// treated as unset. Returns false on any failure or unsupported case — the
+// caller then abandons the custom pipeline entirely and calls real
+// `cv::SIFT::create()->detectAndCompute()`, since there is no partial fallback
+// once a hand-ported pipeline is committed to.
+typedef bool (*GPUSiftPyramidFunc)(MatWrapperRef base, bool doubleImageSize,
+                                   double sigma, int nOctaves, int nOctaveLayers,
+                                   MatWrapperRef *outPyramid);
+
+// Registers (or clears, with NULL) the SIFT pyramid GPU backend. Separate
+// from gpu_ops_set_handlers/warp/median-merge above because it is gated by
+// its own Config flag (Config.useGPUForSIFT, off by default) rather than the
+// general useGPU — see that property's doc comment for why.
+void gpu_ops_set_sift_pyramid_handler(GPUSiftPyramidFunc handler);
+bool gpu_ops_sift_pyramid_available(void);
+
 #ifdef __cplusplus
 }
 #endif

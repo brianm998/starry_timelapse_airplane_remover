@@ -91,7 +91,35 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                   // so feature sets detected at different scales must
                                   // not be matched against each other.
                                   double detectionScale,
+                                  // Sky alignment only, ignored for earth: use the
+                                  // from-scratch GPU-accelerated SIFT reimplementation
+                                  // (see SIFTDetector.cpp) instead of real cv::SIFT, when
+                                  // a GPU pyramid handler is registered and this is true
+                                  // (Config.useGPUForSIFT). Falls back to real cv::SIFT
+                                  // — not partially, entirely — on any failure.
+                                  bool useGPUForSift,
                                   const char **errorMsg);
+
+// --- Test-only: the from-scratch SIFT port, without the cv::SIFT fallback ---
+//
+// Exposes SIFTDetector's two entry points directly so tests can compare them
+// against each other and against real cv::SIFT (via ia_find_features with
+// useGPUForSift=false) without depending on GPU availability to exercise the
+// ported algorithm at all. `img` must be CV_8U grayscale (matching what
+// ia_find_features hands cv::SIFT); `mask` may be null. Returns NULL if the
+// requested backend (GPU pyramid) is unavailable — `reference` never fails
+// this way, since it needs no GPU. Not meant to be a stable part of the C API
+// otherwise; see GPUOpsTests.swift / SIFTDetectorTests.swift.
+OCVFeatureSetRef ia_debug_sift_reference(MatWrapperRef img, MatWrapperRef mask, int nfeatures);
+OCVFeatureSetRef ia_debug_sift_gpu(MatWrapperRef img, MatWrapperRef mask, int nfeatures);
+
+// Real cv::SIFT::create(nfeatures)->detectAndCompute(img, mask, ...), called
+// directly with none of ia_find_features's mask/scale preprocessing — the
+// same raw-input contract as the two entries above, so all three can be
+// compared on identical inputs to isolate "does the ported algorithm match
+// real SIFT" from any question about the rest of ia_find_features's pipeline
+// (which is unchanged and not what this is testing).
+OCVFeatureSetRef ia_debug_sift_opencv(MatWrapperRef img, MatWrapperRef mask, int nfeatures);
 
 // --- Homography computation ---
 

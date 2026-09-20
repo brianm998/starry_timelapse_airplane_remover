@@ -5,6 +5,7 @@
 #include "MatWrapper.h"
 #include "MatWrapperImpl.hpp"
 #include "OCVFeatureSetImpl.hpp"
+#include "SIFTDetector.h"
 #include "logging_impl.hpp"
 
 #include <opencv2/core.hpp>
@@ -1257,6 +1258,7 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                    int baseImageDilateSize,
                                    int baseImageThresholdValue,
                                    double detectionScale,
+                                   bool useGPUForSift,
                                    const char **errorMsg) {
     if (!baseImage) { if (errorMsg) *errorMsg = "null base image"; return nullptr; }
     try {
@@ -1428,8 +1430,23 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             // compute() drops any keypoint it cannot describe, so the two stay in step.
             akazeBase->compute(baseImageProcessed, keypoints, descriptors);
         } else {
-            cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
-            siftBase->detectAndCompute(detectGray, detectionMask, keypoints, descriptors);
+            // useGPUForSift: try the from-scratch GPU-accelerated port first — see
+            // SIFTDetector.cpp for why this exists as a separate implementation
+            // rather than a hook into real cv::SIFT, and Config.useGPUForSIFT's
+            // doc comment for why it defaults off and is gated separately from
+            // Config.useGPU. Any failure (no GPU handler registered, or the
+            // handler itself failing) falls back to real cv::SIFT wholesale —
+            // not partially, since there is no seam to fall back within a
+            // hand-ported pipeline once it is committed to.
+            bool usedGPUPort = false;
+            if (useGPUForSift) {
+                usedGPUPort = star_sift::siftDetectAndComputeGPU(
+                  detectGray, detectionMask, maxKeypoints, keypoints, descriptors);
+            }
+            if (!usedGPUPort) {
+                cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
+                siftBase->detectAndCompute(detectGray, detectionMask, keypoints, descriptors);
+            }
         }
 
         // Map keypoints back into full-resolution coordinates.  Descriptors are left
@@ -2048,5 +2065,45 @@ MatWrapperRef ia_debug_warp(MatWrapperRef src, MatWrapperRef homography, bool us
     try {
         return wrap(warpInto(src->mat, homography->mat, useGPU));
     } KHT_CATCH_LOG("ia_debug_warp")
+    return nullptr;
+}
+
+OCVFeatureSetRef ia_debug_sift_reference(MatWrapperRef img, MatWrapperRef mask, int nfeatures) {
+    if (!img || img->mat.empty()) return nullptr;
+    try {
+        std::vector<cv::KeyPoint> keypoints;
+        cv::Mat descriptors;
+        if (!star_sift::siftDetectAndComputeReference(
+              img->mat, mask ? mask->mat : cv::Mat(), nfeatures, keypoints, descriptors)) {
+            return nullptr;
+        }
+        return new OCVFeatureSetImpl(keypoints, descriptors);
+    } KHT_CATCH_LOG("ia_debug_sift_reference")
+    return nullptr;
+}
+
+OCVFeatureSetRef ia_debug_sift_gpu(MatWrapperRef img, MatWrapperRef mask, int nfeatures) {
+    if (!img || img->mat.empty()) return nullptr;
+    try {
+        std::vector<cv::KeyPoint> keypoints;
+        cv::Mat descriptors;
+        if (!star_sift::siftDetectAndComputeGPU(
+              img->mat, mask ? mask->mat : cv::Mat(), nfeatures, keypoints, descriptors)) {
+            return nullptr;
+        }
+        return new OCVFeatureSetImpl(keypoints, descriptors);
+    } KHT_CATCH_LOG("ia_debug_sift_gpu")
+    return nullptr;
+}
+
+OCVFeatureSetRef ia_debug_sift_opencv(MatWrapperRef img, MatWrapperRef mask, int nfeatures) {
+    if (!img || img->mat.empty()) return nullptr;
+    try {
+        std::vector<cv::KeyPoint> keypoints;
+        cv::Mat descriptors;
+        cv::Ptr<cv::SIFT> sift = cv::SIFT::create(nfeatures);
+        sift->detectAndCompute(img->mat, mask ? mask->mat : cv::Mat(), keypoints, descriptors);
+        return new OCVFeatureSetImpl(keypoints, descriptors);
+    } KHT_CATCH_LOG("ia_debug_sift_opencv")
     return nullptr;
 }

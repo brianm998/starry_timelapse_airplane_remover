@@ -368,6 +368,24 @@ public struct Config: Codable, Sendable {
     /// unsupported" both end up running on the CPU.
     public var useGPU: Bool = true
 
+    /// Whether to use a from-scratch, GPU-accelerated reimplementation of SIFT's
+    /// Gaussian scale-space pyramid for sky (star) keypoint detection, in place of
+    /// OpenCV's own `cv::SIFT`.
+    ///
+    /// Off by default, unlike `useGPU` — deliberately separate from it. OpenCV's
+    /// SIFT internals (pyramid construction, extremum refinement, orientation,
+    /// descriptor computation) are not exposed by any public API, so accelerating
+    /// the pyramid (the ~100% of SIFT's cost the guide measured) required porting
+    /// the surrounding algorithm by hand from OpenCV's real source rather than
+    /// calling into it — a materially larger behavioral-drift risk than Tier 1's
+    /// warp/median-merge kernels, which call the real `cv::warpPerspective`
+    /// boundary logic and only replace arithmetic. This is why it ships behind its
+    /// own flag rather than folded into `useGPU`: turning `useGPU` on should not
+    /// silently opt a sequence into a still-young keypoint detector.
+    ///
+    /// Still requires `GPUCapability.isAvailable()`, same as `useGPU`.
+    public var useGPUForSIFT: Bool = false
+
     /// A localized, user-facing sentence describing whether this machine has GPU
     /// hardware `useGPU` can actually use — independent of whether `useGPU` itself is
     /// currently on or off, so a client can show it right next to the toggle and make
@@ -1345,6 +1363,7 @@ public struct Config: Codable, Sendable {
         self.writeOutputFiles = try c.decodeIfPresent(Bool.self, forKey: .writeOutputFiles) ?? self.writeOutputFiles
         self.reprocessOnSettingsChange = try c.decodeIfPresent(Bool.self, forKey: .reprocessOnSettingsChange) ?? self.reprocessOnSettingsChange
         self.useGPU = try c.decodeIfPresent(Bool.self, forKey: .useGPU) ?? self.useGPU
+        self.useGPUForSIFT = try c.decodeIfPresent(Bool.self, forKey: .useGPUForSIFT) ?? self.useGPUForSIFT
 
         self.ignoreLowerPixels = try c.decodeIfPresent(Int.self, forKey: .ignoreLowerPixels) ?? self.ignoreLowerPixels
 

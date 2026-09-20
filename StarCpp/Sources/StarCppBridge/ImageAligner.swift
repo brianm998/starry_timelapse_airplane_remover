@@ -67,7 +67,8 @@ public enum ImageAligner {
                                      skyHorizonExtension: Int32,
                                      baseImageDilateSize: Int32,
                                      baseImageThresholdValue: Int32,
-                                     detectionScale: Double = 1.0) -> OCVFeatureSet? {
+                                     detectionScale: Double = 1.0,
+                                     useGPUForSift: Bool = false) -> OCVFeatureSet? {
         var errMsg: UnsafePointer<CChar>?
         guard let r = ia_find_features(baseImage.ref, frameIndex,
                                         matchMethod, mask?.ref,
@@ -78,8 +79,29 @@ public enum ImageAligner {
                                         baseImageDilateSize,
                                         baseImageThresholdValue,
                                         detectionScale,
+                                        useGPUForSift,
                                         &errMsg) else { return nil }
         return OCVFeatureSet(ref: r)
+    }
+
+    /// Test-only: the from-scratch SIFT port directly, without cv::SIFT as a
+    /// fallback — see `ia_debug_sift_reference`/`ia_debug_sift_gpu`'s comments
+    /// for why these exist. `img` must be CV_8U grayscale.
+    public static func debugSiftReference(_ img: MatWrapper, mask: MatWrapper?,
+                                          nfeatures: Int32) -> OCVFeatureSet? {
+        ia_debug_sift_reference(img.ref, mask?.ref, nfeatures).map { OCVFeatureSet(ref: $0) }
+    }
+
+    public static func debugSiftGPU(_ img: MatWrapper, mask: MatWrapper?,
+                                    nfeatures: Int32) -> OCVFeatureSet? {
+        ia_debug_sift_gpu(img.ref, mask?.ref, nfeatures).map { OCVFeatureSet(ref: $0) }
+    }
+
+    /// Real cv::SIFT, called directly with the same raw-input contract as
+    /// `debugSiftReference`/`debugSiftGPU` — see `ia_debug_sift_opencv`.
+    public static func debugSiftOpenCV(_ img: MatWrapper, mask: MatWrapper?,
+                                       nfeatures: Int32) -> OCVFeatureSet? {
+        ia_debug_sift_opencv(img.ref, mask?.ref, nfeatures).map { OCVFeatureSet(ref: $0) }
     }
 
     public static func computeHomography(baseKeypoints: OCVFeatureSet,
