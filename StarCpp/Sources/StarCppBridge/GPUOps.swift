@@ -51,6 +51,18 @@ public enum GPUOps {
                                             nOctaves: Int(nOctaves), nOctaveLayers: Int(nOctaveLayers),
                                             outPyramid: outPyramid)
         }
+        // Separate again, gated by its own Config.useGPUForAKAZE flag — see
+        // GPUOps_C.h's GPUAkazePyramidFunc doc comment.
+        gpu_ops_set_akaze_pyramid_handler { img, soffset, levels, levelCount, stepCounts, tsteps,
+                                            tstepsCount, kcontrastBase, outLt, outLsmooth in
+            guard let backend = activeBackend, let img, let levels, let stepCounts,
+                  let outLt, let outLsmooth else { return false }
+            return backend.buildAkazePyramid(img: img, soffset: soffset, levels: levels,
+                                             levelCount: Int(levelCount), stepCounts: stepCounts,
+                                             tsteps: tsteps, tstepsCount: Int(tstepsCount),
+                                             kcontrastBase: kcontrastBase,
+                                             outLt: outLt, outLsmooth: outLsmooth)
+        }
         Log.i("GPU acceleration registered (\(GPUCapability.deviceName() ?? "unknown device")).")
         return true
         #else
@@ -83,6 +95,12 @@ private final class MetalGPUBackend: @unchecked Sendable {
     let medianU8: MTLComputePipelineState
     let medianU16: MTLComputePipelineState
     let downsampleNearest2xF32: MTLComputePipelineState
+    let downsampleArea2xF32: MTLComputePipelineState
+    let scharrXF32: MTLComputePipelineState
+    let scharrYF32: MTLComputePipelineState
+    let pmG2F32: MTLComputePipelineState
+    let fedStepF32: MTLComputePipelineState
+    let addInPlaceF32: MTLComputePipelineState
 
     init?() {
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -103,6 +121,12 @@ private final class MetalGPUBackend: @unchecked Sendable {
             self.medianU8 = try pipeline("median_merge_u8")
             self.medianU16 = try pipeline("median_merge_u16")
             self.downsampleNearest2xF32 = try pipeline("downsample_nearest_2x_f32")
+            self.downsampleArea2xF32 = try pipeline("downsample_area_2x_f32")
+            self.scharrXF32 = try pipeline("scharr_x_f32")
+            self.scharrYF32 = try pipeline("scharr_y_f32")
+            self.pmG2F32 = try pipeline("pm_g2_f32")
+            self.fedStepF32 = try pipeline("fed_step_f32")
+            self.addInPlaceF32 = try pipeline("add_in_place_f32")
         } catch {
             Log.e("GPU acceleration unavailable: failed to compile Metal kernels (\(error)).")
             return nil
@@ -467,6 +491,182 @@ private final class MetalGPUBackend: @unchecked Sendable {
         return true
     }
 
+    // MARK: - AKAZE nonlinear diffusion pyramid
+
+    /// Builds the nonlinear diffusion scale-space pyramid
+    /// `akazeDetectAndComputeGPU` (AKAZEDetector.cpp) needs — see
+    /// `GPUAkazePyramidFunc` in GPUOps_C.h for the exact contract. Every
+    /// level's Gaussian blur uses `MPSImageGaussianBlur` (as `buildSiftPyramid`
+    /// does), the 2x octave halving is `cv::INTER_AREA`'s exact box-filter
+    /// average (a custom kernel — MPS has no box-average filter), the Scharr
+    /// derivatives and Perona-Malik G2 diffusivity are small custom kernels,
+    /// and the FED explicit-diffusion steps are a direct port of
+    /// `nldStepScalar` (AKAZEDetector.cpp) onto textures, including its literal
+    /// four-corner special case.
+    ///
+    /// Like `buildSiftPyramid`, every texture is `.storageModeManaged` with an
+    /// explicit blit-encoder `synchronize` before the final readback — see that
+    /// function's doc comment for the measured reason (a `.shared` texture a
+    /// compute kernel writes reads back as zero on this Vega).
+    ///
+    /// The Scharr kernel here uses clamp-to-edge rather than `cv::Scharr`'s
+    /// actual `BORDER_DEFAULT` (reflect-101): a one-pixel-wide simplification
+    /// that only affects the diffusivity input, itself already an approximate,
+    /// behaviorally-validated stand-in for OpenCV's own boundary handling —
+    /// not worth a second boundary-mode kernel variant for a single row/column
+    /// of pixels deep inside the border `Find_Scale_Space_Extrema` excludes.
+    func buildAkazePyramid(img: MatWrapperRef, soffset: Float,
+                          levels: UnsafePointer<GPUAkazeLevelInfo>, levelCount: Int,
+                          stepCounts: UnsafePointer<Int32>, tsteps: UnsafePointer<Float>?,
+                          tstepsCount: Int, kcontrastBase: Float,
+                          outLt: UnsafeMutablePointer<MatWrapperRef?>,
+                          outLsmooth: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
+        guard levelCount > 1 else { return false }  // the trivial 1-level case never reaches here
+        guard mat_wrapper_bits_per_component(img) == 32, mat_wrapper_channels(img) == 1 else {
+            return false  // AKAZEDetector.cpp always hands this CV_32FC1; anything else is a caller bug
+        }
+        let imgRows = Int(mat_wrapper_rows(img)), imgCols = Int(mat_wrapper_cols(img))
+        guard imgRows > 0, imgCols > 0, let imgPtr = mat_wrapper_data_ptr(img) else { return false }
+        let imgStepBytes = Int(mat_wrapper_step(img))
+
+        guard let inputTexture = makeFloatTexture(width: imgCols, height: imgRows) else { return false }
+        inputTexture.replace(region: MTLRegionMake2D(0, 0, imgCols, imgRows), mipmapLevel: 0,
+                             withBytes: imgPtr, bytesPerRow: imgStepBytes)
+
+        guard let cmdBuf = queue.makeCommandBuffer() else { return false }
+
+        var ltTextures = [MTLTexture?](repeating: nil, count: levelCount)
+        var lsmoothTextures = [MTLTexture?](repeating: nil, count: levelCount)
+
+        // Level 0: a single blur by `soffset`, used as both Lt and Lsmooth —
+        // matching create_nonlinear_scale_space's own
+        // `evolution[0].Lsmooth.copyTo(evolution[0].Lt)`.
+        guard let level0 = makeFloatTexture(width: imgCols, height: imgRows) else { return false }
+        MPSImageGaussianBlur(device: device, sigma: soffset)
+            .encode(commandBuffer: cmdBuf, sourceTexture: inputTexture, destinationTexture: level0)
+        ltTextures[0] = level0
+        lsmoothTextures[0] = level0
+
+        var kcontrast = kcontrastBase
+        var tstepOffset = 0
+        let tstepsBuffer = tsteps.map { UnsafeBufferPointer(start: $0, count: tstepsCount) }
+
+        for i in 1..<levelCount {
+            let info = levels[i]
+            let width = Int(info.width), height = Int(info.height)
+            guard width > 0, height > 0 else { return false }
+
+            // Halve (new octave) or copy (same octave) the previous level's Lt,
+            // producing THIS level's pre-diffusion Lt — matching
+            // create_nonlinear_scale_space's own branch.
+            guard let prevLt = ltTextures[i - 1] else { return false }
+            let levelLt: MTLTexture
+            if info.newOctave != 0 {
+                guard let halved = makeFloatTexture(width: width, height: height) else { return false }
+                guard let encoder = cmdBuf.makeComputeCommandEncoder() else { return false }
+                encoder.setComputePipelineState(downsampleArea2xF32)
+                encoder.setTexture(prevLt, index: 0)
+                encoder.setTexture(halved, index: 1)
+                dispatch(encoder: encoder, pipeline: downsampleArea2xF32, width: width, height: height)
+                encoder.endEncoding()
+                levelLt = halved
+                kcontrast *= 0.75
+            } else {
+                guard let copy = makeFloatTexture(width: width, height: height),
+                      let blit = cmdBuf.makeBlitCommandEncoder()
+                else { return false }
+                blit.copy(from: prevLt, sourceSlice: 0, sourceLevel: 0,
+                         sourceOrigin: MTLOriginMake(0, 0, 0), sourceSize: MTLSizeMake(width, height, 1),
+                         to: copy, destinationSlice: 0, destinationLevel: 0,
+                         destinationOrigin: MTLOriginMake(0, 0, 0))
+                blit.endEncoding()
+                levelLt = copy
+            }
+
+            // Lsmooth: the fixed 5x5-equivalent, sigma=1 blur of the
+            // pre-diffusion Lt, used for this level's derivatives now and by
+            // Compute_Determinant_Hessian_Response later.
+            guard let smooth = makeFloatTexture(width: width, height: height) else { return false }
+            MPSImageGaussianBlur(device: device, sigma: 1.0)
+                .encode(commandBuffer: cmdBuf, sourceTexture: levelLt, destinationTexture: smooth)
+
+            guard let lx = makeFloatTexture(width: width, height: height),
+                  let ly = makeFloatTexture(width: width, height: height),
+                  let flow = makeFloatTexture(width: width, height: height)
+            else { return false }
+            guard let derivEncoder = cmdBuf.makeComputeCommandEncoder() else { return false }
+            derivEncoder.setComputePipelineState(scharrXF32)
+            derivEncoder.setTexture(smooth, index: 0)
+            derivEncoder.setTexture(lx, index: 1)
+            dispatch(encoder: derivEncoder, pipeline: scharrXF32, width: width, height: height)
+            derivEncoder.setComputePipelineState(scharrYF32)
+            derivEncoder.setTexture(smooth, index: 0)
+            derivEncoder.setTexture(ly, index: 1)
+            dispatch(encoder: derivEncoder, pipeline: scharrYF32, width: width, height: height)
+            var k = kcontrast
+            derivEncoder.setComputePipelineState(pmG2F32)
+            derivEncoder.setTexture(lx, index: 0)
+            derivEncoder.setTexture(ly, index: 1)
+            derivEncoder.setTexture(flow, index: 2)
+            derivEncoder.setBytes(&k, length: MemoryLayout<Float>.size, index: 0)
+            dispatch(encoder: derivEncoder, pipeline: pmG2F32, width: width, height: height)
+            derivEncoder.endEncoding()
+
+            // FED steps: each computes Lstep into its own texture, then adds
+            // it into `current` in place (add_in_place_f32) — safe because the
+            // read (fed_step_f32, into a separate destination) always
+            // completes, and is encoded, before the in-place add that follows
+            // it, so the next step's fed_step_f32 always sees a fully updated
+            // `current`.
+            let current = levelLt
+            let stepCount = Int(stepCounts[i])
+            guard stepCount == 0 || tstepsBuffer != nil else { return false }
+            for s in 0..<stepCount {
+                guard let lstep = makeFloatTexture(width: width, height: height),
+                      let stepEncoder = cmdBuf.makeComputeCommandEncoder()
+                else { return false }
+                var stepSize = tstepsBuffer![tstepOffset + s]
+                stepEncoder.setComputePipelineState(fedStepF32)
+                stepEncoder.setTexture(current, index: 0)
+                stepEncoder.setTexture(flow, index: 1)
+                stepEncoder.setTexture(lstep, index: 2)
+                stepEncoder.setBytes(&stepSize, length: MemoryLayout<Float>.size, index: 0)
+                dispatch(encoder: stepEncoder, pipeline: fedStepF32, width: width, height: height)
+
+                stepEncoder.setComputePipelineState(addInPlaceF32)
+                stepEncoder.setTexture(current, index: 0)
+                stepEncoder.setTexture(lstep, index: 1)
+                dispatch(encoder: stepEncoder, pipeline: addInPlaceF32, width: width, height: height)
+                stepEncoder.endEncoding()
+            }
+            tstepOffset += stepCount
+
+            ltTextures[i] = current
+            lsmoothTextures[i] = smooth
+        }
+
+        guard let syncEncoder = cmdBuf.makeBlitCommandEncoder() else { return false }
+        for texture in ltTextures + lsmoothTextures {
+            guard let texture else { return false }
+            syncEncoder.synchronize(resource: texture)
+        }
+        syncEncoder.endEncoding()
+
+        cmdBuf.commit()
+        cmdBuf.waitUntilCompleted()
+        guard cmdBuf.status == .completed else { return false }
+
+        for i in 0..<levelCount {
+            guard let ltTex = ltTextures[i], let smoothTex = lsmoothTextures[i],
+                  let ltMat = matWrapper(fromFloatTexture: ltTex),
+                  let smoothMat = matWrapper(fromFloatTexture: smoothTex)
+            else { return false }
+            outLt[i] = ltMat
+            outLsmooth[i] = smoothMat
+        }
+        return true
+    }
+
     private func makeFloatTexture(width: Int, height: Int) -> MTLTexture? {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
           pixelFormat: .r32Float, width: width, height: height, mipmapped: false)
@@ -712,6 +912,129 @@ private final class MetalGPUBackend: @unchecked Sendable {
         if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
         float value = src.read(uint2(gid.x * 2, gid.y * 2)).r;
         dst.write(float4(value, 0.0, 0.0, 0.0), gid);
+    }
+
+    // Exact 2x box-average downsample, matching cv::resize(..., INTER_AREA)
+    // for an exact integer scale factor -- AKAZEDetector.cpp's own octave
+    // halving (create_nonlinear_scale_space's `if (e.octave > ...)` branch).
+    kernel void downsample_area_2x_f32(texture2d<float, access::read> src [[texture(0)]],
+                                       texture2d<float, access::write> dst [[texture(1)]],
+                                       uint2 gid [[thread_position_in_grid]])
+    {
+        if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
+        uint2 s = gid * 2;
+        float v00 = src.read(uint2(s.x,     s.y)).r;
+        float v10 = src.read(uint2(s.x + 1, s.y)).r;
+        float v01 = src.read(uint2(s.x,     s.y + 1)).r;
+        float v11 = src.read(uint2(s.x + 1, s.y + 1)).r;
+        dst.write(float4(0.25f * (v00 + v10 + v01 + v11), 0.0, 0.0, 0.0), gid);
+    }
+
+    // A clamp-to-edge helper for the 3x3 kernels below -- see buildAkazePyramid's
+    // doc comment on why clamp stands in for cv::Scharr's actual BORDER_DEFAULT
+    // (reflect-101) here.
+    inline float read_clamped(texture2d<float, access::read> tex, int x, int y) {
+        int w = int(tex.get_width()), h = int(tex.get_height());
+        x = clamp(x, 0, w - 1);
+        y = clamp(y, 0, h - 1);
+        return tex.read(uint2(uint(x), uint(y))).r;
+    }
+
+    // 3x3 Scharr, matching cv::Scharr(src, dst, CV_32F, 1, 0, 1, 0, BORDER_DEFAULT):
+    // Gx = [-3 0 3; -10 0 10; -3 0 3].
+    kernel void scharr_x_f32(texture2d<float, access::read> src [[texture(0)]],
+                             texture2d<float, access::write> dst [[texture(1)]],
+                             uint2 gid [[thread_position_in_grid]])
+    {
+        if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
+        int x = int(gid.x), y = int(gid.y);
+        float v = -3.0f * read_clamped(src, x - 1, y - 1) + 3.0f * read_clamped(src, x + 1, y - 1)
+                - 10.0f * read_clamped(src, x - 1, y    ) + 10.0f * read_clamped(src, x + 1, y    )
+                 - 3.0f * read_clamped(src, x - 1, y + 1) + 3.0f * read_clamped(src, x + 1, y + 1);
+        dst.write(float4(v, 0.0, 0.0, 0.0), gid);
+    }
+
+    // 3x3 Scharr, Y direction: Gy = [-3 -10 -3; 0 0 0; 3 10 3].
+    kernel void scharr_y_f32(texture2d<float, access::read> src [[texture(0)]],
+                             texture2d<float, access::write> dst [[texture(1)]],
+                             uint2 gid [[thread_position_in_grid]])
+    {
+        if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
+        int x = int(gid.x), y = int(gid.y);
+        float v = -3.0f * read_clamped(src, x - 1, y - 1) - 10.0f * read_clamped(src, x, y - 1)
+                 - 3.0f * read_clamped(src, x + 1, y - 1)
+                 + 3.0f * read_clamped(src, x - 1, y + 1) + 10.0f * read_clamped(src, x, y + 1)
+                 + 3.0f * read_clamped(src, x + 1, y + 1);
+        dst.write(float4(v, 0.0, 0.0, 0.0), gid);
+    }
+
+    // Perona-Malik G2 diffusivity, matching pm_g2 (AKAZEDetector.cpp):
+    // 1 / (1 + (Lx^2 + Ly^2) / k^2).
+    kernel void pm_g2_f32(texture2d<float, access::read> lx [[texture(0)]],
+                          texture2d<float, access::read> ly [[texture(1)]],
+                          texture2d<float, access::write> dst [[texture(2)]],
+                          constant float& k [[buffer(0)]],
+                          uint2 gid [[thread_position_in_grid]])
+    {
+        if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
+        float x = lx.read(gid).r, y = ly.read(gid).r;
+        float v = 1.0f / (1.0f + (x * x + y * y) / (k * k));
+        dst.write(float4(v, 0.0, 0.0, 0.0), gid);
+    }
+
+    // One Fast Explicit Diffusion step, a direct port of nldStepScalar
+    // (AKAZEDetector.cpp): a five-point forward-Euler stencil with Neumann
+    // (no-flux) boundaries -- a border pixel omits the term reaching outside
+    // the image -- and AKAZE's own literal four-corner special case (frozen at
+    // exactly 0, not a 2-term partial stencil; see AKAZEDetector.cpp's comment
+    // on nldStepScalar for why this is replicated rather than "improved").
+    kernel void fed_step_f32(texture2d<float, access::read> lt [[texture(0)]],
+                             texture2d<float, access::read> lf [[texture(1)]],
+                             texture2d<float, access::write> dst [[texture(2)]],
+                             constant float& stepSize [[buffer(0)]],
+                             uint2 gid [[thread_position_in_grid]])
+    {
+        int w = int(lt.get_width()), h = int(lt.get_height());
+        int x = int(gid.x), y = int(gid.y);
+        if (x >= w || y >= h) return;
+
+        bool topOrBottomRow = (y == 0 || y == h - 1);
+        if (topOrBottomRow && (x == 0 || x == w - 1)) {
+            dst.write(float4(0.0, 0.0, 0.0, 0.0), gid);
+            return;
+        }
+
+        float ltC = lt.read(uint2(x, y)).r;
+        float lfC = lf.read(uint2(x, y)).r;
+        float acc = 0.0f;
+        if (x < w - 1) {
+            float ltR = lt.read(uint2(x + 1, y)).r, lfR = lf.read(uint2(x + 1, y)).r;
+            acc += (lfC + lfR) * (ltR - ltC);
+        }
+        if (x > 0) {
+            float ltL = lt.read(uint2(x - 1, y)).r, lfL = lf.read(uint2(x - 1, y)).r;
+            acc += (lfC + lfL) * (ltL - ltC);
+        }
+        if (y < h - 1) {
+            float ltB = lt.read(uint2(x, y + 1)).r, lfB = lf.read(uint2(x, y + 1)).r;
+            acc += (lfC + lfB) * (ltB - ltC);
+        }
+        if (y > 0) {
+            float ltA = lt.read(uint2(x, y - 1)).r, lfA = lf.read(uint2(x, y - 1)).r;
+            acc += (lfC + lfA) * (ltA - ltC);
+        }
+        dst.write(float4(acc * stepSize, 0.0, 0.0, 0.0), gid);
+    }
+
+    // In-place elementwise add (Lt += Lstep) -- safe as read_write since every
+    // thread only ever touches its own pixel, with no neighbour dependency.
+    kernel void add_in_place_f32(texture2d<float, access::read_write> lt [[texture(0)]],
+                                 texture2d<float, access::read> lstep [[texture(1)]],
+                                 uint2 gid [[thread_position_in_grid]])
+    {
+        if (gid.x >= lt.get_width() || gid.y >= lt.get_height()) return;
+        float v = lt.read(gid).r + lstep.read(gid).r;
+        lt.write(float4(v, 0.0, 0.0, 0.0), gid);
     }
     """
 }
