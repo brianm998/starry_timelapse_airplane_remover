@@ -963,6 +963,22 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    var useGPUForSIFT: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.useGPUForSIFT = useGPUForSIFT
+            config.update(realConfig)
+        }
+    }
+
+    var useGPUForAKAZE: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.useGPUForAKAZE = useGPUForAKAZE
+            config.update(realConfig)
+        }
+    }
+
     var referenceHorizonSmoothingMaxDistance: Int {
         didSet {
             var realConfig = config.config()
@@ -2003,6 +2019,8 @@ public final class ImageSequenceViewModel {
         self.allowEarthAlignment = config.allowEarthAlignment
         self.useReferenceHorizonSmoothing = config.useReferenceHorizonSmoothing
         self.useGPU = config.useGPU
+        self.useGPUForSIFT = config.useGPUForSIFT
+        self.useGPUForAKAZE = config.useGPUForAKAZE
         self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance
         self.useReferenceHorizonBrightnessRefinement = config.useReferenceHorizonBrightnessRefinement
         self.referenceHorizonBrightnessRefinementSearchRadius = config.referenceHorizonBrightnessRefinementSearchRadius
