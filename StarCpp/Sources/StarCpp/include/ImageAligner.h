@@ -98,6 +98,13 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                                   // (Config.useGPUForSIFT). Falls back to real cv::SIFT
                                   // — not partially, entirely — on any failure.
                                   bool useGPUForSift,
+                                  // Earth alignment only, ignored for sky: the same idea
+                                  // as useGPUForSift above, for the from-scratch
+                                  // GPU-accelerated AKAZE reimplementation (see
+                                  // AKAZEDetector.cpp / Config.useGPUForAKAZE). Falls
+                                  // back to real cv::AKAZE — entirely, not partially —
+                                  // on any failure.
+                                  bool useGPUForAKAZE,
                                   const char **errorMsg);
 
 // --- Test-only: the from-scratch SIFT port, without the cv::SIFT fallback ---
@@ -120,6 +127,22 @@ OCVFeatureSetRef ia_debug_sift_gpu(MatWrapperRef img, MatWrapperRef mask, int nf
 // real SIFT" from any question about the rest of ia_find_features's pipeline
 // (which is unchanged and not what this is testing).
 OCVFeatureSetRef ia_debug_sift_opencv(MatWrapperRef img, MatWrapperRef mask, int nfeatures);
+
+// --- Test-only: the from-scratch AKAZE port, without the cv::AKAZE fallback ---
+//
+// Same shape as the SIFT trio above, for AKAZEDetector's two entry points plus
+// real cv::AKAZE::create()->detect()/compute() (capped by `maxKeypoints` via
+// cv::KeyPointsFilter::retainBest exactly as ImageAligner.cpp's earth branch
+// already does, so all three are comparable). `img` must be CV_8U grayscale;
+// `mask` may be null. `threshold` is the detector response cutoff (see
+// ia_find_features's earth branch for the value this codebase actually uses).
+// Returns NULL if the requested backend (GPU pyramid) is unavailable.
+OCVFeatureSetRef ia_debug_akaze_reference(MatWrapperRef img, MatWrapperRef mask,
+                                          int maxKeypoints, float threshold);
+OCVFeatureSetRef ia_debug_akaze_gpu(MatWrapperRef img, MatWrapperRef mask,
+                                    int maxKeypoints, float threshold);
+OCVFeatureSetRef ia_debug_akaze_opencv(MatWrapperRef img, MatWrapperRef mask,
+                                       int maxKeypoints, float threshold);
 
 // --- Homography computation ---
 

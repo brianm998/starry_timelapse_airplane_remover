@@ -111,6 +111,74 @@ typedef bool (*GPUSiftPyramidFunc)(MatWrapperRef base, bool doubleImageSize,
 void gpu_ops_set_sift_pyramid_handler(GPUSiftPyramidFunc handler);
 bool gpu_ops_sift_pyramid_available(void);
 
+// One level of the AKAZE nonlinear scale-space pyramid's sizing/timing
+// schedule — see GPUAkazePyramidFunc below. `width`/`height` are this level's
+// image size; `newOctave` (0/1, plain int for C ABI compatibility) is true
+// iff this level starts a new octave, i.e. its Lt must come from *halving*
+// the previous level's Lt (cv::INTER_AREA, an exact 2x box-filter average)
+// rather than copying it — matching create_nonlinear_scale_space's own
+// `if (e.octave > evolution[i-1].octave)` branch.
+typedef struct {
+    int width;
+    int height;
+    int newOctave;
+} GPUAkazeLevelInfo;
+
+// Builds the nonlinear diffusion scale-space pyramid a from-scratch
+// reimplementation of AKAZE needs — see AKAZEDetector.cpp, which exists for
+// the same reason SIFTDetector.cpp does: OpenCV's AKAZE internals are not
+// exposed by any public API, so there is no seam to hand a GPU-built pyramid
+// into "OpenCV's real AKAZE." This covers exactly the per-level image work
+// GPU_ACCELERATION_PROPOSAL.md and GPU_IMPLEMENTATION_GUIDE.md identify as
+// the cost: the 5x5 Gaussian blur, Scharr derivatives and Perona-Malik G2
+// diffusivity computed once per level, and the Fast Explicit Diffusion (FED)
+// stencil steps between levels. Everything numerically fiddly and *not*
+// image-sized work — the per-level dimension/sigma/etime schedule
+// (Allocate_Memory_Evolution) and the FED step-count/step-size schedule
+// (fed_tau_by_process_time's cosine/prime-permutation math) — is computed
+// once on the CPU by shared code both backends call, and handed in here
+// as `levels`/`tsteps`, so that dynamic-programming subtlety is never
+// duplicated in Swift.
+//
+// `img` is CV_32FC1, range [0,1]: the plain grayscale float cast of the
+// CV_8U detection image, with no blur applied yet (AKAZE's `prepareInputImage`
+// output). `soffset` is AKAZE's base scale offset (1.6f by default) — the
+// sigma this handler must use for `img`'s own initial 5x5-equivalent blur to
+// produce level 0's Lt/Lsmooth (both equal at level 0, matching
+// create_nonlinear_scale_space's `evolution[0].Lsmooth.copyTo(evolution[0].Lt)`).
+//
+// `levels`/`levelCount` describe every level including level 0. `tsteps` is
+// the flattened, level-major concatenation of every level's FED step sizes
+// (already halved — i.e. each entry is `tau * 0.5f`, exactly what
+// non_linear_diffusion_step expects as its `step_size` argument); level 0 and
+// any level that is a new octave's first sublevel still take FED steps like
+// any other level past 0 (only level 0 itself takes none). `stepCounts` gives
+// each level's share of `tsteps` in the same order (`stepCounts[0]` is always
+// 0). `kcontrastBase` is the contrast factor computed once from `img` at full
+// resolution (compute_kcontrast, before any per-octave decay) — the handler
+// must multiply it by 0.75 at each level where `newOctave` is true, exactly
+// matching create_nonlinear_scale_space's own `kcontrast *= 0.75f`.
+//
+// `outLt`/`outLsmooth` must each point to a caller-allocated array of exactly
+// `levelCount` slots. On success every slot in both arrays holds a newly
+// allocated CV_32FC1 MatWrapperRef (caller must release each one); on failure
+// both arrays are left untouched. Returns false on any failure or unsupported
+// case — the caller then abandons the custom pipeline entirely and calls real
+// `cv::AKAZE::create()`, since there is no partial fallback once a hand-ported
+// pipeline is committed to.
+typedef bool (*GPUAkazePyramidFunc)(MatWrapperRef img, float soffset,
+                                    const GPUAkazeLevelInfo *levels, int levelCount,
+                                    const int *stepCounts, const float *tsteps, int tstepsCount,
+                                    float kcontrastBase,
+                                    MatWrapperRef *outLt, MatWrapperRef *outLsmooth);
+
+// Registers (or clears, with NULL) the AKAZE pyramid GPU backend. Gated by
+// its own Config flag (Config.useGPUForAKAZE, off by default — see that
+// property's doc comment), separate from both Config.useGPU and
+// Config.useGPUForSIFT.
+void gpu_ops_set_akaze_pyramid_handler(GPUAkazePyramidFunc handler);
+bool gpu_ops_akaze_pyramid_available(void);
+
 #ifdef __cplusplus
 }
 #endif

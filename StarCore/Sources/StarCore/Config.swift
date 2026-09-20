@@ -386,6 +386,21 @@ public struct Config: Codable, Sendable {
     /// Still requires `GPUCapability.isAvailable()`, same as `useGPU`.
     public var useGPUForSIFT: Bool = false
 
+    /// Whether to use a from-scratch, GPU-accelerated reimplementation of
+    /// AKAZE's nonlinear diffusion scale-space pyramid for earth (ground)
+    /// keypoint detection, in place of OpenCV's own `cv::AKAZE`.
+    ///
+    /// Off by default, for exactly the same reason as `useGPUForSIFT` and
+    /// gated separately from both it and `useGPU`: OpenCV's AKAZE internals
+    /// are not exposed by any public API either, so this is another
+    /// from-scratch port validated against real `cv::AKAZE` rather than a
+    /// call into it, and it carries the same larger behavioral-drift risk as
+    /// the SIFT port — a still-young keypoint detector that `useGPU` alone
+    /// must not silently opt a sequence into.
+    ///
+    /// Still requires `GPUCapability.isAvailable()`, same as `useGPU`.
+    public var useGPUForAKAZE: Bool = false
+
     /// A localized, user-facing sentence describing whether this machine has GPU
     /// hardware `useGPU` can actually use — independent of whether `useGPU` itself is
     /// currently on or off, so a client can show it right next to the toggle and make
@@ -1364,6 +1379,7 @@ public struct Config: Codable, Sendable {
         self.reprocessOnSettingsChange = try c.decodeIfPresent(Bool.self, forKey: .reprocessOnSettingsChange) ?? self.reprocessOnSettingsChange
         self.useGPU = try c.decodeIfPresent(Bool.self, forKey: .useGPU) ?? self.useGPU
         self.useGPUForSIFT = try c.decodeIfPresent(Bool.self, forKey: .useGPUForSIFT) ?? self.useGPUForSIFT
+        self.useGPUForAKAZE = try c.decodeIfPresent(Bool.self, forKey: .useGPUForAKAZE) ?? self.useGPUForAKAZE
 
         self.ignoreLowerPixels = try c.decodeIfPresent(Int.self, forKey: .ignoreLowerPixels) ?? self.ignoreLowerPixels
 
