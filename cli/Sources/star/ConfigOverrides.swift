@@ -64,6 +64,9 @@ struct ConfigOverrides {
     /// exposed anywhere but the cli today: this is how it gets reviewed on
     /// real sequences before it earns a place in the gui/Kotlin settings UIs.
     var useGPUForSift: Bool?
+    /// `--use-gpu-for-akaze` / `--no-use-gpu-for-akaze`. Same shape and same
+    /// reason as `useGPUForSift` above, for `Config.useGPUForAKAZE`.
+    var useGPUForAKAZE: Bool?
     /// `--no-horizon`, inverted: the flag turns horizon detection off.
     var horizonDetectionEnabled: Bool?
     var tripodHeadWasMoving: Bool?
@@ -95,6 +98,7 @@ struct ConfigOverrides {
         if let writeOutputFiles { config.writeOutputFiles = writeOutputFiles }
         if let useGPU { config.useGPU = useGPU }
         if let useGPUForSift { config.useGPUForSIFT = useGPUForSift }
+        if let useGPUForAKAZE { config.useGPUForAKAZE = useGPUForAKAZE }
         if let horizonDetectionEnabled {
             config.horizonDetectionEnabled = horizonDetectionEnabled
         }

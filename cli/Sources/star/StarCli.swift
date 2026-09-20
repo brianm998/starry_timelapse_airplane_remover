@@ -264,6 +264,11 @@ struct StarCli: AsyncParsableCommand {
           help: ArgumentHelp(localized("cli.help.use_gpu_for_sift")))
     var useGPUForSift: Bool?
 
+    @Flag(name: [.customLong("use-gpu-for-akaze")],
+          inversion: .prefixedNo,
+          help: ArgumentHelp(localized("cli.help.use_gpu_for_akaze")))
+    var useGPUForAKAZE: Bool?
+
     @Argument(help: ArgumentHelp(localized("cli.help.image_sequence_dirname")))
     var imageSequenceDirname: String?
 
@@ -285,6 +290,7 @@ struct StarCli: AsyncParsableCommand {
           // that does not repeat the flag, same reasoning as writeOutputFiles above.
           useGPU: useGPU,
           useGPUForSift: useGPUForSift,
+          useGPUForAKAZE: useGPUForAKAZE,
           horizonDetectionEnabled: noHorizon ? false : nil,
           tripodHeadWasMoving: movingCamera ? true : nil,
           alignmentKeypointDetectionDivisor: keypointDivisor,
