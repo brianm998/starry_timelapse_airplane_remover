@@ -11,6 +11,26 @@ enum StartupState {
     case removal                // what kind of removal is desired?
 }
 
+/// A subdued "go to the previous question" control, shown on every startup screen after the
+/// first. Lets the user correct an earlier answer (e.g. horizon or moving) without restarting
+/// star — mirrors the escape hatch the horizon painter's own Cancel button already provides.
+struct StartupBackButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.left")
+                Text(localized("ui.back"))
+            }
+              .font(.title2)
+              .foregroundColor(.white)
+              .opacity(0.8)
+        }
+          .buttonStyle(PlainButtonStyle())
+    }
+}
+
 
 struct StartupView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
@@ -129,6 +149,7 @@ struct MovingView: View {
               .foregroundColor(.white)
             Space(height: 10)
             HStack {
+                StartupBackButton { self.state = .horizon }
                 Spacer()
                 Button {
                     viewModel.cameraMotion = .fixed
@@ -216,6 +237,7 @@ struct SelectMovingHorizonsView: View {
               .foregroundColor(.white)
             Space(height: 10)
             HStack {
+                StartupBackButton { self.state = .moving }
                 Spacer()
                 Button {
                     self.state = .removal
@@ -293,6 +315,7 @@ struct SelectHorizonView: View {
               .foregroundColor(.white)
             Space(height: 10)
             HStack {
+                StartupBackButton { self.state = .moving }
                 Spacer()
                 Button {
                     self.state = .removal
@@ -397,7 +420,15 @@ struct RemovalView: View {
             localized("ui.mode_desc_selective")
         }
     }
-    
+
+    /// Which question screen "Back" should return to — derived from the answers already given
+    /// rather than a separate history stack, since they fully determine how this screen was
+    /// reached (directly from `.moving`, or via one of the horizon selection screens).
+    private var previousStartupState: StartupState {
+        guard viewModel.horizonDetectionEnabled else { return .moving }
+        return viewModel.cameraMotion == .fixed ? .selectHorizon : .selectMovingHorizons
+    }
+
     var body: some View {
         VStack {
             Text(localized("ui.what_do_you_want_star_to_remove"))
@@ -445,6 +476,7 @@ struct RemovalView: View {
 
             Space(height: 10)
             HStack {
+                StartupBackButton { self.state = self.previousStartupState }
                 Spacer()
                 Button {
                     withAnimation {

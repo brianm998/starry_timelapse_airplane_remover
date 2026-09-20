@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "بمعدل {0} ثانية",
+  "ui.back": "رجوع",
   "ui.base_image_dilation_size": "حجم توسيع الصورة الأساس:",
   "ui.base_image_threshold": "عتبة الصورة الأساس:",
   "ui.bit_depths": "أعماق البت: {0}",

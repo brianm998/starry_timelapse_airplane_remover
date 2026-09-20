@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "เฉลี่ย {0} วินาที",
+  "ui.back": "ย้อนกลับ",
   "ui.base_image_dilation_size": "ขนาดการขยายของภาพฐาน:",
   "ui.base_image_threshold": "เกณฑ์ของภาพฐาน:",
   "ui.bit_depths": "ความลึกบิต: {0}",

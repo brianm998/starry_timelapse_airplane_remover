@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "ortalama {0} sn",
+  "ui.back": "Geri",
   "ui.base_image_dilation_size": "Temel görüntü genişletme boyutu:",
   "ui.base_image_threshold": "Temel görüntü eşiği:",
   "ui.bit_depths": "bit derinlikleri: {0}",

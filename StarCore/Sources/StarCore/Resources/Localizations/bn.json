@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "গড়ে {0} সেকেন্ড",
+  "ui.back": "পিছনে",
   "ui.base_image_dilation_size": "মূল ছবির ডাইলেশন আকার:",
   "ui.base_image_threshold": "মূল ছবির থ্রেশহোল্ড:",
   "ui.bit_depths": "বিট গভীরতা: {0}",

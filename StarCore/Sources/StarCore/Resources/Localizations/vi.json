@@ -204,6 +204,7 @@
   "ui.averagebrightness": "Averagebrightness",
   "ui.averagelinevariance": "AverageLineVariance",
   "ui.averaging_secs": "trung bình {0} giây",
+  "ui.back": "Quay lại",
   "ui.base_image_dilation_size": "Kích thước giãn nở ảnh nền:",
   "ui.base_image_threshold": "Ngưỡng ảnh nền:",
   "ui.bit_depths": "độ sâu bit: {0}",
