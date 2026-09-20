@@ -59,6 +59,11 @@ struct ConfigOverrides {
     /// `writeOutputFiles`: it is the one alignment flag that can turn something off
     /// rather than only add or raise something, so a saved `false` needs a way back.
     var useGPU: Bool?
+    /// `--use-gpu-for-sift` / `--no-use-gpu-for-sift`. Off by default, unlike
+    /// `useGPU` — see `Config.useGPUForSIFT`'s doc comment. Deliberately not
+    /// exposed anywhere but the cli today: this is how it gets reviewed on
+    /// real sequences before it earns a place in the gui/Kotlin settings UIs.
+    var useGPUForSift: Bool?
     /// `--no-horizon`, inverted: the flag turns horizon detection off.
     var horizonDetectionEnabled: Bool?
     var tripodHeadWasMoving: Bool?
@@ -89,6 +94,7 @@ struct ConfigOverrides {
         }
         if let writeOutputFiles { config.writeOutputFiles = writeOutputFiles }
         if let useGPU { config.useGPU = useGPU }
+        if let useGPUForSift { config.useGPUForSIFT = useGPUForSift }
         if let horizonDetectionEnabled {
             config.horizonDetectionEnabled = horizonDetectionEnabled
         }
