@@ -112,6 +112,66 @@ class InteropIntegrationTest {
     }
 
     /**
+     * Regression test for a bug where the Kotlin filmstrip showed every frame as "unprocessed"
+     * even for an already-fully-processed sequence: `Sequence.Open` falls back to a fresh
+     * per-session scratch dir for `outputPath` whenever the client sends none, so reopening the
+     * same sequence never resolves to where a prior run's output actually landed, and
+     * `FrameAirplaneRemover.init`'s `outputFileExistsOnDisk()` check never finds it.
+     * `AppViewModel.openSequence` now sends `outputPath` = the sequence dir's own parent (the
+     * same convention macOS uses) so re-opens are deterministic; this test drives the daemon the
+     * same way and asserts a second, independent process reports frame 0 as complete. Heavy (real
+     * processing), so gated like the golden test.
+     */
+    @Test
+    fun resumeDetectsAlreadyProcessedFrames() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] resumeDetectsAlreadyProcessedFrames — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        // Copy the fixture into a scratch dir so this test's output doesn't pollute the shared fixture.
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-resume").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val outputPath = seqCopy.parent!!
+        val cfgWithOutput = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(outputPath).build()
+
+        try {
+            withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfgWithOutput)
+                val done = CompletableDeferred<Unit>()
+                val sub = CoroutineScope(SupervisorJob()).launch {
+                    runCatching {
+                        client.streamProgress(info.sessionId).collect { ev ->
+                            if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") done.complete(Unit)
+                        }
+                    }
+                }
+                delay(400)
+                client.startProcessing(info.sessionId, 0, -1)
+                assertTrue(withTimeoutOrNull(1_200_000) { done.await() } != null, "processing timed out")
+                sub.cancel()
+                client.closeSession(info.sessionId)
+            }
+
+            // Independent daemon process, same sequence dir + same outputPath convention: Frame.Get
+            // must now report the frame as already complete, not unprocessed.
+            withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfgWithOutput)
+                val frame = client.getFrame(info.sessionId, 0)
+                assertEquals(
+                    com.star.proto.FrameProcessingState.FPS_COMPLETE, frame.state,
+                    "reopening an already-processed sequence with a deterministic outputPath did not report frame 0 as complete",
+                )
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
+    /**
      * Interactive horizon painter RPCs (`Horizon.GetBest` + `Horizon.ComputeInBand`) against a real
      * stard: a fresh sequence has no best-existing horizon; the combined detector over a full-width
      * band returns a per-column line of the right length without breaking the connection. This is the

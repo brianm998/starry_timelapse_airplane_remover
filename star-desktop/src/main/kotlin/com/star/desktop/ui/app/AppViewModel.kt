@@ -508,7 +508,19 @@ class AppViewModel(
         }
     }
 
-    fun openSequence(dir: String) = launchOpen("Opening image sequence", dir, promptStartup = true) { sessions.openSequence(dir) }
+    /**
+     * Output goes to the sequence directory's own parent (macOS `inputImageSequencePath`), not
+     * left to the daemon's per-session scratch-dir fallback (a fresh temp dir every open). Config's
+     * `basename` already embeds the sequence's own dirname, so this can't collide with a sibling
+     * sequence — and reopening the SAME sequence resolves to the SAME output location, which is
+     * what lets `FrameAirplaneRemover.init`'s `outputFileExistsOnDisk()` check find a previous
+     * run's output and report already-processed frames as complete instead of unprocessed.
+     */
+    fun openSequence(dir: String) = launchOpen("Opening image sequence", dir, promptStartup = true) {
+        val outputPath = java.io.File(dir).parent ?: dir
+        val config = SessionRepository.defaultInitialConfig().toBuilder().setOutputPath(outputPath).build()
+        sessions.openSequence(dir, config)
+    }
 
     fun openConfig(path: String) = launchOpen("Resuming session", path) { sessions.openConfig(path) }
 
