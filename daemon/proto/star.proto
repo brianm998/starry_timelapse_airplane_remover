@@ -226,6 +226,12 @@ message Config {
   // must never send this on, since there is nothing on the StarCore side for it
   // to set.
   optional bool   gpu_hardware_available                               = 54;
+  // Whether to use GPU acceleration for SIFT / AKAZE keypoint detection,
+  // respectively. Both off by default, and independent of use_gpu_acceleration
+  // and of each other -- see StarCore Config.useGPUForSIFT / .useGPUForAKAZE.
+  // Also still gated by gpu_hardware_available.
+  optional bool   use_gpu_for_sift                                     = 55;
+  optional bool   use_gpu_for_akaze                                    = 56;
 }
 
 enum CleanMethod {

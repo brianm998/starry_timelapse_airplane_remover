@@ -28,12 +28,34 @@ sourceSets {
     }
 }
 
+// JavaFX classifier for the current build host, matching the artifacts published to Maven Central
+// (org.openjfx:javafx-*). Only used for the initial screen's decorative background video (embedded
+// via JFXPanel/MediaView, since Compose Desktop has no video playback of its own) — same idea as
+// hostResourceDir below, one platform's binary per build.
+val javafxClassifier: String = run {
+    val os = System.getProperty("os.name").lowercase()
+    val arch = System.getProperty("os.arch").lowercase()
+    val isArm = arch.contains("aarch64") || arch.contains("arm")
+    when {
+        os.contains("mac") || os.contains("darwin") -> if (isArm) "mac-aarch64" else "mac"
+        os.contains("win") -> "win"
+        else -> if (isArm) "linux-aarch64" else "linux"
+    }
+}
+
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
 
     // Proto messages only — NO gRPC plugin (transport is hand-rolled stdio framing).
     implementation("com.google.protobuf:protobuf-kotlin-lite:4.28.3")
+
+    // Background video on the initial screen (macOS `SplitRevealVideoView`, via IntroVideoBackground).
+    val javafxVersion = "21.0.2"
+    implementation("org.openjfx:javafx-base:$javafxVersion:$javafxClassifier")
+    implementation("org.openjfx:javafx-graphics:$javafxVersion:$javafxClassifier")
+    implementation("org.openjfx:javafx-media:$javafxVersion:$javafxClassifier")
+    implementation("org.openjfx:javafx-swing:$javafxVersion:$javafxClassifier")
 
     // Coroutines: core + Swing dispatcher (Compose Desktop runs on the AWT/Swing EDT).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
@@ -85,8 +107,12 @@ compose.desktop {
             // so StarCore.ToolPaths (sibling-of-executable) resolves them with no daemon code change.
             appResourcesRootDir.set(layout.projectDirectory.dir("app-resources"))
             includeAllModules = true // the daemon-driving GUI loads classes reflectively; ship the full JDK module set
+            // Same icon as the macOS gui's Assets.xcassets/AppIcon.appiconset, converted to each OS's
+            // native format (see packaging/README.md for how to regenerate). Without these, jpackage
+            // falls back to the default Java/coffee-cup icon in the packaged app.
             macOS {
                 bundleID = "com.star.desktop"
+                iconFile.set(project.file("packaging/star.icns"))
                 // Optional Developer ID signing (off by default → an unsigned app image). Enable with
                 // -Pstar.sign.identity="Developer ID Application: Name (TEAMID)" or STAR_SIGN_IDENTITY.
                 // Signs the .app and its embedded native binaries (stard/ffmpeg/ffprobe) with the hardened
@@ -99,6 +125,12 @@ compose.desktop {
                     entitlementsFile.set(project.file("packaging/macos-entitlements.plist"))
                     runtimeEntitlementsFile.set(project.file("packaging/macos-entitlements.plist"))
                 }
+            }
+            windows {
+                iconFile.set(project.file("packaging/star.ico"))
+            }
+            linux {
+                iconFile.set(project.file("packaging/star.png"))
             }
         }
     }
@@ -160,6 +192,22 @@ tasks.register("stageAppResources") {
         val ffDir = (findProperty("ffmpegdir") as String?)?.let { file(it) } ?: rootProject.file("../external_binaries/bin")
         stage(File(ffDir, "ffmpeg$exe"), "ffmpeg$exe")
         stage(File(ffDir, "ffprobe$exe"), "ffprobe$exe")
+
+        // Decorative initial-screen background video — same asset the macOS gui bundles from
+        // gui/videos (see its .gitignore entry: too large for git, fetched from the `ci-assets`
+        // GitHub Release). Purely cosmetic, so unlike stard above, a missing file never fails
+        // the build — IntroVideoBackground just shows nothing.
+        val introVideoName = "11_30_2024-fx3-aurora-topaz-star.mp4"
+        val introVideo = listOfNotNull(
+            (findProperty("introvideo") as String?)?.let { file(it) },
+            rootProject.file("../gui/videos/$introVideoName"),
+        ).firstOrNull { it.exists() }
+        if (introVideo != null) {
+            File(outDir, "videos").mkdirs()
+            stage(introVideo, "videos/$introVideoName")
+        } else {
+            logger.lifecycle("stageAppResources: $introVideoName not found — initial screen will show no background video")
+        }
     }
 }
 

@@ -154,6 +154,17 @@ class SequenceViewModel(
     val isProcessing: StateFlow<Boolean> = processing.processing
     val sequenceState: StateFlow<String?> = processing.sequenceState
 
+    // ---- processing progress screen (macOS `ProcessingModalView`) ----
+    //
+    // Dismissing it (see dismissProcessingModal) only hides the screen — the run keeps going in the
+    // background, and results can be inspected while other frames still process. Stopping the run
+    // (cancelProcessing) is a separate action. Re-armed on every new run, so a modal dismissed on
+    // one run still shows for the next.
+    private val _processingModalDismissed = MutableStateFlow(false)
+    private val _showProcessingModal = MutableStateFlow(false)
+    val showProcessingModal: StateFlow<Boolean> = _showProcessingModal.asStateFlow()
+    fun dismissProcessingModal() { _processingModalDismissed.value = true }
+
     // ---- current preview ----
     private val _currentPreview = MutableStateFlow<ImageBitmap?>(null)
     val currentPreview: StateFlow<ImageBitmap?> = _currentPreview.asStateFlow()
@@ -209,6 +220,10 @@ class SequenceViewModel(
                 }
             }
             .launchIn(scope)
+
+        combine(isProcessing, _processingModalDismissed) { processingNow, dismissed -> processingNow && !dismissed }
+            .onEach { _showProcessingModal.value = it }
+            .launchIn(scope)
     }
 
     // ---- actions ----
@@ -246,11 +261,19 @@ class SequenceViewModel(
         }
     }
 
-    fun processAll() = scope.launch { processing.start(sessionId, 0, -1) }
-    fun processRemaining() = scope.launch { processing.start(sessionId, 0, -1) } // daemon resumes completed frames
-    fun processCurrent() = scope.launch { processing.start(sessionId, _currentIndex.value, _currentIndex.value) }
+    fun processAll() = startProcessingRun { processing.start(sessionId, 0, -1) }
+    fun processRemaining() = startProcessingRun { processing.start(sessionId, 0, -1) } // daemon resumes completed frames
+    fun processCurrent() = startProcessingRun { processing.start(sessionId, _currentIndex.value, _currentIndex.value) }
     /** Reprocess the current frame from scratch (Processing.Start force=true). */
-    fun reprocessCurrent() = scope.launch { processing.start(sessionId, _currentIndex.value, _currentIndex.value, force = true) }
+    fun reprocessCurrent() = startProcessingRun {
+        processing.start(sessionId, _currentIndex.value, _currentIndex.value, force = true)
+    }
+
+    /** Re-arm the processing modal (macOS `startProcessingModal`) before launching a new run. */
+    private fun startProcessingRun(block: suspend () -> Unit) = scope.launch {
+        _processingModalDismissed.value = false
+        block()
+    }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
 
     /** Re-run the decision-tree classifier across all frames, then refresh the current frame. */

@@ -21,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -58,9 +59,14 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // Selective-removal tools (remove/keep/razor/shovel/...) only apply when this frame's
+        // clean method actually reviews outliers (macOS `currentFrameUsesOutliers`) — plain
+        // automatic mode replaces every bad pixel with no per-frame review, so there is nothing
+        // for these tools to act on.
+        val usesOutliers = (info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE) != CleanMethod.CLEAN_AUTOMATIC
         Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         ToolType.selectable.forEachIndexed { i, t ->
-            ToolRow(t, number = i + 1, selected = t == tool, onClick = { vm.setTool(t) })
+            ToolRow(t, number = i + 1, selected = t == tool, enabled = usesOutliers, onClick = { vm.setTool(t) })
         }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
@@ -135,18 +141,20 @@ private fun BulkButton(label: String, color: Color, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ToolRow(tool: ToolType, number: Int, selected: Boolean, onClick: () -> Unit) {
+private fun ToolRow(tool: ToolType, number: Int, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     val accent = StarColors.toolColor(tool)
+    val alpha = if (enabled) 1f else 0.35f
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(5.dp))
-            .background(if (selected) accent.copy(alpha = 0.22f) else Color.Transparent)
-            .then(if (selected) Modifier.border(1.dp, SolidColor(accent), RoundedCornerShape(5.dp)) else Modifier)
-            .clickable(onClick = onClick)
-            .padding(4.dp),
+            .background(if (selected && enabled) accent.copy(alpha = 0.22f) else Color.Transparent)
+            .then(if (selected && enabled) Modifier.border(1.dp, SolidColor(accent), RoundedCornerShape(5.dp)) else Modifier)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(4.dp)
+            .alpha(alpha),
     ) {
         Icon(
             painter = toolPainter(tool),

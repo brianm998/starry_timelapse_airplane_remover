@@ -424,6 +424,28 @@ class AppViewModel(
         prefs.setMovingHorizonCountMultiplier(movingHorizonCountMultiplier(chosen, startupFrameCount()))
     }
 
+    /**
+     * Which question screen "Back" should return to — derived from the answers already given
+     * rather than a separate history stack, since they fully determine how [step] was reached
+     * (macOS `RemovalView.previousStartupState`). Returns null on the first screen.
+     */
+    fun previousStartupStep(step: StartupStep): StartupStep? = when (step) {
+        StartupStep.HORIZON -> null
+        StartupStep.MOVING -> StartupStep.HORIZON
+        StartupStep.SELECT_HORIZON -> StartupStep.MOVING
+        StartupStep.SELECT_MOVING_HORIZONS -> StartupStep.MOVING
+        StartupStep.REMOVAL -> when {
+            !startupHasHorizon -> StartupStep.MOVING
+            startupCameraMoving -> StartupStep.SELECT_MOVING_HORIZONS
+            else -> StartupStep.SELECT_HORIZON
+        }
+    }
+
+    /** "Back" on a startup prompt: return to the previous question without discarding later answers. */
+    fun startupGoBack(step: StartupStep) {
+        _startupStep.value = previousStartupStep(step)
+    }
+
     /** "Advanced" gear on a prompt: persist the answers so the dialog reflects them, then open settings. */
     fun startupOpenAdvanced() {
         scope.launch {
@@ -434,9 +456,9 @@ class AppViewModel(
     }
 
     /** Removal prompt "Start Processing": apply the chosen clean method + answers, then process. */
-    fun startupStartProcessing(cleanMethod: CleanMethod) {
+    fun startupStartProcessing(cleanMethod: CleanMethod, allowEarthAlignment: Boolean) {
         scope.launch {
-            applyStartupChoices(cleanMethod)
+            applyStartupChoices(cleanMethod, allowEarthAlignment)
             _startupStep.value = null
             requestProcessAll()
         }
@@ -445,15 +467,18 @@ class AppViewModel(
     /** Removal prompt "Close": dismiss the prompts without processing (keeps the default config). */
     fun dismissStartup() { _startupStep.value = null }
 
-    /** Fold the accumulated startup answers (and optionally a clean method) into the live session config. */
-    private suspend fun applyStartupChoices(cleanMethod: CleanMethod? = null) {
+    /**
+     * Fold the accumulated startup answers (and optionally a clean method + the removal prompt's
+     * "Cars" toggle) into the live session config. [allowEarthAlignment] defaults to true for the
+     * paths that skip the removal prompt (e.g. jumping to Advanced settings mid-flow), matching
+     * the macOS behavior of earth alignment being on by default.
+     */
+    private suspend fun applyStartupChoices(cleanMethod: CleanMethod? = null, allowEarthAlignment: Boolean = true) {
         val current = runCatching { sessions.getConfig() }.getOrNull() ?: return
         val b = current.toBuilder()
             .setHorizonDetectionEnabled(startupHasHorizon)
             .setTripodHeadWasMoving(startupCameraMoving)
-            // Earth alignment is on for both static and moving sequences now that the
-            // ground homography guard rejects the warps it used to apply blindly.
-            .setAllowEarthAlignment(true)
+            .setAllowEarthAlignment(allowEarthAlignment)
         cleanMethod?.let { b.setCleanMethod(it) }
         runCatching { sessions.updateConfig(b.build()) }
     }

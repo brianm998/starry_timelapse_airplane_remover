@@ -69,6 +69,11 @@ fun StarApp(vm: AppViewModel) {
             if (showPre && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PreProcessingRenderPrompt(vm)
             val showPost by vm.showPostRenderPrompt.collectAsState()
             if (showPost && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PostProcessingRenderPrompt(vm)
+            if (screen is AppScreen.Sequence) {
+                val sequenceVm = (screen as AppScreen.Sequence).vm
+                val showProcessingModal by sequenceVm.showProcessingModal.collectAsState()
+                if (showProcessingModal) com.star.desktop.ui.dialogs.ProcessingModal(sequenceVm)
+            }
 
             val engineWarning by vm.engineWarning.collectAsState()
             engineWarning?.let { w ->
