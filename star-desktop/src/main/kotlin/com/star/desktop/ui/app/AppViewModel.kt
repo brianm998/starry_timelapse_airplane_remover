@@ -456,9 +456,9 @@ class AppViewModel(
     }
 
     /** Removal prompt "Start Processing": apply the chosen clean method + answers, then process. */
-    fun startupStartProcessing(cleanMethod: CleanMethod) {
+    fun startupStartProcessing(cleanMethod: CleanMethod, allowEarthAlignment: Boolean) {
         scope.launch {
-            applyStartupChoices(cleanMethod)
+            applyStartupChoices(cleanMethod, allowEarthAlignment)
             _startupStep.value = null
             requestProcessAll()
         }
@@ -467,15 +467,18 @@ class AppViewModel(
     /** Removal prompt "Close": dismiss the prompts without processing (keeps the default config). */
     fun dismissStartup() { _startupStep.value = null }
 
-    /** Fold the accumulated startup answers (and optionally a clean method) into the live session config. */
-    private suspend fun applyStartupChoices(cleanMethod: CleanMethod? = null) {
+    /**
+     * Fold the accumulated startup answers (and optionally a clean method + the removal prompt's
+     * "Cars" toggle) into the live session config. [allowEarthAlignment] defaults to true for the
+     * paths that skip the removal prompt (e.g. jumping to Advanced settings mid-flow), matching
+     * the macOS behavior of earth alignment being on by default.
+     */
+    private suspend fun applyStartupChoices(cleanMethod: CleanMethod? = null, allowEarthAlignment: Boolean = true) {
         val current = runCatching { sessions.getConfig() }.getOrNull() ?: return
         val b = current.toBuilder()
             .setHorizonDetectionEnabled(startupHasHorizon)
             .setTripodHeadWasMoving(startupCameraMoving)
-            // Earth alignment is on for both static and moving sequences now that the
-            // ground homography guard rejects the warps it used to apply blindly.
-            .setAllowEarthAlignment(true)
+            .setAllowEarthAlignment(allowEarthAlignment)
         cleanMethod?.let { b.setCleanMethod(it) }
         runCatching { sessions.updateConfig(b.build()) }
     }

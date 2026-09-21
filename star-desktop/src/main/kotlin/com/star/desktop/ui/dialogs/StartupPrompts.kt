@@ -148,6 +148,7 @@ private fun RemovalPrompt(app: AppViewModel) {
     var airplanes by remember { mutableStateOf(true) }
     var satellites by remember { mutableStateOf(true) }
     var meteors by remember { mutableStateOf(true) }
+    var cars by remember { mutableStateOf(true) }
     val cleanMethod = removalCleanMethod(airplanes, satellites, meteors)
 
     Title("What do you want Star to remove?")
@@ -166,13 +167,14 @@ private fun RemovalPrompt(app: AppViewModel) {
             ToggleRow("Airplanes", airplanes) { airplanes = it }
             ToggleRow("Satellites", satellites) { satellites = it }
             ToggleRow("Meteors", meteors) { meteors = it }
+            ToggleRow("Cars", cars) { cars = it }
         }
     }
     HorizontalDivider(color = StarColors.cellDefault)
     Body(removalDescription(cleanMethod))
     AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
         SecondaryButton("Close") { app.dismissStartup() }
-        PrimaryButton("Start Processing") { app.startupStartProcessing(cleanMethod) }
+        PrimaryButton("Start Processing") { app.startupStartProcessing(cleanMethod, allowEarthAlignment = cars) }
     }
 }
 
