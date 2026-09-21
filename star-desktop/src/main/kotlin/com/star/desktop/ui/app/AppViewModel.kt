@@ -424,6 +424,28 @@ class AppViewModel(
         prefs.setMovingHorizonCountMultiplier(movingHorizonCountMultiplier(chosen, startupFrameCount()))
     }
 
+    /**
+     * Which question screen "Back" should return to — derived from the answers already given
+     * rather than a separate history stack, since they fully determine how [step] was reached
+     * (macOS `RemovalView.previousStartupState`). Returns null on the first screen.
+     */
+    fun previousStartupStep(step: StartupStep): StartupStep? = when (step) {
+        StartupStep.HORIZON -> null
+        StartupStep.MOVING -> StartupStep.HORIZON
+        StartupStep.SELECT_HORIZON -> StartupStep.MOVING
+        StartupStep.SELECT_MOVING_HORIZONS -> StartupStep.MOVING
+        StartupStep.REMOVAL -> when {
+            !startupHasHorizon -> StartupStep.MOVING
+            startupCameraMoving -> StartupStep.SELECT_MOVING_HORIZONS
+            else -> StartupStep.SELECT_HORIZON
+        }
+    }
+
+    /** "Back" on a startup prompt: return to the previous question without discarding later answers. */
+    fun startupGoBack(step: StartupStep) {
+        _startupStep.value = previousStartupStep(step)
+    }
+
     /** "Advanced" gear on a prompt: persist the answers so the dialog reflects them, then open settings. */
     fun startupOpenAdvanced() {
         scope.launch {

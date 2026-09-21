@@ -88,7 +88,7 @@ private fun MovingPrompt(app: AppViewModel) {
     Title("Was the camera moving during this video")
     Title("or", small = true)
     Title("was it stationary on a tripod the entire time?")
-    AnswerRow(advanced = { app.startupOpenAdvanced() }) {
+    AnswerRow(back = { app.startupGoBack(StartupStep.MOVING) }, advanced = { app.startupOpenAdvanced() }) {
         SecondaryButton("Static") { app.startupAnswerMoving(false) }
         PrimaryButton("Moving") { app.startupAnswerMoving(true) }
     }
@@ -102,7 +102,7 @@ private fun SelectHorizonPrompt(app: AppViewModel) {
             "refining the horizon yourself now, you will speed up Star's processing and avoid horizon-" +
             "detection errors.",
     )
-    AnswerRow {
+    AnswerRow(back = { app.startupGoBack(StartupStep.SELECT_HORIZON) }) {
         SecondaryButton("No") { app.startupAnswerSelectHorizon(false) }
         PrimaryButton("Yes") { app.startupAnswerSelectHorizon(true) }
     }
@@ -125,6 +125,7 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
             "the sequence.",
     )
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        BackButton { app.startupGoBack(StartupStep.SELECT_MOVING_HORIZONS) }
         Spacer(Modifier.weight(1f))
         SecondaryButton("No") { app.startupAnswerSelectHorizon(false) }
         Spacer(Modifier.width(28.dp))
@@ -169,7 +170,7 @@ private fun RemovalPrompt(app: AppViewModel) {
     }
     HorizontalDivider(color = StarColors.cellDefault)
     Body(removalDescription(cleanMethod))
-    AnswerRow(advanced = { app.startupOpenAdvanced() }) {
+    AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
         SecondaryButton("Close") { app.dismissStartup() }
         PrimaryButton("Start Processing") { app.startupStartProcessing(cleanMethod) }
     }
@@ -193,17 +194,37 @@ private fun Body(text: String) {
     Text(text, color = StarColors.textSecondary, fontSize = 13.sp, modifier = Modifier.fillMaxWidth())
 }
 
-/** Centered answer buttons, with an optional "Advanced" gear pinned to the right (macOS layout). */
+/**
+ * Centered answer buttons, with an optional "Back" pinned to the left and an optional
+ * "Advanced" gear pinned to the right (macOS layout).
+ */
 @Composable
-private fun AnswerRow(advanced: (() -> Unit)? = null, buttons: @Composable () -> Unit) {
+private fun AnswerRow(back: (() -> Unit)? = null, advanced: (() -> Unit)? = null, buttons: @Composable () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (back != null) BackButton(back)
         Spacer(Modifier.weight(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { buttons() }
         Spacer(Modifier.weight(1f))
         if (advanced != null) AdvancedButton(advanced)
+    }
+}
+
+/**
+ * Subdued "go to the previous question" control, shown on every startup screen after the first
+ * (macOS `StartupBackButton`). Lets the user correct an earlier answer without restarting.
+ */
+@Composable
+private fun BackButton(onClick: () -> Unit) {
+    Row(
+        Modifier.clip(StarShapes.card).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("‹", color = StarColors.textPrimary, fontSize = 20.sp)
+        Text(localized("ui.back"), color = StarColors.textPrimary, fontSize = 15.sp)
     }
 }
 
