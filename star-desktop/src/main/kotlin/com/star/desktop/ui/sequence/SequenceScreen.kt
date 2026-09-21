@@ -114,8 +114,10 @@ private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMo
             val painting by vm.horizonPaintMode.collectAsState()
             Chip("Paint Horizon", selected = painting) { vm.toggleHorizonPaint() }
         }
-        Chip("Align", selected = false) { app.toggleAlignmentWindow() }
-        Chip("Close", selected = false) { app.closeSession() }
+        // No Align chip here: the alignment window is already reachable from the Window menu
+        // (StarMenuBar's "ui.alignment_2" item), so a duplicate top-bar button just adds confusion.
+        // No Close chip either: closing this window already ends the session (Main.kt's
+        // onCloseRequest = ::exitApplication), so a button that duplicates it isn't needed.
         // Engine status badge, laid out in the top bar (no longer a floating bottom-right overlay).
         com.star.desktop.ui.app.EngineBadge(app)
     }
