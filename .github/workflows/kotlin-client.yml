@@ -47,6 +47,242 @@ jobs:
       - name: Build + unit tests
         run: ./gradlew test --no-daemon --stacktrace
 
+  # ─── Linux installer (.deb) ───────────────────────────────────────────────────
+  # Builds stard for Linux (same OpenCV/StarDecisionTrees caches as cli.yml's
+  # `linux` job, so a warm cache there means nothing is rebuilt here either),
+  # then packages the Compose Desktop app via stageAppResources + gradlew
+  # packageDeb — the beta-distribution counterpart to macos-signed's .dmg, just
+  # unsigned (no Linux equivalent of Developer ID / notarization).
+  #
+  # Runs on push (to develop/main) and manual dispatch, but not on pull_request:
+  # building stard from scratch takes 15-30 minutes even with warm caches.
+  linux-package:
+    name: Linux installer (.deb)
+    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install apt prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake make git pkg-config perl dpkg-dev zip \
+            libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
+            libcurl4-openssl-dev
+
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: '6.0'
+
+      # Same cache keys as cli.yml's `linux` job so the OpenCV / StarDecisionTrees
+      # builds are shared instead of rebuilt.
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/linux
+            opencv/include
+          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/linux
+            StarDecisionTrees/include/release/linux
+          key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/linux/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
+
+      - name: Build stard (release)
+        working-directory: daemon
+        run: swift build -c release
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build .deb
+        working-directory: star-desktop
+        # stageAppResources picks up ../daemon/.build/release/stard and
+        # ../external_binaries/bin automatically; packageDeb depends on it.
+        run: ./gradlew packageDeb --no-daemon --stacktrace
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-desktop-linux-deb
+          path: star-desktop/build/compose/binaries/main/deb/*.deb
+          if-no-files-found: error
+
+  # ─── Windows installer (.msi) ─────────────────────────────────────────────────
+  # Same idea as linux-package, but for Windows — reusing cli.yml's `windows`
+  # job's MSVC/SDK pinning (needed for the Swift/Clang toolchain, same reasons
+  # documented there) and OpenCV/StarDecisionTrees cache keys.
+  windows-package:
+    name: Windows installer (.msi)
+    runs-on: windows-2022
+    if: github.event_name != 'pull_request'
+    defaults:
+      run:
+        shell: bash  # Git Bash; matches cli.yml's `windows` job
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          # See cli.yml's `windows` job for why 6.1 (not 6.0) and why the MSVC/SDK
+          # pin below is needed — same toolchain, same StarCore/StarCpp sources.
+          swift-version: swift-6.1-release
+          swift-build: 6.1-RELEASE
+
+      - name: Install Eigen3 to C:/eigen3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest `
+            -Uri 'https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip' `
+            -OutFile "$env:RUNNER_TEMP\eigen.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\eigen.zip" -DestinationPath C:\
+          Move-Item C:\eigen-3.4.0 C:\eigen3
+
+      - name: Install MSVC 14.40 toolset
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          $vsPath    = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
+          $proc = Start-Process -FilePath $installer -ArgumentList @(
+              'modify',
+              '--installPath', "`"$vsPath`"",
+              '--add', 'Microsoft.VisualStudio.Component.VC.14.40.17.10.x86.x64',
+              '--quiet', '--norestart', '--nocache'
+          ) -Wait -PassThru -NoNewWindow
+          if ($proc.ExitCode -notin 0,3010) {
+              throw "VS Installer failed (exit code $($proc.ExitCode))"
+          }
+          $toolsetDir = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Directory `
+              | Where-Object { $_.Name -like '14.40.*' } | Select-Object -First 1
+          if (-not $toolsetDir) {
+              throw "MSVC 14.40 toolset not found under $vsPath\VC\Tools\MSVC after install"
+          }
+
+      - name: Pin MSVC dev env to 14.40 + Windows SDK 10.0.22621.0
+        # See cli.yml's `windows` job for the full explanation of why both pins
+        # are needed (a Clang module cycle on the default SDK, an STL
+        # static_assert on the default toolset).
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vsPath = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
+          $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+          $output = & cmd /c "`"$vcvars`" 10.0.22621.0 -vcvars_ver=14.40 && set"
+          $wanted = @(
+              'INCLUDE','LIB','LIBPATH','PATH',
+              'VCINSTALLDIR','VCToolsInstallDir','VCToolsVersion',
+              'VSINSTALLDIR','WindowsSdkDir','WindowsSDKVersion','UCRTVersion'
+          )
+          foreach ($line in $output) {
+              if ($line -match '^([A-Za-z_][A-Za-z0-9_(\)]*)=(.*)$') {
+                  $name = $matches[1]; $value = $matches[2]
+                  if ($wanted -contains $name) {
+                      "$name=$value" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                  }
+              }
+          }
+
+      - name: Install Swift modulemaps into the pinned SDK and MSVC toolset
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $share = Join-Path $env:SDKROOT 'usr\share'
+          if (-not (Test-Path $share)) {
+              throw "Swift SDK share dir not found at $share (SDKROOT=$env:SDKROOT)"
+          }
+          $sdkVer = $env:WindowsSDKVersion.TrimEnd('\')
+          $sdkInc = Join-Path $env:WindowsSdkDir "Include\$sdkVer"
+          $vcInc  = Join-Path $env:VCToolsInstallDir 'include'
+          $copies = @(
+              @{ src='ucrt.modulemap';     dst=(Join-Path $sdkInc 'ucrt\module.modulemap') },
+              @{ src='winsdk.modulemap';   dst=(Join-Path $sdkInc 'um\module.modulemap')   },
+              @{ src='visualc.modulemap';  dst=(Join-Path $vcInc  'module.modulemap')      },
+              @{ src='visualc.apinotes';   dst=(Join-Path $vcInc  'visualc.apinotes')      }
+          )
+          foreach ($c in $copies) {
+              $src = Join-Path $share $c.src
+              if (Test-Path $src) {
+                  $dstDir = Split-Path $c.dst -Parent
+                  New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+                  Copy-Item -Force $src $c.dst
+              }
+          }
+
+      # Same cache keys as cli.yml's `windows` job (including the toolset/SDK
+      # pin in the key, so changing that pin invalidates these automatically).
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/windows
+            opencv/include
+          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/windows
+            StarDecisionTrees/include/release/windows
+          key: dt-windows-msvc14.40-sdk22621-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/windows/opencv2.lib ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/windows/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
+
+      - name: Build stard (release)
+        working-directory: daemon
+        # See release_windows.sh's CL note (cli.yml `windows` job): do not set
+        # CL=/D... globally, it breaks OpenCV's CMake compiler probe.
+        run: swift build -c release
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build .msi
+        working-directory: star-desktop
+        run: ./gradlew packageMsi --no-daemon --stacktrace
+
+      - name: Upload .msi artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-desktop-windows-msi
+          path: star-desktop/build/compose/binaries/main/msi/*.msi
+          if-no-files-found: error
+
   # ─── macOS signed + notarized installer ──────────────────────────────────────
   # Builds the Compose Desktop app, bundles a natively-built stard + ffmpeg/ffprobe,
   # signs with Developer ID (hardened runtime), then notarizes + staples the .dmg —
