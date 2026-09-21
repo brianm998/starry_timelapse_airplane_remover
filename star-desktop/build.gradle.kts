@@ -107,8 +107,12 @@ compose.desktop {
             // so StarCore.ToolPaths (sibling-of-executable) resolves them with no daemon code change.
             appResourcesRootDir.set(layout.projectDirectory.dir("app-resources"))
             includeAllModules = true // the daemon-driving GUI loads classes reflectively; ship the full JDK module set
+            // Same icon as the macOS gui's Assets.xcassets/AppIcon.appiconset, converted to each OS's
+            // native format (see packaging/README.md for how to regenerate). Without these, jpackage
+            // falls back to the default Java/coffee-cup icon in the packaged app.
             macOS {
                 bundleID = "com.star.desktop"
+                iconFile.set(project.file("packaging/star.icns"))
                 // Optional Developer ID signing (off by default → an unsigned app image). Enable with
                 // -Pstar.sign.identity="Developer ID Application: Name (TEAMID)" or STAR_SIGN_IDENTITY.
                 // Signs the .app and its embedded native binaries (stard/ffmpeg/ffprobe) with the hardened
@@ -121,6 +125,12 @@ compose.desktop {
                     entitlementsFile.set(project.file("packaging/macos-entitlements.plist"))
                     runtimeEntitlementsFile.set(project.file("packaging/macos-entitlements.plist"))
                 }
+            }
+            windows {
+                iconFile.set(project.file("packaging/star.ico"))
+            }
+            linux {
+                iconFile.set(project.file("packaging/star.png"))
             }
         }
     }
