@@ -133,13 +133,11 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 ExpertGroup("Horizon", HORIZON_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
                 ExpertGroup("Memory", MEMORY_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
                 SettingGroup("Performance") {
-                    // Only one GPU toggle is exposed to this client today (the other two,
-                    // keypoint detection for SIFT/AKAZE, are cli-only) -- but even one toggle
-                    // reads as "GPU for everything" unless something says otherwise, so this
-                    // note is not waiting on a second toggle to earn its place.
+                    // Three independent GPU toggles, each naming the specific step it applies
+                    // to rather than reading as "GPU for everything."
                     Text(
-                        "GPU acceleration below applies to the alignment/merge step only, not "
-                            + "to keypoint detection or any other step.",
+                        "Each toggle below applies to one step only: alignment/merge, or "
+                            + "SIFT/AKAZE keypoint detection.",
                         color = StarColors.textDisabled, fontSize = 10.sp,
                     )
                     // Only the daemon's own machine's hardware is known here; a client's own
@@ -150,7 +148,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                         if (!f.has(cfg)) { UnsupportedRow(f.label, daemonVersion); return@forEach }
                         when (f) {
                             is BoolField -> {
-                                val gpuGated = f.label == GPU_FOR_MERGE_LABEL && gpuUnsupported
+                                val gpuGated = f.label in GPU_FIELD_LABELS && gpuUnsupported
                                 ToggleRow(
                                     f.label,
                                     if (gpuGated) false else (boolEdits[f.label] ?: f.get(cfg)),
@@ -326,9 +324,17 @@ internal val MEMORY_FIELDS: List<ExpertField> = listOf(
 // step rather than a master switch -- it wires to the wire-stable `useGpuAcceleration` proto
 // field/StarCore `Config.useGPUForMerge` regardless; only the label users see changed.
 internal const val GPU_FOR_MERGE_LABEL = "Use GPU for Align & Merge"
+// Independent of GPU_FOR_MERGE_LABEL and of each other -- see StarCore
+// Config.useGPUForSIFT / .useGPUForAKAZE. Both off by default.
+internal const val GPU_FOR_SIFT_LABEL = "Use GPU for SIFT"
+internal const val GPU_FOR_AKAZE_LABEL = "Use GPU for AKAZE"
+
+internal val GPU_FIELD_LABELS = setOf(GPU_FOR_MERGE_LABEL, GPU_FOR_SIFT_LABEL, GPU_FOR_AKAZE_LABEL)
 
 internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
     BoolField(GPU_FOR_MERGE_LABEL, { it.useGpuAcceleration }, { b, v -> b.setUseGpuAcceleration(v) }, { it.hasUseGpuAcceleration() }),
+    BoolField(GPU_FOR_SIFT_LABEL, { it.useGpuForSift }, { b, v -> b.setUseGpuForSift(v) }, { it.hasUseGpuForSift() }),
+    BoolField(GPU_FOR_AKAZE_LABEL, { it.useGpuForAkaze }, { b, v -> b.setUseGpuForAkaze(v) }, { it.hasUseGpuForAkaze() }),
 )
 
 @Composable

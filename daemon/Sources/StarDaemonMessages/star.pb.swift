@@ -1558,6 +1558,28 @@ public struct Star_V1_Config: @unchecked Sendable {
   /// Clears the value of `gpuHardwareAvailable`. Subsequent reads from it will return its default value.
   public mutating func clearGpuHardwareAvailable() {_uniqueStorage()._gpuHardwareAvailable = nil}
 
+  /// Whether to use GPU acceleration for SIFT / AKAZE keypoint detection,
+  /// respectively. Both off by default, and independent of use_gpu_acceleration
+  /// and of each other -- see StarCore Config.useGPUForSIFT / .useGPUForAKAZE.
+  /// Also still gated by gpu_hardware_available.
+  public var useGpuForSift: Bool {
+    get {_storage._useGpuForSift ?? false}
+    set {_uniqueStorage()._useGpuForSift = newValue}
+  }
+  /// Returns true if `useGpuForSift` has been explicitly set.
+  public var hasUseGpuForSift: Bool {_storage._useGpuForSift != nil}
+  /// Clears the value of `useGpuForSift`. Subsequent reads from it will return its default value.
+  public mutating func clearUseGpuForSift() {_uniqueStorage()._useGpuForSift = nil}
+
+  public var useGpuForAkaze: Bool {
+    get {_storage._useGpuForAkaze ?? false}
+    set {_uniqueStorage()._useGpuForAkaze = newValue}
+  }
+  /// Returns true if `useGpuForAkaze` has been explicitly set.
+  public var hasUseGpuForAkaze: Bool {_storage._useGpuForAkaze != nil}
+  /// Clears the value of `useGpuForAkaze`. Subsequent reads from it will return its default value.
+  public mutating func clearUseGpuForAkaze() {_uniqueStorage()._useGpuForAkaze = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3608,7 +3630,7 @@ extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -3662,6 +3684,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _startupHorizonFramePosition: Int32? = nil
     var _useGpuAcceleration: Bool? = nil
     var _gpuHardwareAvailable: Bool? = nil
+    var _useGpuForSift: Bool? = nil
+    var _useGpuForAkaze: Bool? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -3723,6 +3747,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _startupHorizonFramePosition = source._startupHorizonFramePosition
       _useGpuAcceleration = source._useGpuAcceleration
       _gpuHardwareAvailable = source._gpuHardwareAvailable
+      _useGpuForSift = source._useGpuForSift
+      _useGpuForAkaze = source._useGpuForAkaze
     }
   }
 
@@ -3792,6 +3818,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 52: try { try decoder.decodeSingularInt32Field(value: &_storage._startupHorizonFramePosition) }()
         case 53: try { try decoder.decodeSingularBoolField(value: &_storage._useGpuAcceleration) }()
         case 54: try { try decoder.decodeSingularBoolField(value: &_storage._gpuHardwareAvailable) }()
+        case 55: try { try decoder.decodeSingularBoolField(value: &_storage._useGpuForSift) }()
+        case 56: try { try decoder.decodeSingularBoolField(value: &_storage._useGpuForAkaze) }()
         default: break
         }
       }
@@ -3957,6 +3985,12 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       try { if let v = _storage._gpuHardwareAvailable {
         try visitor.visitSingularBoolField(value: v, fieldNumber: 54)
       } }()
+      try { if let v = _storage._useGpuForSift {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 55)
+      } }()
+      try { if let v = _storage._useGpuForAkaze {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 56)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -4017,6 +4051,8 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._startupHorizonFramePosition != rhs_storage._startupHorizonFramePosition {return false}
         if _storage._useGpuAcceleration != rhs_storage._useGpuAcceleration {return false}
         if _storage._gpuHardwareAvailable != rhs_storage._gpuHardwareAvailable {return false}
+        if _storage._useGpuForSift != rhs_storage._useGpuForSift {return false}
+        if _storage._useGpuForAkaze != rhs_storage._useGpuForAkaze {return false}
         return true
       }
       if !storagesAreEqual {return false}
