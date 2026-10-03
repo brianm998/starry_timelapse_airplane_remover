@@ -98,11 +98,17 @@ public actor ImageCache {
         cacheMisses += 1
 
         // 3️⃣ Start new load (strong ownership inside task)
+        // Through `IOWork`: one of the volume's streams for the read, on a private queue
+        // rather than a cooperative-pool thread (a decode blocks for as long as the disk
+        // takes — 0.5s cold for 196MB, minutes on a saturated drive).
+        let size = DecodedFrameStore.fileSize(filename)
         let task: Task<MatWrapper?, Never> =
           Task.detached(priority: .userInitiated) { [filename] in
-              if let mat = MatWrapper.load(fromFilename: filename),
-                 !mat.isEmpty { mat }
-              else { nil }
+              await IOWork.run(path: filename, bytes: size) { () -> MatWrapper? in
+                  if let mat = MatWrapper.load(fromFilename: filename),
+                     !mat.isEmpty { mat }
+                  else { nil }
+              }
           }
 
         inFlight[filename] = task

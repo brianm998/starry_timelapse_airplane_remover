@@ -1581,11 +1581,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     let featheredMask = await NativeWork.run {
                         featherMask.raiseMaskBy(Self.horizonFeatherPixels)
                     }
+                    // The blend is a full-frame pixel loop: native thread, CPU gate.
+                    let blendBase = skyImage
                     if let feathered = featheredMask,
-                       let blended = try? skyImage.blend(
-                         mask: feathered,
-                         with: earthImage
-                       )
+                       let blended = await NativeWork.run({
+                           try? blendBase.blend(mask: feathered, with: earthImage)
+                       })
                     {
                         return blended
                     }
@@ -2039,11 +2040,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     let featheredMask = await NativeWork.run {
                         featherMask.raiseMaskBy(FrameAirplaneRemover.horizonFeatherPixels)
                     }
+                    // The blend is a full-frame pixel loop: native thread, CPU gate.
+                    let blendBase = skyImage
                     if let feathered = featheredMask,
-                       let blended = try? skyImage.blend(
-                         mask: feathered,
-                         with: earth
-                       )
+                       let blended = await NativeWork.run({
+                           try? blendBase.blend(mask: feathered, with: earth)
+                       })
                     {
                         imageToSubtract = blended
                     } else {
