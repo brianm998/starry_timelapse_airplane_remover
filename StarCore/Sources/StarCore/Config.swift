@@ -365,19 +365,21 @@ public struct Config: Codable, Sendable {
     /// each with its own default and its own risk profile, and turning this one on or
     /// off has no effect on them.
     ///
-    /// On by default. This is a request, not a guarantee: `GPUCapability.isAvailable`
+    /// On by default when a compatible GPU is accessible (see
+    /// `GPUCapability.isAvailable()`), off otherwise. This is a request, not a guarantee: `GPUCapability.isAvailable`
     /// still gates every call site, so a machine with no usable GPU (or a non-macOS
     /// build, until another backend lands) silently runs the CPU path regardless of
     /// this setting. See `GPUCapability` for how a client shows the user which case
     /// they are in — this flag alone cannot tell them, because "off" and "on but
     /// unsupported" both end up running on the CPU.
-    public var useGPUForMerge: Bool = true
+    public var useGPUForMerge: Bool = GPUCapability.isAvailable()
 
     /// Whether to use a from-scratch, GPU-accelerated reimplementation of SIFT's
     /// Gaussian scale-space pyramid for sky (star) keypoint detection, in place of
     /// OpenCV's own `cv::SIFT`.
     ///
-    /// Off by default, unlike `useGPUForMerge` — deliberately separate from it.
+    /// Defaults the same way as `useGPUForMerge` (on when a compatible GPU is
+    /// accessible) but remains a deliberately separate flag.
     /// OpenCV's SIFT internals (pyramid construction, extremum refinement,
     /// orientation, descriptor computation) are not exposed by any public API, so
     /// accelerating the pyramid (the ~100% of SIFT's cost the guide measured)
@@ -389,13 +391,13 @@ public struct Config: Codable, Sendable {
     /// not silently opt a sequence into a still-young keypoint detector.
     ///
     /// Still requires `GPUCapability.isAvailable()`, same as `useGPUForMerge`.
-    public var useGPUForSIFT: Bool = false
+    public var useGPUForSIFT: Bool = GPUCapability.isAvailable()
 
     /// Whether to use a from-scratch, GPU-accelerated reimplementation of
     /// AKAZE's nonlinear diffusion scale-space pyramid for earth (ground)
     /// keypoint detection, in place of OpenCV's own `cv::AKAZE`.
     ///
-    /// Off by default, for exactly the same reason as `useGPUForSIFT` and
+    /// Defaults like `useGPUForSIFT`, which is a separate flag for the same reason, and
     /// gated separately from both it and `useGPUForMerge`: OpenCV's AKAZE
     /// internals are not exposed by any public API either, so this is another
     /// from-scratch port validated against real `cv::AKAZE` rather than a
@@ -404,7 +406,7 @@ public struct Config: Codable, Sendable {
     /// alone must not silently opt a sequence into.
     ///
     /// Still requires `GPUCapability.isAvailable()`, same as `useGPUForMerge`.
-    public var useGPUForAKAZE: Bool = false
+    public var useGPUForAKAZE: Bool = GPUCapability.isAvailable()
 
     /// A localized, user-facing sentence describing whether this machine has GPU
     /// hardware any of the `useGPUFor*` flags can actually use — independent of
