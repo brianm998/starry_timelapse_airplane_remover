@@ -878,5 +878,6 @@
   "warning.title.memory_pressure": "মেমরি কম",
   "warning.title.output_write_failed": "আউটপুট লেখা যায়নি",
   "warning.title.oversized_reservation": "মেমরি সীমা অতিক্রান্ত",
-  "warning.title.previous_run_died": "আগের রান থেমে গেছে"
+  "warning.title.previous_run_died": "আগের রান থেমে গেছে",
+  "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive."
 }

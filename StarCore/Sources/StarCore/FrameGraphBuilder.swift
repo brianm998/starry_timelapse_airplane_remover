@@ -103,6 +103,10 @@ public final actor FrameGraphBuilder {
         // Every per-resource limit, live: CPU/IO/GPU gates, QoS, I/O policy. The queue
         // below is wide by design — memory decides how much is in flight.
         ResourceControl.apply(config)
+        Task {
+            await ResourceGovernor.shared.configure(for: config)
+            await ResourceGovernor.shared.start()
+        }
         queue.maxConcurrentOperationCount = config.pipelineDepth
         applyKeypointLimit(from: config, context: "configure")
 

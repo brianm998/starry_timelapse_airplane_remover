@@ -878,5 +878,6 @@
   "warning.title.memory_pressure": "メモリ不足",
   "warning.title.output_write_failed": "出力を書き出せません",
   "warning.title.oversized_reservation": "メモリ制限を超過",
-  "warning.title.previous_run_died": "前回の実行が停止しました"
+  "warning.title.previous_run_died": "前回の実行が停止しました",
+  "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive."
 }

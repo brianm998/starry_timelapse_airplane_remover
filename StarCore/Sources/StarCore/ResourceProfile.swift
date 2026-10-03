@@ -145,6 +145,20 @@ extension Config {
         }
     }
 
+    /// Switch to Custom, pre-filled from whichever profile was in effect, so opening Custom
+    /// (or passing `-n` on the command line) changes nothing but what the user then edits.
+    public mutating func makeCustom() {
+        guard resourceProfile != .custom else { return }
+        let limits = resources
+        customResources = CustomResourceLimits(
+          cpuWidth: limits.cpuWidth, qos: limits.qos, gpuWidth: limits.gpuWidth,
+          gpuDutyCycle: limits.gpuDutyCycle, diskStreamsPerVolume: limits.diskStreamsPerVolume,
+          ioPolicy: limits.ioPolicy)
+        maxMatMemoryFraction = limits.memoryFraction
+        numberOfFramesToProcessConcurrently = limits.pipelineDepth
+        resourceProfile = .custom
+    }
+
     /// Fraction of physical memory the ledger may reserve.
     public var effectiveMemoryFraction: Double { resources.memoryFraction }
 
@@ -175,14 +189,26 @@ public enum ResourceControl {
         apply(config.resources)
     }
 
+    nonisolated(unsafe) private static var extraStreams = 0
+
+    /// Streams added above the profile's per-volume width by the auto-tuner (Full only).
+    public static func setExtraStreams(_ extra: Int) {
+        lock.lock()
+        extraStreams = max(0, extra)
+        let limits = applied
+        lock.unlock()
+        if let limits { apply(limits) }
+    }
+
     public static func apply(_ limits: ResourceLimits) {
         lock.lock()
         let changed = applied != limits
         applied = limits
+        let extra = extraStreams
         lock.unlock()
 
         NativeWork.setLimits(width: limits.cpuWidth, qos: limits.qos)
-        IOWork.setLimits(streamsPerVolume: limits.diskStreamsPerVolume,
+        IOWork.setLimits(streamsPerVolume: limits.diskStreamsPerVolume + extra,
                          policy: limits.ioPolicy, qos: limits.qos)
         GPUOps.setConcurrency(limits.gpuWidth)
         GPUOps.setDutyCycle(limits.gpuDutyCycle)

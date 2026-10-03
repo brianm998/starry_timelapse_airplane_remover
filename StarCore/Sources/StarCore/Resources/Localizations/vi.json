@@ -878,5 +878,6 @@
   "warning.title.memory_pressure": "Thiếu bộ nhớ",
   "warning.title.output_write_failed": "Không ghi được kết quả",
   "warning.title.oversized_reservation": "Vượt giới hạn bộ nhớ",
-  "warning.title.previous_run_died": "Lần chạy trước đã dừng"
+  "warning.title.previous_run_died": "Lần chạy trước đã dừng",
+  "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive."
 }

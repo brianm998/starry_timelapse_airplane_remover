@@ -878,5 +878,6 @@
   "warning.title.memory_pressure": "Weinig geheugen",
   "warning.title.output_write_failed": "Kon de uitvoer niet schrijven",
   "warning.title.oversized_reservation": "Geheugenlimiet overschreden",
-  "warning.title.previous_run_died": "Vorige run gestopt"
+  "warning.title.previous_run_died": "Vorige run gestopt",
+  "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive."
 }

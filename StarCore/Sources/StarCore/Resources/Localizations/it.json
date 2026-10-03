@@ -878,5 +878,6 @@
   "warning.title.memory_pressure": "Memoria scarsa",
   "warning.title.output_write_failed": "Impossibile scrivere l'output",
   "warning.title.oversized_reservation": "Limite di memoria superato",
-  "warning.title.previous_run_died": "Esecuzione precedente interrotta"
+  "warning.title.previous_run_died": "Esecuzione precedente interrotta",
+  "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive."
 }

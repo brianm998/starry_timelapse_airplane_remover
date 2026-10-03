@@ -878,5 +878,6 @@
   "warning.title.memory_pressure": "ذاكرة منخفضة",
   "warning.title.output_write_failed": "تعذّرت كتابة المخرجات",
   "warning.title.oversized_reservation": "تجاوز حد الذاكرة",
-  "warning.title.previous_run_died": "توقّف التشغيل السابق"
+  "warning.title.previous_run_died": "توقّف التشغيل السابق",
+  "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive."
 }

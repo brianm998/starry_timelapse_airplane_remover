@@ -525,6 +525,24 @@ public actor MemoryMonitor {
         drainReadyWaiters()
     }
 
+    /// What the resource governor reads: the ledger against the admission budget, the
+    /// number of ops parked waiting for memory, and the process's real footprint.
+    public struct Snapshot: Sendable {
+        public let reservedBytes: UInt64
+        public let admissionBudgetBytes: UInt64
+        public let waiting: Int
+        public let footprintBytes: UInt64
+        public let underPressure: Bool
+    }
+
+    public func snapshot() -> Snapshot {
+        Snapshot(reservedBytes: reservedBytes,
+                 admissionBudgetBytes: effectiveBudget(),
+                 waiting: waiters.count,
+                 footprintBytes: reality.processFootprint(),
+                 underPressure: underMemoryPressure)
+    }
+
     /// Returns a summary of memory monitor stats for logging.
     public func stats() -> String {
         let footprint = reality.processFootprint()

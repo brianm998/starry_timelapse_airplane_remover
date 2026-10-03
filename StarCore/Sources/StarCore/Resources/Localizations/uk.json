@@ -878,5 +878,6 @@
   "warning.title.memory_pressure": "Мало памʼяті",
   "warning.title.output_write_failed": "Не вдалося записати результат",
   "warning.title.oversized_reservation": "Перевищено межу памʼяті",
-  "warning.title.previous_run_died": "Попередній запуск зупинено"
+  "warning.title.previous_run_died": "Попередній запуск зупинено",
+  "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive."
 }

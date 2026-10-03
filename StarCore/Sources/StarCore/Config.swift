@@ -908,6 +908,11 @@ public struct Config: Codable, Sendable {
     /// Defaults to Full, and so does every config that predates the setting.
     public var resourceProfile: ResourceProfile = .full
 
+    /// In Full, let the resource governor add disk streams above Full's width while they
+    /// keep buying throughput. It never goes below Full's own width, so it cannot be
+    /// slower than fixed Full by construction. Ignored by the other profiles.
+    public var resourceAutoTune: Bool = true
+
     /// The editable limits behind `.custom`; ignored by the other profiles.
     public var customResources: CustomResourceLimits = .fromFull
     
@@ -1443,6 +1448,7 @@ public struct Config: Codable, Sendable {
         // Old configs have no profile and start at Full; their frame count waits in Custom.
         self.resourceProfile = try c.decodeIfPresent(ResourceProfile.self, forKey: .resourceProfile) ?? self.resourceProfile
         self.customResources = try c.decodeIfPresent(CustomResourceLimits.self, forKey: .customResources) ?? self.customResources
+        self.resourceAutoTune = try c.decodeIfPresent(Bool.self, forKey: .resourceAutoTune) ?? self.resourceAutoTune
 
 
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment

@@ -878,5 +878,6 @@
   "warning.title.memory_pressure": "Mało pamięci",
   "warning.title.output_write_failed": "Nie można zapisać wyniku",
   "warning.title.oversized_reservation": "Przekroczono limit pamięci",
-  "warning.title.previous_run_died": "Poprzedni przebieg zatrzymany"
+  "warning.title.previous_run_died": "Poprzedni przebieg zatrzymany",
+  "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive."
 }

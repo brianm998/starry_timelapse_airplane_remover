@@ -36,6 +36,7 @@ public enum IOWork {
     nonisolated(unsafe) private static var gates: [String: ResizableGate] = [:]
     nonisolated(unsafe) private static var directoryVolumes: [String: String] = [:]
     nonisolated(unsafe) private static var counters: [String: VolumeCounters] = [:]
+    nonisolated(unsafe) private static var volumeNames: [String: String] = [:]
 
     private final class VolumeCounters {
         var bytes: UInt64 = 0
@@ -71,10 +72,27 @@ public enum IOWork {
         {
             id = "dev\(device)"
         }
+        let name = mountPoint(of: directory.isEmpty ? "." : directory)
         lock.lock()
         directoryVolumes[directory] = id
+        if volumeNames[id] == nil { volumeNames[id] = name }
         lock.unlock()
         return id
+    }
+
+    /// Where a directory's volume is mounted, for the status line.
+    private static func mountPoint(of directory: String) -> String {
+        #if canImport(Darwin)
+        var info = statfs()
+        if statfs(directory, &info) == 0 {
+            return withUnsafePointer(to: &info.f_mntonname) {
+                $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) {
+                    String(cString: $0)
+                }
+            }
+        }
+        #endif
+        return directory
     }
 
     static func gate(forVolume volume: String) -> ResizableGate {
@@ -151,6 +169,8 @@ public enum IOWork {
     /// Bytes moved per volume since launch, and the streams in use and waiting.
     public struct VolumeStatus: Sendable {
         public let volume: String
+        /// Mount point, e.g. /Volumes/rp
+        public let name: String
         public let bytes: UInt64
         public let inFlight: Int
         public let waiting: Int
@@ -161,7 +181,8 @@ public enum IOWork {
         lock.lock()
         defer { lock.unlock() }
         return gates.map { volume, gate in
-            VolumeStatus(volume: volume, bytes: counters[volume]?.bytes ?? 0,
+            VolumeStatus(volume: volume, name: volumeNames[volume] ?? volume,
+                         bytes: counters[volume]?.bytes ?? 0,
                          inFlight: gate.inFlight, waiting: gate.waiting, width: gate.max)
         }
     }

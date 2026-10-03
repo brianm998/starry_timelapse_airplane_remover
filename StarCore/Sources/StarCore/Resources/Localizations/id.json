@@ -878,5 +878,6 @@
   "warning.title.memory_pressure": "Memori menipis",
   "warning.title.output_write_failed": "Keluaran tidak bisa ditulis",
   "warning.title.oversized_reservation": "Batas memori terlampaui",
-  "warning.title.previous_run_died": "Proses sebelumnya berhenti"
+  "warning.title.previous_run_died": "Proses sebelumnya berhenti",
+  "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive."
 }
