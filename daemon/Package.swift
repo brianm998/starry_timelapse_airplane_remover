@@ -1,22 +1,26 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
+// Absolute, not "../StarDecisionTrees/...": under swiftbuild (the `swift build`
+// default as of Swift 6.4) the Swift driver's working directory is the repo root,
+// not this package, so a relative -I misses the module. See cli/Package.swift.
+let dtRoot = "\(Context.packageDirectory)/../StarDecisionTrees"
 #if os(macOS)
-let dtInclude = "../StarDecisionTrees/include/release/macos"
-let dtLib     = "../StarDecisionTrees/lib/release/macos"
-let dtLibFile = "../StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a"
+let dtInclude = "\(dtRoot)/include/release/macos"
+let dtLib     = "\(dtRoot)/lib/release/macos"
+let dtLibFile = "\(dtRoot)/lib/release/macos/libStarDecisionTrees.a"
 #elseif os(Linux)
-let dtInclude = "../StarDecisionTrees/include/release/linux"
-let dtLib     = "../StarDecisionTrees/lib/release/linux"
-let dtLibFile = "../StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a"
+let dtInclude = "\(dtRoot)/include/release/linux"
+let dtLib     = "\(dtRoot)/lib/release/linux"
+let dtLibFile = "\(dtRoot)/lib/release/linux/libStarDecisionTrees.a"
 #elseif os(Windows)
-let dtInclude = "../StarDecisionTrees/include/release/windows"
-let dtLib     = "../StarDecisionTrees/lib/release/windows"
-let dtLibFile = "../StarDecisionTrees/lib/release/windows/StarDecisionTrees.lib"
+let dtInclude = "\(dtRoot)/include/release/windows"
+let dtLib     = "\(dtRoot)/lib/release/windows"
+let dtLibFile = "\(dtRoot)/lib/release/windows/StarDecisionTrees.lib"
 #else
-let dtInclude = "../StarDecisionTrees/include/release/macos"
-let dtLib     = "../StarDecisionTrees/lib/release/macos"
-let dtLibFile = "../StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a"
+let dtInclude = "\(dtRoot)/include/release/macos"
+let dtLib     = "\(dtRoot)/lib/release/macos"
+let dtLibFile = "\(dtRoot)/lib/release/macos/libStarDecisionTrees.a"
 #endif
 
 let package = Package(

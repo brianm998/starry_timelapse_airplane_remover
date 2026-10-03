@@ -7,23 +7,36 @@ import PackageDescription
 // All three platforms consume the artifacts produced by
 // StarDecisionTrees/release.sh, which writes into lib/release/<platform>/
 // and include/release/<platform>/. There is no separate debug build script.
+//
+// Absolute, not "../StarDecisionTrees/...": a relative path in unsafeFlags is
+// resolved against whatever working directory the build system gives the tool,
+// and the build systems disagree. The native one resolves it from this
+// directory, but swiftbuild (the `swift build` default as of Swift 6.4) runs
+// the Swift driver with -working-directory set to the common ancestor of the
+// local packages — the repo root — so "../StarDecisionTrees" points beside the
+// checkout and `import StarDecisionTrees` fails with "unable to resolve module
+// dependency". Its link step does still run from here, so the relative library
+// paths kept working, but they are absolute too rather than relying on that.
+// (StarCpp/Package.swift gets around the same thing for its OpenCV headers
+// with .headerSearchPath, which has no equivalent for a Swift module path.)
+let dtRoot = "\(Context.packageDirectory)/../StarDecisionTrees"
 #if os(macOS)
-let dtIncludeDebug   = "../StarDecisionTrees/include/release/macos"
-let dtLibDebug       = "../StarDecisionTrees/lib/release/macos"
-let dtLibDebugFile   = "../StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a"
+let dtIncludeDebug   = "\(dtRoot)/include/release/macos"
+let dtLibDebug       = "\(dtRoot)/lib/release/macos"
+let dtLibDebugFile   = "\(dtRoot)/lib/release/macos/libStarDecisionTrees.a"
 #elseif os(Linux)
-let dtIncludeDebug   = "../StarDecisionTrees/include/release/linux"
-let dtLibDebug       = "../StarDecisionTrees/lib/release/linux"
-let dtLibDebugFile   = "../StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a"
+let dtIncludeDebug   = "\(dtRoot)/include/release/linux"
+let dtLibDebug       = "\(dtRoot)/lib/release/linux"
+let dtLibDebugFile   = "\(dtRoot)/lib/release/linux/libStarDecisionTrees.a"
 #elseif os(Windows)
 // SPM on Windows produces TargetName.lib (no "lib" prefix, .lib not .a).
-let dtIncludeDebug   = "../StarDecisionTrees/include/release/windows"
-let dtLibDebug       = "../StarDecisionTrees/lib/release/windows"
-let dtLibDebugFile   = "../StarDecisionTrees/lib/release/windows/StarDecisionTrees.lib"
+let dtIncludeDebug   = "\(dtRoot)/include/release/windows"
+let dtLibDebug       = "\(dtRoot)/lib/release/windows"
+let dtLibDebugFile   = "\(dtRoot)/lib/release/windows/StarDecisionTrees.lib"
 #else
-let dtIncludeDebug   = "../StarDecisionTrees/include/debug"
-let dtLibDebug       = "../StarDecisionTrees/lib/debug"
-let dtLibDebugFile   = "../StarDecisionTrees/lib/debug/libStarDecisionTrees.a"
+let dtIncludeDebug   = "\(dtRoot)/include/debug"
+let dtLibDebug       = "\(dtRoot)/lib/debug"
+let dtLibDebugFile   = "\(dtRoot)/lib/debug/libStarDecisionTrees.a"
 #endif
 
 let package = Package(
