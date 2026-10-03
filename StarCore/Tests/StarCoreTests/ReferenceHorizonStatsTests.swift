@@ -317,7 +317,9 @@ final class ReferenceHorizonStatsTests: XCTestCase {
     /// The mean must not drift as samples are reordered — the stats are computed per reference frame
     /// and compared across frames.
     func testTheFitIsIndependentOfSampleOrder() throws {
-        let samples: [(Double, Double, Double)] = (0..<30).map { i in
+        // `i` typed explicitly: left to inference, this is more than the Swift 6.4 type
+        // checker will solve in time, and the build fails on it outright.
+        let samples: [(Double, Double, Double)] = (0..<30).map { (i: Int) in
             (Double(i % 7), Double(i % 5) * 2, Double(i % 3) * 3)
         }
         let forward = try XCTUnwrap(GaussianStats3D(samples: samples))

@@ -1320,12 +1320,15 @@ public struct Config: Codable, Sendable {
         // there is no prompt, and a run that quietly detected at two thirds when the user
         // expected full resolution would be indistinguishable from a bug.
         let mp = { (pixels: Int) in String(format: "%.1f", Double(pixels) / 1_000_000) }
-        Log.i("frames are \(mp(advice.imagePixels))MP against a "
-            + "\(mp(advice.thresholdPixels))MP full resolution limit on this machine "
-            + "(\(advice.fullResolutionConcurrency) of \(advice.frameConcurrency) "
-            + "keypoint ops fit), defaulting the keypoint divisor to "
-            + "\(advice.recommendedDivisor). Pass --keypoint-divisor 1 for full "
-            + "resolution.")
+        // Appended a piece at a time: as one `+` chain this is more than the Swift 6.4 type
+        // checker will solve in time, and the build fails on it outright.
+        var message = "frames are \(mp(advice.imagePixels))MP against a "
+        message += "\(mp(advice.thresholdPixels))MP full resolution limit on this machine "
+        message += "(\(advice.fullResolutionConcurrency) of \(advice.frameConcurrency) "
+        message += "keypoint ops fit), defaulting the keypoint divisor to "
+        message += "\(advice.recommendedDivisor). Pass --keypoint-divisor 1 for full "
+        message += "resolution."
+        Log.i(message)
     }
 
     /// Decode a config.json, tolerating keys it does not contain.

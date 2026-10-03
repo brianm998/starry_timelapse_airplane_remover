@@ -480,17 +480,20 @@ public actor MemoryMonitor {
         }
 
         let startTime = Date()
-        Log.i("MemoryMonitor: waiting to reserve \(bytes / (1024*1024))MB — " +
-              "reserved=\(reservedBytes / (1024*1024))MB, budget=\(admissionBudget / (1024*1024))MB" +
-              (admissionBudget < budget
-                 ? " (narrowed from \(budget / (1024*1024))MB — the rest of the machine is " +
-                   "holding memory star cannot have; " +
-                   "\(reality.systemAvailable() / (1024*1024))MB available, " +
-                   // The ratio is the other half of any "why is this stalling" question:
-                   // near 1.00 the ledger is real and the stall is the machine, well under
-                   // it the ledger is predicted peaks that are not landing together.
-                   "ledger realized=\(String(format: "%.2f", realizedRatio)))"
-                 : ""))
+        // Appended a piece at a time: as one `+` chain this is more than the Swift 6.4 type
+        // checker will solve in time, and the build fails on it outright.
+        var message = "MemoryMonitor: waiting to reserve \(bytes / (1024*1024))MB — "
+        message += "reserved=\(reservedBytes / (1024*1024))MB, budget=\(admissionBudget / (1024*1024))MB"
+        if admissionBudget < budget {
+            message += " (narrowed from \(budget / (1024*1024))MB — the rest of the machine is "
+            message += "holding memory star cannot have; "
+            message += "\(reality.systemAvailable() / (1024*1024))MB available, "
+            // The ratio is the other half of any "why is this stalling" question:
+            // near 1.00 the ledger is real and the stall is the machine, well under
+            // it the ledger is predicted peaks that are not landing together.
+            message += "ledger realized=\(String(format: "%.2f", realizedRatio)))"
+        }
+        Log.i(message)
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let id = nextWaiterId
@@ -865,14 +868,19 @@ public actor MemoryMonitor {
            lastWithholdLog.map({ now.timeIntervalSince($0) >= 60 }) ?? true
         {
             lastWithholdLog = now
-            Log.i("MemoryMonitor: \(waiters.count) waiter(s) held with forced admission " +
-                  "withheld — " +
-                  (atOrUnderBudget
-                     ? "the OS reports critical memory pressure"
-                     : "the ledger is already \((reservedBytes - budget) / (1024*1024))MB " +
-                       "over the \(budget / (1024*1024))MB budget from an earlier forced " +
-                       "admission") +
-                  ". Waiting for in-flight work to finish rather than adding to it.")
+            // Appended a piece at a time: as one `+` chain this is more than the Swift 6.4
+            // type checker will solve in time, and the build fails on it outright.
+            var message = "MemoryMonitor: \(waiters.count) waiter(s) held with forced admission "
+            message += "withheld — "
+            if atOrUnderBudget {
+                message += "the OS reports critical memory pressure"
+            } else {
+                message += "the ledger is already \((reservedBytes - budget) / (1024*1024))MB "
+                message += "over the \(budget / (1024*1024))MB budget from an earlier forced "
+                message += "admission"
+            }
+            message += ". Waiting for in-flight work to finish rather than adding to it."
+            Log.i(message)
         }
 
         for waiter in waiters {
