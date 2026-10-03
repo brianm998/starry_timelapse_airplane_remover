@@ -106,6 +106,9 @@ public final actor FrameGraphBuilder {
         Task {
             await MemoryMonitor.shared.configure(budgetFraction: config.maxMatMemoryFraction)
             await keypointCache.configure(maxBytes: config.keypointCacheMaxMB * 1024 * 1024)
+            await finalHorizonMaskBudget.configure(
+              limit: FinalHorizonMaskBudget.limit(
+                forConcurrency: config.numberOfFramesToProcessConcurrently))
         }
     }
 
