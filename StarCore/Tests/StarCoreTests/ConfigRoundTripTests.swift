@@ -182,6 +182,11 @@ final class ConfigRoundTripTests: XCTestCase {
         try put("pixelFormat", Self.other(than: Config().pixelFormat))
         try put("muxer", Self.other(than: Config().muxer))
         try put("frameRate", Self.other(than: Config().frameRate))
+        try put("resourceProfile", ResourceProfile.light)       // default is .full
+        try put("customResources",
+                CustomResourceLimits(cpuWidth: 3, qos: .background, gpuWidth: 2,
+                                     gpuDutyCycle: 0.5, diskStreamsPerVolume: 1,
+                                     ioPolicy: .throttle))
 
         // collections that default to empty: there is nothing in them to perturb
         try put("startupHorizonFrameIndices", [3, 9, 17])

@@ -1,5 +1,4 @@
 import Foundation
-import Semaphore
 import logging
 
 /// Runs blocking native work — OpenCV, and the C++ bridge generally — off
@@ -42,31 +41,58 @@ import logging
 ///
 /// ## The limit
 ///
-/// Deliberately the same `TaskRunner.maxConcurrentTasks` that bounded this work
-/// before, so the amount of native work running at once does not change — only
-/// which threads it runs on.  Note that each of these operations fans out
-/// further inside OpenCV, which selects the GCD backend and ignores
-/// `cv::setNumThreads` for values above one (see the comment on
-/// `medianMergeTyped` in ImageAligner.cpp), so this bounds the number of
-/// concurrent *operations*, not the total thread count.
+/// The CPU gate of the resource profile (`ResourceLimits.cpuWidth`): its width and the QoS
+/// its items run at are set by `ResourceControl.apply` and change while the run is going.
+/// A change lets items already running finish under the old values and gives new ones the
+/// new. Note that each of these operations fans out further inside OpenCV, whose GCD
+/// backend ignores `cv::setNumThreads` for values above one (see the comment on
+/// `medianMergeTyped` in ImageAligner.cpp) — so this bounds the number of concurrent
+/// *operations*, not the total thread count, and the QoS reaches OpenCV's workers only
+/// through the `DISPATCH_APPLY_AUTO` patch in `opencv/build.sh`.
+///
+/// Also available as `CPUWork`.
 public enum NativeWork {
 
     /// Real threads for blocking work.  Concurrent, but only ever handed
-    /// `concurrencyLimit` items at a time.
+    /// `gate.max` items at a time.
     private static let queue = DispatchQueue(label: "star.native-work",
                                              qos: .userInitiated,
                                              attributes: .concurrent)
 
-    public static let concurrencyLimit = Int(TaskRunner.maxConcurrentTasks)
+    static let gate = ResizableGate(max: PhysicalCores.count)
 
-    private static let slots = AsyncSemaphore(value: concurrencyLimit)
+    private static let qosLock = NSLock()
+    nonisolated(unsafe) private static var qos: DispatchQoS = .userInitiated
+
+    /// Current width, for logs and the governor.
+    public static var concurrencyLimit: Int { gate.max }
+
+    /// Items waiting for a CPU slot.
+    public static var waiting: Int { gate.waiting }
+
+    /// Items running.
+    public static var running: Int { gate.inFlight }
+
+    /// Seconds of wall time spent inside the gate across all items, for the governor.
+    public static var busySeconds: Double { busy.seconds }
+    private static let busy = BusyClock()
+
+    public static func setLimits(width: Int, qos newQoS: ResourceQoS) {
+        gate.set(max: width)
+        qosLock.withLock { qos = newQoS.dispatchQoS }
+    }
+
+    private static var currentQoS: DispatchQoS { qosLock.withLock { qos } }
 
     /// Run `work` on a native thread, suspending the caller until it finishes.
     public static func run<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
-        await slots.wait()
-        defer { slots.signal() }
+        await gate.acquire()
+        defer { gate.release() }
+        let itemQoS = currentQoS
         return await withCheckedContinuation { continuation in
-            queue.async { continuation.resume(returning: work()) }
+            queue.async(qos: itemQoS, flags: .enforceQoS) {
+                continuation.resume(returning: busy.measure(work))
+            }
         }
     }
 
@@ -74,13 +100,35 @@ public enum NativeWork {
     public static func run<T: Sendable>(
       _ work: @escaping @Sendable () throws -> T
     ) async throws -> T {
-        await slots.wait()
-        defer { slots.signal() }
+        await gate.acquire()
+        defer { gate.release() }
+        let itemQoS = currentQoS
         return try await withCheckedThrowingContinuation { continuation in
-            queue.async {
-                do { continuation.resume(returning: try work()) }
+            queue.async(qos: itemQoS, flags: .enforceQoS) {
+                do { continuation.resume(returning: try busy.measure(work)) }
                 catch { continuation.resume(throwing: error) }
             }
         }
     }
+}
+
+public typealias CPUWork = NativeWork
+
+/// Accumulates the wall time work items spend running, across threads.
+final class BusyClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var nanoseconds: UInt64 = 0
+
+    var seconds: Double { Double(lock.withLock { nanoseconds }) / 1_000_000_000 }
+
+    func measure<T>(_ work: () throws -> T) rethrows -> T {
+        let start = DispatchTime.now().uptimeNanoseconds
+        defer {
+            let used = DispatchTime.now().uptimeNanoseconds - start
+            lock.withLock { nanoseconds &+= used }
+        }
+        return try work()
+    }
+
+    func add(_ used: UInt64) { lock.withLock { nanoseconds &+= used } }
 }

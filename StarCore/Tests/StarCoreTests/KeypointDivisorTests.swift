@@ -167,6 +167,7 @@ final class KeypointDivisorTests: XCTestCase {
     func testReducedResolutionBuysConcurrency() {
         let physical: UInt64 = 128 * 1024 * 1024 * 1024
         var full = config()
+        full.resourceProfile = .custom
         full.numberOfFramesToProcessConcurrently = 64   // so memory is the binding term
         var reduced = full
         reduced.alignmentKeypointDetectionDivisor = 2.0

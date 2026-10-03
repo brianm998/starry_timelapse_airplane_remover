@@ -32,6 +32,7 @@ final class KeypointDivisorAdviceTests: XCTestCase {
         c.imageWidth = Int((height * 1.5).rounded())
         c.imageBytesPerPixel = 6
         c.imageBitsPerComponent = 16
+        c.resourceProfile = .custom
         c.numberOfFramesToProcessConcurrently = cores
         return c
     }
@@ -264,6 +265,7 @@ final class AutomaticKeypointDivisorTests: XCTestCase {
                             memory: UInt64 = AutomaticKeypointDivisorTests.iMacProMemory,
                             before: (inout Config) -> Void = { _ in }) -> Config {
         var c = Config()
+        c.resourceProfile = .custom
         c.numberOfFramesToProcessConcurrently = cores
         let info = imageInfo(megapixels: megapixels)
         c.imageWidth = info.imageWidth

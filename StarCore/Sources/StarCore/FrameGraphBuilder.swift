@@ -100,15 +100,18 @@ public final actor FrameGraphBuilder {
     }
 
     public func update(from config: Config) {
-        queue.maxConcurrentOperationCount = config.numberOfFramesToProcessConcurrently
+        // Every per-resource limit, live: CPU/IO/GPU gates, QoS, I/O policy. The queue
+        // below is wide by design — memory decides how much is in flight.
+        ResourceControl.apply(config)
+        queue.maxConcurrentOperationCount = config.pipelineDepth
         applyKeypointLimit(from: config, context: "configure")
 
         Task {
-            await MemoryMonitor.shared.configure(budgetFraction: config.maxMatMemoryFraction)
+            await MemoryMonitor.shared.configure(budgetFraction: config.effectiveMemoryFraction)
             await keypointCache.configure(maxBytes: config.keypointCacheMaxMB * 1024 * 1024)
             await finalHorizonMaskBudget.configure(
               limit: FinalHorizonMaskBudget.limit(
-                forConcurrency: config.numberOfFramesToProcessConcurrently))
+                forConcurrency: config.frameConcurrency))
         }
     }
 
@@ -169,7 +172,7 @@ public final actor FrameGraphBuilder {
         message += "\(config.effectiveKeypointMemoryMultiplier()) "
         message += "(divisor \(config.quantizedKeypointDivisor)) = "
         message += "\(kc.bytesPerOp / (1024 * 1024))MB/op of \(kc.budget / (1024 * 1024))MB budget), "
-        message += "frames cap \(config.numberOfFramesToProcessConcurrently)\(explicit) "
+        message += "frames cap \(config.frameConcurrency)\(explicit) "
         message += "→ bound by \(kc.binding)"
         Log.i(message)
     }

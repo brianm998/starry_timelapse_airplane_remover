@@ -898,7 +898,18 @@ public struct Config: Codable, Sendable {
     // How many frames the pipeline may work on at once.  Physical cores rather than the
     // logical count `ProcessInfo` reports: see `PhysicalCores`, which explains why the
     // hyperthreads are not worth counting here and why over-counting them costs RAM.
+    //
+    // Since the resource profile, this is Custom's "pipeline depth cap" and nothing else:
+    // the other profiles size the queue from the machine (`Config.resources`). Old configs
+    // keep the key, and it takes effect when they switch to Custom.
     public var numberOfFramesToProcessConcurrently: Int = PhysicalCores.count
+
+    /// How much of this Mac star may use. See `ResourceProfile`, `Config.resources`.
+    /// Defaults to Full, and so does every config that predates the setting.
+    public var resourceProfile: ResourceProfile = .full
+
+    /// The editable limits behind `.custom`; ignored by the other profiles.
+    public var customResources: CustomResourceLimits = .fromFull
     
     // Removed: horizonVerticalShiftAmount.  It scooted the horizon mask up by a
     // hand-entered number of pixels before compositing the star-aligned sky over the
@@ -1429,6 +1440,9 @@ public struct Config: Codable, Sendable {
         self.horizonMinY = try c.decodeIfPresent(Int.self, forKey: .horizonMinY)
         self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
         self.numberOfFramesToProcessConcurrently = try c.decodeIfPresent(Int.self, forKey: .numberOfFramesToProcessConcurrently) ?? self.numberOfFramesToProcessConcurrently
+        // Old configs have no profile and start at Full; their frame count waits in Custom.
+        self.resourceProfile = try c.decodeIfPresent(ResourceProfile.self, forKey: .resourceProfile) ?? self.resourceProfile
+        self.customResources = try c.decodeIfPresent(CustomResourceLimits.self, forKey: .customResources) ?? self.customResources
 
 
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
@@ -1948,11 +1962,11 @@ public struct Config: Codable, Sendable {
     /// frame count was the smaller term, which is why it appeared to do nothing at
     /// 12MP and everything at 42MP.
     public func keypointConcurrency(physicalMemory: UInt64) -> KeypointConcurrency {
-        let budget = UInt64(Double(physicalMemory) * maxMatMemoryFraction)
+        let budget = UInt64(Double(physicalMemory) * effectiveMemoryFraction)
         let bytesPerOp = workingFrameBytes * UInt64(max(effectiveKeypointMemoryMultiplier(), 1))
 
-        var limit = max(1, numberOfFramesToProcessConcurrently)
-        var binding = "numberOfFramesToProcessConcurrently"
+        var limit = frameConcurrency
+        var binding = "frame concurrency"
 
         var budgetLimit: Int? = nil
         if bytesPerOp > 0 {
@@ -2043,9 +2057,9 @@ public struct Config: Codable, Sendable {
         let pixels = imageWidth * imageHeight
         guard perPixel > 0, pixels > 0, physicalMemory > 0 else { return nil }
 
-        let frameConcurrency = max(1, numberOfFramesToProcessConcurrently)
+        let frameConcurrency = self.frameConcurrency
         let bytesPerPixelPerOp = perPixel * max(keypointMemoryMultiplier, 1)
-        let budget = Double(physicalMemory) * maxMatMemoryFraction
+        let budget = Double(physicalMemory) * effectiveMemoryFraction
 
         // The largest frame that still fits frameConcurrency ops in the budget.
         let threshold = Int(budget / Double(frameConcurrency * bytesPerPixelPerOp))

@@ -34,8 +34,20 @@ public final class DecodedFrameStore: @unchecked Sendable {
     public private(set) var decodeCount = 0
 
     /// The actual decode. Replaceable so tests can count calls without real files.
+    ///
+    /// By default a read through `IOWork`, so a native thread inside a C++ merge takes one
+    /// of its volume's streams for exactly as long as the read takes. This runs
+    /// synchronously on that thread — see `StarCppBridge.ImageCache.setLoader` — so the
+    /// gate is acquired blocking. It cannot deadlock: a stream is held only for the read,
+    /// which waits on nothing else.
     nonisolated(unsafe) var decoder: @Sendable (String) -> MatWrapper? = { filename in
-        MatWrapper.load(fromFilename: filename)
+        IOWork.runBlocking(path: filename, bytes: DecodedFrameStore.fileSize(filename)) {
+            MatWrapper.load(fromFilename: filename)
+        }
+    }
+
+    static func fileSize(_ path: String) -> Int {
+        ((try? FileManager.default.attributesOfItem(atPath: path)[.size]) as? NSNumber)?.intValue ?? 0
     }
 
     init() {}

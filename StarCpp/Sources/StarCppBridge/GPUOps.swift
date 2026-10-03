@@ -16,6 +16,40 @@ import MetalPerformanceShaders
 
 public enum GPUOps {
 
+    /// Bounds how many GPU entry points are inside Metal at once, across every caller.
+    /// Resizable while running — see `setConcurrency`.
+    static let gate = BlockingGate(max: 8)
+
+    private static let stateLock = NSLock()
+    nonisolated(unsafe) private static var _dutyCycle = 1.0
+    nonisolated(unsafe) private static var _busyNanoseconds: UInt64 = 0
+
+    /// Width of the GPU gate. In-flight work finishes under the old width.
+    public static func setConcurrency(_ slots: Int) { gate.set(max: slots) }
+
+    public static var concurrency: Int { gate.max }
+
+    /// Fraction (0, 1] of the device this process may hold: after each GPU op the slot is
+    /// kept for as long as the op ran, scaled by `1/duty - 1`. 1 means no throttling.
+    public static func setDutyCycle(_ duty: Double) {
+        stateLock.withLock { _dutyCycle = min(max(duty, 0.05), 1.0) }
+    }
+
+    static var dutyCycle: Double { stateLock.withLock { _dutyCycle } }
+
+    /// Seconds spent inside GPU slots since launch (wall time of the entry points, which
+    /// is the GPU's work plus the encode and wait around it). For the resource governor.
+    public static var busySeconds: Double {
+        Double(stateLock.withLock { _busyNanoseconds }) / 1_000_000_000
+    }
+
+    /// GPU entry points currently waiting for a slot.
+    public static var waiting: Int { gate.waiting }
+
+    static func record(busyNanoseconds: UInt64) {
+        stateLock.withLock { _busyNanoseconds &+= busyNanoseconds }
+    }
+
     /// Registers the Metal backend with the C++ layer if this machine has one, and
     /// reports whether it did. Idempotent and safe to call from every client's
     /// startup path — `StarCore.ImageCache.init()` is where it is actually called,
@@ -197,7 +231,9 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// On a discrete GPU each slot it holds still has every input copied (9
     /// frames for 8 neighbours) plus the result, about half of what the old
     /// version held. The pyramid builders are unchanged by any of this.
-    private let gpuSlots = DispatchSemaphore(value: 8)
+    ///
+    /// The width now lives in `GPUOps.gate`, which can be resized mid-run
+    /// (`GPUOps.setConcurrency`) and is shared by every entry point.
 
     /// The merges' bookkeeping: see `GPUOps.mergeCounts` and
     /// `GPUOps.setDiscreteMergesForTesting`.
@@ -217,9 +253,20 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// Runs `body` inside `gpuSlots`. Every public entry point below must go
     /// through this rather than calling into Metal directly.
     private func withGPUSlot<T>(_ body: () -> T) -> T {
-        gpuSlots.wait()
-        defer { gpuSlots.signal() }
-        return body()
+        GPUOps.gate.acquire()
+        defer { GPUOps.gate.release() }
+        let start = DispatchTime.now().uptimeNanoseconds
+        let result = body()
+        let used = DispatchTime.now().uptimeNanoseconds - start
+        GPUOps.record(busyNanoseconds: used)
+        // Duty cycle: after an op that used the GPU for `t`, keep the slot for another
+        // `t * (1/duty - 1)` so this caller's share of the device is at most `duty`.
+        let duty = GPUOps.dutyCycle
+        if duty < 1.0, duty > 0 {
+            let pause = Double(used) * (1.0 / duty - 1.0) / 1_000_000_000
+            if pause > 0 { Thread.sleep(forTimeInterval: pause) }
+        }
+        return result
     }
     let warpU8: MTLComputePipelineState
     let warpU16: MTLComputePipelineState
