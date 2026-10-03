@@ -37,8 +37,19 @@ final public actor FrameHorizonProcessor {
     // Cached result of loadOrCreateFinalHorizonMask().  The horizon mask is
     // computed once per frame and never changes during a processing run.
     // Cleared by recomputeMergedHorizon* whenever the mask is intentionally
-    // regenerated (e.g. after a reference-horizon edit in the GUI).
+    // regenerated (e.g. after a reference-horizon edit in the GUI), and by
+    // `maskBudget` whenever more recently used frames need the room.  Set and
+    // cleared only through `keep(finalHorizonMask:)` and
+    // `releaseCachedFinalHorizonMask()`, so the budget always knows who holds one.
     private var cachedFinalHorizonMask: HorizonMask?
+
+    /// Where holding `cachedFinalHorizonMask` is booked.  The process-wide budget, except in
+    /// tests that need a small one of their own.
+    private var maskBudget: FinalHorizonMaskBudget = finalHorizonMaskBudget
+
+    internal func setMaskBudgetForTesting(_ budget: FinalHorizonMaskBudget) {
+        maskBudget = budget
+    }
 
     init(
         frameIndex: Int,
@@ -89,7 +100,7 @@ final public actor FrameHorizonProcessor {
           ofType: .mergedHorizon,
           atSize: .original
         ) else { return }
-        cachedFinalHorizonMask = nil
+        await releaseCachedFinalHorizonMask()
         imageAccessor.deleteImages(
           frameIndex: frameIndex,
           ofTypes: [.mergedHorizon],
@@ -121,7 +132,7 @@ final public actor FrameHorizonProcessor {
     /// wrong band is the failure the prior exists to prevent, and keeping it would mean the
     /// user's correction reached the merge and stopped there.
     public func discardMergedHorizon() async {
-        cachedFinalHorizonMask = nil
+        await releaseCachedFinalHorizonMask()
         imageAccessor.deleteImages(
           frameIndex: frameIndex,
           ofTypes: [.mergedHorizon],
@@ -161,7 +172,7 @@ final public actor FrameHorizonProcessor {
     public func recomputeMergedHorizon() async throws {
         // Reference frames serve their painted mask directly; nothing to recompute.
         if (try await loadHorizonReferenceMask()) != nil { return }
-        cachedFinalHorizonMask = nil
+        await releaseCachedFinalHorizonMask()
         // The only caller is `HorizonRefinementOp`, which exists for exactly one reason — a
         // reference was edited — so the detection those references guided is stale too and
         // has to go before the merge asks for it.  This is what makes the recompute cost a
@@ -170,15 +181,34 @@ final public actor FrameHorizonProcessor {
         await discardPriorGuidedDetection()
         // Bypass loadOrCreateMergedHorizonMask's "load if exists" check and go
         // straight to creation.  createMergedHorizonMask saves with overwrite:true.
-        cachedFinalHorizonMask = try await createMergedHorizonMask()
+        let recomputed = try await createMergedHorizonMask()
+        await keep(finalHorizonMask: recomputed)
     }
     /// Drop the cached final horizon mask.
     ///
     /// `loadOrCreateFinalHorizonMask()` rebuilds it from the merged (or raw) horizon on
     /// disk, so nothing is lost. At 42MP the mask is a full-frame 8-bit plane, ~40MB,
-    /// held for the life of the frame and invisible to the MemoryMonitor.
-    internal func releaseCachedFinalHorizonMask() {
+    /// invisible to the MemoryMonitor — which is why `maskBudget` limits how many frames
+    /// hold one, and calls this on the least recently used when it is over.
+    internal func releaseCachedFinalHorizonMask() async {
         cachedFinalHorizonMask = nil
+        await maskBudget.released(self)
+    }
+
+    /// Cache `mask` as this frame's final horizon mask, booking it against `maskBudget` and
+    /// releasing whichever frames that pushes out.
+    ///
+    /// Also what a cache hit calls, with the mask already held, so that a frame still being
+    /// worked on stays at the end of the budget the least recently used are taken from.
+    private func keep(finalHorizonMask mask: HorizonMask?) async {
+        cachedFinalHorizonMask = mask
+        guard mask != nil else {
+            await maskBudget.released(self)
+            return
+        }
+        for evicted in await maskBudget.holding(self) {
+            await evicted.releaseCachedFinalHorizonMask()
+        }
     }
 
     /// Whether a final horizon mask is currently held, for the tests that pin who
@@ -188,7 +218,10 @@ final public actor FrameHorizonProcessor {
     }
 
     internal func loadOrCreateFinalHorizonMask() async throws -> HorizonMask? {
-        if let cached = cachedFinalHorizonMask { return cached }
+        if let cached = cachedFinalHorizonMask {
+            await keep(finalHorizonMask: cached)
+            return cached
+        }
         let mask: HorizonMask?
         if let merged = try await loadOrCreateMergedHorizonMask() {
             mask = merged
@@ -196,7 +229,7 @@ final public actor FrameHorizonProcessor {
             // fall back to non-merged horizon mask
             mask = try await loadOrCreateHorizonMask()
         }
-        cachedFinalHorizonMask = mask
+        await keep(finalHorizonMask: mask)
         return mask
     }
     

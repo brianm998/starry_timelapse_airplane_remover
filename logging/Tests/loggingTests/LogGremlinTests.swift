@@ -75,6 +75,50 @@ final class LogGremlinTests: XCTestCase {
         XCTAssertNil(next)
     }
 
+    /// The queue is read from a moving head and compacted once the consumed prefix is at least
+    /// half of it, so order has to survive the compaction and lines arriving mid-drain.
+    func testTheQueueStaysFirstInFirstOutAcrossCompaction() async {
+        let gremlin = LogGremlin(selfDraining: false)
+        for i in 0..<5000 {
+            await gremlin.log("line \(i)", at: .error, logTime: 0, "F.swift", "f()", i)
+        }
+        var seen: [String] = []
+        for _ in 0..<3000 {
+            if let next = await gremlin.nextLog() { seen.append(next.message) }
+        }
+        for i in 5000..<7000 {
+            await gremlin.log("line \(i)", at: .error, logTime: 0, "F.swift", "f()", i)
+        }
+
+        let queued = await gremlin.pendingLogCount()
+        XCTAssertEqual(queued, 4000, "3000 of 5000 taken, then 2000 more queued")
+
+        while let next = await gremlin.nextLog() { seen.append(next.message) }
+        XCTAssertEqual(seen, (0..<7000).map { "line \($0)" })
+        let remaining = await gremlin.pendingLogCount()
+        XCTAssertEqual(remaining, 0)
+    }
+
+    /// Draining has to cost time in proportion to the backlog.  `removeFirst()` made every line
+    /// cost the whole backlog behind it, so a session with file logging at `.debug` — millions
+    /// of lines queued — drained slower the further behind it fell, and ended up twenty minutes
+    /// behind with no prospect of catching up.  At this size that took minutes.
+    func testALargeBacklogDrainsInLinearTime() async {
+        let gremlin = LogGremlin(selfDraining: false)
+        let count = 300_000
+        for i in 0..<count {
+            await gremlin.log("line \(i)", at: .error, logTime: 0, "F.swift", "f()", i)
+        }
+
+        let start = Date()
+        var drained = 0
+        while await gremlin.nextLog() != nil { drained += 1 }
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertEqual(drained, count)
+        XCTAssertLessThan(elapsed, 30, "draining \(count) lines took \(elapsed)s")
+    }
+
     // MARK: - the file location a caller gets attributed to
 
     /// The `#file` a log call captures is a full path, and only the last component belongs in the
@@ -315,6 +359,49 @@ final class LogGremlinTests: XCTestCase {
                        "the drain loop should have delivered every line, in order")
         let remaining = await gremlin.pendingLogCount()
         XCTAssertEqual(remaining, 0)
+    }
+
+    /// What the loop does each tick: at most `limit` lines, oldest first, with the rest left
+    /// queued for the next tick.
+    func testABatchDeliversAtMostItsLimitInOrder() async {
+        let gremlin = LogGremlin(selfDraining: false)
+        let handler = Recording(at: .verbose)
+        await gremlin.add(handler: handler, for: .console)
+        for i in 0..<10 {
+            await gremlin.log("line \(i)", at: .error, logTime: 0, "F.swift", "f()", i)
+        }
+
+        await gremlin.logBatch(limit: 4)
+        XCTAssertEqual(handler.lines.map(\.0), (0..<4).map { "line \($0)" })
+        let left = await gremlin.pendingLogCount()
+        XCTAssertEqual(left, 6)
+
+        await gremlin.logBatch(limit: 100)
+        XCTAssertEqual(handler.lines.map(\.0), (0..<10).map { "line \($0)" })
+        let none = await gremlin.pendingLogCount()
+        XCTAssertEqual(none, 0)
+    }
+
+    /// The loop has to keep up with a burst far bigger than one line per tick.  It used to
+    /// deliver exactly one line per 1ms sleep, so this burst alone took over twenty seconds —
+    /// and the gui's alignment chart queues one this size every few redraws at `.debug`.
+    func testASelfDrainingGremlinKeepsUpWithABurst() async throws {
+        let gremlin = LogGremlin()          // draining, as in production
+        let handler = Recording(at: .verbose)
+        await gremlin.add(handler: handler, for: .console)
+
+        let count = 20_000
+        for i in 0..<count {
+            await gremlin.log("line \(i)", at: .error, logTime: 0, "F.swift", "f()", i)
+        }
+
+        // up to ten seconds, against the twenty-plus one line per tick would need
+        for _ in 0..<1000 where handler.lines.count < count {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(handler.lines.count, count, "the drain loop fell behind a burst")
+        XCTAssertEqual(handler.lines.last?.0, "line \(count - 1)")
     }
 
     /// A gremlin built with the loop switched off must *not* deliver on its own — otherwise the

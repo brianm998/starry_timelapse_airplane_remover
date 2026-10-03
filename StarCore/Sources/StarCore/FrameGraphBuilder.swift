@@ -106,6 +106,9 @@ public final actor FrameGraphBuilder {
         Task {
             await MemoryMonitor.shared.configure(budgetFraction: config.maxMatMemoryFraction)
             await keypointCache.configure(maxBytes: config.keypointCacheMaxMB * 1024 * 1024)
+            await finalHorizonMaskBudget.configure(
+              limit: FinalHorizonMaskBudget.limit(
+                forConcurrency: config.numberOfFramesToProcessConcurrently))
         }
     }
 
@@ -151,14 +154,19 @@ public final actor FrameGraphBuilder {
         let explicit = config.maxConcurrentKeypointOps > 0
             ? ", explicit cap \(config.maxConcurrentKeypointOps)"
             : ""
-        Log.i("KeypointLimiter[\(context)]: \(kc.limit) concurrent keypoint ops — " +
-              "budget fits \(budgetLimit) " +
-              "(image \(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B, " +
-              "working frame \(config.workingFrameBytes/(1024*1024))MB × \(config.effectiveKeypointMemoryMultiplier()) " +
-              "(divisor \(config.quantizedKeypointDivisor)) = " +
-              "\(kc.bytesPerOp/(1024*1024))MB/op of \(kc.budget/(1024*1024))MB budget), " +
-              "frames cap \(config.numberOfFramesToProcessConcurrently)\(explicit) " +
-              "→ bound by \(kc.binding)")
+        // Appended a piece at a time, for the same reason as `MemoryMonitor.configure`'s log
+        // line: as one `+` chain this is more than the Swift 6.4 type checker will solve in
+        // time, and the build fails on it outright.
+        var message = "KeypointLimiter[\(context)]: \(kc.limit) concurrent keypoint ops — "
+        message += "budget fits \(budgetLimit) "
+        message += "(image \(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B, "
+        message += "working frame \(config.workingFrameBytes / (1024 * 1024))MB × "
+        message += "\(config.effectiveKeypointMemoryMultiplier()) "
+        message += "(divisor \(config.quantizedKeypointDivisor)) = "
+        message += "\(kc.bytesPerOp / (1024 * 1024))MB/op of \(kc.budget / (1024 * 1024))MB budget), "
+        message += "frames cap \(config.numberOfFramesToProcessConcurrently)\(explicit) "
+        message += "→ bound by \(kc.binding)"
+        Log.i(message)
     }
 
     public func add(operation: Operation) {
