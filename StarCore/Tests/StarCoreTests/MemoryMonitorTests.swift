@@ -202,8 +202,12 @@ final class MemoryMonitorTests: XCTestCase {
 
     /// A footprint already past the budget holds the reservation back — but as a waiter, so the
     /// forced-admission escape hatch still applies and it cannot deadlock.
+    ///
+    /// On a machine with nothing to spare, so that this is the forced path: with room to
+    /// spare and nothing in flight the reservation would go straight through instead — see
+    /// the serial-admission tests below.
     func testAFootprintPastTheBudgetHoldsAReservationBackButDoesNotDeadlock() async {
-        let m = await monitor(footprint: UInt64.max / 2)
+        let m = await monitor(footprint: UInt64.max / 2, available: 0)
         await m.configure(budgetFraction: 0.1, maxWaitTime: 1)
 
         let granted = await withTimeout(seconds: 20) { await m.reserve(bytes: 1 * mb) }
@@ -772,6 +776,73 @@ final class MemoryMonitorTests: XCTestCase {
         XCTAssertTrue(granted,
                       "warn level must delay a reservation, not strand it — see " +
                       "testWarnLevelPressureStillHoldsAdmissionsBack for the delay")
+    }
+
+    // MARK: - admitting one at a time past the brake
+    //
+    // With nothing in flight the reality brake is not waiting for anything: a footprint over
+    // budget is then memory held outside every reservation, and no release is coming that
+    // would shrink it. Parking the queue on the forced-admission timer cost a minute per op
+    // however quickly the ops ran — a 36GB M5 Max ran two-second keypoint ops at one a minute
+    // for twelve hours, with 11GB free and its GPU idle.
+
+    /// Footprint over budget, nothing reserved, plenty free: the reservation goes ahead
+    /// without waiting out a forced-admission interval it could never shorten.
+    func testWithNothingInFlightAReservationHeldOnlyByTheFootprintGoesAhead() async {
+        let m = await monitor(footprint: UInt64.max / 2)
+        await m.configure(budgetFraction: 0.8, maxWaitTime: 60, forcedAdmissionInterval: 60)
+
+        let granted = await withTimeout(seconds: 2) { await m.reserve(bytes: 1 * mb) }
+        XCTAssertTrue(granted, "nothing was in flight to wait for, so waiting was pointless")
+    }
+
+    /// One at a time: the next waits while the first is in flight, and goes as soon as it is
+    /// released rather than at the next forced admission.
+    func testAdmissionsPastTheBrakeAreOneAtATime() async {
+        let m = await monitor(footprint: UInt64.max / 2)
+        await m.configure(budgetFraction: 0.8, maxWaitTime: 60, forcedAdmissionInterval: 60)
+
+        await m.reserve(bytes: 1 * mb)      // admitted, as in the test above
+
+        let second = Flag()
+        let waiting = Task { await m.reserve(bytes: 1 * mb); await second.set() }
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        let admittedEarly = await second.value
+        XCTAssertFalse(admittedEarly,
+                       "a second reservation went ahead while the first was still in flight")
+
+        await m.release(bytes: 1 * mb)
+
+        var admitted = false
+        for _ in 0..<100 {
+            admitted = await second.value
+            if admitted { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(admitted, "releasing the first should have let the second straight through")
+        waiting.cancel()
+    }
+
+    /// The machine has to have room for the op itself. With less free than that, the rest of
+    /// the machine giving memory back is something worth waiting for.
+    func testAdmissionPastTheBrakeNeedsRoomOnTheMachineForTheOp() async {
+        let m = await monitor(footprint: UInt64.max / 2, available: 1034 * mb)
+        await m.setSystemFloor(bytes: 1024 * mb)
+        await m.configure(budgetFraction: 0.8, maxWaitTime: 60, forcedAdmissionInterval: 60)
+
+        let granted = await withTimeout(seconds: 2) { await m.reserve(bytes: 100 * mb) }
+        XCTAssertFalse(granted, "10MB above the floor cannot hold a 100MB op")
+    }
+
+    /// Nor while the OS reports pressure — the brake's other reason for holding, and one that
+    /// can clear on its own.
+    func testAdmissionPastTheBrakeIsWithheldUnderPressure() async {
+        let m = await monitor(footprint: UInt64.max / 2)
+        await m.configure(budgetFraction: 0.8, maxWaitTime: 60, forcedAdmissionInterval: 60)
+        await m.pressureChanged(level: .warning)
+
+        let granted = await withTimeout(seconds: 2) { await m.reserve(bytes: 1 * mb) }
+        XCTAssertFalse(granted, "pressure is the machine asking for memory back")
     }
 
     // MARK: - stats

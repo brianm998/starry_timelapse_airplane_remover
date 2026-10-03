@@ -46,6 +46,12 @@ You should have received a copy of the GNU General Public License along with sta
 /// exists to prevent. See `drainReadyWaiters()` for what happened when the "at most one
 /// outstanding" half of that was documented but not implemented.
 ///
+/// The reality brake has one exception of its own. When it is holding work only because
+/// star's own footprint is over budget, nothing is in flight that could bring it down, so
+/// waiting is pointless: the next reservation goes ahead one at a time, rather than one per
+/// `forcedAdmissionInterval`, for as long as the rest of the machine has room — see
+/// `admitsDespiteRealityHold`.
+///
 /// API:
 ///   - `reserve(bytes:)` — call before starting heavy work; suspends until
 ///     the accounting budget allows it.
@@ -155,6 +161,14 @@ public actor MemoryMonitor {
 
     /// Count of admissions the reality brake has held back, for `stats()`.
     private var realityHolds: Int = 0
+
+    /// Count of reservations admitted one at a time past the brake, because nothing was in
+    /// flight to wait for — see `admitsDespiteRealityHold`.
+    private var serialAdmissions: Int = 0
+
+    /// When `noteSerialAdmission` last logged, so a run working through a long stretch one op
+    /// at a time says so once a minute rather than once per op.
+    private var lastSerialAdmissionLog: Date?
 
     // MARK: - Realization
 
@@ -411,6 +425,15 @@ public actor MemoryMonitor {
         let admissionBudget = effectiveBudget()
         if reservedBytes + bytes <= admissionBudget {
             if let blocked = realityBlock() {
+                // Not ahead of anyone already queued: they are admitted from the drain, in
+                // order, the moment this rule allows it.
+                if waiters.isEmpty,
+                   admitsDespiteRealityHold(bytes, alreadyAdmitted: reservedBytes)
+                {
+                    reservedBytes += bytes
+                    noteSerialAdmission(bytes, heldBecause: blocked)
+                    return
+                }
                 realityHolds += 1
                 Log.w("MemoryMonitor: ledger has room for \(bytes / (1024*1024))MB but " +
                       "\(blocked) — waiting instead of admitting")
@@ -556,7 +579,9 @@ public actor MemoryMonitor {
     /// admissions permanently after the first heavy frame.
     ///
     /// A held-back reservation becomes a normal waiter, so the forced-admission escape
-    /// hatch still applies and the brake cannot deadlock the pipeline.
+    /// hatch still applies and the brake cannot deadlock the pipeline.  And when nothing at
+    /// all is in flight the brake is not waiting for anything, so it lets work through one
+    /// reservation at a time instead — see `admitsDespiteRealityHold`.
     ///
     /// `effectiveBudget()` now covers the same ground continuously rather than as a
     /// threshold, and it is the part that does the work: the two tests below are worst-case
@@ -596,6 +621,45 @@ public actor MemoryMonitor {
                    "\(systemFloorBytes / (1024*1024))MB"
         }
         return nil
+    }
+
+    /// Whether a reservation the reality brake is holding should go ahead anyway, because
+    /// holding it cannot help.
+    ///
+    /// The brake holds new work so that work already in flight can finish and give its memory
+    /// back.  With nothing in flight there is nothing to wait for: a footprint over budget is
+    /// then memory star is holding outside any reservation — caches, retained per-frame state,
+    /// allocator slack — and no release is coming that would shrink it.  Holding only parks
+    /// the queue on the forced-admission timer instead, one op per `forcedAdmissionInterval`
+    /// however quickly the ops themselves finish.  That is what a 36GB M5 Max spent twelve
+    /// hours doing, 11GB free and its GPU idle, on ops that each finished in a second or two.
+    ///
+    /// So admit one, and only one — `alreadyAdmitted` must be zero — and the next waits for it
+    /// to be released, as though the queue were one wide.  The overshoot stays a single op,
+    /// which is all forcing ever allowed; the minute between ops goes.
+    ///
+    /// Only while the rest of the machine is fine: the OS reports no pressure, and what it has
+    /// free above the floor star leaves alone covers this op outright.  When either fails,
+    /// waiting *can* help — the rest of the machine may give memory back — and the
+    /// forced-admission path keeps the say it always had.
+    private func admitsDespiteRealityHold(_ needed: UInt64, alreadyAdmitted: UInt64) -> Bool {
+        guard alreadyAdmitted == 0, pressureLevel == .normal else { return false }
+        let available = reality.systemAvailable()
+        guard available > systemFloorBytes else { return false }
+        return available - systemFloorBytes >= needed
+    }
+
+    private func noteSerialAdmission(_ bytes: UInt64, heldBecause blocked: String) {
+        serialAdmissions += 1
+        let now = Date()
+        guard lastSerialAdmissionLog.map({ now.timeIntervalSince($0) >= 60 }) ?? true
+        else { return }
+        lastSerialAdmissionLog = now
+        var message = "MemoryMonitor: admitting \(bytes / (1024*1024))MB although \(blocked) — "
+        message += "nothing is in flight that could free it, so waiting would only idle the "
+        message += "queue.  Admitting one reservation at a time while the machine has room "
+        message += "(\(serialAdmissions) so far)."
+        Log.w(message)
     }
 
     /// Begin watching the machine, independently of whether anything has reserved yet.
@@ -813,6 +877,18 @@ public actor MemoryMonitor {
 
         for waiter in waiters {
             if blocked == nil, speculativeReserved + waiter.needed <= admissionBudget {
+                released.append(waiter)
+                speculativeReserved += waiter.needed
+                continue
+            }
+
+            // Held by reality alone, with nothing in flight to wait for: the oldest waiter
+            // that fits goes now rather than at the next forced admission.  At most one per
+            // drain, since admitting it makes `speculativeReserved` non-zero.
+            if let blocked, speculativeReserved + waiter.needed <= admissionBudget,
+               admitsDespiteRealityHold(waiter.needed, alreadyAdmitted: speculativeReserved)
+            {
+                noteSerialAdmission(waiter.needed, heldBecause: blocked)
                 released.append(waiter)
                 speculativeReserved += waiter.needed
                 continue
