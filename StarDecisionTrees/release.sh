@@ -35,27 +35,53 @@ rm -rf include/release/$PLATFORM_DIR
 mkdir -p lib/release/$PLATFORM_DIR
 mkdir -p include/release/$PLATFORM_DIR
 
+# Ask swift build, given the same configuration and arch flags as a build,
+# where it put the products rather than assume a layout, and set BIN_PATH to
+# that directory and MODULE_PATH to the StarDecisionTrees.swiftmodule in it.
+# The native build system uses .build/<triple>/release and keeps modules in a
+# Modules/ subdirectory.  xcbuild (which older toolchains use to build more
+# than one arch) and swiftbuild (the default from Swift 6.4) put the module
+# beside the lib, in .build/apple/Products/Release and
+# .build/out/Products/Release respectively.
+find_products() {
+    BIN_PATH=$(swift build "$@" --show-bin-path)
+    BIN_PATH=${BIN_PATH%$'\r'}  # in case swift.exe ends its output with \r\n
+    MODULE_PATH=$BIN_PATH/Modules/StarDecisionTrees.swiftmodule
+    [ -e "$MODULE_PATH" ] || MODULE_PATH=$BIN_PATH/StarDecisionTrees.swiftmodule
+}
+
 if [ "$PLATFORM" = "Darwin" ]; then
     # macOS: build universal binary (x86_64 + arm64)
 
-    # this only produces the swift module for both arches (which we need),
-    # and a .o file, which is useless
+    # this produces the swift module for both arches (which we need).
+    # swiftbuild makes a universal .a here too, but xcbuild only leaves
+    # a .o file beside the module, which is useless
     swift build --configuration release -Xswiftc -O  --arch x86_64 --arch arm64
 
-    mv .build/apple/Products/Release/StarDecisionTrees.swiftmodule include/release/$PLATFORM_DIR
+    find_products --configuration release --arch x86_64 --arch arm64
+    mv "$MODULE_PATH" include/release/$PLATFORM_DIR
 
-    # build the real .a file
+    # use swiftbuild's universal .a if there is one (checking one arch per
+    # -verify_arch: Xcode 27's lipo rejects a list of them)
+    UNIVERSAL_LIB=$BIN_PATH/libStarDecisionTrees.a
+    if [ -f "$UNIVERSAL_LIB" ] &&
+       lipo "$UNIVERSAL_LIB" -verify_arch x86_64 &&
+       lipo "$UNIVERSAL_LIB" -verify_arch arm64; then
+        mv "$UNIVERSAL_LIB" lib/release/$PLATFORM_DIR
+    else
+        # build the real .a file, one arch at a time, moving each one out
+        # as soon as it is built in case both builds use the same directory
+        for ARCH in x86_64 arm64; do
+            swift build --configuration release -Xswiftc -O --arch $ARCH
+            find_products --configuration release --arch $ARCH
+            mv "$BIN_PATH/libStarDecisionTrees.a" .build/libStarDecisionTrees-$ARCH.a
+        done
 
-    # first for x86
-    swift build --configuration release -Xswiftc -O --arch x86_64
-
-    # next for arm
-    swift build --configuration release -Xswiftc -O --arch arm64
-
-    # then lipo them together
-    lipo .build/arm64-apple-macosx/release/libStarDecisionTrees.a \
-         .build/x86_64-apple-macosx/release/libStarDecisionTrees.a \
-          -create -output lib/release/$PLATFORM_DIR/libStarDecisionTrees.a
+        # then lipo them together
+        lipo .build/libStarDecisionTrees-arm64.a \
+             .build/libStarDecisionTrees-x86_64.a \
+              -create -output lib/release/$PLATFORM_DIR/libStarDecisionTrees.a
+    fi
 
 elif [ "$PLATFORM_DIR" = "windows" ]; then
     # Windows: single architecture build. Same memory-aware job cap as
@@ -89,20 +115,19 @@ elif [ "$PLATFORM_DIR" = "windows" ]; then
     # StarDecisionTrees.lib, so we rename .a -> .lib at the destination.
     # clang/lld on Windows accepts the GNU ar archive regardless of the
     # filename extension, since the cli passes the full path via -Xlinker.
-    BUILD_DIR=.build/x86_64-unknown-windows-msvc/release
-    if [ -f "$BUILD_DIR/libStarDecisionTrees.a" ]; then
-        mv "$BUILD_DIR/libStarDecisionTrees.a" \
+    find_products --configuration release
+    if [ -f "$BIN_PATH/libStarDecisionTrees.a" ]; then
+        mv "$BIN_PATH/libStarDecisionTrees.a" \
            lib/release/$PLATFORM_DIR/StarDecisionTrees.lib
-    elif [ -f "$BUILD_DIR/StarDecisionTrees.lib" ]; then
+    elif [ -f "$BIN_PATH/StarDecisionTrees.lib" ]; then
         # Fallback: older Swift / a future toolchain might emit a true .lib.
-        mv "$BUILD_DIR/StarDecisionTrees.lib" lib/release/$PLATFORM_DIR/
+        mv "$BIN_PATH/StarDecisionTrees.lib" lib/release/$PLATFORM_DIR/
     else
-        echo "ERROR: no StarDecisionTrees static archive found in $BUILD_DIR" >&2
-        ls -la "$BUILD_DIR" >&2 || true
+        echo "ERROR: no StarDecisionTrees static archive found in $BIN_PATH" >&2
+        ls -la "$BIN_PATH" >&2 || true
         exit 1
     fi
-    mv "$BUILD_DIR/Modules/StarDecisionTrees.swiftmodule" \
-       include/release/$PLATFORM_DIR/
+    mv "$MODULE_PATH" include/release/$PLATFORM_DIR/
 
 else
     # Linux: single architecture build.
@@ -118,6 +143,7 @@ else
 
     swift build --configuration release -Xswiftc -O -j "$JOBS"
 
-    mv .build/release/libStarDecisionTrees.a lib/release/$PLATFORM_DIR
-    mv .build/release/Modules/StarDecisionTrees.swiftmodule include/release/$PLATFORM_DIR
+    find_products --configuration release
+    mv "$BIN_PATH/libStarDecisionTrees.a" lib/release/$PLATFORM_DIR
+    mv "$MODULE_PATH" include/release/$PLATFORM_DIR
 fi
