@@ -286,10 +286,6 @@ struct RightPanel: View {
                             
                             let frameView = viewModel.currentFrameView
 
-                            AlignedNeighborFrameOverrideView(
-                              focusedField: $focusedField
-                            )
-
                             if !config.tripodHeadWasMoving {
                                 StaticNeighborFrameOverrideView(
                                   focusedField: $focusedField
@@ -618,72 +614,6 @@ struct EditableNumberOfFramesToProcessView: View {
             alwaysOpen: alwaysOpen
             // no extra commit side‐effects here
         )
-    }
-}
-
-/// Shows and edits the per-frame override for numberAlignedNeighborFrames.
-/// When the current frame has an override, a "Reset" button reverts it to the
-/// global default.  Changing the value invalidates existing star-alignment
-/// images and immediately triggers reprocessing for that frame.
-struct AlignedNeighborFrameOverrideView: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<FocusedField?>.Binding
-
-    @State private var localCount: Int = 8
-
-    var body: some View {
-        @Bindable var viewModel = viewModel
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                /*
-                if viewModel.currentFrameHasAlignedNeighborOverride {
-                    Text(localized("ui.custom"))
-                      .foregroundColor(.yellow)
-                      .font(.caption)
-                } else {
-                    Text(localized("ui.default"))
-                      .foregroundColor(.white)
-                      .font(.caption)
-                }
-                Spacer()*/
-                if viewModel.currentFrameHasAlignedNeighborOverride {
-                    Button(localized("ui.reset")) {
-                        viewModel.clearAlignedNeighborFrameOverride(forFrame: viewModel.currentIndex)
-                    }
-                    .font(.caption)
-                    .buttonStyle(.bordered)
-                    .tint(.orange)
-                }
-            }
-            EditableNumberView(
-              value: $localCount,
-              minValue: 1,
-              maxValue: viewModel.imageSequenceSize,
-              fullTextProvider: { localized("ui.slider.align_neighbors", $0) },
-              prefixText: localized("ui.slider.align_with"),
-              suffixTextProvider: { _ in localized("ui.slider.neighbor_frames") },
-              textColor: viewModel.currentFrameHasAlignedNeighborOverride ? .yellow : .white,
-              focusedField: focusedField,
-              focusField: .frameAlignedNeighborFrames,
-              alwaysOpen: false,
-              commitAction: { newVal in
-                  viewModel.set(alignedNeighborFrames: newVal, forFrame: viewModel.currentIndex)
-              }
-            )
-        }
-        .onAppear { localCount = viewModel.currentFrameAlignedNeighborCount }
-        .onChange(of: viewModel.currentIndex) {
-            localCount = viewModel.currentFrameAlignedNeighborCount
-        }
-        .onChange(of: viewModel.alignedNeighborFrameOverrides) {
-            localCount = viewModel.currentFrameAlignedNeighborCount
-        }
-        .onChange(of: viewModel.numberOfAlignedNeighborFrames) {
-            // if the global default changes, update display when not overridden
-            if !viewModel.currentFrameHasAlignedNeighborOverride {
-                localCount = viewModel.numberOfAlignedNeighborFrames
-            }
-        }
     }
 }
 
