@@ -1332,7 +1332,7 @@ struct ProcessingSettingsView: View {
         .disabled(!Config.isGPUHardwareAvailable)
     }
 
-    /// Off by default, unlike `useGPUForMerge` — see `Config.useGPUForSIFT`'s doc comment for why it
+    /// On by default when a GPU is available — see `Config.useGPUForSIFT`'s doc comment for why it
     /// ships behind its own toggle instead of being folded into the one above. Disabled the
     /// same way as `useGPUView` when this machine has no supported GPU.
     private var useGPUForSIFTView: some View {
@@ -1371,7 +1371,7 @@ struct ProcessingSettingsView: View {
         .disabled(!Config.isGPUHardwareAvailable)
     }
 
-    /// Off by default, unlike `useGPUForMerge` — see `Config.useGPUForAKAZE`'s doc comment for why it
+    /// On by default when a GPU is available — see `Config.useGPUForAKAZE`'s doc comment for why it
     /// ships behind its own toggle instead of being folded into the one above. Disabled the
     /// same way as `useGPUView` when this machine has no supported GPU.
     private var useGPUForAKAZEView: some View {
