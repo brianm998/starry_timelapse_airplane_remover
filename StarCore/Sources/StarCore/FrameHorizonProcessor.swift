@@ -1006,12 +1006,15 @@ final public actor FrameHorizonProcessor {
         let definedExpY = expectedYPerColumn.compactMap { $0 }
         let expYMin = definedExpY.min() ?? -1
         let expYMax = definedExpY.max() ?? -1
-        Log.i("frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: " +
-              "refined \(refinedCount) pixels in band y=[\(minBandTop),\(maxBandBottom)] " +
-              "expectedY=[\(expYMin),\(expYMax)] " +
-              "clamped \(clampedColumns)/\(w) columns at +\(downwardLimit)px " +
-              "skyMedian=\(String(format:"%.4f", stats.first?.medianSkyBrightness ?? 0)) " +
-              "groundMedian=\(String(format:"%.4f", stats.first?.medianGroundBrightness ?? 0))")
+        // Appended a piece at a time: as one `+` chain this is more than the Swift 6.4 type
+        // checker will solve in time, and the build fails on it outright.
+        var message = "frame \(frameIndex) referenceStatsBrightnessRefinedHorizonMask: "
+        message += "refined \(refinedCount) pixels in band y=[\(minBandTop),\(maxBandBottom)] "
+        message += "expectedY=[\(expYMin),\(expYMax)] "
+        message += "clamped \(clampedColumns)/\(w) columns at +\(downwardLimit)px "
+        message += "skyMedian=\(String(format:"%.4f", stats.first?.medianSkyBrightness ?? 0)) "
+        message += "groundMedian=\(String(format:"%.4f", stats.first?.medianGroundBrightness ?? 0))"
+        Log.i(message)
 
         // De-spike: extract per-column horizon Y from the refined output, remove narrow
         // upward protrusions (wind turbines, towers, etc.), then re-render the bytes.

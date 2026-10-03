@@ -242,12 +242,16 @@ public final class KeypointLimiter: @unchecked Sendable {
             // ungated op still has to reserve its 7.8GB, and cannot while the machine is
             // full. The cap being exceeded here is a queue-depth statement, not a
             // memory-safety one.
-            Log.w("KeypointLimiter: \(expired.count) waiter(s) hit their deadline and are " +
-                  "proceeding ungated — the \(cap)-op cap will be exceeded until they " +
-                  "finish, though the memory gate still applies to each of them. Either a " +
-                  "slot holder is genuinely stuck, or the machine is loaded enough that " +
-                  "ops which normally take under a minute are taking more than five. " +
-                  "Check the MemoryMonitor lines above for which.")
+            //
+            // Appended a piece at a time: as one `+` chain this is more than the Swift 6.4
+            // type checker will solve in time, and the build fails on it outright.
+            var message = "KeypointLimiter: \(expired.count) waiter(s) hit their deadline and are "
+            message += "proceeding ungated — the \(cap)-op cap will be exceeded until they "
+            message += "finish, though the memory gate still applies to each of them. Either a "
+            message += "slot holder is genuinely stuck, or the machine is loaded enough that "
+            message += "ops which normally take under a minute are taking more than five. "
+            message += "Check the MemoryMonitor lines above for which."
+            Log.w(message)
         }
         // Timed-out waiters hold no slot, so they must not release one.
         for continuation in expired { continuation.resume(returning: false) }
