@@ -2129,7 +2129,7 @@ public final class ImageSequenceViewModel {
         
         Log.d("loaded imageInfo \(imageInfo)")
 
-        self.appNapDisabler.begin(light: config.config().resourceProfile == .light)
+        self.appNapDisabler.begin(light: config.resourceProfile == .light)
         
         self.matInstancesTask = Task { [weak self] in 
             while(self != nil) { 

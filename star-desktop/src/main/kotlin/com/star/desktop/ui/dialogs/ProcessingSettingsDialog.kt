@@ -79,6 +79,8 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             var horizon by remember(cfg) { mutableStateOf(cfg.horizonDetectionEnabled) }
             var tripod by remember(cfg) { mutableStateOf(cfg.tripodHeadWasMoving) }
             var concurrency by remember(cfg) { mutableStateOf(cfg.numberOfFramesToProcessConcurrently.coerceAtLeast(1)) }
+            // Daemons that predate the profile send none: they behave as Full.
+            var useProfile by remember(cfg) { mutableStateOf(if (cfg.hasResourceProfile()) cfg.resourceProfile else "full") }
             var showExpert by remember { mutableStateOf(false) }
             // Expert-field edits: bools and raw text (parsed on save) keyed by field label.
             val boolEdits = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
@@ -116,11 +118,32 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             ToggleRow("Horizon detection", horizon) { horizon = it }
             ToggleRow("Tripod head was moving", tripod) { tripod = it }
 
-            SettingGroup("Frames processed concurrently") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlyphButton("−", "Fewer", { concurrency = (concurrency - 1).coerceAtLeast(1) }, size = 24, fontSize = 14)
-                    Text("$concurrency", color = StarColors.textPrimary, fontSize = 14.sp)
-                    GlyphButton("+", "More", { concurrency += 1 }, size = 24, fontSize = 14)
+            SettingGroup(localized("ui.use_of_this_mac")) {
+                Segmented(
+                    options = listOf(
+                        "full" to localized("ui.use_full"),
+                        "balanced" to localized("ui.use_balanced"),
+                        "light" to localized("ui.use_light"),
+                        "custom" to localized("ui.use_custom"),
+                    ),
+                    selected = useProfile,
+                    onSelect = { useProfile = it },
+                )
+                Text(
+                    localized("ui.use_of_this_mac_help"),
+                    color = StarColors.textDisabled, fontSize = 10.sp,
+                )
+            }
+
+            // The old "frames at once" number is Custom's pipeline depth cap: the other
+            // profiles size the queue from the machine, so it is only shown for Custom.
+            if (useProfile == "custom") {
+                SettingGroup(localized("ui.use_custom_pipeline_depth")) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlyphButton("−", "Fewer", { concurrency = (concurrency - 1).coerceAtLeast(1) }, size = 24, fontSize = 14)
+                        Text("$concurrency", color = StarColors.textPrimary, fontSize = 14.sp)
+                        GlyphButton("+", "More", { concurrency += 1 }, size = 24, fontSize = 14)
+                    }
                 }
             }
 
@@ -179,6 +202,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                             .setHorizonDetectionEnabled(horizon)
                             .setTripodHeadWasMoving(tripod)
                             .setNumberOfFramesToProcessConcurrently(concurrency)
+                            .setResourceProfile(useProfile)
                         // Apply expert edits (cfg already carries current values; only changed ones differ).
                         // Unsupported fields are skipped: they render as read-only so there
                         // should be no edit to apply, and sending one to a daemon that does
