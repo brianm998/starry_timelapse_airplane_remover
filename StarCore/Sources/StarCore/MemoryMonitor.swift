@@ -347,14 +347,18 @@ public actor MemoryMonitor {
         if let forcedAdmissionInterval {
             self.forcedAdmissionInterval = max(0, forcedAdmissionInterval)
         }
-        Log.i("MemoryMonitor configured: budgetFraction=\(self.budgetFraction), " +
-              "physical=\(physicalMemory / (1024*1024*1024))GB, " +
-              "budget=\(budget / (1024*1024))MB, " +
-              "admitting up to \(effectiveBudget() / (1024*1024))MB right now " +
-              "(system floor \(systemFloorBytes / (1024*1024))MB, " +
-              "\(reality.systemAvailable() / (1024*1024))MB available), " +
-              "maxWait=\(Int(self.maxWaitTime))s, " +
-              "forcedGap=\(Int(self.forcedAdmissionInterval))s")
+        // Appended a piece at a time: as one `+` chain of eight interpolations, each with its
+        // own literal arithmetic, this is more than the Swift 6.4 type checker will solve in
+        // time, and the build fails on it outright.
+        var message = "MemoryMonitor configured: budgetFraction=\(self.budgetFraction), "
+        message += "physical=\(physicalMemory / (1024*1024*1024))GB, "
+        message += "budget=\(budget / (1024*1024))MB, "
+        message += "admitting up to \(effectiveBudget() / (1024*1024))MB right now "
+        message += "(system floor \(systemFloorBytes / (1024*1024))MB, "
+        message += "\(reality.systemAvailable() / (1024*1024))MB available), "
+        message += "maxWait=\(Int(self.maxWaitTime))s, "
+        message += "forcedGap=\(Int(self.forcedAdmissionInterval))s"
+        Log.i(message)
     }
 
     // MARK: - Public API
