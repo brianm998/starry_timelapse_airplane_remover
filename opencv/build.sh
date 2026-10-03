@@ -135,7 +135,13 @@ fi
 # asks GCD for worker threads that match the calling thread's configuration, QoS included.
 #
 # Applied on EVERY build, not only on a fresh clone: cached sources get it too. Idempotent
-# (the grep makes a second run a no-op). It is the only GCD dispatch in the OpenCV modules
+# (the grep makes a second run a no-op).
+#
+# What it measurably does, on macOS 27 / M5 Max (StarCpp/Tests/.../OpenCVQoSTests.swift):
+# even unpatched, dispatch_apply on the global queue ran the bodies at the caller's QoS, so
+# that half of the premise above did not hold. The patch changes the *width*: a .background
+# caller gets 6 worker threads where the unpatched queue used all 18, so Light takes fewer
+# cores, not just lower-priority ones. It is the only GCD dispatch in the OpenCV modules
 # star builds; re-check with
 #   grep -rln -e dispatch_apply -e dispatch_get_global_queue opencv/modules
 # after any version bump. Linux and Windows do not use the GCD backend, and have no QoS.

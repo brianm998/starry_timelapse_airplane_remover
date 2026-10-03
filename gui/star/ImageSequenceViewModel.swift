@@ -1589,11 +1589,40 @@ public final class ImageSequenceViewModel {
         }
     }
     
+    /// How much of this Mac star may use. Changing it reaches the run in progress through
+    /// `ConfigManager.onUpdate` → `FrameGraphBuilder.update(from:)`, which moves every
+    /// gate, the QoS of new work, the I/O policy, the memory budget and the queue width.
+    var resourceProfile: ResourceProfile {
+        didSet {
+            var realConfig = config.config()
+            if resourceProfile == .custom {
+                // Open Custom pre-filled from the profile it was opened from.
+                realConfig.resourceProfile = oldValue
+                realConfig.makeCustom()
+                customResources = realConfig.customResources
+                numberOfFramesToProcessConcurrently = realConfig.numberOfFramesToProcessConcurrently
+                memoryBudgetFraction = realConfig.maxMatMemoryFraction
+                realConfig = config.config()
+            }
+            realConfig.resourceProfile = resourceProfile
+            config.update(realConfig)
+        }
+    }
+
+    /// The editable limits behind `.custom`.
+    var customResources: CustomResourceLimits {
+        didSet {
+            var realConfig = config.config()
+            realConfig.customResources = customResources
+            config.update(realConfig)
+        }
+    }
+
+    /// Custom's pipeline depth cap: the old "frames at once" number.
     var numberOfFramesToProcessConcurrently: Int {
         didSet {
             var realConfig = config.config()
             realConfig.numberOfFramesToProcessConcurrently = numberOfFramesToProcessConcurrently
-            Log.d("FUCKING update numberOfFramesToProcessConcurrently \(numberOfFramesToProcessConcurrently)")
             config.update(realConfig)
         }
     }
@@ -2010,6 +2039,8 @@ public final class ImageSequenceViewModel {
         self.alignedNeighborFrameOverrides = config.alignedNeighborFrameOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
+        self.resourceProfile = config.resourceProfile
+        self.customResources = config.customResources
         self.reprocessOnSettingsChange = config.reprocessOnSettingsChange
         self.memoryBudgetFraction = config.maxMatMemoryFraction
         self.keypointMemoryMultiplier = config.keypointMemoryMultiplier
@@ -2098,7 +2129,7 @@ public final class ImageSequenceViewModel {
         
         Log.d("loaded imageInfo \(imageInfo)")
 
-        self.appNapDisabler.begin()
+        self.appNapDisabler.begin(light: config.config().resourceProfile == .light)
         
         self.matInstancesTask = Task { [weak self] in 
             while(self != nil) { 
@@ -3583,13 +3614,15 @@ public final class ImageSequenceViewModel {
 final class AppNapDisabler {
     private var activity: NSObjectProtocol?
 
-    func begin() {
+    /// `.userInitiated` keeps the machine's full attention on a run in Full and Balanced.
+    /// Under Light it drops to a background activity — still holding off idle system sleep,
+    /// which a long run needs, but no longer asking the system to favour star over other apps.
+    func begin(light: Bool = false) {
+        let options: ProcessInfo.ActivityOptions = light
+            ? [.background, .idleSystemSleepDisabled, .suddenTerminationDisabled]
+            : [.userInitiated, .idleSystemSleepDisabled, .suddenTerminationDisabled]
         activity = ProcessInfo.processInfo.beginActivity(
-            options: [
-                .userInitiated,
-                .idleSystemSleepDisabled,
-                .suddenTerminationDisabled
-            ],
+            options: options,
             reason: "Long-running video processing"
         )
     }

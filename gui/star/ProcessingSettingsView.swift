@@ -612,8 +612,12 @@ struct ProcessingSettingsView: View {
                           Divider()
                           DisclosureGroup {
                               Grid {
-                                  self.memoryBudgetFractionView
-                                  Divider()
+                                  // Only Custom reads this: the other profiles size the budget
+                                  // themselves (Full 0.85, Balanced 0.60, Light 0.35).
+                                  if viewModel.resourceProfile == .custom {
+                                      self.memoryBudgetFractionView
+                                      Divider()
+                                  }
                                   self.keypointMultiplierView
                                   Divider()
                                   self.outlierMultiplierView

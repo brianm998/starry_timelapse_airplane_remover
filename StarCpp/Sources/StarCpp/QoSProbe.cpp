@@ -5,6 +5,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <mutex>
+#include <set>
 #include <thread>
 
 #if defined(__APPLE__)
@@ -16,11 +18,14 @@ int star_debug_parallel_qos(int stripes, int *counts) {
     if (!counts || stripes <= 0) return 0;
     std::atomic<int> tally[6];
     for (auto &t : tally) t.store(0);
+    std::mutex threadsLock;
+    std::set<std::thread::id> threads;
 
     cv::parallel_for_(cv::Range(0, stripes), [&](const cv::Range &range) {
         for (int i = range.start; i < range.end; ++i) {
             // long enough that GCD brings in its workers rather than the caller doing all of it
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            { std::lock_guard<std::mutex> g(threadsLock); threads.insert(std::this_thread::get_id()); }
             int slot;
             switch (qos_class_self()) {
                 case QOS_CLASS_USER_INTERACTIVE: slot = 0; break;
@@ -36,6 +41,7 @@ int star_debug_parallel_qos(int stripes, int *counts) {
 
     int total = 0;
     for (int i = 0; i < 6; ++i) { counts[i] = tally[i].load(); total += counts[i]; }
+    counts[6] = (int)threads.size();
     return total;
 #else
     (void)stripes; (void)counts;

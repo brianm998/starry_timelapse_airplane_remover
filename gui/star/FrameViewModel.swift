@@ -69,8 +69,22 @@ public class FrameViewModel {
 
     var isPendingHorizonRefinement: Bool = false
 
+    /// Aligned images this frame can build on demand: its homographies exist even though, in
+    /// the default mode, the full-size aligned TIFFs are never written.
+    var producibleImages: Set<FrameViewMode> = []
+
+    func refreshProducibleImages() async {
+        guard let frame else { return }
+        var producible: Set<FrameViewMode> = []
+        for type in [FrameViewMode.starAligned, .earthAligned] {
+            if await frame.canProduceAlignedImage(of: type) { producible.insert(type) }
+        }
+        producibleImages = producible
+    }
+
     func hasImage(type: FrameViewMode) -> Bool {
         if existingImages.contains(type) { return true }
+        if producibleImages.contains(type) { return true }
         // userHorizon files (reference.tiff or per-frame) may be added after initial load
         // without updating existingImages for every frame, so do a lazy live check
         if type == .userHorizon,
@@ -113,6 +127,7 @@ public class FrameViewModel {
                         existingImages.insert(type)
                     }
                 }
+                Task { await self.refreshProducibleImages() }
                 Task.detached {
                     await frame.set(observer: self.frameObserver)
                     try await frame.loadOutliers(loadOnly: true)
