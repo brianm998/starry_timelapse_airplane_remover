@@ -131,11 +131,16 @@ public final actor FrameGraphBuilder {
             // and the keypoint limiter falls back to the frame concurrency count.  On
             // high-resolution sequences that means N concurrent SIFT ops with no gating
             // whatsoever.  Loud, because it is invisible otherwise.
-            Log.e("MEMORY GATING DISABLED [\(context)]: config has no image dimensions " +
-                  "(\(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B). " +
-                  "Call config.set(imageInfo:) before building the frame graph. " +
-                  "Every operation will reserve 0 bytes and the keypoint limiter is " +
-                  "capped only by numberOfFramesToProcessConcurrently (\(kc.limit)).")
+            //
+            // Appended a piece at a time: as one `+` chain this still compiles, but one more
+            // piece takes it past what the Swift 6.4 type checker will solve in time, and the
+            // build fails on it outright.
+            var message = "MEMORY GATING DISABLED [\(context)]: config has no image dimensions "
+            message += "(\(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B). "
+            message += "Call config.set(imageInfo:) before building the frame graph. "
+            message += "Every operation will reserve 0 bytes and the keypoint limiter is "
+            message += "capped only by numberOfFramesToProcessConcurrently (\(kc.limit))."
+            Log.e(message)
             // Also a user-facing warning, not only a log line: this is the exact defect
             // that shipped in 0.11.1 and got a user's cli killed on a high-resolution
             // sequence. A run in this state has no memory gating at all, so if it is going
@@ -643,13 +648,18 @@ public final actor FrameGraphBuilder {
         // Said up front and at info level on purpose.  A re-run of an unchanged sequence
         // used to spend many minutes looking busy before it could report that there was
         // nothing to do; the survey above already knows, so it says so now.
-        Log.i("already on disk: " +
-              "\(haveHorizon.count)/\(range.horizon.count) horizon masks, " +
-              "\(haveMergedHorizon.count)/\(range.keypoint.count) merged horizons, " +
-              "\(haveSkyKeypoints.count)/\(range.keypoint.count) sky keypoint sets" +
-              (processEarth
-                 ? ", \(haveEarthKeypoints.count)/\(range.keypoint.count) earth keypoint sets"
-                 : ""))
+        //
+        // Appended a piece at a time: as one `+` chain this still compiles, but one more
+        // piece takes it past what the Swift 6.4 type checker will solve in time, and the
+        // build fails on it outright.
+        var message = "already on disk: "
+        message += "\(haveHorizon.count)/\(range.horizon.count) horizon masks, "
+        message += "\(haveMergedHorizon.count)/\(range.keypoint.count) merged horizons, "
+        message += "\(haveSkyKeypoints.count)/\(range.keypoint.count) sky keypoint sets"
+        if processEarth {
+            message += ", \(haveEarthKeypoints.count)/\(range.keypoint.count) earth keypoint sets"
+        }
+        Log.i(message)
 
         // Where the one static horizon merge would run, and whether it has anything to
         // do.  Resolved here because the accumulator below is only worth building if

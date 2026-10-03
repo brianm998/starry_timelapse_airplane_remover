@@ -2743,11 +2743,15 @@ final public actor FrameHorizonProcessor {
         let cannyValues  = config.dpHorizonCannyWeightValues
         let dpTotal      = lambdaValues.count * sobelValues.count * cannyValues.count
 
-        Log.i("frame \(frameIndex) DP shrunk-image grid: " +
-                "\(dpTotal) combinations " +
-                "(lambda×\(lambdaValues.count), sobel×\(sobelValues.count), canny×\(cannyValues.count)), " +
-                "search \(String(format:"%.0f",dpSearchTop*100))%–" +
-                "\(String(format:"%.0f",dpSearchBottom*100))% of image height")
+        // Appended a piece at a time: as one `+` chain this still compiles, but one more
+        // piece takes it past what the Swift 6.4 type checker will solve in time, and the
+        // build fails on it outright.
+        var message = "frame \(frameIndex) DP shrunk-image grid: "
+        message += "\(dpTotal) combinations "
+        message += "(lambda×\(lambdaValues.count), sobel×\(sobelValues.count), canny×\(cannyValues.count)), "
+        message += "search \(String(format:"%.0f",dpSearchTop*100))%–"
+        message += "\(String(format:"%.0f",dpSearchBottom*100))% of image height"
+        Log.i(message)
 
         // Run all DP combinations in parallel on the shrunk image.
         struct DPShrunkResult {

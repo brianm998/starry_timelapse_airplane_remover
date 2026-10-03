@@ -407,11 +407,15 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
             case .needsRepair(let reciprocityScore):
                 if let reciprocityScore {
-                    Log.i("frame \(frame.frameIndex) star homography rejected by " +
-                          "the reciprocity check: it disagrees with its neighbours' own " +
-                          "fits of the same pairs by " +
-                          "\(String(format: "%.2f", reciprocityScore))px, above " +
-                          "\(ReciprocityLimits.frameRejection)px")
+                    // Appended a piece at a time: as one `+` chain this still compiles, but
+                    // one more piece takes it past what the Swift 6.4 type checker will solve
+                    // in time, and the build fails on it outright.
+                    var message = "frame \(frame.frameIndex) star homography rejected by "
+                    message += "the reciprocity check: it disagrees with its neighbours' own "
+                    message += "fits of the same pairs by "
+                    message += "\(String(format: "%.2f", reciprocityScore))px, above "
+                    message += "\(ReciprocityLimits.frameRejection)px"
+                    Log.i(message)
                     reciprocityRejections += 1
                 }
             }
