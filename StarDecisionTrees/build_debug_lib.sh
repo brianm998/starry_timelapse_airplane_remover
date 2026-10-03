@@ -44,6 +44,14 @@ swift build -j "$JOBS" --arch `uname -m`
 mkdir -p lib/debug/$PLATFORM_DIR
 mkdir -p include/debug/$PLATFORM_DIR
 
+# ask swift build, given the same arch, where it put the lib rather than
+# assume a layout.  The native build system uses .build/<triple>/debug and
+# keeps modules in a Modules/ subdirectory; swiftbuild, the default from
+# Swift 6.4, uses .build/out/Products/Debug and puts the module beside the lib.
+BIN_PATH=$(swift build --arch $(uname -m) --show-bin-path)
+MODULE_PATH=$BIN_PATH/Modules/StarDecisionTrees.swiftmodule
+[ -e "$MODULE_PATH" ] || MODULE_PATH=$BIN_PATH/StarDecisionTrees.swiftmodule
+
 # copy output lib and swiftmodule to platform-specific output dirs
-mv .build/debug/libStarDecisionTrees.a lib/debug/$PLATFORM_DIR
-mv .build/debug/Modules/StarDecisionTrees.swiftmodule include/debug/$PLATFORM_DIR
+mv "$BIN_PATH/libStarDecisionTrees.a" lib/debug/$PLATFORM_DIR
+mv "$MODULE_PATH" include/debug/$PLATFORM_DIR
