@@ -991,19 +991,36 @@ public actor LogGremlin {
     // internal rather than fileprivate so the tests can drive one drain step directly; going
     // through finishLogging() instead would cost its 100ms poll on every case.
     func logNext() async {
-        if let log = nextLog() {
-            for handler in getHandlers().values {
-                if log.logLevel <= handler.level {
-                    handler.log(message: log.message,
-                                at: log.fileLocation,
-                                with: log.data,
-                                at: log.logLevel,
-                                logTime: log.logTime)
-                }
-            }
+        if let log = nextLog() { dispatch(log) }
+    }
+
+    /// Hand up to `limit` queued lines to the handlers, oldest first.
+    ///
+    /// What the drain loop calls instead of `logNext()`, so that a backlog is worked off
+    /// between sleeps rather than one line per sleep.  One line per 1ms sleep capped the
+    /// gremlin at well under a thousand lines a second, while the gui's alignment chart alone
+    /// could queue two thousand debug lines per redraw — so with file logging at `.debug` the
+    /// queue only ever grew: a real session's log fell twenty minutes behind and was still
+    /// losing ground, with the backlog holding 250MB.  Bounded rather than "everything queued",
+    /// so a long backlog does not hold the actor shut against the producers behind it.
+    func logBatch(limit: Int = 1024) {
+        var handled = 0
+        while handled < limit, let log = nextLog() {
+            dispatch(log)
+            handled += 1
         }
     }
-    
+
+    private func dispatch(_ log: LogHolder) {
+        for handler in handlers.values where log.logLevel <= handler.level {
+            handler.log(message: log.message,
+                        at: log.fileLocation,
+                        with: log.data,
+                        at: log.logLevel,
+                        logTime: log.logTime)
+        }
+    }
+
     /// - Parameter selfDraining: whether to start the background loop that hands queued lines to
     ///   the handlers.  Always true in production — the global `gremlin` below relies on it.
     ///   Passing false gives a gremlin that only moves when `logNext()` is called explicitly,
@@ -1012,15 +1029,24 @@ public actor LogGremlin {
         guard selfDraining else { return }
         Task {
             while(await self.isRunning()) {
-                await self.logNext()
+                await self.logBatch()
                 try? await Task.sleep(nanoseconds: 1_000_000) // 1ms
             }
         }
     }
-    
+
     private var handlers: [Log.Output : LogHandler] = [:]
 
+    /// Lines not yet handed to the handlers, oldest at `pendingHead`.
+    ///
+    /// Read from a moving head rather than with `removeFirst()`, which shifts every element
+    /// behind it and so made each line cost the length of the backlog.  That is quadratic in
+    /// exactly the case it matters: with millions of lines queued, every line drained moved
+    /// hundreds of megabytes, so draining got slower the further behind it fell.  The consumed
+    /// prefix is dropped in one go once it is at least half the array, which keeps both the
+    /// per-line cost and the dead storage bounded.
     private var pendingLogs: [LogHolder] = []
+    private var pendingHead = 0
 
     public func getHandlers() -> [Log.Output : LogHandler] { handlers }
 
@@ -1038,11 +1064,22 @@ public actor LogGremlin {
         }
     }
 
-    public func pendingLogCount() -> Int { pendingLogs.count }
-    
+    public func pendingLogCount() -> Int { pendingLogs.count - pendingHead }
+
     func nextLog() -> LogHolder? {
-        if pendingLogs.count > 0 { return pendingLogs.removeFirst() }
-        return nil
+        guard pendingHead < pendingLogs.count else { return nil }
+        let log = pendingLogs[pendingHead]
+        pendingHead += 1
+        if pendingHead == pendingLogs.count {
+            // Drained.  Keep the storage only if it is small; a backlog's worth of capacity
+            // held for the rest of the session would be the backlog's memory all over again.
+            pendingLogs.removeAll(keepingCapacity: pendingLogs.count <= 4096)
+            pendingHead = 0
+        } else if pendingHead >= 1024, pendingHead * 2 >= pendingLogs.count {
+            pendingLogs.removeFirst(pendingHead)
+            pendingHead = 0
+        }
+        return log
     }
 
     func log(_ message: String,
