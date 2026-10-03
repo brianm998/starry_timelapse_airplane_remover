@@ -438,6 +438,13 @@ public struct ImageAccessor: Sendable {
                         await OutputWriteFailures.shared.record(path: filename,
                                                                 frameIndex: frameIndex)
                     }
+                case .original where type.isRecomputableCache:
+                    // A cache of work that is recomputed when missing: uncompressed so the
+                    // reload takes the direct read, and no fsync — a torn one after a
+                    // crash fails to decode and `loadOrCreateAlignedImage` rebuilds it.
+                    if !image.writeCacheTIFF(toFilename: filename) {
+                        Log.w("frame \(frameIndex) failed to write intermediate image of type \(type) to \(filename)")
+                    }
                 case .original:
                     // Every other type saved at original size (earthAligned, starAligned,
                     // autoProcessed, ...) is an intermediate cache file under tempOutputPath,

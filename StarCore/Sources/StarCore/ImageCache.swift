@@ -35,8 +35,10 @@ public actor ImageCache {
 
     init() {
         // Register our loader with the C++ image cache
+        // Through the decoded-frame store, so a merge op decodes each neighbour once for
+        // both its star and earth builds.
         StarCppBridge.ImageCache.setLoader { filename in
-            MatWrapper.load(fromFilename: filename)
+            DecodedFrameStore.shared.load(filename)
         }
         // Same reasoning as the loader above: every client touches `imageCache`
         // before doing any real work, so this is where the GPU backend (if this

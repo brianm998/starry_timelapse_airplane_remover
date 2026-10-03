@@ -516,6 +516,13 @@ extension PixelatedImage {
         self.mat.write(to: imageFilename)
     }
 
+    /// Writes an uncompressed TIFF with no fsync: for intermediates that are rebuilt when
+    /// missing or unreadable. Uncompressed so reloading takes the direct-read path.
+    @discardableResult
+    public func writeCacheTIFF(toFilename imageFilename: String) -> Bool {
+        self.mat.writeCache(to: imageFilename)
+    }
+
     public func horizonTest() throws -> PixelatedImage {
         let selfMat = self.mat
         guard let resultMat = PixelatedImageBridge.detectHorizon(selfMat) else {

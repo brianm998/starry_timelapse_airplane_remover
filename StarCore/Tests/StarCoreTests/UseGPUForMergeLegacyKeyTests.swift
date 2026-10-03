@@ -1,4 +1,5 @@
 import XCTest
+import StarCppBridge
 @testable import StarCore
 
 /// Tests for `useGPUForMerge`, which replaced the plain `useGPU` name (renamed so it could

@@ -464,6 +464,39 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    /// Whether this frame's aligned image of `type` can be produced: its homographies
+    /// exist, so `loadOrCreate…AlignedImage` can build it. This, not the file existing, is
+    /// what the GUI's aligned view modes and `HorizonRefinementOp` ask, because in the
+    /// default mode the full-size aligned TIFFs are never written.
+    public func canProduceAlignedImage(of type: FrameViewMode) async -> Bool {
+        switch type {
+        case .starAligned:
+            return await alignmentProcessor.readStarNeighborHomographyForThisFrame() != nil
+        case .earthAligned:
+            return await alignmentProcessor.readEarthNeighborHomographyForThisFrame() != nil
+        default:
+            return false
+        }
+    }
+
+    /// Makes sure the full-size aligned image of `type` is on disk, building and saving it
+    /// (uncompressed, no fsync) if it is not. For the GUI, when the user opens an aligned
+    /// view at full resolution in a run that skipped writing it.
+    public func ensureFullSizeAlignedImage(of type: FrameViewMode) async throws {
+        guard type.isRecomputableCache else { return }
+        if imageAccessor.imageExists(frameIndex: frameIndex, ofType: type, atSize: .original) {
+            return
+        }
+        switch type {
+        case .starAligned:
+            _ = try await alignmentProcessor.loadOrCreateStarAlignedImage(forceFullSizeSave: true)
+        case .earthAligned:
+            _ = try await alignmentProcessor.loadOrCreateEarthAlignedImage(forceFullSizeSave: true)
+        default:
+            break
+        }
+    }
+
           
     /// Deletes this frame's alignment products — the stored homography, the record of how
     /// many neighbours were aligned, and the images derived from them — leaving the
@@ -1457,6 +1490,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         ) * 2
         await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
 
+        // The star and earth builds below merge the same neighbours; decode each once.
+        let decodePin = await alignmentProcessor.pinNeighborDecodes()
+        defer { decodePin.release() }
+
         let result = try await alignmentProcessor.loadOrCreateStarAlignedImage()
         let starAlignedImage = result.warpedFrame
 
@@ -1927,6 +1964,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) loadOrCreateSubtractionImage")
 
         // load or create the aligned frame
+
+        // Star and earth builds below merge the same neighbours; decode each once.
+        let decodePin = await alignmentProcessor.pinNeighborDecodes()
+        defer { decodePin.release() }
 
         Log.d("frame \(frameIndex) loadOrCreateStarAlignedImage")
         let result = try await alignmentProcessor.loadOrCreateStarAlignedImage()

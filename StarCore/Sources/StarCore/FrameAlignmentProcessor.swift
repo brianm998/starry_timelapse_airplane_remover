@@ -97,6 +97,25 @@ final public actor FrameAlignmentProcessor {
         }
     }
 
+    /// Sizes to write a freshly built aligned image at.
+    ///
+    /// The full-size aligned TIFF is only a cache, and only worth its 2 x 196MB per frame
+    /// when something reads it back. In `.automatic(false)` nothing does: the merge
+    /// consumes the in-memory result, and a resume or a re-render recomputes it (~0.1s of
+    /// GPU plus the neighbour decodes, which costs less than writing and re-reading it
+    /// on a slow drive). Outlier modes reload it in `createAutoProcessedImage` /
+    /// `finishSelective`, so those keep it. Previews are written whenever previews are on.
+    private func alignedImageSizes(forceFullSize: Bool) async -> [ImageDisplaySize] {
+        var sizes = await outputSizes
+        if !forceFullSize, let frame {
+            let method = await frame.cleanMethod
+            if !method.usesOutliers {
+                sizes.removeAll { $0 == .original }
+            }
+        }
+        return sizes
+    }
+
     // MARK: - Accessors
 
     public func skyKeyPointCount() -> Int {
@@ -112,6 +131,20 @@ final public actor FrameAlignmentProcessor {
     public func getAlignmentFrameIndices() -> [Int] { alignmentFrames }
 
     public func getStaticNeighborFrames() -> [Int] { staticNeighborFrames }
+
+    /// Hold the decoded neighbours of this frame's merges, so the star and earth builds of
+    /// one op decode each file once between them. Release it when the op's merges are done.
+    func pinNeighborDecodes() -> DecodedFrameStore.Pin {
+        var paths: [String] = []
+        for neighborIndex in alignmentFilenames.keys {
+            if let filename = imageAccessor.nameForImage(frameIndex: neighborIndex,
+                                                         ofType: .original,
+                                                         atSize: .original) {
+                paths.append(filename)
+            }
+        }
+        return DecodedFrameStore.shared.pin(paths)
+    }
 
     public func getStaticNeighborFilenames() -> [String] {
         var ret: [String] = []
@@ -690,16 +723,22 @@ final public actor FrameAlignmentProcessor {
     // MARK: - Aligned Image Creation
 
     // uses opencv2 for dark ground specific detection logic
-    internal func loadOrCreateEarthAlignedImage() async throws -> WarpedImageResult {
+    internal func loadOrCreateEarthAlignedImage(
+      forceFullSizeSave: Bool = false
+    ) async throws -> WarpedImageResult {
         try await loadOrCreateAlignedImage(
+          forceFullSizeSave: forceFullSizeSave,
           of: .earthAligned,
           withFailedType: .failedEarthAligned
         )
     }
 
     // uses opencv2 for SIFT fast, accurate image alignment
-    internal func loadOrCreateStarAlignedImage() async throws -> WarpedImageResult {
+    internal func loadOrCreateStarAlignedImage(
+      forceFullSizeSave: Bool = false
+    ) async throws -> WarpedImageResult {
         try await loadOrCreateAlignedImage(
+          forceFullSizeSave: forceFullSizeSave,
           of: .starAligned,
           withFailedType: .failedStarAligned
         )
@@ -716,6 +755,7 @@ final public actor FrameAlignmentProcessor {
 
      */
     private func loadOrCreateAlignedImage(
+      forceFullSizeSave: Bool = false,
       of type: FrameViewMode,
       withFailedType failedType: FrameViewMode? = nil
     ) async throws -> WarpedImageResult {
@@ -1065,7 +1105,7 @@ final public actor FrameAlignmentProcessor {
               image,
               frameIndex: frameIndex,
               as: type,
-              atSizes: await self.outputSizes,
+              atSizes: await self.alignedImageSizes(forceFullSize: forceFullSizeSave),
               overwrite: true
             )
         }

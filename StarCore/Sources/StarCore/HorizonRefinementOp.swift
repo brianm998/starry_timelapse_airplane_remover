@@ -37,11 +37,11 @@ public final class HorizonRefinementOp: AsyncOperation, @unchecked Sendable {
             // filmstrip.  Save state before the call and restore it after — the
             // dependent MergeOp (when one exists) will advance .mergingHorizon
             // to .complete on its own.
-            let hasAlignment =
-                frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
-                                                ofType: .starAligned, atSize: .original) ||
-                frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
-                                                ofType: .earthAligned, atSize: .original)
+            // Homographies existing is what "this frame has been aligned" means: in the
+            // default mode the full-size aligned TIFFs are not written at all.
+            let hasStarAlignment = await frame.canProduceAlignedImage(of: .starAligned)
+            let hasEarthAlignment = await frame.canProduceAlignedImage(of: .earthAligned)
+            let hasAlignment = hasStarAlignment || hasEarthAlignment
             let stateBeforeMerge = hasAlignment ? nil : await frame.processingState()
             try await frame.recomputeMergedHorizon()
             if let savedState = stateBeforeMerge {

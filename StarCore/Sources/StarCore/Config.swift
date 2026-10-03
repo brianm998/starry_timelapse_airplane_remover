@@ -1862,7 +1862,13 @@ public struct Config: Codable, Sendable {
     public func residentBuildExtraMultiplier(alignedNeighbours: Int?,
                                              staticNeighbours: Int?) -> Int {
         let aligned = alignedNeighbours ?? numberAlignedNeighborFrames
-        let statics = staticNeighbours ?? numberStaticNeighborFrames
+        // The static-earth build only runs when the earth is median-merged in place, i.e.
+        // the tripod head did not move (the `alignmentType == .earth,
+        // !config.tripodHeadWasMoving` branch in FrameAlignmentProcessor). On a moving
+        // run the earth is aligned with `aligned` neighbours instead, so charging for the
+        // 17-source resident build there reserved 21x where 13x is held — on the
+        // reference sequence that capped 12 admissible merge ops at 7.
+        let statics = tripodHeadWasMoving ? 0 : (staticNeighbours ?? numberStaticNeighborFrames)
 
         var extra = 0
         if !mergeStreams(sourceCount: aligned + 1) {
