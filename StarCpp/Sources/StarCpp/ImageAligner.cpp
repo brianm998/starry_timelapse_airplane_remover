@@ -1909,9 +1909,10 @@ static cv::Mat warpCoverage(const cv::Mat &probe, const cv::Mat &H, bool useGPU)
 // decode, or do not match the base's geometry, converts each surviving neighbour's
 // homography to a flattened row-major 3x3 double array, and hands the base plus
 // every surviving neighbour's still-unwarped pixels to the registered
-// GPUAlignedMergeFunc in a single call — one Metal command buffer does every warp
-// and the final merge together, instead of `neighborCount * 2 + 1` separate
-// round-trips.
+// GPUAlignedMergeFunc in a single call — one Metal kernel does every warp and the
+// final merge together, instead of `neighborCount * 2 + 1` separate round-trips,
+// and on unified memory it reads these decoded neighbours and writes `output` in
+// place, so all it costs in memory is what this function already holds.
 //
 // Returns nullptr on any failure or unsupported case, including "no handler
 // registered" and "zero neighbours survived filtering" — the caller then runs the
@@ -1928,12 +1929,12 @@ static MatWrapperRef tryGPUAlignedMerge(const cv::Mat &base, int baseFrameIndex,
                                         int loadConcurrency, int *outWarpCount) {
     GPUAlignedMergeFunc gpuAlignedMerge = gpu_ops_get_aligned_merge();
     if (!gpuAlignedMerge) return nullptr;
-    // The merge kernel this reuses internally (median_merge_u8/u16, see GPUOps.swift)
-    // has a fixed-size 17-element stack array — the same cap GPUMedianMergeFunc
-    // already enforces for the un-batched, single-call GPU merge used elsewhere in
-    // this file. Bailing before any decoding happens (rather than discovering this
-    // only after loading every neighbour) keeps the common "GPU unavailable/
-    // inapplicable" case just as cheap as it always was.
+    // The fused kernel (aligned_merge_u8/u16, see GPUOps.swift) binds at most 16
+    // neighbours and selects from a fixed-size 17-element stack array — the same
+    // cap GPUMedianMergeFunc already enforces for the un-batched, single-call GPU
+    // merge used elsewhere in this file. Bailing before any decoding happens
+    // (rather than discovering this only after loading every neighbour) keeps the
+    // common "GPU unavailable/inapplicable" case just as cheap as it always was.
     if (neighborCount < 0 || neighborCount + 1 > 17) return nullptr;
 
     // One loaded neighbour, pending the same filtering warpNeighbour already does:
@@ -2260,6 +2261,22 @@ MatWrapperRef ia_debug_warp(MatWrapperRef src, MatWrapperRef homography, bool us
     try {
         return wrap(warpInto(src->mat, homography->mat, useGPU));
     } KHT_CATCH_LOG("ia_debug_warp")
+    return nullptr;
+}
+
+MatWrapperRef ia_debug_median_merge(MatWrapperRef *sources, int count, MatWrapperRef misses,
+                                    double outlierThreshold, bool includeAll, bool useGPU) {
+    if (!sources || count <= 0) return nullptr;
+    try {
+        std::vector<cv::Mat> mats;
+        mats.reserve((size_t)count);
+        for (int i = 0; i < count; ++i) {
+            if (!sources[i]) return nullptr;
+            mats.push_back(sources[i]->mat);
+        }
+        return medianImageFromMats(mats, outlierThreshold, includeAll,
+                                   misses ? misses->mat : cv::Mat(), useGPU);
+    } KHT_CATCH_LOG("ia_debug_median_merge")
     return nullptr;
 }
 

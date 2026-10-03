@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import StarCppBridge
 
 /// A real-run report: GPU-accelerated SIFT was fast, but the median-merge step
@@ -309,5 +310,132 @@ final class GPUOpsConcurrencyStressTests: XCTestCase {
         print("STRESS single warp round-trip, CPU (10 calls): \(cpuTimes)")
         print("STRESS single warp round-trip GPU mean: \(gpuTimes.reduce(0, +) / Double(gpuTimes.count))s, "
               + "CPU mean: \(cpuTimes.reduce(0, +) / Double(cpuTimes.count))s")
+    }
+
+    /// The numbers `MetalGPUBackend.alignedMerge`'s doc comment quotes: one
+    /// realistic aligned merge -- a 7008x4672 16-bit RGB frame (33MP, an a7iv),
+    /// 8 neighbours rotated and drifted like a star field so their warps leave
+    /// real holes, coverage counted -- timed, with the process's peak memory
+    /// sampled while it runs, CPU against GPU, alone and then four at a time.
+    /// The frames are served from memory, so decoding them is not part of what
+    /// is measured.
+    ///
+    /// Prints rather than asserting anything about speed: it exists to be re-run
+    /// on whatever machine has a question about it. Run with `swift test -c
+    /// release`, for the same reason as the tests above.
+    func testAlignedMergeTimeAndFootprintAtRealScale() throws {
+        try XCTSkipIf(_isDebugAssertConfiguration(),
+                      "run with 'swift test -c release' -- see doc comment")
+        let width = 7008, height = 4672, channels = 3
+        let offsets = [-4, -3, -2, -1, 1, 2, 3, 4]
+
+        func frame(_ seed: UInt32) -> MatWrapper {
+            let count = width * height * channels
+            let data = UnsafeMutablePointer<UInt16>.allocate(capacity: count)
+            defer { data.deallocate() }   // the MatWrapper below copies it
+            nonisolated(unsafe) let pixels = data
+            DispatchQueue.concurrentPerform(iterations: height) { y in
+                var h = UInt32(truncatingIfNeeded: y) &* 2_654_435_761 &+ seed &* 40_503
+                let row = pixels.advanced(by: y * width * channels)
+                for x in 0..<width {
+                    for c in 0..<channels {
+                        h ^= h << 13; h ^= h >> 17; h ^= h << 5
+                        let sky = 6000 + (x * 7 + y * 5) % 3000 + c * 500
+                        row[x * channels + c] = (x * 31 + y * 17) % 997 == 0
+                            ? 50000 : UInt16(sky + Int(h % 600))
+                    }
+                }
+            }
+            return MatWrapper(width: width, height: height,
+                              cvType: MatWrapper.cvType(forBitsPerComponent: 16,
+                                                        componentsPerPixel: Int32(channels)),
+                              bytesPerRow: width * channels * 2,
+                              data: UnsafeMutableRawPointer(data), takeOwnership: true)
+        }
+
+        let base = frame(1)
+        var pool: [String: MatWrapper] = [:]
+        var neighbors: [AlignmentNeighborInfo] = []
+        var homography: [Int: MatWrapper] = [:]
+        for (i, d) in offsets.enumerated() {
+            let name = "memory://neighbour-\(i)"
+            pool[name] = frame(UInt32(100 + i))
+            neighbors.append(AlignmentNeighborInfo(filename: name, maskFilename: nil, keypoints: nil,
+                                                   frameIndex: Int32(d)))
+            // ~0.02 degrees of field rotation and ~20px of drift per frame,
+            // about what a real 33MP star-field sequence's homographies show.
+            let theta = 0.0004 * Double(d), scale = 1.0 + 0.0002 * Double(d)
+            let cx = Double(width) / 2, cy = Double(height) / 2
+            let a = scale * cos(theta), b = -scale * sin(theta)
+            let c = scale * sin(theta), e = scale * cos(theta)
+            homography[d] = MatWrapper(homographyValues: [
+              a, b, cx - a * cx - b * cy - 20.7 * Double(d),
+              c, e, cy - c * cx - e * cy + 3.1 * Double(d),
+              0, 0, 1])
+        }
+        ImageCache.setLoader { pool[$0] }
+
+        func merge(useGPU: Bool) {
+            let result = ImageAligner.alignAndMedianMerge(
+              baseImage: base, baseFrameIndex: 0, neighbors: neighbors, homography: homography,
+              outlierThreshold: 1.2, includeAll: false, useGPU: useGPU)
+            XCTAssertEqual(result?.warpCount, offsets.count)
+        }
+
+        for useGPU in [false, true] {
+            let label = useGPU ? "GPU" : "CPU"
+            for rep in 0..<3 {
+                let (seconds, peak) = Self.measure { merge(useGPU: useGPU) }
+                print(String(format: "STRESS aligned merge %@ alone, run %d: %.3fs, peak footprint +%.0fMB",
+                             label, rep, seconds, Double(peak) / 1e6))
+            }
+            let concurrent = 4, total = 12
+            let (seconds, peak) = Self.measure {
+                DispatchQueue.concurrentPerform(iterations: concurrent) { worker in
+                    for _ in stride(from: worker, to: total, by: concurrent) { merge(useGPU: useGPU) }
+                }
+            }
+            print(String(format: "STRESS aligned merge %@, %d merges %d at a time: %.2fs (%.2fs a merge), "
+                         + "peak footprint +%.0fMB",
+                         label, total, concurrent, seconds, seconds / Double(total), Double(peak) / 1e6))
+        }
+    }
+
+    /// Runs `body`, sampling this process's physical footprint every 2ms while it
+    /// does, and returns how long it took and how far above its starting
+    /// footprint the process peaked.
+    private static func measure(_ body: () -> Void) -> (seconds: TimeInterval, peakGrowth: UInt64) {
+        final class Sampler: @unchecked Sendable {
+            let lock = NSLock()
+            var running = true
+            var peak: UInt64 = 0
+        }
+        let sampler = Sampler()
+        let before = physFootprint()
+        let thread = Thread {
+            while sampler.lock.withLock({ sampler.running }) {
+                let now = physFootprint()
+                sampler.lock.withLock { sampler.peak = max(sampler.peak, now) }
+                usleep(2000)
+            }
+        }
+        thread.start()
+        let start = Date()
+        body()
+        let seconds = Date().timeIntervalSince(start)
+        sampler.lock.withLock { sampler.running = false }
+        while !thread.isFinished { usleep(500) }
+        return (seconds, sampler.lock.withLock { sampler.peak } &- before)
+    }
+
+    private static func physFootprint() -> UInt64 {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let kr = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return kr == KERN_SUCCESS ? info.phys_footprint : 0
     }
 }

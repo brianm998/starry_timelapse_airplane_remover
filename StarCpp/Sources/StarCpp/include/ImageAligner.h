@@ -256,6 +256,22 @@ MatWrapperRef ia_masked_stretch_to_gray8(MatWrapperRef image, MatWrapperRef mask
 // caller must release the result.
 MatWrapperRef ia_debug_warp(MatWrapperRef src, MatWrapperRef homography, bool useGPU);
 
+// --- Test-only: the raw merge, given sources and a coverage plane directly ---
+
+// Exposes medianImageFromMats directly, coverage plane included — every other
+// entry point either derives `misses` itself (ia_align_and_median_merge) or has
+// none to give (the static merges). This exists so a test can build a merge out
+// of separately warped sources and hold the GPU's fused aligned merge to it
+// exactly (see GPUOpsTests.swift), and is not meant to be a stable part of the
+// C API otherwise.
+//
+// `sources[0]` is the base. `misses` may be NULL (no holes); otherwise it is a
+// CV_8UC1 plane the size of one source, with the CoverageMisses contract
+// medianImageFromMats documents. Returns NULL on a bad input; caller must
+// release the result.
+MatWrapperRef ia_debug_median_merge(MatWrapperRef *sources, int count, MatWrapperRef misses,
+                                    double outlierThreshold, bool includeAll, bool useGPU);
+
 #ifdef __cplusplus
 }
 #endif

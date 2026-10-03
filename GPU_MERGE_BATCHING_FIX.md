@@ -235,6 +235,71 @@ Model this on `buildSiftPyramid` / `buildAkazePyramid`, not on `warp` /
 - Don't try to also rebuild the streaming/spill path's GPU usage in the same
   pass unless it falls out easily — see point 6 above.
 
+## Follow-up: the per-frame buffers were the next problem (2026-10-03, M5 Max)
+
+Batching fixed the round trips. What it left was memory, and it took a
+unified-memory machine with a third of the iMac Pro's RAM to show it.
+
+**What happened.** A 33MP sequence (7008x4672, 16-bit RGB, from an a7iv) on an
+M5 Max Mac Studio with 36GB of unified memory, `numberOfFramesToProcessConcurrently`
+at 18. Keypoints were fast on the GPU; the aligned merges took 77-260s each.
+Cutting the run to 4 frames (then 6) brought them to 2-4s, and aligned merges
+went from finishing 1-3 a minute to over 30. The machine had been in swap (6.6GB
+of 8GB) and star logged low-memory warnings continuously until the frame count
+came down.
+
+**Why.** Measured on that machine, one 8-neighbour merge, frames already
+decoded: the batched version allocated 3.6GB of Metal buffers per frame — every
+neighbour copied into a new shared buffer (1.6GB), the packed warps (1.8GB), a
+misses plane and the result — on top of the 8 decoded neighbours it already
+held. None of it is reserved through `MemoryMonitor`, and `gpuSlots` let 8
+merges be inside at once: 29GB of a 36GB machine before anything else in the
+run. Alone it was not slow — 0.24-0.35s against the CPU path's 0.37-0.78s, with
+the kernels only ~0.04s of that; the rest was copying and faulting in fresh
+pages.
+
+**The fix** (`MetalGPUBackend.alignedMerge`, GPUOps.swift): one kernel,
+`aligned_merge_*`, that for each destination pixel warps every neighbour to it
+on the spot, counts the neighbours that miss it and merges, so no warped copy of
+a neighbour ever exists; and on unified memory the decoded images and the result
+are read and written in place (`makeBuffer(bytesNoCopy:)` over the pages they
+already occupy), so a merge allocates and copies nothing. A discrete GPU still
+gets its inputs copied in and its result copied out, just without the packed
+warps. Same machine, same frames (a star run sharing the machine throughout,
+hence the ranges):
+
+| | per merge, alone | extra memory | 4 at a time |
+|---|---|---|---|
+| CPU | 0.37-0.78s | +1.9GB | 1.2-2.0s a merge, +5.6-7.5GB |
+| batched (above) | 0.24-0.35s | +3.6GB | not run: ~14GB |
+| fused, in place | 0.08-0.13s | +0MB | 0.07-0.27s a merge, +0.1-1.8GB |
+
+The standalone `medianMerge` had the same shape — every source packed into one
+new buffer by one thread — and the static-earth merge calls it with 17 sources,
+3.3GB a frame at 33MP. It now reads its sources in place too: 0.17-0.21s for a
+17-source 33MP merge, against 0.49-0.53s on the CPU — and 0.43s, then 3.9s,
+forced down the copying path while the machine was short of memory.
+
+**Correctness.** Byte-identical output before and after: the aligned merge on a
+full 33MP frame and on smaller frames with both `includeAll` settings; the
+standalone merge across 8- and 16-bit, 1 and 3 channels, 1-17 sources, with and
+without a coverage plane. `GPUOpsTests` now holds the fused kernel to the
+standalone warp and merge kernels byte for byte (they share `warp_tap`,
+`warp_value` and `sigma_clipped_median`), and the copied path to the in-place
+one. `GPUOpsConcurrencyStressTests.testAlignedMergeTimeAndFootprintAtRealScale`
+re-measures the table's CPU and fused rows on whatever machine runs it.
+
+**Not measured:** the copy path's speed on a discrete GPU. It does strictly less
+than the batched version did there (no packed-warps buffer, one dispatch instead
+of nine), but nobody has timed it on the Vega.
+
+**Where a merge's time goes now**, on that machine: not the GPU (~0.1s). The C++
+merge decodes each neighbour from disk itself (`image_cache_load` →
+`MatWrapper.load`, not StarCore's in-memory `ImageCache`), 8 per aligned merge,
+one after another at the default `mergeLoadConcurrency` of 1. From a USB SSD on
+a 5Gb/s link a cold 196MB frame took 0.48-0.60s, a page-cache hit 0.02-0.03s,
+and writing each aligned frame back out took about 3.5s.
+
 ## Appendix: the panic report in full
 
 ```
