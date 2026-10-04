@@ -122,7 +122,9 @@ jobs:
         working-directory: star-desktop
         # stageAppResources picks up ../daemon/.build/release/stard and
         # ../external_binaries/bin automatically; packageDeb depends on it.
-        run: ./gradlew packageDeb --no-daemon --stacktrace
+        run: |
+          ./gradlew packageDeb --no-daemon --stacktrace
+          packaging/name-installers.sh build/compose/binaries/main/deb
 
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
@@ -131,12 +133,12 @@ jobs:
           path: star-desktop/build/compose/binaries/main/deb/*.deb
           if-no-files-found: error
 
-  # ─── Windows installer (.msi) ─────────────────────────────────────────────────
+  # ─── Windows installers (.exe + .msi) ─────────────────────────────────────────────────
   # Same idea as linux-package, but for Windows — reusing cli.yml's `windows`
   # job's MSVC/SDK pinning (needed for the Swift/Clang toolchain, same reasons
   # documented there) and OpenCV/StarDecisionTrees cache keys.
   windows-package:
-    name: Windows installer (.msi)
+    name: Windows installers (.exe, .msi)
     runs-on: windows-2022
     if: github.event_name != 'pull_request'
     defaults:
@@ -275,9 +277,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build .msi
+      - name: Build .exe and .msi
         working-directory: star-desktop
-        run: ./gradlew packageMsi --no-daemon --stacktrace
+        run: |
+          ./gradlew packageExe packageMsi --no-daemon --stacktrace
+          packaging/name-installers.sh build/compose/binaries/main/exe
+          packaging/name-installers.sh build/compose/binaries/main/msi
+
+      - name: Upload .exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-desktop-windows-exe
+          path: star-desktop/build/compose/binaries/main/exe/*.exe
+          if-no-files-found: error
 
       - name: Upload .msi artifact
         uses: actions/upload-artifact@v4
@@ -392,7 +404,9 @@ jobs:
           # STAR_JPACKAGE_JDK / checkJdkVendor override is needed. stageAppResources picks up
           # ../daemon/.build/release/stard and ../external_binaries/bin automatically.
           STAR_SIGN_IDENTITY: "Developer ID Application: Brian Martin (${{ secrets.APPLE_TEAM_ID }})"
-        run: ./gradlew packageDmg --no-daemon --stacktrace
+        run: |
+          ./gradlew packageDmg --no-daemon --stacktrace
+          packaging/name-installers.sh build/compose/binaries/main/dmg
 
       - name: Notarize + staple the .dmg
         working-directory: star-desktop

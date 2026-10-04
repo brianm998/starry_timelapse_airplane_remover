@@ -11,7 +11,7 @@
 #   1. opencv must already be built  (run: cd opencv && ./release.sh)
 #      OR this script will build it for you if not found.
 #   2. This script builds StarDecisionTrees then the CLI.
-#   3. Produces a .deb package at cli/.build/star_<version>_<arch>.deb
+#   3. Produces a .deb package at cli/.build/star_cli_<version>_<arch>.deb
 
 set -e
 
@@ -67,7 +67,7 @@ case "$(uname -m)" in
     *)       DPKG_ARCH="$(uname -m)" ;;
 esac
 
-PKG_STEM="star_${STAR_VERSION}_${DPKG_ARCH}"
+PKG_STEM="star_cli_${STAR_VERSION}_${DPKG_ARCH}"
 PKG_DIR="$REPO_ROOT/cli/.build/${PKG_STEM}"
 DEB_FILE="$REPO_ROOT/cli/.build/${PKG_STEM}.deb"
 
