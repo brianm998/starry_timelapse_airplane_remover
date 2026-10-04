@@ -617,3 +617,78 @@ Acceptance:
 - **Changing the final output's format or compression.** That is a separate decision.
 - **Profiling or optimising phase A's algorithms** (Random Walker, RANSAC, the SIFT/AKAZE
   ports) beyond moving them off the cooperative pool.
+
+## Implementation status and findings (2026-10-03, branch `claude/resource-scheduling-design-37393f`)
+
+### What was built
+
+- **Phase 1.** Merge/outlier reservations skip the static-earth term on moving runs (13×, not
+  21×). The default mode writes no full-size `.starAligned`/`.earthAligned` TIFFs (previews
+  still written); outlier modes write them uncompressed and without fsync
+  (`mat_wrapper_write_cache_to`), and the GUI builds them on demand
+  (`FrameAirplaneRemover.ensureFullSizeAlignedImage`). `HorizonRefinementOp` and the GUI's
+  view-mode availability ask `canProduceAlignedImage` (homographies exist). `DecodedFrameStore`
+  decodes each neighbour once per op, behind the C++ loader. Saves and decodes run through
+  `IOWork`; the horizon detector's pixel loops, the horizon `scaledY` pass, keypoint YAML
+  parsing and the two composite blends run through `NativeWork`.
+- **Phase 2.** `ResizableGate` (async and blocking callers share one count), `BlockingGate`
+  for the GPU entry points (`GPUOps.setConcurrency`, `setDutyCycle`), `NativeWork`/`CPUWork`
+  with live width and QoS, `IOWork` with one gate per volume and a per-thread I/O policy.
+  The queue width is `Config.pipelineDepth` (Full: 4×cores). `NativeWork`'s fixed limit and
+  `gpuSlots` are gone.
+- **Phase 3.** `ResourceProfile` (`Config.resourceProfile`, default Full; old configs load at
+  Full and keep their frame count as Custom's depth cap), `ResourceControl.apply` on every
+  config change. Surfaces: `--use full|balanced|light` (`-n` opens Custom pre-filled), daemon
+  `resource_profile` (field 55, a string), GUI control with a Custom popover and the status
+  line, Kotlin settings dialog. OpenCV patch in `opencv/build.sh`, idempotent, every build.
+- **Phase 4 (part).** `ResourceGovernor` samples every 5s, logs the "limited by …" line every
+  30s, and exposes the last report to the GUI. `AutoTuner` adds disk streams above Full's
+  width while they buy throughput (floor is Full itself).
+
+### Findings that change the design
+
+1. **GPU SIFT costs more memory than OpenCV's, not less.** Measured one `ia_find_features`
+   per fresh process (`KeypointFootprintMeasurement`; whole-op peak as a multiple of the
+   working frame, 33MP and 42MP agreeing to 0.3×):
+
+   | | divisor 1.0 | 1.5 | 2.0 |
+   |---|---|---|---|
+   | sky, OpenCV | 42.3 | 21.9 | 12.9 |
+   | sky, GPU | 53.9 | 29.5 | 17.3 |
+   | earth, OpenCV | 28.7 | 16.3 | 10.9 |
+   | earth, GPU | 38.8 | 20.9 | 13.8 |
+
+   `useGPUForSIFT` defaults on wherever a GPU exists, so the default sky reservation (42×)
+   was below the default path's peak. Estimates are now per detector and per path
+   (`Config.effectiveKeypointMemoryMultiplier(for:)`: sky 42/57, earth 31/42 at full
+   resolution, OpenCV/GPU). Earth measured higher on this synthetic frame than the earlier
+   real-frame figure (18.7–20.5×); the higher one is used. **Decision:** `KeypointLimiter`'s
+   memory term now sits on the cheapest path, so it never refuses what the ledger would
+   admit; the ledger is the memory gate. Caveat: the frame is synthetic (0 sky keypoints).
+2. **The OpenCV QoS premise was half right.** Unpatched, GCD's `dispatch_apply` workers
+   already ran at the caller's QoS on macOS 27. What the patch changes is width: a
+   `.background` caller gets 6 workers instead of 18. `OpenCVQoSTests` pins both; only
+   `testLowQoSUsesFewerWorkersThanNormalQoS` fails without the patch. Light therefore takes
+   fewer cores, not only lower-priority ones.
+3. **Reference-sequence check (30 frames, moving tripod, debug builds).** Output frames are
+   byte-identical to `362c38c0` (0 of 30 differ). Temp dir 17GB → 5.6GB, 150 → 90 TIFFs (the
+   60 aligned intermediates). Wall time 5:29 → 6:07 but both are debug builds, run while the
+   machine was busy: not a performance result. A release-build before/after on the full
+   sequence, with per-stage times, is still owed (acceptance for phases 1–3).
+4. A pre-existing test (`UseGPUForMergeLegacyKeyTests`) needed `import StarCppBridge` to compile.
+5. `star.pb.swift` was edited by hand (no `protoc`); round-trip tests pass. Regenerate with
+   `daemon/regen-proto.sh` when `protoc` is available.
+
+### Not done
+
+- Release-build throughput numbers; the Balanced/Light-versus-another-app measurement
+  (phase 3 acceptance); validation that auto-tune beats fixed Full on the USB drive.
+- Heavy CPU still on the cooperative pool: the `removeAirplanes` pixel loop and
+  `computeRemovalMask` (inside the `FrameAirplaneRemover` actor), Otsu (awaits an async API),
+  the outlier/blob orchestration, `HorizonAccumulator.accumulate`, SQLite.
+- Per-path *merge* estimates (GPU fused vs CPU) were not split; both still use 13×.
+- Pipeline depth is not auto-tuned; the decoded-frame LRU across ops and the elastic memory
+  budget (phase 4 options) are not built.
+- GUI is compile-verified only (not run). Kotlin compiles and its tests pass.
+- Non-English tables carry the English text for the new keys.
+- Open questions above (GPU use in the merge phase, discrete GPUs, spinning disks) remain open.
