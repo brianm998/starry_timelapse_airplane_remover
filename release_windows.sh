@@ -86,7 +86,7 @@ case "$(uname -m)" in
     *)       WIN_ARCH="$(uname -m)" ;;
 esac
 
-PKG_STEM="star_${STAR_VERSION}_windows_${WIN_ARCH}"
+PKG_STEM="star_cli_${STAR_VERSION}_windows_${WIN_ARCH}"
 PKG_DIR="$REPO_ROOT/cli/.build/${PKG_STEM}"
 ZIP_FILE="$REPO_ROOT/cli/.build/${PKG_STEM}.zip"
 

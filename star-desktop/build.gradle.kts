@@ -107,7 +107,7 @@ compose.desktop {
         // changing the JVM used for compilation: -Pstar.jpackage.jdk=/path or STAR_JPACKAGE_JDK env.
         (findProperty("star.jpackage.jdk") as String? ?: System.getenv("STAR_JPACKAGE_JDK"))?.let { javaHome = it }
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
             packageName = "Star"
             packageVersion = starVersion
             description = "Star — Nighttime Timelapse Airplane Remover"
@@ -141,6 +141,9 @@ compose.desktop {
             }
             windows {
                 iconFile.set(project.file("packaging/star.ico"))
+                menu = true
+                shortcut = true
+                dirChooser = true
             }
             linux {
                 iconFile.set(project.file("packaging/star.png"))
