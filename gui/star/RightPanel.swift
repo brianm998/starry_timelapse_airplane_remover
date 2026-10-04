@@ -294,12 +294,6 @@ struct RightPanel: View {
 
                             ResourceProfileView(textColor: .white)
 
-                            MemoryMultiplierView(
-                              focusedField: $focusedField,
-                              textColor: .white,
-                              alwaysOpen: false
-                            )
-
                             Picker(localized("ui.redo"), selection: $viewModel.reprocessingType) {
                                 ForEach(FrameReprocessingType.allCases, id: \.self) { value in
                                     Text(value.rawValue).tag(value)
@@ -704,11 +698,12 @@ struct ResourceProfileView: View {
             // Stacked, not a segmented row: the right panel is narrow, and four buttons
             // side by side made the control wider than everything around it.
             Picker("", selection: profileBinding) {
-                Text(localized("ui.use_full")).tag(ResourceProfile?.some(.full))
-                Text(localized("ui.use_balanced")).tag(ResourceProfile?.some(.balanced))
-                Text(localized("ui.use_light")).tag(ResourceProfile?.some(.light))
+                Text(localized("ui.use_full")).foregroundColor(textColor).tag(ResourceProfile?.some(.full))
+                Text(localized("ui.use_balanced")).foregroundColor(textColor).tag(ResourceProfile?.some(.balanced))
+                Text(localized("ui.use_light")).foregroundColor(textColor).tag(ResourceProfile?.some(.light))
             }
               .pickerStyle(.radioGroup)
+              .colorScheme(.dark)
               .labelsHidden()
             Button(localized("ui.use_custom")) {
                 if viewModel.resourceProfile != .custom {

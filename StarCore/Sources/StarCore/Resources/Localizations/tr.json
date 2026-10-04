@@ -880,7 +880,7 @@
   "warning.title.oversized_reservation": "Bellek sınırı aşıldı",
   "warning.title.previous_run_died": "Önceki çalıştırma durdu",
   "cli.help.use": "How much of this Mac star may use: full (the default), balanced, or light.\nFull uses everything the machine has. Balanced and Light cap memory, CPU, GPU and\ndisk use, and run at lower priority, so other apps stay responsive.",
-  "ui.use_of_this_mac": "Use of this Mac",
+  "ui.use_of_this_mac": "Effort",
   "ui.use_of_this_mac_help": "How much of this Mac star may use. Full uses everything it has. Balanced and Light cap memory, CPU, GPU and disk use and run at lower priority, so other apps stay responsive. Takes effect right away, on the run in progress.",
   "ui.use_full": "Full",
   "ui.use_balanced": "Balanced",
