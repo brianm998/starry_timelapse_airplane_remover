@@ -396,10 +396,14 @@ struct AlignmentDeviationChart: View {
                 ForEach(group.points) { point in
                     LineMark(
                       x: .value(localized("ui.frame_capitalised"), point.baseFrame),
-                      y: .value(localized("ui.deviation"), point.signedDeviation)
+                      y: .value(localized("ui.deviation"), point.signedDeviation),
+                      // One polyline per neighbor offset.  Without an explicit series
+                      // Charts joins every point into a single line, so each offset's
+                      // right end connects back to the next offset's left start (the
+                      // "starburst"), and the whole line takes a single color.
+                      series: .value(localized("ui.neighbor_offset"), group.offset)
                     )
-                      .foregroundStyle(Color.byOffset(point.offset))
-                      .foregroundStyle(by: .value(localized("ui.neighbor_offset"), group.offset))
+                      .foregroundStyle(Color.byOffset(group.offset))
                       .interpolationMethod(.linear)
                 }
             }
