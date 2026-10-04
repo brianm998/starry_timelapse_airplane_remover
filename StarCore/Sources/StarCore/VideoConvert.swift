@@ -48,6 +48,7 @@ public func decodeVideo(
 
     let ffprobePath = ToolPaths.ffprobe
     let ffmpegPath = ToolPaths.ffmpeg
+    Log.i("decoding \(inputPath) with ffmpeg at \(ffmpegPath)")
 
     let totalFramesTask = Task {
         try shellOut(
@@ -66,9 +67,14 @@ public func decodeVideo(
     
     let totalFrames = Int(totalFramesStr.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
 
+    // software decode unless the user opted in; see FFmpegHardware for why
+    var decodeArguments = FFmpegHardware.decodeArguments()
+    decodeArguments += ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"]
+    let framesArguments = decodeArguments
+
     let ffmpegTask = Task {
         try runFFmpegWithProgress(
-          arguments: ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"],
+          arguments: framesArguments,
           totalFrames: totalFrames,
           outputFolder: outputFolder,
           progress: progress
@@ -128,6 +134,7 @@ public func decodeVideo(
 
     if hasAudio {
         _ = try shellOut(to: ffmpegPath, arguments: [
+            "-hide_banner", "-nostdin", "-loglevel", "error",
             "-i", inputPath, "-vn", "-acodec", "copy", "\(outputFolder)/audio.aac"
         ])
     }
@@ -182,7 +189,12 @@ public func runFFmpegWithProgress(
     Log.d("starting ffmpeg run with arguments \(arguments)")
     let process = Process()
     process.executableURL = URL(fileURLWithPath: ffmpegPath)
-    process.arguments = arguments
+    // -hide_banner: the banner is the build's whole configure line, which would otherwise
+    //   head every error message shown to the user.
+    // -nostdin and a null stdin: ffmpeg polls stdin for keypresses ('q' quits), so a child that
+    //   inherits a terminal or a pipe takes input meant for whoever else reads it.
+    process.arguments = ["-hide_banner", "-nostdin"] + arguments
+    process.standardInput = FileHandle.nullDevice
 
     let pipe = Pipe()
     process.standardError = pipe
@@ -209,7 +221,12 @@ public func runFFmpegWithProgress(
         }
     }
 
-    try process.run()
+    do {
+        try process.run()
+    } catch {
+        pipe.fileHandleForReading.readabilityHandler = nil
+        throw ToolLaunchError(path: ffmpegPath, underlying: error)
+    }
     process.waitUntilExit()
     pipe.fileHandleForReading.readabilityHandler = nil
 

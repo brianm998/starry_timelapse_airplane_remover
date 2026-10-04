@@ -1474,10 +1474,30 @@ public struct Config: Codable, Sendable {
         self.ignoreLowerPixels = try c.decodeIfPresent(Int.self, forKey: .ignoreLowerPixels) ?? self.ignoreLowerPixels
 
         self.frameRate = try c.decodeIfPresent(FrameRate.self, forKey: .frameRate) ?? self.frameRate
-        self.codec = try c.decodeIfPresent(FFmpegCodec.self, forKey: .codec) ?? self.codec
-        self.encoder = try c.decodeIfPresent(FFmpegEncoder.self, forKey: .encoder) ?? self.encoder
-        self.pixelFormat = try c.decodeIfPresent(FFmpegPixelFormat.self, forKey: .pixelFormat) ?? self.pixelFormat
-        self.muxer = try c.decodeIfPresent(FFmpegMuxer.self, forKey: .muxer) ?? self.muxer
+        // These four are names from the tables of the ffmpeg star shipped when the config was
+        // written, and a later ffmpeg can lack one: a config saved with the previous build can
+        // say libaom-av1, which the current one does not have.  A config that cannot be read
+        // for that reason is worse than one that renders with the default settings, and an
+        // encoder from one codec next to a different codec is no use either, so if any of the
+        // four is not a name the tables know, all four stay at the defaults.
+        let savedCodec = try? c.decodeIfPresent(FFmpegCodec.self, forKey: .codec)
+        let savedEncoder = try? c.decodeIfPresent(FFmpegEncoder.self, forKey: .encoder)
+        let savedPixelFormat = try? c.decodeIfPresent(FFmpegPixelFormat.self, forKey: .pixelFormat)
+        let savedMuxer = try? c.decodeIfPresent(FFmpegMuxer.self, forKey: .muxer)
+        // (separate statements: Swift 6.4 will not type-check one long boolean expression here)
+        var videoSettingsAreReadable = true
+        if c.contains(.codec) && savedCodec == nil { videoSettingsAreReadable = false }
+        if c.contains(.encoder) && savedEncoder == nil { videoSettingsAreReadable = false }
+        if c.contains(.pixelFormat) && savedPixelFormat == nil { videoSettingsAreReadable = false }
+        if c.contains(.muxer) && savedMuxer == nil { videoSettingsAreReadable = false }
+        if videoSettingsAreReadable {
+            self.codec = savedCodec ?? self.codec
+            self.encoder = savedEncoder ?? self.encoder
+            self.pixelFormat = savedPixelFormat ?? self.pixelFormat
+            self.muxer = savedMuxer ?? self.muxer
+        } else {
+            Log.w("the config names a video codec, encoder, pixel format or container this build does not know; using the default video settings")
+        }
         self.hasAudio = try c.decodeIfPresent(Bool.self, forKey: .hasAudio) ?? self.hasAudio
 
         self.horizonDetectionEnabled = try c.decodeIfPresent(Bool.self, forKey: .horizonDetectionEnabled) ?? self.horizonDetectionEnabled

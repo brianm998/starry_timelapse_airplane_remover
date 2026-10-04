@@ -38,37 +38,28 @@ struct RenderVideoSheetView: View {
         _frameRate = State(initialValue: frameRate)
         _frameRateString = State(initialValue: String(format: "%g", frameRate.rawValue))
         
-         let codec = config.config().codec 
-         _codec = State(initialValue: codec)
-         
-        let encoder = config.config().encoder 
+        // The config may name settings that do not go together, or ones the bundled ffmpeg does
+        // not have (it is saved with whatever was bundled then, and a GPU encoder only exists on
+        // a machine with the GPU), so settle on a set that does fit, keeping whatever already does.
+        let configured = config.config()
+        let settings = FFmpegCodec.consistentSettings(codec: configured.codec,
+                                                      encoder: configured.encoder,
+                                                      pixelFormat: configured.pixelFormat,
+                                                      muxer: configured.muxer)
+        let codec = settings?.codec ?? configured.codec
+        let encoder = settings?.encoder ?? configured.encoder
+        let pixelFormat = settings?.pixelFormat ?? configured.pixelFormat
+        let muxer = settings?.muxer ?? configured.muxer
+        if codec != configured.codec || encoder != configured.encoder
+             || pixelFormat != configured.pixelFormat || muxer != configured.muxer
+        {
+            Log.w("video settings \(configured.codec)/\(configured.encoder)/\(configured.pixelFormat)/\(configured.muxer) do not fit this ffmpeg; using \(codec)/\(encoder)/\(pixelFormat)/\(muxer)")
+        }
+        _codec = State(initialValue: codec)
         _encoder = State(initialValue: encoder)
-
-        let pixelFormat = config.config().pixelFormat 
         _pixelFormat = State(initialValue: pixelFormat)
-        
-        let muxer = config.config().muxer 
         _muxer = State(initialValue: muxer)
-        _videoFilename = State(initialValue: "\(config.config().basename).\(muxer.rawValue)")
-
-        // check to see if encoder, pixelformat and muxer are in the list for this codex,
-        // and if not, use different ones that are.
-
-        if !self.codec.encoders.contains(self.encoder) {
-            Log.d("encoder \(self.encoder) not applicibale for codec \(self.codec)")
-            _encoder = State(initialValue: self.codec.encoders[0])
-        }
-        
-        // note this in the UI
-        if !self.encoder.pixelFormats.contains(self.pixelFormat) {
-            Log.w("pixel format \(self.pixelFormat) not applicable for encoder \(self.encoder)")
-            _pixelFormat = State(initialValue: encoder.pixelFormats[0])
-        }
-
-        // note this in the UI
-        if !self.encoder.supportedMuxers.contains(self.muxer) {
-            _muxer = State(initialValue: encoder.supportedMuxers[0])
-        }
+        _videoFilename = State(initialValue: "\(configured.basename).\(muxer.defaultFileExtension ?? muxer.rawValue)")
     }
     
     @State private var frameRateString: String
@@ -263,26 +254,29 @@ struct RenderVideoSheetView: View {
                   .onChange(of: codec) {
                       viewModel.userPreferences.codec = codec
                       viewModel.codec = codec
-                      encoder = codec.encoders[0]
+                      encoder = codec.availableEncoders[0]
                       viewModel.userPreferences.encoder = encoder
                       viewModel.encoder = encoder
-                      pixelFormat = encoder.pixelFormats[0]
-                      muxer = encoder.supportedMuxers[0]
+                      pixelFormat = encoder.usablePixelFormats[0]
+                      muxer = codec.defaultMuxer(for: encoder) ?? encoder.supportedMuxers[0]
                   }
 
                 Picker(localized("ui.encoder"), selection: $encoder) {
-                    ForEach(codec.encoders, id: \.self) { encoder in
+                    ForEach(codec.availableEncoders, id: \.self) { encoder in
                         Text("\(encoder.rawValue) [\(encoder.description)]")
                     }
                 }
                   .onChange(of: encoder) {
                       viewModel.userPreferences.encoder = encoder
                       viewModel.encoder = encoder
-                      pixelFormat = encoder.pixelFormats[0]
+                      pixelFormat = encoder.usablePixelFormats[0]
+                      if !encoder.supportedMuxers.contains(muxer) {
+                          muxer = codec.defaultMuxer(for: encoder) ?? encoder.supportedMuxers[0]
+                      }
                   }
                 
                 Picker(localized("ui.pixel_format"), selection: $pixelFormat) {
-                    ForEach(encoder.pixelFormats, id: \.self) { pixelFormat in
+                    ForEach(encoder.usablePixelFormats, id: \.self) { pixelFormat in
                         Text(pixelFormat.rawValue)
                     }
                 }

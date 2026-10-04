@@ -30,6 +30,17 @@ else
     echo "==> StarDecisionTrees: done"
 fi
 
+# ── 2b. FFmpeg ────────────────────────────────────────────────────────────────
+# The gui bundles ffmpeg and ffprobe.  Both slices, or the app fails on one kind of Mac.
+FFMPEG_BIN="external_binaries/bin/ffmpeg"
+if [ -x "$FFMPEG_BIN" ] && lipo "$FFMPEG_BIN" -verify_arch arm64 >/dev/null 2>&1 \
+   && lipo "$FFMPEG_BIN" -verify_arch x86_64 >/dev/null 2>&1; then
+    echo "==> FFmpeg: already built, skipping"
+else
+    echo "==> FFmpeg: not found (or not universal), building now..."
+    ./ffmpeg/build.sh --install macos-universal
+fi
+
 # ── 3. CLI ────────────────────────────────────────────────────────────────────
 echo "==> Building star CLI..."
 cd cli

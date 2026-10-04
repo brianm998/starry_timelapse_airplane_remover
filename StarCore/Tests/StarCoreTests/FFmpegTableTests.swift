@@ -187,15 +187,16 @@ final class FFmpegTableTests: XCTestCase {
     }
 
     /// `encoder(for:)` has to find an encoder whose list actually contains the format it was asked
-    /// about — it is how a chosen pixel format is turned back into an encoder at export time.
+    /// about — it is how a chosen pixel format is turned back into an encoder at export time.  It
+    /// looks only among the encoders a user can pick, and the formats they can pick.
     func testLookingUpAnEncoderByPixelFormatReturnsOneThatSupportsIt() {
         for codec in FFmpegCodec.availableVideoCodecs.prefix(20) {
-            for format in codec.encoders.flatMap({ $0.pixelFormats }).prefix(8) {
+            for format in codec.availableEncoders.flatMap({ $0.usablePixelFormats }).prefix(8) {
                 guard let found = codec.encoder(for: format) else {
                     XCTFail("\(codec.rawValue) offers \(format.rawValue) but no encoder for it")
                     continue
                 }
-                XCTAssertTrue(found.pixelFormats.contains(format),
+                XCTAssertTrue(found.usablePixelFormats.contains(format),
                               "\(codec.rawValue): \(found.rawValue) was returned for "
                               + "\(format.rawValue) but does not support it")
             }
@@ -297,16 +298,90 @@ final class FFmpegTableTests: XCTestCase {
     }
 
     /// The gui carries a workaround for an incompatible pair — `RenderVideoSheetView` substitutes
-    /// `encoder.pixelFormats[0]` when the config's format is not in the encoder's list — so the
-    /// substitute it reaches for has to exist for every encoder a user can select.  Otherwise that
-    /// workaround would itself trap on an empty array.
-    func testEveryOfferedEncoderHasAFirstPixelFormatForTheGuiToFallBackOn() {
+    /// the first usable pixel format when the config's format is not in the encoder's list — so
+    /// the substitute it reaches for has to exist for every encoder a user can select, and have
+    /// a container to go in.  Otherwise that workaround would itself trap on an empty array.
+    func testEveryOfferedEncoderHasAFirstPixelFormatAndAContainerForTheGuiToFallBackOn() {
         for codec in FFmpegCodec.availableVideoCodecs {
-            for encoder in codec.encoders where !encoder.pixelFormats.isEmpty {
-                XCTAssertFalse(encoder.pixelFormats.isEmpty)
-                _ = encoder.pixelFormats[0]
+            XCTAssertFalse(codec.availableEncoders.isEmpty, codec.rawValue)
+            for encoder in codec.availableEncoders {
+                XCTAssertFalse(encoder.usablePixelFormats.isEmpty, "\(encoder.rawValue) has no usable pixel format")
+                XCTAssertFalse(encoder.supportedMuxers.isEmpty, "\(encoder.rawValue) has no container")
             }
         }
+    }
+
+    // MARK: - hardware encoders
+
+    /// The pixel formats an encoder's table entry lists include its GPU surfaces, and
+    /// VideoToolbox's come first.  Those are never something a folder of TIFFs can be, so none
+    /// may reach the dialog, least of all as the one it opens on.
+    func testNoGPUSurfaceFormatIsEverOffered() {
+        for codec in FFmpegCodec.availableVideoCodecs {
+            for encoder in codec.availableEncoders {
+                for format in encoder.usablePixelFormats {
+                    XCTAssertFalse(format.isHardwareAccelrated, "\(encoder.rawValue) offers \(format.rawValue)")
+                    XCTAssertTrue(format.canOutput, "\(encoder.rawValue) offers \(format.rawValue)")
+                }
+            }
+        }
+        XCTAssertTrue(FFmpegEncoder.h264_videotoolbox.pixelFormats.contains(.videotoolbox_vld),
+                      "the table is expected to list the surface format, or this test proves nothing")
+        XCTAssertFalse(FFmpegEncoder.h264_videotoolbox.usablePixelFormats.contains(.videotoolbox_vld))
+    }
+
+    /// The three GPU families star can drive without anything but `-c:v`: Apple's media engine,
+    /// NVIDIA's NVENC and AMD's AMF, each for the codecs that matter in a timelapse delivery.
+    func testTheGPUEncodersStarCanDriveAreInTheTables() {
+        let expected: [FFmpegCodec: [FFmpegEncoder]] = [
+          .h264: [.h264_videotoolbox, .h264_nvenc, .h264_amf],
+          .hevc: [.hevc_videotoolbox, .hevc_nvenc, .hevc_amf],
+          .av1: [.av1_nvenc, .av1_amf],
+          .prores: [.prores_videotoolbox],
+        ]
+        for (codec, encoders) in expected {
+            for encoder in encoders {
+                XCTAssertTrue(codec.encoders.contains(encoder), "\(encoder.rawValue) is not an encoder of \(codec.rawValue)")
+                XCTAssertTrue(encoder.isHardware, encoder.rawValue)
+                XCTAssertFalse(encoder.usablePixelFormats.isEmpty, "\(encoder.rawValue) has no usable pixel format")
+                XCTAssertFalse(encoder.supportedMuxers.isEmpty, "\(encoder.rawValue) has no container")
+                XCTAssertFalse(encoder.description.isEmpty, "\(encoder.rawValue) has no description")
+            }
+        }
+    }
+
+    /// An encoder fits the containers its codec does, so a hardware H.264 encoder has to be
+    /// usable in every container a software one is.
+    func testAHardwareEncoderWritesTheSameContainersAsItsSoftwareSibling() {
+        for (hardware, software) in [(FFmpegEncoder.h264_nvenc, FFmpegEncoder.libx264),
+                                     (.hevc_nvenc, .libx265),
+                                     (.h264_videotoolbox, .libx264)] {
+            let hardwareMuxers = Set(hardware.supportedMuxers)
+            let softwareMuxers = Set(software.supportedMuxers)
+            XCTAssertEqual(hardwareMuxers, softwareMuxers,
+                           "\(hardware.rawValue) vs \(software.rawValue): "
+                           + "\(hardwareMuxers.symmetricDifference(softwareMuxers).map(\.rawValue).sorted())")
+        }
+    }
+
+    func testOnlyTheGPUAPIsAreCalledHardware() {
+        for encoder in [FFmpegEncoder.libx264, .libx265, .prores_ks, .libsvtav1, .libvpx_vp9, .dnxhd] {
+            XCTAssertFalse(encoder.isHardware, encoder.rawValue)
+        }
+        for encoder in [FFmpegEncoder.h264_videotoolbox, .prores_videotoolbox, .h264_nvenc, .av1_nvenc, .hevc_amf] {
+            XCTAssertTrue(encoder.isHardware, encoder.rawValue)
+        }
+    }
+
+    /// Software encoders are listed before the hardware ones, so a codec's dialog opens on the
+    /// encoder that behaves the same on every machine.
+    func testSoftwareEncodersComeBeforeHardwareOnes() {
+        for codec in FFmpegCodec.availableVideoCodecs {
+            let flags = codec.availableEncoders.map(\.isHardware)
+            XCTAssertEqual(flags, flags.sorted { !$0 && $1 }, "\(codec.rawValue): \(codec.availableEncoders.map(\.rawValue))")
+        }
+        XCTAssertEqual(FFmpegCodec.h264.availableEncoders.first, .libx264)
+        XCTAssertEqual(FFmpegCodec.hevc.availableEncoders.first, .libx265)
     }
 
     /// The default codec also has to be one the user could have picked, or the picker would open on
@@ -357,6 +432,103 @@ final class FFmpegTableTests: XCTestCase {
             XCTAssertFalse(ext.hasPrefix("."),
                            "\(muxer.rawValue)'s extension '\(ext)' should not include the dot")
             XCTAssertFalse(ext.contains(" "), "\(muxer.rawValue)'s extension has a space")
+        }
+    }
+
+    // MARK: - choosing a consistent set of settings
+
+    func testAConsistentChoiceIsLeftAlone() {
+        let kept = FFmpegCodec.consistentSettings(codec: .hevc, encoder: .libx265,
+                                                  pixelFormat: .yuv420p10le, muxer: .mp4)
+        XCTAssertEqual(kept?.codec, .hevc)
+        XCTAssertEqual(kept?.encoder, .libx265)
+        XCTAssertEqual(kept?.pixelFormat, .yuv420p10le)
+        XCTAssertEqual(kept?.muxer, .mp4)
+    }
+
+    /// What the gui does with whatever a config says: an encoder from another codec, a pixel
+    /// format the encoder cannot write, a container that cannot hold it, each replaced by one
+    /// that fits and the rest kept.
+    func testEachPartThatDoesNotFitIsReplacedAndTheRestKept() throws {
+        let fixed = try XCTUnwrap(FFmpegCodec.consistentSettings(
+                                    codec: .prores, encoder: .libx264,
+                                    pixelFormat: .yuv420p, muxer: .mp4))
+        XCTAssertEqual(fixed.codec, .prores)
+        XCTAssertTrue(FFmpegCodec.prores.availableEncoders.contains(fixed.encoder))
+        XCTAssertTrue(fixed.encoder.usablePixelFormats.contains(fixed.pixelFormat))
+        XCTAssertTrue(fixed.encoder.supportedMuxers.contains(fixed.muxer))
+
+        let pixelFormatFixed = try XCTUnwrap(FFmpegCodec.consistentSettings(
+                                               codec: .prores, encoder: .prores_ks,
+                                               pixelFormat: .yuv420p, muxer: .mov))
+        XCTAssertEqual(pixelFormatFixed.encoder, .prores_ks, "an encoder that fits is kept")
+        XCTAssertEqual(pixelFormatFixed.muxer, .mov, "a container that fits is kept")
+        XCTAssertNotEqual(pixelFormatFixed.pixelFormat, .yuv420p, "prores_ks cannot write 8-bit 4:2:0")
+        XCTAssertTrue(FFmpegEncoder.prores_ks.usablePixelFormats.contains(pixelFormatFixed.pixelFormat))
+    }
+
+    func testACodecThatIsNotOfferedFallsBackToOneThatIs() throws {
+        let notOffered = try XCTUnwrap(FFmpegCodec.allCases.first {
+            !FFmpegCodec.availableVideoCodecs.contains($0)
+        })
+        let fixed = try XCTUnwrap(FFmpegCodec.consistentSettings(
+                                    codec: notOffered, encoder: .libx264,
+                                    pixelFormat: .yuv420p, muxer: .mp4))
+        XCTAssertTrue(FFmpegCodec.availableVideoCodecs.contains(fixed.codec))
+        XCTAssertTrue(fixed.codec.availableEncoders.contains(fixed.encoder))
+    }
+
+    /// Whatever comes in, what goes out indexes safely: the gui reads the first entry of each list.
+    func testTheResultIsAlwaysSomethingTheDialogCanShow() throws {
+        for codec in FFmpegCodec.allCases.prefix(80) {
+            let fixed = try XCTUnwrap(FFmpegCodec.consistentSettings(
+                                        codec: codec, encoder: .prores_ks,
+                                        pixelFormat: .gray, muxer: .null))
+            XCTAssertTrue(FFmpegCodec.availableVideoCodecs.contains(fixed.codec), codec.rawValue)
+            XCTAssertTrue(fixed.codec.availableEncoders.contains(fixed.encoder), codec.rawValue)
+            XCTAssertTrue(fixed.encoder.usablePixelFormats.contains(fixed.pixelFormat), codec.rawValue)
+            XCTAssertTrue(fixed.encoder.supportedMuxers.contains(fixed.muxer), codec.rawValue)
+        }
+    }
+
+    /// A new codec's container should be the one it belongs in, not whichever comes first in
+    /// a list of nearly two hundred.
+    func testTheDefaultContainerIsTheNaturalOneNotTheFirstInTheList() {
+        let expected: [(FFmpegCodec, FFmpegEncoder, FFmpegMuxer)] = [
+          (.prores, .prores_ks, .mov), (.dnxhd, .dnxhd, .mov),
+          (.h264, .libx264, .mp4), (.hevc, .libx265, .mp4), (.av1, .libsvtav1, .mp4),
+        ]
+        for (codec, encoder, container) in expected {
+            XCTAssertEqual(codec.defaultMuxer(for: encoder), container, "\(codec.rawValue)/\(encoder.rawValue)")
+        }
+    }
+
+    // MARK: - quality defaults for the GPU encoders
+
+    /// Only an encoder whose own default is poor gets extra arguments, and they are well-formed
+    /// option/value pairs, since they are spliced into an ffmpeg command line.
+    func testOnlyHardwareEncodersGetQualityArgumentsAndTheyArePairs() {
+        for encoder in FFmpegEncoder.allCases {
+            let arguments = encoder.defaultQualityArguments
+            if arguments.isEmpty { continue }
+            XCTAssertTrue(encoder.isHardware, "\(encoder.rawValue) is software but has quality arguments")
+            XCTAssertEqual(arguments.count % 2, 0, encoder.rawValue)
+            for (index, argument) in arguments.enumerated() {
+                XCTAssertEqual(argument.hasPrefix("-") && argument.count > 1, index % 2 == 0,
+                               "\(encoder.rawValue): '\(argument)' is in the wrong place")
+            }
+        }
+    }
+
+    func testNVENCRunsAtConstantQualityNotItsTwoMegabitDefault() {
+        for encoder in [FFmpegEncoder.h264_nvenc, .hevc_nvenc, .av1_nvenc] {
+            let arguments = encoder.defaultQualityArguments
+            XCTAssertEqual(arguments.firstIndex(of: "-rc").map { arguments[$0 + 1] }, "vbr", encoder.rawValue)
+            XCTAssertNotNil(arguments.firstIndex(of: "-cq"), encoder.rawValue)
+            XCTAssertEqual(arguments.firstIndex(of: "-b:v").map { arguments[$0 + 1] }, "0", encoder.rawValue)
+        }
+        for encoder in [FFmpegEncoder.libx264, .libx265, .prores_ks, .h264_videotoolbox, .hevc_videotoolbox, .h264_amf] {
+            XCTAssertTrue(encoder.defaultQualityArguments.isEmpty, encoder.rawValue)
         }
     }
 }

@@ -4,6 +4,13 @@ set -e
 
 # build and notarize with apple the star gui code for ad hoc distribution
 
+# The app bundles ffmpeg and ffprobe, and this build is universal, so they have to be too.
+# Checked before the long archive step rather than discovered afterwards: the failure this
+# replaced shipped an x86_64-only ffmpeg in an app that also claimed to run on arm64.
+source "$(dirname "$0")/../preflight.sh"
+preflight_ffmpeg universal
+preflight_finish
+
 BUILD_DIR=.build
 APP_NAME=Star
 STAR_VERSION=`cd ../StarCore ; perl version.pl`

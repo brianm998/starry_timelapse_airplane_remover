@@ -77,8 +77,10 @@ enum ExportHandlers {
 
     // Return the codec→encoder→{pixel_formats, muxers} capability graph used to
     // populate the Render Video dialog's cascading pickers.  Mirrors StarCore's
-    // FFmpegCodec.availableVideoCodecs / codec.encoders / encoder.pixelFormats /
-    // encoder.supportedMuxers relationships.
+    // FFmpegCodec.availableVideoCodecs / codec.availableEncoders / encoder.usablePixelFormats /
+    // encoder.supportedMuxers relationships: only what the bundled ffmpeg has and this machine
+    // can run (a GPU encoder appears only on a machine with the GPU), and only pixel formats
+    // a folder of images can be converted to.
     static func getVideoCapabilities(id: UInt64, payload: Data, transport: StdioTransport) async {
         do {
             var caps = Star_V1_VideoCapabilities()
@@ -89,10 +91,10 @@ enum ExportHandlers {
             for codec in FFmpegCodec.availableVideoCodecs {
                 var cc = Star_V1_CodecCaps()
                 cc.codec = codec.rawValue
-                for enc in codec.encoders {
+                for enc in codec.availableEncoders {
                     var ec = Star_V1_EncoderCaps()
                     ec.encoder       = enc.rawValue
-                    ec.pixelFormats  = enc.pixelFormats.map { $0.rawValue }
+                    ec.pixelFormats  = enc.usablePixelFormats.map { $0.rawValue }
                     ec.muxers        = enc.supportedMuxers.map { $0.rawValue }
                     cc.encoders.append(ec)
                 }
@@ -150,6 +152,8 @@ enum ExportHandlers {
                 "-c:v", encoderName,
                 "-pix_fmt", vi.pixelFormat.rawValue,
             ]
+            // for the GPU encoders whose own default quality is poor (see FFmpegHardware.swift)
+            ffmpegArgs += vi.encoder?.defaultQualityArguments ?? []
             if hasAudio { ffmpegArgs += ["-c:a", "copy"] }
             ffmpegArgs += ["-y", req.outputVideoPath]
 

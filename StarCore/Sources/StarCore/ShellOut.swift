@@ -20,8 +20,17 @@ func shellOut(
     let stderrPipe = Pipe()
     process.standardOutput = stdoutPipe
     process.standardError = stderrPipe
+    // Never the parent's stdin.  A child that inherits it can read it, and ffmpeg does, for
+    // keypresses: whatever else is reading the same terminal or pipe loses those bytes, and a
+    // stray `q` ends the encode.  (stard already points its own stdin at /dev/null; the gui and
+    // the cli do not.)
+    process.standardInput = FileHandle.nullDevice
 
-    try process.run()
+    do {
+        try process.run()
+    } catch {
+        throw ToolLaunchError(path: executable, underlying: error)
+    }
     process.waitUntilExit()
 
     let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()

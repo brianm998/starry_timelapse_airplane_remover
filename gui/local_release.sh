@@ -10,6 +10,7 @@ source "$(dirname "$0")/../preflight.sh"
 preflight_eigen
 preflight_decision_trees_release
 preflight_gui_videos
+preflight_ffmpeg
 preflight_finish
 
 BUILD_DIR=.build
