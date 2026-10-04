@@ -106,6 +106,38 @@ enum ExportHandlers {
         }
     }
 
+    // The encode settings an export uses, and whether it puts the video's own sound back.
+    //
+    // The settings come from (priority order):
+    //   1. the request, if it names a codec (the desktop's Render Video dialog always does)
+    //   2. the VideoInfo the session was opened with (decoded from the source video)
+    //   3. the config's video fields (may be defaults)
+    //
+    // Whether there is sound to put back is not one of them.  A request's settings say how to
+    // encode; they cannot say what the video that was imported had, so that comes from the
+    // session whichever settings are used.  This used to read `false` for every request that
+    // carried settings, which was every request the desktop client sent, and each export of a
+    // video with sound came out silent.  A session resumed from its config has no VideoInfo of
+    // its own, but the config recorded the sound when the video was first opened.
+    static func videoInfo(for request: Star_V1_VideoEncodeSettings,
+                          opened: VideoInfo?,
+                          config: Config) -> VideoInfo
+    {
+        let hasAudio = opened?.hasAudio ?? config.hasAudio
+        if let fromRequest = Mapping.videoInfo(from: request, hasAudio: hasAudio) {
+            return fromRequest
+        }
+        return opened ?? Mapping.videoInfoFromConfig(config)
+    }
+
+    // Where an export writes its video: the request's path, or if it left that empty (the
+    // desktop's dialog does) the one the protocol promises, `<basename>.<muxer>`.  That is
+    // beside the folder of rendered frames, which is where the Mac app's dialog puts it too.
+    static func outputVideoPath(requested: String, config: Config, muxer: FFmpegMuxer) -> String {
+        guard requested.isEmpty else { return requested }
+        return "\(config.outputPath)/\(config.basename).\(muxer.defaultFileExtension ?? muxer.rawValue)"
+    }
+
     // Assemble processed output TIFFs back into a video using ffmpeg.
     // Streams ProgressEvent items (io_progress, sequence_state) while encoding.
     static func video(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
@@ -115,22 +147,19 @@ enum ExportHandlers {
                 await transport.sendError(id: id, message: "session not found", code: 404); return
             }
 
-            // Resolve encode settings (priority order):
-            //   1. Explicit settings in the request (codec field not empty)
-            //   2. VideoInfo stored on the session (decoded from the source video)
-            //   3. Config's video fields (may be defaults)
             let config = await session.configManager.config()
-            let vi: VideoInfo
-            if let fromReq = Mapping.videoInfo(from: req.settings, hasAudio: false) {
-                vi = fromReq
-            } else if let stored = await session.videoInfo {
-                vi = stored
-            } else {
-                vi = Mapping.videoInfoFromConfig(config)
-            }
+            let opened = await session.videoInfo
+            let vi = videoInfo(for: req.settings, opened: opened, config: config)
+
+            // The file to write: the request's, or the protocol's default when it names none.
+            let videoPath = outputVideoPath(requested: req.outputVideoPath, config: config, muxer: vi.muxer)
 
             let outputPath = config.outputPath
             let totalFrames = await session.frameCount
+
+            // A render leaves its frames in the config's output sequence folder, which is a
+            // folder of its own inside outputPath, named after the sequence.
+            let framesPath = config.outputSequenceDirname
 
             // Derive the decoded-frames directory from the image sequence filenames
             // so we can find the sound file decodeVideo kept beside them, if it did.
@@ -142,7 +171,7 @@ enum ExportHandlers {
             let audio = vi.hasAudio  // StarCore.VideoInfo.hasAudio
               ? AudioSidecar.plan(in: decodedDir,
                                   formatArguments: [],
-                                  outputExtension: URL(fileURLWithPath: req.outputVideoPath).pathExtension)
+                                  outputExtension: URL(fileURLWithPath: videoPath).pathExtension)
               : AudioPlan.none("the video has none")
 
             // Determine the encoder name: prefer explicit encoder, then codec's rawValue.
@@ -151,7 +180,7 @@ enum ExportHandlers {
             var ffmpegArgs: [String] = [
                 "-framerate", vi.frameRate.rawString,
                 "-start_number", "1",
-                "-i", "\(outputPath)/image_%04d.tiff",
+                "-i", "\(framesPath)/image_%04d.tiff",
             ]
             ffmpegArgs += audio.inputArguments
             ffmpegArgs += [
@@ -161,7 +190,7 @@ enum ExportHandlers {
             // for the GPU encoders whose own default quality is poor (see FFmpegHardware.swift)
             ffmpegArgs += vi.encoder?.defaultQualityArguments ?? []
             ffmpegArgs += audio.codecArguments
-            ffmpegArgs += ["-y", req.outputVideoPath]
+            ffmpegArgs += ["-y", videoPath]
 
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
 

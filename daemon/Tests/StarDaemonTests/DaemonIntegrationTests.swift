@@ -96,10 +96,12 @@ final class DaemonProcess: @unchecked Sendable {
     private var nextID: UInt64 = 1
     private let lock = NSLock()
 
-    init(binaryPath: String, scratchDir: String) throws {
+    /// `environment` replaces the daemon's whole environment if given; nil is this process's own.
+    init(binaryPath: String, scratchDir: String, environment: [String: String]? = nil) throws {
         process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)
         process.arguments = ["--scratch", scratchDir]
+        if let environment { process.environment = environment }
         stdinPipe  = Pipe()
         stdoutPipe = Pipe()
         process.standardInput  = stdinPipe
@@ -172,6 +174,53 @@ final class DaemonProcess: @unchecked Sendable {
         case .error(let msg, let code):    throw DaemonDriverError.remoteError(msg, code)
         default:                           throw DaemonDriverError.unexpectedShape
         }
+    }
+
+    /// What a server-streaming call sent: every item in order, and how it ended.
+    struct StreamResult {
+        var items: [Data] = []
+        /// The daemon's message and code if the stream ended in an error; nil if it ended normally.
+        var failure: (message: String, code: Int32)?
+    }
+
+    /// Calls a server-streaming method (`Session.OpenVideo`, `Export.Video`, ...) and collects the
+    /// stream until the daemon ends it, one way or the other.  Notifications the daemon volunteers
+    /// (warnings) are not part of any call's stream and are skipped.
+    func stream<Req: Message>(method: String, request: Req) async throws -> StreamResult {
+        let id = nextRequestID()
+        var env = Star_V1_Envelope()
+        env.id      = id
+        env.kind    = .request
+        env.method  = method
+        env.payload = try request.serializedData()
+        let sent = env
+
+        return await Task.detached {
+            var result = StreamResult()
+            do {
+                try self.writeEnvelope(sent)
+                while true {
+                    let reply = try self.readEnvelope()
+                    switch reply.kind {
+                    case .streamItem:
+                        result.items.append(reply.payload)
+                    case .streamEnd:
+                        return result
+                    case .response:
+                        result.items.append(reply.payload)
+                        return result
+                    case .error:
+                        result.failure = (reply.error, reply.errorCode)
+                        return result
+                    default:
+                        continue
+                    }
+                }
+            } catch {
+                result.failure = ("\(error)", -1)
+                return result
+            }
+        }.value
     }
 
     enum DaemonDriverError: Error {
