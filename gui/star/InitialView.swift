@@ -114,6 +114,10 @@ struct InitialView: View {
                         }
                     }//.frame(maxWidth: 500)
                       .pickerStyle(.menu)
+                      // the initial view sits on a dark backdrop whatever the system
+                      // appearance is; without this the menu's text is dark on dark
+                      .environment(\.colorScheme, .dark)
+                      .foregroundColor(.white)
                 }
                 Spacer()
             }
