@@ -133,12 +133,12 @@ jobs:
           path: star-desktop/build/compose/binaries/main/deb/*.deb
           if-no-files-found: error
 
-  # ─── Windows installers (.exe + .msi) ─────────────────────────────────────────────────
+  # ─── Windows installer (.exe) ─────────────────────────────────────────────────
   # Same idea as linux-package, but for Windows — reusing cli.yml's `windows`
   # job's MSVC/SDK pinning (needed for the Swift/Clang toolchain, same reasons
   # documented there) and OpenCV/StarDecisionTrees cache keys.
   windows-package:
-    name: Windows installers (.exe, .msi)
+    name: Windows installer (.exe)
     runs-on: windows-2022
     if: github.event_name != 'pull_request'
     defaults:
@@ -277,25 +277,17 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build .exe and .msi
+      - name: Build .exe
         working-directory: star-desktop
         run: |
-          ./gradlew packageExe packageMsi --no-daemon --stacktrace
+          ./gradlew packageExe --no-daemon --stacktrace
           packaging/name-installers.sh build/compose/binaries/main/exe
-          packaging/name-installers.sh build/compose/binaries/main/msi
 
       - name: Upload .exe artifact
         uses: actions/upload-artifact@v4
         with:
           name: star-desktop-windows-exe
           path: star-desktop/build/compose/binaries/main/exe/*.exe
-          if-no-files-found: error
-
-      - name: Upload .msi artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: star-desktop-windows-msi
-          path: star-desktop/build/compose/binaries/main/msi/*.msi
           if-no-files-found: error
 
   # ─── macOS signed + notarized installer ──────────────────────────────────────

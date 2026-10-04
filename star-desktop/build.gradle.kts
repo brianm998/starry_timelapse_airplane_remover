@@ -16,7 +16,7 @@ val starVersion: String = rootProject.file("../StarCore/Sources/StarCore/Config.
     .let { Regex("""static let latestVersion\s*=\s*"(\d+\.\d+\.\d+)"""").find(it)?.groupValues?.get(1) }
     ?: throw GradleException("could not read Config.latestVersion from StarCore/Sources/StarCore/Config.swift")
 // jpackage on macOS rejects a leading 0 ("first number in an app-version cannot be zero"), so the
-// dmg/pkg carry 1.<minor>.<patch> while the .msi/.deb use the real version.
+// dmg/pkg carry 1.<minor>.<patch> while the .exe/.deb use the real version.
 val macPackageVersion: String = starVersion.split(".").let { v ->
     if (v[0] == "0") "1.${v[1]}.${v[2]}" else starVersion
 }
@@ -107,7 +107,7 @@ compose.desktop {
         // changing the JVM used for compilation: -Pstar.jpackage.jdk=/path or STAR_JPACKAGE_JDK env.
         (findProperty("star.jpackage.jdk") as String? ?: System.getenv("STAR_JPACKAGE_JDK"))?.let { javaHome = it }
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Exe, TargetFormat.Deb)
             packageName = "Star"
             packageVersion = starVersion
             description = "Star — Nighttime Timelapse Airplane Remover"
@@ -308,7 +308,7 @@ tasks.register("fixBundledBinaries") {
 // the .app then wrap it). finalizedBy ensures it runs even when createDistributable is up-to-date.
 tasks.matching { it.name == "createDistributable" || it.name == "createReleaseDistributable" }
     .configureEach { finalizedBy("fixBundledBinaries") }
-// package*/dmg/msi/deb wrap the .app into an installer — they must run AFTER the fixup, not race the finalizer.
+// package*/dmg/exe/deb wrap the .app into an installer — they must run AFTER the fixup, not race the finalizer.
 tasks.matching { it.name.startsWith("package") }.configureEach { mustRunAfter("fixBundledBinaries") }
 
 // ---------------------------------------------------------------------------
