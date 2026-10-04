@@ -34,6 +34,10 @@ final class KeypointDivisorAdviceTests: XCTestCase {
         c.imageBitsPerComponent = 16
         c.resourceProfile = .custom
         c.numberOfFramesToProcessConcurrently = cores
+        // These tables were measured on the OpenCV detector paths; the GPU ports cost more
+        // (see `Config.effectiveKeypointMemoryMultiplier(for:)`), so pin the path.
+        c.useGPUForSIFT = false
+        c.useGPUForAKAZE = false
         return c
     }
 
@@ -222,9 +226,12 @@ final class KeypointDivisorAdviceTests: XCTestCase {
 
         let before = full.keypointConcurrency(physicalMemory: Self.iMacProMemory).limit
         let after = reduced.keypointConcurrency(physicalMemory: Self.iMacProMemory).limit
-        XCTAssertGreaterThanOrEqual(after, before * 2,
+        // The limiter's memory term sits on the cheapest detector path (earth, 31 -> 18),
+        // whose fixed overhead is a larger share than sky's (42 -> 21), so the gain is
+        // ~1.7x rather than the 2x the sky path alone gave. Still a clear win.
+        XCTAssertGreaterThanOrEqual(after * 2, before * 3,
                                     "1.5 shrinks the scale space by 2.25x, so it should "
-                                    + "roughly double what fits in the same budget")
+                                    + "buy at least half again as much in the same budget")
 
         // And it stays a recommendation, not a fix: 42MP is far enough past this machine
         // that even 1.5 does not get all 36 cores fed.
@@ -267,6 +274,8 @@ final class AutomaticKeypointDivisorTests: XCTestCase {
         var c = Config()
         c.resourceProfile = .custom
         c.numberOfFramesToProcessConcurrently = cores
+        c.useGPUForSIFT = false
+        c.useGPUForAKAZE = false
         let info = imageInfo(megapixels: megapixels)
         c.imageWidth = info.imageWidth
         c.imageHeight = info.imageHeight

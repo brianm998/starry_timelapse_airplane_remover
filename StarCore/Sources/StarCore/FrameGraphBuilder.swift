@@ -173,7 +173,8 @@ public final actor FrameGraphBuilder {
         message += "budget fits \(budgetLimit) "
         message += "(image \(config.imageWidth)×\(config.imageHeight)×\(config.imageBytesPerPixel)B, "
         message += "working frame \(config.workingFrameBytes / (1024 * 1024))MB × "
-        message += "\(config.effectiveKeypointMemoryMultiplier()) "
+        message += "sky \(config.effectiveKeypointMemoryMultiplier(for: .sky)) / "
+        message += "earth \(config.effectiveKeypointMemoryMultiplier(for: .earth)) "
         message += "(divisor \(config.quantizedKeypointDivisor)) = "
         message += "\(kc.bytesPerOp / (1024 * 1024))MB/op of \(kc.budget / (1024 * 1024))MB budget), "
         message += "frames cap \(config.frameConcurrency)\(explicit) "
@@ -878,7 +879,7 @@ public final actor FrameGraphBuilder {
                       mode: .starAligned,
                       limiter: self.keypointLimiter,
                       rawImageBytes: rawImageBytes,
-                      memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier()),
+                      memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier(for: .sky)),
                       keypointPath: config.keypointPath(frameIndex: frameIndex,
                                                         ofType: .starAligned)
                     ) { errorString in
@@ -938,7 +939,7 @@ public final actor FrameGraphBuilder {
                           mode: .earthAligned,
                           limiter: self.keypointLimiter,
                           rawImageBytes: rawImageBytes,
-                          memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier()),
+                          memoryMultiplier: UInt64(config.effectiveKeypointMemoryMultiplier(for: .earth)),
                           keypointPath: config.keypointPath(frameIndex: frameIndex,
                                                             ofType: .earthAligned)
                         ) { errorString in

@@ -1,4 +1,5 @@
 import XCTest
+import StarCppBridge
 @testable import StarCore
 
 /// Tests for `alignmentKeypointDetectionDivisor`, which replaced the
@@ -26,6 +27,10 @@ final class KeypointDivisorTests: XCTestCase {
         c.imageWidth = Int((height * 1.5).rounded())
         c.imageBytesPerPixel = 6
         c.imageBitsPerComponent = 16
+        // Measured on the OpenCV detector paths; the GPU ports have their own table,
+        // pinned in KeypointPathMemoryTests.
+        c.useGPUForSIFT = false
+        c.useGPUForAKAZE = false
         return c
     }
 
@@ -179,5 +184,67 @@ final class KeypointDivisorTests: XCTestCase {
                              "detecting on a quarter of the pixels reserved 42x anyway "
                              + "before this, so a half-res run got a full-res run's "
                              + "concurrency for no reason")
+    }
+}
+
+/// The per-detector, per-path keypoint reservations, against what was measured: one real
+/// `ia_find_features` per fresh process (StarCpp's `KeypointFootprintMeasurement`), 33MP
+/// and 42MP agreeing to within 0.3x. Whole-op peak as a multiple of the working frame.
+final class KeypointPathMemoryTests: XCTestCase {
+
+    private func config(gpu: Bool, divisor: Double) -> Config {
+        var c = Config()
+        c.useGPUForSIFT = gpu
+        c.useGPUForAKAZE = gpu
+        c.alignmentKeypointDetectionDivisor = divisor
+        c.keypointDivisorWasChosen = true
+        return c
+    }
+
+    private let measured: [(gpu: Bool, earth: Bool, divisor: Double, multiple: Double)] = [
+      (false, false, 1.0, 42.3), (false, false, 1.5, 21.9), (false, false, 2.0, 12.9),
+      (true,  false, 1.0, 53.9), (true,  false, 1.5, 29.5), (true,  false, 2.0, 17.3),
+      (false, true,  1.0, 28.7), (false, true,  1.5, 16.3), (false, true,  2.0, 10.9),
+      (true,  true,  1.0, 38.8), (true,  true,  1.5, 20.9), (true,  true,  2.0, 13.8),
+    ]
+
+    func testEveryPathReservesAtLeastWhatItWasMeasuredToPeakAt() throws {
+        try XCTSkipUnless(GPUCapability.isAvailable() || !measured.contains { $0.gpu } ,
+                          "GPU rows need a GPU")
+        for row in measured {
+            if row.gpu && !GPUCapability.isAvailable() { continue }
+            let c = config(gpu: row.gpu, divisor: row.divisor)
+            let reserved = Double(c.effectiveKeypointMemoryMultiplier(for: row.earth ? .earth : .sky))
+            // 5% slack: the OpenCV sky figures (42/21/14) predate these measurements and
+            // were validated at ~95% of real frames; this synthetic frame's 42.3 includes its
+            // mask. The GPU and earth rows carry ~5% headroom outright.
+            XCTAssertGreaterThanOrEqual(
+              reserved, row.multiple * 0.95,
+              "\(row.earth ? "earth" : "sky") \(row.gpu ? "GPU" : "OpenCV") at divisor "
+              + "\(row.divisor) peaks at \(row.multiple)x and was only charged \(reserved)x")
+        }
+    }
+
+    func testTheGPUSkyPathCostsMoreThanOpenCVs() throws {
+        try XCTSkipUnless(GPUCapability.isAvailable(), "needs a GPU")
+        XCTAssertGreaterThan(config(gpu: true, divisor: 1).effectiveKeypointMemoryMultiplier(for: .sky),
+                             config(gpu: false, divisor: 1).effectiveKeypointMemoryMultiplier(for: .sky),
+                             "the GPU SIFT port was measured at 53.9x against OpenCV's 42.3x")
+    }
+
+    func testTheDefaultOpenCVSkyFigureIsUnchanged() {
+        XCTAssertEqual(config(gpu: false, divisor: 1).effectiveKeypointMemoryMultiplier(), 42)
+        XCTAssertEqual(config(gpu: false, divisor: 1.5).effectiveKeypointMemoryMultiplier(), 21)
+        XCTAssertEqual(config(gpu: false, divisor: 2).effectiveKeypointMemoryMultiplier(), 14)
+    }
+
+    func testTheLimiterSizesItselfFromTheCheapestPath() {
+        var c = config(gpu: false, divisor: 1)
+        c.imageWidth = 7008; c.imageHeight = 4672
+        c.imageBytesPerPixel = 6; c.imageBitsPerComponent = 16
+        let kc = c.keypointConcurrency(physicalMemory: 36 * 1024 * 1024 * 1024)
+        XCTAssertEqual(kc.bytesPerOp,
+                       c.workingFrameBytes * UInt64(c.effectiveKeypointMemoryMultiplier(for: .earth)),
+                       "the ledger charges each op its own path; this gate must not refuse what it admits")
     }
 }

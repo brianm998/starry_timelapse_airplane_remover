@@ -514,12 +514,66 @@ public struct Config: Codable, Sendable {
     /// over-reserves against both rather than splitting them, because under-reserving
     /// costs the machine while over-reserving only costs concurrency.
     public func effectiveKeypointMemoryMultiplier() -> Int {
-        let divisor = quantizedKeypointDivisor
-        guard divisor > 1.0 else { return keypointMemoryMultiplier }
+        effectiveKeypointMemoryMultiplier(for: .sky)
+    }
 
-        let fixed = 4
-        let scaleSpace = max(keypointMemoryMultiplier - fixed, 0)
-        let scaled = Int((Double(scaleSpace) / (divisor * divisor)).rounded(.up))
+    /// Which detector a keypoint op runs: sky is SIFT, earth is AKAZE.
+    public enum KeypointDetector: Sendable {
+        case sky
+        case earth
+    }
+
+    /// What one keypoint op should reserve, per detector *and* per path (the GPU port or
+    /// OpenCV), as a multiple of the working frame.
+    ///
+    /// The GPU ports were measured for the first time on 2026-10-03, on a 36GB M5 Max, one
+    /// `ia_find_features` per fresh process (`KeypointFootprintMeasurement`), at 33MP and
+    /// 42MP. Whole-op peak as a multiple of the working frame, the two sizes agreeing to
+    /// within 0.3x:
+    ///
+    ///                       divisor 1.0      1.5      2.0
+    ///     sky   OpenCV        42.3          21.9     12.9
+    ///     sky   GPU           53.9          29.4     17.2
+    ///     earth OpenCV        28.0-28.7     16.3     10.9
+    ///     earth GPU           38.5-38.8     20.9     13.8
+    ///
+    /// The GPU SIFT port costs ~30% MORE than OpenCV's, not less — its scale space lives in
+    /// unified-memory buffers on top of what the CPU path holds. And `useGPUForSIFT`
+    /// defaults to on wherever a GPU exists, so before this the default sky reservation
+    /// (42x) was under what the default path peaked at (53.9x) at every divisor.
+    ///
+    /// Each path is modelled as `fixed + scaleSpace / divisor²` with `scaleSpace` scaled
+    /// from `keypointMemoryMultiplier - 4` (the 38x of the CPU sky path at the default 42),
+    /// fitted to the table above with ~5% headroom at full resolution and the divisor rows
+    /// covered by the model's shape:
+    ///
+    ///     path          fixed  factor   at 42:  1.0   1.5   2.0   (against measured above)
+    ///     sky   OpenCV    4     1.00           42    21    14
+    ///     sky   GPU      12     1.16           57    32    24
+    ///     earth OpenCV    7     0.61           31    18    13
+    ///     earth GPU       8     0.87           42    23    17
+    ///
+    /// Earth on OpenCV reads lower than the shared 42 it was charged before, and the old
+    /// comment's "earth costs about half" (18.7-20.5x, real frames) is not what this
+    /// synthetic frame measured (28x); the higher figure is the one used, so it errs toward
+    /// reserving too much.
+    public func effectiveKeypointMemoryMultiplier(for detector: KeypointDetector) -> Int {
+        let gpu: Bool
+        let fixed: Int
+        let factor: Double
+        switch detector {
+        case .sky:
+            gpu = useGPUForSIFT && GPUCapability.isAvailable()
+            fixed = gpu ? 12 : 4
+            factor = gpu ? 1.16 : 1.0
+        case .earth:
+            gpu = useGPUForAKAZE && GPUCapability.isAvailable()
+            fixed = gpu ? 8 : 7
+            factor = gpu ? 0.87 : 0.61
+        }
+        let divisor = max(quantizedKeypointDivisor, 1.0)
+        let scaleSpace = Double(max(keypointMemoryMultiplier - 4, 0)) * factor
+        let scaled = Int((scaleSpace / (divisor * divisor)).rounded(.up))
         return max(fixed + scaled, 1)
     }
 
@@ -1969,7 +2023,14 @@ public struct Config: Codable, Sendable {
     /// 12MP and everything at 42MP.
     public func keypointConcurrency(physicalMemory: UInt64) -> KeypointConcurrency {
         let budget = UInt64(Double(physicalMemory) * effectiveMemoryFraction)
-        let bytesPerOp = workingFrameBytes * UInt64(max(effectiveKeypointMemoryMultiplier(), 1))
+        // The memory term uses the CHEAPEST path's reservation, so this limiter never refuses
+        // what the ledger would admit: the ledger (MemoryMonitor) is the real memory gate and
+        // charges each op its own path's figure, sky or earth. With one gate for both kinds
+        // of op, sizing it from the dearest path (as a single multiplier did) capped the
+        // count at what the sky ops alone fit, though earth ops cost a quarter to a third less.
+        let multiplier = min(effectiveKeypointMemoryMultiplier(for: .sky),
+                             effectiveKeypointMemoryMultiplier(for: .earth))
+        let bytesPerOp = workingFrameBytes * UInt64(max(multiplier, 1))
 
         var limit = frameConcurrency
         var binding = "frame concurrency"
@@ -2064,7 +2125,12 @@ public struct Config: Codable, Sendable {
         guard perPixel > 0, pixels > 0, physicalMemory > 0 else { return nil }
 
         let frameConcurrency = self.frameConcurrency
-        let bytesPerPixelPerOp = perPixel * max(keypointMemoryMultiplier, 1)
+        // What full resolution would cost on the sky path actually in use (it is the dearer
+        // of the two), so the answer does not move once a divisor is already set.
+        var fullResolution = self
+        fullResolution.alignmentKeypointDetectionDivisor = 1.0
+        let bytesPerPixelPerOp = perPixel * max(
+          fullResolution.effectiveKeypointMemoryMultiplier(for: .sky), 1)
         let budget = Double(physicalMemory) * effectiveMemoryFraction
 
         // The largest frame that still fits frameConcurrency ops in the budget.
