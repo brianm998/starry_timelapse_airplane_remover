@@ -23,7 +23,7 @@ before packaging:
 # host-OS binaries → app-resources/<os-arch>/  (release stard preferred; falls back to debug)
 ./gradlew stageAppResources
 # build the installer for the current OS
-./gradlew packageDistributionForCurrentOS         # .dmg / .msi / .deb
+./gradlew packageDistributionForCurrentOS         # .dmg / .exe / .deb
 # or just the runnable app image (no installer tooling needed):
 ./gradlew createDistributable
 ```
@@ -31,7 +31,7 @@ before packaging:
 Overrides: `-Pstard=/abs/path/to/stard` and `-Pffmpegdir=/abs/dir/containing/ffmpeg+ffprobe`
 (defaults: `daemon/.build/{release,debug}/stard` and repo-root `external_binaries/bin`).
 
-All packaging tasks (`createDistributable` for the app image, and `packageDmg`/`packageMsi`/`packageDeb`
+All packaging tasks (`createDistributable` for the app image, and `packageDmg`/`packageExe`/`packageDeb`
 for installers) invoke **`jpackage`**, which some JDKs omit — notably the JetBrains Runtime bundled with
 Android Studio. Point the packaging step at a full JDK 21+ (with jpackage) without changing the compile
 JVM: `-Pstar.jpackage.jdk=/path/to/jdk` or `STAR_JPACKAGE_JDK=/path/to/jdk`. (The binary-staging step,
