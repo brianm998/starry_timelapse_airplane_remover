@@ -31,6 +31,18 @@ before packaging:
 Overrides: `-Pstard=/abs/path/to/stard` and `-Pffmpegdir=/abs/dir/containing/ffmpeg+ffprobe`
 (defaults: `daemon/.build/{release,debug}/stard` and repo-root `external_binaries/bin`).
 
+`external_binaries/bin` is where `ffmpeg/build.sh --install` puts the ffmpeg it builds for **this**
+machine (a universal one on a Mac), with its GPU support: VideoToolbox on a Mac, NVENC / AMF /
+Media Foundation / Direct3D on Windows, NVENC / Vulkan on Linux. It is not committed; build it first:
+
+```bash
+./ffmpeg/build.sh --install        # macos-universal on a Mac, else linux-x64 / windows-x64
+```
+
+Staging refuses to package an ffmpeg or ffprobe built for a different architecture than the bundle
+(an x86_64-only one in an arm64 bundle would package fine and then fail the first time a user opens a
+video). To bundle an arm64-only app, thin the universal one: `lipo -thin arm64 in -output out`.
+
 All packaging tasks (`createDistributable` for the app image, and `packageDmg`/`packageMsi`/`packageDeb`
 for installers) invoke **`jpackage`**, which some JDKs omit — notably the JetBrains Runtime bundled with
 Android Studio. Point the packaging step at a full JDK 21+ (with jpackage) without changing the compile
@@ -65,6 +77,6 @@ it just hasn't been notarized for Gatekeeper on other machines.
 `stard` is a Swift binary and must be built **on each target OS** (its OpenCV + StarDecisionTrees
 artifacts live only in the main checkout, so CI needs them provisioned first). The cross-platform flow is:
 build `stard` on macOS / Windows / Linux, drop each into the matching `app-resources/<os-arch>/` on that
-runner, then run `packageDistributionForCurrentOS`. ffmpeg/ffprobe must be **portable** builds (the macOS
-binaries in `external_binaries/bin` link only against system frameworks — verify with `otool -L` / `ldd`
-when adding other platforms).
+runner, then run `packageDistributionForCurrentOS`. ffmpeg/ffprobe come from `ffmpeg/build.sh` (CI:
+`.github/workflows/ffmpeg.yml`), which builds them static, so they link only against what the OS itself
+has; `ffmpeg/smoke_test.sh` checks exactly that on every platform (`otool -L` / `ldd` / `objdump -p`).

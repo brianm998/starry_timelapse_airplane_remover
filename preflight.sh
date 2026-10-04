@@ -86,6 +86,62 @@ preflight_gui_videos() {
     return 0
 }
 
+# The gui and the desktop app carry ffmpeg and ffprobe, which are built by ffmpeg/build.sh and
+# are not in git.  They used to be: one x86_64-only copy, which fails on every Apple silicon Mac
+# without Rosetta ("Bad CPU type in executable") and was the reason video import and export
+# did not work there.
+#
+# $1 is "universal" for a build that has to run on both kinds of Mac (a release), and
+# anything else for the Mac doing the building, which is all a development build needs.
+preflight_ffmpeg() {
+    [ "$(uname -s)" = Darwin ] || return 0
+
+    local bin="$PREFLIGHT_ROOT/external_binaries/bin" wanted tool archs arch target
+    if [ "${1:-}" = universal ]; then
+        wanted="x86_64 arm64"
+        target=macos-universal
+    else
+        wanted="$(uname -m)"
+        case "$wanted" in arm64) target=macos-arm64 ;; *) target=macos-x64 ;; esac
+    fi
+    local fix
+    fix="$(printf '%q' "$PREFLIGHT_ROOT/ffmpeg/build.sh") --install $target"
+    fix="$fix"$'\n'"            (needs: brew install nasm pkgconf meson ninja cmake; the first build takes a while)"
+
+    for tool in ffmpeg ffprobe; do
+        if [ ! -x "$bin/$tool" ]; then
+            preflight_fail "external_binaries/bin/$tool is missing (it is built, not committed)" "$fix"
+            continue
+        fi
+        archs="$(lipo -archs "$bin/$tool" 2>/dev/null)"
+        for arch in $wanted; do
+            case " $archs " in
+                *" $arch "*) ;;
+                *)
+                    preflight_fail "external_binaries/bin/$tool has no $arch slice (it has: ${archs:-none}), but this build has to run on $arch" "$fix"
+                    break
+                    ;;
+            esac
+        done
+    done
+    return 0
+}
+
+# What ffmpeg/build.sh needs from the machine, named up front for the same reason as the rest:
+# a missing one otherwise shows up minutes into the build as a configure error.
+preflight_ffmpeg_tools() {
+    local tool missing=()
+    for tool in cmake meson ninja nasm git curl make; do
+        command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+    done
+    command -v pkg-config >/dev/null 2>&1 || command -v pkgconf >/dev/null 2>&1 || missing+=(pkgconf)
+    if [ "${#missing[@]}" -gt 0 ]; then
+        preflight_fail "ffmpeg/build.sh needs ${missing[*]}, which are not installed" \
+                       "brew install nasm pkgconf meson ninja cmake"
+    fi
+    return 0
+}
+
 # Report everything the checks found and stop the calling script, or return
 # quietly if all was well.
 preflight_finish() {

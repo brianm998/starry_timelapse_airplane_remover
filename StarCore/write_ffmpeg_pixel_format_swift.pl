@@ -2,7 +2,10 @@
 
 use strict;
 
-open (FH, "../external_binaries/bin/ffmpeg -pix_fmts 2>/dev/null |") || die "cannot read pix fmts: $!\n";
+# Which ffmpeg to describe: FFMPEG, or the one ../ffmpeg/build.sh --install left in the repository.
+my $ffmpeg = $ENV{FFMPEG} // '../external_binaries/bin/ffmpeg';
+
+open (FH, "$ffmpeg -pix_fmts 2>/dev/null |") || die "cannot read pix fmts: $!\n";
 
 open OUT, ">Sources/StarCore/FFmpegPixelFormat.swift";
 
@@ -56,7 +59,7 @@ print OUT "// DO NOT EDIT BY HAND\n";
 print OUT "// DO NOT EDIT BY HAND\n\n";
 
 print OUT "public enum FFmpegPixelFormat: String, CaseIterable, Codable, Sendable {\n";
-foreach my $name (keys %$fmts) {
+foreach my $name (sort keys %$fmts) {
   if(exists $fmts->{$name}{real_name}) {
     print OUT "    case $fmts->{$name}{name} = \"$fmts->{$name}{real_name}\"\n";
   } else {
@@ -68,7 +71,7 @@ print OUT "\n\n";
 
 print OUT "    public var canInput: Bool {\n";
 print OUT "        switch self {\n";
-foreach my $name (keys %$fmts) {
+foreach my $name (sort keys %$fmts) {
   if (exists $fmts->{$name}{real_name}) {
     print OUT "        case .$fmts->{$name}{name}:\n";
   } else {
@@ -86,7 +89,7 @@ print OUT "    }\n\n";
 
 print OUT "    public var canOutput: Bool {\n";
 print OUT "        switch self {\n";
-foreach my $name (keys %$fmts) {
+foreach my $name (sort keys %$fmts) {
   if (exists $fmts->{$name}{real_name}) {
     print OUT "        case .$fmts->{$name}{name}:\n";
   } else {
@@ -103,7 +106,7 @@ print OUT "    }\n\n";
 
 print OUT "    public var isHardwareAccelrated: Bool {\n";
 print OUT "        switch self {\n";
-foreach my $name (keys %$fmts) {
+foreach my $name (sort keys %$fmts) {
   if (exists $fmts->{$name}{real_name}) {
     print OUT "        case .$fmts->{$name}{name}:\n";
   } else {
@@ -121,7 +124,7 @@ print OUT "    }\n\n";
 
 print OUT "    public var isPalleted: Bool {\n";
 print OUT "        switch self {\n";
-foreach my $name (keys %$fmts) {
+foreach my $name (sort keys %$fmts) {
   if (exists $fmts->{$name}{real_name}) {
     print OUT "        case .$fmts->{$name}{name}:\n";
   } else {
@@ -139,7 +142,7 @@ print OUT "    }\n\n";
 
 print OUT "    public var isBitstream: Bool {\n";
 print OUT "        switch self {\n";
-foreach my $name (keys %$fmts) {
+foreach my $name (sort keys %$fmts) {
   if (exists $fmts->{$name}{real_name}) {
     print OUT "        case .$fmts->{$name}{name}:\n";
   } else {
@@ -156,7 +159,7 @@ print OUT "    }\n\n";
 
 print OUT "    public var numberOfComponents: Int {\n";
 print OUT "        switch self {\n";
-foreach my $name (keys %$fmts) {
+foreach my $name (sort keys %$fmts) {
   if (exists $fmts->{$name}{real_name}) {
     print OUT "        case .$fmts->{$name}{name}:\n";
   } else {
@@ -170,7 +173,7 @@ print OUT "    }\n\n";
 
 print OUT "    public var bitsPerPixel: Int {\n";
 print OUT "        switch self {\n";
-foreach my $name (keys %$fmts) {
+foreach my $name (sort keys %$fmts) {
   if (exists $fmts->{$name}{real_name}) {
     print OUT "        case .$fmts->{$name}{name}:\n";
   } else {
@@ -184,7 +187,7 @@ print OUT "    }\n\n";
 
 print OUT "    public var bitDepths: String {\n";
 print OUT "        switch self {\n";
-foreach my $name (keys %$fmts) {
+foreach my $name (sort keys %$fmts) {
   if (exists $fmts->{$name}{real_name}) {
     print OUT "        case .$fmts->{$name}{name}:\n";
   } else {

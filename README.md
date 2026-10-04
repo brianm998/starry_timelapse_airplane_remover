@@ -94,7 +94,7 @@ Download the latest release from the GitHub releases page:
 
 https://github.com/brianm998/starry_timelapse_airplane_remover/releases
 
-Two packages are available: the `star` command-line tool and the `Star.app` GUI. Either or both can be installed. The installer is self-contained — it bundles OpenCV and ffmpeg with no external dependencies required.
+Two packages are available: the `star` command-line tool and the `Star.app` GUI. Either or both can be installed. Both are self-contained: OpenCV is built in, and `Star.app` bundles its own ffmpeg (native on Apple silicon and Intel, with VideoToolbox hardware encoding, and NVIDIA/AMD GPU encoders on Windows) for importing and rendering video. The `star` command-line tool works on image sequences and does not use ffmpeg. See [ffmpeg/README.md](ffmpeg/README.md).
 
 Star is under active development. For questions or bug reports, open an issue on GitHub.
 

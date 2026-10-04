@@ -33,3 +33,12 @@ gui/videos
 # an absolute path into one machine.
 horizon_test_data
 small_horizon_test_data
+
+# FFmpeg is built by ffmpeg/build.sh (locally or in CI) and never committed: the committed
+# x86_64-only copy is what failed on every Apple silicon Mac without Rosetta.  `--install`
+# puts the result in external_binaries/bin, which the Xcode project, StarCore's table
+# generators and star-desktop's gradle staging all read; ffmpeg/.work holds sources and
+# per-target build trees, ffmpeg/dist the finished binaries.
+/external_binaries/bin/
+/ffmpeg/.work/
+/ffmpeg/dist/

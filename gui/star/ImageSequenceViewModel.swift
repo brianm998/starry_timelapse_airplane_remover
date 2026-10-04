@@ -3580,6 +3580,7 @@ public final class ImageSequenceViewModel {
                     "-c:v", encoder.rawValue,         // encoder
                     "-pix_fmt", pixelFormat.rawValue, // pixel format
                 ]
+                arguments += encoder.defaultQualityArguments // for the GPU encoders whose own default is poor
                 if hasAudio {
                     arguments += ["-c:a", "copy"]
                 }
