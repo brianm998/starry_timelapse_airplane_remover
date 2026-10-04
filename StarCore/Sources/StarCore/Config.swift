@@ -1663,10 +1663,16 @@ public struct Config: Codable, Sendable {
     //        speed up re-running a sequence
     //        stop the low-memory alert crying wolf and taking the window with i    // 0.11.5 add horizon adjustment via homography
     //        add processing modal
+    // 0.12.0 gpu support
+    //        uses less ram
+    //        kotlin client
+    //        earth alignment works
+    //        compile ffmpeg for all platforms
+    //
 
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.11.5"
+    public static let latestVersion = "0.12.0"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
