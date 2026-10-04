@@ -153,6 +153,9 @@ Each design-doc §7 method gets one typed wrapper. Repositories call these; neve
 - `Export.Video` with an empty `output_video_path` lets the daemon name the file (`<basename>.<muxer>`, beside
   the rendered frames). Its last stream item is a `video_exported` event with the absolute path it wrote, which
   the dialog shows ("Successfully Rendered <path>"): the client has no other way to know where the video is.
+  Beside it the dialog has the Mac app's "Reveal In Finder" as a button (`FileReveal`: the JDK's
+  `Desktop.browseFileDirectory` where it exists, else `open -R` / `explorer /select,` / `xdg-open <folder>`); off a
+  Mac it reads "Show In Folder" (`ui.show_in_folder`), since there is no Finder to name.
 - `Session.OpenVideo`'s terminal `SessionInfo.source_video_info` (`VideoInfo`) surfaces the decoded source's
   settings so the client defaults an export to re-encode matching the source.
 - `Export.GetVideoCapabilities` returns the `VideoCapabilities` graph (frame rates; per-codec encoders;

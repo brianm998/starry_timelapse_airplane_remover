@@ -35,6 +35,25 @@ class RenderVideoDialogTest {
         assertEquals("Done", renderedStatus(""))
     }
 
+    /** A Mac has a Finder, and the catalogue says so in every language; the others have none. */
+    @Test
+    fun theRevealButtonSaysFinderOnAMacAndFolderElsewhere() {
+        assertEquals(localized("ui.reveal_in_finder"), revealLabel("Mac OS X"))
+        assertEquals(localized("ui.show_in_folder"), revealLabel("Windows 11"))
+        assertEquals(localized("ui.show_in_folder"), revealLabel("Linux"))
+    }
+
+    /** The two labels have to be told apart, or the test above would pass for any key that is missing. */
+    @Test
+    fun bothRevealLabelsExistAndDiffer() {
+        val finder = localized("ui.reveal_in_finder")
+        val folder = localized("ui.show_in_folder")
+
+        assertTrue(finder != "ui.reveal_in_finder", "the catalogue has no ui.reveal_in_finder")
+        assertTrue(folder != "ui.show_in_folder", "the catalogue has no ui.show_in_folder")
+        assertTrue(finder != folder, "$finder / $folder")
+    }
+
     /**
      * The bytes stard sends, spelt out: its own test (ExportVideoSettingsTests) asserts it produces
      * exactly these, so the two clients cannot drift apart on the field numbers without a test of
