@@ -147,6 +147,31 @@ class ExportEndToEndTestCase: XCTestCase {
                                  from: Data(contentsOf: URL(fileURLWithPath: info.configJsonPath)))
     }
 
+    // MARK: - what an export streams
+
+    /// The events an `Export.Video` stream carried, in order.
+    func events(of result: DaemonProcess.StreamResult) throws -> [Star_V1_ProgressEvent] {
+        try result.items.map { try Star_V1_ProgressEvent(serializedBytes: $0) }
+    }
+
+    /// Where the daemon said it put the video, or nil if it did not say.  Asserts that it said so at
+    /// most once, and as the last thing before the stream ended.
+    func reportedVideoPath(of result: DaemonProcess.StreamResult,
+                           file: StaticString = #filePath, line: UInt = #line) throws -> String?
+    {
+        let all = try events(of: result)
+        let reports = all.compactMap { event -> String? in
+            if case .videoExported(let exported)? = event.kind { return exported.outputVideoPath }
+            return nil
+        }
+        XCTAssertLessThanOrEqual(reports.count, 1, "the video was reported more than once", file: file, line: line)
+        if let last = all.last, case .videoExported? = last.kind {
+            return reports.first
+        }
+        XCTAssertTrue(reports.isEmpty, "the video was reported before the end of the stream", file: file, line: line)
+        return nil
+    }
+
     // MARK: - exporting
 
     func settings(codec: String, encoder: String, pixelFormat: String,

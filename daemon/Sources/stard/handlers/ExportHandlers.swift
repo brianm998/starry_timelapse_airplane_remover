@@ -138,8 +138,20 @@ enum ExportHandlers {
         return "\(config.outputPath)/\(config.basename).\(muxer.defaultFileExtension ?? muxer.rawValue)"
     }
 
+    // The event that tells a client where an export's video went.  The client may not have named
+    // the file (the desktop's dialog never does), so the daemon says, and as an absolute path: a
+    // relative one is relative to the daemon's working directory, which nobody else can see.
+    static func videoExportedEvent(path: String) -> Star_V1_ProgressEvent {
+        var exported = Star_V1_VideoExportedEvent()
+        exported.outputVideoPath = URL(fileURLWithPath: path).path
+        var event = Star_V1_ProgressEvent()
+        event.kind = .videoExported(exported)
+        return event
+    }
+
     // Assemble the rendered frames back into a video using ffmpeg.
-    // Streams ProgressEvent items (io_progress, sequence_state) while encoding.
+    // Streams ProgressEvent items (io_progress, sequence_state) while encoding, and when the video
+    // is written, a video_exported with where it went.
     static func video(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_ExportVideoRequest(serializedBytes: payload)
@@ -247,6 +259,11 @@ enum ExportHandlers {
             if case .failure(let err) = await encodeTask.result {
                 await transport.sendError(id: id, message: "\(err)")
                 return
+            }
+
+            // The video is written; say where.
+            if let data = try? videoExportedEvent(path: videoPath).serializedData() {
+                await transport.sendStreamItem(id: id, payload: data)
             }
 
             await transport.sendStreamEnd(id: id)

@@ -67,10 +67,11 @@ final class ExportVideoAudioTests: ExportEndToEndTestCase {
 
         let output = "\(scratch)/out.mov"
         let chosen = proresInMov
-        try await export(daemon, session: info, to: output,
-                         with: settings(codec: chosen.codec, encoder: chosen.encoder,
-                                        pixelFormat: chosen.pixelFormat, muxer: chosen.muxer))
+        let result = try await export(daemon, session: info, to: output,
+                                      with: settings(codec: chosen.codec, encoder: chosen.encoder,
+                                                     pixelFormat: chosen.pixelFormat, muxer: chosen.muxer))
 
+        XCTAssertEqual(try reportedVideoPath(of: result), output, "the client is told where its video went")
         XCTAssertEqual(try codec(ofFirst: "v", in: output), "prores",
                        "the request's settings, not the source's, have to have been used")
         XCTAssertEqual(try codec(ofFirst: "a", in: output), "pcm_s16le",
@@ -167,12 +168,14 @@ final class ExportVideoAudioTests: ExportEndToEndTestCase {
         let config = try config(of: info)
         let expected = "\(config.outputPath)/\(config.basename).mov"
         let chosen = proresInMov
-        try await export(daemon, session: info, to: "",
-                         with: settings(codec: chosen.codec, encoder: chosen.encoder,
-                                        pixelFormat: chosen.pixelFormat, muxer: chosen.muxer))
+        let result = try await export(daemon, session: info, to: "",
+                                      with: settings(codec: chosen.codec, encoder: chosen.encoder,
+                                                     pixelFormat: chosen.pixelFormat, muxer: chosen.muxer))
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: expected),
                       "expected the video at \(expected)")
+        XCTAssertEqual(try reportedVideoPath(of: result), expected,
+                       "asked for no path, the client has no other way to learn where the video went")
         XCTAssertEqual(try codec(ofFirst: "a", in: expected), "pcm_s16le")
     }
 }

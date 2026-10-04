@@ -155,4 +155,38 @@ final class ExportVideoSettingsTests: XCTestCase {
 
         XCTAssertTrue(path.hasSuffix(".mkv"), path)
     }
+
+    // MARK: - telling the client where the video went
+
+    /// The desktop's dialog asks for no path, so what it shows afterwards is what the daemon says.
+    func testTheVideoExportedEventCarriesTheVideosPath() throws {
+        let event = ExportHandlers.videoExportedEvent(path: "/Users/someone/night sky-star-v-0_11_5.mov")
+
+        guard case .videoExported(let exported)? = event.kind else {
+            return XCTFail("expected a video_exported event, got \(String(describing: event.kind))")
+        }
+        XCTAssertEqual(exported.outputVideoPath, "/Users/someone/night sky-star-v-0_11_5.mov")
+        // and it survives the wire
+        let decoded = try Star_V1_ProgressEvent(serializedBytes: try event.serializedData())
+        XCTAssertEqual(decoded, event)
+    }
+
+    /// A relative path means somewhere under the daemon's working directory, which a client cannot
+    /// know, so it is said as the place it really is.
+    func testARelativePathIsReportedAsTheAbsolutePathItIs() {
+        let event = ExportHandlers.videoExportedEvent(path: "renders/clip.mov")
+
+        XCTAssertEqual(event.videoExported.outputVideoPath,
+                       "\(FileManager.default.currentDirectoryPath)/renders/clip.mov")
+    }
+
+    /// The bytes the daemon sends, written out: the same bytes are parsed by the desktop client's
+    /// test, so a change to the field numbers breaks both sides' tests and not just one of them.
+    /// `3A 08` is field 7 (`video_exported`) holding 8 bytes; `0A 06` is field 1 (the path) of 6.
+    func testTheVideoExportedEventHasTheBytesTheDesktopClientParses() throws {
+        let event = ExportHandlers.videoExportedEvent(path: "/x.mov")
+
+        XCTAssertEqual(Array(try event.serializedData()),
+                       [0x3A, 0x08, 0x0A, 0x06, 0x2F, 0x78, 0x2E, 0x6D, 0x6F, 0x76])
+    }
 }
