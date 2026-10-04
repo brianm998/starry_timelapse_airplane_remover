@@ -9,6 +9,9 @@ on:
   push:
     branches: [main, develop]
     paths: ['star-desktop/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
+    # release/* tags build the installers and attach them to the release (see release-upload).
+    # No paths filter applies to tag pushes.
+    tags: ['release/*']
   pull_request:
     branches: [main, develop]
     paths: ['star-desktop/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
@@ -437,3 +440,38 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/build.keychain" || true
           rm -f "$RUNNER_TEMP/certs.p12"
           rm -rf "$RUNNER_TEMP/private_keys"
+
+  # ─── Attach installers to the GitHub release ─────────────────────────────────
+  # On release/* tag pushes, adds the three desktop installers to the release for
+  # that tag. cli.yml's release-publish job creates the draft release from the same
+  # tag push; softprops/action-gh-release reuses an existing release for the tag
+  # (drafts included) and creates a draft if this job gets there first. If both
+  # create one simultaneously you can end up with two drafts: delete the duplicate.
+  release-upload:
+    name: Attach installers to release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/release/')
+    needs: [linux-package, windows-package, macos-signed]
+    permissions:
+      contents: write
+    steps:
+      - name: Extract version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#release/}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: star-desktop-*
+          path: release-artifacts/
+          merge-multiple: true
+
+      - name: List release artifacts
+        run: find release-artifacts -type f | sort
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name:               ${{ github.ref_name }}
+          name:                   "Star ${{ steps.ver.outputs.version }}"
+          draft:                  true
+          generate_release_notes: true
+          files:                  release-artifacts/*
