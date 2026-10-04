@@ -9,7 +9,19 @@ plugins {
 }
 
 group = "com.star.desktop"
-version = "2.0.0"
+
+// The app version is Config.latestVersion in StarCore, the same string `star --version` and the release
+// tags use, so the installers can't drift from it. Read it from the source rather than hardcoding.
+val starVersion: String = rootProject.file("../StarCore/Sources/StarCore/Config.swift").readText()
+    .let { Regex("""static let latestVersion\s*=\s*"(\d+\.\d+\.\d+)"""").find(it)?.groupValues?.get(1) }
+    ?: throw GradleException("could not read Config.latestVersion from StarCore/Sources/StarCore/Config.swift")
+// jpackage on macOS rejects a leading 0 ("first number in an app-version cannot be zero"), so the
+// dmg/pkg carry 1.<minor>.<patch> while the .msi/.deb use the real version.
+val macPackageVersion: String = starVersion.split(".").let { v ->
+    if (v[0] == "0") "1.${v[1]}.${v[2]}" else starVersion
+}
+
+version = starVersion
 
 kotlin {
     compilerOptions {
@@ -97,7 +109,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Star"
-            packageVersion = "2.0.0"
+            packageVersion = starVersion
             description = "Star — Nighttime Timelapse Airplane Remover"
             vendor = "Star"
             // Bundle the native daemon (stard) + ffmpeg/ffprobe so the app is self-contained. The
@@ -112,6 +124,7 @@ compose.desktop {
             // falls back to the default Java/coffee-cup icon in the packaged app.
             macOS {
                 bundleID = "com.star.desktop"
+                packageVersion = macPackageVersion
                 iconFile.set(project.file("packaging/star.icns"))
                 // Optional Developer ID signing (off by default → an unsigned app image). Enable with
                 // -Pstar.sign.identity="Developer ID Application: Name (TEAMID)" or STAR_SIGN_IDENTITY.
