@@ -48,6 +48,17 @@ public enum FrameViewMode: String,
         }
     }
 
+    /// True for full-size intermediates that are only a cache: when one is missing or
+    /// fails to decode, `loadOrCreateAlignedImage` recomputes it. They are written
+    /// uncompressed and without fsync (see `PixelatedImage.writeCacheTIFF`), and in the
+    /// default mode not at all, because nothing reads them back.
+    public var isRecomputableCache: Bool {
+        switch self {
+        case .starAligned, .earthAligned: true
+        default: false
+        }
+    }
+
     public var shortName: String {
         switch self {
         case .original:

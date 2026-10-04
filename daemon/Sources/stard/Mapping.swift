@@ -249,6 +249,7 @@ enum Mapping {
         // always shows the daemon's own machine's hardware, not a stale answer from
         // whenever the daemon happened to start.
         out.gpuHardwareAvailable = Config.isGPUHardwareAvailable
+        out.resourceProfile = c.resourceProfile.rawValue
         // Not an expert setting — recorded state.  Always sent, so a client that re-opens a
         // session can see it left a hand-painted horizon selection unfinished.
         out.startupHorizonFrameIndices = c.startupHorizonFrameIndices.map { Int32($0) }
@@ -310,6 +311,11 @@ enum Mapping {
         if p.hasMaxConcurrentKeypointOps { c.maxConcurrentKeypointOps = Int(p.maxConcurrentKeypointOps) }
         if p.hasMergeStreamingThresholdMb { c.mergeStreamingThresholdMB = Int(p.mergeStreamingThresholdMb) }
         if p.hasUseGpuAcceleration { c.useGPUForMerge = p.useGpuAcceleration }
+        // Unknown names are ignored rather than rejected: a newer client may know profiles
+        // this daemon does not, and keeping the config's own is the safe answer.
+        if p.hasResourceProfile, let profile = ResourceProfile(rawValue: p.resourceProfile) {
+            c.resourceProfile = profile
+        }
         // gpu_hardware_available is read-only (see protoConfig) and deliberately not
         // applied here — it describes hardware, not a setting a client can choose.
         // The record of an unfinished hand-painted horizon selection, applied as a pair and

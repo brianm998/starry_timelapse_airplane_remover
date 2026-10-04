@@ -23,7 +23,7 @@ enum ExportHandlers {
 
             let frames = await session.frames
             let config = await session.configManager.config()
-            let concurrency = max(1, config.numberOfFramesToProcessConcurrently)
+            let concurrency = config.frameConcurrency
 
             // Finish all frames concurrently, respecting the configured limit.
             let finishTask = Task {

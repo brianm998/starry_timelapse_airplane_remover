@@ -196,3 +196,56 @@ final class ExpertConfigFieldsTests: XCTestCase {
                              small.horizonMemoryMultiplier)
     }
 }
+
+/// The resource profile ("Use of this Mac") over the wire. Hand-added to star.pb.swift
+/// (`protoc` was not available), so the round trip below is what proves the generated
+/// code's name map, decode, visit and equality agree with each other.
+final class ResourceProfileFieldTests: XCTestCase {
+
+    func testTheProfileRoundTripsOverTheWire() throws {
+        var c = Star_V1_Config()
+        c.resourceProfile = "light"
+        let back = try Star_V1_Config(serializedBytes: try c.serializedData())
+        XCTAssertTrue(back.hasResourceProfile)
+        XCTAssertEqual(back.resourceProfile, "light")
+        XCTAssertEqual(back, c)
+    }
+
+    func testTheNameMapKnowsTheField() throws {
+        var c = Star_V1_Config()
+        c.resourceProfile = "balanced"
+        let json = try c.jsonString()
+        XCTAssertTrue(json.contains("resourceProfile"), json)
+        let back = try Star_V1_Config(jsonString: json)
+        XCTAssertEqual(back.resourceProfile, "balanced")
+    }
+
+    func testAnUnsetProfileKeepsTheConfigsOwn() {
+        var c = Config()
+        c.resourceProfile = .balanced
+        Mapping.applyExpertConfig(&c, from: Star_V1_Config())
+        XCTAssertEqual(c.resourceProfile, .balanced)
+    }
+
+    func testAPresentProfileIsApplied() {
+        var c = Config()
+        var p = Star_V1_Config()
+        p.resourceProfile = "light"
+        Mapping.applyExpertConfig(&c, from: p)
+        XCTAssertEqual(c.resourceProfile, .light)
+    }
+
+    func testAnUnknownProfileIsIgnored() {
+        var c = Config()
+        var p = Star_V1_Config()
+        p.resourceProfile = "turbo"
+        Mapping.applyExpertConfig(&c, from: p)
+        XCTAssertEqual(c.resourceProfile, .full)
+    }
+
+    func testTheDaemonReportsTheProfile() {
+        var c = Config()
+        c.resourceProfile = .custom
+        XCTAssertEqual(Mapping.protoConfig(c).resourceProfile, "custom")
+    }
+}

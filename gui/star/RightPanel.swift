@@ -292,11 +292,7 @@ struct RightPanel: View {
                                 )
                             }
 
-                            EditableNumberOfFramesToProcessConcurrentlyView(
-                              focusedField: $focusedField,
-                              textColor: .white,
-                              alwaysOpen: false
-                            )
+                            ResourceProfileView(textColor: .white)
 
                             MemoryMultiplierView(
                               focusedField: $focusedField,
@@ -682,6 +678,118 @@ struct StaticNeighborFrameOverrideView: View {
                 localCount = viewModel.numberStaticNeighborFrames
             }
         }
+    }
+}
+
+/// "Use of this Mac": Full / Balanced / Light, plus Custom… for every limit by hand, and the
+/// resource governor's one-line answer to "what is holding this run back?".
+struct ResourceProfileView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    let textColor: Color
+
+    @State private var showCustom = false
+    @State private var status: String? = nil
+
+    private var profileBinding: Binding<ResourceProfile?> {
+        Binding(
+          get: { viewModel.resourceProfile == .custom ? nil : viewModel.resourceProfile },
+          set: { if let value = $0 { viewModel.resourceProfile = value } }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(localized("ui.use_of_this_mac"))
+                  .foregroundColor(textColor)
+                Picker("", selection: profileBinding) {
+                    Text(localized("ui.use_full")).tag(ResourceProfile?.some(.full))
+                    Text(localized("ui.use_balanced")).tag(ResourceProfile?.some(.balanced))
+                    Text(localized("ui.use_light")).tag(ResourceProfile?.some(.light))
+                }
+                  .pickerStyle(.segmented)
+                  .labelsHidden()
+                  .fixedSize()
+                Button(localized("ui.use_custom")) {
+                    if viewModel.resourceProfile != .custom {
+                        viewModel.resourceProfile = .custom
+                    }
+                    showCustom = true
+                }
+                  .buttonStyle(.borderedProminent)
+                  .tint(viewModel.resourceProfile == .custom ? .accentColor : .gray)
+                  .controlSize(.small)
+                  .popover(isPresented: $showCustom) {
+                      ResourceCustomLimitsView()
+                        .environment(viewModel)
+                  }
+            }
+            if let status {
+                Text(status)
+                  .font(.caption)
+                  .foregroundColor(.gray)
+            }
+        }
+        .help(localized("ui.use_of_this_mac_help"))
+        .task {
+            // The governor samples every few seconds; ask at the same pace.
+            while !Task.isCancelled {
+                if let latest = await ResourceGovernor.shared.latest {
+                    status = latest.limitedBy.map {
+                        localized("ui.use_status_limited", $0.description)
+                    } ?? localized("ui.use_status_none")
+                } else {
+                    status = nil
+                }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+}
+
+/// Every limit behind a profile as an editable field. Opened pre-filled from the profile it
+/// was opened from; changes reach the running pipeline at once.
+struct ResourceCustomLimitsView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    var body: some View {
+        @Bindable var viewModel = viewModel
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(localized("ui.use_custom_title"))
+              .font(.headline)
+            Stepper(value: $viewModel.numberOfFramesToProcessConcurrently, in: 1...1024) {
+                Text("\(localized("ui.use_custom_pipeline_depth")): \(viewModel.numberOfFramesToProcessConcurrently)")
+            }
+            VStack(alignment: .leading) {
+                Text("\(localized("ui.use_custom_memory")): \(viewModel.memoryBudgetFraction, specifier: "%.2f")")
+                Slider(value: $viewModel.memoryBudgetFraction, in: 0.1...0.95)
+            }
+            Stepper(value: $viewModel.customResources.cpuWidth, in: 1...256) {
+                Text("\(localized("ui.use_custom_cpu")): \(viewModel.customResources.cpuWidth)")
+            }
+            Stepper(value: $viewModel.customResources.gpuWidth, in: 1...32) {
+                Text("\(localized("ui.use_custom_gpu")): \(viewModel.customResources.gpuWidth)")
+            }
+            VStack(alignment: .leading) {
+                Text("\(localized("ui.use_custom_gpu_duty")): \(viewModel.customResources.gpuDutyCycle, specifier: "%.2f")")
+                Slider(value: $viewModel.customResources.gpuDutyCycle, in: 0.05...1.0)
+            }
+            Stepper(value: $viewModel.customResources.diskStreamsPerVolume, in: 1...16) {
+                Text("\(localized("ui.use_custom_disk")): \(viewModel.customResources.diskStreamsPerVolume)")
+            }
+            Picker(localized("ui.use_custom_qos"), selection: $viewModel.customResources.qos) {
+                Text(localized("ui.use_custom_qos_user_initiated")).tag(ResourceQoS.userInitiated)
+                Text(localized("ui.use_custom_qos_utility")).tag(ResourceQoS.utility)
+                Text(localized("ui.use_custom_qos_background")).tag(ResourceQoS.background)
+            }
+            Picker(localized("ui.use_custom_io"), selection: $viewModel.customResources.ioPolicy) {
+                Text(localized("ui.use_custom_io_default")).tag(ResourceIOPolicy.default)
+                Text(localized("ui.use_custom_io_utility")).tag(ResourceIOPolicy.utility)
+                Text(localized("ui.use_custom_io_throttle")).tag(ResourceIOPolicy.throttle)
+            }
+        }
+        .padding()
+        .frame(width: 420)
     }
 }
 

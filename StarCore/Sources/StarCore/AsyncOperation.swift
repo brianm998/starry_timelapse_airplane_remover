@@ -141,6 +141,7 @@ open class AsyncOperation: Operation, @unchecked Sendable {
                                                          reserved: memBytes)
                                            : nil
             await self.asyncExecute()
+            OperationThroughput.record(self.type)
             await probe?.finish()
 
             // Release reservation, then mark complete so the queue can start

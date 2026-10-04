@@ -228,6 +228,11 @@ message Config {
   // must never send this on, since there is nothing on the StarCore side for it
   // to set.
   optional bool   gpu_hardware_available                               = 54;
+  // How much of this Mac star may use: "full" (the default), "balanced", "light" or
+  // "custom". Maps to StarCore Config.resourceProfile. Unset keeps whatever the session's
+  // config already has. For "custom" the limits are number_of_frames_to_process_concurrently
+  // (the pipeline depth cap) and the editable fields StarCore keeps beside it.
+  optional string resource_profile                                     = 55;
 }
 
 enum CleanMethod {
