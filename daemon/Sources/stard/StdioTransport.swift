@@ -38,8 +38,8 @@ func setupProtocolIO() {
     _ = _setmode(inFD,  O_BINARY)
     _ = _setmode(outFD, O_BINARY)
     _ = _dup2(_fileno(stderr), _fileno(stdout))           // stray stdout writes → stderr
-    let nul = _open("NUL", 0 /* _O_RDONLY */)
-    if nul >= 0 { _ = _dup2(nul, _fileno(stdin)); _ = _close(nul) } // stray stdin reads → EOF
+    // stray stdin reads → EOF. freopen rather than _open: _open is variadic, which Swift can't import.
+    _ = freopen("NUL", "r", stdin)
     inHandle  = FileHandle(fileDescriptor: inFD,  closeOnDealloc: false)
     outHandle = FileHandle(fileDescriptor: outFD, closeOnDealloc: false)
 #else
