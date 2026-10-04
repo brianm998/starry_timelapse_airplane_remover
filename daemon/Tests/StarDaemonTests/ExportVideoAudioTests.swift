@@ -17,71 +17,9 @@ import SwiftProtobuf
 /// `outputSequenceDirname`; here they are copied there from the decoded source, which saves
 /// running the whole detection pipeline over a synthetic video to get files that are exactly as
 /// good for this.
-///
-/// Skipped when `stard` or ffmpeg has not been built, which is a fresh checkout's normal state.
-final class ExportVideoAudioTests: XCTestCase {
-
-    private var scratch = ""
-    private var tools: URL!
-    private var daemons: [DaemonProcess] = []
+final class ExportVideoAudioTests: ExportEndToEndTestCase {
 
     private let frameCount = 24
-
-    override func setUpWithError() throws {
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: DaemonIntegrationTests.stardPath),
-                          "stard is not built; run `swift build` in daemon/")
-
-        // <repo>/external_binaries/bin, found from this file's own location
-        tools = URL(fileURLWithPath: #filePath)
-          .deletingLastPathComponent()   // StarDaemonTests
-          .deletingLastPathComponent()   // Tests
-          .deletingLastPathComponent()   // daemon
-          .deletingLastPathComponent()   // <repo>
-          .appendingPathComponent("external_binaries")
-          .appendingPathComponent("bin")
-        for tool in ["ffmpeg", "ffprobe"] {
-            try XCTSkipUnless(FileManager.default.fileExists(atPath: tools.appendingPathComponent(tool).path),
-                              "ffmpeg is not built here; run ffmpeg/build.sh --install")
-        }
-        let encoders = try run("ffmpeg", ["-hide_banner", "-encoders"])
-        for encoder in ["libx264", "prores_ks", "mpeg4"] {
-            try XCTSkipUnless(encoders.contains(" \(encoder) "), "this ffmpeg has no \(encoder)")
-        }
-
-        scratch = FileManager.default.temporaryDirectory
-          .appendingPathComponent("stard-export-audio-\(UUID().uuidString)").path
-        try FileManager.default.createDirectory(atPath: scratch, withIntermediateDirectories: true)
-    }
-
-    override func tearDown() {
-        for daemon in daemons { daemon.terminate() }
-        daemons = []
-        if !scratch.isEmpty { try? FileManager.default.removeItem(atPath: scratch) }
-    }
-
-    // MARK: - the tools
-
-    @discardableResult
-    private func run(_ tool: String, _ arguments: [String]) throws -> String {
-        let process = Process()
-        process.executableURL = tools.appendingPathComponent(tool)
-        process.arguments = arguments
-        process.standardInput = FileHandle.nullDevice
-        let out = Pipe(), err = Pipe()
-        process.standardOutput = out
-        process.standardError = err
-        try process.run()
-        let output = out.fileHandleForReading.readDataToEndOfFile()
-        let errors = err.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            var message = "\(tool) \(arguments.joined(separator: " ")) failed: "
-            message += String(decoding: errors, as: UTF8.self)
-            throw NSError(domain: "ExportVideoAudioTests", code: Int(process.terminationStatus),
-                          userInfo: [NSLocalizedDescriptionKey: message])
-        }
-        return String(decoding: output, as: UTF8.self)
-    }
 
     /// One second of video, and of PCM sound if `withSound`: what an editor or a camera writes,
     /// and not AAC.
@@ -101,47 +39,6 @@ final class ExportVideoAudioTests: XCTestCase {
         return path
     }
 
-    /// The codec of the first stream of `kind` (`a` or `v`) in a file, or nil if it has none.
-    private func codec(ofFirst kind: String, in path: String) throws -> String? {
-        let output = try run("ffprobe", [
-            "-v", "error", "-select_streams", "\(kind):0",
-            "-show_entries", "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1", path])
-        let name = output.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? nil : name
-    }
-
-    // MARK: - the daemon
-
-    private func launchDaemon() throws -> DaemonProcess {
-        var environment = ProcessInfo.processInfo.environment
-        environment[ToolPaths.directoryOverrideVariable] = tools.path
-        let daemon = try DaemonProcess(binaryPath: DaemonIntegrationTests.stardPath,
-                                       scratchDir: "\(scratch)/daemon",
-                                       environment: environment)
-        daemons.append(daemon)
-        return daemon
-    }
-
-    private func openVideo(_ daemon: DaemonProcess, _ path: String) async throws -> Star_V1_SessionInfo {
-        var request = Star_V1_OpenVideoRequest()
-        request.videoPath = path
-        let result = try await daemon.stream(method: "Session.OpenVideo", request: request)
-        if let failure = result.failure {
-            XCTFail("Session.OpenVideo failed: \(failure.message)")
-        }
-        for item in result.items.reversed() {
-            if case .done(let info)? = try Star_V1_OpenProgress(serializedBytes: item).kind {
-                return info
-            }
-        }
-        throw XCTSkip("Session.OpenVideo never reported the opened session")
-    }
-
-    private func config(of info: Star_V1_SessionInfo) throws -> Config {
-        try JSONDecoder().decode(Config.self,
-                                 from: Data(contentsOf: URL(fileURLWithPath: info.configJsonPath)))
-    }
-
     /// What a finished render leaves for the export to encode: the frames, in the folder the
     /// config says the final sequence goes to.
     private func renderFrames(of info: Star_V1_SessionInfo, from video: String) throws {
@@ -155,39 +52,6 @@ final class ExportVideoAudioTests: XCTestCase {
             try FileManager.default.copyItem(atPath: "\(decoded)/\(name)", toPath: "\(rendered)/\(name)")
         }
     }
-
-    private func settings(codec: String, encoder: String, pixelFormat: String,
-                          muxer: String) -> Star_V1_VideoEncodeSettings
-    {
-        var settings = Star_V1_VideoEncodeSettings()
-        settings.frameRate = 24
-        settings.codec = codec
-        settings.encoder = encoder
-        settings.pixelFormat = pixelFormat
-        settings.muxer = muxer
-        return settings
-    }
-
-    /// Runs `Export.Video` and returns how it ended; fails the test if it failed.
-    @discardableResult
-    private func export(_ daemon: DaemonProcess,
-                        session: Star_V1_SessionInfo,
-                        to path: String,
-                        with settings: Star_V1_VideoEncodeSettings?) async throws -> DaemonProcess.StreamResult
-    {
-        var request = Star_V1_ExportVideoRequest()
-        request.sessionID = session.sessionID
-        request.outputVideoPath = path
-        if let settings { request.settings = settings }
-        let result = try await daemon.stream(method: "Export.Video", request: request)
-        if let failure = result.failure {
-            XCTFail("Export.Video failed: \(failure.message)")
-        }
-        return result
-    }
-
-    private let proresInMov = (codec: "prores", encoder: "prores_ks", pixelFormat: "yuv422p10le", muxer: "mov")
-    private let h264InMp4 = (codec: "h264", encoder: "libx264", pixelFormat: "yuv420p", muxer: "mp4")
 
     // MARK: - the reported failure
 
@@ -211,6 +75,9 @@ final class ExportVideoAudioTests: XCTestCase {
                        "the request's settings, not the source's, have to have been used")
         XCTAssertEqual(try codec(ofFirst: "a", in: output), "pcm_s16le",
                        "the sound the video came in with is gone from the export")
+        let facts = try videoFacts(of: output)
+        XCTAssertEqual(facts.frames, frameCount, "every frame is in the video")
+        XCTAssertEqual(facts.frameRate, "24/1")
     }
 
     /// MP4 is where ffmpeg will write PCM that almost nothing plays, so there it is AAC.
@@ -242,6 +109,7 @@ final class ExportVideoAudioTests: XCTestCase {
 
         XCTAssertEqual(try codec(ofFirst: "v", in: output), "mpeg4", "the source's own settings")
         XCTAssertEqual(try codec(ofFirst: "a", in: output), "pcm_s16le")
+        XCTAssertEqual(try videoFacts(of: output).frames, frameCount)
     }
 
     /// A session resumed from its config has no record of the video it was opened from, only the
@@ -265,6 +133,7 @@ final class ExportVideoAudioTests: XCTestCase {
                                         pixelFormat: chosen.pixelFormat, muxer: chosen.muxer))
 
         XCTAssertEqual(try codec(ofFirst: "a", in: output), "pcm_s16le")
+        XCTAssertEqual(try videoFacts(of: output).frames, frameCount)
     }
 
     /// Making sound up would be as wrong as losing it.
