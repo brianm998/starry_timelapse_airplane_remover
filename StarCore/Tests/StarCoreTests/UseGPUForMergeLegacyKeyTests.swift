@@ -31,6 +31,8 @@ final class UseGPUForMergeLegacyKeyTests: XCTestCase {
 
     func testAbsentKeysLeaveTheDefault() throws {
         let c = try decode(#"{"imageWidth": 100}"#)
-        XCTAssertTrue(c.useGPUForMerge, "on by default")
+        XCTAssertEqual(c.useGPUForMerge, GPUCapability.isAvailable(), "defaults to on when a GPU is available")
+        XCTAssertEqual(c.useGPUForSIFT, GPUCapability.isAvailable())
+        XCTAssertEqual(c.useGPUForAKAZE, GPUCapability.isAvailable())
     }
 }

@@ -178,9 +178,14 @@ public struct HomographyResultsCodable: Codable, Sendable {
                 }
             }
         } else {
-            Log.d("frame \(frameIndex) has NO medianSlope :(")
             // ALL FAIL :(
             // here we don't know the median, so all are bad :(
+            //
+            // Deliberately not logged.  The gui's alignment deviation chart partitions every
+            // frame of the sequence each time it redraws, and every frame not yet aligned
+            // lands here — so a line here was two thousand lines per redraw at `.debug`,
+            // 2.4 million of the 2.6 million lines in one session's log, and a log writer
+            // that fell twenty minutes behind trying to keep up.
             badWarps = neighborHomography
         }
 

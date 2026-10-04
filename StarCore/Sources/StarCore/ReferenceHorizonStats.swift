@@ -406,12 +406,15 @@ extension PixelatedImage {
         let groundMeans = groundG.map {
             "(L=\(String(format:"%.1f", $0.mean0)),a=\(String(format:"%.1f", $0.mean1)),b=\(String(format:"%.1f", $0.mean2)))"
         } ?? "nil"
-        Log.i("frame \(frameIndex) computeReferenceHorizonStats: " +
-              "skyMedian=\(String(format:"%.4f", medSky)) " +
-              "groundMedian=\(String(format:"%.4f", medGround)) " +
-              "skyLAB=\(skyMeans) " +
-              "groundLAB=\(groundMeans) " +
-              "horizonY=[\(minHorizonY),\(maxHorizonY)]")
+        // Appended a piece at a time: as one `+` chain this is more than the Swift 6.4 type
+        // checker will solve in time, and the build fails on it outright.
+        var message = "frame \(frameIndex) computeReferenceHorizonStats: "
+        message += "skyMedian=\(String(format:"%.4f", medSky)) "
+        message += "groundMedian=\(String(format:"%.4f", medGround)) "
+        message += "skyLAB=\(skyMeans) "
+        message += "groundLAB=\(groundMeans) "
+        message += "horizonY=[\(minHorizonY),\(maxHorizonY)]"
+        Log.i(message)
         return stats
     }
 

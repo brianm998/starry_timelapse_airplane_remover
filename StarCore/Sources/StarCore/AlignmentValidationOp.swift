@@ -407,22 +407,29 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
             case .needsRepair(let reciprocityScore):
                 if let reciprocityScore {
-                    Log.i("frame \(frame.frameIndex) star homography rejected by " +
-                          "the reciprocity check: it disagrees with its neighbours' own " +
-                          "fits of the same pairs by " +
-                          "\(String(format: "%.2f", reciprocityScore))px, above " +
-                          "\(ReciprocityLimits.frameRejection)px")
+                    // Appended a piece at a time: as one `+` chain this still compiles, but
+                    // one more piece takes it past what the Swift 6.4 type checker will solve
+                    // in time, and the build fails on it outright.
+                    var message = "frame \(frame.frameIndex) star homography rejected by "
+                    message += "the reciprocity check: it disagrees with its neighbours' own "
+                    message += "fits of the same pairs by "
+                    message += "\(String(format: "%.2f", reciprocityScore))px, above "
+                    message += "\(ReciprocityLimits.frameRejection)px"
+                    Log.i(message)
                     reciprocityRejections += 1
                 }
             }
         }
 
-        Log.i("moving star alignment: \(goodFlags.filter { $0 }.count) of " +
-              "\(entries.count) frames keep their measured homography whole " +
-              "(\(corroborated) warps kept because a partner frame vouched for them, " +
-              "and \(distrusted) across \(distrustedFrames) frames kept despite " +
-              "nothing vouching for them); " +
-              "\(reciprocityRejections) rejected by the reciprocity check")
+        // Appended a piece at a time: as one `+` chain this is more than the Swift 6.4 type
+        // checker will solve in time, and the build fails on it outright.
+        var message = "moving star alignment: \(goodFlags.filter { $0 }.count) of "
+        message += "\(entries.count) frames keep their measured homography whole "
+        message += "(\(corroborated) warps kept because a partner frame vouched for them, "
+        message += "and \(distrusted) across \(distrustedFrames) frames kept despite "
+        message += "nothing vouching for them); "
+        message += "\(reciprocityRejections) rejected by the reciprocity check"
+        Log.i(message)
 
         // Only frames that kept their own measured homography vouch for anything: a
         // frame still awaiting repair has nothing to say about its neighbours, and one
@@ -752,12 +759,15 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         )
 
         for report in result.perOffset {
-            Log.i("validateMovingEarthAlignment offset \(report.offset): " +
-                  "\(report.comparableFrames) comparable frames, median disagreement " +
-                  "\(String(format: "%.2f", report.medianDisagreement))px, worst " +
-                  "\(String(format: "%.2f", report.worstDisagreement))px, cutoff " +
-                  "\(String(format: "%.2f", report.cutoff))px, " +
-                  "\(report.replaced) replaced, \(report.filled) filled")
+            // Appended a piece at a time: as one `+` chain this is more than the Swift 6.4
+            // type checker will solve in time, and the build fails on it outright.
+            var message = "validateMovingEarthAlignment offset \(report.offset): "
+            message += "\(report.comparableFrames) comparable frames, median disagreement "
+            message += "\(String(format: "%.2f", report.medianDisagreement))px, worst "
+            message += "\(String(format: "%.2f", report.worstDisagreement))px, cutoff "
+            message += "\(String(format: "%.2f", report.cutoff))px, "
+            message += "\(report.replaced) replaced, \(report.filled) filled"
+            Log.i(message)
         }
 
         guard result.replaced + result.filled > 0 else {

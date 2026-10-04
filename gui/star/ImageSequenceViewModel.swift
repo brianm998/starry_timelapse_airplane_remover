@@ -1468,7 +1468,10 @@ public final class ImageSequenceViewModel {
         // the log to say where they went — measured at 11-185s over 16-30 frames.
         let started = Date()
 
-        Task.detached(priority: .userInitiated) { [self] in
+        // `mergeIndices` by value: captured as the variable, Swift 6.4 refuses to let the
+        // main-actor task at the end read it ("sending 'mergeIndices' risks causing data
+        // races"), though nothing changes it once the loop above is done.
+        Task.detached(priority: .userInitiated) { [self, mergeIndices] in
             for idx in toInvalidate {
                 await referenceHorizonStatsCache.clearStats(for: idx)
             }
