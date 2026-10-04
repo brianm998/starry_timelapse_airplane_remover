@@ -35,9 +35,11 @@ nothing but Windows; Linux: glibc only). Versions and checksums are pinned in `v
 | VP8 / VP9 | libvpx |
 | ProRes, DNxHD/HR, FFV1, MJPEG, PNG/TIFF/EXR, ... | FFmpeg's own |
 
-Left out on purpose: audio libraries (star copies the audio stream, it never encodes one), subtitle and
-filter libraries, the capture devices, `libfdk-aac` (non-free: it would make the binary
-unredistributable). Compared with the old build that drops `libaom-av1` (AV1 is SVT-AV1 now),
+Left out on purpose: audio libraries, subtitle and filter libraries, the capture devices, `libfdk-aac`
+(non-free: it would make the binary unredistributable). Star keeps the sound of an imported video as it
+came whenever it can, so it rarely encodes audio; when a container will not take the original (WebM takes only
+Opus, QuickTime refuses FLAC and Opus, an MP4 is only worth AAC) it uses FFmpeg's own AAC encoder, or its
+Opus encoder for WebM, and `AudioSidecar` works out which by asking ffmpeg. Compared with the old build that drops `libaom-av1` (AV1 is SVT-AV1 now),
 `libopenh264`, `libxvid`, `libtheora`, `libxavs`, `libwebp` and `libopenjpeg` (the native JPEG 2000
 encoder remains).
 

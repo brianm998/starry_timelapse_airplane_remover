@@ -133,11 +133,17 @@ enum ExportHandlers {
             let totalFrames = await session.frameCount
 
             // Derive the decoded-frames directory from the image sequence filenames
-            // so we can find audio.aac if it exists.
+            // so we can find the sound file decodeVideo kept beside them, if it did.
             let filenames    = await session.imageSequence.filenames
             let decodedDir   = (filenames.first as NSString?)?.deletingLastPathComponent ?? outputPath
-            let audioPath    = "\(decodedDir)/audio.aac"
-            let hasAudio     = vi.hasAudio && FileManager.default.fileExists(atPath: audioPath)  // StarCore.VideoInfo.hasAudio
+
+            // What the output container will take of that sound: as it is, AAC, Opus, or nothing.
+            // The muxer is chosen from the output file's extension, as the ffmpeg run below does.
+            let audio = vi.hasAudio  // StarCore.VideoInfo.hasAudio
+              ? AudioSidecar.plan(in: decodedDir,
+                                  formatArguments: [],
+                                  outputExtension: URL(fileURLWithPath: req.outputVideoPath).pathExtension)
+              : AudioPlan.none("the video has none")
 
             // Determine the encoder name: prefer explicit encoder, then codec's rawValue.
             let encoderName  = vi.encoder?.rawValue ?? vi.codec.rawValue
@@ -147,14 +153,14 @@ enum ExportHandlers {
                 "-start_number", "1",
                 "-i", "\(outputPath)/image_%04d.tiff",
             ]
-            if hasAudio { ffmpegArgs += ["-i", audioPath] }
+            ffmpegArgs += audio.inputArguments
             ffmpegArgs += [
                 "-c:v", encoderName,
                 "-pix_fmt", vi.pixelFormat.rawValue,
             ]
             // for the GPU encoders whose own default quality is poor (see FFmpegHardware.swift)
             ffmpegArgs += vi.encoder?.defaultQualityArguments ?? []
-            if hasAudio { ffmpegArgs += ["-c:a", "copy"] }
+            ffmpegArgs += audio.codecArguments
             ffmpegArgs += ["-y", req.outputVideoPath]
 
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
