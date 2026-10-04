@@ -62,14 +62,15 @@ final class ExportSequenceTests: ExportEndToEndTestCase {
         }
     }
 
+    @discardableResult
     private func export(_ daemon: DaemonProcess, _ info: Star_V1_SessionInfo, to path: String,
-                        frameRate: Double = 24) async throws
+                        frameRate: Double = 24) async throws -> DaemonProcess.StreamResult
     {
         let chosen = h264InMp4
         var chosenSettings = settings(codec: chosen.codec, encoder: chosen.encoder,
                                       pixelFormat: chosen.pixelFormat, muxer: chosen.muxer)
         chosenSettings.frameRate = frameRate
-        try await export(daemon, session: info, to: path, with: chosenSettings)
+        return try await export(daemon, session: info, to: path, with: chosenSettings)
     }
 
     /// The video has exactly the frames at the places `expected` names, in that order, at `rate`.
@@ -104,9 +105,10 @@ final class ExportSequenceTests: ExportEndToEndTestCase {
         try renderFrames(of: info, names: names)
 
         let output = "\(scratch)/out.mp4"
-        try await export(daemon, info, to: output)
+        let result = try await export(daemon, info, to: output)
 
         try assertVideo(output, showsFramesAt: Array(names.indices))
+        XCTAssertEqual(try reportedVideoPath(of: result), output)
     }
 
     /// A number missing used to end the video there, without an error, so a sequence with a
@@ -200,6 +202,7 @@ final class ExportSequenceTests: ExportEndToEndTestCase {
         let message = try XCTUnwrap(result.failure?.message, "an export of nothing is not a success")
         XCTAssertTrue(message.contains("nothing to export"), message)
         XCTAssertFalse(FileManager.default.fileExists(atPath: output))
+        XCTAssertNil(try reportedVideoPath(of: result), "there is no video to say where it went")
     }
 
     // MARK: - what the real pipeline leaves
@@ -246,11 +249,12 @@ final class ExportSequenceTests: ExportEndToEndTestCase {
 
         let expected = "\(config.outputPath)/\(config.basename).mp4"
         let chosen = h264InMp4
-        try await export(daemon, session: info, to: "",
-                         with: settings(codec: chosen.codec, encoder: chosen.encoder,
-                                        pixelFormat: chosen.pixelFormat, muxer: chosen.muxer))
+        let result = try await export(daemon, session: info, to: "",
+                                      with: settings(codec: chosen.codec, encoder: chosen.encoder,
+                                                     pixelFormat: chosen.pixelFormat, muxer: chosen.muxer))
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: expected), "expected the video at \(expected)")
+        XCTAssertEqual(try reportedVideoPath(of: result), expected)
         let facts = try videoFacts(of: expected)
         XCTAssertEqual(facts.frames, count)
         XCTAssertEqual(facts.frameRate, "24/1")

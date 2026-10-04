@@ -108,14 +108,20 @@ fun RenderVideoDialog(app: AppViewModel) {
                     .setPixelFormat(pixelFormat).setMuxer(muxer).build()
                 scope.launch {
                     try {
+                        // No path is asked for, so the daemon names the file and says where it put it.
+                        var writtenTo: String? = null
                         app.export.exportVideo(sid, "", settings).collect { ev ->
-                            if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) {
-                                val io = ev.ioProgress
-                                progress = if (io.total > 0) io.current.toFloat() / io.total else null
-                                status = "Rendering ${io.current} / ${io.total}"
+                            when (ev.kindCase) {
+                                ProgressEvent.KindCase.IO_PROGRESS -> {
+                                    val io = ev.ioProgress
+                                    progress = if (io.total > 0) io.current.toFloat() / io.total else null
+                                    status = "Rendering ${io.current} / ${io.total}"
+                                }
+                                ProgressEvent.KindCase.VIDEO_EXPORTED -> writtenTo = ev.videoExported.outputVideoPath
+                                else -> Unit
                             }
                         }
-                        status = "Done"
+                        status = renderedStatus(writtenTo)
                     } catch (e: Throwable) {
                         status = "Error: ${e.message}"
                     } finally {
@@ -142,6 +148,15 @@ fun RenderVideoDialog(app: AppViewModel) {
         }
     }
 }
+
+/**
+ * What the dialog says once the video is written: where it is, as the daemon reported it. The dialog
+ * asks for no path, so the daemon chooses one and this is the only place the user can see it. The
+ * sentence is the catalogue's, which the Mac app's dialog uses too, so it reads in the user's language.
+ * An engine that does not report the path (one older than the event) gets the plain "Done".
+ */
+internal fun renderedStatus(videoPath: String?): String =
+    if (videoPath.isNullOrEmpty()) "Done" else localized("ui.successfully_rendered", videoPath)
 
 @Composable
 private fun Picker(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {

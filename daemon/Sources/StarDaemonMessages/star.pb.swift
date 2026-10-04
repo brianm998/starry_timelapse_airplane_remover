@@ -2209,6 +2209,14 @@ public struct Star_V1_ProgressEvent: Sendable {
     set {kind = .sequenceState(newValue)}
   }
 
+  public var videoExported: Star_V1_VideoExportedEvent {
+    get {
+      if case .videoExported(let v)? = kind {return v}
+      return Star_V1_VideoExportedEvent()
+    }
+    set {kind = .videoExported(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_Kind: Equatable, Sendable {
@@ -2218,6 +2226,7 @@ public struct Star_V1_ProgressEvent: Sendable {
     case outliersLoaded(Star_V1_OutliersLoaded)
     case ioProgress(Star_V1_IoProgress)
     case sequenceState(Star_V1_SequenceStateEvent)
+    case videoExported(Star_V1_VideoExportedEvent)
 
   }
 
@@ -2296,6 +2305,21 @@ public struct Star_V1_SequenceStateEvent: Sendable {
   public init() {}
 }
 
+/// Export.Video sends one of these after it has written the video and before the stream ends. The
+/// request may not have named the file (an empty output_video_path), so this is how a client learns
+/// where the video went.
+public struct Star_V1_VideoExportedEvent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var outputVideoPath: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct Star_V1_ExportVideoRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2303,7 +2327,7 @@ public struct Star_V1_ExportVideoRequest: Sendable {
 
   public var sessionID: String = String()
 
-  /// empty → daemon derives "<basename>.<muxer>"
+  /// empty → daemon derives "<basename>.<muxer>" beside the frames; the VideoExportedEvent says where it went
   public var outputVideoPath: String = String()
 
   /// defaults to the session config's persisted settings
@@ -5189,7 +5213,7 @@ extension Star_V1_CancelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageI
 
 extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgressEvent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_state\0\u{3}frame_saving_state\0\u{3}frame_existing\0\u{3}outliers_loaded\0\u{3}io_progress\0\u{3}sequence_state\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_state\0\u{3}frame_saving_state\0\u{3}frame_existing\0\u{3}outliers_loaded\0\u{3}io_progress\0\u{3}sequence_state\0\u{3}video_exported\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5270,6 +5294,19 @@ extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
           self.kind = .sequenceState(v)
         }
       }()
+      case 7: try {
+        var v: Star_V1_VideoExportedEvent?
+        var hadOneofValue = false
+        if let current = self.kind {
+          hadOneofValue = true
+          if case .videoExported(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.kind = .videoExported(v)
+        }
+      }()
       default: break
       }
     }
@@ -5304,6 +5341,10 @@ extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     case .sequenceState?: try {
       guard case .sequenceState(let v)? = self.kind else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
+    case .videoExported?: try {
+      guard case .videoExported(let v)? = self.kind else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     }()
     case nil: break
     }
@@ -5492,6 +5533,36 @@ extension Star_V1_SequenceStateEvent: SwiftProtobuf.Message, SwiftProtobuf._Mess
 
   public static func ==(lhs: Star_V1_SequenceStateEvent, rhs: Star_V1_SequenceStateEvent) -> Bool {
     if lhs.state != rhs.state {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_VideoExportedEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VideoExportedEvent"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_video_path\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.outputVideoPath) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.outputVideoPath.isEmpty {
+      try visitor.visitSingularStringField(value: self.outputVideoPath, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_VideoExportedEvent, rhs: Star_V1_VideoExportedEvent) -> Bool {
+    if lhs.outputVideoPath != rhs.outputVideoPath {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

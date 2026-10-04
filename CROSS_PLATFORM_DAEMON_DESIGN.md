@@ -347,6 +347,8 @@ This is the authoritative method list; the daemon's `Dispatcher` registers exact
 | `Export.Video` | `ExportVideoRequest` | `ProgressEvent` | server-stream |
 | `Export.GetVideoCapabilities` | `GetVideoCapabilitiesRequest` | `VideoCapabilities` | unary |
 
+> `Export.Video` ends with a `video_exported` event carrying the absolute path of the video it wrote: a client
+> that sent no `output_video_path` (the desktop's dialog) has no other way to learn the daemon's choice.
 > `Session.OpenVideo`'s terminal `SessionInfo` carries the decoded source's `VideoInfo` (framerate/codec/etc.)
 > so the client can default an export to re-encode matching the source. `Export.GetVideoCapabilities` returns
 > the codec→encoder→{pixel-format, muxer} validity graph that drives the Render Video dialog's cascading
@@ -443,6 +445,7 @@ message ProgressEvent {
     FrameStateEvent  frame_state = 1; FrameSavingEvent frame_saving_state = 2;
     int32            frame_existing = 3; OutliersLoaded outliers_loaded = 4;
     IoProgress       io_progress = 5; SequenceStateEvent sequence_state = 6;
+    VideoExportedEvent video_exported = 7;
   }
 }
 message FrameStateEvent  { int32 frame_index = 1; FrameProcessingState state = 2; }
@@ -450,6 +453,9 @@ message FrameSavingEvent { int32 frame_index = 1; int32 old_state = 2; int32 new
 message OutliersLoaded   { int32 frame_index = 1; int32 state = 2; }
 message IoProgress       { int32 current = 1; int32 total = 2; string output_dir = 3; }
 message SequenceStateEvent { string state = 1; }
+// Export.Video sends one of these after the video is written and before the stream ends: where it went
+// (an absolute path), for a client that left output_video_path empty.
+message VideoExportedEvent { string output_video_path = 1; }
 // Encode settings. codec/encoder/pixel_format/muxer are StarCore FFmpeg* enum **rawValue strings**
 // (those enums have 1000+ cases — proto enums would be unmaintainable; the daemon maps via init?(rawValue:)).
 // frame_rate is FrameRate.rawValue (double). An empty string field means "use the session config default".
@@ -464,7 +470,7 @@ message VideoInfo { VideoEncodeSettings settings = 1; bool has_audio = 2; }  // 
 
 message ExportVideoRequest {
   string session_id = 1;
-  string output_video_path = 2;        // empty → daemon derives "<basename>.<muxer>"
+  string output_video_path = 2;        // empty → daemon derives "<basename>.<muxer>" beside the frames; the VideoExportedEvent says where it went
   VideoEncodeSettings settings = 3;    // defaults to the session config's persisted settings
 }
 
