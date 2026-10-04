@@ -699,31 +699,30 @@ struct ResourceProfileView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(localized("ui.use_of_this_mac"))
-                  .foregroundColor(textColor)
-                Picker("", selection: profileBinding) {
-                    Text(localized("ui.use_full")).tag(ResourceProfile?.some(.full))
-                    Text(localized("ui.use_balanced")).tag(ResourceProfile?.some(.balanced))
-                    Text(localized("ui.use_light")).tag(ResourceProfile?.some(.light))
-                }
-                  .pickerStyle(.segmented)
-                  .labelsHidden()
-                  .fixedSize()
-                Button(localized("ui.use_custom")) {
-                    if viewModel.resourceProfile != .custom {
-                        viewModel.resourceProfile = .custom
-                    }
-                    showCustom = true
-                }
-                  .buttonStyle(.borderedProminent)
-                  .tint(viewModel.resourceProfile == .custom ? .accentColor : .gray)
-                  .controlSize(.small)
-                  .popover(isPresented: $showCustom) {
-                      ResourceCustomLimitsView()
-                        .environment(viewModel)
-                  }
+            Text(localized("ui.use_of_this_mac"))
+              .foregroundColor(textColor)
+            // Stacked, not a segmented row: the right panel is narrow, and four buttons
+            // side by side made the control wider than everything around it.
+            Picker("", selection: profileBinding) {
+                Text(localized("ui.use_full")).tag(ResourceProfile?.some(.full))
+                Text(localized("ui.use_balanced")).tag(ResourceProfile?.some(.balanced))
+                Text(localized("ui.use_light")).tag(ResourceProfile?.some(.light))
             }
+              .pickerStyle(.radioGroup)
+              .labelsHidden()
+            Button(localized("ui.use_custom")) {
+                if viewModel.resourceProfile != .custom {
+                    viewModel.resourceProfile = .custom
+                }
+                showCustom = true
+            }
+              .buttonStyle(.borderedProminent)
+              .tint(viewModel.resourceProfile == .custom ? .accentColor : .gray)
+              .controlSize(.small)
+              .popover(isPresented: $showCustom) {
+                  ResourceCustomLimitsView()
+                    .environment(viewModel)
+              }
             if let status {
                 Text(status)
                   .font(.caption)
