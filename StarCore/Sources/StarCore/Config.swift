@@ -839,7 +839,8 @@ public struct Config: Codable, Sendable {
     // the muxer (container) of the incoming and outgoing video
     public var muxer: FFmpegMuxer = .mov
 
-    // did the incoming video have an audio track?
+    // did the incoming video have a sound track that was kept beside its frames, for a render to
+    // put back?  (see AudioSidecar: a sound that could not be kept counts as none)
     public var hasAudio: Bool = false
 
     // do horizon processing or not.

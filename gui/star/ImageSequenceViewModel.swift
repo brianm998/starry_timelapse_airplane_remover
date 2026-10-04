@@ -3563,27 +3563,29 @@ public final class ImageSequenceViewModel {
  */
         
         let hasAudio = realConfig.hasAudio
-        let audioPath = "\(realConfig.imageSequencePath)/\(realConfig.imageSequenceDirname)/audio.aac"
+        let audioDirectory = "\(realConfig.imageSequencePath)/\(realConfig.imageSequenceDirname)"
 
         /*videoRenderTask = */Task.detached {
             do {
+                // What the container will take of the video's own sound: as it is, AAC, Opus, or
+                // nothing (see AudioSidecar).  Worked out here, off the main actor, because it asks ffmpeg.
+                let audio = hasAudio
+                  ? AudioSidecar.plan(in: audioDirectory, formatArguments: ["-f", muxer.rawValue], outputExtension: "")
+                  : AudioPlan.none("this video has none")
+
                 var arguments: [String] = [
                     "-y",                                                              // overwrite
                     "-framerate", rawFrameRate,                                        // frame rate
                     "-pattern_type", "glob", "-i",                                    // input image glob
                     "\(outputPath)/\(basename)/*.\(realConfig.fileExtension)",        // input images
                 ]
-                if hasAudio {
-                    arguments += ["-i", audioPath]
-                }
+                arguments += audio.inputArguments
                 arguments += [
                     "-c:v", encoder.rawValue,         // encoder
                     "-pix_fmt", pixelFormat.rawValue, // pixel format
                 ]
                 arguments += encoder.defaultQualityArguments // for the GPU encoders whose own default is poor
-                if hasAudio {
-                    arguments += ["-c:a", "copy"]
-                }
+                arguments += audio.codecArguments
                 arguments += [
                     "-f", muxer.rawValue,             // muxer
                     "\(outputPath)/\(filename)"       // output filename

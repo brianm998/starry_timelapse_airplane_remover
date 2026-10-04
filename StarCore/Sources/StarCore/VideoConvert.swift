@@ -29,7 +29,8 @@ public struct VideoInfo: Sendable {
 }
 
 
-/// Process a video: extract frames and audio and video information
+/// Process a video: extract frames and audio and video information.  The audio, if it has any, is kept
+/// beside the frames by `AudioSidecar`, in its own codec where that is possible.
 public func decodeVideo(
     named inputPath: String,
     progress: @escaping ProgressCallback
@@ -130,14 +131,11 @@ public func decodeVideo(
         ).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    let hasAudio = await hasAudioTask.value
-
-    if hasAudio {
-        _ = try shellOut(to: ffmpegPath, arguments: [
-            "-hide_banner", "-nostdin", "-loglevel", "error",
-            "-i", inputPath, "-vn", "-acodec", "copy", "\(outputFolder)/audio.aac"
-        ])
-    }
+    // The sound goes beside the frames, for a render to put back.  Keeping it never fails the
+    // import (see AudioSidecar): a video whose sound cannot be kept comes in without it.
+    let sourceHasAudio = await hasAudioTask.value
+    let keptAudio = sourceHasAudio ? AudioSidecar.extract(from: inputPath, into: outputFolder) : nil
+    let hasAudio = keptAudio != nil
 
     try await ffmpegTask.value
     
