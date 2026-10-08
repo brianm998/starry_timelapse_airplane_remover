@@ -25,7 +25,9 @@ case "$(uname -s)" in
                 # -lgcc_s"). Use patched copies of the .pc files that drop it.
                 PCDIR="$WORK/pc"; mkdir -p "$PCDIR"
                 for d in /usr/lib/*/pkgconfig /usr/lib/pkgconfig /usr/share/pkgconfig; do
-                  [ -d "$d" ] && for f in "$d"/*.pc; do sed 's/-lgcc_s//g' "$f" > "$PCDIR/$(basename "$f")"; done
+                  for f in "$d"/*.pc; do
+                    if [ -f "$f" ]; then sed 's/-lgcc_s//g' "$f" > "$PCDIR/$(basename "$f")"; fi
+                  done
                 done
                 export PKG_CONFIG_PATH="$PCDIR" ;;
 esac
