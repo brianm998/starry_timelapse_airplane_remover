@@ -44,7 +44,7 @@ esac
   --disable-shared --enable-static \
   --disable-doc --disable-ffplay \
   --pkg-config-flags=--static \
-  --extra-ldflags="-static" \
+  --extra-ldflags="-static -static-libgcc -static-libstdc++" \
   "${EXTRA[@]}" || { tail -50 ffbuild/config.log; exit 1; }
 
 make -j"$(nproc)"
@@ -57,7 +57,7 @@ cp "ffmpeg$EXTE" "ffprobe$EXTE" "$OUT/"
 if [ -n "$EXTE" ]; then
   for t in ffmpeg ffprobe; do
     echo "== $t.exe imports:"; objdump -p "$OUT/$t.exe" | grep "DLL Name" | sort -u
-    if objdump -p "$OUT/$t.exe" | grep "DLL Name" | grep -viE "KERNEL32|msvcrt|api-ms-win|ADVAPI32|USER32|GDI32|SHELL32|WS2_32|ole32|OLEAUT32|bcrypt|crypt32|secur32|ncrypt|mfplat|mfuuid|strmiids|Shlwapi|WINMM|imm32|comdlg32|psapi|userenv|ntdll|ucrtbase|setupapi|dxgi|d3d|NETAPI32|IPHLPAPI|WINHTTP|mf\.dll|mfreadwrite"; then
+    if objdump -p "$OUT/$t.exe" | grep "DLL Name" | grep -viE "KERNEL32|msvcrt|api-ms-win|ADVAPI32|USER32|GDI32|SHELL32|WS2_32|ole32|OLEAUT32|bcrypt|crypt32|secur32|ncrypt|mfplat|mfuuid|strmiids|Shlwapi|WINMM|imm32|comdlg32|psapi|userenv|ntdll|ucrtbase|setupapi|dxgi|d3d|NETAPI32|IPHLPAPI|WINHTTP|mf\.dll|mfreadwrite|^\s*DLL Name: (VERSION|AVICAP32)\.dll"; then
       echo "ERROR: $t.exe depends on non-system DLLs listed above" >&2; exit 1
     fi
   done
