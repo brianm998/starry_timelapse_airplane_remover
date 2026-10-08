@@ -382,7 +382,12 @@ jobs:
           code=$?
           echo "stard.exe --help exit code: $code"
           [ "$code" -eq 0 ] || { echo "::error::stard.exe failed to start (exit $code; -1073741515 = missing DLL)"; exit 1; }
-          env -i SystemRoot="$SYSTEMROOT" PATH="/c/Windows/System32:/c/Windows" "$DIR/ffmpeg.exe" -version | head -1
+          for t in ffmpeg ffprobe; do
+            out=$(env -i SystemRoot="$SYSTEMROOT" PATH="/c/Windows/System32:/c/Windows" "$DIR/$t.exe" -version 2>&1)
+            code=$?
+            echo "$t.exe -version exit code: $code"; echo "$out" | head -3
+            [ "$code" -eq 0 ] || { echo "::error::bundled $t.exe failed to run (exit $code)"; ls -la "$DIR/$t.exe"; exit 1; }
+          done
 
       - name: Upload .exe artifact
         uses: actions/upload-artifact@v4
