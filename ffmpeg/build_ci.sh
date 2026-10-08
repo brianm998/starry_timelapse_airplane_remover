@@ -24,7 +24,14 @@ case "$(uname -s)" in
                 # picks the import lib, giving an ffmpeg.exe that needs libx264-*.dll etc. from
                 # mingw64/bin (fine in this shell, "exit 127" on a user's machine). Delete the import
                 # libs so only the static archives remain.
-                for n in x264 x265 vpx mp3lame opus; do rm -fv "${MINGW_PREFIX:-/mingw64}/lib/lib$n.dll.a"; done ;;
+                for n in x264 x265 vpx mp3lame opus; do rm -fv "${MINGW_PREFIX:-/mingw64}/lib/lib$n.dll.a"; done
+                # Same -lgcc_s problem as Linux below: x265.pc's private libs name it, which pulls in
+                # libgcc_s_seh-1.dll despite -static-libgcc. Patched pkg-config copies shadow the originals.
+                PCDIR="$WORK/pc"; mkdir -p "$PCDIR"
+                for f in "${MINGW_PREFIX:-/mingw64}"/lib/pkgconfig/*.pc; do
+                  if [ -f "$f" ]; then sed -E 's/-lgcc_s([[:space:]]|$)/\1/g' "$f" > "$PCDIR/$(basename "$f")"; fi
+                done
+                export PKG_CONFIG_PATH="$PCDIR${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" ;;
   *)            EXTE="";     EXTRA+=(--disable-network)  # fully static glibc can't resolve hostnames anyway
                 # Debian's x265.pc lists -lgcc_s, which doesn't exist for a -static link ("cannot find
                 # -lgcc_s"). Use patched copies of the .pc files that drop it.
