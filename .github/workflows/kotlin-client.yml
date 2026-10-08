@@ -366,6 +366,9 @@ jobs:
       - name: Verify bundled stard.exe starts without a Swift toolchain
         working-directory: star-desktop
         run: |
+          # packageExe doesn't leave the app image behind (the previous run found no
+          # build/compose/binaries/main/app); createDistributable produces it, and is cheap now.
+          ./gradlew createDistributable -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
           APP=build/compose/binaries/main/app
           STARD=$(find "$APP" -name stard.exe | head -1)
           [ -n "$STARD" ] || { echo "::error::stard.exe not in the app image"; exit 1; }
