@@ -8,13 +8,13 @@ name: Kotlin Client
 on:
   push:
     branches: [main, develop]
-    paths: ['star-desktop/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
+    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml']
     # release/* tags build the installers and attach them to the release (see release-upload).
     # No paths filter applies to tag pushes.
     tags: ['release/*']
   pull_request:
     branches: [main, develop]
-    paths: ['star-desktop/**', 'daemon/proto/**', '.github/workflows/kotlin-client.yml']
+    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml']
   workflow_dispatch:
 
 concurrency:
