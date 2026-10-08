@@ -330,7 +330,7 @@ jobs:
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
-          if [ ! -f StarDecisionTrees/lib/release/windows/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
+          if [ ! -f StarDecisionTrees/lib/release/windows/StarDecisionTrees.lib ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
       - name: Build stard (release)
         working-directory: daemon
@@ -562,7 +562,9 @@ jobs:
   release-upload:
     name: Attach installers to release
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/release/')
+    # !cancelled() so one flaky installer job (a hosted runner dropping mid-build sank the whole
+    # 0.12.1 upload) doesn't block the others; the check step below still fails this job loudly.
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/release/') }}
     needs: [linux-package, windows-package, macos-signed]
     permissions:
       contents: write
@@ -580,6 +582,17 @@ jobs:
       - name: List release artifacts
         run: find release-artifacts -type f | sort
 
+      # The upload below still happens with whatever was built; this marks the job failed so a
+      # missing installer is not mistaken for a complete release.
+      - name: Check all three installers were built
+        id: complete
+        continue-on-error: true
+        run: |
+          for ext in dmg deb exe; do
+            ls release-artifacts/*.$ext >/dev/null 2>&1 || { echo "::error::no .$ext installer was built"; missing=1; }
+          done
+          exit ${missing:-0}
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name:               ${{ github.ref_name }}
@@ -587,3 +600,7 @@ jobs:
           draft:                  true
           generate_release_notes: true
           files:                  release-artifacts/*
+
+      - name: Fail if an installer is missing
+        if: steps.complete.outcome == 'failure'
+        run: exit 1
