@@ -80,6 +80,12 @@ class DaemonProcess(
 
         val cause = when (code) {
             0 -> "the engine exited normally"
+            // Windows NTSTATUS values (Java reports them as signed ints). These fire before stard can
+            // log anything, so without naming them the user only sees "engine stopped".
+            0xC0000135.toInt() -> "the engine could not start: a required DLL is missing (0xC0000135)"
+            0xC0000139.toInt() -> "the engine could not start: a required DLL is the wrong version (0xC0000139)"
+            0xC000007B.toInt() -> "the engine could not start: a DLL has the wrong architecture (0xC000007B)"
+            0xC0000005.toInt() -> "the engine crashed (access violation, 0xC0000005)"
             137 -> "the engine was killed by the system (SIGKILL) — most likely out of memory"
             143 -> "the engine was asked to stop (SIGTERM)"
             139 -> "the engine crashed (SIGSEGV)"

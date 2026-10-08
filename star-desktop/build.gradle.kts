@@ -205,6 +205,40 @@ tasks.register("stageAppResources") {
         }
         stage(stard, stardName)
 
+        // On Windows stard.exe is dynamically linked against the Swift runtime (and the MSVC C++
+        // runtime), which a user's machine does not have. Without these DLLs next to the exe the
+        // loader kills it at startup (0xC0000135) before it can print anything, and the client just
+        // shows "engine stopped". The CLI zip bundles them for the same reason (release_windows.sh).
+        if (isWin) {
+            val swiftDirs = LinkedHashSet<File>()
+            System.getenv("PATH").orEmpty().split(File.pathSeparatorChar)
+                .filter { it.isNotBlank() }.map { File(it) }.forEach { swiftDirs += it }
+            System.getenv("SDKROOT")?.let { swiftDirs += File(it, "usr/bin") }
+            // Only directories that actually hold the Swift runtime; the same lists the CLI script uses,
+            // plus Foundation & friends, which stard imports but the CLI glob (swift*.dll) misses.
+            fun wanted(n: String): Boolean {
+                val l = n.lowercase()
+                return l.endsWith(".dll") && (l.startsWith("swift") || l.startsWith("_") || "foundation" in l ||
+                    l == "blocksruntime.dll" || l == "dispatch.dll" || l == "synchronization.dll" ||
+                    l.startsWith("msvcp") || l.startsWith("vcruntime") || l.startsWith("concrt") ||
+                    l.startsWith("vcomp") || l.startsWith("ucrtbase"))
+            }
+            val copied = HashSet<String>()
+            swiftDirs.filter { File(it, "swiftCore.dll").exists() }.forEach { dir ->
+                dir.listFiles()?.filter { it.isFile && wanted(it.name) }?.forEach { dll ->
+                    if (copied.add(dll.name.lowercase())) stage(dll, dll.name)
+                }
+            }
+            if (File(outDir, "swiftCore.dll").exists().not()) {
+                val msg = "stageAppResources: swiftCore.dll not found on PATH/SDKROOT — the Windows bundle would not start (\"engine stopped\"). Run from a Swift toolchain shell."
+                if (packagingRequested) throw GradleException(msg) else logger.warn(msg)
+            }
+            // MSVC runtime fallback if the toolchain dir didn't carry it.
+            val sys32 = File(System.getenv("SystemRoot") ?: "C:\\Windows", "System32")
+            listOf("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "concrt140.dll")
+                .filter { copied.add(it) }.forEach { stage(File(sys32, it), it) }
+        }
+
         val ffDir = (findProperty("ffmpegdir") as String?)?.let { file(it) } ?: rootProject.file("../external_binaries/bin")
         stage(File(ffDir, "ffmpeg$exe"), "ffmpeg$exe")
         stage(File(ffDir, "ffprobe$exe"), "ffprobe$exe")
