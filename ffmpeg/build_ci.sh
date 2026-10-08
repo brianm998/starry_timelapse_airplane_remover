@@ -20,7 +20,14 @@ cd src
 EXTRA=()
 case "$(uname -s)" in
   MINGW*|MSYS*) EXTE=".exe"; EXTRA+=(--target-os=mingw32 --arch=x86_64) ;;
-  *)            EXTE="";     EXTRA+=(--disable-network) ;;  # fully static glibc can't resolve hostnames anyway
+  *)            EXTE="";     EXTRA+=(--disable-network)  # fully static glibc can't resolve hostnames anyway
+                # Debian's x265.pc lists -lgcc_s, which doesn't exist for a -static link ("cannot find
+                # -lgcc_s"). Use patched copies of the .pc files that drop it.
+                PCDIR="$WORK/pc"; mkdir -p "$PCDIR"
+                for d in /usr/lib/*/pkgconfig /usr/lib/pkgconfig /usr/share/pkgconfig; do
+                  [ -d "$d" ] && for f in "$d"/*.pc; do sed 's/-lgcc_s//g' "$f" > "$PCDIR/$(basename "$f")"; done
+                done
+                export PKG_CONFIG_PATH="$PCDIR" ;;
 esac
 
 ./configure \
