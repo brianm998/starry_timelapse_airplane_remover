@@ -50,6 +50,67 @@ jobs:
       - name: Build + unit tests
         run: ./gradlew test --no-daemon --stacktrace
 
+  # ─── ffmpeg / ffprobe from source (Linux + Windows) ──────────────────────────
+  # macOS bundles the binaries committed in external_binaries/bin; Linux and Windows have none, so
+  # build static ones with ffmpeg/build_ci.sh. Cached on the script hash: after the first run this
+  # job only restores the cache and re-uploads it.
+  ffmpeg-linux:
+    name: ffmpeg (Linux, from source)
+    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: ffmpeg-out
+          key: ffmpeg-linux-${{ hashFiles('ffmpeg/build_ci.sh') }}
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nasm pkg-config \
+            libx264-dev libx265-dev libvpx-dev libmp3lame-dev libopus-dev libnuma-dev
+      - name: Build ffmpeg + ffprobe
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ffmpeg/build_ci.sh "$PWD/ffmpeg-out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-linux
+          path: ffmpeg-out/*
+          if-no-files-found: error
+
+  ffmpeg-windows:
+    name: ffmpeg (Windows, from source)
+    runs-on: windows-2022
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: ffmpeg-out
+          key: ffmpeg-windows-${{ hashFiles('ffmpeg/build_ci.sh') }}
+      - uses: msys2/setup-msys2@v2
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git make diffutils
+            mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-x264 mingw-w64-x86_64-x265 mingw-w64-x86_64-libvpx
+            mingw-w64-x86_64-lame mingw-w64-x86_64-opus
+      - name: Build ffmpeg + ffprobe
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: ffmpeg/build_ci.sh "$(cygpath -u "$GITHUB_WORKSPACE")/ffmpeg-out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows
+          path: ffmpeg-out/*
+          if-no-files-found: error
+
   # ─── Linux installer (.deb) ───────────────────────────────────────────────────
   # Builds stard for Linux (same OpenCV/StarDecisionTrees caches as cli.yml's
   # `linux` job, so a warm cache there means nothing is rebuilt here either),
@@ -62,6 +123,7 @@ jobs:
   linux-package:
     name: Linux installer (.deb)
     runs-on: ubuntu-24.04
+    needs: ffmpeg-linux
     if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -118,12 +180,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Download source-built ffmpeg/ffprobe
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-linux
+          path: ffmpeg-bin
+
       - name: Build .deb
         working-directory: star-desktop
-        # stageAppResources picks up ../daemon/.build/release/stard and
-        # ../external_binaries/bin automatically; packageDeb depends on it.
+        # stageAppResources picks up ../daemon/.build/release/stard automatically;
+        # packageDeb depends on it. ffmpeg/ffprobe come from the ffmpeg-linux job.
         run: |
-          ./gradlew packageDeb --no-daemon --stacktrace
+          chmod +x ../ffmpeg-bin/*
+          ./gradlew packageDeb -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
           packaging/name-installers.sh build/compose/binaries/main/deb
 
       - name: Upload .deb artifact
@@ -140,6 +209,7 @@ jobs:
   windows-package:
     name: Windows installer (.exe)
     runs-on: windows-2022
+    needs: ffmpeg-windows
     if: github.event_name != 'pull_request'
     defaults:
       run:
@@ -277,11 +347,39 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Download source-built ffmpeg/ffprobe
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-windows
+          path: ffmpeg-bin
+
       - name: Build .exe
         working-directory: star-desktop
         run: |
-          ./gradlew packageExe --no-daemon --stacktrace
+          ./gradlew packageExe -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
           packaging/name-installers.sh build/compose/binaries/main/exe
+
+      # Regression check for issue #3 ("engine stopped" on a machine without Swift): the installer
+      # shipped stard.exe without the Swift/MSVC runtime DLLs, so Windows killed it at startup. Run
+      # the bundled stard.exe from the app image with PATH reduced to System32 — i.e. with the Swift
+      # toolchain this runner has NOT reachable — and require that it starts.
+      - name: Verify bundled stard.exe starts without a Swift toolchain
+        working-directory: star-desktop
+        run: |
+          APP=build/compose/binaries/main/app
+          STARD=$(find "$APP" -name stard.exe | head -1)
+          [ -n "$STARD" ] || { echo "::error::stard.exe not in the app image"; exit 1; }
+          DIR=$(dirname "$STARD")
+          echo "Bundled files in $DIR:"; ls "$DIR"
+          for f in swiftCore.dll Foundation.dll ffmpeg.exe ffprobe.exe; do
+            [ -f "$DIR/$f" ] || { echo "::error::$f missing from the bundle"; exit 1; }
+          done
+          set +e
+          env -i SystemRoot="$SYSTEMROOT" PATH="/c/Windows/System32:/c/Windows" "$STARD" --help
+          code=$?
+          echo "stard.exe --help exit code: $code"
+          [ "$code" -eq 0 ] || { echo "::error::stard.exe failed to start (exit $code; -1073741515 = missing DLL)"; exit 1; }
+          env -i SystemRoot="$SYSTEMROOT" PATH="/c/Windows/System32:/c/Windows" "$DIR/ffmpeg.exe" -version | head -1
 
       - name: Upload .exe artifact
         uses: actions/upload-artifact@v4
