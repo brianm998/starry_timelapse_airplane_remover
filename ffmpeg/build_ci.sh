@@ -19,7 +19,12 @@ cd src
 
 EXTRA=()
 case "$(uname -s)" in
-  MINGW*|MSYS*) EXTE=".exe"; EXTRA+=(--target-os=mingw32 --arch=x86_64) ;;
+  MINGW*|MSYS*) EXTE=".exe"; EXTRA+=(--target-os=mingw32 --arch=x86_64)
+                # MSYS2 ships both libfoo.a and an import lib libfoo.dll.a for each codec; the linker
+                # picks the import lib, giving an ffmpeg.exe that needs libx264-*.dll etc. from
+                # mingw64/bin (fine in this shell, "exit 127" on a user's machine). Delete the import
+                # libs so only the static archives remain.
+                for n in x264 x265 vpx mp3lame opus; do rm -fv "${MINGW_PREFIX:-/mingw64}/lib/lib$n.dll.a"; done ;;
   *)            EXTE="";     EXTRA+=(--disable-network)  # fully static glibc can't resolve hostnames anyway
                 # Debian's x265.pc lists -lgcc_s, which doesn't exist for a -static link ("cannot find
                 # -lgcc_s"). Use patched copies of the .pc files that drop it.
@@ -46,6 +51,17 @@ make -j"$(nproc)"
 
 strip "ffmpeg$EXTE" "ffprobe$EXTE" || true
 cp "ffmpeg$EXTE" "ffprobe$EXTE" "$OUT/"
+
+# The binaries must not depend on anything but Windows system DLLs (a user's machine has no
+# mingw64/bin on PATH).
+if [ -n "$EXTE" ]; then
+  for t in ffmpeg ffprobe; do
+    echo "== $t.exe imports:"; objdump -p "$OUT/$t.exe" | grep "DLL Name" | sort -u
+    if objdump -p "$OUT/$t.exe" | grep "DLL Name" | grep -viE "KERNEL32|msvcrt|api-ms-win|ADVAPI32|USER32|GDI32|SHELL32|WS2_32|ole32|OLEAUT32|bcrypt|crypt32|secur32|ncrypt|mfplat|mfuuid|strmiids|Shlwapi|WINMM|imm32|comdlg32|psapi|userenv|ntdll|ucrtbase|setupapi|dxgi|d3d|NETAPI32|IPHLPAPI|WINHTTP|mf\.dll|mfreadwrite"; then
+      echo "ERROR: $t.exe depends on non-system DLLs listed above" >&2; exit 1
+    fi
+  done
+fi
 
 # Fail the build rather than ship a binary that can't encode what the app offers.
 "$OUT/ffmpeg$EXTE" -hide_banner -encoders | grep -E "libx264|libx265|libvpx" 
