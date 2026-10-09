@@ -160,6 +160,31 @@ jobs:
           # cli/.build is hidden; upload-artifact@v4 skips hidden paths by default.
           include-hidden-files: true
 
+      # The release package (cli/release.sh) is assembled by cli/make_pkg.sh from the Xcode-built
+      # star and StarCore/Sources/StarCore/Resources: Xcode builds StarCore's resource bundle but
+      # leaves it out of the archive, so the package takes the resources from the source tree.
+      # SwiftPM's bundle is a copy of exactly that directory. If Package.swift ever lists another
+      # resource this stops matching, and the package would be missing it.
+      - name: Check the package's resources match what SwiftPM bundles
+        run: diff -r StarCore/Sources/StarCore/Resources cli/.build/release/StarCore_StarCore.bundle
+
+      # An unsigned package from the same script, so macos-e2e below can install it on a fresh
+      # runner on every push (the signed one only exists on release tags).
+      - name: Build the installer package (unsigned)
+        run: |
+          VERSION=$(cd StarCore && perl version.pl)
+          cli/make_pkg.sh cli/.build/release/star StarCore/Sources/StarCore/Resources \
+            "$VERSION" "cli/.build/star_cli_${VERSION}_unsigned.pkg"
+
+      - name: Upload unsigned .pkg
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-cli-macos-pkg-unsigned
+          path: cli/.build/star_cli_*_unsigned.pkg
+          retention-days: 3
+          if-no-files-found: error
+          include-hidden-files: true
+
   # ─── macOS (signed + notarized release) ──────────────────────────────────────
   # Runs only on `release/*` tag pushes. Builds the CLI and GUI via the same
   # release scripts used locally on Brian's Mac, signs them with the Developer
@@ -626,6 +651,177 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
 
+  # ─── End-to-end: the packaged CLI, installed the way a user installs it ──────────────────────
+  # Each runs the package a build job above produced, on a FRESH runner (cli/packaging/self-test.sh):
+  # `star --help` in English and Spanish must print text rather than message keys, --list-languages
+  # must list the shipped languages, and the installed star must process the tracked sequence.
+  #
+  # On a fresh runner, deliberately: no build tree and no toolchain. SwiftPM's generated
+  # `Bundle.module` finds a resource folder that is missing from the package by falling back to the
+  # absolute path of the build directory, so a star shipped without StarCore_StarCore.resources
+  # works on the machine that built it — including every build job above — and dies (before
+  # b3650af6) or prints keys instead of text (after) on every other. These jobs are what would
+  # have caught it. The Windows zip and setup also have to carry the Swift runtime DLLs and the
+  # Visual C++ runtime for the same reason (cli/packaging/check-windows-dependencies.sh).
+  linux-e2e:
+    name: Linux end-to-end (installed .deb)
+    runs-on: ubuntu-24.04
+    needs: linux
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            cli/packaging
+            test_data/test_a7sii_10
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-linux-deb
+          path: e2e-pkg
+
+      - name: Install the .deb
+        run: |
+          sudo dpkg -i e2e-pkg/star_cli_*.deb
+          dpkg -L star
+
+      - name: star self-test
+        run: bash cli/packaging/self-test.sh /usr/local/bin/star e2e-work
+
+      - name: Remove the .deb
+        # dpkg must take everything it installed with it, the resources folder included.
+        run: |
+          sudo dpkg -r star
+          if [ -e /usr/local/bin/star ] || [ -e /usr/local/share/star/StarCore_StarCore.resources ]; then
+            echo "::error::dpkg -r left files behind"
+            ls -laR /usr/local/bin/star /usr/local/share/star || true
+            exit 1
+          fi
+
+  macos-e2e:
+    name: macOS end-to-end (installed .pkg)
+    runs-on: macos-14
+    needs: macos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            cli/packaging
+            test_data/test_a7sii_10
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-cli-macos-pkg-unsigned
+          path: e2e-pkg
+
+      - name: Install the .pkg
+        run: |
+          sudo installer -pkg e2e-pkg/star_cli_*_unsigned.pkg -target / -verbose
+          find /usr/local/bin/star /usr/local/share/star -maxdepth 3
+
+      - name: star self-test
+        run: bash cli/packaging/self-test.sh /usr/local/bin/star e2e-work
+
+  # The package users actually download: signed, notarized and stapled. Release tags only, like the
+  # job that builds it.
+  macos-signed-e2e:
+    name: macOS end-to-end (signed + notarized .pkg)
+    runs-on: macos-14
+    needs: macos-signed-release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            cli/packaging
+            test_data/test_a7sii_10
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-cli-macos-pkg
+          path: e2e-pkg
+
+      - name: Check the signature and the notarization ticket
+        run: |
+          pkgutil --check-signature e2e-pkg/star_cli_*.pkg
+          xcrun stapler validate e2e-pkg/star_cli_*.pkg
+
+      - name: Install the .pkg
+        run: |
+          sudo installer -pkg e2e-pkg/star_cli_*.pkg -target / -verbose
+          find /usr/local/bin/star /usr/local/share/star -maxdepth 3
+
+      - name: star self-test
+        run: bash cli/packaging/self-test.sh /usr/local/bin/star e2e-work
+
+  windows-e2e:
+    name: Windows end-to-end (zip and setup.exe)
+    runs-on: windows-2022
+    needs: windows
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            cli/packaging
+            test_data/test_a7sii_10
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-windows-zip
+          path: e2e-zip
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: star-windows-setup
+          path: e2e-setup
+
+      - name: Unpack the zip
+        # Windows PowerShell, which is what release_windows.sh builds the zip with.
+        shell: powershell
+        run: |
+          $zip = (Get-ChildItem e2e-zip\*.zip).FullName
+          Expand-Archive -Path $zip -DestinationPath e2e-unzipped
+          Get-ChildItem -Recurse e2e-unzipped | Select-Object -First 80 -ExpandProperty FullName
+
+      - name: star.exe's DLL dependencies (zip)
+        # dumpbin /dependents, from Visual Studio on the runner: every DLL star.exe needs must be in
+        # the package or be part of Windows. Running star.exe cannot prove the Visual C++ runtime is
+        # bundled, because the runner has it installed and a user's machine may not; and it names
+        # only the first missing DLL, as an exit code.
+        run: bash cli/packaging/check-windows-dependencies.sh "$(ls e2e-unzipped/*/star.exe)"
+
+      - name: star self-test (zip)
+        run: bash cli/packaging/self-test.sh "$(ls e2e-unzipped/*/star.exe)" e2e-work-zip
+
+      - name: Install with the NSIS installer
+        shell: powershell
+        run: |
+          $setup = (Get-ChildItem e2e-setup\*_setup.exe).FullName
+          $dir = Join-Path $env:GITHUB_WORKSPACE 'e2e-installed'
+          # /S is silent; /D= sets the install directory, must come last and be unquoted.
+          $p = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$dir" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "the installer exited $($p.ExitCode)" }
+          Get-ChildItem -Recurse $dir | Select-Object -First 60 -ExpandProperty FullName
+
+      - name: star.exe's DLL dependencies (installed by setup.exe)
+        run: bash cli/packaging/check-windows-dependencies.sh e2e-installed/star.exe
+
+      - name: star self-test (installed by setup.exe)
+        run: bash cli/packaging/self-test.sh e2e-installed/star.exe e2e-work-installed --help-only
+
+      - name: Uninstall
+        # The uninstaller has to take the resources folder with it. `_?=` makes it run in place and
+        # wait (it normally copies itself to %TEMP% and returns at once), which leaves
+        # uninstall.exe behind: that, and nothing else, may remain.
+        shell: powershell
+        run: |
+          $dir = Join-Path $env:GITHUB_WORKSPACE 'e2e-installed'
+          $p = Start-Process -FilePath "$dir\uninstall.exe" -ArgumentList '/S', "_?=$dir" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "the uninstaller exited $($p.ExitCode)" }
+          $left = Get-ChildItem $dir -Force | Where-Object { $_.Name -ne 'uninstall.exe' }
+          if ($left) { throw "the uninstaller left behind: $($left.Name -join ', ')" }
+
   # ─── Draft GitHub Release ────────────────────────────────────────────────────
   # Fires only on release/* tag pushes. Creates a draft release with all
   # platform artifacts attached so you can write release notes and click
@@ -635,7 +831,8 @@ jobs:
     name: Publish Release (draft)
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/release/')
-    needs: [linux, macos-signed-release, windows]
+    # The end-to-end jobs too: a package whose installed star does not work is not worth a draft.
+    needs: [linux, macos-signed-release, windows, linux-e2e, macos-e2e, macos-signed-e2e, windows-e2e]
     permissions:
       contents: write
 

@@ -606,6 +606,7 @@ jobs:
         with:
           sparse-checkout: |
             star-desktop/packaging
+            cli/packaging
             test_data/test_a7sii_10
       - uses: actions/download-artifact@v4
         with:
@@ -614,6 +615,21 @@ jobs:
         # Workspace-relative paths: on Windows, $RUNNER_TEMP is a D:\ path, and GNU tar reads
         # a colon in a path as host:path.
         run: mkdir -p e2e-app && tar -C e2e-app -xf star-desktop-app.tar
+      - name: stard.exe, ffmpeg.exe and ffprobe.exe DLL dependencies
+        # dumpbin /dependents, from Visual Studio on the runner (cli/packaging, shared with cli.yml's
+        # windows-e2e): every DLL each of them needs must be in the app image or be part of Windows.
+        # The self-test below cannot prove the Visual C++ runtime is bundled, because this runner
+        # has it installed and a user's machine may not, and it names only the first missing DLL.
+        # (ffmpeg/build_ci.sh checks the ffmpeg binaries' imports against an allow-list when it builds
+        # them; this checks what actually ships.) All three run, so one run reports every problem.
+        run: |
+          status=0
+          for exe in stard ffmpeg ffprobe; do
+            echo "::group::$exe.exe"
+            bash cli/packaging/check-windows-dependencies.sh "e2e-app/Star/app/resources/$exe.exe" || status=1
+            echo "::endgroup::"
+          done
+          exit "$status"
       - name: Star --self-test
         run: bash star-desktop/packaging/self-test.sh e2e-app e2e-work
       - name: Keep the report and engine log
