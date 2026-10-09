@@ -5,7 +5,8 @@
 # Usage: packaging/self-test.sh <app-image-dir> <work-dir>
 #
 #   <app-image-dir>  what `gradlew createDistributable` produced (build/compose/binaries/main/app),
-#                    i.e. the directory holding Star/ (Windows, Linux) or Star.app (macOS)
+#                    i.e. the directory holding Star/ (Windows, Linux) or Star.app (macOS); or, on
+#                    Linux, the root a .deb installed into (/opt/star)
 #   <work-dir>       scratch space for the fixtures, the engine scratch dir and the report
 #
 # Meant for a CI job on a FRESH runner: no Swift toolchain, no build tree. That is the point —
@@ -30,7 +31,12 @@ case "$(uname -s)" in
     LAUNCHER="$APP/Star.app/Contents/MacOS/Star"; RES="$APP/Star.app/Contents/app/resources" ;;
   *)
     OS=linux; EXE=""
-    LAUNCHER="$APP/Star/bin/Star"; RES="$APP/Star/lib/app/resources" ;;
+    if [ -f "$APP/bin/Star" ]; then
+      # An installed package root (e.g. /opt/star from the .deb).
+      LAUNCHER="$APP/bin/Star"; RES="$APP/lib/app/resources"
+    else
+      LAUNCHER="$APP/Star/bin/Star"; RES="$APP/Star/lib/app/resources"
+    fi ;;
 esac
 
 for f in "$LAUNCHER" "$RES/stard$EXE" "$RES/ffmpeg$EXE"; do
@@ -38,6 +44,14 @@ for f in "$LAUNCHER" "$RES/stard$EXE" "$RES/ffmpeg$EXE"; do
 done
 echo "app image ($OS): $APP"
 ls -la "$RES"
+
+# jpackage installs bundled resources as plain data; the Linux .deb once shipped a stard that
+# could not be executed, and the engine could then never start.
+if [ "$OS" != windows ]; then
+  for f in stard ffmpeg ffprobe; do
+    [ -x "$RES/$f" ] || { echo "::error::$RES/$f is not executable"; exit 1; }
+  done
+fi
 
 # A native path for the Windows launcher (MSYS converts most arguments, but not reliably all).
 native() { if [ "$OS" = windows ]; then cygpath -w "$1"; else echo "$1"; fi; }
@@ -71,6 +85,7 @@ set +e
   --scratch "$(native "$WORK/scratch")" \
   --report "$(native "$REPORT")" \
   --process \
+  --export \
   --video "$(native "$CLIP")" \
   "$(native "$SEQ")"
 code=$?

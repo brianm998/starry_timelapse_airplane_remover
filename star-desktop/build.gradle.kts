@@ -342,7 +342,18 @@ tasks.register("fixBundledBinaries") {
         val apps = layout.buildDirectory.dir("compose/binaries").get().asFile.listFiles().orEmpty()
             .flatMap { File(it, "app").listFiles().orEmpty().toList() }
             .filter { it.name.endsWith(".app") }
-        if (apps.isEmpty()) { logger.warn("fixBundledBinaries: no .app under build/compose/binaries — nothing to do"); return@doLast }
+        // Linux (and Windows) app images are plain directories, not .app bundles. jpackage strips +x from
+        // the bundled binaries there too (the Linux .deb shipped an unrunnable stard — see fix-deb-modes.sh
+        // for the installer itself); fix the image so `Star --self-test` and createDistributable output work.
+        File(layout.buildDirectory.get().asFile, "compose/binaries").listFiles().orEmpty()
+            .flatMap { File(it, "app").listFiles().orEmpty().toList() }
+            .filter { !it.name.endsWith(".app") && it.isDirectory }
+            .forEach { image ->
+                image.walkTopDown().filter { it.isDirectory && it.path.replace('\\', '/').endsWith("app/resources") }.forEach { res ->
+                    listOf("stard", "ffmpeg", "ffprobe").map { File(res, it) }.filter { it.exists() }.forEach { it.setExecutable(true, false) }
+                }
+            }
+        if (apps.isEmpty()) { logger.info("fixBundledBinaries: no .app under build/compose/binaries (not a macOS build)"); return@doLast }
         for (app in apps) {
             val resDir = File(app, "Contents/app/resources")
             val bins = listOf("stard", "ffmpeg", "ffprobe").map { File(resDir, it) }.filter { it.exists() }
@@ -367,6 +378,23 @@ tasks.matching { it.name == "createDistributable" || it.name == "createReleaseDi
     .configureEach { finalizedBy("fixBundledBinaries") }
 // package*/dmg/exe/deb wrap the .app into an installer — they must run AFTER the fixup, not race the finalizer.
 tasks.matching { it.name.startsWith("package") }.configureEach { mustRunAfter("fixBundledBinaries") }
+
+// The .deb itself: jpackage writes the bundled binaries into it as non-executable data, so the installed
+// app cannot start its engine. Re-pack it with the right modes straight after packageDeb.
+tasks.register<Exec>("fixDebModes") {
+    group = "star"
+    description = "Re-pack the built .deb so the bundled stard/ffmpeg/ffprobe are executable."
+    val debDir = layout.buildDirectory.dir("compose/binaries/main/deb")
+    val script = layout.projectDirectory.file("packaging/fix-deb-modes.sh")
+    isIgnoreExitValue = false
+    doFirst {
+        val deb = debDir.get().asFile.listFiles { f -> f.name.endsWith(".deb") }?.firstOrNull()
+            ?: throw GradleException("fixDebModes: no .deb in ${debDir.get().asFile}")
+        commandLine("bash", script.asFile.absolutePath, deb.absolutePath)
+    }
+    onlyIf { !System.getProperty("os.name").lowercase().contains("win") }
+}
+tasks.matching { it.name == "packageDeb" || it.name == "packageReleaseDeb" }.configureEach { finalizedBy("fixDebModes") }
 
 // ---------------------------------------------------------------------------
 // Single localization source of truth.
@@ -421,7 +449,9 @@ tasks.register<JavaExec>("smoke") {
 // End-to-end self-test against a real stard (the same checks `Star --self-test` runs in an
 // installed app; see EngineSelfTest). Exits non-zero on any failure.
 //   ./gradlew selfTest                                   # engine + Hello + localization only
-//   ./gradlew selfTest -Pseq="/abs/seq" -Pprocess -Pvideo="/abs/clip.mp4"
+//   ./gradlew selfTest -Pseq="/abs/seq" -Pprocess -Pexport -Pvideo="/abs/clip.mp4"
+// -Pexport renders the processed frames to a video, so it needs ffmpeg beside stard: a
+// development stard (daemon/.build/release) has none, so put ffmpeg and ffprobe there first.
 tasks.register<JavaExec>("selfTest") {
     group = "star"
     description = "Run the end-to-end engine self-test against a real stard."
@@ -430,6 +460,7 @@ tasks.register<JavaExec>("selfTest") {
     classpath = sourceSets["main"].runtimeClasspath
     val a = mutableListOf<String>()
     if (project.hasProperty("process")) a.add("--process")
+    if (project.hasProperty("export")) a.add("--export")
     (findProperty("video") as String?)?.let { a.addAll(listOf("--video", it)) }
     (findProperty("scratch") as String?)?.let { a.addAll(listOf("--scratch", it)) }
     (findProperty("seq") as String?)?.let { a.add(it) }

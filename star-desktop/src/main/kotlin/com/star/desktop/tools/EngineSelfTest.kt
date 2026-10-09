@@ -10,6 +10,7 @@ import com.star.proto.CleanMethod
 import com.star.proto.FrameViewMode
 import com.star.proto.ProgressEvent
 import com.star.proto.SessionInfo
+import com.star.proto.VideoEncodeSettings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,10 +35,12 @@ import java.time.LocalDateTime
  * tree still present (including CI) and nowhere else.
  *
  *     Star --self-test [options] [<image sequence dir>]               (the installed launcher)
- *     ./gradlew selfTest -Pseq=/abs/seq -Pprocess -Pvideo=/abs/clip.mp4  (development)
+ *     ./gradlew selfTest -Pseq=/abs/seq -Pprocess -Pexport -Pvideo=/abs/clip.mp4  (development)
  *
  * Options:
  *   --process         also process every frame of the sequence (automatic clean) and check the result
+ *   --export          also render the processed frames to a video (needs --process), which runs the
+ *                     bundled ffmpeg the way the Render Video dialog does
  *   --video <file>    also import a video, which runs the bundled ffprobe and ffmpeg
  *   --scratch <dir>   engine scratch dir (default: the app's own)
  *   --report <file>   where to write the report (default: <scratch>/logs/self-test.txt)
@@ -55,6 +58,7 @@ object EngineSelfTest {
     private class Options(
         val sequence: String?,
         val process: Boolean,
+        val export: Boolean,
         val video: String?,
         val scratch: String,
         val report: File?,
@@ -63,6 +67,7 @@ object EngineSelfTest {
     private fun parse(args: List<String>): Options {
         var sequence: String? = null
         var process = false
+        var export = false
         var video: String? = null
         var scratch = DaemonProcess.defaultScratchDir()
         var report: File? = null
@@ -70,13 +75,14 @@ object EngineSelfTest {
         while (it.hasNext()) {
             when (val a = it.next()) {
                 "--process" -> process = true
+                "--export" -> export = true
                 "--video" -> video = it.next()
                 "--scratch" -> scratch = it.next()
                 "--report" -> report = File(it.next())
                 else -> sequence = a
             }
         }
-        return Options(sequence, process, video, scratch, report)
+        return Options(sequence, process, export, video, scratch, report)
     }
 
     /** Runs the checks and returns the process exit status. */
@@ -114,6 +120,11 @@ object EngineSelfTest {
     private var outputDir: File? = null
 
     private suspend fun checks(options: Options, report: Report): Boolean {
+        if (options.export && !options.process) {
+            // Frames are only there to export once processing has written them.
+            report.check<Unit>("options") { error("--export needs --process: there are no processed frames to render until the sequence has been processed") }
+            return false
+        }
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         var engine: EngineState? = null
         try {
@@ -218,13 +229,41 @@ object EngineSelfTest {
                         requireFile(ref.path)
                         detail = ref.path
                     } ?: return false
+
+                    if (options.export) {
+                        // 8. Render the processed frames to a video the way the Render Video dialog
+                        //    does — explicit encode settings, the engine choosing the frames — which
+                        //    runs the ffmpeg beside stard. ProRes in a .mov is StarCore's own default
+                        //    and its encoder is native to every ffmpeg build, so a failure here is the
+                        //    engine's doing rather than a missing codec. 30 fps because the frame
+                        //    count is checked below, and a wrong frame length in the engine's ffmpeg
+                        //    input only shows from about 29.97 fps up (a 3-frame video came out as 4).
+                        report.check("export video (bundled ffmpeg)") {
+                            val video = File(output, EXPORT_FILENAME)
+                            val settings = VideoEncodeSettings.newBuilder()
+                                .setFrameRate(30.0).setCodec("prores").setEncoder("prores")
+                                .setPixelFormat("yuv444p10le").setMuxer("mov").build()
+                            withTimeout(EXPORT_TIMEOUT_MS) {
+                                client.exportVideo(info.sessionId, video.path, settings).collect { }
+                            }
+                            check(video.isFile && video.length() > 0) { "the export finished but ${video.path} is missing or empty" }
+                            // A file with some frames in it is not a video of every frame: count them,
+                            // with the ffprobe beside stard when there is one (a dev tree has none).
+                            val ffprobe = File(File(stard).parentFile, if (File(stard).name.endsWith(".exe")) "ffprobe.exe" else "ffprobe")
+                            val frames = if (ffprobe.canExecute()) probeFrameCount(ffprobe, video) else null
+                            if (frames != null) {
+                                check(frames == info.frameCount) { "the video has $frames frames, the sequence ${info.frameCount}" }
+                            }
+                            detail = "${video.length()} bytes, " + (frames?.let { "$it frames" } ?: "frames not counted (no ffprobe beside stard)")
+                        } ?: return false
+                    }
                 }
 
                 report.check("close session") { client.closeSession(info.sessionId); detail = "" } ?: return false
             }
 
             options.video?.let { video ->
-                // 8. Import a video the way dropping one on the app does: ffprobe reads it, ffmpeg
+                // 9. Import a video the way dropping one on the app does: ffprobe reads it, ffmpeg
                 //    decodes it to frames — both found beside stard, so this is the bundled pair.
                 val info: SessionInfo = report.check("import video (bundled ffprobe + ffmpeg)") {
                     val file = File(video).absoluteFile
@@ -268,6 +307,20 @@ object EngineSelfTest {
     private fun failure(engine: EngineState): String =
         (engine.status.value as? EngineStatus.Failed)?.message ?: engine.status.value.toString()
 
+    /** How many video frames [video] holds, by decoding it with [ffprobe]; null if that could not be read. */
+    private fun probeFrameCount(ffprobe: File, video: File): Int? {
+        val process = ProcessBuilder(
+            ffprobe.path, "-v", "error", "-count_frames", "-select_streams", "v:0",
+            "-show_entries", "stream=nb_read_frames", "-of", "default=noprint_wrappers=1:nokey=1", video.path,
+        ).redirectErrorStream(true).start()
+        // The answer is one number, far below the pipe's buffer, so waiting before reading is safe.
+        if (!process.waitFor(PROBE_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            return null
+        }
+        return process.inputStream.bufferedReader().readText().trim().toIntOrNull()
+    }
+
     private fun requireFile(path: String) {
         check(path.isNotEmpty()) { "engine returned no path" }
         val f = File(path)
@@ -280,6 +333,9 @@ object EngineSelfTest {
     private const val CLIENT_VERSION = "self-test"
     private const val ENGINE_LOG_LINES = 200
     private const val PROCESS_TIMEOUT_MS = 30L * 60 * 1000
+    private const val EXPORT_TIMEOUT_MS = 10L * 60 * 1000
+    private const val EXPORT_FILENAME = "star-self-test.mov"
+    private const val PROBE_TIMEOUT_SECONDS = 60L
     private const val VIDEO_TIMEOUT_MS = 10L * 60 * 1000
 
     /** The checks' outcomes, echoed to stdout and written to [file]. */
