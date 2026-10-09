@@ -205,6 +205,29 @@ tasks.register("stageAppResources") {
         }
         stage(stard, stardName)
 
+        // StarCore's resources: the localization tables (and, on macOS, the tile classifier).
+        // `swift build` leaves them beside the binary as StarCore_StarCore.resources (Linux,
+        // Windows) or StarCore_StarCore.bundle (macOS). Shipping stard without them is what
+        // killed the engine on users' machines: the first localized string (Daemon.Hello sets
+        // the language) went through SwiftPM's Bundle.module, which fatalErrors when the bundle
+        // is missing — and never fails on the build machine, because its fallback is the
+        // absolute build path. Staged as `.resources` on every OS (StarCore.StarResources looks
+        // for both names); a `.bundle` with no Info.plist inside a signed .app upsets codesign.
+        val resourcesName = "StarCore_StarCore.resources"
+        val resourcesDst = File(outDir, resourcesName)
+        resourcesDst.deleteRecursively()
+        val resourcesSrc = listOf("resources", "bundle")
+            .map { File(stard.parentFile, "StarCore_StarCore.$it") }
+            .firstOrNull { File(it, "Localizations").isDirectory }
+        if (resourcesSrc == null) {
+            val msg = "stageAppResources: StarCore_StarCore.{resources,bundle} not found beside $stard — the bundled engine would run without its localization tables."
+            if (packagingRequested) throw GradleException(msg)
+            logger.warn(msg)
+        } else {
+            resourcesSrc.copyRecursively(resourcesDst, overwrite = true)
+            logger.lifecycle("stageAppResources: ${resourcesDst.relativeTo(projectDir)} (from $resourcesSrc)")
+        }
+
         // On Windows stard.exe is dynamically linked against the Swift runtime (and the MSVC C++
         // runtime), which a user's machine does not have. Without these DLLs next to the exe the
         // loader kills it at startup (0xC0000135) before it can print anything, and the client just
@@ -393,6 +416,24 @@ tasks.register<JavaExec>("smoke") {
         if (project.hasProperty("mode")) a.add(project.property("mode") as String)
         args(a)
     }
+}
+
+// End-to-end self-test against a real stard (the same checks `Star --self-test` runs in an
+// installed app; see EngineSelfTest). Exits non-zero on any failure.
+//   ./gradlew selfTest                                   # engine + Hello + localization only
+//   ./gradlew selfTest -Pseq="/abs/seq" -Pprocess -Pvideo="/abs/clip.mp4"
+tasks.register<JavaExec>("selfTest") {
+    group = "star"
+    description = "Run the end-to-end engine self-test against a real stard."
+    dependsOn("buildStardRelease")
+    mainClass.set("com.star.desktop.tools.EngineSelfTest")
+    classpath = sourceSets["main"].runtimeClasspath
+    val a = mutableListOf<String>()
+    if (project.hasProperty("process")) a.add("--process")
+    (findProperty("video") as String?)?.let { a.addAll(listOf("--video", it)) }
+    (findProperty("scratch") as String?)?.let { a.addAll(listOf("--scratch", it)) }
+    (findProperty("seq") as String?)?.let { a.add(it) }
+    args(a)
 }
 
 // ---------------------------------------------------------------------------

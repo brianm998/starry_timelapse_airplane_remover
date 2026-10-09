@@ -29,6 +29,14 @@ class DaemonProcess(
     private var process: Process? = null
     private var stderrJob: Job? = null
 
+    /**
+     * Where this daemon's stderr is also written. In a packaged app [onStderrLine]'s default,
+     * System.err, goes nowhere a user can reach, and the daemon's own diagnostic log never sees
+     * the one line that matters most — a Swift `fatalError` prints to stderr and nothing else —
+     * so without this a Windows engine that died on startup left no trace at all.
+     */
+    val logFile: File = File(File(scratchDir, "logs"), "stard.log")
+
     /** The last few stderr lines, kept so a death can be explained rather than just reported. */
     private val recentStderr = ArrayDeque<String>()
     private val stderrLock = Any()
@@ -38,22 +46,43 @@ class DaemonProcess(
 
     fun start(logScope: CoroutineScope) {
         File(scratchDir).mkdirs()
+        val log = openLog()
         val proc = ProcessBuilder(binaryPath, "--scratch", scratchDir, "--log-level", logLevel)
             .redirectErrorStream(false) // keep stdout (frames) and stderr (logs) separate
             .start()
         process = proc
+        log?.apply { appendLine("# stard started: $binaryPath (pid ${proc.pid()})"); flush() }
         // Insurance against an orphaned daemon if the JVM exits abnormally (stdin-EOF is the normal path).
         Runtime.getRuntime().addShutdownHook(Thread { if (proc.isAlive) proc.destroy() })
         stderrJob = logScope.launch(Dispatchers.IO) {
-            proc.errorStream.bufferedReader().forEachLine { line ->
-                synchronized(stderrLock) {
-                    recentStderr.addLast(line)
-                    while (recentStderr.size > STDERR_TAIL) recentStderr.removeFirst()
+            try {
+                proc.errorStream.bufferedReader().forEachLine { line ->
+                    synchronized(stderrLock) {
+                        recentStderr.addLast(line)
+                        while (recentStderr.size > STDERR_TAIL) recentStderr.removeFirst()
+                    }
+                    log?.apply { appendLine(line); flush() }
+                    onStderrLine(line)
                 }
-                onStderrLine(line)
+                // stderr closes when the process exits; record how, so the log stands on its own.
+                runCatching { proc.waitFor() }
+                log?.appendLine("# stard exited: ${deathDescription() ?: "still running"}")
+            } finally {
+                log?.let { runCatching { it.close() } }
             }
         }
     }
+
+    /** Open [logFile] for this run, keeping the previous run's as `stard.1.log` — a restart must not erase the crash it is recovering from. */
+    private fun openLog(): java.io.Writer? = runCatching {
+        logFile.parentFile.mkdirs()
+        if (logFile.exists()) {
+            val previous = File(logFile.parentFile, "stard.1.log")
+            previous.delete()
+            logFile.renameTo(previous)
+        }
+        logFile.bufferedWriter()
+    }.getOrNull()
 
     fun isAlive(): Boolean = process?.isAlive == true
 
@@ -86,12 +115,19 @@ class DaemonProcess(
             0xC0000139.toInt() -> "the engine could not start: a required DLL is the wrong version (0xC0000139)"
             0xC000007B.toInt() -> "the engine could not start: a DLL has the wrong architecture (0xC000007B)"
             0xC0000005.toInt() -> "the engine crashed (access violation, 0xC0000005)"
+            // A Swift fatalError / precondition failure traps; on Windows that surfaces as one of
+            // these rather than a signal.
+            0xC000001D.toInt() -> "the engine crashed (illegal instruction, 0xC000001D)"
+            0x80000003.toInt() -> "the engine crashed (breakpoint trap, 0x80000003)"
+            0xC0000409.toInt() -> "the engine crashed (fail-fast, 0xC0000409)"
+            0xC00000FD.toInt() -> "the engine crashed (stack overflow, 0xC00000FD)"
             137 -> "the engine was killed by the system (SIGKILL) — most likely out of memory"
             143 -> "the engine was asked to stop (SIGTERM)"
             139 -> "the engine crashed (SIGSEGV)"
             134 -> "the engine crashed (SIGABRT)"
             138 -> "the engine crashed (SIGBUS)"
             133 -> "the engine crashed (SIGTRAP)"
+            132 -> "the engine crashed (SIGILL)" // a Swift fatalError / precondition failure
             in 129..192 -> "the engine was killed by signal ${code - 128}"
             else -> "the engine exited with status $code"
         }
@@ -99,11 +135,14 @@ class DaemonProcess(
         // The daemon's own last words, when it managed any. Its crash handler writes a
         // "*** star has crashed ***" block to stderr, and StarWarnings writes memory-pressure
         // warnings there too, so the tail usually says more than the exit code alone.
-        val detail = stderrTail()
-            .filter { it.isNotBlank() }
-            .lastOrNull { it.contains("STAR-WARNING") || it.contains("ERROR") || it.contains("crashed") }
+        // "Fatal error:" is Swift's own fatalError/precondition text — the only explanation a
+        // trap leaves, and it says exactly what went wrong ("could not load resource bundle…").
+        val tail = stderrTail().filter { it.isNotBlank() }
+        val detail = tail.lastOrNull { it.contains("Fatal error") }
+            ?: tail.lastOrNull { it.contains("STAR-WARNING") || it.contains("ERROR") || it.contains("crashed") }
 
-        return if (detail != null) "$cause — $detail" else cause
+        val where = if (logFile.exists()) " (engine log: ${logFile.absolutePath})" else ""
+        return (if (detail != null) "$cause — $detail" else cause) + where
     }
 
     fun destroy() {

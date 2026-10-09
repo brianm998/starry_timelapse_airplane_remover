@@ -4,6 +4,7 @@ import com.star.desktop.data.FrameRepository
 import com.star.desktop.data.ImageCache
 import com.star.desktop.data.LocalPreferences
 import com.star.desktop.i18n.Strings
+import com.star.desktop.i18n.localized
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.data.SessionRepository
@@ -492,9 +493,13 @@ class AppViewModel(
         }
         scope.launch {
             engine.status.collect { st ->
-                // Engine died while a session was open: offer Restart (don't tear the session down yet —
-                // restart re-opens it via OpenConfig). A deliberate restart() sets `restarting` to suppress this.
-                if (st is EngineStatus.Failed && _screen.value is AppScreen.Sequence && !restarting) {
+                // Engine died: say why and offer Restart. With a session open, don't tear it down yet —
+                // restart re-opens it via OpenConfig. On the start screen this is the only place the
+                // reason appears at all: an engine that failed to come up used to show just a red
+                // "engine stopped" badge, and the user found out only by trying to open something and
+                // getting "RPC error -1: engine not connected". A deliberate restart() sets
+                // `restarting` to suppress this.
+                if (st is EngineStatus.Failed && _screen.value !is AppScreen.Loading && !restarting) {
                     _engineDown.value = st.message
                 }
             }
@@ -574,7 +579,11 @@ class AppViewModel(
             _screen.value = AppScreen.Loading("Restarting engine", null, null)
             val ok = engine.restart()
             restarting = false
-            if (!ok) { fail("Failed to restart the engine"); return@launch }
+            if (!ok) {
+                _screen.value = AppScreen.Initial
+                showEngineDown()
+                return@launch
+            }
             if (resume != null && java.io.File(resume).exists()) {
                 _screen.value = AppScreen.Loading("Resuming session", resume, null)
                 try {
@@ -586,6 +595,11 @@ class AppViewModel(
                 _screen.value = AppScreen.Initial
             }
         }
+    }
+
+    /** Raise the engine-down overlay with whatever the engine said about its death. */
+    private fun showEngineDown() {
+        _engineDown.value = (engine.status.value as? EngineStatus.Failed)?.message ?: localized("ui.engine_stopped")
     }
 
     /** Give up on a crashed engine: close the dead session and return to the start screen. */
@@ -607,6 +621,12 @@ class AppViewModel(
     private fun launchOpen(title: String, path: String, promptStartup: Boolean = false, block: suspend () -> SessionInfo) {
         scope.launch {
             ensureConnected()
+            if (engine.client == null) {
+                // Opening would only fail with "RPC error -1: engine not connected" — what the Windows
+                // user kept getting. Show why the engine isn't there, with Restart, instead.
+                showEngineDown()
+                return@launch
+            }
             _screen.value = AppScreen.Loading(title, path, null)
             try {
                 onOpened(path, block(), promptStartup = promptStartup)

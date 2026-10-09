@@ -54,4 +54,42 @@ class DaemonProcessTest {
         )
         resDir.deleteRecursively()
     }
+
+    /**
+     * A daemon that traps on startup — the Windows engine that could not find its resources — must
+     * be reported with Swift's own "Fatal error" line, and that line must reach the engine log.
+     * Before this the user saw "engine stopped" and nothing else, because the stderr tail filter
+     * only looked for "ERROR"/"crashed" and stderr itself went to System.err.
+     */
+    @Test
+    fun startupTrapIsExplainedAndLogged() {
+        if (isWindows) {
+            println("[skip] startupTrapIsExplainedAndLogged — needs a POSIX shell to fake the daemon")
+            return
+        }
+        val dir = Files.createTempDirectory("star-trap").toFile()
+        val fake = File(dir, "stard")
+        fake.writeText(
+            "#!/bin/sh\n" +
+                "echo 'StarCore/resource_bundle_accessor.swift:12: Fatal error: could not load resource bundle' >&2\n" +
+                "exit 132\n",
+        )
+        assertTrue(fake.setExecutable(true), "could not mark fake stard executable")
+
+        val proc = DaemonProcess(fake.absolutePath, File(dir, "scratch").absolutePath, onStderrLine = {})
+        kotlinx.coroutines.runBlocking {
+            proc.start(this)
+            kotlinx.coroutines.withTimeout(10_000) {
+                while (proc.deathDescription() == null || !proc.logFile.readText().contains("# stard exited")) {
+                    kotlinx.coroutines.delay(20)
+                }
+            }
+        }
+        val death = proc.deathDescription()!!
+        assertTrue("SIGILL" in death, "exit 132 not named: $death")
+        assertTrue("could not load resource bundle" in death, "Fatal error line not surfaced: $death")
+        assertTrue(proc.logFile.absolutePath in death, "engine log not pointed at: $death")
+        assertTrue("Fatal error" in proc.logFile.readText(), "stderr not written to the engine log")
+        dir.deleteRecursively()
+    }
 }

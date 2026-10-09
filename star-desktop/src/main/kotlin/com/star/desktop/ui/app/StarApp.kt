@@ -90,7 +90,10 @@ fun StarApp(vm: AppViewModel) {
             }
 
             val engineDown by vm.engineDown.collectAsState()
-            engineDown?.let { EngineDownOverlay(it, onRestart = vm::restartEngine, onClose = vm::dismissEngineDown) }
+            engineDown?.let {
+                EngineDownOverlay(it, sessionOpen = screen is AppScreen.Sequence,
+                                  onRestart = vm::restartEngine, onClose = vm::dismissEngineDown)
+            }
 
             error?.let { ErrorOverlay(it, onDismiss = vm::dismissError) }
         }
@@ -98,7 +101,7 @@ fun StarApp(vm: AppViewModel) {
 }
 
 @Composable
-private fun EngineDownOverlay(message: String, onRestart: () -> Unit, onClose: () -> Unit) {
+private fun EngineDownOverlay(message: String, sessionOpen: Boolean, onRestart: () -> Unit, onClose: () -> Unit) {
     Box(Modifier.fillMaxSize().background(StarColors.scrim), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -109,16 +112,24 @@ private fun EngineDownOverlay(message: String, onRestart: () -> Unit, onClose: (
                 .padding(32.dp),
         ) {
             Text(localized("ui.engine_stopped"), color = StarColors.red, fontSize = 16.sp)
-            Text(message, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-            Text(
-                localized("ui.restart_re_opens_this_session_from_its_saved"),
-                color = StarColors.textDisabled, fontSize = 11.sp, modifier = Modifier.padding(top = 12.dp),
-            )
+            // Selectable, because the reason (and the engine log path at its end) is exactly what a
+            // user has to copy into a bug report.
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(message, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+            if (sessionOpen) {
+                Text(
+                    localized("ui.restart_re_opens_this_session_from_its_saved"),
+                    color = StarColors.textDisabled, fontSize = 11.sp, modifier = Modifier.padding(top = 12.dp),
+                )
+            }
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier.padding(top = 20.dp),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
             ) {
-                androidx.compose.material3.OutlinedButton(onClick = onClose) { Text(localized("ui.close_session")) }
+                androidx.compose.material3.OutlinedButton(onClick = onClose) {
+                    Text(localized(if (sessionOpen) "ui.close_session" else "ui.dismiss"))
+                }
                 Button(onClick = onRestart) { Text(localized("ui.restart_engine")) }
             }
         }
@@ -227,7 +238,9 @@ private fun ErrorOverlay(message: String, onDismiss: () -> Unit) {
                 .background(StarColors.red.copy(alpha = 0.92f))
                 .padding(40.dp),
         ) {
-            Text(message, color = Color.White, fontSize = 14.sp)
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(message, color = Color.White, fontSize = 14.sp)
+            }
             Button(onClick = onDismiss, modifier = Modifier.padding(top = 20.dp)) { Text(localized("ui.dismiss")) }
         }
     }

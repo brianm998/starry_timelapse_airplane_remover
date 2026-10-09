@@ -169,7 +169,9 @@ jobs:
 
       - name: Build stard (release)
         working-directory: daemon
-        run: swift build -c release
+        # -static-stdlib, as release_linux.sh does for the CLI: a user's machine has no Swift
+        # toolchain, so a stard linked against the toolchain's libswiftCore.so would not start.
+        run: swift build -c release -Xswiftc -static-stdlib
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -200,6 +202,21 @@ jobs:
         with:
           name: star-desktop-linux-deb
           path: star-desktop/build/compose/binaries/main/deb/*.deb
+          if-no-files-found: error
+
+      # The installed app's contents, for linux-e2e to run on a fresh runner. A tar, because
+      # upload-artifact drops the execute bits.
+      - name: Pack the app image for the end-to-end test
+        working-directory: star-desktop
+        run: |
+          ./gradlew createDistributable -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
+          tar -C build/compose/binaries/main/app -cf ../star-desktop-app.tar .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-image-linux
+          path: star-desktop-app.tar
+          retention-days: 3
           if-no-files-found: error
 
   # ─── Windows installer (.exe) ─────────────────────────────────────────────────
@@ -396,6 +413,17 @@ jobs:
           path: star-desktop/build/compose/binaries/main/exe/*.exe
           if-no-files-found: error
 
+      # The app image the step above built, for windows-e2e to run on a fresh runner.
+      - name: Pack the app image for the end-to-end test
+        run: tar -C star-desktop/build/compose/binaries/main/app -cf star-desktop-app.tar .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-image-windows
+          path: star-desktop-app.tar
+          retention-days: 3
+          if-no-files-found: error
+
   # ─── macOS signed + notarized installer ──────────────────────────────────────
   # Builds the Compose Desktop app, bundles a natively-built stard + ffmpeg/ffprobe,
   # signs with Developer ID (hardened runtime), then notarizes + staples the .dmg —
@@ -546,12 +574,137 @@ jobs:
           path: star-desktop/build/compose/binaries/main/dmg/*.dmg
           if-no-files-found: error
 
+      # The signed .app, for macos-e2e to run on a fresh runner. createDistributable is
+      # up to date after packageDmg; running it guarantees the .app is on disk.
+      - name: Pack the app image for the end-to-end test
+        working-directory: star-desktop
+        env:
+          STAR_SIGN_IDENTITY: "Developer ID Application: Brian Martin (${{ secrets.APPLE_TEAM_ID }})"
+        run: |
+          ./gradlew createDistributable --no-daemon --stacktrace
+          tar -C build/compose/binaries/main/app -cf ../star-desktop-app.tar .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-image-macos
+          path: star-desktop-app.tar
+          retention-days: 3
+          if-no-files-found: error
+
       - name: Clean up keychain + secrets
         if: always()
         run: |
           security delete-keychain "$RUNNER_TEMP/build.keychain" || true
           rm -f "$RUNNER_TEMP/certs.p12"
           rm -rf "$RUNNER_TEMP/private_keys"
+
+  # ─── End-to-end: the installed app drives its engine ─────────────────────────
+  # Each runs the packaged app's own launcher with --self-test (EngineSelfTest.kt, via
+  # packaging/self-test.sh): it starts the bundled engine, does the Daemon.Hello handshake,
+  # checks the engine can read its localization tables, opens and processes a 16-bit TIFF
+  # sequence, and imports a video through the bundled ffprobe/ffmpeg.
+  #
+  # On a FRESH runner, deliberately: no Swift toolchain and no build tree. The Windows
+  # "connecting… engine stopped" bug was a stard.exe shipped without its resources, which
+  # worked on every machine that still had the build directory — including the build job —
+  # and nowhere else. These jobs are what would have caught it.
+  windows-e2e:
+    name: Windows end-to-end (installed app)
+    runs-on: windows-2022
+    needs: windows-package
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            star-desktop/packaging
+            test_data/test_a7sii_10
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-image-windows
+      - name: Unpack the app image
+        # Workspace-relative paths: on Windows, $RUNNER_TEMP is a D:\ path, and GNU tar reads
+        # a colon in a path as host:path.
+        run: mkdir -p e2e-app && tar -C e2e-app -xf star-desktop-app.tar
+      - name: Star --self-test
+        run: bash star-desktop/packaging/self-test.sh e2e-app e2e-work
+      - name: Keep the report and engine log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-windows-report
+          path: |
+            e2e-work/self-test.txt
+            e2e-work/scratch/logs/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  linux-e2e:
+    name: Linux end-to-end (installed app)
+    runs-on: ubuntu-24.04
+    needs: linux-package
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            star-desktop/packaging
+            test_data/test_a7sii_10
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-image-linux
+      - name: Unpack the app image
+        # Workspace-relative paths: on Windows, $RUNNER_TEMP is a D:\ path, and GNU tar reads
+        # a colon in a path as host:path.
+        run: mkdir -p e2e-app && tar -C e2e-app -xf star-desktop-app.tar
+      - name: Star --self-test
+        run: bash star-desktop/packaging/self-test.sh e2e-app e2e-work
+      - name: Keep the report and engine log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-linux-report
+          path: |
+            e2e-work/self-test.txt
+            e2e-work/scratch/logs/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  macos-e2e:
+    name: macOS end-to-end (installed app)
+    runs-on: macos-14
+    needs: macos-signed
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            star-desktop/packaging
+            test_data/test_a7sii_10
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-image-macos
+      # The bundled ffmpeg/ffprobe are x86_64-only (see macos-signed), so on this arm64 runner
+      # they need Rosetta — as they do on a user's Apple Silicon Mac. Installing it here keeps
+      # this job about the install, not about that known limitation.
+      - name: Ensure Rosetta
+        run: /usr/sbin/softwareupdate --install-rosetta --agree-to-license || true
+      - name: Unpack the app image
+        # Workspace-relative paths: on Windows, $RUNNER_TEMP is a D:\ path, and GNU tar reads
+        # a colon in a path as host:path.
+        run: mkdir -p e2e-app && tar -C e2e-app -xf star-desktop-app.tar
+      - name: Star --self-test
+        run: bash star-desktop/packaging/self-test.sh e2e-app e2e-work
+      - name: Keep the report and engine log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-macos-report
+          path: |
+            e2e-work/self-test.txt
+            e2e-work/scratch/logs/
+          retention-days: 14
+          if-no-files-found: ignore
 
   # ─── Attach installers to the GitHub release ─────────────────────────────────
   # On release/* tag pushes, adds the three desktop installers to the release for
@@ -565,7 +718,7 @@ jobs:
     # !cancelled() so one flaky installer job (a hosted runner dropping mid-build sank the whole
     # 0.12.1 upload) doesn't block the others; the check step below still fails this job loudly.
     if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/release/') }}
-    needs: [linux-package, windows-package, macos-signed]
+    needs: [linux-package, windows-package, macos-signed, linux-e2e, windows-e2e, macos-e2e]
     permissions:
       contents: write
     steps:
@@ -575,9 +728,23 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: star-desktop-*
+          pattern: star-desktop-*   # the installers only (app images are app-image-*)
           path: release-artifacts/
           merge-multiple: true
+
+      # An installer whose end-to-end test did not pass is not attached: 0.12.1 shipped a
+      # Windows .exe whose engine could not start, and nothing stood between the build and
+      # the release.
+      - name: Drop installers that failed their end-to-end test
+        env:
+          LINUX_E2E: ${{ needs.linux-e2e.result }}
+          WINDOWS_E2E: ${{ needs.windows-e2e.result }}
+          MACOS_E2E: ${{ needs.macos-e2e.result }}
+        run: |
+          drop() { if [ "$2" != success ]; then echo "::error::$3 end-to-end test: $2 — not attaching the .$1"; rm -f release-artifacts/*.$1; fi; }
+          drop deb "$LINUX_E2E" Linux
+          drop exe "$WINDOWS_E2E" Windows
+          drop dmg "$MACOS_E2E" macOS
 
       - name: List release artifacts
         run: find release-artifacts -type f | sort
