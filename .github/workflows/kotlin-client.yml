@@ -204,21 +204,6 @@ jobs:
           path: star-desktop/build/compose/binaries/main/deb/*.deb
           if-no-files-found: error
 
-      # The installed app's contents, for linux-e2e to run on a fresh runner. A tar, because
-      # upload-artifact drops the execute bits.
-      - name: Pack the app image for the end-to-end test
-        working-directory: star-desktop
-        run: |
-          ./gradlew createDistributable -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
-          tar -C build/compose/binaries/main/app -cf ../star-desktop-app.tar .
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: app-image-linux
-          path: star-desktop-app.tar
-          retention-days: 3
-          if-no-files-found: error
-
   # ─── Windows installer (.exe) ─────────────────────────────────────────────────
   # Same idea as linux-package, but for Windows — reusing cli.yml's `windows`
   # job's MSVC/SDK pinning (needed for the Swift/Clang toolchain, same reasons
@@ -652,15 +637,23 @@ jobs:
           sparse-checkout: |
             star-desktop/packaging
             test_data/test_a7sii_10
+      # The real installer, installed the way a user installs it — so what runs is exactly what ships
+      # (file modes, install paths and declared dependencies included).
       - uses: actions/download-artifact@v4
         with:
-          name: app-image-linux
-      - name: Unpack the app image
-        # Workspace-relative paths: on Windows, $RUNNER_TEMP is a D:\ path, and GNU tar reads
-        # a colon in a path as host:path.
-        run: mkdir -p e2e-app && tar -C e2e-app -xf star-desktop-app.tar
+          name: star-desktop-linux-deb
+          path: deb
+      - name: Install the .deb
+        run: |
+          sudo apt-get update
+          # jpackage's post-install script registers a desktop menu entry with xdg-desktop-menu, which
+          # exits 3 ("No writable system menu directory found") on a runner with no desktop
+          # environment. A user's desktop has these directories; give the runner the same.
+          sudo mkdir -p /usr/share/applications /usr/share/desktop-directories /etc/xdg/menus/applications-merged
+          sudo apt-get install -y ./deb/*.deb
+          ls -la /opt/star/lib/app/resources
       - name: Star --self-test
-        run: bash star-desktop/packaging/self-test.sh e2e-app e2e-work
+        run: bash star-desktop/packaging/self-test.sh /opt/star e2e-work
       - name: Keep the report and engine log
         if: always()
         uses: actions/upload-artifact@v4
@@ -674,7 +667,11 @@ jobs:
 
   macos-e2e:
     name: macOS end-to-end (installed app)
-    runs-on: macos-14
+    # macos-15, not the macos-14 the installer is built on: daemon/Package.swift declares
+    # `platforms: [.macOS("15.0")]`, so the shipped stard needs macOS 15 and on 14 dyld aborts with
+    # "Library not loaded: /usr/lib/swift/libswift_errno.dylib (built for macOS 15.0 which is newer
+    # than running OS)". The test runs on the oldest OS the app claims to support.
+    runs-on: macos-15
     needs: macos-signed
     steps:
       - uses: actions/checkout@v4
