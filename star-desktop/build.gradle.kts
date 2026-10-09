@@ -421,7 +421,9 @@ tasks.register<JavaExec>("smoke") {
 // End-to-end self-test against a real stard (the same checks `Star --self-test` runs in an
 // installed app; see EngineSelfTest). Exits non-zero on any failure.
 //   ./gradlew selfTest                                   # engine + Hello + localization only
-//   ./gradlew selfTest -Pseq="/abs/seq" -Pprocess -Pvideo="/abs/clip.mp4"
+//   ./gradlew selfTest -Pseq="/abs/seq" -Pprocess -Pexport -Pvideo="/abs/clip.mp4"
+// -Pexport renders the processed frames to a video, so it needs ffmpeg beside stard: a
+// development stard (daemon/.build/release) has none, so put ffmpeg and ffprobe there first.
 tasks.register<JavaExec>("selfTest") {
     group = "star"
     description = "Run the end-to-end engine self-test against a real stard."
@@ -430,6 +432,7 @@ tasks.register<JavaExec>("selfTest") {
     classpath = sourceSets["main"].runtimeClasspath
     val a = mutableListOf<String>()
     if (project.hasProperty("process")) a.add("--process")
+    if (project.hasProperty("export")) a.add("--export")
     (findProperty("video") as String?)?.let { a.addAll(listOf("--video", it)) }
     (findProperty("scratch") as String?)?.let { a.addAll(listOf("--scratch", it)) }
     (findProperty("seq") as String?)?.let { a.add(it) }

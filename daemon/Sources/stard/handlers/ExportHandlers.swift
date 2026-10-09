@@ -104,8 +104,13 @@ enum ExportHandlers {
         }
     }
 
-    // Assemble processed output TIFFs back into a video using ffmpeg.
+    // Assemble the processed output frames back into a video using ffmpeg.
     // Streams ProgressEvent items (io_progress, sequence_state) while encoding.
+    //
+    // The frames are the ones processing has already written to the output sequence directory
+    // (MergeOp finishes each frame as the graph runs), so Export.RenderSequence is not needed
+    // first; it only re-renders frames after their outliers were edited.  See VideoExport for
+    // how those files are found and handed to ffmpeg.
     static func video(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_ExportVideoRequest(serializedBytes: payload)
@@ -117,41 +122,63 @@ enum ExportHandlers {
             //   1. Explicit settings in the request (codec field not empty)
             //   2. VideoInfo stored on the session (decoded from the source video)
             //   3. Config's video fields (may be defaults)
+            // Whether there is an audio track is a fact about the source, not an encode
+            // setting, so it comes from the session either way.
             let config = await session.configManager.config()
+            let sourceHasAudio = await session.videoInfo?.hasAudio ?? config.hasAudio
             let vi: VideoInfo
-            if let fromReq = Mapping.videoInfo(from: req.settings, hasAudio: false) {
+            if let fromReq = Mapping.videoInfo(from: req.settings, hasAudio: sourceHasAudio) {
                 vi = fromReq
             } else if let stored = await session.videoInfo {
                 vi = stored
             } else {
                 vi = Mapping.videoInfoFromConfig(config)
             }
+            guard vi.frameRate.rawValue > 0 else {
+                await transport.sendError(id: id, message: "invalid frame rate \(vi.frameRate.rawValue)")
+                return
+            }
 
             let outputPath = config.outputPath
-            let totalFrames = await session.frameCount
 
-            // Derive the decoded-frames directory from the image sequence filenames
-            // so we can find audio.aac if it exists.
-            let filenames    = await session.imageSequence.filenames
-            let decodedDir   = (filenames.first as NSString?)?.deletingLastPathComponent ?? outputPath
-            let audioPath    = "\(decodedDir)/audio.aac"
-            let hasAudio     = vi.hasAudio && FileManager.default.fileExists(atPath: audioPath)  // StarCore.VideoInfo.hasAudio
+            // The frames processing wrote, in frame order.
+            let filenames = await session.imageSequence.filenames
+            let frameDir  = config.outputSequenceDirname
+            let found     = VideoExport.finalFrames(outputDir: frameDir, sourceFilenames: filenames)
+            guard !found.files.isEmpty else {
+                await transport.sendError(
+                    id: id,
+                    message: "no processed frames found in \(frameDir); process the sequence first")
+                return
+            }
+            if !found.missing.isEmpty {
+                // A partly processed sequence still renders what it has, as the macOS gui's
+                // render does; say so rather than leave a video that silently skips frames.
+                let sample = found.missing.prefix(5).joined(separator: ", ")
+                Log.w("Export.Video: \(found.missing.count) of \(filenames.count) frames have no output in \(frameDir) and are left out (\(sample)\(found.missing.count > 5 ? ", ..." : ""))")
+            }
+            let totalFrames = found.files.count
 
-            // Determine the encoder name: prefer explicit encoder, then codec's rawValue.
-            let encoderName  = vi.encoder?.rawValue ?? vi.codec.rawValue
+            // The decoded-frames directory of a video import is also where its audio.aac is.
+            let decodedDir = (filenames.first as NSString?)?.deletingLastPathComponent ?? outputPath
+            let audioFile  = "\(decodedDir)/audio.aac"
+            let audioPath  = vi.hasAudio && FileManager.default.fileExists(atPath: audioFile) ? audioFile : nil
 
-            var ffmpegArgs: [String] = [
-                "-framerate", vi.frameRate.rawString,
-                "-start_number", "1",
-                "-i", "\(outputPath)/image_%04d.tiff",
-            ]
-            if hasAudio { ffmpegArgs += ["-i", audioPath] }
-            ffmpegArgs += [
-                "-c:v", encoderName,
-                "-pix_fmt", vi.pixelFormat.rawValue,
-            ]
-            if hasAudio { ffmpegArgs += ["-c:a", "copy"] }
-            ffmpegArgs += ["-y", req.outputVideoPath]
+            let outputVideoPath = req.outputVideoPath.isEmpty
+                ? VideoExport.defaultOutputPath(config: config, muxer: vi.muxer)
+                : req.outputVideoPath
+
+            let listPath = "\(await session.scratchSessionDir)/export-\(UUID().uuidString).ffconcat"
+            try VideoExport.concatList(files: found.files, frameRate: vi.frameRate)
+                .write(toFile: listPath, atomically: true, encoding: .utf8)
+            defer { try? FileManager.default.removeItem(atPath: listPath) }
+
+            let ffmpegArgs = VideoExport.arguments(
+                listPath: listPath,
+                audioPath: audioPath,
+                videoInfo: vi,
+                outputVideoPath: outputVideoPath
+            )
 
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
 

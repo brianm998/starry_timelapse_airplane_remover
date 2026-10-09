@@ -602,7 +602,8 @@ jobs:
   # Each runs the packaged app's own launcher with --self-test (EngineSelfTest.kt, via
   # packaging/self-test.sh): it starts the bundled engine, does the Daemon.Hello handshake,
   # checks the engine can read its localization tables, opens and processes a 16-bit TIFF
-  # sequence, and imports a video through the bundled ffprobe/ffmpeg.
+  # sequence, renders the processed frames to a video with the bundled ffmpeg (the Render
+  # Video path), and imports a video through the bundled ffprobe/ffmpeg.
   #
   # On a FRESH runner, deliberately: no Swift toolchain and no build tree. The Windows
   # "connecting… engine stopped" bug was a stard.exe shipped without its resources, which

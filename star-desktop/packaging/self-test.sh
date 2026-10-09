@@ -71,6 +71,7 @@ set +e
   --scratch "$(native "$WORK/scratch")" \
   --report "$(native "$REPORT")" \
   --process \
+  --export \
   --video "$(native "$CLIP")" \
   "$(native "$SEQ")"
 code=$?
