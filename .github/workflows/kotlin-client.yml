@@ -645,6 +645,10 @@ jobs:
       - name: Install the .deb
         run: |
           sudo apt-get update
+          # jpackage's post-install script registers a desktop menu entry with xdg-desktop-menu, which
+          # exits 3 ("No writable system menu directory found") on a runner with no desktop
+          # environment. A user's desktop has these directories; give the runner the same.
+          sudo mkdir -p /usr/share/applications /usr/share/desktop-directories /etc/xdg/menus/applications-merged
           sudo apt-get install -y ./deb/*.deb
           ls -la /opt/star/lib/app/resources
       - name: Star --self-test
