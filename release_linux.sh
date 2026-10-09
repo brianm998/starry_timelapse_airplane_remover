@@ -2,6 +2,10 @@
 
 # Builds the star CLI binary for Linux and packages it as a .deb file.
 #
+# The .deb installs /usr/local/bin/star and, beside it, /usr/local/share/star/StarCore_StarCore.resources
+# (the localization tables star prints --help and every message from). StarResources.swift looks for
+# it at <exe dir>/../share/star, so the two must stay in step.
+#
 # Prerequisites (Debian/Ubuntu):
 #   apt install cmake make git pkg-config perl dpkg-dev \
 #               libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev
@@ -51,6 +55,15 @@ swift build -c release -Xswiftc -static-stdlib
 
 BINARY="$REPO_ROOT/cli/.build/release/star"
 
+# SwiftPM leaves StarCore's resources beside the binary. Without them star prints message keys
+# instead of text, and SwiftPM's own lookup only ever finds them on the machine that built it,
+# so the package has to carry them: see StarCore/Sources/StarCore/StarResources.swift.
+RESOURCES="$REPO_ROOT/cli/.build/release/StarCore_StarCore.resources"
+if [ ! -d "$RESOURCES/Localizations" ]; then
+    echo "ERROR: $RESOURCES/Localizations not found - swift build did not produce StarCore's resources." >&2
+    exit 1
+fi
+
 # Strip debug symbols to reduce binary size.
 strip "$BINARY"
 
@@ -74,10 +87,15 @@ DEB_FILE="$REPO_ROOT/cli/.build/${PKG_STEM}.deb"
 # Build the staging tree.
 rm -rf "$PKG_DIR"
 mkdir -p "$PKG_DIR/DEBIAN"
-mkdir -p "$PKG_DIR/usr/local/bin"
+mkdir -p "$PKG_DIR/usr/local/bin" "$PKG_DIR/usr/local/share/star"
 
 cp "$BINARY" "$PKG_DIR/usr/local/bin/star"
 chmod 755 "$PKG_DIR/usr/local/bin/star"
+
+# StarResources.candidateDirectories(): <exe dir>/../share/star/StarCore_StarCore.resources
+cp -R "$RESOURCES" "$PKG_DIR/usr/local/share/star/StarCore_StarCore.resources"
+find "$PKG_DIR/usr/local/share/star" -type d -exec chmod 755 {} +
+find "$PKG_DIR/usr/local/share/star" -type f -exec chmod 644 {} +
 
 cat > "$PKG_DIR/DEBIAN/control" << EOF
 Package: star
@@ -95,6 +113,13 @@ EOF
 # --root-owner-group requires dpkg >= 1.19.1 (Ubuntu 18.10+).
 dpkg-deb --build --root-owner-group "$PKG_DIR" "$DEB_FILE"
 rm -rf "$PKG_DIR"
+
+# The package must carry the resources: fail the build rather than ship a star that prints keys.
+if ! dpkg-deb -c "$DEB_FILE" | grep -q 'usr/local/share/star/StarCore_StarCore.resources/Localizations/en.json'; then
+    echo "ERROR: $DEB_FILE does not contain StarCore's localization tables." >&2
+    dpkg-deb -c "$DEB_FILE" >&2
+    exit 1
+fi
 
 echo ""
 echo "==> Package: $DEB_FILE"

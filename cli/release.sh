@@ -46,13 +46,17 @@ codesign --force --options runtime --timestamp \
 
 echo "packaging it up"
 
-# package it up for distribution
-pkgbuild --root .build/star.xcarchive/Products/usr/local/bin \
-	 --identifier com.star \
-	 --version "${STAR_VERSION}" \
-	 --install-location /usr/local/bin \
-	 --sign "$SIGN_PKG" \
-	 $PKG_NAME
+# Package it up for distribution. The archive's Products/usr/local/bin holds only `star`: Xcode
+# builds StarCore's resource bundle (the localization tables) but does not install it, and a star
+# without them prints message keys instead of text on every machine but the one that built it
+# (SwiftPM's Bundle.module falls back to the build directory). make_pkg.sh installs them in
+# /usr/local/share/star, where StarResources.swift looks. They are taken from the source tree: the
+# Xcode and SwiftPM bundles are copies of exactly this directory (Package.swift `.copy`s it).
+./make_pkg.sh .build/star.xcarchive/Products/usr/local/bin/star \
+	      ../StarCore/Sources/StarCore/Resources \
+	      "${STAR_VERSION}" \
+	      "$PKG_NAME" \
+	      "$SIGN_PKG"
 
 echo "notarize it"
 
