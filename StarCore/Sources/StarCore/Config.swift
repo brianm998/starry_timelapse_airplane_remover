@@ -1672,7 +1672,7 @@ public struct Config: Codable, Sendable {
 
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.12.1"
+    public static let latestVersion = "0.12.2"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
