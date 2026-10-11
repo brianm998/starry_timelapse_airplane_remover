@@ -37,11 +37,13 @@ public func decodeVideo(
     let inputURL = URL(fileURLWithPath: inputPath)
     let fileName = inputURL.deletingPathExtension().lastPathComponent
     //let fileExtension = inputURL.pathExtension
+    // Sanitize only the new folder's name. Sanitizing the whole path turned a
+    // Windows path like C:\Users\me\Desktop\x.mp4 into the relative path
+    // C__Users_me_Desktop_x, which ffmpeg then failed to write to (EIO, -5).
     let outputFolder = inputURL
       .deletingLastPathComponent()
-      .appendingPathComponent(fileName)
+      .appendingPathComponent(fileName.sanitized)
       .path
-      .sanitized
     let fileManager = FileManager.default
 
     try? fileManager.createDirectory(atPath: outputFolder, withIntermediateDirectories: true)
