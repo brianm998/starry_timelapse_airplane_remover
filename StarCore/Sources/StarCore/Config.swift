@@ -1668,11 +1668,14 @@ public struct Config: Codable, Sendable {
     //        kotlin client
     //        earth alignment works
     //        compile ffmpeg for all platforms
+    // 0.12.1 windows kotlin fixes
+    // 0.12.2 windows kotlin fixes
+    // 0.12.3 windows kotlin fixes
     //
 
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.12.2"
+    public static let latestVersion = "0.12.3"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
