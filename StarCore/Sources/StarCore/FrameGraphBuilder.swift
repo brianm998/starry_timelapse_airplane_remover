@@ -1046,13 +1046,32 @@ public final actor FrameGraphBuilder {
         // handed, and a frame outside the range has no computed homography to validate
         // — including it would only overwrite its stored one from a median taken
         // without it.
+        // Same report as the normal completion op below, run on its own queue because
+        // `queue.cancelAllOperations()` skips every op still on that one.
+        let abortCompletionOp = GraphCompletionOp {
+            Log.i("Frame graph aborted")
+            closure(await errors.elements())
+        }
+        let abortCompletionQueue = OperationQueue()
         let validationOp = AlignmentValidationOp(
           frames: outputFrames,
-          configManager: configManager
-        ) { errorString in
-            Task { await errors.append(errorString) }
-            errorClosure(errorString)
-        }
+          configManager: configManager,
+          errorClosure: { errorString in
+              Task { await errors.append(errorString) }
+              errorClosure(errorString)
+          },
+          abortClosure: { [queue] errorString in
+              // Nothing downstream can run without a homography.  Cancelled ops are
+              // skipped, but that includes the completion op, so report completion
+              // here or whoever waits on it hangs.
+              queue.cancelAllOperations()
+              errorClosure(errorString)
+              Task {
+                  await errors.append(errorString)
+                  abortCompletionQueue.addOperation(abortCompletionOp)
+              }
+          }
+        )
         validationOp.qualityOfService = .userInteractive
         Log.d("\(homographyOps.count) homographyOps")
         homographyOps.forEach { validationOp.addDependency($0) }
