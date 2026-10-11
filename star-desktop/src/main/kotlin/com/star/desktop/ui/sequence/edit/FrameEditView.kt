@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
+import androidx.compose.ui.draw.clipToBounds
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -79,6 +80,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         modifier
             .fillMaxSize()
             .background(StarColors.appBackground)
+            .clipToBounds()
             .pointerHoverIcon(cursorIcon, overrideDescendants = true)
             .onSizeChanged { canvasSize = it.toSize() }
             .onPointerEvent(PointerEventType.Scroll) { ev ->

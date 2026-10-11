@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -190,6 +191,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     Column(modifier.fillMaxSize().background(StarColors.appBackground)) {
         Box(
             Modifier.weight(1f).fillMaxSize()
+                .clipToBounds()
                 .onSizeChanged { canvasSize = it.toSize() }
                 .pointerHoverIcon(blankCursor)
                 .onPointerEvent(PointerEventType.Move) { hover = it.changes.firstOrNull()?.position }
