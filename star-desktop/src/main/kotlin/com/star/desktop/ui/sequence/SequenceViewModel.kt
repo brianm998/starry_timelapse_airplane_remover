@@ -229,7 +229,15 @@ class SequenceViewModel(
     // ---- actions ----
     fun setMode(m: InteractionMode) { _mode.value = m }
     fun setViewMode(m: FrameViewMode) { _viewMode.value = m }
-    fun setTool(t: ToolType) { _tool.value = t }
+    /**
+     * Whether the current frame's clean method reviews outliers (macOS `currentFrameUsesOutliers`).
+     * The editing tools only apply then; plain automatic mode has nothing for them to act on.
+     */
+    fun currentFrameUsesOutliers(): Boolean =
+        (frameVMFor(_currentIndex.value).info.value?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE) !=
+            com.star.proto.CleanMethod.CLEAN_AUTOMATIC
+
+    fun setTool(t: ToolType) { if (currentFrameUsesOutliers()) _tool.value = t }
     fun toggleFilmstrip() { _showFilmstrip.value = !_showFilmstrip.value }
 
     fun setCurrentIndex(i: Int) {

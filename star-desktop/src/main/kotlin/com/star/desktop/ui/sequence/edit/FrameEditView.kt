@@ -53,7 +53,11 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     LaunchedEffect(current) { fvm.load() }
 
     val bmp by vm.currentPreview.collectAsState()
-    val tool by vm.tool.collectAsState()
+    val selectedTool by vm.tool.collectAsState()
+    val frameInfo by fvm.info.collectAsState()
+    // The tools do nothing on a frame whose clean method doesn't review outliers.
+    val tool = if ((frameInfo?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE) ==
+        com.star.proto.CleanMethod.CLEAN_AUTOMATIC) com.star.desktop.domain.ToolType.NONE else selectedTool
     val groups by fvm.groups.collectAsState()
     val decisions by fvm.decisions.collectAsState()
     val selected by fvm.selected.collectAsState()
