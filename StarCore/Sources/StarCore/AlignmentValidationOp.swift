@@ -10,15 +10,20 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
     let frames: [FrameAirplaneRemover]
     let configManager: ConfigManager
     let errorClosure: (String) -> Void
-    
+    /// Called instead of `errorClosure` when validation cannot produce a homography for
+    /// any frame.  Everything downstream needs one, so the caller should end the run.
+    let abortClosure: ((String) -> Void)?
+
     init(
       frames: [FrameAirplaneRemover],
       configManager: ConfigManager,
-      errorClosure: @escaping (String) -> Void
+      errorClosure: @escaping (String) -> Void,
+      abortClosure: ((String) -> Void)? = nil
     ) {
         self.frames = frames
         self.configManager = configManager
         self.errorClosure = errorClosure
+        self.abortClosure = abortClosure
         super.init(for: .alignmentValidation)
         self.name = "alignment validation"
     }
@@ -63,9 +68,16 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
         guard let median = medianHomography(among: homographies) else {
             Log.e("ERROR, canceling no homographies found")
-            errorClosure("no homographies found")
+            let message = "no usable star alignment was found between these frames, " +
+              "so the sequence cannot be processed"
             self.cancel()
-            // have this abort the operation
+            // Cancelling this op alone is not enough: a cancelled op still finishes, which
+            // releases its dependents to run with no homography stored for any frame.
+            if let abortClosure {
+                abortClosure(message)
+            } else {
+                errorClosure(message)
+            }
             return
         }
         Log.d("found median homography at frameIndex \(median.frameIndex) " +
