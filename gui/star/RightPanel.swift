@@ -93,7 +93,12 @@ struct RightPanel: View {
                                 }.frame(maxWidth: 140)
                             }
 
-                            VerticalStarPicker(localized("ui.tool"), selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
+                            HStack {
+                                Text(localized("ui.tool"))
+                                  .foregroundColor(.white)
+                                ToolHelpButton()
+                            }
+                            VerticalStarPicker(nil, selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
                                 HStack {
                                     if isEnabled {
                                         Image(value.iconName)
@@ -114,18 +119,15 @@ struct RightPanel: View {
                                                          .gray)
                                       .tag(value)
                                 }
+                                  .help(isEnabled ?
+                                          value.helpText :
+                                          localized("tool.help.disabled"))
                             }
                               .disabled(!viewModel.currentFrameUsesOutliers)
-                              .help("""
-                                      What happens when outlier groups are selected?
-                                      paint   - they will be marked for painting
-                                      clear   - they will be marked for not painting
-                                      details - they will be shown in the info window
-                                      """)      // XXX does this work here?
-
 
                             Toggle(localized("ui.multi_choice"), isOn: $viewModel.multiChoice)
                               .foregroundColor(.white)
+                              .disabled(!viewModel.currentFrameUsesOutliers)
    
                             // ── Horizon painting ───────────────────────
                             Button {
