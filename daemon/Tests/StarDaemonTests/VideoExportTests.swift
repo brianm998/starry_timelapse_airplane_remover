@@ -205,4 +205,10 @@ final class VideoExportTests: XCTestCase {
         XCTAssertEqual(VideoExport.defaultOutputPath(config: config, muxer: .mp4), "/o/\(config.basename).mp4")
         XCTAssertTrue(config.basename.hasPrefix("night-star-v-"))
     }
+
+    func testPrioritizedPutsPreferredFirstAndKeepsTheRest() {
+        let all = ["a64", "avi", "mkv", "mp4", "mov"]
+        XCTAssertEqual(VideoExport.prioritized(all, preferred: ["mp4", "mov", "avi", "nope"]),
+                       ["mp4", "mov", "avi", "a64", "mkv"])
+    }
 }
