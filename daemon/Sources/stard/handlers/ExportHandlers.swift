@@ -92,8 +92,10 @@ enum ExportHandlers {
                 for enc in codec.encoders {
                     var ec = Star_V1_EncoderCaps()
                     ec.encoder       = enc.rawValue
-                    ec.pixelFormats  = enc.pixelFormats.map { $0.rawValue }
-                    ec.muxers        = enc.supportedMuxers.map { $0.rawValue }
+                    ec.pixelFormats  = VideoExport.prioritized(
+                        enc.pixelFormats.map { $0.rawValue }, preferred: VideoExport.preferredPixelFormats)
+                    ec.muxers        = VideoExport.prioritized(
+                        enc.supportedMuxers.map { $0.rawValue }, preferred: VideoExport.preferredMuxers)
                     cc.encoders.append(ec)
                 }
                 caps.codecs.append(cc)

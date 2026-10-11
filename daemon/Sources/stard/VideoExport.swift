@@ -72,6 +72,18 @@ enum VideoExport {
         "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
+    /// `values` with the entries named in `preferred` moved to the front, in that order; the
+    /// rest keep their relative order.  The Render Video dialog opens on the first entry of
+    /// each list, and the capability graph is generated alphabetically, so an unordered list
+    /// opens on `a64` (the Commodore 64 muxer, which cannot hold h264 at all) and on whichever
+    /// pixel format sorts first, which ffmpeg then cannot write a header for.
+    static func prioritized(_ values: [String], preferred: [String]) -> [String] {
+        preferred.filter(values.contains) + values.filter { !preferred.contains($0) }
+    }
+
+    static let preferredMuxers = ["mp4", "mov", "matroska", "webm", "avi"]
+    static let preferredPixelFormats = ["yuv420p", "yuv420p10le", "yuv422p", "yuv444p"]
+
     /// The video's path when the client did not choose one: next to the output sequence's
     /// directory, named after it, in the chosen container.  The macOS gui's render sheet
     /// defaults to the same name.
