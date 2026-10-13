@@ -26,8 +26,19 @@ actor Session {
     /// so one ending can never take another's subscription with it.
     private var progressSubscribers: [UUID: AsyncStream<Star_V1_ProgressEvent>.Continuation] = [:]
 
-    // Processing task — set when Processing.Start is called.
-    private var processingTask: Task<Void, Never>?
+    /// The processing run in flight, if any.  Bumped for every run started and every run
+    /// stopped, so a completion that arrives late from a run that was stopped or replaced is
+    /// recognisably not the current one and does nothing.
+    private var runGeneration = 0
+    private var activeRun: Int?
+
+    /// The task that builds the frame graph for `activeRun`; a stop waits for it so it never
+    /// cancels the queue before the run's operations have been put on it.
+    private var buildTask: Task<Void, Never>?
+
+    /// A stop in progress.  A start waits for it rather than building a second graph
+    /// alongside the operations the stop is still draining.
+    private var stopTask: Task<Void, Never>?
 
     init(
         sessionID: String,
@@ -121,50 +132,84 @@ actor Session {
     // Start processing (calls frameGraphBuilder.build).
     // startIndex/endIndex are 0-based inclusive frame indices; pass nil endIndex to process to the last frame.
     func startProcessing(startIndex: Int = 0, endIndex: Int? = nil) async {
-        guard processingTask == nil else { return }
+        await stopTask?.value
+        guard activeRun == nil else { return }
         await frameGraphBuilder.set(configManager: configManager)
+        // The stop that was awaited above, or a concurrent start, may have got in while this
+        // was suspended on the builder.
+        guard activeRun == nil else { return }
+        runGeneration += 1
+        let generation = runGeneration
+        activeRun = generation
         let fs = frames
-        let scratch = scratchSessionDir
         let weakSelf = WeakSessionRef(self)
-        processingTask = Task {
-            let sem = AsyncSemaphore(value: 0)
+        buildTask = Task {
             await frameGraphBuilder.build(
                 frames: fs,
                 startIndex: startIndex,
                 endIndex: endIndex
             ) { errorList in
-                if errorList.isEmpty {
-                    Log.i("stard: processing finished cleanly")
-                } else {
-                    let joined = errorList.joined(separator: "\n")
-                    Log.e("stard: processing finished with \(errorList.count) error(s):\n\(joined)")
-                    try? joined.write(toFile: "\(scratch)/processing_errors.log", atomically: true, encoding: .utf8)
-                }
-                sem.signal()
+                // Not called at all if the run is cancelled; see stopRun.
+                Task { await weakSelf.session?.runCompleted(generation: generation, errors: errorList) }
             } errorClosure: { errorString in
                 Log.e("stard: op error: \(errorString)")
             }
-            await sem.wait()
-            await weakSelf.session?.emitSequenceState("done")
-            await weakSelf.session?.clearProcessingTask()
         }
     }
 
-    func cancelProcessing() {
-        processingTask?.cancel()
-        processingTask = nil
+    /// The graph's completion handler.  Ignored unless `generation` is still the current run.
+    private func runCompleted(generation: Int, errors errorList: [String]) {
+        guard activeRun == generation else {
+            Log.i("stard: ignoring the completion of a stopped processing run")
+            return
+        }
+        activeRun = nil
+        buildTask = nil
+        if errorList.isEmpty {
+            Log.i("stard: processing finished cleanly")
+            emitSequenceState("done")
+        } else {
+            let joined = errorList.joined(separator: "\n")
+            Log.e("stard: processing finished with \(errorList.count) error(s):\n\(joined)")
+            try? joined.write(toFile: "\(scratchSessionDir)/processing_errors.log", atomically: true, encoding: .utf8)
+            emitSequenceState("done")
+        }
+    }
+
+    /// Stop the run in flight and return once what it had running has stopped (macOS
+    /// `cancelAllOperationsAndWait`).  Emits `cancelled` unless `announce` is false, which is
+    /// for a stop that is only the first half of a restart.
+    func cancelProcessing() async {
+        await stopRun(announce: true)
+    }
+
+    private func stopRun(announce: Bool) async {
+        if let inFlight = stopTask {
+            await inFlight.value
+            if announce { emitSequenceState("cancelled") }
+            return
+        }
+        // From here nothing the old run reports counts, whatever order it arrives in.
+        runGeneration += 1
+        activeRun = nil
+        let building = buildTask
+        buildTask = nil
+        let stop = Task {
+            // Let the build finish putting its operations on the queue before cancelling it.
+            await building?.value
+            await frameGraphBuilder.cancelAllOperationsAndWait()
+        }
+        stopTask = stop
+        await stop.value
+        stopTask = nil
+        if announce { emitSequenceState("cancelled") }
     }
 
     // Re-run the whole frame graph after a reference-horizon change. With hasStaticReferenceHorizon
     // set, the graph skips per-frame horizon detection and reads reference.tiff directly.
     func reprocessWithReferenceHorizon() async {
-        processingTask?.cancel()
-        processingTask = nil
+        await stopRun(announce: false)
         await startProcessing(startIndex: 0, endIndex: nil)
-    }
-
-    private func clearProcessingTask() {
-        processingTask = nil
     }
 
     // Reset per-frame work files so the frame graph recomputes them (mirrors the macOS
@@ -185,8 +230,7 @@ actor Session {
 
     // Force-reprocess a contiguous range: reset the frames, then run the graph over [start, end].
     func forceReprocess(startIndex: Int, endIndex: Int?) async {
-        processingTask?.cancel()
-        processingTask = nil
+        await stopRun(announce: false)
         let hi = endIndex ?? (frames.count - 1)
         let range = Array(max(0, startIndex)...min(frames.count - 1, hi))
         await resetFrames(indices: range, type: .everything)
@@ -197,8 +241,7 @@ actor Session {
     // frames in [min,max] are skipped by the ops' state check, so only the reset frames recompute.
     func reprocessFrames(indices: [Int], type: FrameReprocessingType) async {
         guard !indices.isEmpty else { return }
-        processingTask?.cancel()
-        processingTask = nil
+        await stopRun(announce: false)
         await resetFrames(indices: indices, type: type)
         await startProcessing(startIndex: indices.min()!, endIndex: indices.max()!)
     }

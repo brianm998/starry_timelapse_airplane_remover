@@ -653,8 +653,19 @@ class AppViewModel(
         _versionWarning.value = com.star.desktop.util.versionMismatchWarning(info.config.starVersion, engineVer)
         currentSequence?.close()
         val proc = ProcessingRepository(scope) { engine.client }
-        // Fire the post-processing render prompt when a prompted process-all run reaches "done".
-        scope.launch { proc.sequenceState.collect { if (it == "done") handleProcessingDone() } }
+        // Fire the post-processing render prompt when a prompted process-all run reaches "done"; a
+        // run the user stopped must not leave it armed for whichever run reaches "done" next.
+        scope.launch {
+            proc.sequenceState.collect {
+                when (it) {
+                    "done" -> handleProcessingDone()
+                    "cancelled" -> {
+                        awaitingProcessingPrompt = false
+                        autoRenderAfterProcessing = false
+                    }
+                }
+            }
+        }
         val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo)
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)

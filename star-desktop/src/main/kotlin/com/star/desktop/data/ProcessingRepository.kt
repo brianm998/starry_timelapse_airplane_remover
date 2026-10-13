@@ -53,6 +53,12 @@ class ProcessingRepository(
 
     private var subJob: Job? = null
 
+    /**
+     * Whether a run was started since the last [cancel]. The daemon's `cancelled` event for that
+     * stop can reach us after the user has already started the next run, and is not about that run.
+     */
+    private var startedSinceCancel = false
+
     private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, "engine not connected")
 
     /** Open the persistent progress subscription. Call once at session open, before [start]. */
@@ -72,6 +78,7 @@ class ProcessingRepository(
     suspend fun start(sessionId: String, startIndex: Int = 0, endIndex: Int = -1, force: Boolean = false) {
         _sequenceState.value = null
         _processing.value = true
+        startedSinceCancel = true
         try {
             c().startProcessing(sessionId, startIndex, endIndex, force)
         } catch (e: Throwable) {
@@ -80,9 +87,14 @@ class ProcessingRepository(
         }
     }
 
+    /**
+     * Stop the run. The daemon answers once what was running has stopped, which can take a while, so
+     * the UI goes idle at once rather than after the answer.
+     */
     suspend fun cancel(sessionId: String) {
-        runCatching { c().cancelProcessing(sessionId) }
+        startedSinceCancel = false
         _processing.value = false
+        runCatching { c().cancelProcessing(sessionId) }
     }
 
     /** Granular reprocess of selected frames; progress arrives over the live StreamProgress subscription. */
@@ -90,6 +102,7 @@ class ProcessingRepository(
         if (indices.isEmpty()) return
         _sequenceState.value = null
         _processing.value = true
+        startedSinceCancel = true
         try {
             c().reprocessFrames(sessionId, indices, type)
         } catch (e: Throwable) {
@@ -118,8 +131,11 @@ class ProcessingRepository(
                 _ioProgress.value = ev.ioProgress.let { Io(it.current, it.total, it.outputDir) }
             ProgressEvent.KindCase.SEQUENCE_STATE -> {
                 val s = ev.sequenceState.state
+                // The stop's own `cancelled`, arriving after the next run was started: it is not
+                // about that run.
+                if (s == "cancelled" && startedSinceCancel) return
                 _sequenceState.value = s
-                if (s == "done") _processing.value = false
+                if (s == "done" || s == "cancelled") _processing.value = false
             }
             ProgressEvent.KindCase.FRAME_EXISTING ->
                 Log.d("Processing") { "frame ${ev.frameExisting} already exists" }

@@ -399,6 +399,45 @@ class InteropIntegrationTest {
         }
     }
 
+    /**
+     * A5: Stop really stops. Processing.Cancel answers only once the graph has drained, the stream says
+     * `cancelled` and never the stopped run's `done`, and a run started afterwards completes normally.
+     */
+    @Test
+    fun cancelStopsProcessing() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] cancelStopsProcessing — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        withEngine { client ->
+            val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).build()
+            val info = client.openSequence(File(seq).absolutePath, cfg)
+
+            val states = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+            val sub = CoroutineScope(SupervisorJob()).launch {
+                runCatching {
+                    client.streamProgress(info.sessionId).collect { ev ->
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) states.trySend(ev.sequenceState.state)
+                    }
+                }
+            }
+            delay(400)
+            client.startProcessing(info.sessionId, 0, -1)
+            delay(1_000)
+            client.cancelProcessing(info.sessionId)
+            assertEquals("cancelled", withTimeoutOrNull(30_000) { states.receive() }, "no cancelled event after Cancel")
+            // The stopped run's late completion must be swallowed, not reported as done.
+            assertEquals(null, withTimeoutOrNull(5_000) { states.receive() }, "a stopped run still reported a state")
+
+            client.startProcessing(info.sessionId, 0, -1)
+            assertEquals("done", withTimeoutOrNull(1_200_000) { states.receive() }, "the run after a stop did not finish")
+            sub.cancel()
+            client.closeSession(info.sessionId)
+        }
+    }
+
     /** Open → process(all) → render the sequence; return SHA-256 of each rendered output frame by name. */
     private fun processAndRenderHashes(seqDir: String): Map<String, String> = runBlocking {
         val scope = CoroutineScope(SupervisorJob())
