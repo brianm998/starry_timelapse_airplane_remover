@@ -438,6 +438,55 @@ class InteropIntegrationTest {
         }
     }
 
+    /**
+     * A4: `end_index` 0 is frame 0, not "to the end". Start(0, 0) completes frame 0 and leaves the
+     * last frame unfinished; Start(0, -1) is the whole sequence.
+     */
+    @Test
+    fun singleFrameAtIndexZeroProcessesOnlyThatFrame() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] singleFrameAtIndexZeroProcessesOnlyThatFrame — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        withEngine { client ->
+            val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).build()
+            val info = client.openSequence(File(seq).absolutePath, cfg)
+            assertTrue(info.frameCount > 2, "fixture needs at least three frames")
+
+            val states = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+            val sub = CoroutineScope(SupervisorJob()).launch {
+                runCatching {
+                    client.streamProgress(info.sessionId).collect { ev ->
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) states.trySend(ev.sequenceState.state)
+                    }
+                }
+            }
+            delay(400)
+            client.startProcessing(info.sessionId, 0, 0)
+            assertEquals("done", withTimeoutOrNull(1_200_000) { states.receive() }, "single-frame run did not finish")
+            assertEquals(
+                com.star.proto.FrameProcessingState.FPS_COMPLETE, client.getFrame(info.sessionId, 0).state,
+                "frame 0 was not processed",
+            )
+            assertTrue(
+                client.getFrame(info.sessionId, info.frameCount - 1).state != com.star.proto.FrameProcessingState.FPS_COMPLETE,
+                "Start(0, 0) processed the last frame: end_index 0 was read as 'to the end'",
+            )
+
+            // And the whole sequence is still reachable with -1.
+            client.startProcessing(info.sessionId, 0, -1)
+            assertEquals("done", withTimeoutOrNull(1_200_000) { states.receive() }, "full run did not finish")
+            assertEquals(
+                com.star.proto.FrameProcessingState.FPS_COMPLETE, client.getFrame(info.sessionId, info.frameCount - 1).state,
+                "Start(0, -1) did not reach the last frame",
+            )
+            sub.cancel()
+            client.closeSession(info.sessionId)
+        }
+    }
+
     /** Open → process(all) → render the sequence; return SHA-256 of each rendered output frame by name. */
     private fun processAndRenderHashes(seqDir: String): Map<String, String> = runBlocking {
         val scope = CoroutineScope(SupervisorJob())

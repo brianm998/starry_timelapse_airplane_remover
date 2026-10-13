@@ -54,7 +54,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
 
         Menu(localized("ui.process"), mnemonic = 'P') {
             Item(localized("ui.process_all_frames_2"), enabled = hasSession) { svm?.processAll() }
-            Item(localized("ui.process_remaining"), enabled = hasSession) { svm?.processRemaining() }
+            Item(localized("ui.process_frames_from_here_to_the_end"), enabled = hasSession) { svm?.processRemaining() }
             Item(localized("ui.process_current_frame"), enabled = hasSession) { svm?.processCurrent() }
             Separator()
             Item(localized("ui.cancel_processing"), enabled = hasSession) { svm?.cancelProcessing() }

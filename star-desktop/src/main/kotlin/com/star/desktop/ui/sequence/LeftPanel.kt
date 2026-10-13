@@ -65,7 +65,7 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll
         ) { Text(localized("ui.process_all_frames_2")) }
 
         OutlinedButton(onClick = { vm.processRemaining() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(localized("ui.process_remaining"))
+            Text(localized("ui.process_frames_from_here_to_the_end"))
         }
         OutlinedButton(onClick = { vm.processCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(localized("ui.process_current_frame"))

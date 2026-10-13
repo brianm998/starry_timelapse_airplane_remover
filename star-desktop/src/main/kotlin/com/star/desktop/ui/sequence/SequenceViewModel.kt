@@ -282,11 +282,18 @@ class SequenceViewModel(
     }
 
     fun processAll() = startProcessingRun { processing.start(sessionId, 0, -1) }
-    fun processRemaining() = startProcessingRun { processing.start(sessionId, 0, -1) } // daemon resumes completed frames
-    fun processCurrent() = startProcessingRun { processing.start(sessionId, _currentIndex.value, _currentIndex.value) }
-    /** Reprocess the current frame from scratch (Processing.Start force=true). */
+
+    /** From the current frame to the end (macOS `ProcessRemainingFramesButton`); finished work is reused. */
+    fun processRemaining() = startProcessingRun { processing.start(sessionId, _currentIndex.value, -1) }
+
+    /** Process the current frame, keeping whatever is already done (macOS `.none` reprocessing). */
+    fun processCurrent() = startProcessingRun {
+        processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_NONE)
+    }
+
+    /** Reprocess the current frame from scratch (macOS `ReProcessCurrentFrameButton`). */
     fun reprocessCurrent() = startProcessingRun {
-        processing.start(sessionId, _currentIndex.value, _currentIndex.value, force = true)
+        processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_EVERYTHING)
     }
 
     /** Re-arm the processing modal (macOS `startProcessingModal`) before launching a new run. */

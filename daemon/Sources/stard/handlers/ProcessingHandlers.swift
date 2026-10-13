@@ -5,6 +5,13 @@ import SwiftProtobuf
 import logging
 
 enum ProcessingHandlers {
+    /// The frame range a `StartProcessingRequest` asks for.  A negative `end` (the clients send
+    /// -1) means "to the end of the sequence", which is `nil`.  0 is the first frame: a request
+    /// for just frame 0 is start=end=0, and must not turn into the whole sequence.
+    static func frameRange(start: Int32, end: Int32) -> (start: Int, end: Int?) {
+        (start > 0 ? Int(start) : 0, end >= 0 ? Int(end) : nil)
+    }
+
     static func start(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_StartProcessingRequest(serializedBytes: payload)
@@ -12,8 +19,7 @@ enum ProcessingHandlers {
                 await transport.sendError(id: id, message: "session not found", code: 404)
                 return
             }
-            let startIdx = req.startIndex > 0 ? Int(req.startIndex) : 0
-            let endIdx: Int? = req.endIndex > 0 ? Int(req.endIndex) : nil
+            let (startIdx, endIdx) = frameRange(start: req.startIndex, end: req.endIndex)
             if req.force {
                 await session.forceReprocess(startIndex: startIdx, endIndex: endIdx)
             } else {

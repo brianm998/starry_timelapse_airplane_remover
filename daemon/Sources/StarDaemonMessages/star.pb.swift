@@ -2099,6 +2099,8 @@ public struct Star_V1_ApplyOutlierAreaToolResponse: Sendable {
   fileprivate var _preview: Star_V1_ImageRef? = nil
 }
 
+/// start_index/end_index are inclusive frame indices.  A negative end_index (clients send -1) means
+/// "to the end of the sequence"; end_index 0 is the first frame, so start=end=0 processes frame 0 only.
 public struct Star_V1_StartProcessingRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
