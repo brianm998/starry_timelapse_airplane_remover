@@ -1841,7 +1841,8 @@ struct ProcessingSettingsView: View {
                 }
            }
         }
-          .disabled(autoPreservationMode == .no)
+          // Selective always uses outliers, whatever auto-preservation was left at
+          .disabled(cleanMethod == .automatic && autoPreservationMode == .no)
     }
 
     private func applySettings() {
