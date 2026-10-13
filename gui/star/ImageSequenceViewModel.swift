@@ -67,6 +67,11 @@ public enum ToolType: String, Equatable, CaseIterable {
         }
     }
 
+    /// Hover text for this tool, shown on its row in the right panel.
+    var helpText: String {
+        localized("tool.help.\(rawValue)")
+    }
+
     var displayName: String {
         switch self {
         case .remove:

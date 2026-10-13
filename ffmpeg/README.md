@@ -9,6 +9,18 @@ They are **built, not committed and not downloaded**. The one that used to be co
 that does not have Rosetta installed (`Bad CPU type in executable`, which shows up in the app as a
 video that will not load), and gave Windows and Linux nothing at all.
 
+## Two build scripts
+
+| Script | Builds | Used by |
+|---|---|---|
+| `build_ci.sh` | FFmpeg 7.1.1, GPL, x264/x265/libvpx/lame/opus; macOS universal (VideoToolbox), Linux and Windows x86_64 | **the installers**: `.github/workflows/ffmpeg.yml`, reused by `cli.yml` and `kotlin-client.yml`. It has been through CI on all three platforms |
+| `build.sh` (with `lib/`, `versions.env`, `smoke_test.sh`) | FFmpeg 9.0.2 with the GPU encoders compiled in (NVENC/AMF/D3D/Media Foundation/Vulkan; the rest of this file), plus Linux arm64 | local builds (`./ffmpeg/build.sh --install`) and `.github/workflows/ffmpeg-gpu.yml`, which validates the recipe but ships nothing |
+
+The rest of this file describes `build.sh`. Its Linux and Windows recipes have not yet run in CI; once
+`ffmpeg-gpu.yml` is green on all three, `cli.yml` and `kotlin-client.yml` can switch to its artifacts
+(`ffmpeg-macos-universal`, `ffmpeg-linux-x64`, `ffmpeg-windows-x64`) and `build_ci.sh` can go. Either way
+Star finds the runtime's encoders by asking the binary (`FFmpegCapabilities`), so the app works with both.
+
 ## Where it is used
 
 | Product | Where the tools live | Needs them? |

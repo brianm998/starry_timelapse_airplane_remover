@@ -1,6 +1,7 @@
 import XCTest
 import StarCppBridge
 @testable import StarCore
+import StarCppBridge
 
 /// Tests for `useGPUForMerge`, which replaced the plain `useGPU` name (renamed so it could
 /// not be misread as a single GPU-for-everything switch — `useGPUForSIFT`/`useGPUForAKAZE`

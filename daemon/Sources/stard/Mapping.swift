@@ -250,6 +250,8 @@ enum Mapping {
         // whenever the daemon happened to start.
         out.gpuHardwareAvailable = Config.isGPUHardwareAvailable
         out.resourceProfile = c.resourceProfile.rawValue
+        out.useGpuForSift = c.useGPUForSIFT
+        out.useGpuForAkaze = c.useGPUForAKAZE
         // Not an expert setting — recorded state.  Always sent, so a client that re-opens a
         // session can see it left a hand-painted horizon selection unfinished.
         out.startupHorizonFrameIndices = c.startupHorizonFrameIndices.map { Int32($0) }
@@ -316,6 +318,8 @@ enum Mapping {
         if p.hasResourceProfile, let profile = ResourceProfile(rawValue: p.resourceProfile) {
             c.resourceProfile = profile
         }
+        if p.hasUseGpuForSift { c.useGPUForSIFT = p.useGpuForSift }
+        if p.hasUseGpuForAkaze { c.useGPUForAKAZE = p.useGpuForAkaze }
         // gpu_hardware_available is read-only (see protoConfig) and deliberately not
         // applied here — it describes hardware, not a setting a client can choose.
         // The record of an unfinished hand-painted horizon selection, applied as a pair and

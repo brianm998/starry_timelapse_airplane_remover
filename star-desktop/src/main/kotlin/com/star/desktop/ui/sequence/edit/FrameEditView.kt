@@ -29,13 +29,22 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
+import androidx.compose.ui.draw.clipToBounds
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+/** Double-tap-to-zoom target level (macOS's is derived from view geometry; a fixed level is close enough here). */
+private const val DOUBLE_TAP_ZOOM = 3f
+
 /**
  * Edit-mode center view (macOS `FrameEditView` + `OutlierGroupView`): the frame image with
- * scroll-to-zoom / drag-to-pan, the outlier overlay, and click hit-testing — all driven by one
- * [FrameTransform] so they stay aligned at every zoom/pan.
+ * scroll-to-zoom / drag-to-pan, double-click-to-zoom, the outlier overlay, and click hit-testing —
+ * all driven by one [FrameTransform] so they stay aligned at every zoom/pan.
+ *
+ * Pinch (macOS `ZoomableModifier`'s `MagnificationGesture`): Compose Desktop has no multi-touch
+ * trackpad gesture API (it targets mouse + single-pointer input), so there is no dedicated pinch
+ * handler here — the scroll-to-zoom handler below already responds to a trackpad's two-finger
+ * scroll the same as a mouse wheel, which is the closest equivalent this platform offers.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -45,7 +54,11 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     LaunchedEffect(current) { fvm.load() }
 
     val bmp by vm.currentPreview.collectAsState()
-    val tool by vm.tool.collectAsState()
+    val selectedTool by vm.tool.collectAsState()
+    val frameInfo by fvm.info.collectAsState()
+    // The tools do nothing on a frame whose clean method doesn't review outliers.
+    val tool = if ((frameInfo?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE) ==
+        com.star.proto.CleanMethod.CLEAN_AUTOMATIC) com.star.desktop.domain.ToolType.NONE else selectedTool
     val groups by fvm.groups.collectAsState()
     val decisions by fvm.decisions.collectAsState()
     val selected by fvm.selected.collectAsState()
@@ -71,6 +84,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         modifier
             .fillMaxSize()
             .background(StarColors.appBackground)
+            .clipToBounds()
             .pointerHoverIcon(cursorIcon, overrideDescendants = true)
             .onSizeChanged { canvasSize = it.toSize() }
             .onPointerEvent(PointerEventType.Scroll) { ev ->
@@ -116,19 +130,27 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 }
             }
             .pointerInput(tool, labelMap, groups) {
-                detectTapGestures { pos ->
-                    val map = labelMap ?: return@detectTapGestures
-                    val img = transform.canvasToImage(pos, canvasSize)
-                    val gid = map.idAt(img.x.roundToInt(), img.y.roundToInt())
-                    if (gid > 0) {
-                        if (tool == com.star.desktop.domain.ToolType.MULTI) {
-                            val willRemove = com.star.desktop.domain.OutlierDecisions.willRemove(fvm.decisionFor(gid)) == true
-                            vm.openMultiChoice(current, gid, willRemove)
-                        } else {
-                            fvm.applyTool(gid, tool)
+                detectTapGestures(
+                    onTap = { pos ->
+                        val map = labelMap ?: return@detectTapGestures
+                        val img = transform.canvasToImage(pos, canvasSize)
+                        val gid = map.idAt(img.x.roundToInt(), img.y.roundToInt())
+                        if (gid > 0) {
+                            if (tool == com.star.desktop.domain.ToolType.MULTI) {
+                                val willRemove = com.star.desktop.domain.OutlierDecisions.willRemove(fvm.decisionFor(gid)) == true
+                                vm.openMultiChoice(current, gid, willRemove)
+                            } else {
+                                fvm.applyTool(gid, tool)
+                            }
                         }
-                    }
-                }
+                    },
+                    // Double-tap zoom (macOS `ZoomableModifier.doubleTapGesture`): toggle between
+                    // fit-to-canvas and a fixed magnified level, keeping the tapped point stationary.
+                    onDoubleTap = { pos ->
+                        val target = if (transform.userZoom > 1f) 1f else DOUBLE_TAP_ZOOM
+                        transform.zoomBy(target / transform.userZoom, pos, canvasSize)
+                    },
+                )
             }
             // Hover tracking drives arrow/line color + visibility (macOS `arrowSelected`).
             .onPointerEvent(PointerEventType.Move) { ev ->

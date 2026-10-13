@@ -55,35 +55,38 @@ import com.star.desktop.i18n.localized
 fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
     val recent by vm.recentFiles.collectAsState()
 
-    Box(modifier.fillMaxSize().background(StarColors.appBackground), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier.widthIn(max = 560.dp).padding(40.dp),
-        ) {
-            Text("Star", color = StarColors.textPrimary, fontSize = 40.sp, fontWeight = FontWeight.Light)
-            Text(localized("ui.nighttime_timelapse_airplane_remover"), color = StarColors.textSecondary, fontSize = 13.sp)
-            OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.about_star")) }
+    Box(modifier.fillMaxSize().background(StarColors.appBackground)) {
+        IntroVideoBackground()
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                modifier = Modifier.widthIn(max = 560.dp).padding(40.dp),
+            ) {
+                Text("Star", color = StarColors.textPrimary, fontSize = 40.sp, fontWeight = FontWeight.Light)
+                Text(localized("ui.nighttime_timelapse_airplane_remover"), color = StarColors.textSecondary, fontSize = 13.sp)
+                OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.about_star")) }
 
-            DropZone(vm = vm, onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
+                DropZone(vm = vm, onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = { open(vm, OpenKind.SEQUENCE) },
-                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text(localized("ui.open_image_sequence")) }
-                OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { Text(localized("ui.open_video")) }
-                OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { Text(localized("ui.resume")) }
-            }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = { open(vm, OpenKind.SEQUENCE) },
+                        colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    ) { Text(localized("ui.open_image_sequence")) }
+                    OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { Text(localized("ui.open_video")) }
+                    OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { Text(localized("ui.resume")) }
+                }
 
-            if (recent.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Text(localized("ui.recent"), color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
-                RecentFilesList(
-                    recent = recent,
-                    onOpen = { path -> openPath(vm, path) },
-                    onRemove = vm::removeRecent,
-                )
+                if (recent.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(localized("ui.recent"), color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                    RecentFilesList(
+                        recent = recent,
+                        onOpen = { path -> openPath(vm, path) },
+                        onRemove = vm::removeRecent,
+                    )
+                }
             }
         }
     }

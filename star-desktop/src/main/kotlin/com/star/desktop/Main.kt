@@ -20,8 +20,18 @@ import com.star.desktop.i18n.localized
 /**
  * Compose application entry point. The headless engine smoke harness lives in
  * `com.star.desktop.tools.SmokeHarness` (run via `./gradlew smoke`).
+ *
+ * `--self-test` runs [com.star.desktop.tools.EngineSelfTest] instead of the UI: the installed
+ * launcher, its JVM options and its bundled engine, checked end to end with no window.
  */
-fun main(args: Array<String>) = application {
+fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--self-test") {
+        kotlin.system.exitProcess(com.star.desktop.tools.EngineSelfTest.run(args.drop(1)))
+    }
+    runApp(args)
+}
+
+private fun runApp(args: Array<String>) = application {
     // App-lifetime scope for the root view model (engine, repositories, progress streams).
     val appScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     // Dev convenience: `./gradlew run --args="/path/to/seq"` opens it on launch.

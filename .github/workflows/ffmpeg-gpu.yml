@@ -1,0 +1,225 @@
+name: FFmpeg (GPU build)
+
+# The GPU-enabled ffmpeg build: ffmpeg/build.sh (FFmpeg 9, static GPL, x264/x265/SVT-AV1/dav1d/libvpx, with
+# VideoToolbox on macOS, NVENC/AMF/D3D/Media Foundation/Vulkan on Windows, NVENC/Vulkan on Linux),
+# smoke-tested on each platform.  See ffmpeg/README.md for what is in them and why.
+#
+# This is NOT what ships.  The installers get their ffmpeg from ffmpeg.yml (ffmpeg/build_ci.sh), which
+# has been through CI on every platform; this build's Linux and Windows recipes have not yet, so this
+# workflow only validates the recipe, and runs when it changes.  Switching a release over to it means
+# pointing cli.yml and kotlin-client.yml at this workflow's artifacts (ffmpeg-macos-universal,
+# ffmpeg-linux-x64, ffmpeg-windows-x64) after a green run here.
+#
+# A cold build takes a while (x265, SVT-AV1 and FFmpeg itself on every platform).  Results are
+# cached on a hash of the recipe, the same pattern as OpenCV in cli.yml.
+
+on:
+  workflow_call:
+    inputs:
+      platforms:
+        description: 'Which to build: any of "macos linux windows", space separated'
+        type: string
+        default: 'macos linux windows'
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'ffmpeg/build.sh'
+      - 'ffmpeg/lib/**'
+      - 'ffmpeg/versions.env'
+      - 'ffmpeg/smoke_test.sh'
+      - 'ffmpeg/check_extra_encoders.sh'
+      - 'ffmpeg/muxer_codecs.c'
+      - 'StarCore/ffmpeg_extra_encoders.txt'
+      - '.github/workflows/ffmpeg-gpu.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'ffmpeg/build.sh'
+      - 'ffmpeg/lib/**'
+      - 'ffmpeg/versions.env'
+      - 'ffmpeg/smoke_test.sh'
+      - 'ffmpeg/check_extra_encoders.sh'
+      - 'ffmpeg/muxer_codecs.c'
+      - 'StarCore/ffmpeg_extra_encoders.txt'
+      - '.github/workflows/ffmpeg-gpu.yml'
+
+concurrency:
+  group: ffmpeg-${{ github.workflow }}-${{ github.ref }}-${{ inputs.platforms }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── macOS: one universal binary, both slices built on the arm64 runner ─────────
+  macos:
+    name: macOS universal (macos-14)
+    if: ${{ !inputs.platforms || contains(inputs.platforms, 'macos') }}
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache the built binaries
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg/dist/macos-universal
+          key: ffmpeg-macos-universal-${{ hashFiles('ffmpeg/versions.env', 'ffmpeg/build.sh', 'ffmpeg/lib/**') }}
+
+      - name: Install build tools
+        if: steps.cache.outputs.cache-hit != 'true'
+        # nasm assembles the x86 SIMD in the x86_64 slice; meson and ninja build dav1d.
+        run: brew install nasm pkgconf meson ninja cmake
+
+      - name: Build (arm64 + x86_64, joined)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./ffmpeg/build.sh macos-universal
+
+      # The arm64 slice runs here.  VideoToolbox in a CI virtual machine may have no media
+      # engine behind it, so the hardware checks report rather than fail (no --hw).
+      - name: Smoke test
+        run: ./ffmpeg/smoke_test.sh --target macos-universal ffmpeg/dist/macos-universal
+
+      # The x86_64 slice, under Rosetta, if the runner has it.  Not fatal: a runner without
+      # Rosetta says nothing about the binary.
+      - name: Smoke test the x86_64 slice under Rosetta
+        continue-on-error: true
+        run: |
+          mkdir x64
+          for tool in ffmpeg ffprobe; do
+            lipo -thin x86_64 "ffmpeg/dist/macos-universal/$tool" -output "x64/$tool"
+            codesign --force --sign - "x64/$tool"
+          done
+          arch -x86_64 x64/ffmpeg -hide_banner -version | head -n 1
+          arch -x86_64 ./ffmpeg/smoke_test.sh --target macos-x64 x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-macos-universal
+          path: ffmpeg/dist/macos-universal
+          if-no-files-found: error
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-macos-logs
+          path: ffmpeg/.work/logs
+          if-no-files-found: ignore
+
+  # ─── Linux ──────────────────────────────────────────────────────────────────────
+  # x64 on every run.  arm64 only when asked for by hand: it needs the arm64 runner, which a
+  # private repository does not get for free.
+  linux:
+    name: Linux ${{ matrix.target }}
+    if: ${{ !inputs.platforms || contains(inputs.platforms, 'linux') }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-24.04
+            automatic: true
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+            automatic: false
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ matrix.automatic || github.event_name == 'workflow_dispatch' }}
+
+      - name: Cache the built binaries
+        id: cache
+        if: ${{ matrix.automatic || github.event_name == 'workflow_dispatch' }}
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg/dist/${{ matrix.target }}
+          key: ffmpeg-${{ matrix.target }}-${{ hashFiles('ffmpeg/versions.env', 'ffmpeg/build.sh', 'ffmpeg/lib/**') }}
+
+      - name: Install build tools
+        if: ${{ (matrix.automatic || github.event_name == 'workflow_dispatch') && steps.cache.outputs.cache-hit != 'true' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential nasm pkg-config cmake meson ninja-build git curl xz-utils ca-certificates
+
+      - name: Build
+        if: ${{ (matrix.automatic || github.event_name == 'workflow_dispatch') && steps.cache.outputs.cache-hit != 'true' }}
+        run: ./ffmpeg/build.sh ${{ matrix.target }}
+
+      # No GPU here: NVENC and the other hardware encoders are checked to be built in, and
+      # their start-up reports instead of failing.
+      - name: Smoke test
+        if: ${{ matrix.automatic || github.event_name == 'workflow_dispatch' }}
+        run: ./ffmpeg/smoke_test.sh --target ${{ matrix.target }} ffmpeg/dist/${{ matrix.target }}
+
+      # The supplement StarCore's tables carry for NVENC must be something the real encoders accept.
+      - name: Check the NVENC entries in StarCore's tables against this build
+        if: ${{ (matrix.automatic || github.event_name == 'workflow_dispatch') && matrix.target == 'linux-x64' }}
+        run: ./ffmpeg/check_extra_encoders.sh ffmpeg/dist/${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ matrix.automatic || github.event_name == 'workflow_dispatch' }}
+        with:
+          name: ffmpeg-${{ matrix.target }}
+          path: ffmpeg/dist/${{ matrix.target }}
+          if-no-files-found: error
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-${{ matrix.target }}-logs
+          path: ffmpeg/.work/logs
+          if-no-files-found: ignore
+
+  # ─── Windows: MSYS2 MINGW64, gcc, fully static ──────────────────────────────────
+  windows:
+    name: Windows windows-x64
+    if: ${{ !inputs.platforms || contains(inputs.platforms, 'windows') }}
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache the built binaries
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg/dist/windows-x64
+          key: ffmpeg-windows-x64-${{ hashFiles('ffmpeg/versions.env', 'ffmpeg/build.sh', 'ffmpeg/lib/**') }}
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          # mingw-w64 supplies the Direct3D 11/12, DXVA2 and Media Foundation headers.
+          install: >-
+            base-devel git curl xz diffutils file
+            mingw-w64-x86_64-toolchain mingw-w64-x86_64-nasm mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja mingw-w64-x86_64-meson mingw-w64-x86_64-pkgconf
+
+      - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./ffmpeg/build.sh windows-x64
+
+      - name: Smoke test
+        run: ./ffmpeg/smoke_test.sh --target windows-x64 ffmpeg/dist/windows-x64
+
+      - name: Check the NVENC entries in StarCore's tables against this build
+        run: ./ffmpeg/check_extra_encoders.sh ffmpeg/dist/windows-x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-x64
+          path: ffmpeg/dist/windows-x64
+          if-no-files-found: error
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-logs
+          path: ffmpeg/.work/logs
+          if-no-files-found: ignore

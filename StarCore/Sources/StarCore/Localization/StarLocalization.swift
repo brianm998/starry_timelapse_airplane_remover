@@ -252,23 +252,13 @@ public final class StarLocalization: @unchecked Sendable {
         }
     }
 
-    /// `Bundle.module.url(forResource:withExtension:subdirectory:)` is the documented way in,
-    /// but a `.copy`'d directory does not always register its contents with the bundle's
-    /// resource index on every platform, so fall back to walking `resourceURL` directly.
+    /// Found through ``StarResources`` rather than `Bundle.module` directly: the generated
+    /// accessor `fatalError`s when the bundle is missing, which is how a Windows install shipped
+    /// without its resources lost the engine on the first localized string.
     private static func resourceURL(named name: String, extension ext: String) -> URL? {
-        if let url = Bundle.module.url(forResource: name,
-                                       withExtension: ext,
-                                       subdirectory: localizationsDirectoryName)
-        {
-            return url
-        }
-        if let root = Bundle.module.resourceURL {
-            let url = root
-              .appendingPathComponent(localizationsDirectoryName)
-              .appendingPathComponent("\(name).\(ext)")
-            if FileManager.default.fileExists(atPath: url.path) { return url }
-        }
-        return nil
+        StarResources.url(forResource: name,
+                          withExtension: ext,
+                          subdirectory: localizationsDirectoryName)
     }
 
     static let localizationsDirectoryName = "Localizations"

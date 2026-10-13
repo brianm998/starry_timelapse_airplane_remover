@@ -68,8 +68,10 @@ class EngineState(
     suspend fun start(): Boolean {
         if (_status.value is EngineStatus.Connecting || _status.value is EngineStatus.Connected) return true
         _status.value = EngineStatus.Connecting
+        var started: DaemonProcess? = null
         return try {
             val proc = DaemonProcess(binaryPath, scratchDir)
+            started = proc
             proc.start(scope)
             // input = daemon stdout (we read), output = daemon stdin (we write).
             // Dedicated connection scope so its IO coroutines aren't tied to a UI scope's lifecycle.
@@ -92,31 +94,42 @@ class EngineState(
                 val cause = conn.closed.await()
                 client = null
 
-                // Prefer what the process itself says over what the broken pipe says. A
-                // connection that closes because the daemon was killed reports something
-                // generic like "connection closed"; the exit status says *why*, and 137 in
-                // particular means the system killed it for memory. Give the process a moment
-                // to be reaped — the pipe closes fractionally before the exit status lands.
-                var death = proc.deathDescription()
-                if (death == null) {
-                    withTimeoutOrNull(2_000) {
-                        while (death == null) {
-                            delay(50)
-                            death = proc.deathDescription()
-                        }
-                    }
-                }
-
                 _status.value = EngineStatus.Failed(
-                    death ?: cause?.message ?: "the engine stopped unexpectedly",
+                    awaitDeath(proc) ?: cause?.message ?: "the engine stopped unexpectedly",
                 )
             }
             true
         } catch (e: Throwable) {
+            // A daemon that dies before answering Hello fails the call with "connection closed";
+            // what the process says about its own death is the part worth showing. This is the
+            // path every startup crash takes — the Windows engine that could not find its
+            // resources was reported as nothing more than "connection closed".
+            val death = started?.let { awaitDeath(it) }
+            started?.destroy() // not yet in `process`, so cleanup() would leave a live one running
             cleanup()
-            _status.value = EngineStatus.Failed(e.message ?: "failed to start engine")
+            _status.value = EngineStatus.Failed(death ?: e.message ?: "failed to start engine")
             false
         }
+    }
+
+    /**
+     * Prefer what the process itself says over what the broken pipe says. A connection that
+     * closes because the daemon was killed reports something generic like "connection closed";
+     * the exit status says *why*, and 137 in particular means the system killed it for memory.
+     * Gives the process a moment to be reaped — the pipe closes fractionally before the exit
+     * status lands. Null if it is (still) alive.
+     */
+    private suspend fun awaitDeath(proc: DaemonProcess): String? {
+        var death = proc.deathDescription()
+        if (death == null) {
+            withTimeoutOrNull(2_000) {
+                while (death == null) {
+                    delay(50)
+                    death = proc.deathDescription()
+                }
+            }
+        }
+        return death
     }
 
     /** Tear down and bring the engine back up (the app re-opens its session afterward). */

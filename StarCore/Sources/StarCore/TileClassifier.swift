@@ -69,7 +69,7 @@ public final class TileClassifier: Sendable {
     /// - Parameter configuration: Passed through to `MLModel`; use this to pin
     ///   compute units (e.g. `.cpuOnly` for background threads).
     public init(configuration: MLModelConfiguration = MLModelConfiguration()) throws {
-        guard let url = Bundle.module.url(forResource: "tile_classifier",
+        guard let url = StarResources.url(forResource: "tile_classifier",
                                           withExtension: "mlmodelc") else {
             throw TileClassifierError.modelNotFound
         }

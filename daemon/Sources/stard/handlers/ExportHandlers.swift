@@ -94,8 +94,10 @@ enum ExportHandlers {
                 for enc in codec.availableEncoders {
                     var ec = Star_V1_EncoderCaps()
                     ec.encoder       = enc.rawValue
-                    ec.pixelFormats  = enc.usablePixelFormats.map { $0.rawValue }
-                    ec.muxers        = enc.supportedMuxers.map { $0.rawValue }
+                    ec.pixelFormats  = VideoExport.prioritized(
+                        enc.usablePixelFormats.map { $0.rawValue }, preferred: VideoExport.preferredPixelFormats)
+                    ec.muxers        = VideoExport.prioritized(
+                        enc.supportedMuxers.map { $0.rawValue }, preferred: VideoExport.preferredMuxers)
                     cc.encoders.append(ec)
                 }
                 caps.codecs.append(cc)
@@ -131,11 +133,11 @@ enum ExportHandlers {
     }
 
     // Where an export writes its video: the request's path, or if it left that empty (the
-    // desktop's dialog does) the one the protocol promises, `<basename>.<muxer>`.  That is
-    // beside the folder of rendered frames, which is where the Mac app's dialog puts it too.
+    // desktop's dialog does) the one the protocol promises, `<basename>.<container's extension>`.
+    // That is beside the folder of rendered frames, which is where the Mac app's dialog puts it too.
     static func outputVideoPath(requested: String, config: Config, muxer: FFmpegMuxer) -> String {
         guard requested.isEmpty else { return requested }
-        return "\(config.outputPath)/\(config.basename).\(muxer.defaultFileExtension ?? muxer.rawValue)"
+        return VideoExport.defaultOutputPath(config: config, muxer: muxer)
     }
 
     // The event that tells a client where an export's video went.  The client may not have named
@@ -149,9 +151,14 @@ enum ExportHandlers {
         return event
     }
 
-    // Assemble the rendered frames back into a video using ffmpeg.
+    // Assemble the processed output frames back into a video using ffmpeg.
     // Streams ProgressEvent items (io_progress, sequence_state) while encoding, and when the video
     // is written, a video_exported with where it went.
+    //
+    // The frames are the ones processing has already written to the output sequence directory
+    // (MergeOp finishes each frame as the graph runs), so Export.RenderSequence is not needed
+    // first; it only re-renders frames after their outliers were edited.  See VideoExport for
+    // how those files are found and handed to ffmpeg.
     static func video(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_ExportVideoRequest(serializedBytes: payload)
@@ -162,63 +169,58 @@ enum ExportHandlers {
             let config = await session.configManager.config()
             let opened = await session.videoInfo
             let vi = videoInfo(for: req.settings, opened: opened, config: config)
+            guard vi.frameRate.rawValue > 0 else {
+                await transport.sendError(id: id, message: "invalid frame rate \(vi.frameRate.rawValue)")
+                return
+            }
 
             // The file to write: the request's, or the protocol's default when it names none.
             let videoPath = outputVideoPath(requested: req.outputVideoPath, config: config, muxer: vi.muxer)
 
             let outputPath = config.outputPath
 
-            // A render leaves its frames in the config's output sequence folder, which is a
-            // folder of its own inside outputPath, named after the sequence.
-            let framesPath = config.outputSequenceDirname
-
+            // The frames processing wrote, in frame order.
             let filenames = await session.imageSequence.filenames
-
-            // The frames to encode: for each of the sequence's frames, in its order, the image the
-            // render left under the name that frame had.  Those are not the names a video's frames
-            // get, so ffmpeg is given them as a list (see FrameList).
-            let frames = FrameList.renderedFrames(of: filenames, in: framesPath)
-            guard !frames.isEmpty else {
+            let frameDir  = config.outputSequenceDirname
+            let found     = VideoExport.finalFrames(outputDir: frameDir, sourceFilenames: filenames)
+            guard !found.files.isEmpty else {
                 await transport.sendError(
                     id: id,
-                    message: "nothing to export: none of the \(filenames.count) frames has been rendered to \(framesPath)")
+                    message: "nothing to export: no processed frames found in \(frameDir); process the sequence first")
                 return
             }
-            if frames.count < filenames.count {
-                Log.w("Export.Video: only \(frames.count) of \(filenames.count) frames are rendered to \(framesPath); exporting those")
+            if !found.missing.isEmpty {
+                // A partly processed sequence still renders what it has, as the macOS gui's
+                // render does; say so rather than leave a video that silently skips frames.
+                let sample = found.missing.prefix(5).joined(separator: ", ")
+                Log.w("Export.Video: \(found.missing.count) of \(filenames.count) frames have no output in \(frameDir) and are left out (\(sample)\(found.missing.count > 5 ? ", ..." : ""))")
             }
-
-            // The list is a file for as long as ffmpeg takes to read it.
-            let listPath = FileManager.default.temporaryDirectory
-              .appendingPathComponent("star-export-frames-\(UUID().uuidString).ffconcat").path
-            try FrameList.script(for: frames).write(toFile: listPath, atomically: true, encoding: .utf8)
-            defer { try? FileManager.default.removeItem(atPath: listPath) }
+            let totalFrames = found.files.count
 
             // Derive the decoded-frames directory from the image sequence filenames
             // so we can find the sound file decodeVideo kept beside them, if it did.
-            let decodedDir   = (filenames.first as NSString?)?.deletingLastPathComponent ?? outputPath
+            let decodedDir = (filenames.first as NSString?)?.deletingLastPathComponent ?? outputPath
 
             // What the output container will take of that sound: as it is, AAC, Opus, or nothing.
-            // The muxer is chosen from the output file's extension, as the ffmpeg run below does.
+            // The container is the one the arguments below name with `-f`.
             let audio = vi.hasAudio  // StarCore.VideoInfo.hasAudio
               ? AudioSidecar.plan(in: decodedDir,
-                                  formatArguments: [],
-                                  outputExtension: URL(fileURLWithPath: videoPath).pathExtension)
+                                  formatArguments: ["-f", vi.muxer.rawValue],
+                                  outputExtension: "")
               : AudioPlan.none("the video has none")
 
-            // Determine the encoder name: prefer explicit encoder, then codec's rawValue.
-            let encoderName  = vi.encoder?.rawValue ?? vi.codec.rawValue
+            // The list is a file for as long as ffmpeg takes to read it.
+            let listPath = "\(await session.scratchSessionDir)/export-\(UUID().uuidString).ffconcat"
+            try VideoExport.concatList(files: found.files, frameRate: vi.frameRate)
+                .write(toFile: listPath, atomically: true, encoding: .utf8)
+            defer { try? FileManager.default.removeItem(atPath: listPath) }
 
-            var ffmpegArgs = FrameList.inputArguments(listPath: listPath, frameRate: vi.frameRate.rawString)
-            ffmpegArgs += audio.inputArguments
-            ffmpegArgs += [
-                "-c:v", encoderName,
-                "-pix_fmt", vi.pixelFormat.rawValue,
-            ]
-            // for the GPU encoders whose own default quality is poor (see FFmpegHardware.swift)
-            ffmpegArgs += vi.encoder?.defaultQualityArguments ?? []
-            ffmpegArgs += audio.codecArguments
-            ffmpegArgs += ["-y", videoPath]
+            let ffmpegArgs = VideoExport.arguments(
+                listPath: listPath,
+                audio: audio,
+                videoInfo: vi,
+                outputVideoPath: videoPath
+            )
 
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
 
@@ -230,7 +232,7 @@ enum ExportHandlers {
                 }
                 try runFFmpegWithProgress(
                     arguments: ffmpegArgs,
-                    totalFrames: frames.count,
+                    totalFrames: totalFrames,
                     outputFolder: outputPath
                 ) { current, total, dir in
                     var io = Star_V1_IoProgress()

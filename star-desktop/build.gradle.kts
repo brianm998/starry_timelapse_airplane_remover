@@ -9,7 +9,19 @@ plugins {
 }
 
 group = "com.star.desktop"
-version = "2.0.0"
+
+// The app version is Config.latestVersion in StarCore, the same string `star --version` and the release
+// tags use, so the installers can't drift from it. Read it from the source rather than hardcoding.
+val starVersion: String = rootProject.file("../StarCore/Sources/StarCore/Config.swift").readText()
+    .let { Regex("""static let latestVersion\s*=\s*"(\d+\.\d+\.\d+)"""").find(it)?.groupValues?.get(1) }
+    ?: throw GradleException("could not read Config.latestVersion from StarCore/Sources/StarCore/Config.swift")
+// jpackage on macOS rejects a leading 0 ("first number in an app-version cannot be zero"), so the
+// dmg/pkg carry 1.<minor>.<patch> while the .exe/.deb use the real version.
+val macPackageVersion: String = starVersion.split(".").let { v ->
+    if (v[0] == "0") "1.${v[1]}.${v[2]}" else starVersion
+}
+
+version = starVersion
 
 kotlin {
     compilerOptions {
@@ -28,12 +40,34 @@ sourceSets {
     }
 }
 
+// JavaFX classifier for the current build host, matching the artifacts published to Maven Central
+// (org.openjfx:javafx-*). Only used for the initial screen's decorative background video (embedded
+// via JFXPanel/MediaView, since Compose Desktop has no video playback of its own) — same idea as
+// hostResourceDir below, one platform's binary per build.
+val javafxClassifier: String = run {
+    val os = System.getProperty("os.name").lowercase()
+    val arch = System.getProperty("os.arch").lowercase()
+    val isArm = arch.contains("aarch64") || arch.contains("arm")
+    when {
+        os.contains("mac") || os.contains("darwin") -> if (isArm) "mac-aarch64" else "mac"
+        os.contains("win") -> "win"
+        else -> if (isArm) "linux-aarch64" else "linux"
+    }
+}
+
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
 
     // Proto messages only — NO gRPC plugin (transport is hand-rolled stdio framing).
     implementation("com.google.protobuf:protobuf-kotlin-lite:4.28.3")
+
+    // Background video on the initial screen (macOS `SplitRevealVideoView`, via IntroVideoBackground).
+    val javafxVersion = "21.0.2"
+    implementation("org.openjfx:javafx-base:$javafxVersion:$javafxClassifier")
+    implementation("org.openjfx:javafx-graphics:$javafxVersion:$javafxClassifier")
+    implementation("org.openjfx:javafx-media:$javafxVersion:$javafxClassifier")
+    implementation("org.openjfx:javafx-swing:$javafxVersion:$javafxClassifier")
 
     // Coroutines: core + Swing dispatcher (Compose Desktop runs on the AWT/Swing EDT).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
@@ -73,9 +107,9 @@ compose.desktop {
         // changing the JVM used for compilation: -Pstar.jpackage.jdk=/path or STAR_JPACKAGE_JDK env.
         (findProperty("star.jpackage.jdk") as String? ?: System.getenv("STAR_JPACKAGE_JDK"))?.let { javaHome = it }
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Exe, TargetFormat.Deb)
             packageName = "Star"
-            packageVersion = "2.0.0"
+            packageVersion = starVersion
             description = "Star — Nighttime Timelapse Airplane Remover"
             vendor = "Star"
             // Bundle the native daemon (stard) + ffmpeg/ffprobe so the app is self-contained. The
@@ -85,8 +119,13 @@ compose.desktop {
             // so StarCore.ToolPaths (sibling-of-executable) resolves them with no daemon code change.
             appResourcesRootDir.set(layout.projectDirectory.dir("app-resources"))
             includeAllModules = true // the daemon-driving GUI loads classes reflectively; ship the full JDK module set
+            // Same icon as the macOS gui's Assets.xcassets/AppIcon.appiconset, converted to each OS's
+            // native format (see packaging/README.md for how to regenerate). Without these, jpackage
+            // falls back to the default Java/coffee-cup icon in the packaged app.
             macOS {
                 bundleID = "com.star.desktop"
+                packageVersion = macPackageVersion
+                iconFile.set(project.file("packaging/star.icns"))
                 // Optional Developer ID signing (off by default → an unsigned app image). Enable with
                 // -Pstar.sign.identity="Developer ID Application: Name (TEAMID)" or STAR_SIGN_IDENTITY.
                 // Signs the .app and its embedded native binaries (stard/ffmpeg/ffprobe) with the hardened
@@ -99,6 +138,15 @@ compose.desktop {
                     entitlementsFile.set(project.file("packaging/macos-entitlements.plist"))
                     runtimeEntitlementsFile.set(project.file("packaging/macos-entitlements.plist"))
                 }
+            }
+            windows {
+                iconFile.set(project.file("packaging/star.ico"))
+                menu = true
+                shortcut = true
+                dirChooser = true
+            }
+            linux {
+                iconFile.set(project.file("packaging/star.png"))
             }
         }
     }
@@ -161,8 +209,9 @@ fun executableArchitectures(file: File): List<String>? {
 
 // Stage the native daemon + ffmpeg/ffprobe into app-resources/<os-arch>/ for the bundle.
 //   stard:   -Pstard=<path>, else daemon/.build/release/stard, else daemon/.build/debug/stard
-//   ffmpeg:  -Pffmpegdir=<dir>, else repo-root external_binaries/bin (what `ffmpeg/build.sh --install`
-//            leaves there: this machine's own build, with its GPU support; see ffmpeg/README.md)
+//   ffmpeg:  -Pffmpegdir=<dir>, else repo-root external_binaries/bin (git-ignored): `ffmpeg/build_ci.sh
+//            external_binaries/bin` is what CI ships; `ffmpeg/build.sh --install` leaves this machine's own
+//            GPU-enabled build there instead. See ffmpeg/README.md.
 // The staged ffmpeg and ffprobe must be built for the architecture this bundle is for.
 tasks.register("stageAppResources") {
     group = "star"
@@ -202,6 +251,63 @@ tasks.register("stageAppResources") {
         }
         stage(stard, stardName)
 
+        // StarCore's resources: the localization tables (and, on macOS, the tile classifier).
+        // `swift build` leaves them beside the binary as StarCore_StarCore.resources (Linux,
+        // Windows) or StarCore_StarCore.bundle (macOS). Shipping stard without them is what
+        // killed the engine on users' machines: the first localized string (Daemon.Hello sets
+        // the language) went through SwiftPM's Bundle.module, which fatalErrors when the bundle
+        // is missing — and never fails on the build machine, because its fallback is the
+        // absolute build path. Staged as `.resources` on every OS (StarCore.StarResources looks
+        // for both names); a `.bundle` with no Info.plist inside a signed .app upsets codesign.
+        val resourcesName = "StarCore_StarCore.resources"
+        val resourcesDst = File(outDir, resourcesName)
+        resourcesDst.deleteRecursively()
+        val resourcesSrc = listOf("resources", "bundle")
+            .map { File(stard.parentFile, "StarCore_StarCore.$it") }
+            .firstOrNull { File(it, "Localizations").isDirectory }
+        if (resourcesSrc == null) {
+            val msg = "stageAppResources: StarCore_StarCore.{resources,bundle} not found beside $stard — the bundled engine would run without its localization tables."
+            if (packagingRequested) throw GradleException(msg)
+            logger.warn(msg)
+        } else {
+            resourcesSrc.copyRecursively(resourcesDst, overwrite = true)
+            logger.lifecycle("stageAppResources: ${resourcesDst.relativeTo(projectDir)} (from $resourcesSrc)")
+        }
+
+        // On Windows stard.exe is dynamically linked against the Swift runtime (and the MSVC C++
+        // runtime), which a user's machine does not have. Without these DLLs next to the exe the
+        // loader kills it at startup (0xC0000135) before it can print anything, and the client just
+        // shows "engine stopped". The CLI zip bundles them for the same reason (release_windows.sh).
+        if (isWin) {
+            val swiftDirs = LinkedHashSet<File>()
+            System.getenv("PATH").orEmpty().split(File.pathSeparatorChar)
+                .filter { it.isNotBlank() }.map { File(it) }.forEach { swiftDirs += it }
+            System.getenv("SDKROOT")?.let { swiftDirs += File(it, "usr/bin") }
+            // Only directories that actually hold the Swift runtime; the same lists the CLI script uses,
+            // plus Foundation & friends, which stard imports but the CLI glob (swift*.dll) misses.
+            fun wanted(n: String): Boolean {
+                val l = n.lowercase()
+                return l.endsWith(".dll") && (l.startsWith("swift") || l.startsWith("_") || "foundation" in l ||
+                    l == "blocksruntime.dll" || l == "dispatch.dll" || l == "synchronization.dll" ||
+                    l.startsWith("msvcp") || l.startsWith("vcruntime") || l.startsWith("concrt") ||
+                    l.startsWith("vcomp") || l.startsWith("ucrtbase"))
+            }
+            val copied = HashSet<String>()
+            swiftDirs.filter { File(it, "swiftCore.dll").exists() }.forEach { dir ->
+                dir.listFiles()?.filter { it.isFile && wanted(it.name) }?.forEach { dll ->
+                    if (copied.add(dll.name.lowercase())) stage(dll, dll.name)
+                }
+            }
+            if (File(outDir, "swiftCore.dll").exists().not()) {
+                val msg = "stageAppResources: swiftCore.dll not found on PATH/SDKROOT — the Windows bundle would not start (\"engine stopped\"). Run from a Swift toolchain shell."
+                if (packagingRequested) throw GradleException(msg) else logger.warn(msg)
+            }
+            // MSVC runtime fallback if the toolchain dir didn't carry it.
+            val sys32 = File(System.getenv("SystemRoot") ?: "C:\\Windows", "System32")
+            listOf("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "concrt140.dll")
+                .filter { copied.add(it) }.forEach { stage(File(sys32, it), it) }
+        }
+
         val ffDir = (findProperty("ffmpegdir") as String?)?.let { file(it) } ?: rootProject.file("../external_binaries/bin")
         stage(File(ffDir, "ffmpeg$exe"), "ffmpeg$exe")
         stage(File(ffDir, "ffprobe$exe"), "ffprobe$exe")
@@ -218,10 +324,26 @@ tasks.register("stageAppResources") {
             val archs = executableArchitectures(staged)
             if (archs != null && hostArch !in archs) {
                 val msg = "stageAppResources: $name is built for ${archs.joinToString()}, but this bundle is for $hostArch " +
-                    "(app-resources/$hostResourceDir). Build the right one with ffmpeg/build.sh --install, or point -Pffmpegdir at it."
+                    "(app-resources/$hostResourceDir). Build the right one with ffmpeg/build_ci.sh or ffmpeg/build.sh --install, or point -Pffmpegdir at it."
                 if (packagingRequested) throw GradleException(msg)
                 logger.warn("$msg (not packaging, so continuing)")
             }
+        }
+
+        // Decorative initial-screen background video — same asset the macOS gui bundles from
+        // gui/videos (see its .gitignore entry: too large for git, fetched from the `ci-assets`
+        // GitHub Release). Purely cosmetic, so unlike stard above, a missing file never fails
+        // the build — IntroVideoBackground just shows nothing.
+        val introVideoName = "11_30_2024-fx3-aurora-topaz-star.mp4"
+        val introVideo = listOfNotNull(
+            (findProperty("introvideo") as String?)?.let { file(it) },
+            rootProject.file("../gui/videos/$introVideoName"),
+        ).firstOrNull { it.exists() }
+        if (introVideo != null) {
+            File(outDir, "videos").mkdirs()
+            stage(introVideo, "videos/$introVideoName")
+        } else {
+            logger.lifecycle("stageAppResources: $introVideoName not found — initial screen will show no background video")
         }
     }
 }
@@ -284,7 +406,18 @@ tasks.register("fixBundledBinaries") {
         val apps = layout.buildDirectory.dir("compose/binaries").get().asFile.listFiles().orEmpty()
             .flatMap { File(it, "app").listFiles().orEmpty().toList() }
             .filter { it.name.endsWith(".app") }
-        if (apps.isEmpty()) { logger.warn("fixBundledBinaries: no .app under build/compose/binaries — nothing to do"); return@doLast }
+        // Linux (and Windows) app images are plain directories, not .app bundles. jpackage strips +x from
+        // the bundled binaries there too (the Linux .deb shipped an unrunnable stard — see fix-deb-modes.sh
+        // for the installer itself); fix the image so `Star --self-test` and createDistributable output work.
+        File(layout.buildDirectory.get().asFile, "compose/binaries").listFiles().orEmpty()
+            .flatMap { File(it, "app").listFiles().orEmpty().toList() }
+            .filter { !it.name.endsWith(".app") && it.isDirectory }
+            .forEach { image ->
+                image.walkTopDown().filter { it.isDirectory && it.path.replace('\\', '/').endsWith("app/resources") }.forEach { res ->
+                    listOf("stard", "ffmpeg", "ffprobe").map { File(res, it) }.filter { it.exists() }.forEach { it.setExecutable(true, false) }
+                }
+            }
+        if (apps.isEmpty()) { logger.info("fixBundledBinaries: no .app under build/compose/binaries (not a macOS build)"); return@doLast }
         for (app in apps) {
             val resDir = File(app, "Contents/app/resources")
             val bins = listOf("stard", "ffmpeg", "ffprobe").map { File(resDir, it) }.filter { it.exists() }
@@ -307,8 +440,25 @@ tasks.register("fixBundledBinaries") {
 // the .app then wrap it). finalizedBy ensures it runs even when createDistributable is up-to-date.
 tasks.matching { it.name == "createDistributable" || it.name == "createReleaseDistributable" }
     .configureEach { finalizedBy("fixBundledBinaries") }
-// package*/dmg/msi/deb wrap the .app into an installer — they must run AFTER the fixup, not race the finalizer.
+// package*/dmg/exe/deb wrap the .app into an installer — they must run AFTER the fixup, not race the finalizer.
 tasks.matching { it.name.startsWith("package") }.configureEach { mustRunAfter("fixBundledBinaries") }
+
+// The .deb itself: jpackage writes the bundled binaries into it as non-executable data, so the installed
+// app cannot start its engine. Re-pack it with the right modes straight after packageDeb.
+tasks.register<Exec>("fixDebModes") {
+    group = "star"
+    description = "Re-pack the built .deb so the bundled stard/ffmpeg/ffprobe are executable."
+    val debDir = layout.buildDirectory.dir("compose/binaries/main/deb")
+    val script = layout.projectDirectory.file("packaging/fix-deb-modes.sh")
+    isIgnoreExitValue = false
+    doFirst {
+        val deb = debDir.get().asFile.listFiles { f -> f.name.endsWith(".deb") }?.firstOrNull()
+            ?: throw GradleException("fixDebModes: no .deb in ${debDir.get().asFile}")
+        commandLine("bash", script.asFile.absolutePath, deb.absolutePath)
+    }
+    onlyIf { !System.getProperty("os.name").lowercase().contains("win") }
+}
+tasks.matching { it.name == "packageDeb" || it.name == "packageReleaseDeb" }.configureEach { finalizedBy("fixDebModes") }
 
 // ---------------------------------------------------------------------------
 // Single localization source of truth.
@@ -358,6 +508,27 @@ tasks.register<JavaExec>("smoke") {
         if (project.hasProperty("mode")) a.add(project.property("mode") as String)
         args(a)
     }
+}
+
+// End-to-end self-test against a real stard (the same checks `Star --self-test` runs in an
+// installed app; see EngineSelfTest). Exits non-zero on any failure.
+//   ./gradlew selfTest                                   # engine + Hello + localization only
+//   ./gradlew selfTest -Pseq="/abs/seq" -Pprocess -Pexport -Pvideo="/abs/clip.mp4"
+// -Pexport renders the processed frames to a video, so it needs ffmpeg beside stard: a
+// development stard (daemon/.build/release) has none, so put ffmpeg and ffprobe there first.
+tasks.register<JavaExec>("selfTest") {
+    group = "star"
+    description = "Run the end-to-end engine self-test against a real stard."
+    dependsOn("buildStardRelease")
+    mainClass.set("com.star.desktop.tools.EngineSelfTest")
+    classpath = sourceSets["main"].runtimeClasspath
+    val a = mutableListOf<String>()
+    if (project.hasProperty("process")) a.add("--process")
+    if (project.hasProperty("export")) a.add("--export")
+    (findProperty("video") as String?)?.let { a.addAll(listOf("--video", it)) }
+    (findProperty("scratch") as String?)?.let { a.addAll(listOf("--scratch", it)) }
+    (findProperty("seq") as String?)?.let { a.add(it) }
+    args(a)
 }
 
 // ---------------------------------------------------------------------------

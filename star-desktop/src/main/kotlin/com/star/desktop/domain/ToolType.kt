@@ -31,6 +31,9 @@ enum class ToolType(private val nameKey: String, val iconBaseName: String, val c
      */
     val displayName: String get() = localized(nameKey)
 
+    /** Hover text for the tool, from the shared catalogue (`tool.help.<macOS rawValue>`). */
+    val helpText: String get() = localized("tool.help.${nameKey.removePrefix("tool.")}")
+
     /** Whether this tool only sets a keep/remove decision (mappable to `Outlier.SetDecisions` today). */
     val setsDecisionOnly: Boolean get() = this == REMOVE || this == KEEP
 

@@ -8,7 +8,7 @@ import SwiftProtobuf
 ///
 /// An export read `<folder>/image_%04d.tiff`, the names that `decodeVideo` gives the frames of a
 /// video it takes apart, so a sequence, whose frames keep the names they had, could not be
-/// exported at all.  Reading what a render left under whatever names it has is `FrameList`, and
+/// exported at all.  Reading what a render left under whatever names it has is `VideoExport`, and
 /// this runs it against the real `stard` and the ffmpeg star ships, which is the only judge of
 /// whether ffmpeg reads the list the way it was written.
 ///
@@ -210,14 +210,26 @@ final class ExportSequenceTests: ExportEndToEndTestCase {
     /// Everything above puts the rendered frames in place by hand.  This lets the daemon process a
     /// sequence itself, which is where the claim that a frame is rendered under the name it had comes
     /// from, and exports what it made, with no output path, as the desktop does.
+    ///
+    /// The frames are the first few of the repository's `test_data` sequence: processing stops when
+    /// it finds no star alignment between the frames ("no usable star alignment was found"), so a
+    /// synthetic clip, which has none, would leave nothing to export.
     func testASequenceTheDaemonProcessedItselfExports() async throws {
-        let count = 12
+        let count = 6
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("test_data/test_a7sii_10")
+        let available = ((try? FileManager.default.contentsOfDirectory(atPath: source.path)) ?? [])
+            .filter { $0.hasSuffix(".jpg") }.sorted()
+        try XCTSkipIf(available.count < count, "needs the frames in \(source.path)")
+
         try FileManager.default.createDirectory(atPath: sequenceDirectory, withIntermediateDirectories: true)
-        try run("ffmpeg", ["-hide_banner", "-nostdin", "-loglevel", "error", "-y",
-                           "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24", "-frames:v", "\(count)",
-                           "-pix_fmt", "rgb48le", "-start_number", "123", "\(sequenceDirectory)/IMG_%04d.tif"])
+        for name in available.prefix(count) {
+            try FileManager.default.copyItem(atPath: source.appendingPathComponent(name).path,
+                                             toPath: "\(sequenceDirectory)/\(name)")
+        }
         let inputNames = try FileManager.default.contentsOfDirectory(atPath: sequenceDirectory).sorted()
-        XCTAssertEqual(inputNames.first, "IMG_0123.tif")
         XCTAssertEqual(inputNames.count, count)
 
         let daemon = try launchDaemon()
@@ -231,7 +243,7 @@ final class ExportSequenceTests: ExportEndToEndTestCase {
         // wait for every frame's image to be there, and to have stopped growing
         var rendered: [String] = []
         var sizes: [String: Int] = [:]
-        let deadline = Date().addingTimeInterval(90)
+        let deadline = Date().addingTimeInterval(240)
         var settled = false
         while Date() < deadline, !settled {
             rendered = ((try? FileManager.default.contentsOfDirectory(atPath: config.outputSequenceDirname)) ?? []).sorted()

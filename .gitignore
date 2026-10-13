@@ -34,11 +34,13 @@ gui/videos
 horizon_test_data
 small_horizon_test_data
 
-# FFmpeg is built by ffmpeg/build.sh (locally or in CI) and never committed: the committed
-# x86_64-only copy is what failed on every Apple silicon Mac without Rosetta.  `--install`
-# puts the result in external_binaries/bin, which the Xcode project, StarCore's table
-# generators and star-desktop's gradle staging all read; ffmpeg/.work holds sources and
-# per-target build trees, ffmpeg/dist the finished binaries.
+# ffmpeg and ffprobe are built, never committed (the committed x86_64-only copy is what failed on
+# every Apple silicon Mac without Rosetta).  Two scripts build them, see ffmpeg/README.md:
+#   ffmpeg/build_ci.sh   what CI (.github/workflows/ffmpeg.yml) ships; `ffmpeg/build_ci.sh external_binaries/bin`
+#   ffmpeg/build.sh      the GPU-enabled build; `--install` puts it in external_binaries/bin, with
+#                        ffmpeg/.work (sources, per-target build trees) and ffmpeg/dist (finished binaries)
+# external_binaries/bin is what the Xcode project, StarCore's table generators and star-desktop's
+# gradle staging all read.
 /external_binaries/bin/
 /ffmpeg/.work/
 /ffmpeg/dist/

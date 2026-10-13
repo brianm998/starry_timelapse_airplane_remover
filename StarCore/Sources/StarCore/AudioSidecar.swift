@@ -241,6 +241,12 @@ public struct AudioPlan: Equatable, Sendable {
     /// One line on what happens and why, for the log.
     public let summary: String
 
+    public init(inputArguments: [String], codecArguments: [String], summary: String) {
+        self.inputArguments = inputArguments
+        self.codecArguments = codecArguments
+        self.summary = summary
+    }
+
     /// False if the render goes without sound.
     public var hasAudio: Bool { !inputArguments.isEmpty }
 

@@ -120,7 +120,8 @@ final class ExportVideoSettingsTests: XCTestCase {
     // MARK: - the file
 
     /// A client that says where to write is believed, even if the extension and the muxer disagree:
-    /// ffmpeg picks the container from the extension, and the sound is planned for the same one.
+    /// the file is where it said, in the container it chose (the arguments name it with `-f`, and the
+    /// sound is planned for the same one).
     func testAPathTheClientGivesIsUsedAsItIs() {
         let path = ExportHandlers.outputVideoPath(requested: "/Users/someone/Movies/timelapse.mkv",
                                                   config: config(hasAudio: false), muxer: .mov)

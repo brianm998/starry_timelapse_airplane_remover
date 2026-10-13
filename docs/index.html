@@ -348,54 +348,74 @@
       </div>
     </div>
 
-    <!-- Linux: CLI .deb -->
+    <!-- Linux: Star Desktop .deb + CLI .deb -->
     <div id="linux-section" style="display:none">
-      <div class="pkg-grid single">
+      <div class="pkg-grid">
+        <div class="pkg-card">
+          <div class="pkg-icon">🖥</div>
+          <div class="pkg-title">Star Desktop</div>
+          <div class="pkg-desc">
+            Graphical interface for processing a sequence, then reviewing and
+            correcting the airplane remover's results frame by frame before
+            rendering. Start here unless you only want the command line.
+          </div>
+          <a class="download-btn" id="linux-desktop-btn">⬇ Download Star Desktop (.deb)</a>
+          <div class="pkg-meta" id="linux-desktop-meta"></div>
+        </div>
         <div class="pkg-card">
           <div class="pkg-icon">⌨️</div>
           <div class="pkg-title">star CLI</div>
           <div class="pkg-desc">
             Command-line processor for batch-running the full pipeline on an
-            image sequence. Detects and removes airplane and satellite streaks
-            from most common image sequence formats.
+            image sequence, e.g. on a server or in a script. Detects and removes
+            airplane and satellite streaks from most common image sequence formats.
           </div>
-          <a class="download-btn" id="linux-cli-btn">⬇ Download star CLI (.deb)</a>
+          <a class="download-btn ghost" id="linux-cli-btn">⬇ Download star CLI (.deb)</a>
           <div class="pkg-meta" id="linux-cli-meta"></div>
         </div>
       </div>
       <div class="cli-note">
-        <strong>GUI app not yet available on Linux.</strong>
-        Run <code>star -w /path/to/sequence</code> to process and write sidecar
-        data. Star App (macOS) can then load that config for frame-by-frame
-        review and correction.
+        Star Desktop bundles everything it needs, including the processing engine,
+        so you don't need the CLI as well. Install the CLI only if you want to run
+        <code>star -w /path/to/sequence</code> from a terminal.
       </div>
       <div class="sysreq" id="linux-sysreq">
         Debian/Ubuntu · x86-64
       </div>
     </div>
 
-    <!-- Windows: CLI .exe installer + .zip -->
+    <!-- Windows: Star Desktop .exe + CLI .exe installer + .zip -->
     <div id="windows-section" style="display:none">
-      <div class="pkg-grid single">
+      <div class="pkg-grid">
+        <div class="pkg-card">
+          <div class="pkg-icon">🖥</div>
+          <div class="pkg-title">Star Desktop</div>
+          <div class="pkg-desc">
+            Graphical interface for processing a sequence, then reviewing and
+            correcting the airplane remover's results frame by frame before
+            rendering. Start here unless you only want the command line.
+          </div>
+          <a class="download-btn" id="win-desktop-btn">⬇ Download Star Desktop (.exe)</a>
+          <div class="pkg-meta" id="win-desktop-meta"></div>
+        </div>
         <div class="pkg-card">
           <div class="pkg-icon">⌨️</div>
           <div class="pkg-title">star CLI</div>
           <div class="pkg-desc">
             Command-line processor for batch-running the full pipeline on an
-            image sequence. Detects and removes airplane and satellite streaks
-            from most common image sequence formats.
+            image sequence, e.g. in a script. Detects and removes airplane and
+            satellite streaks from most common image sequence formats.
           </div>
-          <a class="download-btn" id="win-exe-btn">⬇ Download Installer (.exe)</a>
+          <a class="download-btn ghost" id="win-exe-btn">⬇ Download CLI Installer (.exe)</a>
           <div class="pkg-meta" id="win-exe-meta"></div>
           <a class="download-btn ghost" id="win-zip-btn">⬇ Portable ZIP</a>
           <div class="pkg-meta" id="win-zip-meta"></div>
         </div>
       </div>
       <div class="cli-note">
-        <strong>GUI app not yet available on Windows.</strong>
-        Run <code>star -w \path\to\sequence</code> to process and write sidecar
-        data. Star App (macOS) can then load that config for frame-by-frame
-        review and correction.
+        Star Desktop bundles everything it needs, including the processing engine,
+        so you don't need the CLI as well. Install the CLI only if you want to run
+        <code>star -w \path\to\sequence</code> from a terminal.
       </div>
       <div class="sysreq" id="win-sysreq">
         Requires Windows 10 (64-bit) or later
@@ -534,13 +554,17 @@
 
       const macApp   = find(/star_app.*\.pkg$/i);
       const macCli   = find(/star_cli.*\.pkg$/i);
-      const linuxDeb = find(/_amd64\.deb$/i);
-      const winExe   = find(/_windows_.*setup\.exe$/i);
-      const winZip   = find(/_windows_.*\.zip$/i);
+      const linuxCli = find(/^star_cli.*_amd64\.deb$/i);
+      const linuxDesktop = find(/^Star-Desktop.*_amd64\.deb$/i);
+      const winExe   = find(/^star_cli.*_windows_.*setup\.exe$/i);
+      const winZip   = find(/^star_cli.*_windows_.*\.zip$/i);
+      const winDesktop = find(/^Star-Desktop.*\.exe$/i);
 
       setBtn('mac-app-btn',   'mac-app-meta',   macApp,   'Star.app');
       setBtn('mac-cli-btn',   'mac-cli-meta',   macCli,   'star CLI (macOS)');
-      setBtn('linux-cli-btn', 'linux-cli-meta', linuxDeb, 'star CLI (Linux)');
+      setBtn('linux-cli-btn', 'linux-cli-meta', linuxCli, 'star CLI (Linux)');
+      setBtn('linux-desktop-btn', 'linux-desktop-meta', linuxDesktop, 'Star Desktop (Linux)');
+      setBtn('win-desktop-btn', 'win-desktop-meta', winDesktop, 'Star Desktop (Windows)');
       setBtn('win-exe-btn',   'win-exe-meta',   winExe,   'Installer (.exe)');
       setBtn('win-zip-btn',   'win-zip-meta',   winZip,   'Portable ZIP');
 
@@ -548,7 +572,9 @@
       setBtnLabel('mac-app-btn',   `⬇ Download Star.app${v}`);
       setBtnLabel('mac-cli-btn',   `⬇ Download star CLI${v}`);
       setBtnLabel('linux-cli-btn', `⬇ Download star CLI${v} (.deb)`);
-      setBtnLabel('win-exe-btn',   `⬇ Download Installer${v} (.exe)`);
+      setBtnLabel('linux-desktop-btn', `⬇ Download Star Desktop${v} (.deb)`);
+      setBtnLabel('win-desktop-btn', `⬇ Download Star Desktop${v} (.exe)`);
+      setBtnLabel('win-exe-btn',   `⬇ Download CLI Installer${v} (.exe)`);
       setBtnLabel('win-zip-btn',   `⬇ Portable ZIP${v}`);
 
       const macSysreq = document.getElementById('mac-sysreq');
@@ -566,7 +592,7 @@
     function populateFallback() {
       const url = `https://github.com/${REPO}/releases/latest`;
       const fallbackLabel = '⬇ View on GitHub';
-      ['mac-app-btn','mac-cli-btn','linux-cli-btn','win-exe-btn'].forEach(id => {
+      ['mac-app-btn','mac-cli-btn','linux-cli-btn','linux-desktop-btn','win-desktop-btn','win-exe-btn'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) { btn.href = url; btn.target = '_blank'; btn.textContent = fallbackLabel; }
       });

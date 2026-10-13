@@ -4,6 +4,7 @@ import com.star.desktop.data.FrameRepository
 import com.star.desktop.data.ImageCache
 import com.star.desktop.data.LocalPreferences
 import com.star.desktop.i18n.Strings
+import com.star.desktop.i18n.localized
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.data.SessionRepository
@@ -424,6 +425,28 @@ class AppViewModel(
         prefs.setMovingHorizonCountMultiplier(movingHorizonCountMultiplier(chosen, startupFrameCount()))
     }
 
+    /**
+     * Which question screen "Back" should return to — derived from the answers already given
+     * rather than a separate history stack, since they fully determine how [step] was reached
+     * (macOS `RemovalView.previousStartupState`). Returns null on the first screen.
+     */
+    fun previousStartupStep(step: StartupStep): StartupStep? = when (step) {
+        StartupStep.HORIZON -> null
+        StartupStep.MOVING -> StartupStep.HORIZON
+        StartupStep.SELECT_HORIZON -> StartupStep.MOVING
+        StartupStep.SELECT_MOVING_HORIZONS -> StartupStep.MOVING
+        StartupStep.REMOVAL -> when {
+            !startupHasHorizon -> StartupStep.MOVING
+            startupCameraMoving -> StartupStep.SELECT_MOVING_HORIZONS
+            else -> StartupStep.SELECT_HORIZON
+        }
+    }
+
+    /** "Back" on a startup prompt: return to the previous question without discarding later answers. */
+    fun startupGoBack(step: StartupStep) {
+        _startupStep.value = previousStartupStep(step)
+    }
+
     /** "Advanced" gear on a prompt: persist the answers so the dialog reflects them, then open settings. */
     fun startupOpenAdvanced() {
         scope.launch {
@@ -434,9 +457,9 @@ class AppViewModel(
     }
 
     /** Removal prompt "Start Processing": apply the chosen clean method + answers, then process. */
-    fun startupStartProcessing(cleanMethod: CleanMethod) {
+    fun startupStartProcessing(cleanMethod: CleanMethod, allowEarthAlignment: Boolean) {
         scope.launch {
-            applyStartupChoices(cleanMethod)
+            applyStartupChoices(cleanMethod, allowEarthAlignment)
             _startupStep.value = null
             requestProcessAll()
         }
@@ -445,15 +468,18 @@ class AppViewModel(
     /** Removal prompt "Close": dismiss the prompts without processing (keeps the default config). */
     fun dismissStartup() { _startupStep.value = null }
 
-    /** Fold the accumulated startup answers (and optionally a clean method) into the live session config. */
-    private suspend fun applyStartupChoices(cleanMethod: CleanMethod? = null) {
+    /**
+     * Fold the accumulated startup answers (and optionally a clean method + the removal prompt's
+     * "Cars" toggle) into the live session config. [allowEarthAlignment] defaults to true for the
+     * paths that skip the removal prompt (e.g. jumping to Advanced settings mid-flow), matching
+     * the macOS behavior of earth alignment being on by default.
+     */
+    private suspend fun applyStartupChoices(cleanMethod: CleanMethod? = null, allowEarthAlignment: Boolean = true) {
         val current = runCatching { sessions.getConfig() }.getOrNull() ?: return
         val b = current.toBuilder()
             .setHorizonDetectionEnabled(startupHasHorizon)
             .setTripodHeadWasMoving(startupCameraMoving)
-            // Earth alignment is on for both static and moving sequences now that the
-            // ground homography guard rejects the warps it used to apply blindly.
-            .setAllowEarthAlignment(true)
+            .setAllowEarthAlignment(allowEarthAlignment)
         cleanMethod?.let { b.setCleanMethod(it) }
         runCatching { sessions.updateConfig(b.build()) }
     }
@@ -467,9 +493,13 @@ class AppViewModel(
         }
         scope.launch {
             engine.status.collect { st ->
-                // Engine died while a session was open: offer Restart (don't tear the session down yet —
-                // restart re-opens it via OpenConfig). A deliberate restart() sets `restarting` to suppress this.
-                if (st is EngineStatus.Failed && _screen.value is AppScreen.Sequence && !restarting) {
+                // Engine died: say why and offer Restart. With a session open, don't tear it down yet —
+                // restart re-opens it via OpenConfig. On the start screen this is the only place the
+                // reason appears at all: an engine that failed to come up used to show just a red
+                // "engine stopped" badge, and the user found out only by trying to open something and
+                // getting "RPC error -1: engine not connected". A deliberate restart() sets
+                // `restarting` to suppress this.
+                if (st is EngineStatus.Failed && _screen.value !is AppScreen.Loading && !restarting) {
                     _engineDown.value = st.message
                 }
             }
@@ -483,7 +513,19 @@ class AppViewModel(
         }
     }
 
-    fun openSequence(dir: String) = launchOpen("Opening image sequence", dir, promptStartup = true) { sessions.openSequence(dir) }
+    /**
+     * Output goes to the sequence directory's own parent (macOS `inputImageSequencePath`), not
+     * left to the daemon's per-session scratch-dir fallback (a fresh temp dir every open). Config's
+     * `basename` already embeds the sequence's own dirname, so this can't collide with a sibling
+     * sequence — and reopening the SAME sequence resolves to the SAME output location, which is
+     * what lets `FrameAirplaneRemover.init`'s `outputFileExistsOnDisk()` check find a previous
+     * run's output and report already-processed frames as complete instead of unprocessed.
+     */
+    fun openSequence(dir: String) = launchOpen("Opening image sequence", dir, promptStartup = true) {
+        val outputPath = java.io.File(dir).parent ?: dir
+        val config = SessionRepository.defaultInitialConfig().toBuilder().setOutputPath(outputPath).build()
+        sessions.openSequence(dir, config)
+    }
 
     fun openConfig(path: String) = launchOpen("Resuming session", path) { sessions.openConfig(path) }
 
@@ -537,7 +579,11 @@ class AppViewModel(
             _screen.value = AppScreen.Loading("Restarting engine", null, null)
             val ok = engine.restart()
             restarting = false
-            if (!ok) { fail("Failed to restart the engine"); return@launch }
+            if (!ok) {
+                _screen.value = AppScreen.Initial
+                showEngineDown()
+                return@launch
+            }
             if (resume != null && java.io.File(resume).exists()) {
                 _screen.value = AppScreen.Loading("Resuming session", resume, null)
                 try {
@@ -549,6 +595,11 @@ class AppViewModel(
                 _screen.value = AppScreen.Initial
             }
         }
+    }
+
+    /** Raise the engine-down overlay with whatever the engine said about its death. */
+    private fun showEngineDown() {
+        _engineDown.value = (engine.status.value as? EngineStatus.Failed)?.message ?: localized("ui.engine_stopped")
     }
 
     /** Give up on a crashed engine: close the dead session and return to the start screen. */
@@ -570,6 +621,12 @@ class AppViewModel(
     private fun launchOpen(title: String, path: String, promptStartup: Boolean = false, block: suspend () -> SessionInfo) {
         scope.launch {
             ensureConnected()
+            if (engine.client == null) {
+                // Opening would only fail with "RPC error -1: engine not connected" — what the Windows
+                // user kept getting. Show why the engine isn't there, with Restart, instead.
+                showEngineDown()
+                return@launch
+            }
             _screen.value = AppScreen.Loading(title, path, null)
             try {
                 onOpened(path, block(), promptStartup = promptStartup)

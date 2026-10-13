@@ -4,7 +4,8 @@
 ; Required /D defines (all passed on the makensis command line):
 ;   STAR_VERSION — e.g. 1.2.3
 ;   ARCH         — e.g. x64
-;   PKG_DIR      — Windows path to the staging dir (contains star.exe + *.dll)
+;   PKG_DIR      — Windows path to the staging dir (contains star.exe, *.dll and
+;                  the StarCore_StarCore.resources folder)
 ;   OUTPUT_FILE  — Windows path for the generated setup .exe
 
 !define APP_NAME      "Star CLI"
@@ -35,6 +36,13 @@ Section "Install"
     SetOutPath "$INSTDIR"
     File "${PKG_DIR}\star.exe"
     File "${PKG_DIR}\*.dll"
+
+    ; StarCore's localization tables. star looks for them beside star.exe (StarResources.swift);
+    ; without them it prints message keys instead of text — and only on machines that did not
+    ; build it, because SwiftPM's own lookup falls back to the build directory.
+    SetOutPath "$INSTDIR\StarCore_StarCore.resources"
+    File /r "${PKG_DIR}\StarCore_StarCore.resources\*.*"
+    SetOutPath "$INSTDIR"
 
     WriteUninstaller "$INSTDIR\uninstall.exe"
 
@@ -77,6 +85,7 @@ Section "Uninstall"
 
     Delete "$INSTDIR\star.exe"
     Delete "$INSTDIR\*.dll"
+    RMDir /r "$INSTDIR\StarCore_StarCore.resources"
     Delete "$INSTDIR\uninstall.exe"
     RMDir  "$INSTDIR"
     DeleteRegKey HKLM "${REG_UNINSTALL}"

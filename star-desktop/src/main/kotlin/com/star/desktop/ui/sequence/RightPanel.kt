@@ -1,6 +1,14 @@
 package com.star.desktop.ui.sequence
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.TooltipPlacement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -19,8 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -48,6 +58,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val selected by fvm.selected.collectAsState()
     val info by fvm.info.collectAsState()
     val fastAdv by vm.fastAdvancement.collectAsState()
+    var showToolHelp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Column(modifier.width(150.dp).fillMaxHeight().background(StarColors.sidePanel)) {
       Column(
@@ -58,9 +69,18 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        // Selective-removal tools (remove/keep/razor/shovel/...) only apply when this frame's
+        // clean method actually reviews outliers (macOS `currentFrameUsesOutliers`) — plain
+        // automatic mode replaces every bad pixel with no per-frame review, so there is nothing
+        // for these tools to act on.
+        val usesOutliers = (info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE) != CleanMethod.CLEAN_AUTOMATIC
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            ToolHelpButton { showToolHelp = true }
+        }
+        if (showToolHelp) com.star.desktop.ui.dialogs.ToolHelpDialog(onClose = { showToolHelp = false })
         ToolType.selectable.forEachIndexed { i, t ->
-            ToolRow(t, number = i + 1, selected = t == tool, onClick = { vm.setTool(t) })
+            ToolRow(t, number = i + 1, selected = t == tool, enabled = usesOutliers, onClick = { vm.setTool(t) })
         }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
@@ -134,19 +154,23 @@ private fun BulkButton(label: String, color: Color, onClick: () -> Unit) {
     ) { Text(label, fontSize = 11.sp) }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ToolRow(tool: ToolType, number: Int, selected: Boolean, onClick: () -> Unit) {
+private fun ToolRow(tool: ToolType, number: Int, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     val accent = StarColors.toolColor(tool)
+    val alpha = if (enabled) 1f else 0.35f
+    HoverTip(if (enabled) tool.helpText else localized("tool.help.disabled")) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(5.dp))
-            .background(if (selected) accent.copy(alpha = 0.22f) else Color.Transparent)
-            .then(if (selected) Modifier.border(1.dp, SolidColor(accent), RoundedCornerShape(5.dp)) else Modifier)
-            .clickable(onClick = onClick)
-            .padding(4.dp),
+            .background(if (selected && enabled) accent.copy(alpha = 0.22f) else Color.Transparent)
+            .then(if (selected && enabled) Modifier.border(1.dp, SolidColor(accent), RoundedCornerShape(5.dp)) else Modifier)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(4.dp)
+            .alpha(alpha),
     ) {
         Icon(
             painter = toolPainter(tool),
@@ -159,4 +183,37 @@ private fun ToolRow(tool: ToolType, number: Int, selected: Boolean, onClick: () 
             Text("$number", color = StarColors.textDisabled, fontSize = 9.sp)
         }
     }
+    }
+}
+
+/** The circled "i" that opens the detailed tool explanation. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ToolHelpButton(onClick: () -> Unit) {
+    HoverTip(localized("ui.tool_help_button")) {
+        Box(
+            Modifier
+                .size(16.dp)
+                .clip(CircleShape)
+                .border(1.dp, SolidColor(StarColors.textPrimary), CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) { Text("i", color = StarColors.textPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+    }
+}
+
+/** Hover popup with a short help text, shown after the pointer rests on [content]. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HoverTip(text: String, content: @Composable () -> Unit) {
+    TooltipArea(
+        tooltip = {
+            Surface(shape = RoundedCornerShape(4.dp), color = StarColors.prefsCard, shadowElevation = 4.dp) {
+                Text(text, color = StarColors.white, fontSize = 11.sp, modifier = Modifier.widthIn(max = 260.dp).padding(8.dp))
+            }
+        },
+        delayMillis = 400,
+        tooltipPlacement = TooltipPlacement.CursorPoint(offset = DpOffset(0.dp, 16.dp)),
+        content = content,
+    )
 }
