@@ -138,7 +138,8 @@ build_darwin() {
     # Fail here, not on a user's machine: both slices present, and nothing but system libraries linked.
     [ "$(lipo -archs "$OUT/$t" | tr ' ' '\n' | sort | tr '\n' ' ')" = "arm64 x86_64 " ] \
       || { echo "$t is not universal: $(lipo -archs "$OUT/$t")" >&2; exit 1; }
-    if otool -L "$OUT/$t" | tail -n +2 | awk '{print $1}' | grep -v -e '^/usr/lib/' -e '^/System/Library/'; then
+    # otool prints one unindented header line per architecture (with the binary's own path), then an indented line per library.
+    if otool -L "$OUT/$t" | grep '^[[:space:]]' | awk '{print $1}' | grep -v -e '^/usr/lib/' -e '^/System/Library/'; then
       echo "$t links a non-system library" >&2; exit 1
     fi
   done
