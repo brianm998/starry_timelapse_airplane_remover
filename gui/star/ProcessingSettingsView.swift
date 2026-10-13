@@ -296,6 +296,7 @@ struct ProcessingSettingsView: View {
         showUseReferenceHorizonBrightnessRefinementInfo ||
         showReferenceHorizonBrightnessRefinementSearchRadiusInfo ||
         showReferenceHorizonBrightnessRefinementHistogramBucketsInfo ||
+        showReferenceHorizonNeighborhoodSizeInfo ||
         showHorizonSpikeRemovalEnabledInfo ||
         showHorizonSpikeMaxWidthInfo ||
         showHorizonSpikeMaxDeviationFractionInfo ||
@@ -345,6 +346,7 @@ struct ProcessingSettingsView: View {
         showUseReferenceHorizonBrightnessRefinementInfo = true
         showReferenceHorizonBrightnessRefinementSearchRadiusInfo = true
         showReferenceHorizonBrightnessRefinementHistogramBucketsInfo = true
+        showReferenceHorizonNeighborhoodSizeInfo = true
         showHorizonSpikeRemovalEnabledInfo = true
         showHorizonSpikeMaxWidthInfo = true
         showHorizonSpikeMaxDeviationFractionInfo = true
@@ -394,6 +396,7 @@ struct ProcessingSettingsView: View {
         showUseReferenceHorizonBrightnessRefinementInfo = false
         showReferenceHorizonBrightnessRefinementSearchRadiusInfo = false
         showReferenceHorizonBrightnessRefinementHistogramBucketsInfo = false
+        showReferenceHorizonNeighborhoodSizeInfo = false
         showHorizonSpikeRemovalEnabledInfo = false
         showHorizonSpikeMaxWidthInfo = false
         showHorizonSpikeMaxDeviationFractionInfo = false
