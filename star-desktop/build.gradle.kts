@@ -166,7 +166,7 @@ val hostResourceDir: String = run {
 
 // Stage the native daemon + ffmpeg/ffprobe into app-resources/<os-arch>/ for the bundle.
 //   stard:   -Pstard=<path>, else daemon/.build/release/stard, else daemon/.build/debug/stard
-//   ffmpeg:  -Pffmpegdir=<dir>, else repo-root external_binaries/bin
+//   ffmpeg:  -Pffmpegdir=<dir>, else repo-root external_binaries/bin (git-ignored; see ffmpeg/build_ci.sh)
 tasks.register("stageAppResources") {
     group = "star"
     description = "Copy host-OS stard + ffmpeg/ffprobe into app-resources/<os-arch>/ for nativeDistributions bundling."

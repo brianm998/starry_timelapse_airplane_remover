@@ -2,8 +2,9 @@
 # The one place ffmpeg + ffprobe are built, for every platform Star ships on: Linux and Windows
 # (MSYS2 MINGW64) build x86_64 against the system's static codec libraries; macOS builds the codec
 # libraries itself and produces a universal (arm64 + x86_64) binary, so it needs no Rosetta and
-# works on any Mac. The macOS output is what's committed in external_binaries/bin (the Xcode
-# project and the desktop bundle both take it from there): regenerate it with
+# works on any Mac. CI runs this through .github/workflows/ffmpeg.yml (reused by kotlin-client.yml
+# and cli.yml); nothing is committed. The Xcode GUI project reads external_binaries/bin, which is
+# git-ignored: for a local GUI build, create it with
 #   ffmpeg/build_ci.sh external_binaries/bin
 #
 # Usage: ffmpeg/build_ci.sh <output-dir>      (run from anywhere; clones FFmpeg into a temp dir)
@@ -34,7 +35,7 @@ build_darwin() {
   mkdir -p "$WORK/bin"
   for t in strings ar ranlib libtool nm lipo strip otool; do ln -sf "/usr/bin/$t" "$WORK/bin/$t"; done
   export PATH="$WORK/bin:$PATH"
-  for t in cmake nasm make clang; do command -v "$t" >/dev/null || { echo "missing build tool: $t" >&2; exit 1; }; done
+  for t in cmake nasm make clang pkg-config; do command -v "$t" >/dev/null || { echo "missing build tool: $t" >&2; exit 1; }; done
 
   local SRC="$WORK/deps"; mkdir -p "$SRC"; cd "$SRC"
   if [ ! -d x264 ]; then

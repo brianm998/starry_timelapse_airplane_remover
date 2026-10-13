@@ -66,5 +66,5 @@ it just hasn't been notarized for Gatekeeper on other machines.
 artifacts live only in the main checkout, so CI needs them provisioned first). The cross-platform flow is:
 build `stard` on macOS / Windows / Linux, drop each into the matching `app-resources/<os-arch>/` on that
 runner, then run `packageDistributionForCurrentOS`. ffmpeg/ffprobe must be **portable** builds, all produced by `ffmpeg/build_ci.sh` (the macOS ones are
-universal arm64 + x86_64 and committed in `external_binaries/bin`; the script itself checks they link only
-system libraries — do the same with `otool -L` / `ldd` when adding other platforms).
+universal arm64 + x86_64; for a local desktop or GUI build run `ffmpeg/build_ci.sh external_binaries/bin`, which is
+git-ignored; the script itself checks they link only system libraries — do the same with `otool -L` / `ldd` when adding other platforms).

@@ -8,13 +8,13 @@ name: Kotlin Client
 on:
   push:
     branches: [main, develop]
-    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml']
+    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml', '.github/workflows/ffmpeg.yml']
     # release/* tags build the installers and attach them to the release (see release-upload).
     # No paths filter applies to tag pushes.
     tags: ['release/*']
   pull_request:
     branches: [main, develop]
-    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml']
+    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml', '.github/workflows/ffmpeg.yml']
   workflow_dispatch:
 
 concurrency:
@@ -50,67 +50,12 @@ jobs:
       - name: Build + unit tests
         run: ./gradlew test --no-daemon --stacktrace
 
-  # ─── ffmpeg / ffprobe from source (Linux + Windows) ──────────────────────────
-  # ffmpeg/build_ci.sh is the one place ffmpeg/ffprobe are built, for every platform. macOS's
-  # universal (arm64 + x86_64) output is committed in external_binaries/bin; Linux and Windows
-  # (x86_64 only: those are the only installers we ship) are built here. Cached on the script hash: after the first run this
-  # job only restores the cache and re-uploads it.
-  ffmpeg-linux:
-    name: ffmpeg (Linux, from source)
-    runs-on: ubuntu-24.04
+  # ─── ffmpeg / ffprobe ─────────────────────────────────────────────────────────
+  # Built from source by ffmpeg/build_ci.sh, for every platform, in the shared ffmpeg.yml (cli.yml
+  # reuses it for the macOS GUI). Artifacts: ffmpeg-linux, ffmpeg-windows, ffmpeg-macos (universal).
+  ffmpeg:
     if: github.event_name != 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
-        id: cache
-        with:
-          path: ffmpeg-out
-          key: ffmpeg-linux-${{ hashFiles('ffmpeg/build_ci.sh') }}
-      - name: Install build dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends nasm pkg-config \
-            libx264-dev libx265-dev libvpx-dev libmp3lame-dev libopus-dev libnuma-dev
-      - name: Build ffmpeg + ffprobe
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: ffmpeg/build_ci.sh "$PWD/ffmpeg-out"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ffmpeg-linux
-          path: ffmpeg-out/*
-          if-no-files-found: error
-
-  ffmpeg-windows:
-    name: ffmpeg (Windows, from source)
-    runs-on: windows-2022
-    if: github.event_name != 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
-        id: cache
-        with:
-          path: ffmpeg-out
-          key: ffmpeg-windows-${{ hashFiles('ffmpeg/build_ci.sh') }}
-      - uses: msys2/setup-msys2@v2
-        if: steps.cache.outputs.cache-hit != 'true'
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git make diffutils
-            mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-x264 mingw-w64-x86_64-x265 mingw-w64-x86_64-libvpx
-            mingw-w64-x86_64-lame mingw-w64-x86_64-opus
-      - name: Build ffmpeg + ffprobe
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: msys2 {0}
-        run: ffmpeg/build_ci.sh "$(cygpath -u "$GITHUB_WORKSPACE")/ffmpeg-out"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ffmpeg-windows
-          path: ffmpeg-out/*
-          if-no-files-found: error
+    uses: ./.github/workflows/ffmpeg.yml
 
   # ─── Linux installer (.deb) ───────────────────────────────────────────────────
   # Builds stard for Linux (same OpenCV/StarDecisionTrees caches as cli.yml's
@@ -124,7 +69,7 @@ jobs:
   linux-package:
     name: Linux installer (.deb)
     runs-on: ubuntu-24.04
-    needs: ffmpeg-linux
+    needs: ffmpeg
     if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -212,7 +157,7 @@ jobs:
   windows-package:
     name: Windows installer (.exe)
     runs-on: windows-2022
-    needs: ffmpeg-windows
+    needs: ffmpeg
     if: github.event_name != 'pull_request'
     defaults:
       run:
@@ -415,9 +360,9 @@ jobs:
   # signs with Developer ID (hardened runtime), then notarizes + staples the .dmg —
   # reusing the same Apple secrets as cli.yml. Apple Silicon runner (macos-14) with
   # Xcode's Swift 6 (the proven cli.yml toolchain); the app + stard are arm64. Intel
-  # is built/tested locally and is not produced here. The ffmpeg/ffprobe in
-  # external_binaries/bin are universal (built by ffmpeg/build_ci.sh), so video import and
-  # export run natively on both architectures with no Rosetta.
+  # is built/tested locally and is not produced here. The ffmpeg/ffprobe come from the
+  # ffmpeg job (ffmpeg/build_ci.sh) and are universal, so video import and export run natively
+  # on both architectures with no Rosetta.
   #
   # Runs on push (to develop/main) and manual dispatch, but NOT on pull_request —
   # PRs (esp. from forks) can't read the signing secrets, and notarization is costly.
@@ -427,15 +372,22 @@ jobs:
   macos-signed:
     name: macOS signed + notarized installer (macos-14)
     runs-on: macos-14
+    needs: ffmpeg
     if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v4
 
-      # The bundled ffmpeg/ffprobe must run on Apple Silicon without Rosetta (see ffmpeg/build_ci.sh).
+      # Universal (arm64 + x86_64) ffmpeg/ffprobe from the ffmpeg job: they must run on Apple
+      # Silicon without Rosetta.
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-macos
+          path: ffmpeg-bin
       - name: Check ffmpeg/ffprobe are universal
         run: |
+          chmod +x ffmpeg-bin/*
           for t in ffmpeg ffprobe; do
-            archs="$(lipo -archs "external_binaries/bin/$t")"
+            archs="$(lipo -archs "ffmpeg-bin/$t")"
             echo "$t: $archs"
             case "$archs" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "$t lacks an arm64 or x86_64 slice" >&2; exit 1 ;; esac
           done
@@ -525,7 +477,7 @@ jobs:
           # ../daemon/.build/release/stard and ../external_binaries/bin automatically.
           STAR_SIGN_IDENTITY: "Developer ID Application: Brian Martin (${{ secrets.APPLE_TEAM_ID }})"
         run: |
-          ./gradlew packageDmg --no-daemon --stacktrace
+          ./gradlew packageDmg -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
           packaging/name-installers.sh build/compose/binaries/main/dmg
 
       - name: Notarize + staple the .dmg
@@ -575,7 +527,7 @@ jobs:
         env:
           STAR_SIGN_IDENTITY: "Developer ID Application: Brian Martin (${{ secrets.APPLE_TEAM_ID }})"
         run: |
-          ./gradlew createDistributable --no-daemon --stacktrace
+          ./gradlew createDistributable -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
           tar -C build/compose/binaries/main/app -cf ../star-desktop-app.tar .
 
       - uses: actions/upload-artifact@v4

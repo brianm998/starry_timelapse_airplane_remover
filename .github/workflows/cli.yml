@@ -185,6 +185,16 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
 
+  # ─── ffmpeg / ffprobe for the GUI package ────────────────────────────────────
+  # The GUI's Xcode project copies ../external_binaries/bin/{ffmpeg,ffprobe} into the app. That
+  # directory is no longer in git: the universal (arm64 + x86_64) binaries are built by the shared
+  # ffmpeg.yml (ffmpeg/build_ci.sh), which kotlin-client.yml reuses for the desktop installers.
+  ffmpeg:
+    if: startsWith(github.ref, 'refs/tags/release/') || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/ffmpeg.yml
+    with:
+      platforms: macos
+
   # ─── macOS (signed + notarized release) ──────────────────────────────────────
   # Runs only on `release/*` tag pushes. Builds the CLI and GUI via the same
   # release scripts used locally on Brian's Mac, signs them with the Developer
@@ -210,7 +220,7 @@ jobs:
     # clicks from the Actions UI (workflow_dispatch). The dispatch path is
     # how you test the signing flow without cutting a real release tag.
     if: startsWith(github.ref, 'refs/tags/release/') || github.event_name == 'workflow_dispatch'
-    needs: [macos]  # don't burn notary quota if the smoke build already failed
+    needs: [macos, ffmpeg]  # don't burn notary quota if the smoke build already failed
     steps:
       - uses: actions/checkout@v4
 
@@ -357,6 +367,21 @@ jobs:
               --pattern '*.mp4' \
               --dir gui/videos
           ls -lh gui/videos
+
+      - name: Fetch the universal ffmpeg/ffprobe the GUI bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-macos
+          path: external_binaries/bin
+
+      - name: Check ffmpeg/ffprobe are universal
+        run: |
+          chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe
+          for t in ffmpeg ffprobe; do
+            archs="$(lipo -archs "external_binaries/bin/$t")"
+            echo "$t: $archs"
+            case "$archs" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "::error::$t lacks an arm64 or x86_64 slice"; exit 1 ;; esac
+          done
 
       - name: Build, sign, notarize, staple GUI
         working-directory: gui

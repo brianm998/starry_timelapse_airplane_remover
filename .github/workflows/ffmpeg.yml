@@ -1,0 +1,100 @@
+name: ffmpeg
+
+# The one place ffmpeg + ffprobe are built in CI, for every platform Star ships on. Reused by
+# kotlin-client.yml (desktop installers) and cli.yml (macOS GUI package) with `uses:`. Every
+# build is ffmpeg/build_ci.sh, cached on that script's hash, and uploads an artifact:
+#   ffmpeg-linux    x86_64      ffmpeg, ffprobe
+#   ffmpeg-windows  x86_64      ffmpeg.exe, ffprobe.exe
+#   ffmpeg-macos    universal   ffmpeg, ffprobe (arm64 + x86_64; runs without Rosetta)
+# Linux and Windows are x86_64 only because those are the only installers we ship. For a local
+# build run `ffmpeg/build_ci.sh <dir>` (macOS: `ffmpeg/build_ci.sh external_binaries/bin`).
+
+on:
+  workflow_call:
+    inputs:
+      platforms:
+        description: Space-separated subset of "linux windows macos" to build
+        type: string
+        default: linux windows macos
+
+jobs:
+  linux:
+    name: ffmpeg (Linux, from source)
+    if: contains(inputs.platforms, 'linux')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: ffmpeg-out
+          key: ffmpeg-linux-${{ hashFiles('ffmpeg/build_ci.sh') }}
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nasm pkg-config \
+            libx264-dev libx265-dev libvpx-dev libmp3lame-dev libopus-dev libnuma-dev
+      - name: Build ffmpeg + ffprobe
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ffmpeg/build_ci.sh "$PWD/ffmpeg-out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-linux
+          path: ffmpeg-out/*
+          if-no-files-found: error
+
+  windows:
+    name: ffmpeg (Windows, from source)
+    if: contains(inputs.platforms, 'windows')
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: ffmpeg-out
+          key: ffmpeg-windows-${{ hashFiles('ffmpeg/build_ci.sh') }}
+      - uses: msys2/setup-msys2@v2
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git make diffutils
+            mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-x264 mingw-w64-x86_64-x265 mingw-w64-x86_64-libvpx
+            mingw-w64-x86_64-lame mingw-w64-x86_64-opus
+      - name: Build ffmpeg + ffprobe
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: ffmpeg/build_ci.sh "$(cygpath -u "$GITHUB_WORKSPACE")/ffmpeg-out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows
+          path: ffmpeg-out/*
+          if-no-files-found: error
+
+  macos:
+    name: ffmpeg (macOS universal, from source)
+    if: contains(inputs.platforms, 'macos')
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: ffmpeg-out
+          key: ffmpeg-macos-${{ hashFiles('ffmpeg/build_ci.sh') }}
+      # Both slices are built here (the x86_64 one cross-compiled); the script checks the result
+      # is universal and links only system libraries, and fails otherwise.
+      - name: Build ffmpeg + ffprobe (arm64 + x86_64)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          brew install nasm pkg-config
+          ffmpeg/build_ci.sh "$PWD/ffmpeg-out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-macos
+          path: ffmpeg-out/*
+          if-no-files-found: error

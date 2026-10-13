@@ -33,3 +33,6 @@ gui/videos
 # an absolute path into one machine.
 horizon_test_data
 small_horizon_test_data
+
+# ffmpeg/ffprobe: built by ffmpeg/build_ci.sh (CI: .github/workflows/ffmpeg.yml), never committed.
+/external_binaries/bin/
