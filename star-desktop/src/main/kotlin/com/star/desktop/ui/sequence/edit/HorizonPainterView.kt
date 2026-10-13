@@ -288,9 +288,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
                     if (y.any { it >= 0 }) {
                         runCatching { app.horizonRepo.setReference(vm.sessionId, frameIdx, y, imgW, imgH, setStaticReference = true) }
                         if (reprocess) {
-                            vm.processing.stop()
                             runCatching { app.horizonRepo.reprocess(vm.sessionId, listOf(frameIdx)).collect { } }
-                            vm.processing.subscribe(vm.sessionId)
                         }
                     }
                     if (!startup) vm.toggleHorizonPaint()

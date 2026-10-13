@@ -20,8 +20,11 @@ actor Session {
     private(set) var imageInfo: ImageInfo
     private(set) var videoInfo: VideoInfo?     // set for sessions opened from a video file
 
-    // Active progress stream continuation — set when Processing.StreamProgress is open.
-    var progressContinuation: AsyncStream<Star_V1_ProgressEvent>.Continuation?
+    /// Every open progress stream, keyed by a token its handler holds.  `Processing.StreamProgress`
+    /// is the long-lived one; `Export.RenderSequence` and `Horizon.Reprocess` add a short-lived
+    /// one for their own duration.  Each handler removes only its own token when its stream ends,
+    /// so one ending can never take another's subscription with it.
+    private var progressSubscribers: [UUID: AsyncStream<Star_V1_ProgressEvent>.Continuation] = [:]
 
     // Processing task — set when Processing.Start is called.
     private var processingTask: Task<Void, Never>?
@@ -200,9 +203,24 @@ actor Session {
         await startProcessing(startIndex: indices.min()!, endIndex: indices.max()!)
     }
 
-    // Called by Dispatcher when the Processing.StreamProgress stream is opened.
-    func setProgressContinuation(_ cont: AsyncStream<Star_V1_ProgressEvent>.Continuation?) {
-        progressContinuation = cont
+    // MARK: - Progress subscribers
+
+    /// Register a stream to receive every progress event from now on.  Hold the token and
+    /// hand it to `removeProgressSubscriber` when the stream ends.
+    func addProgressSubscriber(_ cont: AsyncStream<Star_V1_ProgressEvent>.Continuation) -> UUID {
+        let token = UUID()
+        progressSubscribers[token] = cont
+        return token
+    }
+
+    /// Remove one subscriber, and only that one.
+    func removeProgressSubscriber(_ token: UUID) {
+        progressSubscribers[token] = nil
+    }
+
+    /// Send an event to every subscriber.
+    func emit(_ event: Star_V1_ProgressEvent) {
+        for cont in progressSubscribers.values { cont.yield(event) }
     }
 
     // MARK: - StarCore callback bridges
@@ -213,7 +231,7 @@ actor Session {
         ev.state = Mapping.frameProcessingState(state)
         var prog = Star_V1_ProgressEvent()
         prog.kind = .frameState(ev)
-        progressContinuation?.yield(prog)
+        emit(prog)
     }
 
     private func onFrameSavingStateChange(frame: FrameAirplaneRemover, old: FrameSavingState, new: FrameSavingState) {
@@ -223,13 +241,13 @@ actor Session {
         ev.newState = new.int32Value
         var prog = Star_V1_ProgressEvent()
         prog.kind = .frameSavingState(ev)
-        progressContinuation?.yield(prog)
+        emit(prog)
     }
 
     private func onExistingFrameStateChange(frameIndex: Int) {
         var prog = Star_V1_ProgressEvent()
         prog.kind = .frameExisting(Int32(frameIndex))
-        progressContinuation?.yield(prog)
+        emit(prog)
     }
 
     private func onOutliersLoaded(frameIndex: Int, state: OutlierLoadingState) {
@@ -238,7 +256,7 @@ actor Session {
         ev.state = state.int32Value
         var prog = Star_V1_ProgressEvent()
         prog.kind = .outliersLoaded(ev)
-        progressContinuation?.yield(prog)
+        emit(prog)
     }
 
     private func emitSequenceState(_ state: String) {
@@ -246,7 +264,15 @@ actor Session {
         ev.state = state
         var prog = Star_V1_ProgressEvent()
         prog.kind = .sequenceState(ev)
-        progressContinuation?.yield(prog)
+        emit(prog)
+    }
+}
+
+/// What the `sequence_state` values a processing run reports mean.
+enum ProcessingRun {
+    /// `done`, `cancelled` and `error` each end a run; nothing follows any of them.
+    static func isTerminal(_ state: String) -> Bool {
+        state == "done" || state == "cancelled" || state == "error"
     }
 }
 

@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -100,7 +99,6 @@ fun RenderVideoDialog(app: AppViewModel) {
             fun doRender() {
                 val sid = app.sessions.sessionId ?: return
                 if (rendering || encoder.isEmpty()) return
-                (app.screen.value as? AppScreen.Sequence)?.vm?.processing?.stop() // free the shared progress slot
                 rendering = true
                 status = "Rendering…"
                 val settings = VideoEncodeSettings.newBuilder()

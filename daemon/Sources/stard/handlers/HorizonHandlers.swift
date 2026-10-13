@@ -223,7 +223,9 @@ enum HorizonHandlers {
         }
     }
 
-    // Reprocess with the (already-set) reference horizon; streams ProgressEvent like Processing.StreamProgress.
+    // Reprocess with the (already-set) reference horizon; streams the run's ProgressEvents and
+    // ends when the run does.  It is a subscriber of its own for that long, alongside the
+    // client's long-lived Processing.StreamProgress, which hears the same events.
     static func reprocess(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_ReprocessHorizonsRequest(serializedBytes: payload)
@@ -231,7 +233,7 @@ enum HorizonHandlers {
                 await transport.sendError(id: id, message: "session not found", code: 404); return
             }
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
-            await session.setProgressContinuation(cont)
+            let token = await session.addProgressSubscriber(cont)
             // Re-run the frame graph; with hasStaticReferenceHorizon set, ops read reference.tiff directly.
             await session.reprocessWithReferenceHorizon()
             do {
@@ -240,12 +242,14 @@ enum HorizonHandlers {
                     if let data = try? event.serializedData() {
                         await transport.sendStreamItem(id: id, payload: data)
                     }
+                    // The run's last event; nothing more is coming for this request.
+                    if case .sequenceState(let s) = event.kind, ProcessingRun.isTerminal(s.state) { break }
                 }
             } catch is CancellationError {
                 // cancelled via CANCEL envelope
             }
+            await session.removeProgressSubscriber(token)
             await transport.sendStreamEnd(id: id)
-            await session.setProgressContinuation(nil)
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

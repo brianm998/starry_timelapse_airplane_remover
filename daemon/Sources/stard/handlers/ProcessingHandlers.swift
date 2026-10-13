@@ -34,9 +34,9 @@ enum ProcessingHandlers {
                 return
             }
 
-            // Wire up the session's progress continuation to this stream.
+            // Subscribe this stream to the session's progress events.
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
-            await session.setProgressContinuation(cont)
+            let token = await session.addProgressSubscriber(cont)
 
             // Stream items to the client until the session finishes or this task is cancelled.
             do {
@@ -50,7 +50,7 @@ enum ProcessingHandlers {
                 // task was cancelled via CANCEL envelope
             }
             await transport.sendStreamEnd(id: id)
-            await session.setProgressContinuation(nil)
+            await session.removeProgressSubscriber(token)
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

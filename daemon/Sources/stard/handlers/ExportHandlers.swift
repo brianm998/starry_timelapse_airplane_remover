@@ -7,8 +7,10 @@ import logging
 enum ExportHandlers {
     // Render all output frames by calling finish() on each frame.
     // Streams ProgressEvent items (frame_saving_state, sequence_state) while writing.
-    // The session's progressContinuation is wired up so the existing callback bridges
-    // automatically emit events as each frame writes its output.
+    // This stream is a subscriber of its own for as long as the render runs, so the existing
+    // callback bridges emit events to it as each frame writes its output, alongside the client's
+    // long-lived Processing.StreamProgress, which hears them too.  The completion event goes to
+    // this stream only: it is not the end of a processing run.
     static func renderSequence(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_SessionRef(serializedBytes: payload)
@@ -16,10 +18,9 @@ enum ExportHandlers {
                 await transport.sendError(id: id, message: "session not found", code: 404); return
             }
 
-            // Wire the session's progress continuation to this stream so that
-            // frameSavingStateChangeCallback events reach the client.
+            // Subscribe this stream so that frameSavingStateChangeCallback events reach the client.
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
-            await session.setProgressContinuation(cont)
+            let token = await session.addProgressSubscriber(cont)
 
             let frames = await session.frames
             let config = await session.configManager.config()
@@ -68,8 +69,8 @@ enum ExportHandlers {
                 finishTask.cancel()
             }
 
+            await session.removeProgressSubscriber(token)
             await transport.sendStreamEnd(id: id)
-            await session.setProgressContinuation(nil)
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

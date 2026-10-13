@@ -22,8 +22,9 @@ import kotlinx.coroutines.launch
  * the stream RPC arrives, so [subscribe] must run and be live *before* [start] — otherwise early
  * events are lost. [start] does not begin the subscription; it assumes one is already open.
  *
- * The daemon has a single progress slot per session shared with the `Export.*` streams, so only one
- * progress-bearing stream may run at a time — keep this subscription and serialize exports against it.
+ * The daemon keeps a set of progress subscribers per session, and `Export.RenderSequence` /
+ * `Horizon.Reprocess` are subscribers of their own for their duration, so this subscription is
+ * never torn down to make room for them. Call [stop] only when the session closes.
  */
 class ProcessingRepository(
     private val scope: CoroutineScope,

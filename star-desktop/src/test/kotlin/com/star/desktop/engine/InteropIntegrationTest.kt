@@ -302,6 +302,49 @@ class InteropIntegrationTest {
         }
     }
 
+    /**
+     * A6: the daemon keeps a set of progress subscribers, so a second stream (Export.RenderSequence,
+     * Horizon.Reprocess) neither takes over nor kills the client's long-lived StreamProgress, and both of
+     * those streams now end by themselves. The long-lived stream must hear the `done` of the run after them.
+     */
+    @Test
+    fun progressStreamSurvivesOtherStreams() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] progressStreamSurvivesOtherStreams — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        withEngine { client ->
+            val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).build()
+            val info = client.openSequence(File(seq).absolutePath, cfg)
+
+            val states = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+            val sub = CoroutineScope(SupervisorJob()).launch {
+                runCatching {
+                    client.streamProgress(info.sessionId).collect { ev ->
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) states.trySend(ev.sequenceState.state)
+                    }
+                }
+            }
+            delay(400)
+            client.startProcessing(info.sessionId, 0, -1)
+            assertEquals("done", withTimeoutOrNull(1_200_000) { states.receive() }, "first run did not finish")
+
+            // Both of these must end on their own (they used to hold the slot / never end).
+            assertTrue(withTimeoutOrNull(600_000) { client.renderSequence(info.sessionId).collect { } } != null, "render stream did not end")
+            // The render's own `done` goes to the render stream only, not to the long-lived one.
+            assertEquals(null, withTimeoutOrNull(1_000) { states.receive() }, "the render's completion reached the processing stream")
+
+            val horizonStream = withTimeoutOrNull(1_200_000) { client.reprocessHorizons(info.sessionId, listOf(0)).collect { } }
+            assertTrue(horizonStream != null, "horizon reprocess stream did not end")
+            assertEquals("done", withTimeoutOrNull(60_000) { states.receive() }, "the long-lived stream missed the next run's done")
+
+            sub.cancel()
+            client.closeSession(info.sessionId)
+        }
+    }
+
     /** Open → process(all) → render the sequence; return SHA-256 of each rendered output frame by name. */
     private fun processAndRenderHashes(seqDir: String): Map<String, String> = runBlocking {
         val scope = CoroutineScope(SupervisorJob())

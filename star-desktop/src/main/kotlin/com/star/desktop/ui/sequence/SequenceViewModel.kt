@@ -372,15 +372,13 @@ class SequenceViewModel(
     }
 
     /**
-     * Render every frame's final output (`Export.RenderSequence`). The daemon shares one progress slot
-     * per session with the processing stream, so we drop that subscription for the duration and restore
-     * it afterward (mirrors the Render Video dialog).
+     * Render every frame's final output (`Export.RenderSequence`). The render stream is its own
+     * subscriber on the daemon, so the long-lived progress subscription keeps running throughout.
      */
     fun renderAllFrames() = scope.launch {
         if (_rendering.value || isProcessing.value) return@launch
         _rendering.value = true
         _renderProgress.value = 0f
-        processing.stop() // free the shared progress slot
         try {
             export.renderSequence(sessionId).collect { ev ->
                 if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) {
@@ -395,7 +393,6 @@ class SequenceViewModel(
         } finally {
             _renderProgress.value = null
             _rendering.value = false
-            processing.subscribe(sessionId) // restore live progress
         }
     }
 
