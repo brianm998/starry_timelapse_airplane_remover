@@ -487,6 +487,70 @@ class InteropIntegrationTest {
         }
     }
 
+    /**
+     * A18: a granular reprocess deletes what macOS deletes. NONE leaves every output file in place (the
+     * daemon used to delete them); EVERYTHING deletes the frame's work and the run recomputes it.
+     */
+    @Test
+    fun reprocessTypesDeleteWhatMacOSDeletes() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] reprocessTypesDeleteWhatMacOSDeletes — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-reprocess").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        try {
+            withEngine { client ->
+                val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                    .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).setOutputPath(tmp.absolutePath).build()
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                val outDir = File(client.getConfig(info.sessionId).outputPath)
+
+                val states = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+                val sub = CoroutineScope(SupervisorJob()).launch {
+                    runCatching {
+                        client.streamProgress(info.sessionId).collect { ev ->
+                            if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) states.trySend(ev.sequenceState.state)
+                        }
+                    }
+                }
+                delay(400)
+                client.startProcessing(info.sessionId, 0, -1)
+                assertEquals("done", withTimeoutOrNull(1_200_000) { states.receive() }, "processing timed out")
+
+                // The images a run writes (not the source frames, not databases a run touches every time).
+                fun files() = outDir.walkTopDown()
+                    .filter { it.isFile && !it.startsWith(seqCopy) && it.extension.lowercase() in setOf("tif", "tiff", "png", "jpg", "jpeg") }
+                    .map { it.relativeTo(outDir).path to it.lastModified() }.toMap()
+                val before = files()
+                assertTrue(before.isNotEmpty(), "processing wrote no output files")
+
+                // NONE: nothing is deleted or rewritten.
+                client.reprocessFrames(info.sessionId, listOf(1), com.star.proto.ReprocessingType.REPROCESS_NONE)
+                assertEquals("done", withTimeoutOrNull(1_200_000) { states.receive() }, "REPROCESS_NONE run did not finish")
+                assertEquals(before, files(), "REPROCESS_NONE changed the output files")
+
+                // EVERYTHING: frame 1's work is deleted and recomputed (newer modification times), the rest untouched.
+                delay(1_100) // file timestamps have 1 s granularity on some filesystems
+                client.reprocessFrames(info.sessionId, listOf(1), com.star.proto.ReprocessingType.REPROCESS_EVERYTHING)
+                assertEquals("done", withTimeoutOrNull(1_200_000) { states.receive() }, "REPROCESS_EVERYTHING run did not finish")
+                assertEquals(
+                    com.star.proto.FrameProcessingState.FPS_COMPLETE, client.getFrame(info.sessionId, 1).state,
+                    "frame 1 was not recomputed",
+                )
+                val after = files()
+                val rewritten = after.filter { (name, t) -> before[name]?.let { it < t } ?: true }
+                assertTrue(rewritten.isNotEmpty(), "REPROCESS_EVERYTHING rewrote nothing")
+                sub.cancel()
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
     /** Open → process(all) → render the sequence; return SHA-256 of each rendered output frame by name. */
     private fun processAndRenderHashes(seqDir: String): Map<String, String> = runBlocking {
         val scope = CoroutineScope(SupervisorJob())

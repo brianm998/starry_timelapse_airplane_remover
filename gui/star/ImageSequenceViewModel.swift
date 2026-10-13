@@ -3071,23 +3071,14 @@ public final class ImageSequenceViewModel {
             if performClean {
                 for i in range {
                     if let frame = await frames[i].frame {
+                        // What each type throws away is StarCore's, shared with the daemon
+                        // behind the Kotlin client; the view has only its own state to refresh.
+                        await frame.resetForReprocessing(reprocessingType)
                         switch reprocessingType {
-                        case .everything:
-                            await frame.deleteAllProcessedImages()
-                            try? await frame.deleteOutliers()
-                            try? await self.clearProcessing(of: frame)
-                            
-                        case .none:
+                        case .everything, .alignment, .outliers:
+                            await self.refreshAfterClearingProcessing(of: frame)
+                        case .none, .allHorizons, .horizons:
                             break
-                        case .allHorizons:
-                            break
-                        case .horizons:
-                            await frame.deleteHorizonImages()
-                        case .alignment:
-                            try await self.clearProcessing(of: frame)
-                        case .outliers:
-                            try await self.clearProcessing(of: frame)
-                            try await frame.deleteOutliers()
                         }
                     }
                 }
@@ -3122,23 +3113,15 @@ public final class ImageSequenceViewModel {
     }    
 
     func clearProcessing(of frame: FrameAirplaneRemover) async throws {
-        try await Task.detached(priority: .userInitiated) { // do we need this detached task?
+        await frame.clearProcessing(deleting: self.reprocessingType)
+        await refreshAfterClearingProcessing(of: frame)
+    }
+
+    /// Bring the views up to date with a frame whose processing was just cleared.
+    func refreshAfterClearingProcessing(of frame: FrameAirplaneRemover) async {
+        await Task.detached(priority: .userInitiated) { // do we need this detached task?
             let frameToClear = frame
 
-            await frameToClear.set(state: .unprocessed)
-            //await frameToClear.updateCombineSubjects()
-
-            // this now does delete the alignment and subtraction images too
-            await frameToClear.imageAccessor.deleteAllImages(
-              frameIndex: frameToClear.frameIndex,
-              reprocessingType: self.reprocessingType
-            )
-
-            await frameToClear.setNumberOfAlignedFrames()
-            await frameToClear.setNumberOfStaticNeighborFrames()
-
-            try await frameToClear.removeNumberOfAlignedImagesForThisFrameFile()
-            
             Task { @MainActor in
                 self.frameViewMode = .original
             }
@@ -3157,23 +3140,6 @@ public final class ImageSequenceViewModel {
 
             Task { @MainActor in
                 self.frames[frame.frameIndex].existingImages = existingImages
-            }
-            
-            let binaryBlobFilename = await frameToClear.blobBinaryFilename
-            // get rid of the outlier files
-            do {
-                Log.d("trying to remove \(binaryBlobFilename)")
-                try FileManager.default.removeItem(atPath: binaryBlobFilename)
-            } catch {
-                Log.e("error removing \(binaryBlobFilename): \(error)")
-            }
-
-            let trashBinaryFilename = await frameToClear.trashBinaryFilename
-            do {
-                Log.d("trying to remove \(trashBinaryFilename)")
-                try FileManager.default.removeItem(atPath: trashBinaryFilename)
-            } catch {
-                Log.e("error removing \(trashBinaryFilename): \(error)")
             }
 
             Task { @MainActor in

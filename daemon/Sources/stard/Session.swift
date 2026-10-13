@@ -213,28 +213,24 @@ actor Session {
         await startProcessing(startIndex: 0, endIndex: nil)
     }
 
-    // Reset per-frame work files so the frame graph recomputes them (mirrors the macOS
-    // ImageSequenceViewModel.clearProcessing reset). Used by force-reprocess and granular reprocess.
+    // Throw away what a reprocess of `type` must redo, so the frame graph recomputes it.  The
+    // per-type work is StarCore's `FrameAirplaneRemover.resetForReprocessing`, which the macOS
+    // gui calls too: `.none` deletes nothing, `.horizons` only the horizon images, `.everything`
+    // every processed image and the outliers as well.
     func resetFrames(indices: [Int], type: FrameReprocessingType) async {
         for i in indices {
             guard let frame = frame(at: i) else { continue }
-            await frame.set(state: .unprocessed)
-            frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex, reprocessingType: type)
-            await frame.setNumberOfAlignedFrames()
-            await frame.setNumberOfStaticNeighborFrames()
-            try? await frame.removeNumberOfAlignedImagesForThisFrameFile()
-            if type == .everything || type == .outliers || type == .alignment {
-                try? await frame.deleteOutliers()
-            }
+            await frame.resetForReprocessing(type)
         }
     }
 
     // Force-reprocess a contiguous range: reset the frames, then run the graph over [start, end].
     func forceReprocess(startIndex: Int, endIndex: Int?) async {
         await stopRun(announce: false)
-        let hi = endIndex ?? (frames.count - 1)
-        let range = Array(max(0, startIndex)...min(frames.count - 1, hi))
-        await resetFrames(indices: range, type: .everything)
+        let lo = max(0, startIndex)
+        let hi = min(frames.count - 1, endIndex ?? (frames.count - 1))
+        guard lo <= hi else { return }
+        await resetFrames(indices: Array(lo...hi), type: .everything)
         await startProcessing(startIndex: startIndex, endIndex: endIndex)
     }
 
