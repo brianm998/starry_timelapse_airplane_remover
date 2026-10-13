@@ -121,6 +121,29 @@ actor Session {
     // Current config snapshot.
     func config() async -> Config { await configManager.config() }
 
+    /// Apply the settings a client sent (`Sequence.UpdateConfig`) and persist them.  Returns the
+    /// config as it now stands.
+    func updateConfig(from proto: Star_V1_Config) async -> Config {
+        var config = await configManager.config()
+        config.cleanMethod = Mapping.cleanMethod(from: proto)
+        config.detectionType = Mapping.detectionType(from: proto.detectionType)
+        config.horizonDetectionEnabled = proto.horizonDetectionEnabled
+        config.tripodHeadWasMoving = proto.tripodHeadWasMoving
+        if proto.numberOfFramesToProcessConcurrently > 0 {
+            config.numberOfFramesToProcessConcurrently = Int(proto.numberOfFramesToProcessConcurrently)
+        }
+        Mapping.applyExpertConfig(&config, from: proto)
+        await configManager.update(config)
+        // The client is told the config is applied; make that include the
+        // file, since update() writes asynchronously now.
+        await configManager.flush()
+        // The outlier stage reads the detection strength from the global `constants`, not from
+        // the config, so a change only reaches the frames still to be processed through this
+        // (macOS sets it on change too).
+        await constants.set(detectionType: config.detectionType)
+        return config
+    }
+
     // Set/clear the static reference-horizon flag and persist config.json (resume/interop).
     func setStaticReferenceHorizon(_ enabled: Bool) async {
         var cfg = await configManager.config()
