@@ -18,6 +18,9 @@ import com.star.proto.Config
 import com.star.proto.OpenProgress
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -152,6 +155,9 @@ class AppViewModel(
     val horizonRepo = com.star.desktop.data.HorizonRepository { engine.client }
 
     private var currentSequence: SequenceViewModel? = null
+
+    /** What this class itself runs for the open session (the render-prompt and error collectors); cancelled when it closes. */
+    private var sessionScope: CoroutineScope? = null
 
     val engineStatus: StateFlow<EngineStatus> = engine.status
 
@@ -534,6 +540,7 @@ class AppViewModel(
             ensureConnected()
             _screen.value = AppScreen.Loading("Importing video", path, null)
             try {
+                closeOpenSession() // opening over an open session: cancel it, close it, then open
                 var info: SessionInfo? = null
                 sessions.openVideo(path).collect { p ->
                     when (p.kindCase) {
@@ -561,11 +568,46 @@ class AppViewModel(
 
     fun closeSession() {
         scope.launch {
-            currentSequence?.close()
-            currentSequence = null
-            runCatching { sessions.close() }
+            closeOpenSession()
+            lastResumePath = null // nothing is open, so a crash from here on has nothing to resume
             _screen.value = AppScreen.Initial
         }
+    }
+
+    /**
+     * End the open session completely: the UI side, then `Session.Close` on the daemon, which stops
+     * its run and waits for it, writes out what is pending, and ends its streams. Opening a new
+     * source goes through here first, so the old session is closed rather than just forgotten.
+     */
+    private suspend fun closeOpenSession() {
+        teardownSequence()
+        runCatching { sessions.close() }
+    }
+
+    /**
+     * The UI side of closing a session: stop its view model, cancel every coroutine started for it,
+     * and reset the app-level state that only made sense for it (render prompts, open dialogs, the
+     * startup answers, the version warning) so the next session starts clean.
+     */
+    private fun teardownSequence() {
+        currentSequence?.close()
+        currentSequence = null
+        sessionScope?.cancel()
+        sessionScope = null
+
+        _showPreRenderPrompt.value = false
+        _showPostRenderPrompt.value = false
+        autoRenderAfterProcessing = false
+        awaitingProcessingPrompt = false
+        _showSettings.value = false
+        _showRenderVideo.value = false
+        _renderVideoAutoStart.value = false
+        _showOutlierWindow.value = false
+        _showAlignmentWindow.value = false
+        _showInfoDialog.value = false
+        _startupStep.value = null
+        resetStartupChoices()
+        _versionWarning.value = null
     }
 
     fun dismissError() { _error.value = null }
@@ -605,8 +647,8 @@ class AppViewModel(
     /** Give up on a crashed engine: close the dead session and return to the start screen. */
     fun dismissEngineDown() {
         _engineDown.value = null
-        currentSequence?.close()
-        currentSequence = null
+        teardownSequence()
+        lastResumePath = null
         runCatching { sessions.clearLocal() }
         _screen.value = AppScreen.Initial
     }
@@ -629,6 +671,7 @@ class AppViewModel(
             }
             _screen.value = AppScreen.Loading(title, path, null)
             try {
+                closeOpenSession() // opening over an open session: cancel it, close it, then open
                 onOpened(path, block(), promptStartup = promptStartup)
             } catch (e: Throwable) {
                 fail(e.message ?: "failed to open")
@@ -637,6 +680,9 @@ class AppViewModel(
     }
 
     private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true, promptStartup: Boolean = false) {
+        // Normally the open has already closed what was open; this is for the restart-after-crash route,
+        // where the old session died with the engine. Before anything below sets state for the new one.
+        teardownSequence()
         if (addToRecent) {
             prefs.addRecentFile(path)
             _recentFiles.value = prefs.recentFiles
@@ -651,11 +697,12 @@ class AppViewModel(
         // Warn if the session was last written by a different engine version (req #4).
         val engineVer = (engine.status.value as? EngineStatus.Connected)?.daemonVersion
         _versionWarning.value = com.star.desktop.util.versionMismatchWarning(info.config.starVersion, engineVer)
-        currentSequence?.close()
-        val proc = ProcessingRepository(scope) { engine.client }
+        val sessionScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
+        this.sessionScope = sessionScope
+        val proc = ProcessingRepository(sessionScope) { engine.client }
         // Fire the post-processing render prompt when a prompted process-all run reaches "done"; a
         // run the user stopped must not leave it armed for whichever run reaches "done" next.
-        scope.launch {
+        sessionScope.launch {
             proc.sequenceState.collect {
                 when (it) {
                     "done" -> handleProcessingDone()
@@ -667,8 +714,8 @@ class AppViewModel(
                 }
             }
         }
-        scope.launch { proc.errors.collect(::report) }
-        val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo, onError = ::report)
+        sessionScope.launch { proc.errors.collect(::report) }
+        val svm = SequenceViewModel(sessionScope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo, onError = ::report)
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)

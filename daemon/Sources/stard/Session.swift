@@ -40,6 +40,10 @@ actor Session {
     /// alongside the operations the stop is still draining.
     private var stopTask: Task<Void, Never>?
 
+    /// Set once `close()` begins.  From then on nothing starts work on this session and a
+    /// stream that tries to attach is ended at once.
+    private var closed = false
+
     init(
         sessionID: String,
         scratchSessionDir: String,
@@ -156,11 +160,11 @@ actor Session {
     // startIndex/endIndex are 0-based inclusive frame indices; pass nil endIndex to process to the last frame.
     func startProcessing(startIndex: Int = 0, endIndex: Int? = nil) async {
         await stopTask?.value
-        guard activeRun == nil else { return }
+        guard !closed, activeRun == nil else { return }
         await frameGraphBuilder.set(configManager: configManager)
         // The stop that was awaited above, or a concurrent start, may have got in while this
         // was suspended on the builder.
-        guard activeRun == nil else { return }
+        guard !closed, activeRun == nil else { return }
         runGeneration += 1
         let generation = runGeneration
         activeRun = generation
@@ -232,6 +236,7 @@ actor Session {
     // Re-run the whole frame graph after a reference-horizon change. With hasStaticReferenceHorizon
     // set, the graph skips per-frame horizon detection and reads reference.tiff directly.
     func reprocessWithReferenceHorizon() async {
+        guard !closed else { return }
         await stopRun(announce: false)
         await startProcessing(startIndex: 0, endIndex: nil)
     }
@@ -249,6 +254,7 @@ actor Session {
 
     // Force-reprocess a contiguous range: reset the frames, then run the graph over [start, end].
     func forceReprocess(startIndex: Int, endIndex: Int?) async {
+        guard !closed else { return }
         await stopRun(announce: false)
         let lo = max(0, startIndex)
         let hi = min(frames.count - 1, endIndex ?? (frames.count - 1))
@@ -260,10 +266,30 @@ actor Session {
     // Granular reprocess of a specific (possibly non-contiguous) set of frames. Untouched .complete
     // frames in [min,max] are skipped by the ops' state check, so only the reset frames recompute.
     func reprocessFrames(indices: [Int], type: FrameReprocessingType) async {
-        guard !indices.isEmpty else { return }
+        guard !closed, !indices.isEmpty else { return }
         await stopRun(announce: false)
         await resetFrames(indices: indices, type: type)
         await startProcessing(startIndex: indices.min()!, endIndex: indices.max()!)
+    }
+
+    // MARK: - Closing
+
+    /// End the session (`Session.Close`): stop the run in flight and wait for it to drain, write
+    /// out what is still pending, and end every progress stream, so that nothing keeps running
+    /// against a session that is about to be dropped (the frame-graph builder is shared, and the
+    /// next session repoints it).  Safe to call more than once.
+    func close() async {
+        closed = true
+        // Only a session with a run of its own has anything to stop: the frame-graph builder is
+        // shared, and stopping it would also stop a run that belongs to another session.
+        if activeRun != nil || stopTask != nil {
+            await stopRun(announce: false)
+        }
+        // A1: flush save queue here
+        await configManager.flush()
+        let subscribers = progressSubscribers.values
+        progressSubscribers.removeAll()
+        for cont in subscribers { cont.finish() }
     }
 
     // MARK: - Progress subscribers
@@ -272,7 +298,11 @@ actor Session {
     /// hand it to `removeProgressSubscriber` when the stream ends.
     func addProgressSubscriber(_ cont: AsyncStream<Star_V1_ProgressEvent>.Continuation) -> UUID {
         let token = UUID()
-        progressSubscribers[token] = cont
+        if closed {
+            cont.finish()   // a stream that arrives after the close has nothing to wait for
+        } else {
+            progressSubscribers[token] = cont
+        }
         return token
     }
 

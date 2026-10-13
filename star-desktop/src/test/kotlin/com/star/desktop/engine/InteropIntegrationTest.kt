@@ -590,6 +590,64 @@ class InteropIntegrationTest {
         }
     }
 
+    /**
+     * A16: Session.Close stops a run in flight, waits for it, and ends the session's progress streams;
+     * a session opened afterwards runs normally (it is not fighting the old run for the shared graph).
+     */
+    @Test
+    fun closeStopsTheRunAndEndsTheStreams() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] closeStopsTheRunAndEndsTheStreams — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        withEngine { client ->
+            val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).build()
+            val first = client.openSequence(File(seq).absolutePath, cfg)
+
+            val firstStates = mutableListOf<String>()
+            val streamEnded = CompletableDeferred<Unit>()
+            val sub = CoroutineScope(SupervisorJob()).launch {
+                runCatching {
+                    client.streamProgress(first.sessionId).collect { ev ->
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) synchronized(firstStates) { firstStates += ev.sequenceState.state }
+                    }
+                }
+                streamEnded.complete(Unit)
+            }
+            delay(400)
+            client.startProcessing(first.sessionId, 0, -1)
+            delay(1_000)
+            client.closeSession(first.sessionId)
+            assertTrue(withTimeoutOrNull(30_000) { streamEnded.await() } != null, "Close left the progress stream open")
+            sub.cancel()
+            synchronized(firstStates) {
+                assertTrue("done" !in firstStates, "the closed session's stopped run reported done")
+            }
+
+            // The old session is gone.
+            val gone = runCatching { client.getFrame(first.sessionId, 0) }
+            assertTrue(gone.isFailure, "a closed session still answers")
+
+            // A fresh session processes to the end.
+            val second = client.openSequence(File(seq).absolutePath, cfg)
+            val done = CompletableDeferred<Unit>()
+            val sub2 = CoroutineScope(SupervisorJob()).launch {
+                runCatching {
+                    client.streamProgress(second.sessionId).collect { ev ->
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") done.complete(Unit)
+                    }
+                }
+            }
+            delay(400)
+            client.startProcessing(second.sessionId, 0, -1)
+            assertTrue(withTimeoutOrNull(1_200_000) { done.await() } != null, "the session opened after a close did not finish")
+            sub2.cancel()
+            client.closeSession(second.sessionId)
+        }
+    }
+
     /** Open → process(all) → render the sequence; return SHA-256 of each rendered output frame by name. */
     private fun processAndRenderHashes(seqDir: String): Map<String, String> = runBlocking {
         val scope = CoroutineScope(SupervisorJob())

@@ -68,6 +68,9 @@ enum ExportHandlers {
             } catch is CancellationError {
                 finishTask.cancel()
             }
+            // Past the "done" sentinel this does nothing.  Otherwise the stream was ended from
+            // under it -- the session closed -- and the render must not carry on without it.
+            finishTask.cancel()
 
             await session.removeProgressSubscriber(token)
             await transport.sendStreamEnd(id: id)

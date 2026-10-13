@@ -20,6 +20,8 @@ import com.star.proto.ProgressEvent
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,7 +39,7 @@ import kotlinx.coroutines.launch
  * progress stream. Preview loading auto-retries as processing makes a frame's preview available.
  */
 class SequenceViewModel(
-    private val scope: CoroutineScope,
+    parentScope: CoroutineScope,
     val info: SessionInfo,
     private val frames: FrameRepository,
     val processing: ProcessingRepository,
@@ -50,6 +52,13 @@ class SequenceViewModel(
 ) {
     val sessionId: String = info.sessionId
     val frameCount: Int = info.frameCount
+
+    /**
+     * Everything this view model launches runs here, a child of [parentScope] that [close] cancels,
+     * so nothing it started outlives its session (the app's own scope lives as long as the app).
+     */
+    private val scope: CoroutineScope =
+        CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
 
     // ---- interaction state ----
     private val _mode = MutableStateFlow(InteractionMode.SCRUB) // macOS default is scrub
@@ -511,9 +520,11 @@ class SequenceViewModel(
     suspend fun frameInfo(index: Int): com.star.proto.FrameInfo? =
         runCatching { frames.info(sessionId, index) }.getOrNull()
 
+    /** End this session's UI: stop playback and the progress subscription, and cancel every coroutine it launched. */
     fun close() {
         stopPlayback()
         processing.stop()
+        scope.cancel()
     }
 
     private suspend fun loadPreview(index: Int, mode: FrameViewMode) {
