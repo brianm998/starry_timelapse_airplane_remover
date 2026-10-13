@@ -1688,7 +1688,13 @@ public final class ImageSequenceViewModel {
     }
     
     // the threshold used in goodPixels(thresholdFactor: )
-    var pixelThreshold: Double = 1.2
+    var pixelThreshold: Double = 1.2 {
+        didSet {
+            var realConfig = config.config()
+            realConfig.pixelThreshold = pixelThreshold
+            config.update(realConfig)
+        }
+    }
     
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
@@ -2024,6 +2030,7 @@ public final class ImageSequenceViewModel {
         self.horizonMemoryMultiplier = config.horizonMemoryMultiplier
         self.horizonReservationFloorMB = config.horizonReservationFloorMB
         self.homographySmoothingEpsilon = config.homographySmoothingEpsilon
+        self.pixelThreshold = config.pixelThreshold
         self.allowEarthAlignment = config.allowEarthAlignment
         self.useReferenceHorizonSmoothing = config.useReferenceHorizonSmoothing
         self.useGPUForMerge = config.useGPUForMerge
