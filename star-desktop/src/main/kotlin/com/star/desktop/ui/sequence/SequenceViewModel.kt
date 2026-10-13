@@ -1,6 +1,7 @@
 package com.star.desktop.ui.sequence
 
 import androidx.compose.ui.graphics.ImageBitmap
+import com.star.desktop.i18n.localized
 import com.star.desktop.data.ExportRepository
 import com.star.desktop.data.FrameRepository
 import com.star.desktop.data.HorizonRepository
@@ -44,6 +45,8 @@ class SequenceViewModel(
     private val imageCache: ImageCache,
     private val export: ExportRepository,
     val horizon: HorizonRepository,
+    /** Shows a failed user action to the user (macOS `report(error:)`). */
+    private val onError: (String) -> Unit = {},
 ) {
     val sessionId: String = info.sessionId
     val frameCount: Int = info.frameCount
@@ -196,7 +199,7 @@ class SequenceViewModel(
 
     /** Get (creating if needed) the [FrameViewModel] for [index]. */
     fun frameVMFor(index: Int): FrameViewModel =
-        frameVMs.getOrPut(index) { FrameViewModel(scope, sessionId, index, outliers, frames) }
+        frameVMs.getOrPut(index) { FrameViewModel(scope, sessionId, index, outliers, frames, onError) }
 
     /** The frame view model for the current index. */
     fun currentFrameVM(): FrameViewModel = frameVMFor(_currentIndex.value)
@@ -269,6 +272,15 @@ class SequenceViewModel(
         }
     }
 
+    /**
+     * Show a failed user action. Cancellation is not a failure. [message] is what the user is told;
+     * it defaults to the error's own text, as macOS `report(error: "\(error)")` does.
+     */
+    private fun reportFailure(e: Throwable, message: () -> String = { e.message ?: e.toString() }) {
+        if (e is kotlinx.coroutines.CancellationException) return
+        onError(message())
+    }
+
     fun processAll() = startProcessingRun { processing.start(sessionId, 0, -1) }
     fun processRemaining() = startProcessingRun { processing.start(sessionId, 0, -1) } // daemon resumes completed frames
     fun processCurrent() = startProcessingRun { processing.start(sessionId, _currentIndex.value, _currentIndex.value) }
@@ -288,12 +300,14 @@ class SequenceViewModel(
     fun applyDecisionTreeAll() = scope.launch {
         runCatching { outliers.applyDecisionTreeAllFrames(sessionId, overwrite = true) }
             .onSuccess { frameVMFor(_currentIndex.value).load(force = true) }
+            .onFailure { reportFailure(it) { localized("ui.decision_tree_render_failed", it.message ?: it) } }
     }
 
     /** Granular reprocess (grid context menu) of the selected frames, or the current frame if none. */
     fun reprocessSelected(type: com.star.proto.ReprocessingType) = scope.launch {
         val indices = (_selected.value.takeIf { it.isNotEmpty() } ?: setOf(_currentIndex.value)).sorted()
         runCatching { processing.reprocessFrames(sessionId, indices, type) }
+            .onFailure { reportFailure(it) }
     }
 
     /** Per-cell grid horizon overlay (kind + per-column Y), or null if none. */
@@ -336,6 +350,7 @@ class SequenceViewModel(
         val t = _multiChoice.value ?: return@launch
         val (s, e) = range.indices(_currentIndex.value, frameCount, n)
         runCatching { outliers.setDecisionsOverlapping(sessionId, s, e, shouldRemove, t.frameIndex, t.groupId) }
+            .onFailure { reportFailure(it) }
         dismissMultiSheets()
         frameVMFor(_currentIndex.value).load(force = true)
     }
@@ -345,6 +360,7 @@ class SequenceViewModel(
         val sel = _multiSelect.value ?: return@launch
         val (s, e) = range.indices(_currentIndex.value, frameCount, n)
         runCatching { outliers.setDecisionsInArea(sessionId, s, e, shouldRemove, sel.startX, sel.startY, sel.endX, sel.endY, overlapping) }
+            .onFailure { reportFailure(it) }
         dismissMultiSheets()
         frameVMFor(_currentIndex.value).load(force = true)
     }
@@ -366,6 +382,7 @@ class SequenceViewModel(
             }
         } catch (e: Throwable) {
             Log.w("Sequence") { "render current frame failed: ${e.message}" }
+            reportFailure(e) { localized("ui.render_failed", e.message ?: e) }
         } finally {
             _rendering.value = false
         }
@@ -390,6 +407,7 @@ class SequenceViewModel(
             loadPreview(_currentIndex.value, _viewMode.value)
         } catch (e: Throwable) {
             Log.w("Sequence") { "render all frames failed: ${e.message}" }
+            reportFailure(e) { localized("ui.render_failed", e.message ?: e) }
         } finally {
             _renderProgress.value = null
             _rendering.value = false

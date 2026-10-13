@@ -3,6 +3,7 @@ package com.star.desktop.ui.sequence
 import com.star.desktop.data.FrameRepository
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.domain.OutlierDecisions
+import com.star.desktop.i18n.localized
 import com.star.desktop.domain.ToolType
 import com.star.proto.CleanMethod
 import com.star.proto.FrameInfo
@@ -29,6 +30,8 @@ class FrameViewModel(
     val frameIndex: Int,
     private val outliers: OutlierRepository,
     private val frames: FrameRepository,
+    /** Shows a failed user action to the user (macOS `report(error:)`). */
+    private val onError: (String) -> Unit = {},
 ) {
     private val _groups = MutableStateFlow<List<OutlierGroup>>(emptyList())
     val groups: StateFlow<List<OutlierGroup>> = _groups.asStateFlow()
@@ -86,6 +89,7 @@ class FrameViewModel(
         scope.launch {
             runCatching { frames.setCleanMethod(sessionId, frameIndex, method) }
                 .onSuccess { _info.value = it }
+                .onFailure { reportFailure(it) }
         }
     }
 
@@ -128,6 +132,7 @@ class FrameViewModel(
         val areaTool = tool.toAreaTool() ?: return
         scope.launch {
             runCatching { outliers.applyAreaTool(sessionId, frameIndex, areaTool, startX, startY, endX, endY, groupId = groupId) }
+                .onFailure { reportFailure(it) }
             load(force = true)
         }
     }
@@ -137,6 +142,7 @@ class FrameViewModel(
         scope.launch {
             runCatching { outliers.applyDecisionTree(sessionId, frameIndex, overwrite) }
                 .onSuccess { load(force = true) }
+                .onFailure { reportFailure(it) { localized("ui.decision_tree_render_failed", it.message ?: it) } }
         }
     }
 
@@ -157,6 +163,17 @@ class FrameViewModel(
                 OutlierDecision.newBuilder().setGroupId(it.first).setDecision(it.second).build()
             }
             runCatching { outliers.setDecisions(sessionId, frameIndex, protoDecisions, rerender = false) }
+                .onFailure {
+                    // The optimistic tint above is now wrong; show what the daemon actually has.
+                    reportFailure(it)
+                    load(force = true)
+                }
         }
+    }
+
+    /** Tell the user an action on this frame failed; cancellation is not a failure. */
+    private fun reportFailure(e: Throwable, message: () -> String = { localized("ui.error_processing_frame", frameIndex, e.message ?: e) }) {
+        if (e is kotlinx.coroutines.CancellationException) return
+        onError(message())
     }
 }

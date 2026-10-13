@@ -172,7 +172,8 @@ actor Session {
             let joined = errorList.joined(separator: "\n")
             Log.e("stard: processing finished with \(errorList.count) error(s):\n\(joined)")
             try? joined.write(toFile: "\(scratchSessionDir)/processing_errors.log", atomically: true, encoding: .utf8)
-            emitSequenceState("done")
+            // A run with failed operations did not finish; the client must not offer to render it.
+            emitSequenceState("error", message: joined)
         }
     }
 
@@ -317,9 +318,10 @@ actor Session {
         emit(prog)
     }
 
-    private func emitSequenceState(_ state: String) {
+    private func emitSequenceState(_ state: String, message: String = "") {
         var ev = Star_V1_SequenceStateEvent()
         ev.state = state
+        ev.message = message
         var prog = Star_V1_ProgressEvent()
         prog.kind = .sequenceState(ev)
         emit(prog)

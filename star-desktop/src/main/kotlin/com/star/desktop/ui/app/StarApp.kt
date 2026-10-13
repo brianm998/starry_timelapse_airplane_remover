@@ -6,12 +6,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -238,10 +242,15 @@ private fun ErrorOverlay(message: String, onDismiss: () -> Unit) {
                 .background(StarColors.red.copy(alpha = 0.92f))
                 .padding(40.dp),
         ) {
+            Text(localized("ui.error"), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 12.dp))
             androidx.compose.foundation.text.selection.SelectionContainer {
-                Text(message, color = Color.White, fontSize = 14.sp)
+                Text(
+                    message, color = Color.White, fontSize = 14.sp,
+                    modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+                )
             }
-            Button(onClick = onDismiss, modifier = Modifier.padding(top = 20.dp)) { Text(localized("ui.dismiss")) }
+            Button(onClick = onDismiss, modifier = Modifier.padding(top = 20.dp)) { Text(localized("ui.close")) }
         }
     }
 }

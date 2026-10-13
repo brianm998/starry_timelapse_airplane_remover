@@ -659,14 +659,16 @@ class AppViewModel(
             proc.sequenceState.collect {
                 when (it) {
                     "done" -> handleProcessingDone()
-                    "cancelled" -> {
+                    // A stopped or failed run is not one to offer a render for.
+                    "cancelled", "error" -> {
                         awaitingProcessingPrompt = false
                         autoRenderAfterProcessing = false
                     }
                 }
             }
         }
-        val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo)
+        scope.launch { proc.errors.collect(::report) }
+        val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo, onError = ::report)
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)
@@ -693,6 +695,12 @@ class AppViewModel(
             // session never finished, which has to come before processing rather than after.
             resumeStartupHorizonIfUnfinished(svm, info.config)
         }
+    }
+
+    /** Show an error over whatever screen is up (macOS `report(error:)`); unlike [fail], leaves the screen alone. */
+    fun report(message: String) {
+        Log.w("App") { message }
+        _error.value = message
     }
 
     private fun fail(message: String) {

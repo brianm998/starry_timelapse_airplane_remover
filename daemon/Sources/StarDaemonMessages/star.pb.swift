@@ -2293,12 +2293,16 @@ public struct Star_V1_IoProgress: Sendable {
   public init() {}
 }
 
+/// state: "done" | "cancelled" | "error". "error" ends a run that finished with failed operations,
+/// with message = the failures joined one per line; "done" is only sent for a clean run.
 public struct Star_V1_SequenceStateEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var state: String = String()
+
+  public var message: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -5485,7 +5489,7 @@ extension Star_V1_IoProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
 
 extension Star_V1_SequenceStateEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SequenceStateEvent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}state\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}state\0\u{1}message\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5494,6 +5498,7 @@ extension Star_V1_SequenceStateEvent: SwiftProtobuf.Message, SwiftProtobuf._Mess
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.state) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.message) }()
       default: break
       }
     }
@@ -5503,11 +5508,15 @@ extension Star_V1_SequenceStateEvent: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if !self.state.isEmpty {
       try visitor.visitSingularStringField(value: self.state, fieldNumber: 1)
     }
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_SequenceStateEvent, rhs: Star_V1_SequenceStateEvent) -> Bool {
     if lhs.state != rhs.state {return false}
+    if lhs.message != rhs.message {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

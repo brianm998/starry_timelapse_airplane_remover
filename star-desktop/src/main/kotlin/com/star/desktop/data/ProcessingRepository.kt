@@ -8,8 +8,11 @@ import com.star.proto.ProgressEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -50,6 +53,13 @@ class ProcessingRepository(
 
     private val _processing = MutableStateFlow(false)
     val processing: StateFlow<Boolean> = _processing.asStateFlow()
+
+    /**
+     * A run that finished with failed operations (`sequence_state = "error"`): the failures, one per line.
+     * One-shot, not state — each is shown to the user once.
+     */
+    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val errors: SharedFlow<String> = _errors.asSharedFlow()
 
     private var subJob: Job? = null
 
@@ -119,7 +129,7 @@ class ProcessingRepository(
 
     fun frameState(index: Int): FrameProcessingState? = _frameStates.value[index]
 
-    private fun fold(ev: ProgressEvent) {
+    internal fun fold(ev: ProgressEvent) {
         when (ev.kindCase) {
             ProgressEvent.KindCase.FRAME_STATE ->
                 _frameStates.update { it + (ev.frameState.frameIndex to ev.frameState.state) }
@@ -135,7 +145,8 @@ class ProcessingRepository(
                 // about that run.
                 if (s == "cancelled" && startedSinceCancel) return
                 _sequenceState.value = s
-                if (s == "done" || s == "cancelled") _processing.value = false
+                if (s == "done" || s == "cancelled" || s == "error") _processing.value = false
+                if (s == "error") _errors.tryEmit(ev.sequenceState.message.ifBlank { s })
             }
             ProgressEvent.KindCase.FRAME_EXISTING ->
                 Log.d("Processing") { "frame ${ev.frameExisting} already exists" }

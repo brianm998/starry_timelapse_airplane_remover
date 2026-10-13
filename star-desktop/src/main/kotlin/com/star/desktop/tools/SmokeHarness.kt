@@ -68,7 +68,10 @@ object SmokeHarness {
                             val extra = if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) " '${ev.sequenceState.state}'" else ""
                             println("  [recv #$n] ${ev.kindCase}$extra")
                         }
-                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") done.complete(Unit)
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) {
+                            if (ev.sequenceState.state == "error") println("  [recv] processing errors: ${ev.sequenceState.message}")
+                            if (ev.sequenceState.state == "done" || ev.sequenceState.state == "error") done.complete(Unit)
+                        }
                     }
                     println("  [client] progress stream ENDED after $n events")
                 } catch (e: Throwable) {
