@@ -223,6 +223,21 @@ actor Session {
         for cont in progressSubscribers.values { cont.yield(event) }
     }
 
+    /// Tell one subscriber each frame's state as it is now.  StarCore reports a frame's state
+    /// as it is built, before any stream exists to hear it, so without this a client that
+    /// attaches after the open starts out knowing nothing about frames a resumed run already
+    /// finished.  The live events that follow supersede it.
+    func seedFrameStates(to cont: AsyncStream<Star_V1_ProgressEvent>.Continuation) async {
+        for frame in frames {
+            var ev = Star_V1_FrameStateEvent()
+            ev.frameIndex = Int32(frame.frameIndex)
+            ev.state = Mapping.frameProcessingState(await frame.processingState())
+            var prog = Star_V1_ProgressEvent()
+            prog.kind = .frameState(ev)
+            cont.yield(prog)
+        }
+    }
+
     // MARK: - StarCore callback bridges
 
     private func onFrameStateChange(frame: FrameAirplaneRemover, state: FrameProcessingState) {

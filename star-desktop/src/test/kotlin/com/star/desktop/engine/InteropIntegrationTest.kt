@@ -8,6 +8,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -341,6 +344,57 @@ class InteropIntegrationTest {
             assertEquals("done", withTimeoutOrNull(60_000) { states.receive() }, "the long-lived stream missed the next run's done")
 
             sub.cancel()
+            client.closeSession(info.sessionId)
+        }
+    }
+
+    /**
+     * A7: a stream attached after the open is told every frame's state first, so a resumed, already
+     * processed session reads "N of N complete" immediately instead of starting from nothing.
+     */
+    @Test
+    fun frameStatesSeededOnSubscribe() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] frameStatesSeededOnSubscribe — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).build()
+        val (configJson, frameCount) = withEngine { client ->
+            val info = client.openSequence(File(seq).absolutePath, cfg)
+            val done = CompletableDeferred<Unit>()
+            val sub = CoroutineScope(SupervisorJob()).launch {
+                runCatching {
+                    client.streamProgress(info.sessionId).collect { ev ->
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") done.complete(Unit)
+                    }
+                }
+            }
+            delay(400)
+            client.startProcessing(info.sessionId, 0, -1)
+            assertTrue(withTimeoutOrNull(1_200_000) { done.await() } != null, "processing timed out")
+            sub.cancel()
+            client.closeSession(info.sessionId)
+            info.configJsonPath to info.frameCount
+        }
+
+        // A fresh daemon resumes the finished sequence; nothing has run, yet the stream's first events
+        // are one state per frame, all complete.
+        withEngine { client ->
+            val info = client.openConfig(configJson)
+            val seeded = withTimeoutOrNull(30_000) {
+                client.streamProgress(info.sessionId)
+                    .filter { it.kindCase == ProgressEvent.KindCase.FRAME_STATE }
+                    .take(frameCount)
+                    .toList()
+            }
+            assertTrue(seeded != null, "no frame states arrived on a fresh subscription")
+            assertEquals(frameCount, seeded!!.map { it.frameState.frameIndex }.toSet().size, "not one state per frame")
+            assertTrue(
+                seeded.all { it.frameState.state == com.star.proto.FrameProcessingState.FPS_COMPLETE },
+                "resumed frames not reported complete: ${seeded.map { it.frameState.state }}",
+            )
             client.closeSession(info.sessionId)
         }
     }

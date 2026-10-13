@@ -34,9 +34,11 @@ enum ProcessingHandlers {
                 return
             }
 
-            // Subscribe this stream to the session's progress events.
+            // Subscribe this stream, then tell it where every frame already is: the events from
+            // building the frames were sent before there was anybody to hear them.
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
             let token = await session.addProgressSubscriber(cont)
+            await session.seedFrameStates(to: cont)
 
             // Stream items to the client until the session finishes or this task is cancelled.
             do {
