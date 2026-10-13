@@ -1,5 +1,6 @@
 .PHONY: build release clean
 
+
 # non-release build
 build: 
 	swift build
