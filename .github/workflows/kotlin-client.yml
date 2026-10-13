@@ -51,8 +51,9 @@ jobs:
         run: ./gradlew test --no-daemon --stacktrace
 
   # ─── ffmpeg / ffprobe from source (Linux + Windows) ──────────────────────────
-  # macOS bundles the binaries committed in external_binaries/bin; Linux and Windows have none, so
-  # build static ones with ffmpeg/build_ci.sh. Cached on the script hash: after the first run this
+  # ffmpeg/build_ci.sh is the one place ffmpeg/ffprobe are built, for every platform. macOS's
+  # universal (arm64 + x86_64) output is committed in external_binaries/bin; Linux and Windows
+  # (x86_64 only: those are the only installers we ship) are built here. Cached on the script hash: after the first run this
   # job only restores the cache and re-uploads it.
   ffmpeg-linux:
     name: ffmpeg (Linux, from source)
@@ -414,10 +415,9 @@ jobs:
   # signs with Developer ID (hardened runtime), then notarizes + staples the .dmg —
   # reusing the same Apple secrets as cli.yml. Apple Silicon runner (macos-14) with
   # Xcode's Swift 6 (the proven cli.yml toolchain); the app + stard are arm64. Intel
-  # is built/tested locally and is not produced here. NOTE: the ffmpeg/ffprobe in
-  # external_binaries/ are x86_64-only, so video export needs Rosetta on this arm64
-  # build (the app itself launches + drives the daemon natively); swap in an arm64/
-  # universal ffmpeg later if native video export matters.
+  # is built/tested locally and is not produced here. The ffmpeg/ffprobe in
+  # external_binaries/bin are universal (built by ffmpeg/build_ci.sh), so video import and
+  # export run natively on both architectures with no Rosetta.
   #
   # Runs on push (to develop/main) and manual dispatch, but NOT on pull_request —
   # PRs (esp. from forks) can't read the signing secrets, and notarization is costly.
@@ -430,6 +430,15 @@ jobs:
     if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v4
+
+      # The bundled ffmpeg/ffprobe must run on Apple Silicon without Rosetta (see ffmpeg/build_ci.sh).
+      - name: Check ffmpeg/ffprobe are universal
+        run: |
+          for t in ffmpeg ffprobe; do
+            archs="$(lipo -archs "external_binaries/bin/$t")"
+            echo "$t: $archs"
+            case "$archs" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "$t lacks an arm64 or x86_64 slice" >&2; exit 1 ;; esac
+          done
 
       - name: Select latest Xcode (Swift 6)
         uses: maxim-lobanov/setup-xcode@v1
@@ -698,11 +707,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: app-image-macos
-      # The bundled ffmpeg/ffprobe are x86_64-only (see macos-signed), so on this arm64 runner
-      # they need Rosetta — as they do on a user's Apple Silicon Mac. Installing it here keeps
-      # this job about the install, not about that known limitation.
-      - name: Ensure Rosetta
-        run: /usr/sbin/softwareupdate --install-rosetta --agree-to-license || true
+      # No Rosetta here, on purpose: a fresh Apple Silicon Mac has none, and an x86_64-only
+      # ffmpeg/ffprobe fails there with "Bad CPU type in executable". The self-test runs both.
       - name: Unpack the app image
         # Workspace-relative paths: on Windows, $RUNNER_TEMP is a D:\ path, and GNU tar reads
         # a colon in a path as host:path.

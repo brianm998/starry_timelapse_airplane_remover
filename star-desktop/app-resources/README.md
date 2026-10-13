@@ -65,6 +65,6 @@ it just hasn't been notarized for Gatekeeper on other machines.
 `stard` is a Swift binary and must be built **on each target OS** (its OpenCV + StarDecisionTrees
 artifacts live only in the main checkout, so CI needs them provisioned first). The cross-platform flow is:
 build `stard` on macOS / Windows / Linux, drop each into the matching `app-resources/<os-arch>/` on that
-runner, then run `packageDistributionForCurrentOS`. ffmpeg/ffprobe must be **portable** builds (the macOS
-binaries in `external_binaries/bin` link only against system frameworks — verify with `otool -L` / `ldd`
-when adding other platforms).
+runner, then run `packageDistributionForCurrentOS`. ffmpeg/ffprobe must be **portable** builds, all produced by `ffmpeg/build_ci.sh` (the macOS ones are
+universal arm64 + x86_64 and committed in `external_binaries/bin`; the script itself checks they link only
+system libraries — do the same with `otool -L` / `ldd` when adding other platforms).

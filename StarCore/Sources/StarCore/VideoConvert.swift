@@ -68,9 +68,17 @@ public func decodeVideo(
     
     let totalFrames = Int(totalFramesStr.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
 
+    // On macOS decode on the GPU/media engine (VideoToolbox) where the codec supports it;
+    // ffmpeg falls back to software decoding on its own where it doesn't.
+    #if os(macOS)
+    let decodeArguments = ["-hwaccel", "videotoolbox"]
+    #else
+    let decodeArguments: [String] = []
+    #endif
+
     let ffmpegTask = Task {
         try runFFmpegWithProgress(
-          arguments: ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"],
+          arguments: decodeArguments + ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"],
           totalFrames: totalFrames,
           outputFolder: outputFolder,
           progress: progress
