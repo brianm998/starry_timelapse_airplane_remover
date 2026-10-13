@@ -820,7 +820,7 @@ struct ProcessingSettingsView: View {
                     EditableNumberView(
                       value: $viewModel.numberOfAlignedNeighborFrames,
                       minValue: 1,
-                      maxValue: viewModel.imageSequenceSize,
+                      maxValue: viewModel.imageSequenceSize - 1,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
@@ -859,7 +859,7 @@ struct ProcessingSettingsView: View {
                    EditableNumberView(
                       value: $viewModel.numberStaticNeighborFrames,
                       minValue: 1,
-                      maxValue: viewModel.imageSequenceSize,
+                      maxValue: viewModel.imageSequenceSize - 1,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },

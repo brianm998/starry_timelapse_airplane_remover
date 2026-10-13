@@ -585,7 +585,7 @@ struct EditableNumberOfNeighborFrames: View {
         return EditableNumberView(
           value: $viewModel.numberOfAlignedNeighborFrames,
           minValue: 1,
-          maxValue: viewModel.imageSequenceSize,
+          maxValue: viewModel.imageSequenceSize - 1,
           fullTextProvider: { localized("ui.slider.align_neighbors", $0) },
           prefixText: localized("ui.slider.process_with"),
           suffixTextProvider: { _ in localized("ui.slider.neighbor_frames") },
@@ -610,7 +610,7 @@ struct EditableNumberOfFramesToProcessView: View {
         return EditableNumberView(
             value: $viewModel.numberOfFramesToProcess,
             minValue: 1,
-            maxValue: viewModel.imageSequenceSize+1,
+            maxValue: viewModel.imageSequenceSize,
             fullTextProvider: { localized("ui.slider.n_frames_as", $0) },
             // no prefix, so TextField is first
             suffixTextProvider: { $0 == 1 ? localized("ui.slider.frame_as") : localized("ui.slider.frames_as") },
@@ -660,7 +660,7 @@ struct AlignedNeighborFrameOverrideView: View {
             EditableNumberView(
               value: $localCount,
               minValue: 1,
-              maxValue: viewModel.imageSequenceSize,
+              maxValue: viewModel.imageSequenceSize - 1,
               fullTextProvider: { localized("ui.slider.align_neighbors", $0) },
               prefixText: localized("ui.slider.align_with"),
               suffixTextProvider: { _ in localized("ui.slider.neighbor_frames") },
@@ -728,7 +728,7 @@ struct StaticNeighborFrameOverrideView: View {
             EditableNumberView(
               value: $localCount,
               minValue: 1,
-              maxValue: viewModel.imageSequenceSize,
+              maxValue: viewModel.imageSequenceSize - 1,
               fullTextProvider: { localized("ui.slider.merge_static", $0) },
               prefixText: localized("ui.slider.static_merge"),
               suffixTextProvider: { _ in localized("ui.slider.neighbors") },
