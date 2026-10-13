@@ -743,22 +743,7 @@ jobs:
           sudo installer -pkg e2e-pkg/star_cli_*_unsigned.pkg -target / -verbose
           find /usr/local/bin/star /usr/local/share/star -maxdepth 3
 
-      # TEMPORARY: proves the crash-report capture below works by crashing star on purpose.
-      # Pull requests only; remove once the capture has been seen to upload a report.
-      - name: TEMP deliberately SEGV star
-        if: github.event_name == 'pull_request'
-        run: |
-          mkdir -p e2e-crash && cp -R test_data/test_a7sii_10 e2e-crash/test_a7sii_10
-          cd e2e-crash
-          /usr/local/bin/star -l info test_a7sii_10 star-output &
-          PID=$!
-          sleep 20
-          kill -SEGV "$PID"
-          wait "$PID" || echo "star exited $?"
-          exit 1
-
       - name: star self-test
-        if: github.event_name != 'pull_request'
         run: bash cli/packaging/self-test.sh /usr/local/bin/star e2e-work
 
       # star's crash handler re-raises the signal so macOS writes its own report, and that report
@@ -767,7 +752,6 @@ jobs:
       - name: Collect crash reports
         if: failure()
         run: |
-          sleep 15  # ReportCrash writes the .ips asynchronously
           mkdir -p crash-reports
           cp ~/Library/Logs/DiagnosticReports/*star* crash-reports/ 2>/dev/null || true
           cp ~/Library/Logs/DiagnosticReports/Retired/*star* crash-reports/ 2>/dev/null || true
