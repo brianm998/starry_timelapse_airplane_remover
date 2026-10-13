@@ -59,7 +59,7 @@ struct KeypointDivisorStartupView: View {
     private static let tooHighDivisor: Double = 4.0
 
     /// The largest value the field will accept at all — past here it is not a trade any
-    /// more, it is a typo. Exclusive, matching the `maxValue: 8` this same setting already
+    /// more, it is a typo. Inclusive, matching the `maxValue: 8` this same setting already
     /// has in the Advanced panel's `EditableNumberView`, so a value entered here is one
     /// that panel will also accept.
     private static let maxDivisor: Double = 8.0
@@ -278,7 +278,7 @@ struct KeypointDivisorStartupView: View {
         let filtered = customText.filter { $0.isNumber || $0 == "." }
         guard let value = Double(filtered),
               value >= 1.0,
-              value < Self.maxDivisor
+              value <= Self.maxDivisor
         else { return }
         if abs(value - divisor) >= 0.0001 {
             viewModel.alignmentKeypointDetectionDivisor = value

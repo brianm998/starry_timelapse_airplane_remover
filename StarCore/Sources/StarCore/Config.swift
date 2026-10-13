@@ -1237,7 +1237,7 @@ public struct Config: Codable, Sendable {
     
     // threshold used for throwing out bad pixels before replacing with them
     // good vs
-    var pixelThreshold: Double = 1.2
+    public var pixelThreshold: Double = 1.2
     
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate

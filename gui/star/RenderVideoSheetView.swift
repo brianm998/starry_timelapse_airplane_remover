@@ -219,7 +219,7 @@ struct RenderVideoSheetView: View {
                         //                  .focused($focusedField, equals: .frameRate)
                           .frame(maxWidth: 60)
                           .onSubmit {
-                              let filtered = viewModel.trashLevelString.filter { "0123456789.-".contains($0) }
+                              let filtered = frameRateString.filter { "0123456789.-".contains($0) }
                               if let newValue = Double(filtered),
                                  newValue >= 0,
                                  newValue <= 1000

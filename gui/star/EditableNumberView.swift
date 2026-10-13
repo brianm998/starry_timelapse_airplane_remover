@@ -7,7 +7,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
     @Binding var value: Value
     /// Inclusive lower bound for valid inputs
     let minValue: Value
-    /// Exclusive upper bound for valid inputs
+    /// Inclusive upper bound for valid inputs
     let maxValue: Value
     /// Should decimal points be allowed (for Double)?
     let allowDecimal: Bool
@@ -115,7 +115,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
                                 .filter { allowedChars.contains($0) })
         if let newVal = Value(filtered),
            newVal >= minValue,
-           newVal < maxValue {
+           newVal <= maxValue {
             value = newVal
             commitAction(newVal)
         }

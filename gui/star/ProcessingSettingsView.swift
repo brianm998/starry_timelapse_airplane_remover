@@ -296,6 +296,7 @@ struct ProcessingSettingsView: View {
         showUseReferenceHorizonBrightnessRefinementInfo ||
         showReferenceHorizonBrightnessRefinementSearchRadiusInfo ||
         showReferenceHorizonBrightnessRefinementHistogramBucketsInfo ||
+        showReferenceHorizonNeighborhoodSizeInfo ||
         showHorizonSpikeRemovalEnabledInfo ||
         showHorizonSpikeMaxWidthInfo ||
         showHorizonSpikeMaxDeviationFractionInfo ||
@@ -345,6 +346,7 @@ struct ProcessingSettingsView: View {
         showUseReferenceHorizonBrightnessRefinementInfo = true
         showReferenceHorizonBrightnessRefinementSearchRadiusInfo = true
         showReferenceHorizonBrightnessRefinementHistogramBucketsInfo = true
+        showReferenceHorizonNeighborhoodSizeInfo = true
         showHorizonSpikeRemovalEnabledInfo = true
         showHorizonSpikeMaxWidthInfo = true
         showHorizonSpikeMaxDeviationFractionInfo = true
@@ -394,6 +396,7 @@ struct ProcessingSettingsView: View {
         showUseReferenceHorizonBrightnessRefinementInfo = false
         showReferenceHorizonBrightnessRefinementSearchRadiusInfo = false
         showReferenceHorizonBrightnessRefinementHistogramBucketsInfo = false
+        showReferenceHorizonNeighborhoodSizeInfo = false
         showHorizonSpikeRemovalEnabledInfo = false
         showHorizonSpikeMaxWidthInfo = false
         showHorizonSpikeMaxDeviationFractionInfo = false
@@ -820,7 +823,7 @@ struct ProcessingSettingsView: View {
                     EditableNumberView(
                       value: $viewModel.numberOfAlignedNeighborFrames,
                       minValue: 1,
-                      maxValue: viewModel.imageSequenceSize,
+                      maxValue: viewModel.imageSequenceSize - 1,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
@@ -859,7 +862,7 @@ struct ProcessingSettingsView: View {
                    EditableNumberView(
                       value: $viewModel.numberStaticNeighborFrames,
                       minValue: 1,
-                      maxValue: viewModel.imageSequenceSize,
+                      maxValue: viewModel.imageSequenceSize - 1,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
@@ -1229,6 +1232,7 @@ struct ProcessingSettingsView: View {
                       value: $viewModel.homographySmoothingEpsilon,
                       minValue: 0,
                       maxValue: 10,
+                      allowDecimal: true,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
@@ -1744,6 +1748,7 @@ struct ProcessingSettingsView: View {
                       value: $viewModel.horizonSpikeMaxDeviationFraction,
                       minValue: 0.001,
                       maxValue: 0.5,
+                      allowDecimal: true,
                       fullTextProvider: { _ in "" },
                       prefixText: "",
                       suffixTextProvider: { _ in "" },
@@ -1839,7 +1844,8 @@ struct ProcessingSettingsView: View {
                 }
            }
         }
-          .disabled(autoPreservationMode == .no)
+          // Selective always uses outliers, whatever auto-preservation was left at
+          .disabled(cleanMethod == .automatic && autoPreservationMode == .no)
     }
 
     private func applySettings() {
