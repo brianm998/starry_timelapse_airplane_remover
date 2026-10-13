@@ -551,6 +551,45 @@ class InteropIntegrationTest {
         }
     }
 
+    /**
+     * A3: the Processed view is the final image, not the subtraction debug image. After a run,
+     * Frame.GetPreview(VIEW_PROCESSED) resolves to a file of its own, distinct from the original's and the
+     * subtraction's.
+     */
+    @Test
+    fun processedViewIsTheFinalImage() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] processedViewIsTheFinalImage — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        withEngine { client ->
+            val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).build()
+            val info = client.openSequence(File(seq).absolutePath, cfg)
+            val done = CompletableDeferred<Unit>()
+            val sub = CoroutineScope(SupervisorJob()).launch {
+                runCatching {
+                    client.streamProgress(info.sessionId).collect { ev ->
+                        if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") done.complete(Unit)
+                    }
+                }
+            }
+            delay(400)
+            client.startProcessing(info.sessionId, 0, -1)
+            assertTrue(withTimeoutOrNull(1_200_000) { done.await() } != null, "processing timed out")
+            sub.cancel()
+
+            val processed = client.getFramePreview(info.sessionId, 0, com.star.proto.FrameViewMode.VIEW_PROCESSED)
+            assertTrue(File(processed.path).isFile, "no processed preview on disk: ${processed.path}")
+            val original = client.getFramePreview(info.sessionId, 0, com.star.proto.FrameViewMode.VIEW_ORIGINAL)
+            assertTrue(processed.path != original.path, "the processed view is the original's preview")
+            runCatching { client.getFramePreview(info.sessionId, 0, com.star.proto.FrameViewMode.VIEW_SUBTRACTION) }
+                .getOrNull()?.let { assertTrue(processed.path != it.path, "the processed view is the subtraction debug image") }
+            client.closeSession(info.sessionId)
+        }
+    }
+
     /** Open → process(all) → render the sequence; return SHA-256 of each rendered output frame by name. */
     private fun processAndRenderHashes(seqDir: String): Map<String, String> = runBlocking {
         val scope = CoroutineScope(SupervisorJob())

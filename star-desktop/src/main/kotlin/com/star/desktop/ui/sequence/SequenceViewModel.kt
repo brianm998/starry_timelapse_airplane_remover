@@ -519,9 +519,8 @@ class SequenceViewModel(
     private suspend fun loadPreview(index: Int, mode: FrameViewMode) {
         previewJob?.cancel()
         previewJob = scope.launch {
-            // Try the requested mode, then fall back through the others — which preview types the
-            // daemon actually wrote depends on the clean method (e.g. selective writes a subtraction
-            // preview but no auto-processed/original preview), so we show whatever exists.
+            // Try the requested mode, then fall back through the others (PREVIEW_FALLBACK), so we
+            // show whatever exists: a frame that is not processed yet shows its original.
             val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
             var ref: com.star.proto.ImageRef? = null
             var resolvedMode: FrameViewMode? = null
@@ -547,10 +546,14 @@ class SequenceViewModel(
     private companion object {
         const val FAST_SKIP_AMOUNT = 20 // macOS fastSkipAmount
 
+        /**
+         * What to show when the wanted mode has no preview yet. The original comes before the debug
+         * images: a frame that is not finished shows its own picture, never its subtraction.
+         */
         val PREVIEW_FALLBACK = listOf(
             FrameViewMode.VIEW_PROCESSED,
-            FrameViewMode.VIEW_SUBTRACTION,
             FrameViewMode.VIEW_ORIGINAL,
+            FrameViewMode.VIEW_SUBTRACTION,
             FrameViewMode.VIEW_VALIDATION,
         )
     }

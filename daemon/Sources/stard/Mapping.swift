@@ -10,7 +10,10 @@ enum Mapping {
     static func frameViewMode(from proto: Star_V1_FrameViewMode) -> StarCore.FrameViewMode {
         switch proto {
         case .viewOriginal:    return .original
-        case .viewProcessed:   return .autoProcessed
+        // The final processed image -- what macOS shows -- which `ImageAccessor.linkFinal` points at
+        // the output of whichever clean method the frame used.  `.autoProcessed` is only written
+        // by automatic frames, so selective frames showed a debug image (the subtraction) instead.
+        case .viewProcessed:   return .final
         case .viewSubtraction: return .subtraction
         case .viewValidation:  return .validation
         default:               return .original
