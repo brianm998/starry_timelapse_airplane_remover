@@ -15,6 +15,36 @@ symbol name when a line no longer matches.
 
 ---
 
+## Implementation status (updated 2026-10-13)
+
+Work is on branch `claude/kotlin-client-parity-a0b95d`; one commit per item, message starts with the item ID
+(`git log --oneline --grep '^[A-H][0-9]*:'`). Work stopped because the machine kept crashing, not because of a
+design problem. Pick up at **A1** and continue the Phase order in §0.7.
+
+**Done and committed (daemon `swift build -c release` + `swift test`, and `./gradlew build test`, all pass):**
+A6, A7, A5, A8, A4, A18, A3, A17, A16.
+
+Notes for the next agent:
+- **A16 is built and its tests pass, but its save-queue flush is missing on purpose.** `Session.Close` /
+  `Daemon.Shutdown` have a marked hook `// A1: flush save queue here`; fill it in when you implement A1
+  (cancel-and-wait → **save queue flush** → `configManager.flush()` → finish progress subscribers → drop).
+  The A16 commit message says "WIP, not yet build-verified" — that was written before verification;
+  it has since been built and tested.
+- A6 gave `Session` a progress *subscriber set* (not a single continuation); A5 added a run generation counter and
+  cancel-and-wait; A8 added `SequenceStateEvent.message` and the `"error"` state. Build on those.
+- A18's per-type reset lives in StarCore now (gui calls it too). A4 made `end_index` 0 mean frame 0 and `-1` mean
+  "to the end" everywhere.
+- None of the integration tests that need `small_test_images` (`-Dstar.it.seq=...`) were confirmed to have been run
+  against real sample data in this worktree; run them when you have the data.
+- Worktree build setup (opencv/StarDecisionTrees symlinks, §0.4) must be redone on a fresh checkout.
+
+**Not started:** everything else — A1, A2, A11, A14, A15, A9, A10, A12, A13, A19, G3, G7 (bug parts), E7, F5, all of
+Section B, C, D, E, F (F1–F6), G (G1–G2, G4–G8), and H (H1–H11).
+
+The final step stays: when every item is done, make a last commit that deletes this file.
+
+---
+
 ## 0. How to work on this
 
 ### 0.1 Path shorthand used throughout
