@@ -752,6 +752,7 @@ jobs:
       - name: Collect crash reports
         if: failure()
         run: |
+          sleep 15  # ReportCrash writes the .ips asynchronously
           mkdir -p crash-reports
           cp ~/Library/Logs/DiagnosticReports/*star* crash-reports/ 2>/dev/null || true
           cp ~/Library/Logs/DiagnosticReports/Retired/*star* crash-reports/ 2>/dev/null || true
