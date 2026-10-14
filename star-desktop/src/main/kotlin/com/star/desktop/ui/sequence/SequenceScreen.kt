@@ -72,7 +72,7 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
             }
         }
 
-        BottomControls(vm)
+        BottomControls(app, vm)
 
         // Bottom layout mirrors macOS ImageSequenceView: an optional filmstrip (edit/grid) above a
         // full-width scrub slider shown in every mode except grid — identical in scrub & edit.

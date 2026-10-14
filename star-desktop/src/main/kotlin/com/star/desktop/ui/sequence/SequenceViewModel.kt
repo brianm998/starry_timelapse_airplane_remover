@@ -189,6 +189,9 @@ class SequenceViewModel(
     // ---- processing state (delegated) ----
     val frameStates: StateFlow<Map<Int, FrameProcessingState>> = processing.frameStates
     val isProcessing: StateFlow<Boolean> = processing.processing
+
+    /** Each frame's stage of being saved after an edit (0 not saving, 1 purgatory, 2 waiting, 3 saving): see [com.star.desktop.domain.SavingCounts]. */
+    val savingState: StateFlow<Map<Int, Int>> = processing.savingState
     val sequenceState: StateFlow<String?> = processing.sequenceState
 
     // ---- processing progress screen (macOS `ProcessingModalView`) ----

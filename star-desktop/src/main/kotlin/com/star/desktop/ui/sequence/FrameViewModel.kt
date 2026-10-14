@@ -64,6 +64,10 @@ class FrameViewModel(
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
+    /** Whether the frame's trash is being read (the status line says so, as macOS's "loading outlier trash views"). */
+    private val _loadingTrash = MutableStateFlow(false)
+    val loadingTrash: StateFlow<Boolean> = _loadingTrash.asStateFlow()
+
     private var loaded = false
     private var loadJob: Job? = null
 
@@ -154,8 +158,13 @@ class FrameViewModel(
 
     /** The frame's trash as a mask the view draws in yellow while the trash is shown, or null if there is none to draw. */
     suspend fun loadTrashMask(): OutlierRepository.Mask? {
-        val ref = frames.trashImage(sessionId, frameIndex) ?: return null
-        return outliers.loadMask(ref.path)
+        _loadingTrash.value = true
+        try {
+            val ref = frames.trashImage(sessionId, frameIndex) ?: return null
+            return outliers.loadMask(ref.path)
+        } finally {
+            _loadingTrash.value = false
+        }
     }
 
     fun decisionFor(groupId: Int): RemoveReason = _decisions.value[groupId] ?: RemoveReason.RR_UNDECIDED

@@ -33,7 +33,7 @@ import com.star.desktop.i18n.localized
 
 /** Bottom transport bar: playback buttons, editable frame number, fps, filmstrip toggle. */
 @Composable
-fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
+fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val idx by vm.currentIndex.collectAsState()
     val playing by vm.isPlaying.collectAsState()
     val fps by vm.playbackFps.collectAsState()
@@ -66,6 +66,8 @@ fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 
         // What a run is doing, with its Stop, in every mode; scrub and grid hide it while playing (macOS: nothing else competes then).
         if (mode == com.star.desktop.domain.InteractionMode.EDIT || !playing) ProcessingStatus(vm, mode)
+        // The rest of the read-outs are the edit view's: what the frame is doing, its outlier counts, and what is being saved.
+        if (mode == com.star.desktop.domain.InteractionMode.EDIT) BottomStatus(vm)
 
         // editable frame number
         EditableFrameNumber(idx, vm.frameCount, onSet = vm::setCurrentIndex)
@@ -77,6 +79,11 @@ fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             Text("$fps", color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.width(24.dp))
             GlyphButton("+", "Faster", { vm.setPlaybackFps(fps + 1) }, size = 22, fontSize = 14)
             GlyphButton(if (showFilmstrip) "▥" else "▤", "Toggle filmstrip", vm::toggleFilmstrip, size = 26, fontSize = 14)
+            if (mode == com.star.desktop.domain.InteractionMode.EDIT) {
+                com.star.desktop.ui.components.HoverTip(localized("ui.show_settings")) {
+                    GlyphButton("⚙", localized("ui.show_settings"), app::openSettings, size = 26, fontSize = 16)
+                }
+            }
         }
     }
 }
