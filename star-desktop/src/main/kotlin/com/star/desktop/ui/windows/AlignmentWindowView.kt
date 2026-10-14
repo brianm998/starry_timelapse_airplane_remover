@@ -1,148 +1,122 @@
 package com.star.desktop.ui.windows
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.AlignmentCharts
+import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.DeviationChart
+import com.star.desktop.ui.components.KeypointChart
+import com.star.desktop.ui.components.OffsetLegend
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
-import com.star.proto.AlignmentInfo
-import kotlin.math.abs
-import kotlin.math.roundToInt
-import com.star.desktop.i18n.localized
 
 /**
- * Alignment diagnostics window (macOS `AlignmentWindowView`): per-frame star-alignment deviation
- * (one series per neighbor offset, signed by offset) and sky-keypoint counts, with a current-frame
- * marker. Click a chart to jump to that frame. Driven by `Alignment.GetSequence`.
+ * Alignment diagnostics window (macOS `AlignmentWindowView`): how far each frame's alignment to its neighbors moved the picture (one line per
+ * neighbor offset, with the warps the heuristics distrust in red) and how many keypoints each frame had, for the sky and, when earth alignment
+ * is on, the ground. It keeps up with a run as it goes; the checkboxes pick which of the charts show, and the legend names the lines that do.
+ * See [com.star.desktop.ui.components.DeviationChart] for what the pointer does on a chart.
  */
 @Composable
-fun AlignmentWindowView(app: AppViewModel, svm: SequenceViewModel) {
-    val seq by produceState<List<AlignmentInfo>?>(null, svm.sessionId) {
-        value = runCatching { app.alignmentRepo.sequence(svm.sessionId, includeHomography = false, includePreviews = false) }
-            .getOrNull()?.framesList
-    }
+fun AlignmentWindowView(@Suppress("UNUSED_PARAMETER") app: AppViewModel, svm: SequenceViewModel) {
+    val data by svm.alignment.collectAsState()
     val current by svm.currentIndex.collectAsState()
     val count = svm.frameCount
 
-    Column(Modifier.fillMaxSize().background(StarColors.appBackground).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(localized("ui.alignment_2"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+    var showStarDeviation by remember { mutableStateOf(true) }
+    var showStarKeypoints by remember { mutableStateOf(true) }
+    var showEarthDeviation by remember { mutableStateOf(true) }
+    var showEarthKeypoints by remember { mutableStateOf(true) }
 
-        val frames = seq
-        if (frames == null || frames.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(localized("ui.no_alignment_data_process_the_sequence_first"), color = StarColors.textDisabled, fontSize = 12.sp)
+    val alignment = data
+    Row(Modifier.fillMaxSize().background(StarColors.appBackground).padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (alignment == null || !(alignment.hasStar || alignment.hasEarth)) {
+            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                Text(
+                    localized(if (alignment == null) "ui.waiting_for_alignment_data" else "ui.no_alignment_data_process_the_sequence_first"),
+                    color = StarColors.textDisabled, fontSize = 12.sp,
+                )
             }
-            return@Column
+            return@Row
         }
+        val earthShowing = alignment.allowEarth && alignment.hasEarth
 
-        // Build per-offset deviation series: (frameIndex, signedDeviation).
-        val byOffset = sortedMapOf<Int, MutableList<Pair<Int, Double>>>()
-        var maxAbsDev = 1e-6
-        for (f in frames) {
-            if (!f.hasStarResults) continue
-            for (n in f.star.neighborsList) {
-                val offset = n.frameIndex - f.frameIndex
-                val signed = if (offset >= 0) n.deviation else -n.deviation
-                byOffset.getOrPut(offset) { mutableListOf() }.add(f.frameIndex to signed)
-                maxAbsDev = maxOf(maxAbsDev, abs(n.deviation))
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            if (alignment.hasStar) {
+                if (showStarDeviation) {
+                    ChartTitle(localized("ui.deviation_in_star_alignment"))
+                    DeviationChart(alignment.starPoints, count, current, svm::setCurrentIndex)
+                }
+                if (showStarKeypoints) {
+                    ChartTitle(localized("ui.star_keypoints"))
+                    KeypointChart(alignment.skyKeypoints, count, current, svm::setCurrentIndex)
+                }
+            }
+            if (earthShowing) {
+                if (showEarthDeviation) {
+                    ChartTitle(localized("ui.deviation_in_earth_alignment"))
+                    DeviationChart(alignment.earthPoints, count, current, svm::setCurrentIndex)
+                }
+                if (showEarthKeypoints) {
+                    ChartTitle(localized("ui.earth_keypoints"))
+                    KeypointChart(alignment.earthKeypoints, count, current, svm::setCurrentIndex)
+                }
             }
         }
 
-        Text(localized("ui.star_alignment_deviation_per_neighbor_offset"), color = StarColors.textSecondary, fontSize = 11.sp)
-        DeviationChart(byOffset, maxAbsDev, count, current) { svm.setCurrentIndex(it) }
-
-        OffsetLegend(byOffset.keys.toList())
-
-        Text(localized("ui.sky_keypoints"), color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
-        KeypointChart(frames, count, current) { svm.setCurrentIndex(it) }
-    }
-}
-
-private fun offsetColor(offset: Int): Color {
-    val palette = listOf(StarColors.blue, StarColors.green, StarColors.orange, StarColors.purple, StarColors.mint, StarColors.pink, StarColors.yellow, StarColors.red)
-    return palette[(abs(offset)) % palette.size]
-}
-
-@Composable
-private fun DeviationChart(series: Map<Int, List<Pair<Int, Double>>>, maxAbsDev: Double, count: Int, current: Int, onPick: (Int) -> Unit) {
-    Canvas(
-        Modifier.fillMaxWidth().height(180.dp).background(StarColors.prefsCard)
-            .pointerInput(count) { detectTapGestures { pos -> onPick(pickFrame(pos.x, size.width.toFloat(), count)) } },
-    ) {
-        val w = size.width; val h = size.height
-        fun x(frame: Int) = if (count <= 1) w / 2 else frame.toFloat() / (count - 1) * w
-        fun y(dev: Double) = (h / 2f) - (dev / maxAbsDev).toFloat() * (h / 2f - 6f)
-        // zero axis
-        drawLine(StarColors.gray.copy(alpha = 0.5f), Offset(0f, h / 2f), Offset(w, h / 2f), 1f)
-        // current-frame marker
-        drawLine(StarColors.accent, Offset(x(current), 0f), Offset(x(current), h), 1.5f)
-        for ((offset, points) in series) {
-            val color = offsetColor(offset)
-            val sorted = points.sortedBy { it.first }
-            for (i in 1 until sorted.size) {
-                drawLine(color, Offset(x(sorted[i - 1].first), y(sorted[i - 1].second)), Offset(x(sorted[i].first), y(sorted[i].second)), 1.5f)
+        // Which charts show, then the legend of the lines on the ones that do.
+        Column(Modifier.width(190.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(localized("ui.show_2"), color = StarColors.textPrimary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+            Toggle(localized("ui.star_deviation"), showStarDeviation) { showStarDeviation = it }
+            Toggle(localized("ui.star_keypoints"), showStarKeypoints) { showStarKeypoints = it }
+            if (alignment.allowEarth) {
+                Toggle(localized("ui.earth_deviation"), showEarthDeviation) { showEarthDeviation = it }
+                Toggle(localized("ui.earth_keypoints"), showEarthKeypoints) { showEarthKeypoints = it }
             }
-            for (p in sorted) drawCircle(color, 2.5f, Offset(x(p.first), y(p.second)))
+            HorizontalDivider(Modifier.padding(vertical = 8.dp), color = StarColors.cellDefault)
+            Text(localized("ui.legend"), color = StarColors.textPrimary, fontSize = 13.sp, modifier = Modifier.padding(bottom = 4.dp))
+            // The offsets of the series that are showing (keypoints share the star and earth readings' neighbors).
+            val offsets = AlignmentCharts.visibleOffsets(
+                if (showStarDeviation || showStarKeypoints) alignment.starPoints else emptyList(),
+                if (alignment.allowEarth && (showEarthDeviation || showEarthKeypoints)) alignment.earthPoints else emptyList(),
+            )
+            Column(Modifier.verticalScroll(rememberScrollState())) { OffsetLegend(offsets) }
         }
-    }
-}
-
-@Composable
-private fun KeypointChart(frames: List<AlignmentInfo>, count: Int, current: Int, onPick: (Int) -> Unit) {
-    val pts = frames.filter { it.numSkyKeypoints >= 0 }.map { it.frameIndex to it.numSkyKeypoints }
-    val maxKp = (pts.maxOfOrNull { it.second } ?: 1).coerceAtLeast(1)
-    Canvas(
-        Modifier.fillMaxWidth().height(120.dp).background(StarColors.prefsCard)
-            .pointerInput(count) { detectTapGestures { pos -> onPick(pickFrame(pos.x, size.width.toFloat(), count)) } },
-    ) {
-        val w = size.width; val h = size.height
-        fun x(frame: Int) = if (count <= 1) w / 2 else frame.toFloat() / (count - 1) * w
-        fun y(kp: Int) = h - (kp.toFloat() / maxKp) * (h - 6f)
-        drawLine(StarColors.accent, Offset(x(current), 0f), Offset(x(current), h), 1.5f)
-        val sorted = pts.sortedBy { it.first }
-        for (i in 1 until sorted.size) {
-            drawLine(StarColors.green, Offset(x(sorted[i - 1].first), y(sorted[i - 1].second)), Offset(x(sorted[i].first), y(sorted[i].second)), 1.5f)
-        }
-        for (p in sorted) drawCircle(StarColors.green, 2.5f, Offset(x(p.first), y(p.second)))
     }
 }
 
 @Composable
-private fun OffsetLegend(offsets: List<Int>) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(offsets) { off ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                Box(Modifier.size(8.dp).background(offsetColor(off)))
-                Text(if (off >= 0) "+$off" else "$off", color = StarColors.textSecondary, fontSize = 10.sp)
-            }
-        }
-    }
+private fun ChartTitle(text: String) {
+    Text(text, color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 }
 
-private fun pickFrame(x: Float, width: Float, count: Int): Int =
-    if (count <= 1 || width <= 0f) 0 else (x / width * (count - 1)).roundToInt().coerceIn(0, count - 1)
+@Composable
+private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Checkbox(checked = checked, onCheckedChange = onChange)
+        Text(label, color = StarColors.textPrimary, fontSize = 12.sp)
+    }
+}

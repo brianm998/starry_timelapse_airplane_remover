@@ -492,7 +492,7 @@ tasks.named<ProcessResources>("processResources") {
 tasks.test {
     useJUnitPlatform()
     // Forward integration-test opt-ins to the test JVM (InteropIntegrationTest no-ops without them).
-    for (k in listOf("star.it.config", "star.it.seq", "star.it.process", "star.stard.path")) {
+    for (k in listOf("star.it.config", "star.it.seq", "star.it.process", "star.stard.path", "star.render.dump")) {
         System.getProperty(k)?.let { systemProperty(k, it) }
     }
 }

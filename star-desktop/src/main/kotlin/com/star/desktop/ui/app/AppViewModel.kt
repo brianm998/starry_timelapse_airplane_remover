@@ -862,7 +862,8 @@ class AppViewModel(
             }
         }
         sessionScope.launch { proc.errors.collect(::report) }
-        val svm = SequenceViewModel(sessionScope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo, onError = ::report, prefs = prefs)
+        val svm = SequenceViewModel(sessionScope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo, onError = ::report, prefs = prefs,
+            alignmentSource = { alignmentRepo.sequence(info.sessionId, includeHomography = false, includePreviews = false) })
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)

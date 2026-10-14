@@ -84,6 +84,41 @@ final class MappingTests: XCTestCase {
         XCTAssertEqual(Mapping.protoAlignmentState(.unknown), .alignUnknown)
     }
 
+    // MARK: - suspect warps
+
+    /// A frame's neighbor warps, each on the given slope (pixels per frame of distance), as a real moving-camera measurement looks:
+    /// the heuristics judge the set against its own median slope.
+    private func warps(forFrame frameIndex: Int, slopes: [Int: Double]) -> HomographyResultsCodable {
+        HomographyResultsCodable(
+            for: frameIndex,
+            with: slopes.map { offset, slope in
+                let d = Double(offset)
+                let scale = slope / 6.0
+                return AlignmentWarpInfoCodable(homography: [1, 0, -2.6 * d * scale, 0, 1, -6.0 * d * scale, 0, 0, 1],
+                                                alignmentState: .homographySuccess, frameIndex: frameIndex + offset)
+            }.sorted { $0.frameIndex < $1.frameIndex })
+    }
+
+    /// The charts draw the warps the heuristics distrust in red.  Worked out here over the whole set, since a client sent only the
+    /// deviations could not reproduce a fit through the matrices.
+    func testADistrustedWarpIsMarkedSuspectOnTheWire() {
+        var slopes = Dictionary(uniqueKeysWithValues: [-4, -3, -2, -1, 1, 2, 3, 4].map { ($0, 6.0) })
+        slopes[-4] = 4.0
+        let results = warps(forFrame: 10, slopes: slopes)
+
+        let sent = Mapping.protoHomographyResults(results, includeHomography: false)
+
+        XCTAssertEqual(sent.neighbors.filter(\.suspect).map { Int($0.frameIndex) - 10 }, [-4])
+        XCTAssertEqual(sent.neighbors.count, 8)
+        XCTAssertTrue(sent.neighbors.allSatisfy { $0.homography.isEmpty }, "the matrices were not asked for, and are not sent")
+    }
+
+    func testAUniformSetHasNoSuspectWarps() {
+        let slopes = Dictionary(uniqueKeysWithValues: [-4, -3, -2, -1, 1, 2, 3, 4].map { ($0, 6.0) })
+        let sent = Mapping.protoHomographyResults(warps(forFrame: 0, slopes: slopes), includeHomography: true)
+        XCTAssertFalse(sent.neighbors.contains(where: \.suspect))
+    }
+
     // MARK: - FrameViewMode
 
     func testEachViewModeMapsFromItsWireValue() {

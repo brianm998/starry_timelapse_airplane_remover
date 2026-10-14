@@ -227,11 +227,12 @@ enum Mapping {
         }
     }
 
-    static func protoNeighborHomography(_ w: AlignmentWarpInfoCodable, includeHomography: Bool) -> Star_V1_NeighborHomography {
+    static func protoNeighborHomography(_ w: AlignmentWarpInfoCodable, includeHomography: Bool, suspect: Bool = false) -> Star_V1_NeighborHomography {
         var out = Star_V1_NeighborHomography()
         out.frameIndex = Int32(w.frameIndex)
         out.deviation = w.deviation
         out.state = protoAlignmentState(w.alignmentState)
+        out.suspect = suspect
         if includeHomography, let h = w.homography { out.homography = h }
         return out
     }
@@ -241,7 +242,12 @@ enum Mapping {
         out.frameIndex = Int32(h.frameIndex)
         out.compositeDeviation = h.compositeDeviation
         out.alignmentLooksOk = h.alignmentLooksOk
-        out.neighbors = h.neighborHomography.map { protoNeighborHomography($0, includeHomography: includeHomography) }
+        // Worked out here, on the whole set with its matrices, whatever the client asked to be sent: the heuristics fit a line through all of
+        // a frame's neighbors, so a client given only the deviations could not reproduce them.
+        let suspect = Set(h.partitionWarps().suspect.map(\.frameIndex))
+        out.neighbors = h.neighborHomography.map {
+            protoNeighborHomography($0, includeHomography: includeHomography, suspect: suspect.contains($0.frameIndex))
+        }
         return out
     }
 

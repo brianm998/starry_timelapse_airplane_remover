@@ -591,6 +591,13 @@ class InteropIntegrationTest {
                     assertTrue(step.done + step.alreadyDone > 0, "${step.type} did nothing")
                 }
                 assertTrue(last.stepsList.any { it.type == "merge" }, "the merge step is in every run")
+
+                // C1: the alignment the run found, as the charts read it: one entry per frame, whose neighbors are other frames.
+                val alignment = client.getAlignmentSequence(info.sessionId, false, false)
+                assertEquals(info.frameCount, alignment.framesCount)
+                val data = com.star.desktop.domain.AlignmentData(alignment.framesList)
+                assertTrue(data.starPoints.none { it.offset == 0 }, "a frame's own entry is not a reading")
+                assertTrue(data.starPoints.all { it.frame + it.offset in 0 until info.frameCount }, "a neighbor outside the sequence")
                 client.closeSession(info.sessionId)
             }
         } finally {

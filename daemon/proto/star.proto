@@ -746,6 +746,9 @@ message NeighborHomography {
   AlignmentState state           = 3;
   repeated double homography     = 4;   // row-major 3x3 (len 9); empty when alignment failed/absent
   ImageRef       aligned_preview = 5;   // .starAligned/.failedStarAligned (.preview); set iff include_previews & on disk
+  // The per-frame heuristics distrust this warp (StarCore's HomographyResultsCodable.partitionWarps): drawn red on the charts.  Distrusted is not
+  // the same as unused: the frame's set is kept whole while enough of it stands up.  Always false for the frame's own entry.
+  bool           suspect         = 6;
 }
 
 // Mirrors StarCore.AlignmentState rawValues 0..6 exactly.

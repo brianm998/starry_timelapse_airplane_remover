@@ -3301,6 +3301,10 @@ public struct Star_V1_NeighborHomography: Sendable {
   /// Clears the value of `alignedPreview`. Subsequent reads from it will return its default value.
   public mutating func clearAlignedPreview() {self._alignedPreview = nil}
 
+  /// The per-frame heuristics distrust this warp (StarCore's HomographyResultsCodable.partitionWarps): drawn red on the charts.  Distrusted is not
+  /// the same as unused: the frame's set is kept whole while enough of it stands up.  Always false for the frame's own entry.
+  public var suspect: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -8070,7 +8074,7 @@ extension Star_V1_HomographyResults: SwiftProtobuf.Message, SwiftProtobuf._Messa
 
 extension Star_V1_NeighborHomography: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".NeighborHomography"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}deviation\0\u{1}state\0\u{1}homography\0\u{3}aligned_preview\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}deviation\0\u{1}state\0\u{1}homography\0\u{3}aligned_preview\0\u{1}suspect\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8083,6 +8087,7 @@ extension Star_V1_NeighborHomography: SwiftProtobuf.Message, SwiftProtobuf._Mess
       case 3: try { try decoder.decodeSingularEnumField(value: &self.state) }()
       case 4: try { try decoder.decodeRepeatedDoubleField(value: &self.homography) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._alignedPreview) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.suspect) }()
       default: break
       }
     }
@@ -8108,6 +8113,9 @@ extension Star_V1_NeighborHomography: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try { if let v = self._alignedPreview {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
+    if self.suspect != false {
+      try visitor.visitSingularBoolField(value: self.suspect, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8117,6 +8125,7 @@ extension Star_V1_NeighborHomography: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if lhs.state != rhs.state {return false}
     if lhs.homography != rhs.homography {return false}
     if lhs._alignedPreview != rhs._alignedPreview {return false}
+    if lhs.suspect != rhs.suspect {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

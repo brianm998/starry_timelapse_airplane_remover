@@ -27,13 +27,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.sample
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -55,6 +59,8 @@ class SequenceViewModel(
     private val onError: (String) -> Unit = {},
     /** The user's stored preferences (the horizon line's visibility is one); null where there are none, as in tests. */
     private val prefs: com.star.desktop.data.LocalPreferences? = null,
+    /** The sequence's alignment results as the daemon has them now (`Alignment.GetSequence`); null where there are none, as in tests. */
+    private val alignmentSource: (suspend () -> com.star.proto.AlignmentSequence?)? = null,
 ) {
     val sessionId: String = info.sessionId
     val frameCount: Int = info.frameCount
@@ -189,6 +195,24 @@ class SequenceViewModel(
     // ---- processing state (delegated) ----
     val frameStates: StateFlow<Map<Int, FrameProcessingState>> = processing.frameStates
     val isProcessing: StateFlow<Boolean> = processing.processing
+
+    /**
+     * The sequence's alignment results, kept up to date while anything is showing them (the Alignment window, the left panel's chart, the
+     * processing screen): fetched when the first of those appears, and again at most once a second as the frames' states change, since
+     * alignment finishes frame by frame as a run goes. Null until the first fetch arrives, or when there is nothing to fetch it with.
+     */
+    val alignment: StateFlow<com.star.desktop.domain.AlignmentData?> = alignmentFlow()
+        .map { seq -> seq?.let { com.star.desktop.domain.AlignmentData(it.framesList) } }
+        .stateIn(scope, SharingStarted.WhileSubscribed(stopTimeoutMillis = 10_000), null)
+
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    private fun alignmentFlow(): kotlinx.coroutines.flow.Flow<com.star.proto.AlignmentSequence?> {
+        val source = alignmentSource ?: return kotlinx.coroutines.flow.flowOf(null)
+        return kotlinx.coroutines.flow.flow {
+            emit(source())
+            processing.frameStates.sample(ALIGNMENT_REFRESH_MS).collect { emit(source()) }
+        }
+    }
 
     /** How far each step of the run in progress has got (see [ProcessingRepository.stepProgress]). */
     val stepProgress: StateFlow<com.star.proto.StepProgress?> = processing.stepProgress
@@ -1049,6 +1073,9 @@ class SequenceViewModel(
     }
 
     companion object {
+        /** How often at most the alignment results are fetched again while they are showing and the frames are changing. */
+        private const val ALIGNMENT_REFRESH_MS = 1000L
+
         /** Outlier groups smaller than this (pixels) are left to the trash threshold, not classified (macOS `minimumClassificationSize`). */
         const val MINIMUM_CLASSIFICATION_SIZE = 20
 
