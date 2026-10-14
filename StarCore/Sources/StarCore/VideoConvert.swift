@@ -34,7 +34,7 @@ public struct VideoInfo: Sendable {
 public func decodeVideo(
     named inputPath: String,
     format: FrameDecodeFormat = .tiff16,
-    progress: @escaping ProgressCallback
+    progress progressCallback: @escaping ProgressCallback
 ) async throws -> (outputDirectory: String, videoInfo: VideoInfo) {
     let inputURL = URL(fileURLWithPath: inputPath)
     let fileName = inputURL.deletingPathExtension().lastPathComponent
@@ -58,27 +58,20 @@ public func decodeVideo(
     let ffmpegPath = ToolPaths.ffmpeg
     Log.i("decoding \(inputPath) with ffmpeg at \(ffmpegPath)")
 
-    let totalFramesTask = Task {
-        try shellOut(
-          to: ffprobePath,
-          arguments: [
-            "-v", "error", "-count_frames", "-select_streams", "v:0",
-            "-show_entries", "stream=nb_read_frames",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            inputPath
-          ]
-        )
-    }
-    let totalFramesStr = try await totalFramesTask.value
-    // Counting the frames is a probe that cannot be interrupted, so this is the first place a caller that gave up on the video is noticed.
+    // The frame count is only the denominator of the extraction progress, so it is read the cheapest way that works: the header,
+    // then a packet count (demuxes without decoding), and only then the decode-everything count that used to run every time.
+    let totalFramesTask = Task { videoFrameCount(of: inputPath, ffprobePath: ffprobePath) }
+    let totalFrames = await totalFramesTask.value
+    // Counting the frames can be a probe that cannot be interrupted, so this is the first place a caller that gave up on the video is noticed.
     do { try Task.checkCancellation() } catch {
         if createdOutputFolder { try? fileManager.removeItem(atPath: outputFolder) }
         throw error
     }
 
-    // XXX report counting frames here
-    
-    let totalFrames = Int(totalFramesStr.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+    // A header-derived count can be a little low, and progress past the end of the bar is worse than a bar that finishes early.
+    let progress: ProgressCallback = { current, total, outputDir in
+        progressCallback(current, total > 0 ? max(total, current) : total, outputDir)
+    }
 
     // software decode unless the user opted in; see FFmpegHardware for why
     var decodeArguments = FFmpegHardware.decodeArguments()
@@ -391,4 +384,29 @@ final class StderrCollector: @unchecked Sendable {
         defer { lock.unlock() }
         return data
     }
+}
+
+
+/// How many frames the first video stream has, or 0 if it cannot be told.  Tries the header first (instant; an estimate from duration
+/// and rate when the container has no count), then counts packets (no decoding), and only then decodes the whole video.
+func videoFrameCount(of path: String, ffprobePath: String) -> Int {
+    if let count = VideoProbe.probe(videoAt: path)?.frameCount, count > 0 {
+        Log.i("frame count from header: \(count)")
+        return count
+    }
+    for (flag, key) in [("-count_packets", "nb_read_packets"), ("-count_frames", "nb_read_frames")] {
+        let output = try? shellOut(
+          to: ffprobePath,
+          arguments: [
+            "-v", "error", flag, "-select_streams", "v:0",
+            "-show_entries", "stream=\(key)",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            path
+          ])
+        if let count = output.flatMap({ Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }), count > 0 {
+            Log.i("frame count from \(flag): \(count)")
+            return count
+        }
+    }
+    return 0
 }
