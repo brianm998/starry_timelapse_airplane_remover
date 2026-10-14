@@ -495,6 +495,9 @@ tasks.test {
     for (k in listOf("star.it.config", "star.it.seq", "star.it.process", "star.stard.path", "star.render.dump")) {
         System.getProperty(k)?.let { systemProperty(k, it) }
     }
+    // Every daemon a test starts finds (and clears) the run markers in its own directory, never the ones a real run left in the user's
+    // application support: a test that wants a killed run to report writes its marker here.
+    environment("STAR_RUN_MARKER_DIR", layout.buildDirectory.dir("run-markers").get().asFile.absolutePath)
 }
 
 // Headless engine smoke harness (no spaces in any property value — Gradle's CLI parser otherwise

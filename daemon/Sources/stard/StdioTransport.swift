@@ -155,13 +155,14 @@ actor StdioTransport {
     /// expected. A client that ignores NOTIFICATION frames is still correct — which is what
     /// made this safe to add without a protocol version bump, since the v1 client already
     /// dropped unknown envelope kinds.
-    func sendWarning(_ warning: StarWarning) {
+    func sendWarning(_ warning: StarWarning, restartableConfigPath: String? = nil) {
         var payload = Star_V1_Warning()
         payload.kind = warning.kind.rawValue
         payload.severity = warning.severity.rawValue
         payload.title = warning.title
         payload.message = warning.message
         payload.suggestion = warning.suggestion ?? ""
+        payload.restartableConfigPath = restartableConfigPath ?? ""
         payload.passingCondition = warning.describesAPassingCondition
 
         guard let data = try? payload.serializedData() else { return }

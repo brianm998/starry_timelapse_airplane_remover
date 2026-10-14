@@ -52,6 +52,9 @@ class EngineState(
      * first time the engine came back. Callers subscribe once and keep receiving.
      */
     private val _warnings = MutableSharedFlow<Warning>(
+        // The last few are kept for a collector that is not subscribed yet: the daemon's report of a run that was killed arrives right after Hello,
+        // which can be before the app has started listening, and a report nobody hears is a crash nobody is told about.
+        replay = 4,
         extraBufferCapacity = 16,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
@@ -79,15 +82,16 @@ class EngineState(
             conn.start()
             val cli = StarClient(conn)
 
+            // Forward this connection's warnings onto the long-lived flow above. Before Hello, not after: the daemon's report of a run that was
+            // killed is sent as soon as it has answered, and one that arrived before anybody was listening would be a crash nobody is told about.
+            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { conn.warnings.collect { _warnings.tryEmit(it) } }
+
             val hello = cli.hello(clientVersion, Strings.currentCode)
 
             process = proc
             connection = conn
             client = cli
             _status.value = EngineStatus.Connected(hello.daemonVersion, hello.scratchDir)
-
-            // Forward this connection's warnings onto the long-lived flow above.
-            scope.launch { conn.warnings.collect { _warnings.tryEmit(it) } }
 
             // Monitor death in its own coroutine (does not block start()).
             scope.launch {

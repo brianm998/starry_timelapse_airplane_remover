@@ -487,7 +487,13 @@ public actor RunMarkerStore {
     ///
     /// Not the documents directory that `FileLogHandler` uses: these are machine state, not
     /// something a user should find sitting next to their logs.
+    ///
+    /// `STAR_RUN_MARKER_DIR`, when set, names the directory instead: how a test gives a daemon markers of its own to find, without
+    /// touching (or consuming) the ones a real run left in the user's application support.
     public static func defaultDirectory() -> URL {
+        if let override = ProcessInfo.processInfo.environment["STAR_RUN_MARKER_DIR"], !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
         let support = FileManager.default.urls(for: .applicationSupportDirectory,
                                                in: .userDomainMask).first
         let base = support ?? FileManager.default.temporaryDirectory

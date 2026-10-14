@@ -813,7 +813,34 @@ class AppViewModel(
 
     fun openSequence(dir: String) = launchOpen(dir, video = false, promptStartup = true) { sessions.openSequenceStream(dir, initialConfigBeside(dir, savedDetectionType())) }
 
-    fun openConfig(path: String) = launchOpen(path, video = false) { sessions.openConfigStream(path) }
+    fun openConfig(path: String, thenProcess: Boolean = false) =
+        launchOpen(path, video = false, afterOpen = if (thenProcess) ::resumeProcessing else null) { sessions.openConfigStream(path) }
+
+    /**
+     * The critical warning's "Restart Now" (macOS `restartAbandonedRun`): open again the sequence a run that was killed was working on, and carry
+     * on processing it. Everything a resume needs is in the config that run wrote (which frames are finished is read off the disk), so this is the
+     * ordinary re-open with the press of the button that follows it made for the user. Acknowledges first: the user has acted on the report, and
+     * leaving the kind unacknowledged would let a second report put the same dialog back over the sequence that is loading.
+     */
+    fun restartAbandonedRun(configPath: String) {
+        acknowledgeWarning()
+        Log.i("App") { "restarting the run that stopped, from $configPath" }
+        openConfig(configPath, thenProcess = true)
+    }
+
+    /**
+     * Start processing the sequence that has just been opened again, with no question about rendering (it is a run being picked back up, and
+     * "render a video afterwards?" is not what its button promised). Not over a hand-painted horizon selection the last session never finished: the
+     * open has already put the painter back up, and processing now would run without the horizons the user asked to define.
+     */
+    private fun resumeProcessing() {
+        val svm = currentSequence ?: return
+        if (svm.horizonPaintMode.value) return
+        svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
+        autoRenderAfterProcessing = false
+        awaitingProcessingPrompt = false
+        svm.processAll()
+    }
 
     /** Output goes beside the video, as macOS puts it (the parent of the extracted frames' folder is the video's own folder), not in the daemon's hidden per-session scratch fallback. */
     fun openVideo(path: String) = launchOpen(path, video = true, promptStartup = true) { sessions.openVideo(path, initialConfigBeside(path, savedDetectionType())) }
@@ -832,7 +859,7 @@ class AppViewModel(
     }
 
     /** Open a source from [source], which streams how it is going and ends with the session: shows that on the loading screen, then the sequence. */
-    private fun launchOpen(path: String, video: Boolean, promptStartup: Boolean = false, source: () -> Flow<OpenProgress>) {
+    private fun launchOpen(path: String, video: Boolean, promptStartup: Boolean = false, afterOpen: (() -> Unit)? = null, source: () -> Flow<OpenProgress>) {
         openJob = scope.launch {
             ensureConnected()
             if (engine.client == null) {
@@ -863,6 +890,7 @@ class AppViewModel(
                 }
                 sessions.applySessionInfo(opened)
                 onOpened(path, opened, promptStartup = promptStartup)
+                afterOpen?.invoke()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -982,6 +1010,9 @@ class AppViewModel(
     /** Restart a crashed engine and re-open the last session from its config.json (§2.1 crash recovery). */
     fun restartEngine() {
         val resume = lastResumePath
+        // A run that was going when the engine died is taken up again once the session is back: the user restarted the engine to carry on, and a
+        // sequence reopened idle, with the run's progress still on the disk, would look as if the restart had lost it.
+        val wasProcessing = currentSequence?.isProcessing?.value == true
         scope.launch {
             restarting = true
             _engineDown.value = null
@@ -997,6 +1028,7 @@ class AppViewModel(
                 _screen.value = AppScreen.Loading("Resuming session", resume, null)
                 try {
                     onOpened(resume, sessions.openConfig(resume), addToRecent = false)
+                    if (wasProcessing) resumeProcessing()
                 } catch (e: Throwable) {
                     fail(e.message ?: "failed to resume session after restart")
                 }

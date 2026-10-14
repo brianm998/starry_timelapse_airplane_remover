@@ -103,7 +103,7 @@ fun StarApp(vm: AppViewModel) {
                 }
             }
             // A critical warning interrupts, once per kind (see WarningRouting).
-            warnings.critical?.let { CriticalWarningDialog(it, onOk = vm::acknowledgeWarning) }
+            warnings.critical?.let { CriticalWarningDialog(it, onOk = vm::acknowledgeWarning, onRestart = vm::restartAbandonedRun) }
 
             val engineDown by vm.engineDown.collectAsState()
             engineDown?.let {
@@ -291,10 +291,10 @@ private fun ConfirmCloseOverlay(confirmation: com.star.desktop.domain.CloseConfi
 /**
  * A critical warning over the window (macOS's system alert for them): the machine is about to stop this run, or a previous run was stopped. OK is the
  * default, and does nothing but acknowledge it: starting a run that may take hours is not what a stray Return on a dialog the user did not ask for
- * should do. A click outside does nothing.
+ * should do; a report of a run that was killed also offers Restart Now. A click outside does nothing.
  */
 @Composable
-private fun CriticalWarningDialog(warning: com.star.proto.Warning, onOk: () -> Unit) {
+private fun CriticalWarningDialog(warning: com.star.proto.Warning, onOk: () -> Unit, onRestart: (String) -> Unit) {
     PromptCard(onScrimClick = null, onDefaultAction = onOk, onEscape = null) {
         Text(warning.title, color = StarColors.red, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 18.sp)
         Text(warning.message, color = StarColors.textPrimary, fontSize = 13.sp)
@@ -303,6 +303,11 @@ private fun CriticalWarningDialog(warning: com.star.proto.Warning, onOk: () -> U
             Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp, Alignment.End),
         ) {
+            // Only the report of a run that stopped, and only one whose config is still on disk, has anything to restart: the others are about the
+            // machine, where there is nothing to pick back up.
+            if (warning.restartableConfigPath.isNotEmpty()) {
+                OutlinedButton(onClick = { onRestart(warning.restartableConfigPath) }) { Text(localized("ui.restart_now")) }
+            }
             Button(onClick = onOk, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.ok")) }
         }
     }

@@ -622,6 +622,58 @@ class InteropIntegrationTest {
     }
 
     /**
+     * H3: a daemon that was killed leaves a run marker, and the next one tells its client about it once Hello has been answered: a critical
+     * previousRunDied warning, with the config that run can be restarted from, which is on disk. Once, and the marker is cleared.
+     */
+    @Test
+    fun aKilledRunIsReportedAfterHelloWithItsConfig() {
+        val markerDir = System.getenv("STAR_RUN_MARKER_DIR")?.takeIf { it.isNotBlank() }
+        if (markerDir == null || stardPath() == null) {
+            println("[skip] aKilledRunIsReportedAfterHelloWithItsConfig — needs -Dstar.stard.path and STAR_RUN_MARKER_DIR (the Gradle test task sets it)")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-killed").toFile()
+        val config = File(tmp, "config.json").also { it.writeText("{}") }
+        val dir = File(markerDir).also { it.mkdirs() }
+        val marker = File(dir, "stard-999999-test.json")
+        // A process that is not there (no pid is that high), last heard from a few minutes after it started.
+        marker.writeText(
+            """{"formatVersion":1,"id":"stard-999999-test","client":"stard","starVersion":"1.0.0","pid":999999,
+               |"startedAt":"2026-10-13T10:00:00Z","heartbeatAt":"2026-10-13T10:05:00Z","hostPhysicalMemoryBytes":17179869184,
+               |"sequenceName":"night_sky","sequencePath":"/x","resumeConfigPath":${com.google.gson.Gson().toJson(config.path)},
+               |"frameCount":100,"framesCompleted":40,"peakFootprintBytes":0}""".trimMargin(),
+        )
+        try {
+            runBlocking {
+                val scope = CoroutineScope(SupervisorJob())
+                val engine = EngineState(scope)
+                val heard = java.util.concurrent.CopyOnWriteArrayList<com.star.proto.Warning>()
+                scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { engine.warnings.collect { heard.add(it) } }
+                assertTrue(engine.start(), "engine failed to start: ${engine.status.value}")
+                try {
+                    withTimeoutOrNull(10_000) { while (heard.none { it.kind == "previousRunDied" }) delay(50) }
+                    val report = heard.firstOrNull { it.kind == "previousRunDied" }
+                    assertTrue(report != null, "no report of the killed run; heard ${heard.map { it.kind }}")
+                    assertEquals("critical", report.severity)
+                    assertEquals(config.path, report.restartableConfigPath, "the config the run can be restarted from")
+                    assertFalse(report.passingCondition, "it stays true, so its banner must not expire")
+                    assertTrue(report.message.isNotEmpty())
+                    assertFalse(marker.exists(), "the marker was cleared once reported")
+                    // Hello is idempotent, and the same crash must not be reported twice.
+                    engine.client!!.hello("2.0.0", "en")
+                    delay(500)
+                    assertEquals(1, heard.count { it.kind == "previousRunDied" }, "reported again after a second Hello")
+                } finally {
+                    engine.shutdown()
+                }
+            }
+        } finally {
+            marker.delete()
+            tmp.deleteRecursively()
+        }
+    }
+
+    /**
      * F3: the daemon says whether full resolution keypoint detection suits the sequence on this machine, with the numbers behind it; and a
      * divisor the client writes is the divisor in the config afterwards (sending one is also what marks it chosen).
      */

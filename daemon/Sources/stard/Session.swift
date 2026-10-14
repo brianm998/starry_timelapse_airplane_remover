@@ -868,6 +868,8 @@ actor Session {
     // MARK: - StarCore callback bridges
 
     private func onFrameStateChange(frame: FrameAirplaneRemover, state: FrameProcessingState) {
+        // Progress into the run marker, so a report of a killed run can say how far it got (what the macOS app records as it goes).
+        Task { await RunMarkerStore.shared.note(phase: "\(state)", frameCompleted: state == .complete ? frame.frameIndex : nil) }
         var ev = Star_V1_FrameStateEvent()
         ev.frameIndex = Int32(frame.frameIndex)
         ev.state = Mapping.frameProcessingState(state)

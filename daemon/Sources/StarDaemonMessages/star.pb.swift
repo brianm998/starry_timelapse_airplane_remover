@@ -1019,6 +1019,10 @@ public struct Star_V1_Warning: Sendable {
   /// what to do about it, may be empty
   public var suggestion: String = String()
 
+  /// For a report of a run that was killed (kind "previousRunDied", sent right after Daemon.Hello): the config that run can be picked back up from,
+  /// which is on disk (it is checked). Empty for every other warning. Opening it and processing again is "Restart Now".
+  public var restartableConfigPath: String = String()
+
   /// True for a state of the machine that passes on its own (memory pressure, low system memory, footprint over budget): a banner about it should
   /// come down by itself after a while, where one about something that happened, which stays true, stays until dismissed. StarWarning.describesAPassingCondition.
   public var passingCondition: Bool = false
@@ -4130,7 +4134,7 @@ extension Star_V1_ShutdownResponse: SwiftProtobuf.Message, SwiftProtobuf._Messag
 
 extension Star_V1_Warning: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Warning"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}severity\0\u{1}title\0\u{1}message\0\u{1}suggestion\0\u{4}\u{2}passing_condition\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}severity\0\u{1}title\0\u{1}message\0\u{1}suggestion\0\u{3}restartable_config_path\0\u{3}passing_condition\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4143,6 +4147,7 @@ extension Star_V1_Warning: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
       case 3: try { try decoder.decodeSingularStringField(value: &self.title) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.message) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.suggestion) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.restartableConfigPath) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.passingCondition) }()
       default: break
       }
@@ -4165,6 +4170,9 @@ extension Star_V1_Warning: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     if !self.suggestion.isEmpty {
       try visitor.visitSingularStringField(value: self.suggestion, fieldNumber: 5)
     }
+    if !self.restartableConfigPath.isEmpty {
+      try visitor.visitSingularStringField(value: self.restartableConfigPath, fieldNumber: 6)
+    }
     if self.passingCondition != false {
       try visitor.visitSingularBoolField(value: self.passingCondition, fieldNumber: 7)
     }
@@ -4177,6 +4185,7 @@ extension Star_V1_Warning: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
     if lhs.title != rhs.title {return false}
     if lhs.message != rhs.message {return false}
     if lhs.suggestion != rhs.suggestion {return false}
+    if lhs.restartableConfigPath != rhs.restartableConfigPath {return false}
     if lhs.passingCondition != rhs.passingCondition {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true

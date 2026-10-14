@@ -28,6 +28,12 @@ enum DaemonHandlers {
             // What was actually resolved, which is not always what was asked for.
             resp.locale = StarLocalization.shared.currentCode
             try await transport.respond(id: id, payload: resp.serializedData())
+
+            // Now that the client has said what language it shows: tell it about any run that was killed, once, in that language.
+            for marker in await AbandonedRunReports.shared.take() {
+                let report = AbandonedRunReports.report(for: marker)
+                await transport.sendWarning(report.warning, restartableConfigPath: report.restartableConfigPath)
+            }
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

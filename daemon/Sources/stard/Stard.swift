@@ -65,12 +65,15 @@ struct Stard: AsyncParsableCommand {
         // A daemon that was killed left a marker behind.  The client cannot see this yet
         // beyond the stderr drain, but the daemon is the process most likely to be killed
         // and least likely to be watched, so recording it is worth more here than anywhere.
-        for marker in await RunMarkerStore.shared.abandonedRuns() {
+        let abandoned = await RunMarkerStore.shared.abandonedRuns()
+        for marker in abandoned {
             Log.e("previous run did not finish: \(marker.summary)")
             for line in marker.report.split(separator: "\n", omittingEmptySubsequences: false) {
                 Log.e("  \(line)")
             }
         }
+        // Kept for the client, which hears of them from the first Daemon.Hello (see AbandonedRunReports).
+        await AbandonedRunReports.shared.store(abandoned)
         await RunMarkerStore.shared.clearAbandoned()
 
         await RunMarkerStore.shared.begin(client: "stard", logPath: diagnosticLogPath)
