@@ -74,6 +74,7 @@ import com.star.proto.ReprocessFramesRequest
 import com.star.proto.ReprocessFramesResponse
 import com.star.proto.ReprocessingType
 import com.star.proto.SessionInfo
+import com.star.proto.SequenceProgress
 import com.star.proto.SessionRef
 import com.star.proto.NeighborKind
 import com.star.proto.SetFrameCleanMethodRequest
@@ -168,6 +169,10 @@ class StarClient(private val conn: StdioConnection) {
 
     suspend fun updateConfig(sessionId: String, config: Config): Config =
         call("Sequence.UpdateConfig", UpdateConfigRequest.newBuilder().setSessionId(sessionId).setConfig(config).build(), Config.parser())
+
+    /** How far a previous run got on the sequence, read off what it left on disk now (macOS `SequenceProgressSurvey`). */
+    suspend fun getProgressSurvey(sessionId: String): SequenceProgress =
+        call("Sequence.GetProgressSurvey", SessionRef.newBuilder().setSessionId(sessionId).build(), SequenceProgress.parser())
 
     // ---- Frame ----
 

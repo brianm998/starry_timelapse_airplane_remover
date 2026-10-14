@@ -1,6 +1,7 @@
 package com.star.desktop.domain
 
 import com.star.desktop.i18n.localized
+import com.star.proto.StepCount
 import com.star.proto.StepProgress
 
 /**
@@ -50,7 +51,8 @@ data class StepRow(val type: String, val queued: Int, val running: Int, val done
         fun helpKey(type: String): String? = HELPS[type]
 
         /** The rows in a report from the daemon, in the order it sent them (the order the screen stacks them). */
-        fun of(report: StepProgress?): List<StepRow> =
-            report?.stepsList?.map { StepRow(it.type, it.queued, it.running, it.done, it.alreadyDone) } ?: emptyList()
+        fun of(report: StepProgress?): List<StepRow> = report?.let { of(it.stepsList) } ?: emptyList()
+
+        fun of(counts: List<StepCount>): List<StepRow> = counts.map { StepRow(it.type, it.queued, it.running, it.done, it.alreadyDone) }
     }
 }

@@ -633,6 +633,18 @@ message StepProgress {
   string status            = 3;   // what the run is doing when it cannot be counted in operations (a horizon refinement); empty otherwise
 }
 
+// How far a previous run got on the open sequence, read off what it left on disk at the time of the call (macOS SequenceProgressSurvey,
+// shown when a sequence is reopened).  Every step this configuration takes has a row, even at zero, with the frames whose artifact is
+// already written as `already_done` and the rest `queued`: nothing here is a run's own work, since none is going.
+message SequenceProgress {
+  string sequence_name   = 1;
+  int32  frame_count     = 2;
+  int32  frames_complete = 3;   // frames whose finished output is written: what decides whether there is anything left to do
+  repeated StepCount steps = 4;
+  bool   is_untouched    = 5;   // no step has a single frame done, so the sequence has never been processed
+  bool   is_complete     = 6;   // every frame has its output written, so a run would have nothing to merge
+}
+
 message FrameStateEvent    { int32 frame_index = 1; FrameProcessingState state = 2; }
 message FrameSavingEvent   { int32 frame_index = 1; int32 old_state = 2; int32 new_state = 3; }
 message OutliersLoaded     { int32 frame_index = 1; int32 state = 2; }

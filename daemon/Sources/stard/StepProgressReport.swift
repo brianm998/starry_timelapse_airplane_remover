@@ -34,15 +34,28 @@ enum StepProgressReport {
         var report = Star_V1_StepProgress()
         report.graphBuilt = graphIsBuilt
         report.status = status ?? ""
-        report.steps = steps.map { step in
-            var count = Star_V1_StepCount()
-            count.type = "\(step.type)"   // the case's name ("starKeypoints"), not its raw value ("star kp")
-            count.queued = Int32(step.queued)
-            count.running = Int32(step.running)
-            count.done = Int32(step.done)
-            count.alreadyDone = Int32(step.alreadyDone)
-            return count
-        }
+        report.steps = steps.map(stepCount)
         return report
+    }
+
+    static func stepCount(_ step: ProcessingStepProgress) -> Star_V1_StepCount {
+        var count = Star_V1_StepCount()
+        count.type = "\(step.type)"   // the case's name ("starKeypoints"), not its raw value ("star kp")
+        count.queued = Int32(step.queued)
+        count.running = Int32(step.running)
+        count.done = Int32(step.done)
+        count.alreadyDone = Int32(step.alreadyDone)
+        return count
+    }
+
+    static func proto(_ progress: SequenceProgress) -> Star_V1_SequenceProgress {
+        var out = Star_V1_SequenceProgress()
+        out.sequenceName = progress.sequenceName
+        out.frameCount = Int32(progress.frameCount)
+        out.framesComplete = Int32(progress.framesComplete)
+        out.steps = progress.steps.map(stepCount)
+        out.isUntouched = progress.isUntouched
+        out.isComplete = progress.isComplete
+        return out
     }
 }

@@ -342,7 +342,7 @@ final class DispatcherTests: XCTestCase {
           "Daemon.Hello", "Daemon.Shutdown",
           "Session.OpenSequence", "Session.OpenConfig", "Session.OpenVideo",
           "Session.Close", "Session.List",
-          "Sequence.GetConfig", "Sequence.UpdateConfig",
+          "Sequence.GetConfig", "Sequence.UpdateConfig", "Sequence.GetProgressSurvey",
           "Frame.Get", "Frame.GetPreview", "Frame.GetOutlierLabelImage", "Frame.GetOutlierTrashImage", "Frame.SetCleanMethod", "Frame.SetNeighborOverride",
           "Outlier.List", "Outlier.SetDecisions", "Outlier.RenderFrame",
           "Outlier.ApplyDecisionTree", "Outlier.ApplyDecisionTreeAllFrames",

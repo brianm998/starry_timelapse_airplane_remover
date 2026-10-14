@@ -107,9 +107,9 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     }
 }
 
-/** One bar per processing step, stacked in the order the daemon sends them. */
+/** One bar per processing step, stacked in the order the daemon sends them (also drawn by the reopened-sequence panel, over what was found on disk). */
 @Composable
-private fun StepsView(rows: List<StepRow>, hasReport: Boolean) {
+internal fun StepsView(rows: List<StepRow>, hasReport: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(localized("ui.processing_steps"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         when {

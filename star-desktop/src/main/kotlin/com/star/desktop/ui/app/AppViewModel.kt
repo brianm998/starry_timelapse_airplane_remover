@@ -16,6 +16,7 @@ import com.star.desktop.util.Log
 import com.star.proto.CleanMethod
 import com.star.proto.Config
 import com.star.proto.OpenProgress
+import com.star.proto.SequenceProgress
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -506,17 +507,57 @@ class AppViewModel(
      * ordinary way — which is the point: processing before the selection is done runs the
      * frames the user never reached with the automatic detection they had just declined.
      */
-    private fun resumeStartupHorizonIfUnfinished(svm: SequenceViewModel, config: Config) {
+    private fun resumeStartupHorizonIfUnfinished(svm: SequenceViewModel, config: Config): Boolean {
         val indices = config.startupHorizonFrameIndicesList
         val position = config.startupHorizonFramePosition
         if (startupHorizonResumeFrame(indices, position, svm.frameCount) == null) {
             if (indices.isNotEmpty()) {
                 Log.w("App") { "startup horizon selection at $position of $indices does not fit ${svm.frameCount} frames; not resuming" }
             }
-            return
+            return false
         }
         Log.i("App") { "resuming hand painted horizon selection at ${position + 1} of ${indices.size}" }
         svm.beginStartupHorizon(indices, position)
+        return true
+    }
+
+    // ---- "where this sequence left off" (macOS SequenceProgressModalView) ----
+    private val _sequenceProgress = MutableStateFlow<SequenceProgress?>(null)
+
+    /** How far the last run got, while the panel that says so is up; null otherwise. */
+    val sequenceProgress: StateFlow<SequenceProgress?> = _sequenceProgress.asStateFlow()
+
+    /**
+     * Survey what the last run left on disk and put the panel up. Asked once, as the sequence is reopened, so the numbers are what that
+     * run left and not a running count (a run started from the panel reports itself through the processing screen). A survey that fails
+     * is not worth failing the open over: the user simply goes on to the frames.
+     */
+    private fun showSequenceProgress(svm: SequenceViewModel) {
+        scope.launch {
+            runCatching { sessions.getProgressSurvey() }
+                .onSuccess { if (currentSequence === svm) _sequenceProgress.value = it }
+                .onFailure { Log.w("App") { "could not survey the sequence's progress: ${it.message}" } }
+        }
+    }
+
+    fun closeSequenceProgress() { _sequenceProgress.value = null }
+
+    /**
+     * The panel's Start/Finish Processing: the whole sequence rather than a range from the first unwritten frame, since the frames that
+     * are not finished are not necessarily a contiguous tail (any frame can be reprocessed, and a stopped run leaves holes wherever its
+     * workers happened to be) and a frame whose output is written is skipped anyway. Edit mode, where the frames and the progress are.
+     */
+    fun finishProcessingOpenedSequence() {
+        closeSequenceProgress()
+        currentSequence?.setMode(com.star.desktop.domain.InteractionMode.EDIT)
+        requestProcessAll()
+    }
+
+    /** The panel's Render Video. */
+    fun renderVideoForOpenedSequence() {
+        closeSequenceProgress()
+        currentSequence?.setMode(com.star.desktop.domain.InteractionMode.EDIT)
+        openRenderVideo()
     }
 
     /** Total frames in the open sequence — bounds the moving-horizon count stepper. */
@@ -678,6 +719,7 @@ class AppViewModel(
         autoRenderAfterProcessing = false
         awaitingProcessingPrompt = false
         _showSettings.value = false
+        _sequenceProgress.value = null
         _showRenderVideo.value = false
         _renderVideoAutoStart.value = false
         _showOutlierWindow.value = false
@@ -808,6 +850,7 @@ class AppViewModel(
             "multiselect" -> svm.openMultiSelect(SequenceViewModel.RectSelection(100f, 100f, 400f, 400f)) // dev hook
             "settings" -> openSettings() // dev hook: screenshot the Processing Settings dialog
             "startup" -> _startupStep.value = StartupStep.HORIZON // dev hook: startup prompts
+            "progress" -> showSequenceProgress(svm) // dev hook: screenshot the reopened-sequence panel
             else -> Unit
         }
         autoFrame?.let { svm.setCurrentIndex(it) }
@@ -821,7 +864,8 @@ class AppViewModel(
             // A config resume. Normally there is nothing to prompt for — the config already
             // carries the answers. The exception is a hand-painted horizon selection the last
             // session never finished, which has to come before processing rather than after.
-            resumeStartupHorizonIfUnfinished(svm, info.config)
+            // The panel waits for that: a run started now would fall back to the automatic horizon detection they had declined.
+            if (!resumeStartupHorizonIfUnfinished(svm, info.config)) showSequenceProgress(svm)
         }
     }
 

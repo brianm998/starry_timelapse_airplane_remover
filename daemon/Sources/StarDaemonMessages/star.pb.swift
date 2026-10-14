@@ -2804,6 +2804,34 @@ public struct Star_V1_StepProgress: Sendable {
   public init() {}
 }
 
+/// How far a previous run got on the open sequence, read off what it left on disk at the time of the call (macOS SequenceProgressSurvey,
+/// shown when a sequence is reopened).  Every step this configuration takes has a row, even at zero, with the frames whose artifact is
+/// already written as `already_done` and the rest `queued`: nothing here is a run's own work, since none is going.
+public struct Star_V1_SequenceProgress: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sequenceName: String = String()
+
+  public var frameCount: Int32 = 0
+
+  /// frames whose finished output is written: what decides whether there is anything left to do
+  public var framesComplete: Int32 = 0
+
+  public var steps: [Star_V1_StepCount] = []
+
+  /// no step has a single frame done, so the sequence has never been processed
+  public var isUntouched: Bool = false
+
+  /// every frame has its output written, so a run would have nothing to merge
+  public var isComplete: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct Star_V1_FrameStateEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -7025,6 +7053,61 @@ extension Star_V1_StepProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
     if lhs.steps != rhs.steps {return false}
     if lhs.graphBuilt != rhs.graphBuilt {return false}
     if lhs.status != rhs.status {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SequenceProgress"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sequence_name\0\u{3}frame_count\0\u{3}frames_complete\0\u{1}steps\0\u{3}is_untouched\0\u{3}is_complete\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sequenceName) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameCount) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.framesComplete) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.steps) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.isUntouched) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.isComplete) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sequenceName.isEmpty {
+      try visitor.visitSingularStringField(value: self.sequenceName, fieldNumber: 1)
+    }
+    if self.frameCount != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameCount, fieldNumber: 2)
+    }
+    if self.framesComplete != 0 {
+      try visitor.visitSingularInt32Field(value: self.framesComplete, fieldNumber: 3)
+    }
+    if !self.steps.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.steps, fieldNumber: 4)
+    }
+    if self.isUntouched != false {
+      try visitor.visitSingularBoolField(value: self.isUntouched, fieldNumber: 5)
+    }
+    if self.isComplete != false {
+      try visitor.visitSingularBoolField(value: self.isComplete, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_SequenceProgress, rhs: Star_V1_SequenceProgress) -> Bool {
+    if lhs.sequenceName != rhs.sequenceName {return false}
+    if lhs.frameCount != rhs.frameCount {return false}
+    if lhs.framesComplete != rhs.framesComplete {return false}
+    if lhs.steps != rhs.steps {return false}
+    if lhs.isUntouched != rhs.isUntouched {return false}
+    if lhs.isComplete != rhs.isComplete {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

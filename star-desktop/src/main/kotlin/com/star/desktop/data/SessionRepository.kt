@@ -5,6 +5,7 @@ import com.star.desktop.engine.StarRpcException
 import com.star.proto.CleanMethod
 import com.star.proto.Config
 import com.star.proto.OpenProgress
+import com.star.proto.SequenceProgress
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +48,8 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
     fun clearLocal() { _session.value = null }
 
     suspend fun getConfig(): Config = client().getConfig(requireSession())
+
+    suspend fun getProgressSurvey(): SequenceProgress = client().getProgressSurvey(requireSession())
 
     suspend fun updateConfig(config: Config): Config =
         client().updateConfig(requireSession(), config).also { updated ->

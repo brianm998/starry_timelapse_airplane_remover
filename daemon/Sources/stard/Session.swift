@@ -146,6 +146,14 @@ actor Session {
     // Current config snapshot.
     func config() async -> Config { await configManager.config() }
 
+    /// How far a previous run got on this sequence, as the files it left say (`Sequence.GetProgressSurvey`).  A few `stat`s per frame, so
+    /// it is cheap to ask on the way into a reopened sequence; takes what is on disk at face value.
+    func surveyProgress() async -> SequenceProgress {
+        let manager = configManager
+        let (config, homographies) = await MainActor.run { (manager.config(), manager.homographyDatabase) }
+        return await SequenceProgressSurvey.survey(frames: frames, config: config, homographyDatabase: homographies)
+    }
+
     /// Apply the settings a client sent (`Sequence.UpdateConfig`) and persist them.  Returns the
     /// config as it now stands.
     func updateConfig(from proto: Star_V1_Config) async -> Config {

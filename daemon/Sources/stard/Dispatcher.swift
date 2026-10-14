@@ -79,6 +79,7 @@ extension Dispatcher {
         // Sequence
         register(method: "Sequence.GetConfig")    { id, payload, transport in await SequenceHandlers.getConfig(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Sequence.UpdateConfig") { id, payload, transport in await SequenceHandlers.updateConfig(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Sequence.GetProgressSurvey") { id, payload, transport in await SequenceHandlers.getProgressSurvey(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Frame
         register(method: "Frame.Get")                 { id, payload, transport in await FrameHandlers.get(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

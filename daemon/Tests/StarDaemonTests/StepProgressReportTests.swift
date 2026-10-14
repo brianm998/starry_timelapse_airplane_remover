@@ -13,9 +13,11 @@ final class StepProgressReportTests: XCTestCase {
         Sample(operations: operations, alreadyDone: alreadyDone, graphBuilds: builds)
     }
 
-    private func steps(_ report: Star_V1_StepProgress) -> [String: [Int32]] {
-        Dictionary(uniqueKeysWithValues: report.steps.map { ($0.type, [$0.queued, $0.running, $0.done, $0.alreadyDone]) })
+    private func steps(_ counts: [Star_V1_StepCount]) -> [String: [Int32]] {
+        Dictionary(uniqueKeysWithValues: counts.map { ($0.type, [$0.queued, $0.running, $0.done, $0.alreadyDone]) })
     }
+
+    private func steps(_ report: Star_V1_StepProgress) -> [String: [Int32]] { steps(report.steps) }
 
     /// Until the run's graph is built, every step is listed (none has any operations yet, and filtering would empty the panel and then
     /// pop the rows in one at a time).
@@ -53,5 +55,41 @@ final class StepProgressReportTests: XCTestCase {
         let a = StepProgressReport.make(types: [.horizon], now: sample([.horizon: [.done: 1]], builds: 1), baseline: sample())
         let b = StepProgressReport.make(types: [.horizon], now: sample([.horizon: [.done: 1]], builds: 1), baseline: sample())
         XCTAssertEqual(a, b, "the session sends a report only when it differs from the last")
+    }
+
+    // MARK: - the survey of a reopened sequence
+
+    /// What the survey found on disk goes to the client as it is — including the two verdicts, which the client takes from here rather
+    /// than working them out again, and a step with nothing found, which is a row at zero and not a missing row.
+    func testASurveyedSequenceIsSentWithItsVerdicts() {
+        let types: [OperationType] = [.horizon, .starKeypoints, .merge]
+        let progress = SequenceProgress(
+            sequenceName: "a_sequence", frameCount: 10, framesComplete: 0,
+            steps: SequenceProgressSurvey.steps(for: types, frameCount: 10, framesOnDisk: [.horizon: 10, .starKeypoints: 4]))
+        let sent = StepProgressReport.proto(progress)
+
+        XCTAssertEqual(sent.sequenceName, "a_sequence")
+        XCTAssertEqual(sent.frameCount, 10)
+        XCTAssertEqual(sent.framesComplete, 0)
+        XCTAssertEqual(sent.steps.map(\.type), ["horizon", "starKeypoints", "merge"])
+        XCTAssertEqual(steps(sent.steps), ["horizon": [0, 0, 0, 10], "starKeypoints": [6, 0, 0, 4], "merge": [10, 0, 0, 0]])
+        XCTAssertFalse(sent.isUntouched, "keypoints and horizons found: that is most of the work, not a sequence nothing was done to")
+        XCTAssertFalse(sent.isComplete)
+    }
+
+    func testASequenceWithEveryFrameWrittenIsComplete() {
+        let progress = SequenceProgress(
+            sequenceName: "done", frameCount: 3, framesComplete: 3,
+            steps: SequenceProgressSurvey.steps(for: [.merge], frameCount: 3, framesOnDisk: [.merge: 3]))
+        XCTAssertTrue(StepProgressReport.proto(progress).isComplete)
+        XCTAssertFalse(StepProgressReport.proto(progress).isUntouched)
+    }
+
+    func testASequenceNothingWasDoneToIsUntouched() {
+        let progress = SequenceProgress(
+            sequenceName: "new", frameCount: 3, framesComplete: 0,
+            steps: SequenceProgressSurvey.steps(for: [.horizon, .merge], frameCount: 3, framesOnDisk: [:]))
+        XCTAssertTrue(StepProgressReport.proto(progress).isUntouched)
+        XCTAssertFalse(StepProgressReport.proto(progress).isComplete)
     }
 }

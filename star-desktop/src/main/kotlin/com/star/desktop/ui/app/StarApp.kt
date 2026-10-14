@@ -69,6 +69,8 @@ fun StarApp(vm: AppViewModel) {
             if (startupStep != null && screen is AppScreen.Sequence) {
                 com.star.desktop.ui.dialogs.StartupPrompts(vm, startupStep!!)
             }
+            val sequenceProgress by vm.sequenceProgress.collectAsState()
+            sequenceProgress?.let { if (screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.SequenceProgressDialog(vm, it) }
             val showPre by vm.showPreRenderPrompt.collectAsState()
             if (showPre && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PreProcessingRenderPrompt(vm)
             val showPost by vm.showPostRenderPrompt.collectAsState()

@@ -18,6 +18,7 @@ import java.io.File
 import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -357,6 +358,7 @@ class InteropIntegrationTest {
 
     /**
      * F1: while a run goes the daemon reports how far each step has got, and the last report has every step it lists finished.
+     * F2: the survey of what is on disk says "untouched" before the run and "complete" after it.
      */
     @Test
     fun stepProgressDuringARun() {
@@ -386,10 +388,28 @@ class InteropIntegrationTest {
                     }
                 }
                 delay(400)
+                val before = client.getProgressSurvey(info.sessionId)
+                assertTrue(before.isUntouched, "nothing has been done to a fresh sequence: $before")
+                assertFalse(before.isComplete)
+                assertEquals(info.frameCount, before.frameCount)
+                assertEquals(0, before.framesComplete)
+                assertEquals(seqCopy.name, before.sequenceName.substringAfterLast('/'))
+                assertTrue(before.stepsList.any { it.type == "merge" }, "every configuration merges")
+                for (step in before.stepsList) {
+                    assertEquals(info.frameCount, step.queued + step.alreadyDone, "${step.type} is measured over the whole sequence")
+                    assertEquals(0, step.alreadyDone, "${step.type} has nothing on disk yet")
+                }
+
                 client.startProcessing(info.sessionId, 0, -1)
                 val state = withTimeoutOrNull(1_200_000) { ended.receive() }
                 sub.cancel()
                 assertEquals("done", state, "the run did not finish cleanly")
+
+                val after = client.getProgressSurvey(info.sessionId)
+                assertTrue(after.isComplete, "every frame is written after a clean run: $after")
+                assertFalse(after.isUntouched)
+                assertEquals(info.frameCount, after.framesComplete)
+                assertEquals(info.frameCount, after.stepsList.first { it.type == "merge" }.alreadyDone)
 
                 assertTrue(reports.isNotEmpty(), "no step progress was reported")
                 val last = reports.last()
