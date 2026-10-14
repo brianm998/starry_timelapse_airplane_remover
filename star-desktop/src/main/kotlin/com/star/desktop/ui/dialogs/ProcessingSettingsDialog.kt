@@ -1,5 +1,6 @@
 package com.star.desktop.ui.dialogs
 
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -305,6 +306,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                     onClick = { if (change.contradictsFinishedWork) askUpdate = true else save(true) },
                     enabled = change.canProcess(processing) && problems.isEmpty(),
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    modifier = Modifier.testTag("settings.process"),
                 ) { Text(localized(change.processKey)) }
             }
             if (askUpdate) {

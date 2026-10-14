@@ -79,6 +79,9 @@ public final class ViewModel {
             userPreferences = newPrefs
         }
 
+        // A UI test must not meet a "new release" sheet that depends on what GitHub says today.
+        guard Self.uiTestOpenSequencePath == nil else { return }
+
         Task.detached {
             if let newRelease = await StarCore.newRelease() {
                 Log.i("new release is available: \(newRelease)")
@@ -90,6 +93,38 @@ public final class ViewModel {
         }
     }
     
+    /// The UserDefaults key the XCUITest Gherkin runner passes (`-StarUITestOpenSequence <dir>` as a
+    /// launch argument lands in the argument domain, so `UserDefaults.standard` sees it).
+    static let uiTestOpenSequenceKey = "StarUITestOpenSequence"
+
+    /// The sequence directory to open at launch, when run by the UI tests; nil in every other launch.
+    static var uiTestOpenSequencePath: String? {
+        UserDefaults.standard.string(forKey: uiTestOpenSequenceKey).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// Test seam: opens `-StarUITestOpenSequence <dir>` the way picking it in the open panel does
+    /// (`InitialView.startupWithSequenceDir`), which puts it in `.edit` mode with the startup
+    /// questions showing. The open panel is the only other way in, and an XCUITest cannot drive it.
+    /// Does nothing without the argument, or once a sequence is open or loading.
+    func openSequenceFromUITestArgument() {
+        guard let path = Self.uiTestOpenSequencePath, imageSequence == nil, !isLoadingImageSequence else { return }
+        Log.i("UI test: opening sequence \(path)")
+        eraserTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.startup(withNewImageSequence: path)
+                await MainActor.run { self.imageSequence?.initialLoadInProgress = true }
+            } catch {
+                Log.e("\(error)")
+                await MainActor.run {
+                    self.report(error: "\(error)")
+                    self.imageSequence = nil
+                    self.isLoadingImageSequence = false
+                }
+            }
+        }
+    }
+
 //    @Environment(\.openWindow) private var openWindow
     
     func report(error: String) {

@@ -1,0 +1,5 @@
+[
+  { "case": "openSequence",         "text": "I open the sequence {sequence}" },
+  { "case": "processEveryFrame",    "text": "I process every frame" },
+  { "case": "outputFramesWritten",  "text": "{expected_outputs} output frames are written" }
+]
