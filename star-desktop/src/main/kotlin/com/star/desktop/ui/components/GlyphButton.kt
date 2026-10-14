@@ -26,15 +26,19 @@ fun GlyphButton(
     fontSize: Int = 16,
     tint: Color = StarColors.textPrimary,
 ) {
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        color = Color.Transparent,
-        shape = RoundedCornerShape(6.dp),
-        modifier = modifier.size(size.dp).alpha(if (enabled) 1f else 0.4f),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(glyph, color = tint, fontSize = fontSize.sp)
+    // The description is the hover help too (the transport's "Play (space)"); it was only ever an accessibility label before.
+    val button = @Composable {
+        Surface(
+            onClick = onClick,
+            enabled = enabled,
+            color = Color.Transparent,
+            shape = RoundedCornerShape(6.dp),
+            modifier = modifier.size(size.dp).alpha(if (enabled) 1f else 0.4f),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(glyph, color = tint, fontSize = fontSize.sp)
+            }
         }
     }
+    if (contentDescription.isBlank()) button() else HoverTip(contentDescription, button)
 }

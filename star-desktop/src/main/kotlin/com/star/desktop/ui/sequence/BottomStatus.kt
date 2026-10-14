@@ -42,7 +42,7 @@ fun BottomStatus(vm: SequenceViewModel) {
             }
         }
 
-        states[current]?.let { Line(localized("ui.frame_is_state", FrameState.message(it)), StarColors.frameState(it)) }
+        states[current]?.let { Line(localized("ui.frame_is_state", FrameState.message(it)), StarColors.stateColor(it)) }
 
         if (loading || loadingTrash) {
             Column {

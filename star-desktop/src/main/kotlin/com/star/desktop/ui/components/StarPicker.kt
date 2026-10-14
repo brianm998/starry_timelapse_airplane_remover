@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -31,21 +32,30 @@ fun <T> StarPicker(
     label: (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    /** False greys out and locks the whole control (macOS `.disabled`, e.g. while a video plays). */
+    enabled: Boolean = true,
+    /** Whether one option can be chosen: a mode the frame has no image for is greyed out and does nothing. */
+    isEnabled: (T) -> Boolean = { true },
 ) {
     Row(
-        modifier.clip(StarShapes.picker).background(StarColors.pickerTrack).padding(2.dp),
+        modifier.alpha(if (enabled) 1f else 0.5f).clip(StarShapes.picker).background(StarColors.pickerTrack).padding(2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         options.forEach { opt ->
             val sel = opt == selected
+            val usable = enabled && isEnabled(opt)
             Box(
                 Modifier
                     .clip(StarShapes.picker)
                     .background(if (sel) StarColors.white else Color.Transparent)
-                    .clickable { onSelect(opt) }
+                    .clickable(enabled = usable) { onSelect(opt) }
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
-                Text(label(opt), color = if (sel) Color.Black else UNSELECTED_TEXT, style = StarType.body)
+                Text(
+                    label(opt),
+                    color = if (isEnabled(opt)) (if (sel) Color.Black else UNSELECTED_TEXT) else Color.Gray,
+                    style = StarType.body,
+                )
             }
         }
     }

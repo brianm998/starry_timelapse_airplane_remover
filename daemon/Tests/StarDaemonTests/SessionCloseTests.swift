@@ -199,6 +199,7 @@ final class SessionCloseTests: XCTestCase {
 
         let info = await Mapping.frameInfo(frame: frame, outlierGroups: nil)
         XCTAssertEqual(info.availableModes, [.viewOriginal])
+        XCTAssertEqual(info.filename, "frame0.tif", "the grid's frame panel names the file")
         await session.close()
     }
 }

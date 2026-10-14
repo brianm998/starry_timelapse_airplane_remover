@@ -22,7 +22,6 @@ fun ScrubSlider(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         value = idx.toFloat(),
         onValueChange = { vm.setCurrentIndex(it.roundToInt()) },
         valueRange = 0f..(vm.frameCount - 1).toFloat(),
-        steps = (vm.frameCount - 2).coerceAtLeast(0),
         enabled = !playing,
         colors = SliderDefaults.colors(
             thumbColor = StarColors.accent,

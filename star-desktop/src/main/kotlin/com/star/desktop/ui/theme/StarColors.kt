@@ -49,24 +49,6 @@ object StarColors {
     val white = Color.White
     val accent = blue
 
-    /** The colour a frame's state is written in (macOS `FrameProcessingState.color`): red untouched, green done or resting, yellow in the late stages. */
-    fun frameState(s: com.star.proto.FrameProcessingState): Color = when (s) {
-        com.star.proto.FrameProcessingState.FPS_UNPROCESSED -> red
-        com.star.proto.FrameProcessingState.FPS_HORIZON_DETECTION, com.star.proto.FrameProcessingState.FPS_ASSEMBLING_PIXELS -> blue
-        com.star.proto.FrameProcessingState.FPS_MERGING_HORIZON, com.star.proto.FrameProcessingState.FPS_CREATING_STAR_ALIGNED,
-        com.star.proto.FrameProcessingState.FPS_SORTING_PIXELS -> cyan
-        com.star.proto.FrameProcessingState.FPS_HORIZON_DETECTED, com.star.proto.FrameProcessingState.FPS_STAR_KEYPOINTS_FOUND,
-        com.star.proto.FrameProcessingState.FPS_EARTH_KEYPOINTS_FOUND, com.star.proto.FrameProcessingState.FPS_STAR_ALIGNMENT_COMPLETE,
-        com.star.proto.FrameProcessingState.FPS_EARTH_ALIGNMENT_COMPLETE, com.star.proto.FrameProcessingState.FPS_COMPLETE -> green
-        com.star.proto.FrameProcessingState.FPS_STAR_KEYPOINTS, com.star.proto.FrameProcessingState.FPS_EARTH_KEYPOINTS,
-        com.star.proto.FrameProcessingState.FPS_STAR_ALIGNMENT_FAILED, com.star.proto.FrameProcessingState.FPS_SUBTRACTING_NEIGHBOR -> orange
-        com.star.proto.FrameProcessingState.FPS_EARTH_ALIGNMENT_START, com.star.proto.FrameProcessingState.FPS_EARTH_ALIGNMENT_BASE_KP,
-        com.star.proto.FrameProcessingState.FPS_EARTH_ALIGNMENT_BASE_KP_DONE, com.star.proto.FrameProcessingState.FPS_EARTH_ALIGNMENT_ALIGNING,
-        com.star.proto.FrameProcessingState.FPS_EARTH_ALIGNMENT_LOADING -> cyan
-        com.star.proto.FrameProcessingState.FPS_CREATING_EARTH_ALIGNED -> purple
-        else -> yellow     // star alignment steps, blobs, the filters, classification, writing: everything late
-    }
-
     /** Per-tool selection color (macOS `ToolType` highlight colors). */
     fun toolColor(tool: ToolType): Color = when (tool) {
         ToolType.REMOVE -> red

@@ -483,6 +483,9 @@ enum Mapping {
             fi.outliersLoaded       = true
         }
         fi.availableModes = availableModes(of: frame)
+        if let path = frame.imageAccessor.nameForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original) {
+            fi.filename = (path as NSString).lastPathComponent
+        }
         return fi
     }
 

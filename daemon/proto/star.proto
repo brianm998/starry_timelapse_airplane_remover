@@ -271,6 +271,8 @@ message FrameInfo {
   // The images this frame has on disk right now, as the client can ask for them (Frame.GetPreview): VIEW_ORIGINAL is always there.
   // What the view-mode pickers offer, and grey out.
   repeated FrameViewMode available_modes       = 10;
+  // The file name of this frame's original image (without its directory): what the grid's frame panel shows.  Empty if there is none.
+  string               filename                = 11;
 }
 
 message GetFramePreviewRequest {

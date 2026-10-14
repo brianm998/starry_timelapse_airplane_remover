@@ -1734,6 +1734,9 @@ public struct Star_V1_FrameInfo: Sendable {
   /// What the view-mode pickers offer, and grey out.
   public var availableModes: [Star_V1_FrameViewMode] = []
 
+  /// The file name of this frame's original image (without its directory): what the grid's frame panel shows.  Empty if there is none.
+  public var filename: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -4617,7 +4620,7 @@ extension Star_V1_FrameRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
 
 extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FrameInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0\u{3}num_positive_outliers\0\u{3}num_negative_outliers\0\u{3}num_undecided_outliers\0\u{3}clean_method\0\u{3}num_trash_outliers\0\u{3}outliers_loaded\0\u{3}refinement_pending\0\u{3}available_modes\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0\u{3}num_positive_outliers\0\u{3}num_negative_outliers\0\u{3}num_undecided_outliers\0\u{3}clean_method\0\u{3}num_trash_outliers\0\u{3}outliers_loaded\0\u{3}refinement_pending\0\u{3}available_modes\0\u{1}filename\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4635,6 +4638,7 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
       case 8: try { try decoder.decodeSingularBoolField(value: &self.outliersLoaded) }()
       case 9: try { try decoder.decodeSingularBoolField(value: &self.refinementPending) }()
       case 10: try { try decoder.decodeRepeatedEnumField(value: &self.availableModes) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.filename) }()
       default: break
       }
     }
@@ -4671,6 +4675,9 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if !self.availableModes.isEmpty {
       try visitor.visitPackedEnumField(value: self.availableModes, fieldNumber: 10)
     }
+    if !self.filename.isEmpty {
+      try visitor.visitSingularStringField(value: self.filename, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -4685,6 +4692,7 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if lhs.outliersLoaded != rhs.outliersLoaded {return false}
     if lhs.refinementPending != rhs.refinementPending {return false}
     if lhs.availableModes != rhs.availableModes {return false}
+    if lhs.filename != rhs.filename {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

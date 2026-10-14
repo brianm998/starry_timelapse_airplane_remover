@@ -77,9 +77,11 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SectionTitle("Frame")
-                InfoRow("Index", "$current")
-                states[current]?.let { InfoRow("State", FrameState.shortString(it)) }
+                SectionTitle(localized("ui.frame"))
+                InfoRow(localized("ui.index"), "$current")
+                // The file the frame is from (macOS: the original image's name).
+                info?.filename?.takeIf { it.isNotEmpty() }?.let { InfoRow(localized("ui.file"), it) }
+                (states[current] ?: info?.state)?.let { InfoRow(localized("ui.state"), FrameState.shortString(it), StarColors.stateColor(it)) }
                 // Whether the horizon is waiting for a refinement (macOS GridRightPanel).
                 if (overlayExists == true) {
                     InfoRow(localized("ui.horizon"), localized(if (pending) "ui.pending" else "ui.set"), if (pending) StarColors.orange else StarColors.green)
@@ -88,15 +90,15 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 
             info?.let { fi ->
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SectionTitle("Outliers")
-                    InfoRow("Positive", "${fi.numPositiveOutliers}", if (fi.numPositiveOutliers > 0) StarColors.red else StarColors.white)
-                    InfoRow("Negative", "${fi.numNegativeOutliers}", if (fi.numNegativeOutliers > 0) StarColors.green else StarColors.white)
-                    InfoRow("Undecided", "${fi.numUndecidedOutliers}", if (fi.numUndecidedOutliers > 0) StarColors.orange else StarColors.white)
-                    InfoRow("Trash", "${fi.numTrashOutliers}", if (fi.numTrashOutliers > 0) StarColors.gray else StarColors.white)
+                    SectionTitle(localized("ui.outliers"))
+                    InfoRow(localized("ui.positive"), "${fi.numPositiveOutliers}", if (fi.numPositiveOutliers > 0) StarColors.red else StarColors.white)
+                    InfoRow(localized("ui.negative"), "${fi.numNegativeOutliers}", if (fi.numNegativeOutliers > 0) StarColors.green else StarColors.white)
+                    InfoRow(localized("ui.undecided"), "${fi.numUndecidedOutliers}", if (fi.numUndecidedOutliers > 0) StarColors.orange else StarColors.white)
+                    InfoRow(localized("ui.trash"), "${fi.numTrashOutliers}", if (fi.numTrashOutliers > 0) StarColors.gray else StarColors.white)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SectionTitle("Processing")
-                    InfoRow("Mode", cleanMethodName(fi.cleanMethod))
+                    SectionTitle(localized("ui.processing"))
+                    InfoRow(localized("ui.mode"), cleanMethodName(fi.cleanMethod))
                 }
             }
             Text(localized("ui.double_click_a_thumbnail_to_edit"), color = StarColors.textDisabled, fontSize = 10.sp)
@@ -105,11 +107,11 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     }
 }
 
-private fun cleanMethodName(m: CleanMethod): String = when (m) {
-    CleanMethod.CLEAN_AUTOMATIC_TRUE -> "Auto-Selective"
-    CleanMethod.CLEAN_AUTOMATIC -> "Automatic"
-    else -> "Selective"
-}
+private fun cleanMethodName(m: CleanMethod): String = localized(when (m) {
+    CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.auto_selective"
+    CleanMethod.CLEAN_AUTOMATIC -> "ui.automatic"
+    else -> "ui.selective"
+})
 
 @Composable
 private fun SectionTitle(text: String) =

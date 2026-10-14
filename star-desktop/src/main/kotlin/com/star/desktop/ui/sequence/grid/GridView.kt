@@ -61,6 +61,7 @@ import com.star.proto.GetHorizonOverlayResponse
 import com.star.proto.HorizonOverlayKind
 import com.star.proto.ReprocessingType
 import com.star.desktop.ui.sequence.frameCellClicks
+import com.star.desktop.ui.sequence.frameCellMenu
 
 /** Grid mode (macOS `GridView`): Lightroom-style thumbnail grid with per-cell status, sized by the scale slider. */
 @OptIn(ExperimentalFoundationApi::class)
@@ -77,8 +78,9 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 
     val cellWidth = (vm.info.imageWidth * scale).coerceIn(70f, 1000f)
     val gridState = rememberLazyGridState()
-    LaunchedEffect(Unit) { gridState.scrollToItem(current.coerceAtLeast(0)) }
-    LaunchedEffect(current) { gridState.animateScrollToItem(current.coerceAtLeast(0)) }
+    // The current frame goes to the middle of the view, not the top edge (macOS scrolls to its anchor).
+    LaunchedEffect(Unit) { gridState.centerOn(current.coerceAtLeast(0), animate = false) }
+    LaunchedEffect(current) { gridState.centerOn(current.coerceAtLeast(0), animate = true) }
 
     LazyVerticalGrid(
         state = gridState,
@@ -94,6 +96,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 index = i,
                 isCurrent = i == current,
                 isInSelection = i != current && i in selected,
+                selectedCount = selected.size,
                 state = states[i],
                 viewMode = viewMode,
                 showHorizon = showHorizon,
@@ -111,6 +114,7 @@ private fun GridCell(
     index: Int,
     isCurrent: Boolean,
     isInSelection: Boolean,
+    selectedCount: Int,
     state: FrameProcessingState?,
     viewMode: FrameViewMode,
     showHorizon: Boolean,
@@ -123,23 +127,13 @@ private fun GridCell(
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
     var overlay by remember(index) { mutableStateOf<GetHorizonOverlayResponse?>(null) }
     LaunchedEffect(index, viewMode, state, revision) { thumb = vm.loadThumb(index, viewMode) }
-    LaunchedEffect(index, state) { info = vm.frameInfo(index) }
+    LaunchedEffect(index, state, horizonVersion) { info = vm.frameInfo(index) }
     LaunchedEffect(index, showHorizon, state, horizonVersion) {
         overlay = if (showHorizon) {
             val h = (256f * vm.info.imageHeight / vm.info.imageWidth.coerceAtLeast(1)).toInt().coerceAtLeast(1)
             vm.horizonOverlay(index, 256, h)
         } else null
     }
-    val reprocessItems = {
-        listOf(
-            ContextMenuItem("Process (new only)") { vm.reprocessSelected(ReprocessingType.REPROCESS_NONE) },
-            ContextMenuItem("Re-Process Alignment") { vm.reprocessSelected(ReprocessingType.REPROCESS_ALIGNMENT) },
-            ContextMenuItem("Re-Process Outliers") { vm.reprocessSelected(ReprocessingType.REPROCESS_OUTLIERS) },
-            ContextMenuItem("Re-Process Horizons") { vm.reprocessSelected(ReprocessingType.REPROCESS_HORIZONS) },
-            ContextMenuItem("Re-Process Everything") { vm.reprocessSelected(ReprocessingType.REPROCESS_EVERYTHING) },
-        )
-    }
-
     val bg = when {
         isCurrent -> StarColors.cellHighlighted
         isInSelection -> StarColors.cellSelected
@@ -152,7 +146,8 @@ private fun GridCell(
     }
     val aspect = if (vm.info.imageHeight > 0) vm.info.imageWidth.toFloat() / vm.info.imageHeight else 1.5f
 
-    ContextMenuArea(items = reprocessItems) {
+    // A menu about the selection, only on a cell that is in it, with how many frames it acts on.
+    ContextMenuArea(items = { frameCellMenu(vm, isCurrent || isInSelection, selectedCount) }) {
       Column(
         Modifier
             .clip(StarShapes.gridCell)
@@ -167,10 +162,13 @@ private fun GridCell(
             Box(Modifier.weight(1f))
             val fi = info
             if (fi != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (fi.numPositiveOutliers != 0) OutlierDot(StarColors.red)
-                    if (fi.numUndecidedOutliers != 0) OutlierDot(StarColors.orange)
-                    if (fi.numNegativeOutliers != 0) OutlierDot(StarColors.green)
+                // Only once the outliers are loaded: before that the counts are zeroes that mean nothing.
+                if (fi.outliersLoaded) {
+                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (fi.numPositiveOutliers != 0) OutlierDot(StarColors.red)
+                        if (fi.numUndecidedOutliers != 0) OutlierDot(StarColors.orange)
+                        if (fi.numNegativeOutliers != 0) OutlierDot(StarColors.green)
+                    }
                 }
                 Box(Modifier.padding(start = 3.dp)) { CleanMethodIcon(fi.cleanMethod, StarColors.white, 9.dp) }
             }
@@ -192,7 +190,9 @@ private fun GridCell(
             if (state != null) {
                 val s = FrameState.shortString(state)
                 if (s.isNotEmpty()) {
-                    Text(s, color = StarColors.green, fontSize = 10.sp, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+                    // In the state's own colour, orange while the frame waits for its horizon to be refined (macOS).
+                    val color = if (info?.refinementPending == true) StarColors.orange else StarColors.stateColor(state)
+                    Text(s, color = color, fontSize = 10.sp, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
                 }
             }
         }
@@ -204,4 +204,15 @@ private fun GridCell(
 @Composable
 private fun OutlierDot(color: Color) {
     Text("╱", color = color, fontSize = 9.sp)
+}
+
+/**
+ * Scroll so the item at [index] is in the middle of the view. It is brought into view first, since an item that is not laid out has no
+ * size to centre by; the second scroll then moves it down from the top edge by half of what is left.
+ */
+private suspend fun androidx.compose.foundation.lazy.grid.LazyGridState.centerOn(index: Int, animate: Boolean) {
+    scrollToItem(index)
+    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val offset = -((layoutInfo.viewportSize.height - item.size.height) / 2).coerceAtLeast(0)
+    if (animate) animateScrollToItem(index, offset) else scrollToItem(index, offset)
 }
