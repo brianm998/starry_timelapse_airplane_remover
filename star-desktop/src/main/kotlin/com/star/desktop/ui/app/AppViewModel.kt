@@ -482,6 +482,14 @@ class AppViewModel(
     /** Keeps the machine from sleeping while a sequence is open; a replacement can be given for a test. */
     internal var sleepInhibitor: com.star.desktop.util.SleepInhibitor = com.star.desktop.util.SleepInhibitor()
 
+    private val _showBlobWindow = MutableStateFlow(false)
+    val showBlobWindow: StateFlow<Boolean> = _showBlobWindow.asStateFlow()
+    fun toggleBlobWindow() { _showBlobWindow.value = !_showBlobWindow.value }
+    fun closeBlobWindow() { _showBlobWindow.value = false }
+
+    /** The Blob Processing window's steps, from the engine. */
+    val blobProcessing = com.star.desktop.ui.windows.BlobProcessingModel(scope, com.star.desktop.data.BlobRepository { engine.client })
+
     private val _showDebugWindow = MutableStateFlow(false)
     val showDebugWindow: StateFlow<Boolean> = _showDebugWindow.asStateFlow()
     fun toggleDebugWindow() { _showDebugWindow.value = !_showDebugWindow.value }

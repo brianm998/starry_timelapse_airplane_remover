@@ -1692,4 +1692,61 @@ class InteropIntegrationTest {
             assertTrue(!off.fileEnabled && off.fileLogPath.isEmpty())
         }
     }
+
+    /**
+     * H9: the blob processing steps come from the engine, and the custom type can be changed through it: a copy of another type, one parameter,
+     * a step skipped, and what is refused. The engine keeps the custom steps in `~/.star_custom_processor_steps.json`, which this puts back as it found it.
+     */
+    @Test
+    fun blobStepsCanBeReadAndTheCustomTypeChanged() {
+        if (!runProcess || stardPath() == null) {
+            println("[skip] blobStepsCanBeReadAndTheCustomTypeChanged — set -Dstar.it.process=true -Dstar.stard.path=<stard>")
+            return
+        }
+        val saved = File(System.getenv("HOME") ?: System.getProperty("user.home"), ".star_custom_processor_steps.json")
+        val before = if (saved.exists()) saved.readBytes() else null
+        try {
+            withEngine { client ->
+                for (type in listOf(com.star.proto.DetectionType.DETECTION_MILD, com.star.proto.DetectionType.DETECTION_STRONG, com.star.proto.DetectionType.DETECTION_EXCESSIVE)) {
+                    val r = client.getBlobSteps(type)
+                    assertTrue(!r.editable && r.stepsCount > 0, "$type")
+                    assertEquals("findBlobs", r.getSteps(0).kind)
+                    assertTrue(r.getSteps(0).argsList.any { it.name == "minPixelIntensity" && it.isInteger }, "$type")
+                    assertTrue(r.description.isNotBlank() && !r.description.startsWith("ui."), "$type: ${r.description}")
+                }
+
+                suspend fun change(b: com.star.proto.SetCustomBlobStepsRequest.Builder) = client.setCustomBlobSteps(b.build())
+                val copied = change(com.star.proto.SetCustomBlobStepsRequest.newBuilder().setCopyFrom(com.star.proto.DetectionType.DETECTION_MILD))
+                assertTrue(copied.editable)
+                assertEquals(client.getBlobSteps(com.star.proto.DetectionType.DETECTION_MILD).stepsCount, copied.stepsCount)
+
+                val set = change(
+                    com.star.proto.SetCustomBlobStepsRequest.newBuilder()
+                        .setArg(com.star.proto.BlobStepArgChange.newBuilder().setStepIndex(0).setArgName("minPixelIntensity").setValue(1234.4)),
+                )
+                assertEquals(1234.0, set.getSteps(0).argsList.first { it.name == "minPixelIntensity" }.value, "an integer parameter is rounded")
+                assertEquals(1234.0, client.getBlobSteps(com.star.proto.DetectionType.DETECTION_CUSTOM).getSteps(0).argsList.first { it.name == "minPixelIntensity" }.value)
+
+                val skippable = copied.stepsList.indexOfFirst { it.canDisable }
+                assertTrue(skippable > 0, "a step that can be skipped")
+                val off = change(
+                    com.star.proto.SetCustomBlobStepsRequest.newBuilder()
+                        .setDisabled(com.star.proto.BlobStepDisabledChange.newBuilder().setStepIndex(skippable).setDisabled(true)),
+                )
+                assertTrue(off.getSteps(skippable).disabled)
+
+                val refused = runCatching {
+                    change(
+                        com.star.proto.SetCustomBlobStepsRequest.newBuilder()
+                            .setArg(com.star.proto.BlobStepArgChange.newBuilder().setStepIndex(0).setArgName("noSuchThing").setValue(1.0)),
+                    )
+                }.exceptionOrNull()
+                assertTrue(refused is StarRpcException && refused.code == 400, "an unknown parameter is refused: $refused")
+                val itself = runCatching { change(com.star.proto.SetCustomBlobStepsRequest.newBuilder().setCopyFrom(com.star.proto.DetectionType.DETECTION_CUSTOM)) }.exceptionOrNull()
+                assertTrue(itself is StarRpcException && itself.code == 400, "the custom type cannot be copied from itself: $itself")
+            }
+        } finally {
+            if (before != null) saved.writeBytes(before) else saved.delete()
+        }
+    }
 }

@@ -98,6 +98,26 @@ private fun runApp(args: Array<String>) = application {
         }
     }
 
+    // The Blob Processing window (a developer tool): the steps each detection type takes a frame's blobs through.
+    val showBlob by vm.showBlobWindow.collectAsState()
+    if (showBlob) {
+        val blobSession by vm.sessions.session.collectAsState()
+        Window(
+            onCloseRequest = vm::closeBlobWindow,
+            title = localized("ui.star_blob_processing"),
+            state = rememberWindowState(size = DpSize(1100.dp, 800.dp)),
+        ) {
+            com.star.desktop.ui.theme.StarTheme {
+                com.star.desktop.ui.windows.BlobProcessingWindowView(
+                    session = svm != null,
+                    current = blobSession?.config?.detectionType ?: com.star.proto.DetectionType.DETECTION_STRONG,
+                    onSelectType = vm::setDetectionType,
+                    model = vm.blobProcessing,
+                )
+            }
+        }
+    }
+
     // The Debug window: the log, live. Open from the Window menu on any screen, since an engine that will not start is the time it is wanted.
     val showDebug by vm.showDebugWindow.collectAsState()
     if (showDebug) {

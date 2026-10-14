@@ -61,45 +61,8 @@ struct BlobProcessingView: View {
                       }
                   }
 
-                switch imageSequence.detectionType {
-                case .mild:
-                    Text("""
-                           The Mild detection type is fastest, and detects a small number of blobs.
-                           It will get the vast majority of large bright streaks out of the video,
-                           smaller and dimmer signal may not be found.
-                           """)
-                case .strong:
-                    Text("""
-                           The Strong detection type has been tuned to find more of the signal we want,
-                           at the expense of ending up with more noise.  
-                           The signal that may still not be noticed here includes when an airplane
-                           is seen as a series of small dim dots in the image.
-                           """)
-                case .stronger:
-                    Text("""
-                           XXX write this XXX
-                           """)
-                case .excessive:
-                    Text("""
-                           The Excessive detection type can produce an excessive amount of blob data.
-                           This generally will include any signal that you want to mask out,
-                           but usually also includes a lot more noise.  This will slow down processing,
-                           and make further analysis slower as well.  It can be used on a frame by frame
-                           basis to get that small few bits of signal that the other detection types may miss.
-                           """)
-                case .custom:
-//                    Text("replace these steps with one of the following")
-//                    self.customCopyPicker
-
-                    /*
-                     XXX this replace is broken, as the values do not change upon replace :(
-                     */
-                    
-                    Text("""
-                           A custom detection type can be modified by the user at runtime to see what happens when processing one or more frames.
-                           It will typically start as a copy of another detection type.
-                           """)
-                }
+                // what the chosen detection type is
+                Text(localized("ui.detection_type_desc.\(imageSequence.detectionType.rawValue)"))
 
                 if steps.count == 0,
                    !stepsLoaded
@@ -180,12 +143,7 @@ struct BlobProcessingView: View {
                                 Text(localized("ui.blob_processing_complete"))
                                   .foregroundColor(.white)
                                   .font(.largeTitle)
-                                Text("""
-                                       At this point, the blobs are promoted to outlier groups.
-                                       This allows both manual and machine learning classification
-                                       of the remaning data before we use this information to
-                                       potentially modify certain pixels in each frame
-                                       """)
+                                Text(localized("ui.blob_processing_complete_desc"))
                             }
                               .padding(10)
                               .background(.gray)
@@ -255,18 +213,7 @@ struct BlobProcessingView: View {
                                stepIndex: Int) -> some View
     {
         StepView(title: localized("ui.initial_blob_detection"),
-                 description: """
-                   This initial step analyses both the original frame image and the subtraction
-                   image to try to find neighboring groups (blobs) of pixels that are brighter
-                   in the subtraction image by the given criteria.
-                   After this step, the blobs found here can be processed further so that we can
-                   separate signal from noise.
-                   The signal we want is from transiently brighter streaks coming from airplanes and satellites.
-                   Noise falls into many categories, as it's anything that we don't want to modify.
-                   This can be caused by moving clouds, imperfect star alignment,
-                   ground being rotated due to star alignment, meteors,
-                   and a number of other factores.   
-                   """,
+                 description: localized("ui.initial_blob_detection_desc"),
                  args: args,
                  array: BlobFinder.Args.ArgType.allCases,
                  stepIndex: stepIndex,
@@ -343,10 +290,7 @@ struct BlobProcessingView: View {
                                                   stepIndex: Int) -> some View
     {
         StepView(title: localized("ui.hough_line_matrix_blob_connector"),
-                 description: """
-                   Finds lines from the full blob map image,
-                   and connects blobs that match those lines.
-                   """,
+                 description: localized("ui.hough_line_matrix_blob_connector_desc"),
                  args: args,
                  array: HoughLineMatrixBlobConnector.Args.ArgType.allCases,
                  stepIndex: stepIndex,

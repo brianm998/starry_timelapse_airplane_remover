@@ -70,6 +70,10 @@ extension Dispatcher {
         register(method: "Daemon.SetLogLevel") { id, payload, transport in await DaemonHandlers.setLogLevel(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
         register(method: "Daemon.Shutdown") { id, payload, transport in await DaemonHandlers.shutdown(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
+        // Blob processing (the developer window)
+        register(method: "Blob.GetSteps")       { id, payload, transport in await BlobHandlers.getSteps(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
+        register(method: "Blob.SetCustomSteps") { id, payload, transport in await BlobHandlers.setCustomSteps(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
+
         // Session
         register(method: "Session.OpenSequence") { id, payload, transport in await SessionHandlers.openSequence(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Session.OpenConfig")   { id, payload, transport in await SessionHandlers.openConfig(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

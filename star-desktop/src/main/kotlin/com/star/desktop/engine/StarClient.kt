@@ -10,6 +10,7 @@ import com.star.proto.ApplyDecisionTreeRequest
 import com.star.proto.ApplyDecisionTreeResponse
 import com.star.proto.ApplyOutlierAreaToolRequest
 import com.star.proto.ApplyOutlierAreaToolResponse
+import com.star.proto.BlobStepsResponse
 import com.star.proto.CancelResponse
 import com.star.proto.CleanMethod
 import com.star.proto.ClearReferenceHorizonRequest
@@ -21,6 +22,7 @@ import com.star.proto.ComputeHorizonInBandResponse
 import com.star.proto.Config
 import com.star.proto.ConfigChangePreview
 import com.star.proto.DeferRefinementResponse
+import com.star.proto.DetectionType
 import com.star.proto.ExportVideoRequest
 import com.star.proto.FrameInfo
 import com.star.proto.FrameRef
@@ -29,6 +31,7 @@ import com.star.proto.GetAlignmentRequest
 import com.star.proto.GetAlignmentSequenceRequest
 import com.star.proto.GetBestHorizonRequest
 import com.star.proto.GetBestHorizonResponse
+import com.star.proto.GetBlobStepsRequest
 import com.star.proto.GetDefaultVideoPathRequest
 import com.star.proto.GetDefaultVideoPathResponse
 import com.star.proto.GetFramePreviewRequest
@@ -74,6 +77,7 @@ import com.star.proto.SequenceProgress
 import com.star.proto.SessionInfo
 import com.star.proto.SessionRef
 import com.star.proto.SetAllOutliersRequest
+import com.star.proto.SetCustomBlobStepsRequest
 import com.star.proto.SetFrameCleanMethodRequest
 import com.star.proto.SetHoughLineFinderArgRequest
 import com.star.proto.SetLineRequest
@@ -150,6 +154,16 @@ class StarClient(private val conn: StdioConnection) {
             SetLogLevelRequest.newBuilder().setLevel(level).setFileLevel(fileLevel).also { b -> fileEnabled?.let { b.setFileEnabled(it) } }.build(),
             SetLogLevelResponse.parser(),
         )
+
+    // ---- Blob processing (the developer window) ----
+
+    /** The steps of a detection type, with their parameters and what they do; the same in every session. */
+    suspend fun getBlobSteps(detectionType: DetectionType): BlobStepsResponse =
+        call("Blob.GetSteps", GetBlobStepsRequest.newBuilder().setDetectionType(detectionType).build(), BlobStepsResponse.parser())
+
+    /** Change the custom detection type; the answer is its steps as they are now. */
+    suspend fun setCustomBlobSteps(change: SetCustomBlobStepsRequest): BlobStepsResponse =
+        call("Blob.SetCustomSteps", change, BlobStepsResponse.parser())
 
     suspend fun shutdown(): ShutdownResponse =
         call("Daemon.Shutdown", ShutdownRequest.getDefaultInstance(), ShutdownResponse.parser())

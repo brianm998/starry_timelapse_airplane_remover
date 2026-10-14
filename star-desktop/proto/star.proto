@@ -317,6 +317,54 @@ enum DetectionType {
   DETECTION_CUSTOM    = 4;
 }
 
+// ---- Blob processing (macOS Window ▸ Blob Processing, a developer tool) ----
+//
+// The blob processors are process-wide, not a session's: a detection type has the same steps in every session, and the custom type is the one
+// that can be changed. Changes to it are kept by StarCore in `~/.star_custom_processor_steps.json`, as the macOS window does.
+
+// One parameter of a step. `name` is StarCore's own name for it; `description` is StarCore's, in English.
+message BlobStepArg {
+  string name        = 1;
+  bool   value_present = 2;
+  double value       = 3;
+  bool   is_integer  = 4;
+  bool   is_optional = 5;
+  string description = 6;
+}
+
+message BlobStep {
+  // The step's kind, as StarCore names it: findBlobs, smallBlobRemover, linearBlobConnector, linearBlobExtender, blobLineTrim,
+  // houghLineMatrixBlobConnector, applyUserSlices, compactBlobIds, blobDupeCheck, save or frameState.
+  string   kind        = 1;
+  string   title       = 2;   // in the language of Daemon.Hello
+  string   description = 3;   // what it does, or for a step with nothing to configure what it carries (the image it saves, the state it sets)
+  repeated BlobStepArg args = 4;
+  bool     can_disable = 5;   // the custom processor can be told to skip it: a step with parameters, other than the first
+  bool     disabled    = 6;   // and it has been
+}
+
+message GetBlobStepsRequest { DetectionType detection_type = 1; }
+
+message BlobStepsResponse {
+  DetectionType    detection_type = 1;
+  repeated BlobStep steps         = 2;
+  string           description    = 3;   // what the detection type is, in the language of Daemon.Hello
+  bool             editable       = 4;   // only the custom type is
+}
+
+message BlobStepArgChange      { int32 step_index = 1; string arg_name = 2; double value = 3; }
+message BlobStepDisabledChange { int32 step_index = 1; bool disabled = 2; }
+
+// Change the custom detection type: replace its steps with a copy of another type's, set one parameter of one step (an integer parameter is
+// rounded), or tell a step to be skipped or not. The answer is the custom type's steps as they now are.
+message SetCustomBlobStepsRequest {
+  oneof change {
+    DetectionType          copy_from = 1;
+    BlobStepArgChange      arg       = 2;
+    BlobStepDisabledChange disabled  = 3;
+  }
+}
+
 // ---- Frame ----
 
 message FrameRef { string session_id = 1; int32 frame_index = 2; }

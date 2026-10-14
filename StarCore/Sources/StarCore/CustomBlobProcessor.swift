@@ -76,6 +76,20 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
         }
     }
 
+    /// Whether the step at `index` has been told to be skipped.
+    public func isDisabled(atIndex index: Int) -> Bool {
+        guard let shouldDisable, index >= 0, index < shouldDisable.count else { return false }
+        return shouldDisable[index]
+    }
+
+    /// Tell the step at `index` to be skipped, or not. For a caller with no step's arguments to hand (a client of the daemon).
+    public func setDisabled(_ value: Bool, atIndex index: Int) {
+        var local: [Bool] = shouldDisable ?? [Bool](repeating: false, count: self.steps.count)
+        guard index >= 0, index < local.count else { return }
+        local[index] = value
+        shouldDisable = local
+    }
+
     public func shouldDisable<T>(_ argsToUpdate: any Argable<T>, _ value: Bool, _ stepIndex: Int) {
         var local: [Bool] = []
         if let shouldDisable {

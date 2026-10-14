@@ -1955,6 +1955,164 @@ public struct Star_V1_Config: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+/// One parameter of a step. `name` is StarCore's own name for it; `description` is StarCore's, in English.
+public struct Star_V1_BlobStepArg: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var valuePresent: Bool = false
+
+  public var value: Double = 0
+
+  public var isInteger: Bool = false
+
+  public var isOptional: Bool = false
+
+  public var description_p: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_BlobStep: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The step's kind, as StarCore names it: findBlobs, smallBlobRemover, linearBlobConnector, linearBlobExtender, blobLineTrim,
+  /// houghLineMatrixBlobConnector, applyUserSlices, compactBlobIds, blobDupeCheck, save or frameState.
+  public var kind: String = String()
+
+  /// in the language of Daemon.Hello
+  public var title: String = String()
+
+  /// what it does, or for a step with nothing to configure what it carries (the image it saves, the state it sets)
+  public var description_p: String = String()
+
+  public var args: [Star_V1_BlobStepArg] = []
+
+  /// the custom processor can be told to skip it: a step with parameters, other than the first
+  public var canDisable: Bool = false
+
+  /// and it has been
+  public var disabled: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_GetBlobStepsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var detectionType: Star_V1_DetectionType = .detectionMild
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_BlobStepsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var detectionType: Star_V1_DetectionType = .detectionMild
+
+  public var steps: [Star_V1_BlobStep] = []
+
+  /// what the detection type is, in the language of Daemon.Hello
+  public var description_p: String = String()
+
+  /// only the custom type is
+  public var editable: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_BlobStepArgChange: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var stepIndex: Int32 = 0
+
+  public var argName: String = String()
+
+  public var value: Double = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_BlobStepDisabledChange: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var stepIndex: Int32 = 0
+
+  public var disabled: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Change the custom detection type: replace its steps with a copy of another type's, set one parameter of one step (an integer parameter is
+/// rounded), or tell a step to be skipped or not. The answer is the custom type's steps as they now are.
+public struct Star_V1_SetCustomBlobStepsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var change: Star_V1_SetCustomBlobStepsRequest.OneOf_Change? = nil
+
+  public var copyFrom: Star_V1_DetectionType {
+    get {
+      if case .copyFrom(let v)? = change {return v}
+      return .detectionMild
+    }
+    set {change = .copyFrom(newValue)}
+  }
+
+  public var arg: Star_V1_BlobStepArgChange {
+    get {
+      if case .arg(let v)? = change {return v}
+      return Star_V1_BlobStepArgChange()
+    }
+    set {change = .arg(newValue)}
+  }
+
+  public var disabled: Star_V1_BlobStepDisabledChange {
+    get {
+      if case .disabled(let v)? = change {return v}
+      return Star_V1_BlobStepDisabledChange()
+    }
+    set {change = .disabled(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_Change: Equatable, Sendable {
+    case copyFrom(Star_V1_DetectionType)
+    case arg(Star_V1_BlobStepArgChange)
+    case disabled(Star_V1_BlobStepDisabledChange)
+
+  }
+
+  public init() {}
+}
+
 public struct Star_V1_FrameRef: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -5444,6 +5602,345 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_BlobStepArg: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".BlobStepArg"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}value_present\0\u{1}value\0\u{3}is_integer\0\u{3}is_optional\0\u{1}description\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.valuePresent) }()
+      case 3: try { try decoder.decodeSingularDoubleField(value: &self.value) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.isInteger) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.isOptional) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if self.valuePresent != false {
+      try visitor.visitSingularBoolField(value: self.valuePresent, fieldNumber: 2)
+    }
+    if self.value.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.value, fieldNumber: 3)
+    }
+    if self.isInteger != false {
+      try visitor.visitSingularBoolField(value: self.isInteger, fieldNumber: 4)
+    }
+    if self.isOptional != false {
+      try visitor.visitSingularBoolField(value: self.isOptional, fieldNumber: 5)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_BlobStepArg, rhs: Star_V1_BlobStepArg) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.valuePresent != rhs.valuePresent {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.isInteger != rhs.isInteger {return false}
+    if lhs.isOptional != rhs.isOptional {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_BlobStep: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".BlobStep"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}title\0\u{1}description\0\u{1}args\0\u{3}can_disable\0\u{1}disabled\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.args) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.canDisable) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.disabled) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 2)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 3)
+    }
+    if !self.args.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.args, fieldNumber: 4)
+    }
+    if self.canDisable != false {
+      try visitor.visitSingularBoolField(value: self.canDisable, fieldNumber: 5)
+    }
+    if self.disabled != false {
+      try visitor.visitSingularBoolField(value: self.disabled, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_BlobStep, rhs: Star_V1_BlobStep) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.args != rhs.args {return false}
+    if lhs.canDisable != rhs.canDisable {return false}
+    if lhs.disabled != rhs.disabled {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_GetBlobStepsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetBlobStepsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detection_type\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.detectionType) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.detectionType != .detectionMild {
+      try visitor.visitSingularEnumField(value: self.detectionType, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_GetBlobStepsRequest, rhs: Star_V1_GetBlobStepsRequest) -> Bool {
+    if lhs.detectionType != rhs.detectionType {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_BlobStepsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".BlobStepsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detection_type\0\u{1}steps\0\u{1}description\0\u{1}editable\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.detectionType) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.steps) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.editable) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.detectionType != .detectionMild {
+      try visitor.visitSingularEnumField(value: self.detectionType, fieldNumber: 1)
+    }
+    if !self.steps.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.steps, fieldNumber: 2)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 3)
+    }
+    if self.editable != false {
+      try visitor.visitSingularBoolField(value: self.editable, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_BlobStepsResponse, rhs: Star_V1_BlobStepsResponse) -> Bool {
+    if lhs.detectionType != rhs.detectionType {return false}
+    if lhs.steps != rhs.steps {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.editable != rhs.editable {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_BlobStepArgChange: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".BlobStepArgChange"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}step_index\0\u{3}arg_name\0\u{1}value\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.stepIndex) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.argName) }()
+      case 3: try { try decoder.decodeSingularDoubleField(value: &self.value) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.stepIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.stepIndex, fieldNumber: 1)
+    }
+    if !self.argName.isEmpty {
+      try visitor.visitSingularStringField(value: self.argName, fieldNumber: 2)
+    }
+    if self.value.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.value, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_BlobStepArgChange, rhs: Star_V1_BlobStepArgChange) -> Bool {
+    if lhs.stepIndex != rhs.stepIndex {return false}
+    if lhs.argName != rhs.argName {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_BlobStepDisabledChange: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".BlobStepDisabledChange"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}step_index\0\u{1}disabled\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.stepIndex) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.disabled) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.stepIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.stepIndex, fieldNumber: 1)
+    }
+    if self.disabled != false {
+      try visitor.visitSingularBoolField(value: self.disabled, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_BlobStepDisabledChange, rhs: Star_V1_BlobStepDisabledChange) -> Bool {
+    if lhs.stepIndex != rhs.stepIndex {return false}
+    if lhs.disabled != rhs.disabled {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_SetCustomBlobStepsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetCustomBlobStepsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}copy_from\0\u{1}arg\0\u{1}disabled\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: Star_V1_DetectionType?
+        try decoder.decodeSingularEnumField(value: &v)
+        if let v = v {
+          if self.change != nil {try decoder.handleConflictingOneOf()}
+          self.change = .copyFrom(v)
+        }
+      }()
+      case 2: try {
+        var v: Star_V1_BlobStepArgChange?
+        var hadOneofValue = false
+        if let current = self.change {
+          hadOneofValue = true
+          if case .arg(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.change = .arg(v)
+        }
+      }()
+      case 3: try {
+        var v: Star_V1_BlobStepDisabledChange?
+        var hadOneofValue = false
+        if let current = self.change {
+          hadOneofValue = true
+          if case .disabled(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.change = .disabled(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.change {
+    case .copyFrom?: try {
+      guard case .copyFrom(let v)? = self.change else { preconditionFailure() }
+      try visitor.visitSingularEnumField(value: v, fieldNumber: 1)
+    }()
+    case .arg?: try {
+      guard case .arg(let v)? = self.change else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .disabled?: try {
+      guard case .disabled(let v)? = self.change else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_SetCustomBlobStepsRequest, rhs: Star_V1_SetCustomBlobStepsRequest) -> Bool {
+    if lhs.change != rhs.change {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

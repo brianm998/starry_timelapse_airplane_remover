@@ -88,6 +88,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         }
 
         Menu(localized("ui.window"), mnemonic = 'W') {
+            Item(localized("ui.blob_processing_window"), shortcut = windowShortcut(Key.P, IS_MAC)) { app.toggleBlobWindow() }
             Item(localized("ui.outlier_table"), enabled = hasSession, shortcut = windowShortcut(Key.O, IS_MAC)) { app.toggleOutlierWindow() }
             Item(localized("ui.alignment_2"), enabled = hasSession, shortcut = windowShortcut(Key.A, IS_MAC)) { app.toggleAlignmentWindow() }
             Item(localized("ui.debug_window"), shortcut = windowShortcut(Key.D, IS_MAC)) { app.toggleDebugWindow() }
