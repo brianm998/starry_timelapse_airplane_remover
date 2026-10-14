@@ -301,7 +301,13 @@ public actor ResourceGovernor {
     static func processCPUSeconds() -> Double {
         #if canImport(Darwin) || canImport(Glibc)
         var usage = rusage()
-        guard getrusage(RUSAGE_SELF, &usage) == 0 else { return 0 }
+        #if canImport(Glibc)
+        // Glibc imports RUSAGE_SELF as the `__rusage_who` enum, but getrusage wants its raw Int32.
+        let who = __rusage_who_t(RUSAGE_SELF.rawValue)
+        #else
+        let who = RUSAGE_SELF
+        #endif
+        guard getrusage(who, &usage) == 0 else { return 0 }
         func seconds(_ t: timeval) -> Double { Double(t.tv_sec) + Double(t.tv_usec) / 1_000_000 }
         return seconds(usage.ru_utime) + seconds(usage.ru_stime)
         #else

@@ -46,7 +46,20 @@ object FileReveal {
         // Explorer, finding no path in the quotes, opens the wrong folder if the path has a space.
         Platform.WINDOWS -> Command(listOf("explorer.exe", "/select,", path), exitStatusMatters = false)
         // xdg-open can open a folder, but has no way to select a file in it.
-        Platform.OTHER -> File(path).parent?.let { Command(listOf("xdg-open", it), exitStatusMatters = true) }
+        Platform.OTHER -> parentFolder(path)?.let { Command(listOf("xdg-open", it), exitStatusMatters = true) }
+    }
+
+    /**
+     * The folder of a forward-slash [path], cut on the string: `File.parent` would rewrite it with
+     * the host's separator, so the answer would depend on the machine the test runs on.
+     */
+    private fun parentFolder(path: String): String? {
+        val cut = path.lastIndexOf('/')
+        return when {
+            cut < 0 -> null
+            cut == 0 -> "/"
+            else -> path.substring(0, cut)
+        }
     }
 
     /** Shows [file] in the file manager; false if it is not there or nothing could be started. */
