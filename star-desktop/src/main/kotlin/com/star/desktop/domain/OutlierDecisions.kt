@@ -29,4 +29,12 @@ object OutlierDecisions {
      */
     fun toggled(reason: RemoveReason): RemoveReason =
         if (willRemove(reason) == true) RemoveReason.RR_USER_KEEP else RemoveReason.RR_USER_REMOVE
+
+    /**
+     * What "Clear Undecided" sets (macOS `setUndecidedFrameOutliers(to: false)`): every group nobody has decided
+     * about becomes a user keep. Groups that already carry a decision, the user's or the classifier's, are left.
+     * (Setting them to undecided again, which this once did, changed nothing at all.)
+     */
+    fun clearingUndecided(groupIds: List<Int>, decisionOf: (Int) -> RemoveReason): List<Pair<Int, RemoveReason>> =
+        groupIds.filter { !isDecided(decisionOf(it)) }.map { it to RemoveReason.RR_USER_KEEP }
 }

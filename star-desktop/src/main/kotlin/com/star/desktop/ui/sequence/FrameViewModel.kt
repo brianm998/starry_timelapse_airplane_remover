@@ -181,7 +181,7 @@ class FrameViewModel(
     fun clearUndecided() {
         scope.launch {
             ensureLoaded()
-            apply(_groups.value.filter { !OutlierDecisions.isDecided(decisionFor(it.id)) }.map { it.id to RemoveReason.RR_UNDECIDED })
+            apply(OutlierDecisions.clearingUndecided(_groups.value.map { it.id }, ::decisionFor))
         }
     }
 
