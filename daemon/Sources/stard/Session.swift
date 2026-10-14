@@ -878,7 +878,7 @@ actor Session {
         emit(prog)
     }
 
-    private func onFrameSavingStateChange(frame: FrameAirplaneRemover, old: FrameSavingState, new: FrameSavingState) {
+    func onFrameSavingStateChange(frame: FrameAirplaneRemover, old: FrameSavingState, new: FrameSavingState) {
         var ev = Star_V1_FrameSavingEvent()
         ev.frameIndex = Int32(frame.frameIndex)
         ev.oldState = old.int32Value
@@ -886,6 +886,13 @@ actor Session {
         var prog = Star_V1_ProgressEvent()
         prog.kind = .frameSavingState(ev)
         emit(prog)
+        // A save that has just finished rewrote the frame's final image.  `ImageAccessor` announces that only for the
+        // preview size, and previews are written only when `writeFramePreviewFiles` is on (it is off by default), so
+        // without this a client showing the frame never hears that an edit it made was rendered, and keeps the old
+        // picture until the user changes frame or asks for "Render Updates".
+        if old == .saving, new == .notSaving {
+            onImageSaved(frameIndex: frame.frameIndex, type: .final)
+        }
     }
 
     private func onImageSaved(frameIndex: Int, type: FrameViewMode) {

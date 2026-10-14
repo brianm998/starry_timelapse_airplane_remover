@@ -1009,8 +1009,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func findOutliers() async throws { try await outlierProcessor.findOutliers() }
     public func findOutliers(within bounds: BoundingBox) async throws { try await outlierProcessor.findOutliers(within: bounds) }
     public func maybeApplyOutlierGroupClassifier() async throws { try await outlierProcessor.maybeApplyOutlierGroupClassifier() }
-    public func applyDecisionTreeToAllOutliers(overwrite: Bool = true, minimumSize: Int? = nil) async {
-        await outlierProcessor.applyDecisionTreeToAllOutliers(overwrite: overwrite, minimumSize: minimumSize)
+    public func applyDecisionTreeToAllOutliers(overwrite: Bool = true, keepingUserDecisions: Bool = false, minimumSize: Int? = nil) async {
+        await outlierProcessor.applyDecisionTreeToAllOutliers(overwrite: overwrite, keepingUserDecisions: keepingUserDecisions, minimumSize: minimumSize)
     }
     public func applyDecisionTreeToAutoSelectedOutliers(includingTrash: Bool, overwrite: Bool = false, minimumSize: Int? = nil) async {
         await outlierProcessor.applyDecisionTreeToAutoSelectedOutliers(includingTrash: includingTrash, overwrite: overwrite, minimumSize: minimumSize)

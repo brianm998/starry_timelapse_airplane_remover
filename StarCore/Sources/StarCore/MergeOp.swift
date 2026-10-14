@@ -54,7 +54,7 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
                         Log.d("frame \(frame.frameIndex) merge cancelled before decision tree (auto)")
                         return
                     }
-                    await frame.applyDecisionTreeToAllOutliers()
+                    await frame.applyDecisionTreeToAllOutliers(keepingUserDecisions: true)
                     guard !Task.isCancelled else {
                         Log.d("frame \(frame.frameIndex) merge cancelled after decision tree (auto)")
                         return
@@ -67,7 +67,7 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
                     Log.d("frame \(frame.frameIndex) merge cancelled before decision tree (selective)")
                     return
                 }
-                await frame.applyDecisionTreeToAllOutliers()
+                await frame.applyDecisionTreeToAllOutliers(keepingUserDecisions: true)
                 guard !Task.isCancelled else {
                     Log.d("frame \(frame.frameIndex) merge cancelled after decision tree (selective)")
                     return
