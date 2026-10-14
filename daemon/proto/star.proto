@@ -274,6 +274,15 @@ message GetFramePreviewRequest {
   string        session_id  = 1;
   int32         frame_index = 2;
   FrameViewMode view_mode   = 3;
+  PreviewSize   size        = 4;   // default: the preview
+}
+
+// How large an image Frame.GetPreview returns.  THUMBNAIL is the small one the filmstrip draws (a view mode that has none
+// returns the preview); ORIGINAL is an 8-bit JPEG copy of the full-size image, made on demand (it can be tens of megapixels).
+enum PreviewSize {
+  PREVIEW_SIZE_PREVIEW   = 0;
+  PREVIEW_SIZE_THUMBNAIL = 1;
+  PREVIEW_SIZE_ORIGINAL  = 2;
 }
 
 enum FrameViewMode {

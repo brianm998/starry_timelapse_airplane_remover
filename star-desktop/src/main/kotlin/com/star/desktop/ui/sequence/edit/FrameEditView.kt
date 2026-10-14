@@ -57,7 +57,10 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val fvm = remember(current) { vm.frameVMFor(current) }
     LaunchedEffect(current) { fvm.load() }
 
-    val bmp by vm.currentPreview.collectAsState()
+    val preview by vm.currentPreview.collectAsState()
+    // Zoomed in with "show full resolution" on, the full-size image stands in for the preview (macOS FrameEditImageView).
+    val fullResolution by vm.fullResolution.collectAsState()
+    val bmp = fullResolution ?: preview
     val selectedTool by vm.tool.collectAsState()
     val frameInfo by fvm.info.collectAsState()
     // The tools do nothing on a frame whose clean method doesn't review outliers, and there is nothing to draw for them either.

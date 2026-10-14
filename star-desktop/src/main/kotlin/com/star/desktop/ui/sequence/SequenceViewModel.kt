@@ -266,13 +266,18 @@ class SequenceViewModel(
             }
             .launchIn(scope)
 
+        watchFullResolution()
+
         // `stard` rewrites a frame's previews in place when it saves one: drop what is cached for it and, if
         // it is the one on screen, show the new picture.
         processing.imageSaved
             .onEach { saved ->
                 imageCache.invalidateFrame(saved.frameIndex)
                 bumpRevision(saved.frameIndex)
-                if (saved.frameIndex == _currentIndex.value) loadPreview(saved.frameIndex, _viewMode.value)
+                if (saved.frameIndex == _currentIndex.value) {
+                    loadPreview(saved.frameIndex, _viewMode.value)
+                    fullResolutionVersion.value++   // the full-size copy is of the old picture
+                }
             }
             .launchIn(scope)
 
@@ -437,6 +442,47 @@ class SequenceViewModel(
         block()
     }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
+
+    // ---- full resolution (macOS showFullResolution) ----
+    //
+    // The preview is about 1600 pixels wide, however large the frame is; zoomed in far enough to see single pixels it is a blur.
+    // With this on, and the view zoomed in past fit, the frame's full-size image is loaded in its place. It is one 8-bit bitmap
+    // for the current frame only (a 42 MP frame is some 170 MB), made by the daemon on demand, and dropped when the frame, the view
+    // mode or the zoom changes.
+
+    private val _showFullResolution = MutableStateFlow(false)
+    val showFullResolution: StateFlow<Boolean> = _showFullResolution.asStateFlow()
+    fun setShowFullResolution(show: Boolean) { _showFullResolution.value = show }
+
+    private val _fullResolution = MutableStateFlow<ImageBitmap?>(null)
+    /** The current frame's full-size image while [showFullResolution] is on and the view is zoomed in; else null. */
+    val fullResolution: StateFlow<ImageBitmap?> = _fullResolution.asStateFlow()
+    private var fullResolutionJob: Job? = null
+    private val fullResolutionVersion = MutableStateFlow(0)
+
+    private fun watchFullResolution() {
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
+        combine(
+            _currentIndex, _viewMode, _showFullResolution,
+            androidx.compose.runtime.snapshotFlow { transform.userZoom > ZOOMED_IN }.distinctUntilChanged(),
+            fullResolutionVersion,
+        ) { index, mode, show, zoomed, _ -> if (show && zoomed) index to mode else null }
+            .distinctUntilChanged()
+            .onEach { _fullResolution.value = null }   // what was loaded is of another frame, mode or zoom
+            .debounce(250)                              // not for every frame of a scrub
+            .onEach { wanted -> loadFullResolution(wanted) }
+            .launchIn(scope)
+    }
+
+    private fun loadFullResolution(wanted: Pair<Int, FrameViewMode>?) {
+        fullResolutionJob?.cancel()
+        if (wanted == null) return
+        fullResolutionJob = scope.launch {
+            val ref = frames.previewPath(sessionId, wanted.first, wanted.second, com.star.proto.PreviewSize.PREVIEW_SIZE_ORIGINAL) ?: return@launch
+            val bitmap = imageCache.loadUncached(ref.path) ?: return@launch
+            if (_currentIndex.value == wanted.first && _viewMode.value == wanted.second) _fullResolution.value = bitmap
+        }
+    }
 
     // ---- the outlier window's rows (macOS outlierGroupTableRows) ----
 
@@ -829,6 +875,9 @@ class SequenceViewModel(
     companion object {
         /** Outlier groups smaller than this (pixels) are left to the trash threshold, not classified (macOS `minimumClassificationSize`). */
         const val MINIMUM_CLASSIFICATION_SIZE = 20
+
+        /** The view counts as zoomed in once it is this much past fit. */
+        private const val ZOOMED_IN = 1.01f
 
         /** The outlier arrows are `width / this` long (macOS `outlierArrowLength`); the view keeps room for them around the frame. */
         const val ARROW_LENGTH_DIVISOR = 70f

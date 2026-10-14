@@ -109,6 +109,46 @@ public enum Star_V1_DetectionType: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
+/// How large an image Frame.GetPreview returns.  THUMBNAIL is the small one the filmstrip draws (a view mode that has none
+/// returns the preview); ORIGINAL is an 8-bit JPEG copy of the full-size image, made on demand (it can be tens of megapixels).
+public enum Star_V1_PreviewSize: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case preview // = 0
+  case thumbnail // = 1
+  case original // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .preview
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .preview
+    case 1: self = .thumbnail
+    case 2: self = .original
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .preview: return 0
+    case .thumbnail: return 1
+    case .original: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Star_V1_PreviewSize] = [
+    .preview,
+    .thumbnail,
+    .original,
+  ]
+
+}
+
 public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case viewOriginal // = 0
@@ -1646,6 +1686,9 @@ public struct Star_V1_GetFramePreviewRequest: Sendable {
 
   public var viewMode: Star_V1_FrameViewMode = .viewOriginal
 
+  /// default: the preview
+  public var size: Star_V1_PreviewSize = .preview
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -3063,6 +3106,10 @@ extension Star_V1_DetectionType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DETECTION_MILD\0\u{1}DETECTION_STRONG\0\u{1}DETECTION_STRONGER\0\u{1}DETECTION_EXCESSIVE\0\u{1}DETECTION_CUSTOM\0")
 }
 
+extension Star_V1_PreviewSize: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PREVIEW_SIZE_PREVIEW\0\u{1}PREVIEW_SIZE_THUMBNAIL\0\u{1}PREVIEW_SIZE_ORIGINAL\0")
+}
+
 extension Star_V1_FrameViewMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0")
 }
@@ -4363,7 +4410,7 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
 
 extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetFramePreviewRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}view_mode\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}view_mode\0\u{1}size\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4374,6 +4421,7 @@ extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._
       case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
       case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.viewMode) }()
+      case 4: try { try decoder.decodeSingularEnumField(value: &self.size) }()
       default: break
       }
     }
@@ -4389,6 +4437,9 @@ extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._
     if self.viewMode != .viewOriginal {
       try visitor.visitSingularEnumField(value: self.viewMode, fieldNumber: 3)
     }
+    if self.size != .preview {
+      try visitor.visitSingularEnumField(value: self.size, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -4396,6 +4447,7 @@ extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.sessionID != rhs.sessionID {return false}
     if lhs.frameIndex != rhs.frameIndex {return false}
     if lhs.viewMode != rhs.viewMode {return false}
+    if lhs.size != rhs.size {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -58,6 +58,7 @@ import com.star.proto.OpenVideoRequest
 import com.star.proto.OutlierDecision
 import com.star.proto.OutlierGroupList
 import com.star.proto.Point
+import com.star.proto.PreviewSize
 import com.star.proto.ProgressEvent
 import com.star.proto.ReprocessFramesRequest
 import com.star.proto.ReprocessFramesResponse
@@ -160,10 +161,13 @@ class StarClient(private val conn: StdioConnection) {
     suspend fun getFrame(sessionId: String, frameIndex: Int): FrameInfo =
         call("Frame.Get", frameRef(sessionId, frameIndex), FrameInfo.parser())
 
-    suspend fun getFramePreview(sessionId: String, frameIndex: Int, viewMode: FrameViewMode): ImageRef =
+    /** The frame's image for [viewMode] at [size]: the preview by default, the filmstrip's thumbnail, or an 8-bit copy of the full-size image. */
+    suspend fun getFramePreview(
+        sessionId: String, frameIndex: Int, viewMode: FrameViewMode, size: PreviewSize = PreviewSize.PREVIEW_SIZE_PREVIEW,
+    ): ImageRef =
         call(
             "Frame.GetPreview",
-            GetFramePreviewRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setViewMode(viewMode).build(),
+            GetFramePreviewRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setViewMode(viewMode).setSize(size).build(),
             ImageRef.parser(),
         )
 

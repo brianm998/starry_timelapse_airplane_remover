@@ -146,6 +146,16 @@ class InteropIntegrationTest {
             assertTrue(preview.path.isNotEmpty(), "GetPreview(VIEW_ORIGINAL) returned no path on a fresh sequence")
             assertTrue(File(preview.path).exists(), "GetPreview(VIEW_ORIGINAL) path does not exist on disk: ${preview.path}")
 
+            // D3: the original size is an 8-bit copy of the full-size image (what "show full resolution" draws), and the
+            // thumbnail is the filmstrip's smaller one (the preview if the view has none).
+            val full = client.getFramePreview(info.sessionId, 0, com.star.proto.FrameViewMode.VIEW_ORIGINAL, com.star.proto.PreviewSize.PREVIEW_SIZE_ORIGINAL)
+            assertTrue(File(full.path).exists(), "no full-size copy was made: ${full.path}")
+            val fullImage = javax.imageio.ImageIO.read(File(full.path))
+            assertEquals(info.imageWidth to info.imageHeight, fullImage.width to fullImage.height, "the full-size copy is not full size")
+            assertTrue(File(full.path).path != preview.path, "the full-size copy is the preview")
+            val thumb = client.getFramePreview(info.sessionId, 0, com.star.proto.FrameViewMode.VIEW_ORIGINAL, com.star.proto.PreviewSize.PREVIEW_SIZE_THUMBNAIL)
+            assertTrue(File(thumb.path).exists(), "no thumbnail: ${thumb.path}")
+
             // Outliers may not exist pre-processing; the call must not break the connection.
             runCatching { client.listOutliers(info.sessionId, 0) }
             client.closeSession(info.sessionId)

@@ -36,6 +36,12 @@ class ImageCache(private val maxEntries: Int = 120) {
         cache[path] ?: loadFromDisk(path)?.also { cache[path] = it }
     }
 
+    /**
+     * Read the image at [path] without keeping it: for the one full-size bitmap the view holds while zoomed in, which is far too
+     * large to sit among the cache's previews.
+     */
+    suspend fun loadUncached(path: String): ImageBitmap? = withContext(Dispatchers.IO) { loadFromDisk(path) }
+
     /** `stard` rewrites a frame's images in place, so a path's old bitmap is wrong once the frame is saved. */
     fun invalidate(path: String) { cache.remove(path) }
 

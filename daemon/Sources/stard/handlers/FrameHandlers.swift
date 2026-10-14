@@ -42,7 +42,17 @@ enum FrameHandlers {
             // would fail and the Kotlin client would show blank frames forever.  For .original this
             // always succeeds (the source frame exists); for processed/aligned types it only
             // succeeds once processing has written that full-resolution image.
-            guard let ref = await PreviewFiles.ref(for: frame, mode: starViewMode) else {
+            let ref: Star_V1_ImageRef?
+            switch req.size {
+            case .original:
+                ref = await PreviewFiles.fullSizeRef(for: frame, mode: starViewMode,
+                                                     directory: "\(await session.scratchSessionDir)/fullres")
+            case .thumbnail:
+                ref = await PreviewFiles.ref(for: frame, mode: starViewMode, size: .thumbnail)
+            default:
+                ref = await PreviewFiles.ref(for: frame, mode: starViewMode)
+            }
+            guard let ref else {
                 Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) unavailable (not generated yet)")
                 await transport.sendError(id: id, message: "preview not yet generated: frame \(frameIdx) mode \(starViewMode)"); return
             }

@@ -147,6 +147,12 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         ZoomControls(vm)
+        val fullResolution by vm.showFullResolution.collectAsState()
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            androidx.compose.material3.Switch(checked = fullResolution, onCheckedChange = vm::setShowFullResolution)
+            Spacer(Modifier.width(6.dp))
+            Text(localized("ui.show_full_resolution"), color = StarColors.white, fontSize = 11.sp)
+        }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         Text(localized("ui.clean_method"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
