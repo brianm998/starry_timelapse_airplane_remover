@@ -202,6 +202,14 @@ target_linux() {
     CC_VERSION_CMD="gcc --version"
 
     CMAKE_COMMON+=(-DCMAKE_POSITION_INDEPENDENT_CODE=ON)
+
+    # FFmpeg's -lz would otherwise take the system's libz.so.1, which a minimal machine may not
+    # have.  The prefix is searched first and has only the archive, so the link takes that.
+    local libz
+    libz=$(gcc -print-file-name=libz.a)
+    [ -f "$libz" ] || die "libz.a not found (install zlib1g-dev, which ships the static library)"
+    mkdir -p "$PREFIX/lib"
+    cp "$libz" "$PREFIX/lib/libz.a"
     T_VPX_TARGET="$vpx_arch-linux-gcc"
 
     ffmpeg_common_args

@@ -103,7 +103,7 @@ for tool in "$FFMPEG" "$FFPROBE"; do
             ;;
         linux)
             if [ "$HOST_OS" = linux ]; then
-                bad=$(ldd "$tool" 2>&1 | awk '{print $1}' | grep -v -E '^(linux-vdso|linux-gate|/lib.*/ld-linux|libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|libstdc\+\+\.so|libgcc_s\.so|statically)' || true)
+                bad=$(ldd "$tool" 2>&1 | awk '{print $1}' | grep -v -E '^(linux-vdso|linux-gate|/lib.*/ld-linux|libc\.so|libm\.so|libmvec\.so|libdl\.so|libpthread\.so|librt\.so|libstdc\+\+\.so|libgcc_s\.so|statically)' || true)
             else
                 bad=""
             fi
