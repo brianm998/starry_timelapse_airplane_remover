@@ -45,4 +45,17 @@ class FrameStateTest {
         assertEquals("aligning stars complete", FrameState.message(FrameProcessingState.FPS_STAR_ALIGNMENT_COMPLETE))
         assertEquals("classified", FrameState.message(FrameProcessingState.FPS_USER_MODIFIED))
     }
+
+    /** The badges' words come from the catalogue, so they follow the language; a state without a phrase of its own says what its message does. */
+    @Test fun badgesFollowTheLanguage() {
+        assertEquals("unprocessed", FrameState.shortString(FrameProcessingState.FPS_UNPROCESSED))
+        assertEquals("finding horizon", FrameState.shortString(FrameProcessingState.FPS_HORIZON_DETECTION))
+        assertEquals(FrameState.message(FrameProcessingState.FPS_STAR_KEYPOINTS_FOUND), FrameState.shortString(FrameProcessingState.FPS_STAR_KEYPOINTS_FOUND))
+        Strings.setOverride("de")
+        for (s in FrameProcessingState.entries.filter { it != FrameProcessingState.UNRECOGNIZED }) {
+            val text = FrameState.shortString(s)
+            assertTrue(text.isNotBlank() && !text.startsWith("frame_state."), "de $s: $text")
+        }
+        assertTrue(FrameState.shortString(FrameProcessingState.FPS_HORIZON_DETECTION) != "finding horizon", "still English in German")
+    }
 }

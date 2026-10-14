@@ -97,24 +97,24 @@ object FrameState {
         FrameProcessingState.UNRECOGNIZED -> ""
     }
 
-    /** A short human label for filmstrip/grid badges. */
-    fun shortString(s: FrameProcessingState): String = SHORT[s] ?: prettify(s.name)
+    /**
+     * A short label for filmstrip/grid badges, in the user's language. macOS's own is English words; here the states that have a catalogue phrase
+     * show it (the badge truncates what does not fit), and the rest say what [message] says.
+     */
+    fun shortString(s: FrameProcessingState): String = SHORT_KEYS[s]?.let { localized(it) } ?: message(s)
 
-    private val SHORT: Map<FrameProcessingState, String> = mapOf(
-        FrameProcessingState.FPS_UNPROCESSED to "unprocessed",
-        FrameProcessingState.FPS_HORIZON_DETECTION to "horizon",
-        FrameProcessingState.FPS_DETECTING_BLOBS to "blobs",
-        FrameProcessingState.FPS_FIRST_CLASSIFICATION to "classifying",
-        FrameProcessingState.FPS_READY_FOR_INTER_FRAME to "interframe",
-        FrameProcessingState.FPS_SECOND_CLASSIFICATION to "classifying 2",
-        FrameProcessingState.FPS_OUTLIER_PROCESSING_COMPLETE to "outliers done",
-        FrameProcessingState.FPS_LOADING_IMAGES to "loading",
-        FrameProcessingState.FPS_WRITING_OUTPUT_FILE to "writing",
-        FrameProcessingState.FPS_FINISHING to "finishing",
-        FrameProcessingState.FPS_USER_MODIFIED to "edited",
-        FrameProcessingState.FPS_COMPLETE to "complete",
+    private val SHORT_KEYS: Map<FrameProcessingState, String> = mapOf(
+        FrameProcessingState.FPS_UNPROCESSED to "frame_state.unprocessed",
+        FrameProcessingState.FPS_HORIZON_DETECTION to "frame_state.horizon_detection",
+        FrameProcessingState.FPS_DETECTING_BLOBS to "frame_state.detecting_blobs",
+        FrameProcessingState.FPS_FIRST_CLASSIFICATION to "frame_state.first_classification",
+        FrameProcessingState.FPS_READY_FOR_INTER_FRAME to "frame_state.ready_for_inter_frame_processing",
+        FrameProcessingState.FPS_SECOND_CLASSIFICATION to "frame_state.second_classification",
+        FrameProcessingState.FPS_OUTLIER_PROCESSING_COMPLETE to "frame_state.outlier_processing_complete",
+        FrameProcessingState.FPS_LOADING_IMAGES to "frame_state.loading_images",
+        FrameProcessingState.FPS_WRITING_OUTPUT_FILE to "frame_state.writing_output_file",
+        FrameProcessingState.FPS_FINISHING to "frame_state.finishing",
+        FrameProcessingState.FPS_USER_MODIFIED to "frame_state.user_modified",
+        FrameProcessingState.FPS_COMPLETE to "frame_state.complete",
     )
-
-    private fun prettify(enumName: String): String =
-        enumName.removePrefix("FPS_").lowercase().replace('_', ' ')
 }

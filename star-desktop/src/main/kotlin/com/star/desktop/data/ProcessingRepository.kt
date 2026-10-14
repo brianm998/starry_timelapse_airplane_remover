@@ -1,5 +1,6 @@
 package com.star.desktop.data
 
+import com.star.desktop.i18n.localized
 import com.star.desktop.engine.StarClient
 import com.star.desktop.engine.StarRpcException
 import com.star.desktop.util.Log
@@ -90,7 +91,7 @@ class ProcessingRepository(
      */
     private var startedSinceCancel = false
 
-    private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, "engine not connected")
+    private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, localized("ui.engine_not_connected"))
 
     /** Open the persistent progress subscription. Call once at session open, before [start]. */
     fun subscribe(sessionId: String) {

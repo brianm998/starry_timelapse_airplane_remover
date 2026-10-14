@@ -1,5 +1,6 @@
 package com.star.desktop.ui.initial
 
+import com.star.desktop.i18n.localized
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
@@ -50,7 +51,7 @@ fun resolveDrop(files: List<File>): OpenAction? {
 fun chooseDirectory(): String? {
     val chooser = JFileChooser().apply {
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-        dialogTitle = "Open Image Sequence"
+        dialogTitle = localized("ui.open_image_sequence").trimEnd('…', '.')
     }
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile?.absolutePath else null
 }

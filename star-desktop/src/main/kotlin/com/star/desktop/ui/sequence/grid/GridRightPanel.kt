@@ -59,13 +59,13 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SectionTitle("Thumbnail Size")
+                SectionTitle(localized("ui.thumbnail_size"))
                 Slider(value = scale, onValueChange = vm::setGridThumbnailScale, valueRange = 0.02f..0.5f)
                 Text(String.format("%.2f×", scale), color = StarColors.textSecondary, fontSize = 10.sp)
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SectionTitle("Display")
+                SectionTitle(localized("ui.display"))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Switch(checked = showFilmstrip, onCheckedChange = { vm.toggleFilmstrip() })
                     Text(localized("ui.show_filmstrip"), color = StarColors.white, fontSize = 11.sp)

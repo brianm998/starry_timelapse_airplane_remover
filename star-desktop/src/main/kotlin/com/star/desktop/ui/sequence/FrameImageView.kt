@@ -50,7 +50,7 @@ fun FrameImageView(vm: SequenceViewModel, background: Color = StarColors.appBack
                 val label = when {
                     !available && state != null -> localized("ui.frame_n_state", idx, FrameState.shortString(state))
                     !available -> localized("ui.frame_n_unprocessed", idx)
-                    else -> "Loading frame $idx…"
+                    else -> localized("ui.loading_frame_n", idx)
                 }
                 Text(label, color = StarColors.textSecondary, fontSize = 13.sp)
                 if (!available && !processing) {

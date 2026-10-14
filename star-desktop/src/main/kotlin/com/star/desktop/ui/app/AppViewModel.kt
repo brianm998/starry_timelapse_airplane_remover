@@ -50,7 +50,8 @@ private const val QUIT_WAIT_MS = 5_000L
 /** What the root window is showing. */
 sealed interface AppScreen {
     data object Initial : AppScreen
-    data class Loading(val title: String, val detail: String?, val fraction: Float?) : AppScreen
+    /** A wait with a title ([titleKey] is a catalogue key, so the title follows the language) and, if there is one, what it is on. */
+    data class Loading(val titleKey: String, val detail: String?, val fraction: Float?) : AppScreen
 
     /** A source is being opened, with the Cancel that stops it (macOS `ImageSequenceLoadingView`). */
     data class Opening(val progress: com.star.desktop.domain.LoadingProgress) : AppScreen
@@ -222,6 +223,8 @@ class AppViewModel(
     fun setLanguage(code: String?) {
         prefs.setLanguage(code)
         Strings.setOverride(code)
+        // The engine words its own warnings and errors: it is told, or they would stay in the language it started with.
+        scope.launch { engine.announceLanguage() }
     }
     val imageCache = ImageCache()
     val sessions = SessionRepository { engine.client }
@@ -907,7 +910,7 @@ class AppViewModel(
                         _screen.update { if (it is AppScreen.Opening) AppScreen.Opening(progress) else it }
                     }
                 }
-                val opened = info ?: run { fail(if (video) "video import produced no session" else "opening produced no session"); return@launch }
+                val opened = info ?: run { fail(localized(if (video) "ui.video_import_produced_no_session" else "ui.opening_produced_no_session")); return@launch }
                 if (_screen.value !is AppScreen.Opening) {
                     // Cancelled just as it finished: the daemon has a session nobody here will use.
                     withContext(NonCancellable) { runCatching { engine.client?.closeSession(opened.sessionId) } }
@@ -919,7 +922,7 @@ class AppViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                fail(e.message ?: if (video) "failed to import video" else "failed to open")
+                fail(e.message ?: localized(if (video) "ui.failed_to_import_video" else "ui.failed_to_open"))
             }
         }
     }
@@ -1041,7 +1044,7 @@ class AppViewModel(
         scope.launch {
             restarting = true
             _engineDown.value = null
-            _screen.value = AppScreen.Loading("Restarting engine", null, null)
+            _screen.value = AppScreen.Loading("ui.restarting_engine", null, null)
             val ok = engine.restart()
             restarting = false
             if (!ok) {
@@ -1050,12 +1053,12 @@ class AppViewModel(
                 return@launch
             }
             if (resume != null && java.io.File(resume).exists()) {
-                _screen.value = AppScreen.Loading("Resuming session", resume, null)
+                _screen.value = AppScreen.Loading("ui.resuming_session", resume, null)
                 try {
                     onOpened(resume, sessions.openConfig(resume), addToRecent = false)
                     if (wasProcessing) resumeProcessing()
                 } catch (e: Throwable) {
-                    fail(e.message ?: "failed to resume session after restart")
+                    fail(e.message ?: localized("ui.failed_to_resume_the_session_after_the_restart"))
                 }
             } else {
                 _screen.value = AppScreen.Initial

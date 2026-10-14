@@ -1,5 +1,6 @@
 package com.star.desktop.engine
 
+import com.star.desktop.i18n.localized
 import com.star.desktop.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -8,6 +9,12 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+
+/** How the engine ended, in the few words the badge has room for (see [EngineStatus.Failed]). */
+enum class EngineFailure { OUT_OF_MEMORY, CRASHED, EXITED, STOPPED }
+
+/** Why the daemon is gone: the sentence for the overlay, and the kind of end it was. */
+data class EngineDeath(val description: String, val failure: EngineFailure)
 
 /**
  * Spawns and supervises the `stard` child process (design §4).
@@ -66,7 +73,8 @@ class DaemonProcess(
                 }
                 // stderr closes when the process exits; record how, so the log stands on its own.
                 runCatching { proc.waitFor() }
-                log?.appendLine("# stard exited: ${deathDescription() ?: "still running"}")
+                // the status, not the sentence: the log is read by whoever gets the bug report, in whatever language the user reads
+                log?.appendLine("# stard exited: ${exitValueOrNull()?.let { "status $it" } ?: "still running"}")
             } finally {
                 log?.let { runCatching { it.close() } }
             }
@@ -104,32 +112,36 @@ class DaemonProcess(
      * signal N exits with 128+N, so 137 is SIGKILL — which for stard almost always means the
      * system ran out of memory, exactly the failure the whole crash-reporting effort is about.
      */
-    fun deathDescription(): String? {
+    fun deathDescription(): String? = death()?.description
+
+    /** [deathDescription] with the kind of end it was, which the engine badge shows in a few words. Null if the daemon is still running. */
+    fun death(): EngineDeath? {
         val code = exitValueOrNull() ?: return null
 
-        val cause = when (code) {
-            0 -> "the engine exited normally"
+        fun crashed(how: String) = localized("ui.engine_death.crashed", how) to EngineFailure.CRASHED
+        val (cause, failure) = when (code) {
+            0 -> localized("ui.engine_death.exited_normally") to EngineFailure.EXITED
             // Windows NTSTATUS values (Java reports them as signed ints). These fire before stard can
             // log anything, so without naming them the user only sees "engine stopped".
-            0xC0000135.toInt() -> "the engine could not start: a required DLL is missing (0xC0000135)"
-            0xC0000139.toInt() -> "the engine could not start: a required DLL is the wrong version (0xC0000139)"
-            0xC000007B.toInt() -> "the engine could not start: a DLL has the wrong architecture (0xC000007B)"
-            0xC0000005.toInt() -> "the engine crashed (access violation, 0xC0000005)"
+            0xC0000135.toInt() -> localized("ui.engine_death.dll_missing", "0xC0000135") to EngineFailure.STOPPED
+            0xC0000139.toInt() -> localized("ui.engine_death.dll_wrong_version", "0xC0000139") to EngineFailure.STOPPED
+            0xC000007B.toInt() -> localized("ui.engine_death.dll_wrong_architecture", "0xC000007B") to EngineFailure.STOPPED
+            0xC0000005.toInt() -> crashed("access violation, 0xC0000005")
             // A Swift fatalError / precondition failure traps; on Windows that surfaces as one of
             // these rather than a signal.
-            0xC000001D.toInt() -> "the engine crashed (illegal instruction, 0xC000001D)"
-            0x80000003.toInt() -> "the engine crashed (breakpoint trap, 0x80000003)"
-            0xC0000409.toInt() -> "the engine crashed (fail-fast, 0xC0000409)"
-            0xC00000FD.toInt() -> "the engine crashed (stack overflow, 0xC00000FD)"
-            137 -> "the engine was killed by the system (SIGKILL) — most likely out of memory"
-            143 -> "the engine was asked to stop (SIGTERM)"
-            139 -> "the engine crashed (SIGSEGV)"
-            134 -> "the engine crashed (SIGABRT)"
-            138 -> "the engine crashed (SIGBUS)"
-            133 -> "the engine crashed (SIGTRAP)"
-            132 -> "the engine crashed (SIGILL)" // a Swift fatalError / precondition failure
-            in 129..192 -> "the engine was killed by signal ${code - 128}"
-            else -> "the engine exited with status $code"
+            0xC000001D.toInt() -> crashed("illegal instruction, 0xC000001D")
+            0x80000003.toInt() -> crashed("breakpoint trap, 0x80000003")
+            0xC0000409.toInt() -> crashed("fail-fast, 0xC0000409")
+            0xC00000FD.toInt() -> crashed("stack overflow, 0xC00000FD")
+            137 -> localized("ui.engine_death.killed_out_of_memory") to EngineFailure.OUT_OF_MEMORY
+            143 -> localized("ui.engine_death.asked_to_stop") to EngineFailure.STOPPED
+            139 -> crashed("SIGSEGV")
+            134 -> crashed("SIGABRT")
+            138 -> crashed("SIGBUS")
+            133 -> crashed("SIGTRAP")
+            132 -> crashed("SIGILL") // a Swift fatalError / precondition failure
+            in 129..192 -> localized("ui.engine_death.killed_by_signal", code - 128) to EngineFailure.STOPPED
+            else -> localized("ui.engine_death.exited_with_status", code) to EngineFailure.STOPPED
         }
 
         // The daemon's own last words, when it managed any. Its crash handler writes a
@@ -141,8 +153,8 @@ class DaemonProcess(
         val detail = tail.lastOrNull { it.contains("Fatal error") }
             ?: tail.lastOrNull { it.contains("STAR-WARNING") || it.contains("ERROR") || it.contains("crashed") }
 
-        val where = if (logFile.exists()) " (engine log: ${logFile.absolutePath})" else ""
-        return (if (detail != null) "$cause — $detail" else cause) + where
+        val where = if (logFile.exists()) " (${localized("ui.engine_death.engine_log", logFile.absolutePath)})" else ""
+        return EngineDeath((if (detail != null) "$cause — $detail" else cause) + where, failure)
     }
 
     fun destroy() {

@@ -183,7 +183,7 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
         com.star.desktop.ui.components.VerticalStarPicker(
             options = CLEAN_METHODS.map { it.first },
             selected = activeMethod,
-            label = { cmLabels[it] ?: "" },
+            label = { cmLabels[it]?.let { key -> localized(key) } ?: "" },
             onSelect = { fvm.setCleanMethod(it) },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -362,11 +362,11 @@ private fun NeighborCountEditor(
     }
 }
 
-/** Per-frame clean methods (proto `CleanMethod`) with display labels matching the macOS picker. */
+/** Per-frame clean methods (proto `CleanMethod`) with the catalogue key of the label, as in the macOS picker. */
 private val CLEAN_METHODS: List<Pair<CleanMethod, String>> = listOf(
-    CleanMethod.CLEAN_AUTOMATIC to "Automatic",
-    CleanMethod.CLEAN_AUTOMATIC_TRUE to "Auto + Outliers",
-    CleanMethod.CLEAN_SELECTIVE to "Selective",
+    CleanMethod.CLEAN_AUTOMATIC to "ui.automatic",
+    CleanMethod.CLEAN_AUTOMATIC_TRUE to "ui.auto_selective",
+    CleanMethod.CLEAN_SELECTIVE to "ui.selective",
 )
 
 @OptIn(ExperimentalFoundationApi::class)

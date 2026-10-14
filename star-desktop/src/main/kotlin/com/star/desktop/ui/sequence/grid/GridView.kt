@@ -1,5 +1,6 @@
 package com.star.desktop.ui.sequence.grid
 
+import com.star.desktop.i18n.localized
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ContextMenuArea
 import androidx.compose.foundation.ContextMenuItem
@@ -177,7 +178,7 @@ private fun GridCell(
         Box(Modifier.fillMaxWidth().aspectRatio(aspect).clip(StarShapes.gridCell), contentAlignment = Alignment.BottomStart) {
             val t = thumb
             if (t != null) {
-                Image(bitmap = t, contentDescription = "Frame $index", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                Image(bitmap = t, contentDescription = localized("ui.frame_n", index), modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
             // Per-cell horizon line (orange while pending, else by kind), scaled from the overlay's draw space.
             val ov = overlay
@@ -192,7 +193,7 @@ private fun GridCell(
                 if (s.isNotEmpty()) {
                     // In the state's own colour, orange while the frame waits for its horizon to be refined (macOS).
                     val color = if (info?.refinementPending == true) StarColors.orange else StarColors.stateColor(state)
-                    Text(s, color = color, fontSize = 10.sp, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+                    Text(s, color = color, fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
                 }
             }
         }

@@ -585,35 +585,11 @@ struct HorizonPainterStartupInstructionsView: View {
                   .font(.headline)
                   .foregroundColor(.white)
 
-                if isMoving {
-                    Text("""
-For a moving video like this, you can define the horizon on several evenly-spaced frames. Star will use these as references for all frames in the sequence.  This makes overall processing faster and more accurate.
-
-If the frame shown here doesn't show the horizon well, you can scroll to a different frame in the sequence to use instead.
-
-Then brush over the horizon itself, so that the selected area covers the horizon line itself.  Once you have selected across the entire width of the screen, Star will then automatically try to select the sky part of the image, stopping at what it thinks is the horizon.
-
-If the selection looks good, hit 'Continue'.
-
-If the selection of the sky isn't exactly right, use the brush to either add or remove to the selection.  Use '[' and ']' keys to shrink and enlarge the brush.
-""")
-                      .font(.body)
-                      .foregroundColor(.white)
-                } else {
-                    Text("""
-For a static video like this, you can choose any frame to calculate a horizon from and Star can then apply that same horizon mask to all frames in the sequence.  This makes overall processing faster and more accurate.
-
-If the frame you see here doesn't show the horizon well, scroll to a different frame that does first.
-
-Then brush over the horizon itself, so that the selected area covers the horizon line itself.  Once you have selected across the entire width of the screen, Star will then automatically try to select the sky part of the image, stopping at what it thinks is the horizon.
-
-If the selection looks good, hit 'Continue'.
-
-If the selection of the sky isn't exactly right, use the brush to either add or remove to the selection.  Use '[' and ']' keys to shrink and enlarge the brush.
-""")
-                      .font(.body)
-                      .foregroundColor(.white)
-                }
+                Text(localized(isMoving ? "ui.horizon_painter_instructions_moving"
+                                        : "ui.horizon_painter_instructions_static")
+                     + "\n\n" + localized("ui.horizon_painter_instructions_brushing"))
+                  .font(.body)
+                  .foregroundColor(.white)
 
                 HStack(spacing: 16) {
                     Toggle(localized("ui.don_t_show_again"), isOn: $dontShowAgain)

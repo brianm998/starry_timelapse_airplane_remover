@@ -37,7 +37,7 @@ fun GridLeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             com.star.desktop.ui.components.VerticalStarPicker(
                 options = SHOW_MODES.map { it.first },
                 selected = viewMode,
-                label = { labels[it] ?: "" },
+                label = { labels[it]?.let { key -> localized(key) } ?: "" },
                 onSelect = { vm.setViewMode(it) },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -47,8 +47,8 @@ fun GridLeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 }
 
 private val SHOW_MODES = listOf(
-    FrameViewMode.VIEW_ORIGINAL to "original frame",
-    FrameViewMode.VIEW_PROCESSED to "final processed frame",
-    FrameViewMode.VIEW_SUBTRACTION to "subtracted frame",
-    FrameViewMode.VIEW_VALIDATION to "validation data",
+    FrameViewMode.VIEW_ORIGINAL to "view_mode.original",
+    FrameViewMode.VIEW_PROCESSED to "view_mode.final",
+    FrameViewMode.VIEW_SUBTRACTION to "view_mode.subtraction",
+    FrameViewMode.VIEW_VALIDATION to "view_mode.validation",
 )

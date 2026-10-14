@@ -63,20 +63,20 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
         // transport — 8 buttons when stopped; collapses to just play/pause while playing (macOS)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             if (playing) {
-                GlyphButton("⏸", "Pause", vm::togglePlayback, size = 40, fontSize = 24, tint = StarColors.blue)
+                GlyphButton("⏸", localized("ui.transport_pause"), vm::togglePlayback, size = 40, fontSize = 24, tint = StarColors.blue)
             } else {
                 // With several frames selected the arrows go round them, so there is no start or end to be at.
                 val atStart = idx <= 0 && selected.size <= 1
                 val atEnd = idx >= vm.frameCount - 1 && selected.size <= 1
                 val multi = vm.frameCount > 1
-                GlyphButton("⏮", "Go to first frame (b)", vm::goToFirst, enabled = !atStart)
-                GlyphButton("⏪", "Back $skip frames (z)", vm::fastPrevious, enabled = !atStart)
-                GlyphButton("◂", "Previous frame (←)", vm::previous, enabled = !atStart, fontSize = 13)
-                GlyphButton("◀", "Play in reverse (w)", vm::playReverse, enabled = multi, size = 40, fontSize = 20)
-                GlyphButton("▶", "Play (space)", vm::playForward, enabled = multi, size = 40, fontSize = 20)
-                GlyphButton("▸", "Next frame (→)", vm::next, enabled = !atEnd, fontSize = 13)
-                GlyphButton("⏩", "Forward $skip frames (x)", vm::fastForward, enabled = !atEnd)
-                GlyphButton("⏭", "Go to last frame (f)", vm::goToLast, enabled = !atEnd)
+                GlyphButton("⏮", localized("ui.transport_first_frame"), vm::goToFirst, enabled = !atStart)
+                GlyphButton("⏪", localized("ui.transport_back_frames", skip), vm::fastPrevious, enabled = !atStart)
+                GlyphButton("◂", localized("ui.transport_previous_frame"), vm::previous, enabled = !atStart, fontSize = 13)
+                GlyphButton("◀", localized("ui.transport_play_reverse"), vm::playReverse, enabled = multi, size = 40, fontSize = 20)
+                GlyphButton("▶", localized("ui.transport_play"), vm::playForward, enabled = multi, size = 40, fontSize = 20)
+                GlyphButton("▸", localized("ui.transport_next_frame"), vm::next, enabled = !atEnd, fontSize = 13)
+                GlyphButton("⏩", localized("ui.transport_forward_frames", skip), vm::fastForward, enabled = !atEnd)
+                GlyphButton("⏭", localized("ui.transport_last_frame"), vm::goToLast, enabled = !atEnd)
             }
         }
 
@@ -91,10 +91,10 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
         // fps + filmstrip toggle
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(localized("ui.fps"), color = StarColors.textDisabled, fontSize = 10.sp)
-            GlyphButton("−", "Slower", { vm.setPlaybackFps(fps - 1) }, size = 22, fontSize = 14)
+            GlyphButton("−", localized("ui.transport_slower"), { vm.setPlaybackFps(fps - 1) }, size = 22, fontSize = 14)
             Text("$fps", color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.width(24.dp))
-            GlyphButton("+", "Faster", { vm.setPlaybackFps(fps + 1) }, size = 22, fontSize = 14)
-            GlyphButton(if (showFilmstrip) "▥" else "▤", "Toggle filmstrip", vm::toggleFilmstrip, size = 26, fontSize = 14)
+            GlyphButton("+", localized("ui.transport_faster"), { vm.setPlaybackFps(fps + 1) }, size = 22, fontSize = 14)
+            GlyphButton(if (showFilmstrip) "▥" else "▤", localized("ui.toggle_filmstrip"), vm::toggleFilmstrip, size = 26, fontSize = 14)
             if (mode == com.star.desktop.domain.InteractionMode.EDIT) {
                 com.star.desktop.ui.components.HoverTip(localized("ui.show_settings")) {
                     GlyphButton("⚙", localized("ui.show_settings"), app::openSettings, size = 26, fontSize = 16)

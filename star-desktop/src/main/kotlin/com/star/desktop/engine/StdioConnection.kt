@@ -1,5 +1,6 @@
 package com.star.desktop.engine
 
+import com.star.desktop.i18n.localized
 import com.google.protobuf.ByteString
 import com.star.proto.Envelope
 import com.star.desktop.util.Log
@@ -25,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /** An RPC error surfaced to a caller. [code] is the daemon's `error_code` (only 404 is meaningful today). */
-class StarRpcException(val code: Int, message: String) : Exception("RPC error $code: $message")
+class StarRpcException(val code: Int, message: String) : Exception(localized("ui.engine_error_n", code, message))
 
 /**
  * Multiplexer for the stard stdio protobuf protocol (design §5.4).
@@ -215,13 +216,13 @@ class StdioConnection(
 
     private fun enqueue(env: Envelope) {
         if (outboundCh.trySend(env.toByteArray()).isFailure) {
-            throw StarRpcException(-1, "connection closed")
+            throw StarRpcException(-1, localized("ui.connection_closed"))
         }
     }
 
     private fun closeWith(cause: Throwable?) {
         if (!closedFlag.compareAndSet(false, true)) return
-        val ex = cause as? StarRpcException ?: StarRpcException(-1, cause?.message ?: "connection closed")
+        val ex = cause as? StarRpcException ?: StarRpcException(-1, cause?.message ?: localized("ui.connection_closed"))
         pendingUnary.values.forEach { it.completeExceptionally(ex) }
         pendingStreams.values.forEach { it.close(ex) }
         pendingUnary.clear()

@@ -1,5 +1,6 @@
 package com.star.desktop.ui.sequence
 
+import com.star.desktop.i18n.localized
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -110,7 +111,7 @@ private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMo
         com.star.desktop.ui.components.StarPicker(
             options = InteractionMode.entries,
             selected = mode,
-            label = { it.displayName },
+            label = { localized(it.labelKey) },
             onSelect = { vm.setMode(it) },
             enabled = !playing,
         )
@@ -119,14 +120,14 @@ private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMo
         com.star.desktop.ui.components.StarPicker(
             options = listOf(FrameViewMode.VIEW_ORIGINAL, FrameViewMode.VIEW_PROCESSED),
             selected = viewMode, // grid 'Show' may set SUBTRACTION/VALIDATION → no pill highlights (matches old chips)
-            label = { if (it == FrameViewMode.VIEW_PROCESSED) "Processed" else "Original" },
+            label = { localized(if (it == FrameViewMode.VIEW_PROCESSED) "ui.view_processed" else "ui.view_original") },
             onSelect = { vm.setViewMode(it) },
             enabled = !playing,
             isEnabled = { it in available },
         )
         if (mode == InteractionMode.EDIT) {
             val painting by vm.horizonPaintMode.collectAsState()
-            Chip("Paint Horizon", selected = painting) { vm.toggleHorizonPaint() }
+            Chip(localized("ui.paint_horizon_reference"), selected = painting) { vm.toggleHorizonPaint() }
         }
         // No Align chip here: the alignment window is already reachable from the Window menu
         // (StarMenuBar's "ui.alignment_2" item), so a duplicate top-bar button just adds confusion.

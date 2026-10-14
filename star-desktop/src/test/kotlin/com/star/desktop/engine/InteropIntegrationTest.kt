@@ -1613,4 +1613,29 @@ class InteropIntegrationTest {
             tmp.deleteRecursively()
         }
     }
+
+    /** H6: a language picked while the engine runs reaches it, so what it says (warnings, errors) follows; asking again with no language changes nothing. */
+    @Test
+    fun changingTheLanguageReachesTheEngine() {
+        if (!runProcess || stardPath() == null) {
+            println("[skip] changingTheLanguageReachesTheEngine — set -Dstar.it.process=true -Dstar.stard.path=<stard>")
+            return
+        }
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob())
+            com.star.desktop.i18n.Strings.setOverride("en")
+            val engine = EngineState(scope)
+            assertTrue(engine.start(), "engine failed to start: ${engine.status.value}")
+            try {
+                val client = engine.client ?: error("no client after start")
+                assertEquals("en", client.hello("2.0.0", "").locale, "the language the engine started in")
+                com.star.desktop.i18n.Strings.setOverride("de")
+                engine.announceLanguage()
+                assertEquals("de", client.hello("2.0.0", "").locale, "the engine was not told the language changed")
+            } finally {
+                com.star.desktop.i18n.Strings.setOverride(null)
+                engine.shutdown()
+            }
+        }
+    }
 }

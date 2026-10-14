@@ -1,5 +1,6 @@
 package com.star.desktop.data
 
+import com.star.desktop.i18n.localized
 import com.star.desktop.engine.StarClient
 import com.star.desktop.engine.StarRpcException
 import com.star.proto.CleanMethod
@@ -16,7 +17,7 @@ import com.star.proto.PreviewSize
  */
 class FrameRepository(private val clientProvider: () -> StarClient?) {
 
-    private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, "engine not connected")
+    private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, localized("ui.engine_not_connected"))
 
     suspend fun info(sessionId: String, frameIndex: Int): FrameInfo = c().getFrame(sessionId, frameIndex)
 

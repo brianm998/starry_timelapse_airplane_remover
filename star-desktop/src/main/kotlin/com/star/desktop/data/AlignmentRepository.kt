@@ -1,5 +1,6 @@
 package com.star.desktop.data
 
+import com.star.desktop.i18n.localized
 import com.star.desktop.engine.StarClient
 import com.star.desktop.engine.StarRpcException
 import com.star.proto.AlignmentInfo
@@ -8,7 +9,7 @@ import com.star.proto.AlignmentSequence
 /** Read-only alignment diagnostics for the Alignment window. */
 class AlignmentRepository(private val clientProvider: () -> StarClient?) {
 
-    private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, "engine not connected")
+    private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, localized("ui.engine_not_connected"))
 
     /** Whole-sequence alignment info (one round-trip). Null if not available yet. */
     suspend fun sequence(sessionId: String, includeHomography: Boolean = false, includePreviews: Boolean = false): AlignmentSequence? =

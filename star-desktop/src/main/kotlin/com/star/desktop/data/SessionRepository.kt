@@ -1,5 +1,6 @@
 package com.star.desktop.data
 
+import com.star.desktop.i18n.localized
 import com.star.desktop.engine.StarClient
 import com.star.desktop.engine.StarRpcException
 import com.star.proto.CleanMethod
@@ -26,7 +27,7 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
     val sessionId: String? get() = _session.value?.sessionId
 
     private fun client(): StarClient =
-        clientProvider() ?: throw StarRpcException(-1, "engine not connected")
+        clientProvider() ?: throw StarRpcException(-1, localized("ui.engine_not_connected"))
 
     suspend fun openSequence(dir: String, initialConfig: Config = defaultInitialConfig()): SessionInfo =
         client().openSequence(dir, initialConfig).also { _session.value = it }
@@ -69,7 +70,7 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
         }
 
     private fun requireSession(): String =
-        sessionId ?: throw StarRpcException(-1, "no open session")
+        sessionId ?: throw StarRpcException(-1, localized("ui.no_session_is_open"))
 
     companion object {
         /**

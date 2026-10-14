@@ -88,35 +88,31 @@ private fun StartupCard(content: @Composable () -> Unit) {
 
 @Composable
 private fun HorizonPrompt(app: AppViewModel) {
-    Title("Does this video include a horizon?")
+    Title(localized("ui.does_this_video_include_a_horizon"))
     AnswerRow(advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton("No") { app.startupAnswerHorizon(false) }
-        PrimaryButton("Yes") { app.startupAnswerHorizon(true) }
+        SecondaryButton(localized("ui.no")) { app.startupAnswerHorizon(false) }
+        PrimaryButton(localized("ui.yes")) { app.startupAnswerHorizon(true) }
     }
 }
 
 @Composable
 private fun MovingPrompt(app: AppViewModel) {
-    Title("Was the camera moving during this video")
-    Title("or", small = true)
-    Title("was it stationary on a tripod the entire time?")
+    Title(localized("ui.was_the_camera_moving_during_this_video"))
+    Title(localized("ui.or"), small = true)
+    Title(localized("ui.was_it_stationary_on_a_tripod_the_entire"))
     AnswerRow(back = { app.startupGoBack(StartupStep.MOVING) }, advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton("Static") { app.startupAnswerMoving(false) }
-        PrimaryButton("Moving") { app.startupAnswerMoving(true) }
+        SecondaryButton(localized("ui.static")) { app.startupAnswerMoving(false) }
+        PrimaryButton(localized("ui.moving")) { app.startupAnswerMoving(true) }
     }
 }
 
 @Composable
 private fun SelectHorizonPrompt(app: AppViewModel) {
-    Title("Do you want to select the horizon yourself?")
-    Body(
-        "Star lets you tell it where the horizon is. If you spend a minute or two selecting and " +
-            "refining the horizon yourself now, you will speed up Star's processing and avoid horizon-" +
-            "detection errors.",
-    )
+    Title(localized("ui.do_you_want_to_select_the_horizon_yourself"))
+    Body(localized("ui.star_allows_you_to_tell_it_where_the_horizon"))
     AnswerRow(back = { app.startupGoBack(StartupStep.SELECT_HORIZON) }) {
-        SecondaryButton("No") { app.startupAnswerSelectHorizon(false) }
-        PrimaryButton("Yes") { app.startupAnswerSelectHorizon(true) }
+        SecondaryButton(localized("ui.no")) { app.startupAnswerSelectHorizon(false) }
+        PrimaryButton(localized("ui.yes")) { app.startupAnswerSelectHorizon(true) }
     }
 }
 
@@ -129,31 +125,24 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
     val maxCount = app.startupFrameCount()
     var count by remember { mutableStateOf(app.preferredHorizonCount()) }
 
-    Title("Do you want to select the horizons yourself?")
-    Body(
-        "Star lets you tell it where the horizon is for specific frames of this moving video. If you " +
-            "define horizons on evenly-spaced frames now, you will speed up Star's processing and avoid " +
-            "horizon-detection errors. Star will use these painted frames as references for all frames in " +
-            "the sequence.",
-    )
+    Title(localized("ui.do_you_want_to_select_the_horizons_yourself"))
+    Body(localized("ui.star_allows_you_to_tell_it_where_the_horizon_2"))
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         BackButton { app.startupGoBack(StartupStep.SELECT_MOVING_HORIZONS) }
         Spacer(Modifier.weight(1f))
-        SecondaryButton("No") { app.startupAnswerSelectHorizon(false) }
+        SecondaryButton(localized("ui.no")) { app.startupAnswerSelectHorizon(false) }
         Spacer(Modifier.width(28.dp))
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // every step records the preference: only a user change reaches this callback
-            Stepper("Define $count ${horizonWord(count)}", count, 1, maxCount) {
+            Stepper(localized(if (count == 1) "ui.define_n_horizons_one" else "ui.define_n_horizons", count), count, 1, maxCount) {
                 count = it
                 app.recordHorizonCount(it)
             }
-            PrimaryButton("Yes, select $count ${horizonWord(count)}") { app.startMovingHorizonStartupFlow(count) }
+            PrimaryButton(localized(if (count == 1) "ui.select_n_horizons_one" else "ui.select_n_horizons", count)) { app.startMovingHorizonStartupFlow(count) }
         }
         Spacer(Modifier.weight(1f))
     }
 }
-
-private fun horizonWord(count: Int) = if (count == 1) "horizon" else "horizons"
 
 @Composable
 private fun RemovalPrompt(app: AppViewModel) {
@@ -163,11 +152,8 @@ private fun RemovalPrompt(app: AppViewModel) {
     var cars by remember { mutableStateOf(true) }
     val cleanMethod = removalCleanMethod(airplanes, satellites, meteors)
 
-    Title("What do you want Star to remove?")
-    Body(
-        "Star can remove some or all of these from this video. The choice here is the default for all " +
-            "frames, and can later be changed frame by frame.",
-    )
+    Title(localized("ui.what_do_you_want_star_to_remove"))
+    Body(localized("ui.star_can_remove_some_or_all_of_these_things"))
     HorizontalDivider(color = StarColors.cellDefault)
     Row(
         Modifier.fillMaxWidth(),
@@ -176,10 +162,10 @@ private fun RemovalPrompt(app: AppViewModel) {
     ) {
         Text(localized("ui.star_should_remove"), color = StarColors.textPrimary, fontSize = 15.sp)
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            ToggleRow("Airplanes", airplanes) { airplanes = it }
-            ToggleRow("Satellites", satellites) { satellites = it }
-            ToggleRow("Meteors", meteors) { meteors = it }
-            ToggleRow("Cars", cars) { cars = it }
+            ToggleRow(localized("ui.airplanes"), airplanes) { airplanes = it }
+            ToggleRow(localized("ui.satellites"), satellites) { satellites = it }
+            ToggleRow(localized("ui.meteors"), meteors) { meteors = it }
+            ToggleRow(localized("ui.cars"), cars) { cars = it }
         }
     }
     HorizontalDivider(color = StarColors.cellDefault)
@@ -188,8 +174,8 @@ private fun RemovalPrompt(app: AppViewModel) {
     KeypointDivisorSection(app)
     HorizontalDivider(color = StarColors.cellDefault)
     AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton("Close") { app.dismissStartup() }
-        PrimaryButton("Start Processing") { app.startupStartProcessing(cleanMethod, allowEarthAlignment = cars) }
+        SecondaryButton(localized("ui.close")) { app.dismissStartup() }
+        PrimaryButton(localized("ui.start_processing")) { app.startupStartProcessing(cleanMethod, allowEarthAlignment = cars) }
     }
 }
 
@@ -344,12 +330,14 @@ private fun SecondaryButton(text: String, onClick: () -> Unit) {
 
 @Composable
 private fun AdvancedButton(onClick: () -> Unit) {
-    Column(
-        Modifier.clip(StarShapes.card).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("⚙", color = StarColors.textSecondary, fontSize = 30.sp)
-        Text(localized("ui.advanced"), color = StarColors.textSecondary, fontSize = 11.sp)
+    HoverTip(localized("ui.show_advanced_settings")) {
+        Column(
+            Modifier.clip(StarShapes.card).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("⚙", color = StarColors.textSecondary, fontSize = 30.sp)
+            Text(localized("ui.advanced"), color = StarColors.textSecondary, fontSize = 11.sp)
+        }
     }
 }
 
@@ -386,15 +374,10 @@ private fun removalCleanMethod(airplanes: Boolean, satellites: Boolean, meteors:
     else -> CleanMethod.CLEAN_AUTOMATIC_TRUE                               // satellite/meteor-centric
 }
 
-private fun removalDescription(method: CleanMethod): String = when (method) {
-    CleanMethod.CLEAN_AUTOMATIC ->
-        "Star will run in automatic mode, replacing all bad pixels. If everything goes well it will " +
-            "not require any per-frame attention."
-    CleanMethod.CLEAN_AUTOMATIC_TRUE ->
-        "Star will run in auto mode, replacing all bad pixels, then do further processing so you can " +
-            "select removed pixels to return to their original state. Star cannot yet tell airplanes, " +
-            "satellites and meteors apart, so you will review each frame."
-    else ->
-        "Star will run in selective mode, analyzing each frame for bad signals and trying to categorize " +
-            "them automatically. The initial results may need some frame-by-frame attention."
-}
+private fun removalDescription(method: CleanMethod): String = localized(
+    when (method) {
+        CleanMethod.CLEAN_AUTOMATIC -> "ui.mode_desc_automatic"
+        CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.mode_desc_auto_selective"
+        else -> "ui.mode_desc_selective"
+    },
+)

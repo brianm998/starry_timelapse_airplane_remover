@@ -177,7 +177,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
         if (result != null && result.any { it >= 0 }) {
             state.transitionToRefinement(result)
         } else {
-            errorText = "Horizon detection failed — adjust the band and try again"
+            errorText = localized("ui.horizon_detection_failed_adjust_the_band_and_try_again")
             state.phase = HorizonPhase.BAND_SELECTION
         }
     }
@@ -202,13 +202,13 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             } else {
                 // Show the horizon the solver last gave, not the stroke's optimistic nudge that it did not confirm.
                 state.restoreSolvedHorizon()
-                errorText = "Refinement failed — try another stroke"
+                errorText = localized("ui.refinement_failed_try_another_stroke")
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Throwable) {
             state.restoreSolvedHorizon()
-            errorText = "Refinement failed — try another stroke"
+            errorText = localized("ui.refinement_failed_try_another_stroke")
         } finally {
             refining = max(0, refining - 1)
         }
@@ -576,19 +576,8 @@ private fun HorizonInstructionTip(prefs: com.star.desktop.data.LocalPreferences,
     ) {
         Text(localized("ui.selecting_the_horizon_with_star_is_easy"), color = Color.White, fontSize = 15.sp)
         Text(
-            (if (isMoving) {
-                "For a moving video like this, define the horizon on several evenly-spaced frames; Star uses " +
-                    "them as references for the whole sequence. "
-            } else {
-                "For a static video like this, pick any frame and Star applies that horizon to the whole " +
-                    "sequence. "
-            }) +
-                "If this frame doesn't show the horizon well, scroll to a better one first. Then brush over " +
-                "the horizon so the selected area covers the horizon line. Once you've selected across the " +
-                "full width, Star detects the sky automatically. If it looks right, hit " +
-                (if (isMoving) "Next/Continue" else "Continue") +
-                ". Otherwise use the Sky and Ground brushes to add to or remove from the selection. Use the '[' and ']' " +
-                "keys (or the − / + buttons) to shrink and enlarge the brush.",
+            localized(if (isMoving) "ui.horizon_painter_instructions_moving" else "ui.horizon_painter_instructions_static") + "\n\n" +
+                localized("ui.horizon_painter_instructions_brushing"),
             color = StarColors.textSecondary, fontSize = 12.sp,
         )
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
@@ -694,7 +683,7 @@ private fun HorizonControlBar(
                     enabled = canSave,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     onClick = onContinue,
-                ) { Text(if (hasMore) "Next" else "Continue") }
+                ) { Text(localized(if (hasMore) "ui.next" else "ui.continue")) }
             } else {
                 Button(
                     enabled = canSave,

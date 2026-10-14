@@ -1,5 +1,6 @@
 package com.star.desktop.domain
 
+import com.star.desktop.i18n.localized
 import com.star.proto.VideoCapabilities
 import java.io.File
 import java.util.Locale
@@ -36,9 +37,9 @@ object RenderVideo {
         val hours = total / 3600
         val minutes = total % 3600 / 60
         val parts = ArrayList<String>()
-        if (hours > 0) parts += "${hours}h"
-        if (minutes > 0 || hours > 0) parts += "${minutes}m"
-        parts += "${total % 60}s"
+        if (hours > 0) parts += localized("duration.hours_minutes", hours, minutes)
+        else if (minutes > 0) parts += localized("duration.minutes", minutes)
+        parts += localized("duration.seconds", total % 60)
         return parts.joinToString(" ")
     }
 

@@ -1,6 +1,8 @@
 package com.star.desktop.engine
 
 import com.star.desktop.i18n.Strings
+import com.star.desktop.i18n.localized
+import com.star.desktop.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import com.star.proto.Warning
@@ -22,7 +24,8 @@ sealed interface EngineStatus {
     data object Disconnected : EngineStatus
     data object Connecting : EngineStatus
     data class Connected(val daemonVersion: String, val scratchDir: String) : EngineStatus
-    data class Failed(val message: String) : EngineStatus
+    /** The engine is gone: [message] is the whole reason (for the overlay and a bug report), [failure] the kind of end it was (for the badge). */
+    data class Failed(val message: String, val failure: EngineFailure = EngineFailure.STOPPED) : EngineStatus
 }
 
 /**
@@ -98,8 +101,10 @@ class EngineState(
                 val cause = conn.closed.await()
                 client = null
 
+                val death = awaitDeath(proc)
                 _status.value = EngineStatus.Failed(
-                    awaitDeath(proc) ?: cause?.message ?: "the engine stopped unexpectedly",
+                    death?.description ?: cause?.message ?: localized("ui.engine_death.stopped_unexpectedly"),
+                    death?.failure ?: EngineFailure.STOPPED,
                 )
             }
             true
@@ -111,7 +116,7 @@ class EngineState(
             val death = started?.let { awaitDeath(it) }
             started?.destroy() // not yet in `process`, so cleanup() would leave a live one running
             cleanup()
-            _status.value = EngineStatus.Failed(death ?: e.message ?: "failed to start engine")
+            _status.value = EngineStatus.Failed(death?.description ?: e.message ?: localized("ui.engine_death.failed_to_start"), death?.failure ?: EngineFailure.STOPPED)
             false
         }
     }
@@ -123,17 +128,31 @@ class EngineState(
      * Gives the process a moment to be reaped — the pipe closes fractionally before the exit
      * status lands. Null if it is (still) alive.
      */
-    private suspend fun awaitDeath(proc: DaemonProcess): String? {
-        var death = proc.deathDescription()
+    private suspend fun awaitDeath(proc: DaemonProcess): EngineDeath? {
+        var death = proc.death()
         if (death == null) {
             withTimeoutOrNull(2_000) {
                 while (death == null) {
                     delay(50)
-                    death = proc.deathDescription()
+                    death = proc.death()
                 }
             }
         }
         return death
+    }
+
+    /**
+     * Tell the engine the language now in use, so that what it writes (its warnings and errors) follows a change made while it is running. It is
+     * the Hello of the start again, which the daemon takes as often as it is sent; a language that could not be sent is the engine's to keep.
+     */
+    suspend fun announceLanguage() {
+        try {
+            client?.hello(clientVersion, Strings.currentCode)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("Engine") { "could not tell the engine the language: ${e.message}" }
+        }
     }
 
     /** Tear down and bring the engine back up (the app re-opens its session afterward). */

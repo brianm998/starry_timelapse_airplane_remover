@@ -1,7 +1,10 @@
 package com.star.desktop.domain
 
+import com.star.desktop.i18n.Strings
 import com.star.proto.FrameRateCaps
 import com.star.proto.VideoCapabilities
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -9,6 +12,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class RenderVideoTest {
+    @BeforeTest fun english() = Strings.setOverride("en")
+    @AfterTest fun systemLanguage() = Strings.setOverride(null)
+
     @Test fun aLengthIsHoursMinutesSecondsWithOnlyWhatIsNeeded() {
         assertEquals("0s", RenderVideo.formatLength(0.0))
         assertEquals("5s", RenderVideo.formatLength(5.4))

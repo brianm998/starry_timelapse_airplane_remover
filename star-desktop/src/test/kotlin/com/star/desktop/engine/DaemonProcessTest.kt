@@ -92,4 +92,47 @@ class DaemonProcessTest {
         assertTrue("Fatal error" in proc.logFile.readText(), "stderr not written to the engine log")
         dir.deleteRecursively()
     }
+
+    /** H6: how the engine ended is told apart by its exit status, and the badge says it in words that follow the language. */
+    @Test
+    fun theKindOfEndFollowsTheExitStatusAndIsWordedInTheLanguage() {
+        if (isWindows) {
+            println("[skip] theKindOfEndFollowsTheExitStatusAndIsWordedInTheLanguage — needs a POSIX shell to fake the daemon")
+            return
+        }
+        val expected = mapOf(
+            0 to EngineFailure.EXITED, 137 to EngineFailure.OUT_OF_MEMORY, 139 to EngineFailure.CRASHED, 132 to EngineFailure.CRASHED,
+            143 to EngineFailure.STOPPED, 7 to EngineFailure.STOPPED, 150 to EngineFailure.STOPPED,
+        )
+        for ((status, failure) in expected) {
+            val dir = Files.createTempDirectory("star-end").toFile()
+            try {
+                val fake = File(dir, "stard")
+                fake.writeText("#!/bin/sh\nexit $status\n")
+                assertTrue(fake.setExecutable(true), "could not mark fake stard executable")
+                val proc = DaemonProcess(fake.absolutePath, File(dir, "scratch").absolutePath, onStderrLine = {})
+                kotlinx.coroutines.runBlocking {
+                    proc.start(this)
+                    kotlinx.coroutines.withTimeout(10_000) { while (proc.death() == null) kotlinx.coroutines.delay(20) }
+                }
+                assertEquals(failure, proc.death()!!.failure, "exit status $status")
+            } finally {
+                dir.deleteRecursively()
+            }
+        }
+    }
+
+    @Test
+    fun everyKindOfEndHasItsOwnBadgeWordsInEveryLanguage() {
+        for (code in com.star.desktop.i18n.Strings.languages.map { it.code }) {
+            com.star.desktop.i18n.Strings.setOverride(code)
+            try {
+                val words = EngineFailure.entries.map { com.star.desktop.ui.app.shortEngineFailure(it) }
+                assertEquals(words.size, words.toSet().size, "$code: two kinds of end share their words: $words")
+                for (w in words) assertTrue(!w.startsWith("ui."), "$code: a badge shows a missing key: $w")
+            } finally {
+                com.star.desktop.i18n.Strings.setOverride(null)
+            }
+        }
+    }
 }

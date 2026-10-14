@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.engine.EngineFailure
 import com.star.desktop.engine.EngineStatus
 import com.star.desktop.ui.dialogs.PromptCard
 import com.star.desktop.ui.initial.InitialView
@@ -47,7 +48,7 @@ fun StarApp(vm: AppViewModel) {
         Box(Modifier.fillMaxSize().background(StarColors.appBackground)) {
             when (val s = screen) {
                 is AppScreen.Initial -> InitialView(vm)
-                is AppScreen.Loading -> LoadingView(s.title, s.detail, s.fraction)
+                is AppScreen.Loading -> LoadingView(localized(s.titleKey), s.detail, s.fraction)
                 is AppScreen.Opening -> com.star.desktop.ui.loading.OpeningView(s.progress, onCancel = vm::cancelOpen)
                 is AppScreen.Sequence -> SequenceScreen(vm, s.vm)
             }
@@ -215,30 +216,30 @@ private fun VersionWarningBanner(message: String, onDismiss: () -> Unit, modifie
 /**
  * The engine-failure reason condensed to fit a badge.
  *
- * [DaemonProcess.deathDescription] returns a full sentence plus, where there was one, the
- * daemon's last meaningful stderr line. That belongs in the overlay; the badge needs three or
- * four words, and the distinction that matters most at a glance is "killed" versus "stopped".
+ * [DaemonProcess.deathDescription] returns a full sentence plus, where there was one, the daemon's last meaningful stderr line. That belongs
+ * in the overlay; the badge needs three or four words, and the distinction that matters most at a glance is "killed" versus "stopped".
  */
-internal fun shortEngineFailure(message: String): String = when {
-    message.contains("out of memory") -> "engine killed: out of memory"
-    message.contains("SIGKILL") -> "engine killed"
-    message.contains("crashed") -> "engine crashed"
-    message.contains("exited normally") -> "engine exited"
-    else -> "engine stopped"
-}
+internal fun shortEngineFailure(failure: EngineFailure): String = localized(
+    when (failure) {
+        EngineFailure.OUT_OF_MEMORY -> "ui.engine_badge.out_of_memory"
+        EngineFailure.CRASHED -> "ui.engine_badge.crashed"
+        EngineFailure.EXITED -> "ui.engine_badge.exited"
+        EngineFailure.STOPPED -> "ui.engine_badge.stopped"
+    },
+)
 
 @Composable
 fun EngineBadge(vm: AppViewModel, modifier: Modifier = Modifier) {
     val status by vm.engineStatus.collectAsState()
     val (color, label) = when (val s = status) {
-        is EngineStatus.Connected -> StarColors.green to "engine ${s.daemonVersion}"
-        EngineStatus.Connecting -> StarColors.yellow to "connecting…"
-        EngineStatus.Disconnected -> StarColors.gray to "disconnected"
+        is EngineStatus.Connected -> StarColors.green to localized("ui.engine_badge.connected", s.daemonVersion)
+        EngineStatus.Connecting -> StarColors.yellow to localized("ui.engine_badge.connecting")
+        EngineStatus.Disconnected -> StarColors.gray to localized("ui.engine_badge.disconnected")
         // The badge has room for a few words, not a sentence, so it stays short — but the
         // reason is no longer thrown away: it is in the tooltip here and in full in the
         // engine-down overlay. Discarding `s.message` for a literal was why a daemon killed
         // for memory and one that quit cleanly looked identical.
-        is EngineStatus.Failed -> StarColors.red to shortEngineFailure(s.message)
+        is EngineStatus.Failed -> StarColors.red to shortEngineFailure(s.failure)
     }
     androidx.compose.foundation.layout.Row(
         verticalAlignment = Alignment.CenterVertically,

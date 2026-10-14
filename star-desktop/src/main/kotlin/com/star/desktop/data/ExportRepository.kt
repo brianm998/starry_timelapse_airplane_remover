@@ -1,5 +1,6 @@
 package com.star.desktop.data
 
+import com.star.desktop.i18n.localized
 import com.star.desktop.engine.StarClient
 import com.star.desktop.engine.StarRpcException
 import com.star.proto.ProgressEvent
@@ -14,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
  */
 class ExportRepository(private val clientProvider: () -> StarClient?) {
 
-    private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, "engine not connected")
+    private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, localized("ui.engine_not_connected"))
 
     /** The codec→encoder→{pixel format, muxer} validity graph for the Render Video dialog. */
     suspend fun capabilities(): VideoCapabilities = c().getVideoCapabilities()

@@ -48,6 +48,7 @@ import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import java.awt.datatransfer.DataFlavor
 import java.io.File
+import com.star.desktop.engine.EngineStatus
 import com.star.desktop.i18n.localized
 
 /** The startup screen (macOS `StartupView`/`InitialView`): open actions, a drop zone, recent files. */
@@ -63,8 +64,12 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(20.dp),
                 modifier = Modifier.widthIn(max = 560.dp).padding(40.dp),
             ) {
-                Text("Star", color = StarColors.textPrimary, fontSize = 40.sp, fontWeight = FontWeight.Light)
-                Text(localized("ui.nighttime_timelapse_airplane_remover"), color = StarColors.textSecondary, fontSize = 13.sp)
+                // The version is the engine's, which is Star's (macOS shows its own); until the engine has said, the heading waits.
+                val engineStatus by vm.engineStatus.collectAsState()
+                (engineStatus as? EngineStatus.Connected)?.let {
+                    Text(localized("ui.welcome_to_star", it.daemonVersion), color = StarColors.textPrimary, fontSize = 32.sp, fontWeight = FontWeight.Light)
+                }
+                Text(localized("ui.the_starry_timelapse_airplane_remover"), color = StarColors.textSecondary, fontSize = 16.sp)
                 OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.about_star")) }
 
                 DropZone(vm = vm, onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
