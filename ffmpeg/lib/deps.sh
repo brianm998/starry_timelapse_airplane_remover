@@ -163,7 +163,17 @@ build_ffmpeg() {
     rm -rf "$build"
     mkdir -p "$build"
     cd "$build"
-    "$SRC_DIR/ffmpeg/configure" --prefix="${FFMPEG_PREFIX:-$PREFIX}" "${FFMPEG_ARGS[@]}"
+    if ! "$SRC_DIR/ffmpeg/configure" --prefix="${FFMPEG_PREFIX:-$PREFIX}" "${FFMPEG_ARGS[@]}"; then
+        # configure's own message is only "x265 not found"; the reason is in config.log, which
+        # is gone with the work tree, so put the end of it (the failed probe) and the pkg-config
+        # view of the codecs where the CI log keeps it.
+        echo "---- tail of ffbuild/config.log ----"
+        tail -n 60 ffbuild/config.log || true
+        echo "---- pkg-config view of x265 ----"
+        cat "$PREFIX/lib/pkgconfig/x265.pc" || true
+        pkg-config --static --libs x265 || true
+        return 1
+    fi
     make -j"$JOBS"
     make install
 }
