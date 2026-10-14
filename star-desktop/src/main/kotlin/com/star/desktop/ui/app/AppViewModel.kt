@@ -479,6 +479,9 @@ class AppViewModel(
     fun toggleAlignmentWindow() { _showAlignmentWindow.value = !_showAlignmentWindow.value }
     fun closeAlignmentWindow() { _showAlignmentWindow.value = false }
 
+    /** Keeps the machine from sleeping while a sequence is open; a replacement can be given for a test. */
+    internal var sleepInhibitor: com.star.desktop.util.SleepInhibitor = com.star.desktop.util.SleepInhibitor()
+
     private val _showDebugWindow = MutableStateFlow(false)
     val showDebugWindow: StateFlow<Boolean> = _showDebugWindow.asStateFlow()
     fun toggleDebugWindow() { _showDebugWindow.value = !_showDebugWindow.value }
@@ -1002,6 +1005,7 @@ class AppViewModel(
      * uses). Waits a few seconds at most, and goes on without it if the engine does not answer.
      */
     private fun quitNow() {
+        sleepInhibitor.release()
         scope.launch {
             withTimeoutOrNull(QUIT_WAIT_MS) { runCatching { shutdown() } }
             onQuit()
@@ -1032,6 +1036,7 @@ class AppViewModel(
      * startup answers, the version warning) so the next session starts clean.
      */
     private fun teardownSequence() {
+        sleepInhibitor.release()
         currentSequence?.close()
         currentSequence = null
         sessionScope?.cancel()
@@ -1176,6 +1181,8 @@ class AppViewModel(
         svm.openOutlierWindow = { _showOutlierWindow.value = true }
         currentSequence = svm
         _screen.value = AppScreen.Sequence(svm)
+        // The machine is not to fall asleep under a long run for as long as a sequence is open (macOS does the same).
+        sleepInhibitor.acquire()
         // Fresh source → walk the startup prompts (skipped for config resume + dev auto-open hooks).
         if (promptStartup && autoMode == null) {
             _startupStep.value = StartupStep.HORIZON
