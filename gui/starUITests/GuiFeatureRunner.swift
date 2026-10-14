@@ -80,6 +80,16 @@ final class GuiFeatureRunner {
         e.click()
     }
 
+    /// Clicks the element; if it exists but cannot be hit (on a small display the sheet's lower buttons can sit below the
+    /// screen's edge, as on hosted runners), presses Return instead, which is that button's default action.
+    private func activateDefault(_ identifier: String, timeout: TimeInterval = 120) throws {
+        let e = element(identifier)
+        guard e.waitForExistence(timeout: timeout) else {
+            throw RunnerError("\(identifier) did not appear within \(Int(timeout))s\n\(app.debugDescription)")
+        }
+        if e.isHittable { e.click() } else { app.typeKey(.return, modifierFlags: []) }
+    }
+
     /// Polls `condition` until it holds. Real-time waits only, never a fixed sleep.
     private func waitFor(_ what: String, timeout: TimeInterval, detail: () -> String = { "" }, _ condition: () -> Bool) throws {
         let deadline = Date().addingTimeInterval(timeout)
@@ -125,7 +135,7 @@ final class GuiFeatureRunner {
         try tap("startup.horizon.yes")
         try tap("startup.moving.static")
         try tap("startup.selecthorizon.no")
-        try tap("startup.removal.start")
+        try activateDefault("startup.removal.start")
         // A user who chose "don't ask again" skips this prompt; the run is simply already going then.
         if element("prompt.pre.no").waitForExistence(timeout: 30) { element("prompt.pre.no").click() }
 

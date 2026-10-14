@@ -520,6 +520,7 @@ struct RemovalView: View {
                 }
                   .buttonStyle(PlainButtonStyle())
                   .accessibilityIdentifier("startup.removal.start")
+                  .keyboardShortcut(.defaultAction)
                   .fixedSize(horizontal: true, vertical: true)
                 Spacer()
                 
