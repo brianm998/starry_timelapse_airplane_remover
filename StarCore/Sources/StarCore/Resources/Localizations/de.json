@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Aktuelles Bild verarbeiten",
   "ui.process_frames": "Bilder verarbeiten",
   "ui.process_frames_from_here_to_the_end": "Bilder von hier bis zum Ende verarbeiten",
+  "ui.process_n_new_only": "{0} verarbeiten (nur neue)",
   "ui.process_now": "Jetzt verarbeiten",
   "ui.process_remaining": "Restliche verarbeiten",
   "ui.process_the_frames_that_are_not_finished": "Die noch nicht fertigen Bilder verarbeiten. Bereits auf der Festplatte vorhandene Arbeit wird weiterverwendet.",

@@ -596,6 +596,7 @@
   "ui.process_current_frame": "現在のフレームを処理",
   "ui.process_frames": "フレームを処理",
   "ui.process_frames_from_here_to_the_end": "ここから最後までのフレームを処理",
+  "ui.process_n_new_only": "{0}を処理（未処理のみ）",
   "ui.process_now": "今すぐ処理",
   "ui.process_remaining": "残りを処理",
   "ui.process_the_frames_that_are_not_finished": "まだ完了していないフレームを処理します。ディスク上にある作業結果は再利用されます。",

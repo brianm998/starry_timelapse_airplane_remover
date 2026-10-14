@@ -190,6 +190,9 @@ class SequenceViewModel(
     val frameStates: StateFlow<Map<Int, FrameProcessingState>> = processing.frameStates
     val isProcessing: StateFlow<Boolean> = processing.processing
 
+    /** Whether each frame's outliers are loading (1) or in memory (2), as the daemon reports it; a frame not listed has them on disk. */
+    val outlierLoadState: StateFlow<Map<Int, Int>> = processing.outlierLoadState
+
     /** Each frame's stage of being saved after an edit (0 not saving, 1 purgatory, 2 waiting, 3 saving): see [com.star.desktop.domain.SavingCounts]. */
     val savingState: StateFlow<Map<Int, Int>> = processing.savingState
     val sequenceState: StateFlow<String?> = processing.sequenceState
@@ -945,10 +948,13 @@ class SequenceViewModel(
     }
 
     /** Preview path for [index] in [mode], falling back through the other view modes. Null if none exist. */
-    suspend fun previewRefPath(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL): String? {
+    suspend fun previewRefPath(
+        index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL,
+        size: com.star.proto.PreviewSize = com.star.proto.PreviewSize.PREVIEW_SIZE_PREVIEW,
+    ): String? {
         val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
         for (m in order) {
-            frames.previewPath(sessionId, index, m)?.let {
+            frames.previewPath(sessionId, index, m, size)?.let {
                 Log.d("Sequence") { "previewRefPath(frame=$index): resolved via $m -> ${it.path}" }
                 return it.path
             }
@@ -957,8 +963,13 @@ class SequenceViewModel(
         return null
     }
 
-    suspend fun loadThumb(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL): ImageBitmap? =
-        previewRefPath(index, mode)?.let { imageCache.load(it, index) }
+    /**
+     * A small picture of frame [index]; the daemon's thumbnail size when [thumbnail] (the filmstrip's cells are about a hundred pixels
+     * wide, and a full preview of each is many times the bytes), else the preview.
+     */
+    suspend fun loadThumb(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL, thumbnail: Boolean = false): ImageBitmap? =
+        previewRefPath(index, mode, if (thumbnail) com.star.proto.PreviewSize.PREVIEW_SIZE_THUMBNAIL else com.star.proto.PreviewSize.PREVIEW_SIZE_PREVIEW)
+            ?.let { imageCache.load(it, index) }
 
     /** Per-frame status/counts/clean-method for the grid header & right panel (`Frame.Get`). */
     suspend fun frameInfo(index: Int): com.star.proto.FrameInfo? =

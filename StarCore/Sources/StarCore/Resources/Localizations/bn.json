@@ -596,6 +596,7 @@
   "ui.process_current_frame": "বর্তমান ফ্রেম প্রক্রিয়া করুন",
   "ui.process_frames": "ফ্রেম প্রক্রিয়া করুন",
   "ui.process_frames_from_here_to_the_end": "এখান থেকে শেষ পর্যন্ত ফ্রেম প্রক্রিয়া করুন",
+  "ui.process_n_new_only": "{0} প্রক্রিয়া করুন (শুধু নতুন)",
   "ui.process_now": "এখনই প্রক্রিয়া করুন",
   "ui.process_remaining": "বাকিগুলি প্রক্রিয়া করুন",
   "ui.process_the_frames_that_are_not_finished": "যে ফ্রেমগুলি এখনও শেষ হয়নি সেগুলি প্রক্রিয়া করুন। ডিস্কে থাকা কাজ পুনরায় ব্যবহার করা হয়।",

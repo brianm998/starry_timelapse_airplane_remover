@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Processar o quadro atual",
   "ui.process_frames": "Processar quadros",
   "ui.process_frames_from_here_to_the_end": "Processar os quadros daqui até o fim",
+  "ui.process_n_new_only": "Processar {0} (somente novos)",
   "ui.process_now": "Processar agora",
   "ui.process_remaining": "Processar os restantes",
   "ui.process_the_frames_that_are_not_finished": "Processar os quadros que ainda não estão prontos. O trabalho já em disco é reaproveitado.",

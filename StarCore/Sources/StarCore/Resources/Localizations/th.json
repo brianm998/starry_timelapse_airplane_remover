@@ -596,6 +596,7 @@
   "ui.process_current_frame": "ประมวลผลเฟรมปัจจุบัน",
   "ui.process_frames": "ประมวลผลเฟรม",
   "ui.process_frames_from_here_to_the_end": "ประมวลผลเฟรมตั้งแต่ตรงนี้จนจบ",
+  "ui.process_n_new_only": "ประมวลผล {0} (เฉพาะที่ใหม่)",
   "ui.process_now": "ประมวลผลเดี๋ยวนี้",
   "ui.process_remaining": "ประมวลผลส่วนที่เหลือ",
   "ui.process_the_frames_that_are_not_finished": "ประมวลผลเฟรมที่ยังไม่เสร็จ งานที่มีอยู่บนดิสก์แล้วจะถูกนำมาใช้ซ้ำ",

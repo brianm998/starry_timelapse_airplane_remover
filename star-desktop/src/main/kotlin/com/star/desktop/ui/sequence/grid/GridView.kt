@@ -60,6 +60,7 @@ import com.star.proto.FrameViewMode
 import com.star.proto.GetHorizonOverlayResponse
 import com.star.proto.HorizonOverlayKind
 import com.star.proto.ReprocessingType
+import com.star.desktop.ui.sequence.frameCellClicks
 
 /** Grid mode (macOS `GridView`): Lightroom-style thumbnail grid with per-cell status, sized by the scale slider. */
 @OptIn(ExperimentalFoundationApi::class)
@@ -129,8 +130,6 @@ private fun GridCell(
             vm.horizonOverlay(index, 256, h)
         } else null
     }
-    var mods by remember { mutableStateOf<PointerKeyboardModifiers?>(null) }
-
     val reprocessItems = {
         listOf(
             ContextMenuItem("Process (new only)") { vm.reprocessSelected(ReprocessingType.REPROCESS_NONE) },
@@ -159,18 +158,7 @@ private fun GridCell(
             .clip(StarShapes.gridCell)
             .background(bg)
             .then(borderMod)
-            .onPointerEvent(PointerEventType.Press) { mods = it.keyboardModifiers }
-            .combinedClickable(
-                onClick = {
-                    val m = mods
-                    when {
-                        m?.isShiftPressed == true -> vm.select(index, range = true)
-                        m?.isCtrlPressed == true || m?.isMetaPressed == true -> vm.select(index, additive = true)
-                        else -> vm.select(index)
-                    }
-                },
-                onDoubleClick = { vm.setCurrentIndex(index); vm.select(index); vm.setMode(InteractionMode.EDIT) },
-            )
+            .frameCellClicks(vm, index, onDoubleClick = { vm.setCurrentIndex(index); vm.select(index); vm.setMode(InteractionMode.EDIT) })
             .padding(4.dp),
     ) {
         // Header: 0-based frame number · outlier dots · clean-method icon.

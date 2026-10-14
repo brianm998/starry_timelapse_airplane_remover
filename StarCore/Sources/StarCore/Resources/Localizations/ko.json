@@ -596,6 +596,7 @@
   "ui.process_current_frame": "현재 프레임 처리",
   "ui.process_frames": "프레임 처리",
   "ui.process_frames_from_here_to_the_end": "여기부터 끝까지 프레임 처리",
+  "ui.process_n_new_only": "{0} 처리(새 항목만)",
   "ui.process_now": "지금 처리",
   "ui.process_remaining": "남은 항목 처리",
   "ui.process_the_frames_that_are_not_finished": "아직 완료되지 않은 프레임을 처리합니다. 디스크에 있는 작업은 재사용됩니다.",

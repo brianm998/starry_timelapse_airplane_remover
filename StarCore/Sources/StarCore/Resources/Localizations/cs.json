@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Zpracovat aktuální snímek",
   "ui.process_frames": "Zpracovat snímky",
   "ui.process_frames_from_here_to_the_end": "Zpracovat snímky odsud do konce",
+  "ui.process_n_new_only": "Zpracovat {0} (jen nové)",
   "ui.process_now": "Zpracovat nyní",
   "ui.process_remaining": "Zpracovat zbývající",
   "ui.process_the_frames_that_are_not_finished": "Zpracovat snímky, které ještě nejsou hotové. Práce již uložená na disku se využije znovu.",

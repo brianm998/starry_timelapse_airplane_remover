@@ -596,6 +596,7 @@
   "ui.process_current_frame": "موجودہ فریم پر کارروائی کریں",
   "ui.process_frames": "فریموں پر کارروائی کریں",
   "ui.process_frames_from_here_to_the_end": "یہاں سے آخر تک فریموں پر کارروائی کریں",
+  "ui.process_n_new_only": "{0} پروسیس کریں (صرف نئے)",
   "ui.process_now": "ابھی کارروائی کریں",
   "ui.process_remaining": "باقی پر کارروائی کریں",
   "ui.process_the_frames_that_are_not_finished": "جو فریم ابھی مکمل نہیں ہوئے اُن کی پروسیسنگ کریں۔ ڈسک پر موجود کام دوبارہ استعمال ہوتا ہے۔",

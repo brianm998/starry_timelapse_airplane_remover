@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Procesar el fotograma actual",
   "ui.process_frames": "Procesar fotogramas",
   "ui.process_frames_from_here_to_the_end": "Procesar los fotogramas desde aquí hasta el final",
+  "ui.process_n_new_only": "Procesar {0} (solo nuevos)",
   "ui.process_now": "Procesar ahora",
   "ui.process_remaining": "Procesar los restantes",
   "ui.process_the_frames_that_are_not_finished": "Procesar los fotogramas que aún no están terminados. El trabajo que ya está en el disco se reutiliza.",

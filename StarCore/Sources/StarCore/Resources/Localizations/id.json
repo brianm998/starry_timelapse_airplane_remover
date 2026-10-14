@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Proses bingkai saat ini",
   "ui.process_frames": "Proses bingkai",
   "ui.process_frames_from_here_to_the_end": "Proses bingkai dari sini sampai akhir",
+  "ui.process_n_new_only": "Proses {0} (hanya yang baru)",
   "ui.process_now": "Proses sekarang",
   "ui.process_remaining": "Proses sisanya",
   "ui.process_the_frames_that_are_not_finished": "Memproses bingkai yang belum selesai. Hasil kerja yang sudah ada di disk digunakan kembali.",

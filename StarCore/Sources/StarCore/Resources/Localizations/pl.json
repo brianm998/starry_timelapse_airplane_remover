@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Przetwórz bieżącą klatkę",
   "ui.process_frames": "Przetwórz klatki",
   "ui.process_frames_from_here_to_the_end": "Przetwórz klatki stąd do końca",
+  "ui.process_n_new_only": "Przetwórz {0} (tylko nowe)",
   "ui.process_now": "Przetwórz teraz",
   "ui.process_remaining": "Przetwórz pozostałe",
   "ui.process_the_frames_that_are_not_finished": "Przetwórz klatki, które nie są jeszcze gotowe. Praca zapisana już na dysku zostanie użyta ponownie.",

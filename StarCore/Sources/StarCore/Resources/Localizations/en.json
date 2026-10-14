@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Process Current Frame",
   "ui.process_frames": "Process frames",
   "ui.process_frames_from_here_to_the_end": "Process frames from here to the end",
+  "ui.process_n_new_only": "Process {0} (new only)",
   "ui.process_now": "Process Now",
   "ui.process_remaining": "Process Remaining",
   "ui.process_the_frames_that_are_not_finished": "Process the frames that are not finished yet.  Work already on disk is reused.",

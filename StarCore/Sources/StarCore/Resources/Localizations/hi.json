@@ -596,6 +596,7 @@
   "ui.process_current_frame": "वर्तमान फ़्रेम प्रसंस्कृत करें",
   "ui.process_frames": "फ़्रेम प्रसंस्कृत करें",
   "ui.process_frames_from_here_to_the_end": "यहाँ से अंत तक के फ़्रेम प्रसंस्कृत करें",
+  "ui.process_n_new_only": "{0} संसाधित करें (केवल नए)",
   "ui.process_now": "अभी प्रसंस्कृत करें",
   "ui.process_remaining": "शेष प्रसंस्कृत करें",
   "ui.process_the_frames_that_are_not_finished": "जो फ़्रेम अभी पूरे नहीं हुए उनका प्रसंस्करण करें। डिस्क पर पहले से मौजूद काम पुनः उपयोग होता है।",

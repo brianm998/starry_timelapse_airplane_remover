@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Huidig beeld verwerken",
   "ui.process_frames": "Beelden verwerken",
   "ui.process_frames_from_here_to_the_end": "De beelden van hier tot het einde verwerken",
+  "ui.process_n_new_only": "{0} verwerken (alleen nieuwe)",
   "ui.process_now": "Nu verwerken",
   "ui.process_remaining": "De rest verwerken",
   "ui.process_the_frames_that_are_not_finished": "De beelden verwerken die nog niet klaar zijn. Werk dat al op schijf staat wordt hergebruikt.",

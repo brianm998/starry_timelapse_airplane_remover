@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Обработать текущий кадр",
   "ui.process_frames": "Обработать кадры",
   "ui.process_frames_from_here_to_the_end": "Обработать кадры отсюда до конца",
+  "ui.process_n_new_only": "Обработать {0} (только новые)",
   "ui.process_now": "Обработать сейчас",
   "ui.process_remaining": "Обработать оставшиеся",
   "ui.process_the_frames_that_are_not_finished": "Обработать кадры, которые ещё не готовы. Уже сохранённая на диске работа используется повторно.",

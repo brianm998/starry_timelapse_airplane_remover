@@ -2,6 +2,8 @@ package com.star.desktop.ui.sequence
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ContextMenuArea
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -53,6 +56,8 @@ fun Filmstrip(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val current by vm.currentIndex.collectAsState()
     val selected by vm.selected.collectAsState()
     val states by vm.frameStates.collectAsState()
+    val loads by vm.outlierLoadState.collectAsState()
+    val revisions by vm.frameRevisions.collectAsState()
     val listState = rememberLazyListState()
 
     LaunchedEffect(current) {
@@ -71,19 +76,27 @@ fun Filmstrip(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 index = i,
                 isCurrent = i == current,
                 isInSelection = i != current && i in selected,
+                selectedCount = selected.size,
                 state = states[i],
+                outliersLoading = loads[i] == OUTLIERS_LOADING,
+                revision = revisions[i] ?: 0,
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FilmstripCell(
     vm: SequenceViewModel,
     index: Int,
     isCurrent: Boolean,
     isInSelection: Boolean,
+    selectedCount: Int,
     state: FrameProcessingState?,
+    outliersLoading: Boolean,
+    /** Changes when a picture of this frame is saved, so the thumbnail is fetched again. */
+    revision: Int,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
@@ -96,8 +109,8 @@ private fun FilmstripCell(
             vm.horizonOverlay(index, 128, h)
         } else null
     }
-    // Reload when the frame's processing state changes — its preview/counts may now exist.
-    LaunchedEffect(index, state) { if (thumb == null) thumb = vm.loadThumb(index) }
+    // Reload when the frame's processing state changes (its picture may exist now) and when a picture of it is saved.
+    LaunchedEffect(index, state, revision) { vm.loadThumb(index, thumbnail = true)?.let { thumb = it } }
     LaunchedEffect(index, state) { info = vm.frameInfo(index) }
 
     // The streamed state updates live during processing; `Frame.Get` is the source of truth on open
@@ -120,13 +133,15 @@ private fun FilmstripCell(
     val processingColor = if (effectiveState == FrameProcessingState.FPS_COMPLETE) StarColors.green else StarColors.gray
     val aspect = if (vm.info.imageHeight > 0) vm.info.imageWidth.toFloat() / vm.info.imageHeight else 1.5f
 
+    ContextMenuArea(items = { frameCellMenu(vm, isCurrent || isInSelection, selectedCount) }) {
+    com.star.desktop.ui.components.HoverTip(localized("ui.show_frame_n", index)) {
     Column(
         modifier = Modifier
             .width(CELL_WIDTH)
             .fillMaxHeight()
             .background(bg)
             .then(borderMod)
-            .clickable { vm.select(index) },
+            .frameCellClicks(vm, index),
     ) {
         // Top strip: frame index on the left, outlier + clean-method badges on the right.
         Row(
@@ -136,13 +151,28 @@ private fun FilmstripCell(
             Text("$index", color = StarColors.white, fontSize = 11.sp)
             Box(Modifier.weight(1f))
             val fi = info
-            if (fi != null) {
+            // While the frame's outliers load the ticks would all be zeroes that mean nothing: a spinner stands in for them (macOS).
+            if (outliersLoading) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(9.dp), color = StarColors.yellow, strokeWidth = 1.dp)
+            } else if (fi != null && fi.outliersLoaded) {
                 Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
                     if (fi.numPositiveOutliers != 0) OutlierTick(StarColors.red)
                     if (fi.numUndecidedOutliers != 0) OutlierTick(StarColors.orange)
                     if (fi.numNegativeOutliers != 0) OutlierTick(StarColors.green)
                 }
-                Box(Modifier.padding(start = 3.dp)) { CleanMethodIcon(fi.cleanMethod, processingColor, 9.dp) }
+            }
+            if (fi != null) {
+                Box(Modifier.padding(start = 3.dp)) {
+                    com.star.desktop.ui.components.HoverTip(
+                        localized(
+                            when (fi.cleanMethod) {
+                                com.star.proto.CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.this_frame_uses_auto_select"
+                                com.star.proto.CleanMethod.CLEAN_AUTOMATIC -> "ui.this_frame_uses_automatic_mode"
+                                else -> "ui.this_frame_uses_selective_mode"
+                            },
+                        ),
+                    ) { CleanMethodIcon(fi.cleanMethod, processingColor, 9.dp) }
+                }
             }
         }
 
@@ -181,7 +211,12 @@ private fun FilmstripCell(
             }
         }
     }
+    }
+    }
 }
+
+/** `outliers_loaded` event state: the frame's outliers are being read from disk. */
+private const val OUTLIERS_LOADING = 1
 
 /** A small diagonal stroke standing in for the macOS `line.diagonal` outlier indicator. */
 @Composable

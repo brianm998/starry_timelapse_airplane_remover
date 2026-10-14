@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Traiter l'image actuelle",
   "ui.process_frames": "Traiter les images",
   "ui.process_frames_from_here_to_the_end": "Traiter les images d'ici jusqu'à la fin",
+  "ui.process_n_new_only": "Traiter {0} (nouveaux seulement)",
   "ui.process_now": "Traiter maintenant",
   "ui.process_remaining": "Traiter les restantes",
   "ui.process_the_frames_that_are_not_finished": "Traiter les images qui ne sont pas encore terminées. Le travail déjà présent sur le disque est réutilisé.",

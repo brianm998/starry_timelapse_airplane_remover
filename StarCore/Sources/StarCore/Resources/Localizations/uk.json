@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Обробити поточний кадр",
   "ui.process_frames": "Обробити кадри",
   "ui.process_frames_from_here_to_the_end": "Обробити кадри звідси до кінця",
+  "ui.process_n_new_only": "Обробити {0} (лише нові)",
   "ui.process_now": "Обробити зараз",
   "ui.process_remaining": "Обробити решту",
   "ui.process_the_frames_that_are_not_finished": "Обробити кадри, які ще не готові. Уже збережена на диску робота використовується повторно.",

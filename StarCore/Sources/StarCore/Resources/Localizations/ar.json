@@ -596,6 +596,7 @@
   "ui.process_current_frame": "معالجة الإطار الحالي",
   "ui.process_frames": "معالجة الإطارات",
   "ui.process_frames_from_here_to_the_end": "عالج الإطارات من هنا حتى النهاية",
+  "ui.process_n_new_only": "معالجة {0} (الجديد فقط)",
   "ui.process_now": "عالج الآن",
   "ui.process_remaining": "معالجة المتبقي",
   "ui.process_the_frames_that_are_not_finished": "معالجة الإطارات التي لم تكتمل بعد. يُعاد استخدام العمل الموجود على القرص.",

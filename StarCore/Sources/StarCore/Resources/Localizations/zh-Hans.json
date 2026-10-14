@@ -596,6 +596,7 @@
   "ui.process_current_frame": "处理当前帧",
   "ui.process_frames": "处理帧",
   "ui.process_frames_from_here_to_the_end": "处理从这里到结尾的帧",
+  "ui.process_n_new_only": "处理 {0}（仅新的）",
   "ui.process_now": "立即处理",
   "ui.process_remaining": "处理剩余部分",
   "ui.process_the_frames_that_are_not_finished": "处理尚未完成的帧。磁盘上已有的成果会被复用。",

@@ -596,6 +596,7 @@
   "ui.process_current_frame": "Geçerli kareyi işle",
   "ui.process_frames": "Kareleri işle",
   "ui.process_frames_from_here_to_the_end": "Buradan sona kadar olan kareleri işle",
+  "ui.process_n_new_only": "{0} işle (yalnızca yeni)",
   "ui.process_now": "Şimdi işle",
   "ui.process_remaining": "Kalanları işle",
   "ui.process_the_frames_that_are_not_finished": "Henüz tamamlanmamış kareleri işle. Diskte hâlihazırda bulunan çalışma yeniden kullanılır.",
