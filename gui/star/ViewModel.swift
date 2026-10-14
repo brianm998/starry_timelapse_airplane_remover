@@ -545,7 +545,7 @@ public final class ViewModel {
                     self.isExtractingImageSequence = true
                     self.isProbingImageSequence = false
                     self.numberExtracted = currentFrame
-                    self.amountExtracted = Double(currentFrame) / Double(totalFrames)
+                    self.amountExtracted = totalFrames > 0 ? Double(currentFrame) / Double(totalFrames) : 0
 
                     // XXX make a preview here
                     /*
