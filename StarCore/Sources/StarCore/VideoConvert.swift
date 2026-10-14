@@ -232,6 +232,7 @@ private final class FFmpegRun: @unchecked Sendable {
     private let stderrCollector = StderrCollector()
     private let lock = NSLock()
     private var cancelled = false
+    private var handleOutput: @Sendable (Data) -> Void = { _ in }
 
     var wasCancelled: Bool {
         lock.lock(); defer { lock.unlock() }
@@ -256,10 +257,8 @@ private final class FFmpegRun: @unchecked Sendable {
         process.standardOutput = nil
 
         let collector = stderrCollector
-        pipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-
+        // What ffmpeg prints on stderr: kept for the error message, and the frame count in it is the progress.
+        let handle: @Sendable (Data) -> Void = { data in
             collector.append(data)
 
             if let line = String(data: data, encoding: .utf8) {
@@ -273,6 +272,12 @@ private final class FFmpegRun: @unchecked Sendable {
                     }
                 }
             }
+        }
+        handleOutput = handle
+        pipe.fileHandleForReading.readabilityHandler = { fileHandle in
+            let data = fileHandle.availableData
+            guard !data.isEmpty else { return }
+            handle(data)
         }
 
         do {
@@ -307,7 +312,10 @@ private final class FFmpegRun: @unchecked Sendable {
 
     /// Throw if ffmpeg did not end well; call once it has exited.
     func finish() throws {
+        // A short run exits having printed all its progress at the very end, which the handler may not have been given yet:
+        // stop it, and take what is left in the pipe.
         stopListening()
+        if let rest = try? pipe.fileHandleForReading.readToEnd(), !rest.isEmpty { handleOutput(rest) }
 
         if process.terminationStatus != 0 {
             let stderrMessage = String(data: stderrCollector.collectedData(), encoding: .utf8) ?? "<unreadable stderr>"

@@ -187,20 +187,15 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
             onSelect = { fvm.setCleanMethod(it) },
             modifier = Modifier.fillMaxWidth(),
         )
-        // How many neighbours this frame is star aligned against, and (for a fixed camera) merged with for the horizon: the sequence's number
-        // until the frame is given its own.
+        // How many neighbours this frame is merged with for the horizon (a fixed camera only), the sequence's number until the frame is
+        // given its own. macOS dropped the matching "align with N neighbor frames" row, so it is not here either; the daemon still
+        // takes an aligned count (Frame.SetNeighborOverride).
         val session by app.sessions.session.collectAsState()
         info?.let { i ->
-            NeighborCountEditor(
-                prefixKey = "ui.slider.align_with", suffixKey = "ui.slider.neighbor_frames",
-                count = i.alignedNeighborCount, overridden = i.alignedNeighborOverridden, max = vm.frameCount, frame = current,
-                onCommit = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_ALIGNED, it) },
-                onReset = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_ALIGNED, null) },
-            )
             if (session?.config?.tripodHeadWasMoving != true) {
                 NeighborCountEditor(
                     prefixKey = "ui.slider.static_merge", suffixKey = "ui.slider.neighbors",
-                    count = i.staticNeighborCount, overridden = i.staticNeighborOverridden, max = vm.frameCount, frame = current,
+                    count = i.staticNeighborCount, overridden = i.staticNeighborOverridden, max = vm.frameCount - 1, frame = current,
                     onCommit = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_STATIC, it) },
                     onReset = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_STATIC, null) },
                 )
