@@ -1638,4 +1638,28 @@ class InteropIntegrationTest {
             }
         }
     }
+
+    /** H7: the config the engine reports names the sequence's folder, which the window's title is made of. */
+    @Test
+    fun theOpenSessionNamesItsFolder() {
+        val seq = seqPath ?: run {
+            println("[skip] theOpenSessionNamesItsFolder — set -Dstar.it.seq=<sequence dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-title").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                assertEquals(File(seq).name, info.config.imageSequenceDirname)
+                assertEquals(File(seq).name, client.getConfig(info.sessionId).imageSequenceDirname)
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
 }

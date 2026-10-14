@@ -63,9 +63,15 @@ private fun runApp(args: Array<String>) = application {
             }
         }
     }
+    // The sequence's folder in the title while one is open; the screen is what says whether it is, the session what it is called.
+    val mainScreen by vm.screen.collectAsState()
+    val openSession by vm.sessions.session.collectAsState()
+    val mainTitle = com.star.desktop.domain.WindowTitle.of(
+        if (mainScreen is com.star.desktop.ui.app.AppScreen.Sequence) openSession?.config?.imageSequenceDirname else null,
+    )
     Window(
         onCloseRequest = vm::requestQuit,
-        title = "Star",
+        title = mainTitle,
         state = rememberWindowState(size = DpSize(1280.dp, 800.dp)),
         onKeyEvent = { handleGlobalKey(it, vm) },
     ) {

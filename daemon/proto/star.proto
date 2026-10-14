@@ -281,6 +281,9 @@ message Config {
   // Read-only: the name of the GPU the daemon's machine offers (Metal's device name on a Mac), for saying which one the GPU toggles would use. Absent
   // where there is none; a client applying a Config back must not send it on.
   optional string gpu_device_name                                      = 60;
+  // Read-only: the name of the folder the image sequence is in (StarCore Config.imageSequenceDirname), for a window to be titled by; for a video it is
+  // the name the daemon gave the frames it took out of it. A client applying a Config back must not send it on.
+  string          image_sequence_dirname                               = 61;
 }
 
 enum CleanMethod {

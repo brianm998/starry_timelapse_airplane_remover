@@ -395,6 +395,20 @@ final class MappingTests: XCTestCase {
         XCTAssertFalse(proto.starVersion.isEmpty, "the client compares this against its own")
     }
 
+    /// The folder's name is sent so a window can be titled by it (H7), and is not something a client can change by sending a config back.
+    func testTheSequenceFolderNameIsReportedAndNotApplied() {
+        var config = Config()
+        config.imageSequenceDirname = "night-sky-0413"
+        XCTAssertEqual(Mapping.protoConfig(config).imageSequenceDirname, "night-sky-0413")
+
+        var incoming = Star_V1_Config()
+        incoming.imageSequenceDirname = "something else"
+        var target = Config()
+        target.imageSequenceDirname = "night-sky-0413"
+        Mapping.applyExpertConfig(&target, from: incoming)
+        XCTAssertEqual(target.imageSequenceDirname, "night-sky-0413", "the folder is where it is, whatever a client says")
+    }
+
     /// `ignoreLowerPixels` is only written when non-zero, so a client cannot tell an explicit 0
     /// from an unset field — but 0 *is* the default ("ignore nothing"), so nothing is lost.
     /// Pinning it because the asymmetry looks like an oversight otherwise.

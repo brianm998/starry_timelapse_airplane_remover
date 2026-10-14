@@ -274,6 +274,7 @@ enum Mapping {
         out.writeOutlierGroupFiles = c.writeOutlierGroupFiles
         out.writeFramePreviewFiles = c.writeFramePreviewFiles
         out.starVersion = c.starVersion
+        out.imageSequenceDirname = c.imageSequenceDirname
         out.reprocessOnSettingsChange = c.reprocessOnSettingsChange
         out.maxMatMemoryFraction = c.maxMatMemoryFraction
         var ves = Star_V1_VideoEncodeSettings()
