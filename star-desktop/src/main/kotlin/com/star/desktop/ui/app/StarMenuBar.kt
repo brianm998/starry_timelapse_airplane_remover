@@ -53,7 +53,8 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         }
 
         Menu(localized("ui.process"), mnemonic = 'P') {
-            Item(localized("ui.process_all_frames_2"), enabled = hasSession) { svm?.processAll() }
+            // Through the app, not straight to the session: it is what asks about rendering a video before and after.
+            Item(localized("ui.process_all_frames_2"), enabled = hasSession) { app.requestProcessAll() }
             Item(localized("ui.process_frames_from_here_to_the_end"), enabled = hasSession) { svm?.processRemaining() }
             Item(localized("ui.process_current_frame"), enabled = hasSession) { svm?.processCurrent() }
             Separator()
