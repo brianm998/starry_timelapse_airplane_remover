@@ -158,6 +158,16 @@ actor Session {
     // Current config snapshot.
     func config() async -> Config { await configManager.config() }
 
+    /// The background pre-warm of thumbnails and previews (`PreviewPrewarm`), started when the session is open for a client and stopped when it closes.
+    private var previewPrewarm: Task<Void, Never>?
+
+    /// Start making the thumbnails and previews this sequence is missing, at the back of the preview queue.  Once per session.
+    func startPreviewPrewarm() {
+        guard previewPrewarm == nil, !closed, !frames.isEmpty else { return }
+        let frames = frames
+        previewPrewarm = Task.detached(priority: .utility) { await PreviewPrewarm.run(frames: frames) }
+    }
+
     /// `Sequence.GetKeypointAdvice`: whether full resolution keypoint detection suits this sequence on this machine.  Asked fresh each time, since
     /// it depends on the settings that move it (use of this Mac, concurrency).
     func keypointAdvice() async -> Star_V1_KeypointDivisorAdvice {
@@ -639,6 +649,8 @@ actor Session {
     /// next session repoints it).  Safe to call more than once.
     func close() async {
         closed = true
+        previewPrewarm?.cancel()
+        previewPrewarm = nil
         // Only a session with a run of its own has anything to stop: the frame-graph builder is
         // shared, and stopping it would also stop a run that belongs to another session.
         if activeRun != nil || stopTask != nil {

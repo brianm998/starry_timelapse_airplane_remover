@@ -454,6 +454,41 @@ class InteropIntegrationTest {
     }
 
     /**
+     * F6: a thumbnail and a preview of every frame are made in the background once a sequence is open, without anyone asking for them
+     * (they are what the grid and filmstrip draw), and asking for one meanwhile still works.
+     */
+    @Test
+    fun previewsAreMadeInTheBackgroundAfterOpen() {
+        val seq = seqPath ?: run {
+            println("[skip] previewsAreMadeInTheBackgroundAfterOpen — set -Dstar.it.seq=<sequence dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-prewarm").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                // A request meanwhile is answered: it joins the pre-warm's operation or makes its own.
+                val first = client.getFramePreview(info.sessionId, 0, com.star.proto.FrameViewMode.VIEW_ORIGINAL)
+                assertTrue(File(first.path).exists(), "an on-demand preview was not made: ${first.path}")
+
+                // Everything else appears without being asked for: a preview and a thumbnail per frame, none of them the source frames.
+                val wanted = info.frameCount * 2
+                val deadline = System.currentTimeMillis() + 120_000
+                fun made() = tmp.walkTopDown().filter { it.isFile && it.extension == "jpg" && !it.path.startsWith(seqCopy.path) }.count()
+                while (made() < wanted && System.currentTimeMillis() < deadline) Thread.sleep(250)
+                assertTrue(made() >= wanted, "only ${made()} of $wanted previews and thumbnails were made in the background")
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
+    /**
      * F3: the daemon says whether full resolution keypoint detection suits the sequence on this machine, with the numbers behind it; and a
      * divisor the client writes is the divisor in the config afterwards (sending one is also what marks it chosen).
      */

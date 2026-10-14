@@ -23,7 +23,15 @@ enum PreviewFiles {
         }
         if isStale(previewPath, madeFrom: frame.imageAccessor.nameForImage(frameIndex: frameIndex, ofType: mode, atSize: .original)) {
             Log.d("preview: frame \(frameIndex) mode \(mode) missing or out of date at \(previewPath) — generating on demand")
-            _ = try? await frame.imageAccessor.makeMissingImage(frameIndex: frameIndex, ofType: mode, andSize: size)
+            // Through the frame graph's preview queue, which holds a memory reservation for the full-size frame each one loads: a grid
+            // scrolled quickly asks for dozens at once, and made here directly they all decoded at the same moment.
+            let unit = await frame.configManager.config().workingFrameBytes
+            func make() async -> Bool {
+                await PreviewGeneration.shared.make(imageAccessor: frame.imageAccessor, frameIndex: frameIndex, mode: mode, size: size,
+                                                    workingFrameBytes: unit, urgency: .now)
+            }
+            // Stopping a run clears the queue this waits in, and with it this request, though nobody asked for that: ask again once.
+            if await !make(), !Task.isCancelled, !FileManager.default.fileExists(atPath: previewPath) { _ = await make() }
         }
         guard FileManager.default.fileExists(atPath: previewPath) else { return nil }
         var ref = Star_V1_ImageRef()
