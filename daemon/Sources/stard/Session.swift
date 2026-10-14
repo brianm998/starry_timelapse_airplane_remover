@@ -44,6 +44,15 @@ actor Session {
     /// stream that tries to attach is ended at once.
     private var closed = false
 
+    /// The horizon refinement this sequence is owed after a reference horizon was repainted (StarCore's, the
+    /// same record and rules as the macOS app's).
+    private var horizonRefinement = HorizonRefinementPlan()
+
+    /// The frames shown as waiting for it (macOS `FrameViewModel.isPendingHorizonRefinement`).  Not the plan's
+    /// own sets: a frame in a run that has been claimed stays marked until its merge completes, and one that
+    /// was never processed is unmarked as soon as the run is queued.
+    private var refinementMarks: Set<Int> = []
+
     /// Where a user's edits are written down.  StarCore's own queue, the one the macOS app uses:
     /// a frame is put in "purgatory" when it is edited, and ten seconds after the last edit its
     /// finished image and decisions are written.  Built with the frame graph because the class
@@ -180,6 +189,16 @@ actor Session {
         runGeneration += 1
         let generation = runGeneration
         activeRun = generation
+        // Before the graph is built, which surveys the disk: a horizon reference the user painted and put off
+        // applying is taken on by this run, so starting one is a way through it and not a way around it.  Over
+        // this run's own range only, so a reference whose span reaches past it stays pending for the frames
+        // it will not touch.
+        let lastFrame = frames.count - 1
+        let first = max(0, startIndex)
+        let last = endIndex.map { min($0, lastFrame) } ?? lastFrame
+        await applyPendingHorizonRefinementToRun(range: first <= last ? first...last : nil)
+        // A stop that came in while that ran has already ended this run.
+        guard activeRun == generation, !closed else { return }
         let fs = frames
         let weakSelf = WeakSessionRef(self)
         buildTask = Task {
@@ -197,11 +216,12 @@ actor Session {
     }
 
     /// The graph's completion handler.  Ignored unless `generation` is still the current run.
-    private func runCompleted(generation: Int, errors errorList: [String]) {
+    private func runCompleted(generation: Int, errors errorList: [String], whenCurrent: (() -> Void)? = nil) {
         guard activeRun == generation else {
             Log.i("stard: ignoring the completion of a stopped processing run")
             return
         }
+        whenCurrent?()
         activeRun = nil
         buildTask = nil
         if errorList.isEmpty {
@@ -232,6 +252,10 @@ actor Session {
         // From here nothing the old run reports counts, whatever order it arrives in.
         runGeneration += 1
         activeRun = nil
+        // A horizon refinement that is stopped gives back what it claimed, so it can be run again.
+        if let affected = horizonRefinement.returnInFlight() {
+            refinementMarks.formUnion(affected)
+        }
         let building = buildTask
         buildTask = nil
         let stop = Task {
@@ -282,6 +306,181 @@ actor Session {
         await stopRun(announce: false)
         await resetFrames(indices: indices, type: type)
         await startProcessing(startIndex: indices.min()!, endIndex: indices.max()!)
+    }
+
+    // MARK: - Horizon refinement
+
+    /// Whether `frameIndex` is waiting for horizon refinement.
+    func isRefinementPending(_ frameIndex: Int) -> Bool { refinementMarks.contains(frameIndex) }
+
+    /// Whether any horizon refinement is waiting (`Horizon.GetRefinementStatus`), and how many frames are marked.
+    func horizonRefinementStatus() -> (pending: Bool, markedFrames: Int) {
+        (horizonRefinement.hasPending(hasOutput: { hasHorizonOutput($0) }), refinementMarks.count)
+    }
+
+    /// A frame's `FrameInfo`, with what only the session knows.
+    func frameInfo(_ frame: FrameAirplaneRemover, outlierGroups: OutlierGroups?) async -> Star_V1_FrameInfo {
+        var info = await Mapping.frameInfo(frame: frame, outlierGroups: outlierGroups)
+        info.refinementPending = refinementMarks.contains(frame.frameIndex)
+        return info
+    }
+
+    /// Whether a frame has output the horizon went into, and so has to be rendered again when it moves.
+    private func hasHorizonOutput(_ index: Int) -> Bool {
+        guard let frame = frame(at: index) else { return false }
+        return HorizonRefinementPlan.outputTypes.contains {
+            frame.imageAccessor.imageExists(frameIndex: index, ofType: $0, atSize: .original)
+        }
+    }
+
+    /// Every frame that has a painted reference horizon, in frame order.
+    private func referenceHorizonFrameIndices() -> [Int] {
+        frames.indices.filter {
+            frames[$0].imageAccessor.imageExists(frameIndex: $0, ofType: .userHorizon, atSize: .original)
+        }
+    }
+
+    /// The reference horizon of `frameIndex` was saved (`Horizon.ReferenceUpdated`).  With `applyToNearby`, the
+    /// frames that interpolate from it are marked pending, and the numbers the "now or later?" question quotes
+    /// are returned; nil when it is not asked, either because nearby frames were not to be touched or because
+    /// there is nothing to redo (in which case the bookkeeping is cleared, which is all a run would do).
+    func horizonReferenceUpdated(frameIndex: Int, applyToNearby: Bool) async -> HorizonRefinementPlan.PromptCounts? {
+        guard applyToNearby else { return nil }
+        let change = horizonRefinement.recordReferenceUpdated(
+          frameIndex: frameIndex,
+          referenceIndices: referenceHorizonFrameIndices(),
+          frameCount: frames.count
+        )
+        refinementMarks.subtract(change.noLongerPending)
+        refinementMarks.formUnion(change.nowPending)
+
+        guard let counts = horizonRefinement.promptCounts(hasOutput: { hasHorizonOutput($0) }) else {
+            _ = await runHorizonRefinement()
+            return nil
+        }
+        return counts
+    }
+
+    /// "Later": keep the work pending, but take away what the horizon the user has just corrected was already
+    /// baked into.
+    ///
+    /// Saying later used to leave the sequence looking finished.  Every affected frame kept the render made
+    /// with the old horizon, so "Render Video" stayed live over frames the user had just told star were wrong.
+    /// Deleting that output is what makes the state honest, and it is the same output the run would have
+    /// deleted anyway; the only difference is that nothing is rendered to replace it yet.  The stale merged
+    /// horizon masks go too, which is what makes "later" survive the daemon being restarted: the plan is only
+    /// in memory, but a frame with no merged mask and no output is a frame every run already knows to redo.
+    func deferHorizonRefinement() async {
+        let references = horizonRefinement.updatedReferences
+        var maskFrames: [FrameAirplaneRemover] = []
+        var stripped = Set<Int>()
+        for i in horizonRefinement.deferralFrameIndices {
+            guard let frame = frame(at: i) else { continue }
+            maskFrames.append(frame)
+            if hasHorizonOutput(i) { stripped.insert(i) }
+        }
+        guard !maskFrames.isEmpty else { return }
+        horizonRefinement.markStripped(stripped)
+        let outputFrames = maskFrames.filter { stripped.contains($0.frameIndex) }
+        await HorizonRefinementEffects.strip(references: references, maskFrames: maskFrames, outputFrames: outputFrames)
+        Log.i("stard: horizon refinement deferred over \(maskFrames.count) frames, \(stripped.count) of which lost their output")
+    }
+
+    /// Fold pending horizon refinement into a run that is about to start (see `HorizonRefinementEffects.strip`).
+    /// `range` is the frames the run covers, or nil for the whole sequence.
+    private func applyPendingHorizonRefinementToRun(range: ClosedRange<Int>?) async {
+        guard let taken = horizonRefinement.take(range: range) else { return }
+        Log.i("stard: processing run is taking on \(taken.frames.count) of \(taken.pendingCount) frames of pending horizon refinement")
+        var maskFrames: [FrameAirplaneRemover] = []
+        var outputFrames: [FrameAirplaneRemover] = []
+        for i in taken.frames.sorted() {
+            guard let frame = frame(at: i) else { continue }
+            maskFrames.append(frame)
+            if hasHorizonOutput(i) { outputFrames.append(frame) }
+            refinementMarks.remove(i)
+        }
+        await HorizonRefinementEffects.strip(references: taken.referencesToClear, maskFrames: maskFrames, outputFrames: outputFrames)
+    }
+
+    /// "Now" / "Re-run Horizon Refinement": claim everything pending and queue it as a run (`Horizon.RunRefinement`).
+    /// Returns once it is queued; it ends like any run, with a `sequence_state` event, and a stop gives the work
+    /// back.  False if there was nothing to run, or a run was already going.
+    @discardableResult
+    func runHorizonRefinement() async -> Bool {
+        await stopTask?.value
+        guard !closed else { return false }
+        guard activeRun == nil else {
+            Log.w("stard: not starting a horizon refinement while a processing run is going")
+            return false
+        }
+        let claim = horizonRefinement.claimAll()
+        let toProcess = claim.affected
+        let toInvalidate = claim.references
+        let toRestore = claim.stripped
+
+        var refinementFrames: [FrameAirplaneRemover] = []
+        var framesToMerge: [FrameAirplaneRemover] = []
+        var mergeIndices = Set<Int>()
+        for i in toProcess.union(toInvalidate).union(toRestore).sorted() {
+            guard let frame = frame(at: i) else { continue }
+            // Affected interpolated frames need their merged horizon recomputed.
+            if toProcess.contains(i) { refinementFrames.append(frame) }
+            // Re-queue any frame that already has final output, and any that "Later" already took the output of.
+            if toRestore.contains(i) || hasHorizonOutput(i) {
+                framesToMerge.append(frame)
+                mergeIndices.insert(i)
+            } else {
+                // Never processed: nothing to re-render, and the pipeline uses the new horizon when it first
+                // reaches this frame.  Clear the mark now.
+                refinementMarks.remove(i)
+            }
+        }
+        guard !refinementFrames.isEmpty || !framesToMerge.isEmpty else {
+            horizonRefinement.finishClaim()
+            return false
+        }
+
+        await frameGraphBuilder.set(configManager: configManager)
+        runGeneration += 1
+        let generation = runGeneration
+        activeRun = generation
+        let weakSelf = WeakSessionRef(self)
+        let merging = framesToMerge
+        let refining = refinementFrames
+        let merged = mergeIndices
+        let build = Task {
+            await HorizonRefinementEffects.prepareRerun(references: toInvalidate, mergeFrames: merging)
+            guard !Task.isCancelled else { return }
+            Log.i("stard: horizon refinement: \(refining.count) horizons and \(merging.count) merges to queue")
+            await frameGraphBuilder.enqueueHorizonRefinement(
+              refinementFrames: refining,
+              mergeFrames: merging,
+              refinementCompletion: { frame in
+                  await weakSelf.session?.horizonRefined(frameIndex: frame.frameIndex)
+              },
+              errorClosure: { errorString in Log.e("stard: op error: \(errorString)") }
+            ) { errors in
+                Task { await weakSelf.session?.refinementCompleted(generation: generation, errors: errors, mergedFrames: merged) }
+            }
+        }
+        buildTask = build
+        await build.value
+        return true
+    }
+
+    /// One frame's merged horizon was recomputed: tell the client to draw its horizon again.
+    private func horizonRefined(frameIndex: Int) {
+        var prog = Star_V1_ProgressEvent()
+        prog.kind = .horizonUpdated(Int32(frameIndex))
+        emit(prog)
+    }
+
+    /// The refinement run finished: its frames are no longer pending, and it keeps what it claimed.
+    private func refinementCompleted(generation: Int, errors: [String], mergedFrames: Set<Int>) {
+        runCompleted(generation: generation, errors: errors) { [self] in
+            refinementMarks.subtract(mergedFrames)
+            horizonRefinement.finishClaim()
+        }
     }
 
     // MARK: - Closing

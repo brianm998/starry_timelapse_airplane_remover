@@ -21,7 +21,12 @@ import com.star.proto.GetBestHorizonRequest
 import com.star.proto.GetBestHorizonResponse
 import com.star.proto.GetAlignmentRequest
 import com.star.proto.GetAlignmentSequenceRequest
+import com.star.proto.DeferRefinementResponse
 import com.star.proto.GetReferenceHorizonRequest
+import com.star.proto.HorizonReferenceUpdatedRequest
+import com.star.proto.HorizonReferenceUpdatedResponse
+import com.star.proto.RefinementStatusResponse
+import com.star.proto.RunRefinementResponse
 import com.star.proto.GetReferenceHorizonResponse
 import com.star.proto.ReprocessHorizonsRequest
 import com.star.proto.SetReferenceHorizonRequest
@@ -329,12 +334,32 @@ class StarClient(private val conn: StdioConnection) {
             ClearReferenceHorizonResponse.parser(),
         )
 
+    @Deprecated("Horizon.ReferenceUpdated + Horizon.RunRefinement; this streams a run for old clients")
     fun reprocessHorizons(sessionId: String, editedFrames: List<Int>): Flow<ProgressEvent> =
         serverStream(
             "Horizon.Reprocess",
             ReprocessHorizonsRequest.newBuilder().setSessionId(sessionId).addAllEditedFrameIndices(editedFrames).build(),
             ProgressEvent.parser(),
         )
+
+    /** The reference of [frameIndex] was saved; with [applyToNearby] the frames that interpolate from it become pending. */
+    suspend fun horizonReferenceUpdated(sessionId: String, frameIndex: Int, applyToNearby: Boolean): HorizonReferenceUpdatedResponse =
+        call(
+            "Horizon.ReferenceUpdated",
+            HorizonReferenceUpdatedRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setApplyToNearby(applyToNearby).build(),
+            HorizonReferenceUpdatedResponse.parser(),
+        )
+
+    suspend fun getHorizonRefinementStatus(sessionId: String): RefinementStatusResponse =
+        call("Horizon.GetRefinementStatus", sessionRef(sessionId), RefinementStatusResponse.parser())
+
+    /** "Later": keep the refinement pending, but take away what the old horizon was baked into. */
+    suspend fun deferHorizonRefinement(sessionId: String): DeferRefinementResponse =
+        call("Horizon.DeferRefinement", sessionRef(sessionId), DeferRefinementResponse.parser())
+
+    /** "Now": queue the pending refinement as a run; progress and the end of it arrive on the progress stream. */
+    suspend fun runHorizonRefinement(sessionId: String): RunRefinementResponse =
+        call("Horizon.RunRefinement", sessionRef(sessionId), RunRefinementResponse.parser())
 
     suspend fun getHorizonOverlay(sessionId: String, frameIndex: Int, width: Int, height: Int): GetHorizonOverlayResponse =
         call(

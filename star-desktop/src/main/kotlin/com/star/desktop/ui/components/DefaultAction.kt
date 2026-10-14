@@ -19,15 +19,22 @@ fun isDefaultActionKey(event: KeyEvent): Boolean =
     event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.NumPadEnter)
 
 /**
- * Make Return trigger [action], as a sheet's default button does on macOS (`.keyboardShortcut(.defaultAction)`).
+ * Make Return trigger [action], as a sheet's default button does on macOS (`.keyboardShortcut(.defaultAction)`), and
+ * Esc trigger [onEscape] when there is one (the cancel role).
  * Takes the keyboard focus when it appears, so Return is heard without the user having to click in the dialog first.
  */
 @Composable
-fun Modifier.defaultAction(action: () -> Unit): Modifier {
+fun Modifier.defaultAction(action: () -> Unit, onEscape: (() -> Unit)? = null): Modifier {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     return this
         .focusRequester(focus)
         .focusable()
-        .onPreviewKeyEvent { if (isDefaultActionKey(it)) { action(); true } else false }
+        .onPreviewKeyEvent {
+            when {
+                isDefaultActionKey(it) -> { action(); true }
+                onEscape != null && it.type == KeyEventType.KeyDown && it.key == Key.Escape -> { onEscape(); true }
+                else -> false
+            }
+        }
 }

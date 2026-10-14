@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -289,6 +290,18 @@ class SequenceViewModel(
             }
             .launchIn(scope)
 
+        // A run that ends (done, stopped, failed) may have taken the pending refinement or given it back.
+        processing.sequenceState
+            .onEach { if (it != null) { refreshRefinementStatus(); horizonChanged() } }
+            .launchIn(scope)
+
+        // Refinement operations finish by the hundred; redraw the horizons at most a few times a second while they do.
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
+        processing.horizonUpdated
+            .debounce(300)
+            .onEach { horizonChanged() }
+            .launchIn(scope)
+
         combine(isProcessing, _processingModalDismissed) { processingNow, dismissed -> processingNow && !dismissed }
             .onEach { _showProcessingModal.value = it }
             .launchIn(scope)
@@ -395,6 +408,70 @@ class SequenceViewModel(
         block()
     }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
+
+    // ---- horizon refinement: the work owed after a reference horizon is repainted ----
+    //
+    // The daemon keeps the record (which frames are pending, what "later" took away); this is the question put to the
+    // user and the bookkeeping the screen needs. The prompt is hosted by the sequence screen, not by the painter, which
+    // closes when it saves.
+
+    /** What the "re-run the refinement now, or later?" question quotes. */
+    data class RefinementPrompt(val frameCount: Int, val renderCount: Int)
+
+    private val _refinementPrompt = MutableStateFlow<RefinementPrompt?>(null)
+    val refinementPrompt: StateFlow<RefinementPrompt?> = _refinementPrompt.asStateFlow()
+
+    /** Whether any refinement is waiting: what enables "Re-run Horizon Refinement". */
+    private val _refinementPending = MutableStateFlow(false)
+    val refinementPending: StateFlow<Boolean> = _refinementPending.asStateFlow()
+
+    /**
+     * Bumped whenever a frame's horizon, or whether it is pending, may have changed: a reference was saved, the question was
+     * answered, a refinement operation finished. Overlays that draw a frame's horizon load it keyed on this.
+     */
+    private val _horizonVersion = MutableStateFlow(0)
+    val horizonVersion: StateFlow<Int> = _horizonVersion.asStateFlow()
+    fun horizonChanged() { _horizonVersion.value++ }
+
+    /**
+     * The painter saved frame [frameIndex]'s reference. With [applyToNearby] the daemon marks the frames that interpolate from
+     * it, and if there is anything to redo this asks the user whether to do it now.
+     */
+    fun horizonReferenceSaved(frameIndex: Int, applyToNearby: Boolean) {
+        scope.launch {
+            val answer = runCatching { horizon.referenceUpdated(sessionId, frameIndex, applyToNearby) }
+                .onFailure { reportFailure(it) }.getOrNull()
+            refreshRefinementStatus()
+            horizonChanged()
+            if (answer != null && (answer.affectedFrameCount > 0 || answer.renderCount > 0)) {
+                _refinementPrompt.value = RefinementPrompt(answer.affectedFrameCount, answer.renderCount)
+            }
+        }
+    }
+
+    /** "Later": the work stays pending, minus the renders and masks the old horizon went into. */
+    fun deferHorizonRefinement() {
+        _refinementPrompt.value = null
+        scope.launch {
+            runCatching { horizon.deferRefinement(sessionId) }.onFailure { reportFailure(it) }
+            refreshRefinementStatus()
+            horizonChanged()
+        }
+    }
+
+    /** "Now" / "Re-run Horizon Refinement": queue the pending work as a run, with the processing modal as for any run. */
+    fun runHorizonRefinement() {
+        _refinementPrompt.value = null
+        startProcessingRun {
+            runCatching { processing.startClaimedRun { horizon.runRefinement(sessionId) } }.onFailure { reportFailure(it) }
+            refreshRefinementStatus()
+            horizonChanged()
+        }
+    }
+
+    private suspend fun refreshRefinementStatus() {
+        _refinementPending.value = horizon.refinementPending(sessionId)
+    }
 
     // ---- decision tree (macOS classifyOnlyUnclassified / minimumClassificationSize) ----
 

@@ -115,6 +115,10 @@ extension Dispatcher {
         register(method: "Horizon.SetReference")   { id, payload, transport in await HorizonHandlers.setReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.GetReference")   { id, payload, transport in await HorizonHandlers.getReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.ClearReference") { id, payload, transport in await HorizonHandlers.clearReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.ReferenceUpdated") { id, payload, transport in await HorizonHandlers.referenceUpdated(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.GetRefinementStatus") { id, payload, transport in await HorizonHandlers.refinementStatus(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.DeferRefinement") { id, payload, transport in await HorizonHandlers.deferRefinement(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.RunRefinement")   { id, payload, transport in await HorizonHandlers.runRefinement(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.Reprocess")      { id, payload, transport in await HorizonHandlers.reprocess(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.GetOverlay")     { id, payload, transport in await HorizonHandlers.getOverlay(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.ComputeInBand")  { id, payload, transport in await HorizonHandlers.computeInBand(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

@@ -118,6 +118,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     var refining by remember { mutableStateOf(0) }          // in-flight random-walker passes
     var errorText by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }          // a save is in flight: a second must not start (macOS isSaving)
+    var applyToNearby by remember { mutableStateOf(true) }   // macOS applyToNearbyFrames: on until turned off
     var savedAlready by remember { mutableStateOf(false) }    // the horizon on screen is already the saved one
     var cancelledExplicitly by remember { mutableStateOf(false) } // Cancel / Esc: the one way out that discards
 
@@ -260,13 +261,13 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
 
     // What the buttons do, also what Return, Esc and R do from the keyboard.
     val doReset = { frameJob.cancelChildren(); refining = 0; state.clear() }
-    val doSave = { reprocess: Boolean ->
+    val doSave = {
         val frameIdx = current
         scope.launch {
             if (saveReference(frameIdx)) {
-                if (reprocess) {
-                    runCatching { app.horizonRepo.reprocess(vm.sessionId, listOf(frameIdx)).collect { } }
-                }
+                // With "apply to nearby frames" the daemon marks the frames that interpolate from this reference and the
+                // sequence screen asks whether to redo them now (the painter closes, so it cannot host the question).
+                vm.horizonReferenceSaved(frameIdx, applyToNearby)
                 if (!startup) vm.toggleHorizonPaint()
             }
         }
@@ -300,7 +301,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             HorizonPainterKey.RESET -> if (state.phase == HorizonPhase.REFINEMENT || state.hasBand()) doReset()
             HorizonPainterKey.CANCEL -> doCancel()
             HorizonPainterKey.SAVE ->
-                if (canSaveHorizon(state.phase, state.hasSolvedHorizon(), refining, saving)) { if (startup) doContinue() else doSave(false) }
+                if (canSaveHorizon(state.phase, state.hasSolvedHorizon(), refining, saving)) { if (startup) doContinue() else doSave() }
         }
         true
     }
@@ -417,6 +418,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             state = state,
             startup = startup, startupIndices = startupIndices, startupPos = startupPos,
             refining = refining, saving = saving, errorText = errorText,
+            applyToNearby = applyToNearby, onApplyToNearbyChange = { applyToNearby = it },
             onReset = doReset,
             onSave = doSave,
             onContinue = doContinue,
@@ -597,8 +599,10 @@ private fun HorizonControlBar(
     refining: Int,
     saving: Boolean,
     errorText: String?,
+    applyToNearby: Boolean,
+    onApplyToNearbyChange: (Boolean) -> Unit,
     onReset: () -> Unit,
-    onSave: (reprocess: Boolean) -> Unit,
+    onSave: () -> Unit,
     onContinue: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -642,6 +646,15 @@ private fun HorizonControlBar(
             Text(localized("ui.paint_across_horizon", coverage), color = StarColors.yellow, fontSize = 12.sp)
         }
 
+        if (!startup && phase == HorizonPhase.REFINEMENT) {
+            DividerDot()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Switch(checked = applyToNearby, onCheckedChange = onApplyToNearbyChange)
+                Spacer(Modifier.size(6.dp))
+                Text(localized("ui.apply_to_nearby_frames"), color = StarColors.textSecondary, fontSize = 11.sp)
+            }
+        }
+
         // Nothing to start over from until something is painted (macOS disables Reset in band selection until then).
         OutlinedButton(onClick = onReset, enabled = phase == HorizonPhase.REFINEMENT || v.let { state.hasBand() }) { Text(localized("ui.reset")) }
 
@@ -661,12 +674,11 @@ private fun HorizonControlBar(
                     onClick = onContinue,
                 ) { Text(if (hasMore) "Next" else "Continue") }
             } else {
-                OutlinedButton(enabled = canSave, onClick = { onSave(false) }) { Text(localized("ui.save")) }
                 Button(
                     enabled = canSave,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                    onClick = { onSave(true) },
-                ) { Text(localized("ui.save_reprocess")) }
+                    onClick = onSave,
+                ) { Text(localized("ui.save")) }
             }
         }
 

@@ -80,6 +80,10 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
         if (mode != InteractionMode.GRID) ScrubSlider(vm)
     }
 
+    // The "re-run horizon refinement now or later?" question, here because the painter that raises it closes first.
+    val refinementPrompt by vm.refinementPrompt.collectAsState()
+    refinementPrompt?.let { com.star.desktop.ui.dialogs.HorizonRefinementPrompt(vm, it) }
+
     // Multi-frame outlier sheets (overlay the whole screen when active).
     val multiChoice by vm.multiChoice.collectAsState()
     multiChoice?.let { com.star.desktop.ui.dialogs.MultiChoiceSheet(vm, it) }

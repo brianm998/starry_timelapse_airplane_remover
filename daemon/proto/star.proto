@@ -265,6 +265,9 @@ message FrameInfo {
   // anything.  A frame whose groups are still purged to disk reports 0/0/0, which is "unknown", not
   // "none"; Frame.Get does not load them (a grid scroll would load every frame).
   bool                 outliers_loaded         = 8;
+  // This frame is waiting for horizon refinement, because a reference horizon it interpolates from was
+  // repainted and the work has not run yet (drawn in orange).  See Horizon.ReferenceUpdated.
+  bool                 refinement_pending      = 9;
 }
 
 message GetFramePreviewRequest {
@@ -475,6 +478,7 @@ message ProgressEvent {
     IoProgress         io_progress         = 5;
     SequenceStateEvent sequence_state      = 6;
     ImageSaved         image_saved         = 7;
+    int32              horizon_updated     = 8;   // frame index: a horizon refinement operation finished for this frame
   }
 }
 
@@ -592,7 +596,41 @@ message ClearReferenceHorizonRequest { string session_id = 1; int32 frame_index 
 message ClearReferenceHorizonResponse {}
 
 // Reprocess after a reference-horizon change; streams ProgressEvent like Processing.StreamProgress.
+// Deprecated: asks for what Horizon.ReferenceUpdated + Horizon.RunRefinement do, for each edited frame, and
+// streams the run's events.  Kept for old clients.
 message ReprocessHorizonsRequest { string session_id = 1; repeated int32 edited_frame_indices = 2; }
+
+// ---- Horizon refinement: the work owed after a reference horizon is repainted ----
+//
+// Repainting a reference changes the horizon of every frame that interpolates from it, so their merged horizon
+// masks, and the output rendered through them, are stale.  The daemon keeps the record of which frames are owed
+// what (StarCore's HorizonRefinementPlan, the same record the macOS app keeps); the client asks the user whether
+// to redo it now or later.
+
+// The reference of `frame_index` was saved.  With apply_to_nearby, the frames that interpolate from it become
+// pending (FrameInfo.refinement_pending); without, nothing is recorded.
+message HorizonReferenceUpdatedRequest  { string session_id = 1; int32 frame_index = 2; bool apply_to_nearby = 3; }
+// How much a re-run would touch, for the "now or later?" question.  Both 0: there is nothing to ask about (and
+// nothing was left running).
+message HorizonReferenceUpdatedResponse {
+  int32 affected_frame_count = 1;   // frames the run would touch
+  int32 render_count         = 2;   // of those, the ones it would render again
+}
+// Whether any horizon refinement is waiting: what enables "Re-run Horizon Refinement".  Not just the marked
+// frames: a reference painted beside another has no frames in between, and still has its own output to render again.
+message RefinementStatusResponse {
+  bool  pending             = 1;
+  int32 pending_frame_count = 2;   // frames marked pending (FrameInfo.refinement_pending)
+}
+// "Later": keep the work pending, but take away what the old horizon was baked into (merged horizon masks, the
+// output rendered through them), so the sequence does not look finished.
+message DeferRefinementResponse {}
+// "Now": claim the pending work and queue it.  Answered once it is queued; progress and the end of the run are
+// reported on the progress stream like any processing run (sequence_state), and Processing.Cancel stops it and
+// gives the work back.
+message RunRefinementResponse {
+  bool started = 1;   // false when there was nothing to run, or a run was already going
+}
 
 // Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green).
 // `isPendingHorizonRefinement` is NOT engine-derived — the client tracks it from edited reference frames.
@@ -608,6 +646,7 @@ message GetHorizonOverlayResponse {
   HorizonOverlayKind kind         = 2;
   repeated int32     y_per_column = 3;   // draw-space Y, length == width
   int32              height       = 4;   // height the overlay was computed at (scaleY divisor)
+  bool               refinement_pending = 5;   // see FrameInfo.refinement_pending
 }
 
 // ---- Horizon: interactive band detection (the live painter) ----

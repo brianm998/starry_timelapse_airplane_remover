@@ -16,7 +16,7 @@ enum FrameHandlers {
                 await transport.sendError(id: id, message: "frame index out of range", code: 404); return
             }
             let groups = await frame.getOutlierGroups()
-            let fi = await Mapping.frameInfo(frame: frame, outlierGroups: groups)
+            let fi = await session.frameInfo(frame, outlierGroups: groups)
             try await transport.respond(id: id, payload: fi.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
@@ -137,7 +137,7 @@ enum FrameHandlers {
             await frame.markAsChanged()
             await session.frameEdited(frame)
             let groups = await frame.getOutlierGroups()
-            let fi = await Mapping.frameInfo(frame: frame, outlierGroups: groups)
+            let fi = await session.frameInfo(frame, outlierGroups: groups)
             try await transport.respond(id: id, payload: fi.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")

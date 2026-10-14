@@ -135,6 +135,27 @@ class ProcessingRepository(
         }
     }
 
+    /**
+     * Start a run the daemon claims some other way than `Processing.Start` (a horizon refinement): [start] asks for it and
+     * says whether one began. Until it does, and for the length of it, this is a run like any other.
+     */
+    suspend fun startClaimedRun(start: suspend () -> Boolean) {
+        _sequenceState.value = null
+        _processing.value = true
+        startedSinceCancel = true
+        val started = try {
+            start()
+        } catch (e: Throwable) {
+            _processing.value = false
+            throw e
+        }
+        if (!started) _processing.value = false
+    }
+
+    /** A frame's horizon was recomputed by a refinement operation (`horizon_updated`). */
+    private val _horizonUpdated = MutableSharedFlow<Int>(extraBufferCapacity = 512)
+    val horizonUpdated: SharedFlow<Int> = _horizonUpdated.asSharedFlow()
+
     /** Tear down the subscription (session close). */
     fun stop() {
         subJob?.cancel()
@@ -164,6 +185,7 @@ class ProcessingRepository(
                 if (s == "done" || s == "cancelled" || s == "error") _processing.value = false
                 if (s == "error") _errors.tryEmit(ev.sequenceState.message.ifBlank { s })
             }
+            ProgressEvent.KindCase.HORIZON_UPDATED -> _horizonUpdated.tryEmit(ev.horizonUpdated)
             ProgressEvent.KindCase.IMAGE_SAVED ->
                 _imageSaved.tryEmit(ImageSaved(ev.imageSaved.frameIndex, ev.imageSaved.viewMode))
             ProgressEvent.KindCase.FRAME_EXISTING ->

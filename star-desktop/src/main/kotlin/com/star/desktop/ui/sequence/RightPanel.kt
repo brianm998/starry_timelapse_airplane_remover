@@ -116,6 +116,14 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         selected?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
+        val refinementPending by vm.refinementPending.collectAsState()
+        val busy by vm.isProcessing.collectAsState()
+        BulkButton(
+            localized("ui.re_run_horizon_refinement"), StarColors.orange,
+            help = localized("ui.re_run_brightness_position_refinement_for"), enabled = refinementPending && !busy,
+        ) { vm.runHorizonRefinement() }
+
+        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         ZoomControls(vm)
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))

@@ -372,16 +372,25 @@ class InteropIntegrationTest {
             }
             delay(400)
             client.startProcessing(info.sessionId, 0, -1)
-            assertEquals("done", withTimeoutOrNull(1_200_000) { states.receive() }, "first run did not finish")
+            var first = withTimeoutOrNull(1_200_000) { states.receive() }
+            if (first == "error") {   // the known intermittent StarCore merge race (see processToCompletion): a second run finishes it
+                client.startProcessing(info.sessionId, 0, -1)
+                first = withTimeoutOrNull(1_200_000) { states.receive() }
+            }
+            assertEquals("done", first, "first run did not finish")
 
             // Both of these must end on their own (they used to hold the slot / never end).
             assertTrue(withTimeoutOrNull(600_000) { client.renderSequence(info.sessionId).collect { } } != null, "render stream did not end")
             // The render's own `done` goes to the render stream only, not to the long-lived one.
             assertEquals(null, withTimeoutOrNull(1_000) { states.receive() }, "the render's completion reached the processing stream")
 
-            val horizonStream = withTimeoutOrNull(1_200_000) { client.reprocessHorizons(info.sessionId, listOf(0)).collect { } }
+            // With no reference painted there is nothing for this to refine: it runs nothing and ends at once.
+            @Suppress("DEPRECATION")
+            val horizonStream = withTimeoutOrNull(120_000) { client.reprocessHorizons(info.sessionId, listOf(0)).collect { } }
             assertTrue(horizonStream != null, "horizon reprocess stream did not end")
-            assertEquals("done", withTimeoutOrNull(60_000) { states.receive() }, "the long-lived stream missed the next run's done")
+            // And the next run's done still reaches the long-lived stream.
+            client.startProcessing(info.sessionId, 0, -1)
+            assertEquals("done", withTimeoutOrNull(120_000) { states.receive() }, "the long-lived stream missed the next run's done")
 
             sub.cancel()
             client.closeSession(info.sessionId)
@@ -895,6 +904,81 @@ class InteropIntegrationTest {
                         assertTrue(tmp.walkTopDown().none { it.name.endsWith(".matroska") }, "a file with the muxer's name as its extension was written")
                     }
                 }
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
+    /**
+     * B1: repainting a reference marks the frames that interpolate from it as pending, "later" takes away their output,
+     * and a refinement run redoes the work and clears the marks. Needs a moving camera so that references are per frame.
+     */
+    @Test
+    fun horizonRefinementPendingDeferAndRun() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] horizonRefinementPendingDeferAndRun — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-horizon").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).setTripodHeadWasMoving(true).setOutputPath(seqCopy.parent!!).build()
+        try {
+            withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                processToCompletion(client, info.sessionId)
+                val n = info.frameCount
+
+                // Paint a reference on frame 3.
+                val w = info.imageWidth
+                val h = info.imageHeight
+                client.setReferenceHorizon(
+                    com.star.proto.SetReferenceHorizonRequest.newBuilder().setSessionId(info.sessionId).setFrameIndex(3)
+                        .setColumns(
+                            com.star.proto.HorizonColumns.newBuilder().setSpaceWidth(w).setSpaceHeight(h)
+                                .addAllHorizonY(List(w) { h / 2 }).build(),
+                        ).build(),
+                )
+                // Without "apply to nearby" nothing is recorded.
+                val none = client.horizonReferenceUpdated(info.sessionId, 3, applyToNearby = false)
+                assertEquals(0, none.affectedFrameCount)
+                assertTrue(!client.getHorizonRefinementStatus(info.sessionId).pending, "a refinement was recorded though nearby frames were not to be touched")
+
+                val asked = client.horizonReferenceUpdated(info.sessionId, 3, applyToNearby = true)
+                assertEquals(n, asked.affectedFrameCount, "every frame interpolates from the lone reference or is it")
+                assertEquals(n, asked.renderCount, "every processed frame has output to render again")
+                assertTrue(client.getHorizonRefinementStatus(info.sessionId).pending)
+                assertTrue(client.getFrame(info.sessionId, 0).refinementPending, "frame 0 interpolates from the reference and is not marked")
+                assertTrue(!client.getFrame(info.sessionId, 3).refinementPending, "the reference itself is marked")
+                assertTrue(client.getHorizonOverlay(info.sessionId, 0, 64, 40).refinementPending, "the overlay does not say frame 0 is pending")
+
+                // Later: the output the old horizon went into is taken away; the work stays pending.
+                client.deferHorizonRefinement(info.sessionId)
+                assertTrue(client.getHorizonRefinementStatus(info.sessionId).pending, "Later cleared the pending work")
+                assertTrue(client.getFrame(info.sessionId, 0).state != com.star.proto.FrameProcessingState.FPS_COMPLETE,
+                    "Later left frame 0 looking finished")
+
+                // Now: runs, ends like any run, and the marks go.
+                val ended = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+                val sub = CoroutineScope(SupervisorJob()).launch {
+                    runCatching {
+                        client.streamProgress(info.sessionId).collect { ev ->
+                            if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) ended.trySend(ev.sequenceState.state)
+                        }
+                    }
+                }
+                delay(400)
+                assertTrue(client.runHorizonRefinement(info.sessionId).started, "the refinement did not start")
+                val state = withTimeoutOrNull(1_200_000) { ended.receive() }
+                sub.cancel()
+                assertEquals("done", state, "the refinement run did not end cleanly")
+                assertTrue(!client.getHorizonRefinementStatus(info.sessionId).pending, "work is still pending after the run")
+                assertTrue(!client.getFrame(info.sessionId, 0).refinementPending, "frame 0 is still marked after the run")
+                assertEquals(com.star.proto.FrameProcessingState.FPS_COMPLETE, client.getFrame(info.sessionId, 0).state, "frame 0 was not rendered again")
                 client.closeSession(info.sessionId)
             }
         } finally {

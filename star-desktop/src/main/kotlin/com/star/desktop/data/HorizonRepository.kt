@@ -5,6 +5,7 @@ import com.star.desktop.engine.StarRpcException
 import com.star.proto.ComputeHorizonInBandRequest
 import com.star.proto.GetHorizonOverlayResponse
 import com.star.proto.GetReferenceHorizonResponse
+import com.star.proto.HorizonReferenceUpdatedResponse
 import com.star.proto.HorizonBandMethod
 import com.star.proto.HorizonColumns
 import com.star.proto.ProgressEvent
@@ -53,8 +54,18 @@ class HorizonRepository(private val clientProvider: () -> StarClient?) {
         runCatching { c().clearReferenceHorizon(sessionId, frameIndex, clearGlobal) }
     }
 
-    fun reprocess(sessionId: String, editedFrames: List<Int>): Flow<ProgressEvent> =
-        c().reprocessHorizons(sessionId, editedFrames)
+    /** Tell the daemon the reference of [frameIndex] was saved. Null on an RPC error. */
+    suspend fun referenceUpdated(sessionId: String, frameIndex: Int, applyToNearby: Boolean): HorizonReferenceUpdatedResponse =
+        c().horizonReferenceUpdated(sessionId, frameIndex, applyToNearby)
+
+    /** Whether any horizon refinement is waiting (what enables "Re-run Horizon Refinement"). */
+    suspend fun refinementPending(sessionId: String): Boolean =
+        runCatching { c().getHorizonRefinementStatus(sessionId).pending }.getOrDefault(false)
+
+    suspend fun deferRefinement(sessionId: String) { c().deferHorizonRefinement(sessionId) }
+
+    /** Queue the pending refinement; true if a run was started. */
+    suspend fun runRefinement(sessionId: String): Boolean = c().runHorizonRefinement(sessionId).started
 
     /** Per-frame horizon overlay (kind + per-column Y) for grid drawing; null if unavailable. */
     suspend fun getOverlay(sessionId: String, frameIndex: Int, width: Int, height: Int): GetHorizonOverlayResponse? =

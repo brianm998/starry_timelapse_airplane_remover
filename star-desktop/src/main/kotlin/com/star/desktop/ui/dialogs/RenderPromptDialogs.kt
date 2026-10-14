@@ -76,14 +76,42 @@ fun PostProcessingRenderPrompt(app: AppViewModel) {
     }
 }
 
-/** [onScrimClick] null means a click outside the card does nothing; [onDefaultAction] is what Return does. */
+/**
+ * "Re-run horizon refinement now?" (macOS alert on `ImageSequenceView`): a reference horizon was saved and frames that
+ * interpolate from it are stale. Hosted by the sequence screen, not by the painter, which closes when it saves. "Later"
+ * is the cancel role (Esc, and the answer that starts nothing); Return is "Re-run Now".
+ */
 @Composable
-private fun PromptCard(onScrimClick: (() -> Unit)?, onDefaultAction: () -> Unit, content: @Composable () -> Unit) {
+fun HorizonRefinementPrompt(vm: com.star.desktop.ui.sequence.SequenceViewModel, prompt: com.star.desktop.ui.sequence.SequenceViewModel.RefinementPrompt) {
+    PromptCard(onScrimClick = null, onDefaultAction = vm::runHorizonRefinement, onEscape = vm::deferHorizonRefinement) {
+        Text(localized("ui.horizon_refinement_prompt_title"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        Text(
+            localized("ui.horizon_refinement_prompt_message", prompt.frameCount, prompt.renderCount),
+            color = StarColors.textSecondary, fontSize = 13.sp,
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+            OutlinedButton(onClick = vm::deferHorizonRefinement) { Text(localized("ui.horizon_refinement_later")) }
+            Button(
+                onClick = vm::runHorizonRefinement,
+                colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+            ) { Text(localized("ui.horizon_refinement_now")) }
+        }
+    }
+}
+
+/** [onScrimClick] null means a click outside the card does nothing; [onDefaultAction] is what Return does, [onEscape] what Esc does. */
+@Composable
+private fun PromptCard(
+    onScrimClick: (() -> Unit)?,
+    onDefaultAction: () -> Unit,
+    onEscape: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
     Box(
         Modifier
             .fillMaxSize()
             .background(StarColors.scrim)
-            .defaultAction(onDefaultAction)
+            .defaultAction(onDefaultAction, onEscape)
             .clickable(enabled = onScrimClick != null, onClick = { onScrimClick?.invoke() }),
         contentAlignment = Alignment.Center,
     ) {

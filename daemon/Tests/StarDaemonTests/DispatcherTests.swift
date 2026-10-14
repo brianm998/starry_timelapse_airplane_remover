@@ -353,6 +353,8 @@ final class DispatcherTests: XCTestCase {
           "Alignment.Get", "Alignment.GetSequence",
           "Horizon.SetReference", "Horizon.GetReference", "Horizon.ClearReference",
           "Horizon.Reprocess", "Horizon.GetOverlay", "Horizon.ComputeInBand", "Horizon.GetBest",
+          "Horizon.ReferenceUpdated", "Horizon.DeferRefinement", "Horizon.RunRefinement",
+          "Horizon.GetRefinementStatus",
         ]
         let actual = Set(try registerAllMethodNames())
 
