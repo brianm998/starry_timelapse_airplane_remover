@@ -40,7 +40,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             }
             Separator()
             Item(localized("ui.close_session"), enabled = hasSession, shortcut = primaryShortcut(Key.W)) {
-                app.closeSession()
+                app.requestCloseSession()
             }
         }
 

@@ -196,6 +196,9 @@ class SequenceViewModel(
     val frameStates: StateFlow<Map<Int, FrameProcessingState>> = processing.frameStates
     val isProcessing: StateFlow<Boolean> = processing.processing
 
+    /** How many frames have edits being saved or waiting to be (see [com.star.desktop.data.ProcessingRepository.pendingSaves]). */
+    val pendingSaves: StateFlow<Int> = processing.pendingSaves
+
     /**
      * The sequence's alignment results, kept up to date while anything is showing them (the Alignment window, the left panel's chart, the
      * processing screen): fetched when the first of those appears, and again at most once a second as the frames' states change, since

@@ -1,5 +1,6 @@
 package com.star.desktop
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -42,8 +43,20 @@ private fun runApp(args: Array<String>) = application {
     val openMode = parts.getOrNull(1)?.ifBlank { null }
     val openFrame = parts.getOrNull(2)?.toIntOrNull()
     val vm = remember { AppViewModel(appScope, autoOpenPath = openPath, autoMode = openMode, autoFrame = openFrame) }
+    vm.onQuit = ::exitApplication
+    // Cmd-Q (and Quit in the app menu) on a Mac would exit at once; it goes through the same question as the window's close button.
+    LaunchedEffect(vm) {
+        runCatching {
+            if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.APP_QUIT_HANDLER)) {
+                java.awt.Desktop.getDesktop().setQuitHandler { _, response ->
+                    response.cancelQuit()
+                    vm.requestQuit()
+                }
+            }
+        }
+    }
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = vm::requestQuit,
         title = "Star",
         state = rememberWindowState(size = DpSize(1280.dp, 800.dp)),
         onKeyEvent = { handleGlobalKey(it, vm) },

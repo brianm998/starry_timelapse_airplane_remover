@@ -8,7 +8,10 @@ import com.star.desktop.i18n.localized
 import com.star.desktop.data.OutlierRepository
 import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.data.SessionRepository
+import com.star.desktop.domain.CloseAction
+import com.star.desktop.domain.CloseConfirmation
 import com.star.desktop.domain.InteractionMode
+import com.star.desktop.domain.PendingWork
 import com.star.desktop.engine.EngineState
 import com.star.desktop.domain.RenderState
 import com.star.desktop.domain.RenderVideo
@@ -35,7 +38,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
+
+/** How long quitting waits for the engine to shut down before it goes without it. */
+private const val QUIT_WAIT_MS = 5_000L
 
 /** What the root window is showing. */
 sealed interface AppScreen {
@@ -829,6 +836,61 @@ class AppViewModel(
             } catch (e: Throwable) {
                 fail(e.message ?: if (video) "failed to import video" else "failed to open")
             }
+        }
+    }
+
+    // ---- closing and quitting with work going (macOS `hasPendingWork`, AppDelegate, File ▸ Close) ----
+
+    private val _closeConfirmation = MutableStateFlow<CloseConfirmation?>(null)
+
+    /** The question up over the window before something that would interrupt work; null when none is. */
+    val closeConfirmation: StateFlow<CloseConfirmation?> = _closeConfirmation.asStateFlow()
+
+    /** What leaving would interrupt: a run, frames rendered again, a video encoded, edits not yet saved. */
+    fun pendingWork(): PendingWork {
+        val svm = currentSequence ?: return PendingWork.NONE
+        return PendingWork(
+            processing = svm.isProcessing.value, renderingFrames = svm.rendering.value, renderingVideo = isRendering, savingFrames = svm.pendingSaves.value,
+        )
+    }
+
+    /** What happens once the app is done, set by whoever owns the window (it exits the application). */
+    var onQuit: () -> Unit = {}
+
+    /** The window's close button, Cmd-Q: quit, after asking if that would interrupt anything. */
+    fun requestQuit() {
+        val work = pendingWork()
+        if (work.isPending) _closeConfirmation.value = CloseConfirmation(CloseAction.QUIT, work.description()) else quitNow()
+    }
+
+    /** File ▸ Close: close the sequence, after asking if that would interrupt anything. */
+    fun requestCloseSession() {
+        if (currentSequence == null) return
+        val work = pendingWork()
+        if (work.isPending) _closeConfirmation.value = CloseConfirmation(CloseAction.CLOSE_SESSION, work.description()) else closeSession()
+    }
+
+    /** The question's yes: do what was asked, interrupting what is going. */
+    fun confirmClose() {
+        val asked = _closeConfirmation.value ?: return
+        _closeConfirmation.value = null
+        when (asked.action) {
+            CloseAction.QUIT -> quitNow()
+            CloseAction.CLOSE_SESSION -> closeSession()
+        }
+    }
+
+    fun cancelClose() { _closeConfirmation.value = null }
+
+    /**
+     * Quit: ask the engine to shut down first, so it writes out what is pending and clears its run marker. Killing it instead leaves the marker,
+     * and the next launch reports a crash that did not happen (Windows has no gentler way to stop a process than the one the JVM's exit hook
+     * uses). Waits a few seconds at most, and goes on without it if the engine does not answer.
+     */
+    private fun quitNow() {
+        scope.launch {
+            withTimeoutOrNull(QUIT_WAIT_MS) { runCatching { shutdown() } }
+            onQuit()
         }
     }
 

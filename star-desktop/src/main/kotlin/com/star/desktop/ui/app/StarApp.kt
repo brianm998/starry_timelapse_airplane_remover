@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
@@ -13,6 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.font.FontWeight
@@ -25,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.engine.EngineStatus
+import com.star.desktop.ui.dialogs.PromptCard
 import com.star.desktop.ui.initial.InitialView
 import com.star.desktop.ui.loading.LoadingView
 import com.star.desktop.ui.sequence.SequenceScreen
@@ -82,6 +86,10 @@ fun StarApp(vm: AppViewModel) {
                 val showProcessingModal by sequenceVm.showProcessingModal.collectAsState()
                 if (showProcessingModal) com.star.desktop.ui.dialogs.ProcessingModal(vm, sequenceVm)
             }
+
+            // Over everything but the engine's own failure: leaving with work going is asked about wherever the user happens to be.
+            val closeConfirmation by vm.closeConfirmation.collectAsState()
+            closeConfirmation?.let { ConfirmCloseOverlay(it, onConfirm = vm::confirmClose, onCancel = vm::cancelClose) }
 
             val engineWarning by vm.engineWarning.collectAsState()
             engineWarning?.let { w ->
@@ -255,6 +263,27 @@ private fun ErrorOverlay(message: String, onDismiss: () -> Unit) {
                 )
             }
             Button(onClick = onDismiss, modifier = Modifier.padding(top = 20.dp)) { Text(localized("ui.close")) }
+        }
+    }
+}
+
+/**
+ * "Work In Progress" (macOS alert on quit, on closing the window and on File ▸ Close): what is going on, and a choice between Cancel, which is Esc
+ * and Return and leaves it going, and the red button that interrupts it. A click outside does nothing.
+ */
+@Composable
+private fun ConfirmCloseOverlay(confirmation: com.star.desktop.domain.CloseConfirmation, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    PromptCard(onScrimClick = null, onDefaultAction = onCancel, onEscape = onCancel) {
+        Text(localized("ui.work_in_progress"), color = StarColors.textPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 18.sp)
+        Text(confirmation.message, color = StarColors.textSecondary, fontSize = 13.sp)
+        androidx.compose.foundation.layout.Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp, Alignment.End),
+        ) {
+            OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
+            OutlinedButton(onClick = onConfirm, colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red)) {
+                Text(localized(confirmation.action.confirmKey))
+            }
         }
     }
 }
