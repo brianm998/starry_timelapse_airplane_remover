@@ -633,6 +633,10 @@ struct ProcessingProgressBarView: View {
             .frame(height: 10)
         }
         .frame(height: 10)
+          // What the Gherkin UI tests wait on: "<complete>/<total>/<running|idle>" in the label (the value comes through empty for an ignored-children element).
+          .accessibilityElement(children: .ignore)
+          .accessibilityIdentifier("processing.progress")
+          .accessibilityLabel("\(viewModel.frameStateMap[.complete]?.count ?? 0)/\(viewModel.frames.count)/\(viewModel.isProcessingFrames ? "running" : "idle")")
     }
 }
 

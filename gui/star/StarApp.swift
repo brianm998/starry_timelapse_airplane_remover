@@ -303,6 +303,7 @@ struct StarApp: App {
                   enableGUILogs()
                   setupKHTLogging()
                   appDelegate.viewModel = viewModel
+                  viewModel.openSequenceFromUITestArgument()
               }
               .onChange(of: loggingViewModel.level) {
                   enableGUILogs()

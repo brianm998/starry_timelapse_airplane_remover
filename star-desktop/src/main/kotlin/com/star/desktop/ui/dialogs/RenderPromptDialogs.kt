@@ -1,5 +1,6 @@
 package com.star.desktop.ui.dialogs
 
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,7 +47,7 @@ fun PreProcessingRenderPrompt(app: AppViewModel) {
             }
             Box(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = { app.confirmStartProcessing(autoRender = false, dontAskAgain = false) }) { Text(localized("ui.no")) }
+                OutlinedButton(onClick = { app.confirmStartProcessing(autoRender = false, dontAskAgain = false) }, modifier = Modifier.testTag("prompt.pre.no")) { Text(localized("ui.no")) }
                 Button(
                     onClick = { app.confirmStartProcessing(autoRender = true, dontAskAgain = false) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),

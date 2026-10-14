@@ -104,6 +104,7 @@ struct HorizonView: View {
                       )
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.horizon.yes")
                   .fixedSize(horizontal: true, vertical: true)
                 Spacer()
                 
@@ -170,6 +171,7 @@ struct MovingView: View {
                 }
                   .fixedSize(horizontal: true, vertical: true)
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.moving.static")
 
                 Space(width: 20)
                 
@@ -331,6 +333,7 @@ struct SelectHorizonView: View {
                 }
                   .fixedSize(horizontal: true, vertical: true)
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.selecthorizon.no")
 
                 Space(width: 20)
 
@@ -516,6 +519,7 @@ struct RemovalView: View {
                       )
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.removal.start")
                   .fixedSize(horizontal: true, vertical: true)
                 Spacer()
                 

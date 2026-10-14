@@ -500,6 +500,43 @@ tasks.test {
     environment("STAR_RUN_MARKER_DIR", layout.buildDirectory.dir("run-markers").get().asFile.absolutePath)
 }
 
+// The Gherkin desktop tests (gherkin/features/*.feature, tagged @desktop): a `gherkinTest` source set of generated test entry points
+// plus a hand-written runner that drives the real Compose root (StarApp) offscreen against a real stard. Kept OUT of `./gradlew test`
+// on purpose: the build-test matrix job runs that on ubuntu/windows with no stard. Run it with
+//   ./gradlew gherkinTest [-Pstar.stard.path=/abs/path/to/stard]
+// (without the property the usual resolution applies: STARD_PATH, then ../daemon/.build/release/stard).
+val gherkinTestSourceSet: SourceSet = sourceSets.create("gherkinTest") {
+    compileClasspath += sourceSets.main.get().output + configurations.testCompileClasspath.get()
+    runtimeClasspath += output + compileClasspath + configurations.testRuntimeClasspath.get()
+}
+dependencies {
+    "gherkinTestImplementation"(compose.desktop.uiTestJUnit4)
+    "gherkinTestImplementation"(kotlin("test"))
+}
+configurations[gherkinTestSourceSet.implementationConfigurationName].extendsFrom(configurations.implementation.get())
+configurations[gherkinTestSourceSet.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly.get())
+
+tasks.register<Test>("gherkinTest") {
+    group = "verification"
+    description = "Run the Gherkin @desktop features against the real Compose UI and a real stard."
+    testClassesDirs = gherkinTestSourceSet.output.classesDirs
+    classpath = gherkinTestSourceSet.runtimeClasspath
+    useJUnitPlatform()
+    // Compose UI tests render offscreen: no Xvfb on Linux.
+    systemProperty("java.awt.headless", "true")
+    systemProperty("star.repo.root", rootProject.projectDir.parentFile.absolutePath)
+    (findProperty("star.stard.path") as String? ?: System.getProperty("star.stard.path"))?.let { systemProperty("star.stard.path", it) }
+    environment("STAR_RUN_MARKER_DIR", layout.buildDirectory.dir("run-markers").get().asFile.absolutePath)
+    // Placeholder overrides (STAR_GHERKIN_<NAME>) pass through the environment as they are.
+    // Never up to date: the point is to run the real engine again.
+    outputs.upToDateWhen { false }
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
 // Headless engine smoke harness (no spaces in any property value — Gradle's CLI parser otherwise
 // mistakes a second word for a task name):
 //   ./gradlew smoke -Pseq="/abs/seq"                  # open + Hello + frame 0

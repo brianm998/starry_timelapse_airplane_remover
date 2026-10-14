@@ -1,5 +1,8 @@
 package com.star.desktop.ui.sequence
 
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,7 +87,7 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
                     onClick = { app.openSettings() },
                     enabled = role.enabled,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().testTag("process.frames"),
                 ) { Text(localized("ui.process_frames")) }
             }
         }
@@ -139,6 +142,8 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
             localized("ui.n_of_m_complete", counts.complete, total) + (seqState?.let { " · $it" } ?: ""),
             color = StarColors.textSecondary,
             fontSize = 11.sp,
+            // What the Gherkin desktop tests wait on: "<complete>/<total>", with the run over (not locale text).
+            modifier = Modifier.testTag("processing.progress").semantics { stateDescription = "${counts.complete}/$total/${if (processing) "running" else "idle"}" },
         )
 
         // How far the star alignment moved the pictures, filling in as frames align (macOS draws it here at 200 by 200).

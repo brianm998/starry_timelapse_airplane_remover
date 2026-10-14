@@ -48,6 +48,8 @@ let package = Package(
         // Dependencies declare other packages that this package depends on.
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
         .package(name: "StarCore", path: "../StarCore"),
+        // The Gherkin step vocabulary and generated features (pure data; see ../gherkin/README.md).
+        .package(name: "StarGherkin", path: "../gherkin/StarGherkin"),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -94,5 +96,10 @@ let package = Package(
                            ]),
               .linkedLibrary("StarDecisionTrees")
             ]),
+        // Black-box: runs the built `star` binary as a subprocess, so it needs neither
+        // `@testable import star` nor StarDecisionTrees. Keep it that way.
+        .testTarget(
+            name: "GherkinTests",
+            dependencies: [.product(name: "StarGherkinKernel", package: "StarGherkin")]),
     ]
 )

@@ -1,0 +1,9 @@
+{
+  "default": {
+    "sequence": "test_data/test_a7sii_10",
+    "expected_outputs": "19"
+  },
+  "cli": {},
+  "mac-gui": {},
+  "desktop": {}
+}

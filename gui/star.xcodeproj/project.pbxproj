@@ -61,8 +61,8 @@
 		D386FA15298B617400878B56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA14298B617400878B56 /* Assets.xcassets */; };
 		D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA17298B617400878B56 /* Preview Assets.xcassets */; };
 		D386FA23298B617400878B56 /* starTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA22298B617400878B56 /* starTests.swift */; };
-		D386FA2D298B617400878B56 /* starUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* starUITests.swift */; };
-		D386FA2F298B617400878B56 /* starUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */; };
+		D386FA2D298B617400878B56 /* GeneratedFeatureUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* GeneratedFeatureUITests.swift */; };
+		D386FA2F298B617400878B56 /* GuiFeatureRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* GuiFeatureRunner.swift */; };
 		D392EB0C2E0AFE320020E16A /* CursorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB0B2E0AFE320020E16A /* CursorView.swift */; };
 		D392EB152E0C48D60020E16A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D392EB142E0C48D60020E16A /* Assets.xcassets */; };
 		D392EB182E101CDF0020E16A /* RemoveAllButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB172E101CDF0020E16A /* RemoveAllButton.swift */; };
@@ -101,6 +101,7 @@
 		D3FBFA232CE91B4700A23FC6 /* ImageSequenceLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */; };
 		D3FBFA272CEAC0FF00A23FC6 /* InfoDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA262CEAC0FF00A23FC6 /* InfoDialogView.swift */; };
 		D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */; };
+		D3F00D032F00000100A00003 /* StarGherkinKernel in Frameworks */ = {isa = PBXBuildFile; productRef = D3F00D022F00000100A00002 /* StarGherkinKernel */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -192,8 +193,8 @@
 		D386FA1E298B617400878B56 /* starTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = starTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D386FA22298B617400878B56 /* starTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = starTests.swift; sourceTree = "<group>"; };
 		D386FA28298B617400878B56 /* starUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = starUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		D386FA2C298B617400878B56 /* starUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = starUITests.swift; sourceTree = "<group>"; };
-		D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = starUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		D386FA2C298B617400878B56 /* GeneratedFeatureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratedFeatureUITests.swift; sourceTree = "<group>"; };
+		D386FA2E298B617400878B56 /* GuiFeatureRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiFeatureRunner.swift; sourceTree = "<group>"; };
 		D392EB0B2E0AFE320020E16A /* CursorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorView.swift; sourceTree = "<group>"; };
 		D392EB142E0C48D60020E16A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D392EB162E101CDF0020E16A /* KeepAllButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeepAllButton.swift; sourceTree = "<group>"; };
@@ -255,6 +256,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D3F00D032F00000100A00003 /* StarGherkinKernel in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -418,8 +420,8 @@
 		D386FA2B298B617400878B56 /* starUITests */ = {
 			isa = PBXGroup;
 			children = (
-				D386FA2C298B617400878B56 /* starUITests.swift */,
-				D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */,
+				D386FA2C298B617400878B56 /* GeneratedFeatureUITests.swift */,
+				D386FA2E298B617400878B56 /* GuiFeatureRunner.swift */,
 			);
 			path = starUITests;
 			sourceTree = "<group>";
@@ -504,6 +506,9 @@
 				D386FA2A298B617400878B56 /* PBXTargetDependency */,
 			);
 			name = starUITests;
+			packageProductDependencies = (
+				D3F00D022F00000100A00002 /* StarGherkinKernel */,
+			);
 			productName = starUITests;
 			productReference = D386FA28298B617400878B56 /* starUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -544,6 +549,7 @@
 				D3B29CAF2B2FE5BE00754C10 /* XCLocalSwiftPackageReference "../StarCore" */,
 				D30356DB2E6FDC8B0092140B /* XCLocalSwiftPackageReference "../logging-objc" */,
 				D3B29CA22B2FE31800754C10 /* XCLocalSwiftPackageReference "../StarCpp" */,
+				D3F00D012F00000100A00001 /* XCLocalSwiftPackageReference "../gherkin/StarGherkin" */,
 			);
 			productRefGroup = D386FA0E298B617300878B56 /* Products */;
 			projectDirPath = "";
@@ -684,8 +690,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D386FA2F298B617400878B56 /* starUITestsLaunchTests.swift in Sources */,
-				D386FA2D298B617400878B56 /* starUITests.swift in Sources */,
+				D386FA2F298B617400878B56 /* GuiFeatureRunner.swift in Sources */,
+				D386FA2D298B617400878B56 /* GeneratedFeatureUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -967,7 +973,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.11.0;
+				SDKROOT = macosx;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -984,7 +992,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.11.0;
+				SDKROOT = macosx;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1051,6 +1061,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../StarCore;
 		};
+		D3F00D012F00000100A00001 /* XCLocalSwiftPackageReference "../gherkin/StarGherkin" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../gherkin/StarGherkin;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1095,6 +1109,11 @@
 		D3B29CB02B2FE5BE00754C10 /* StarCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = StarCore;
+		};
+		D3F00D022F00000100A00002 /* StarGherkinKernel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3F00D012F00000100A00001 /* XCLocalSwiftPackageReference "../gherkin/StarGherkin" */;
+			productName = StarGherkinKernel;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

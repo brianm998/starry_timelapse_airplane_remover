@@ -24,6 +24,7 @@ struct PreProcessingRenderPromptView: View {
                 Button(localized("ui.no")) {
                     viewModel.confirmStartProcessing(autoRender: false, dontAskAgain: false)
                 }
+                  .accessibilityIdentifier("prompt.pre.no")
 
                 Button(localized("ui.yes")) {
                     viewModel.confirmStartProcessing(autoRender: true, dontAskAgain: false)
