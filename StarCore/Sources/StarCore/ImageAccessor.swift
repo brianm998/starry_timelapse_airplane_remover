@@ -889,58 +889,128 @@ public struct ImageAccessor: Sendable {
     }
 }
     
+/// Puts a copy of `sourcePath` at `destinationPath`, replacing whatever is there.
+///
+/// The replacement is one step (see `replacingDestination`): a reader of
+/// `destinationPath` finds the file that was there or the new one, never nothing.
 func copyReplacingDestination(
   from sourcePath: String,
   to destinationPath: String
 ) throws {
-    let fileManager = FileManager.default
-
-    // If destination exists, remove it first
-    if fileManager.fileExists(atPath: destinationPath) {
-        do {
-            try fileManager.removeItem(atPath: destinationPath)
-        } catch {
-            throw NSError(
-                domain: NSCocoaErrorDomain,
-                code: CocoaError.fileWriteNoPermission.rawValue,
-                userInfo: [
-                    NSLocalizedDescriptionKey:
-                        "Failed to remove existing destination file: \(error.localizedDescription)"
-                ]
-            )
-        }
+    try replacingDestination(destinationPath) { temporaryPath in
+        try FileManager.default.copyItem(
+          atPath: sourcePath,
+          toPath: temporaryPath
+        )
     }
-
-    try FileManager.default.copyItem(
-      atPath: sourcePath,
-      toPath: destinationPath
-    )
 }
 
+/// Makes `destinationPath` a hard link to `sourcePath`, replacing whatever is there.
+///
+/// The replacement is one step (see `replacingDestination`): a reader of
+/// `destinationPath` finds the file that was there or the new one, never nothing.
 func createHardLinkReplacingDestination(
   from sourcePath: String,
   to destinationPath: String
 ) throws {
-    let fileManager = FileManager.default
+    try replacingDestination(destinationPath) { temporaryPath in
+        try createHardLink(from: sourcePath, to: temporaryPath)
+    }
+}
 
-    // If destination exists, remove it first
-    if fileManager.fileExists(atPath: destinationPath) {
-        do {
-            try fileManager.removeItem(atPath: destinationPath)
-        } catch {
-            throw NSError(
-                domain: NSCocoaErrorDomain,
-                code: CocoaError.fileWriteNoPermission.rawValue,
-                userInfo: [
-                    NSLocalizedDescriptionKey:
-                        "Failed to remove existing destination file: \(error.localizedDescription)"
-                ]
-            )
+/// Puts a file at `destinationPath`, replacing whatever is there, without the path ever
+/// being absent.
+///
+/// `place` creates the new file at the name it is given, which is beside the destination
+/// (same directory, so same volume) and unique to this call.  Renaming that over the
+/// destination is the only step another reader can see, and it replaces atomically on
+/// every platform we support.
+///
+/// This used to remove the destination and then create the new file at its path, which
+/// leaves a gap in which the path does not exist.  Callers replace files that other
+/// frames are working with: on a static-tripod sequence each frame that builds the merged
+/// horizon links it over every other frame's merged horizon, while those frames are doing
+/// the same, and each one links *from* its own path.  A frame that got there in the gap
+/// found nothing to link from, the link failed, the copy that followed failed the same
+/// way, and the frame's merge ended with "couldn't be opened because there is no such
+/// file" — on some runs and not others, depending on how the frames interleaved.
+///
+/// The temporary name never outlives the call.  After a rename that replaced the
+/// destination it is already gone; it is the only thing left to remove when `place` or
+/// the rename failed, and also when the destination was already the same file as the new
+/// one, which `rename(2)` treats as a successful no-op and so leaves the temporary name
+/// where it was.
+private func replacingDestination(
+  _ destinationPath: String,
+  place: (_ temporaryPath: String) throws -> Void
+) throws {
+    let temporaryPath = uniqueTemporaryPath(beside: destinationPath)
+    defer { try? FileManager.default.removeItem(atPath: temporaryPath) }
+
+    try place(temporaryPath)
+    try renameReplacingDestination(from: temporaryPath, to: destinationPath)
+}
+
+/// A name no other call will use, in the destination's directory, keeping its extension
+/// last so that anything that tells files apart by extension still sees what it would
+/// have seen — the same shape `writeMatAtomically` gives its temporary files.
+private func uniqueTemporaryPath(beside destinationPath: String) -> String {
+    let unique = UUID().uuidString
+    let destination = destinationPath as NSString
+    let pathExtension = destination.pathExtension
+    if pathExtension.isEmpty {
+        return "\(destinationPath).tmp.\(unique)"
+    }
+    return "\(destination.deletingPathExtension).tmp.\(unique).\(pathExtension)"
+}
+
+/// Renames `sourcePath` to `destinationPath`, replacing an existing destination in one
+/// step.
+///
+/// POSIX rename(2) does that natively.  The Windows CRT's rename fails with EEXIST when
+/// the destination exists, so there it is `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`
+/// — the same thing `std::filesystem::rename` does for `writeMatAtomically`.
+private func renameReplacingDestination(
+  from sourcePath: String,
+  to destinationPath: String
+) throws {
+    #if os(Windows)
+    let success: Bool = sourcePath.withCString(encodedAs: UTF16.self) { srcW in
+        destinationPath.withCString(encodedAs: UTF16.self) { dstW in
+            MoveFileExW(srcW, dstW, DWORD(MOVEFILE_REPLACE_EXISTING))
         }
     }
+    if !success {
+        let win32err = Int(GetLastError())
+        throw NSError(
+            domain: "Win32",
+            code: win32err,
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "MoveFileExW failed (GetLastError = \(win32err)) "
+                    + "replacing '\(destinationPath)' with '\(sourcePath)'"
+            ]
+        )
+    }
+    #else
+    if rename(sourcePath, destinationPath) != 0 {
+        let error = errno
+        throw NSError(
+            domain: NSPOSIXErrorDomain,
+            code: Int(error),
+            userInfo: [
+                NSLocalizedDescriptionKey: String(cString: strerror(error))
+            ]
+        )
+    }
+    #endif
+}
 
-    // Create hard link.
-    //
+/// Creates `destinationPath` as a hard link to `sourcePath`, which must not exist yet.
+private func createHardLink(
+  from sourcePath: String,
+  to destinationPath: String
+) throws {
     // POSIX has link(2); Windows doesn't. Use Win32 CreateHardLinkW on
     // Windows (via WinSDK), which has the matching semantics: same volume,
     // file content shared, separate directory entry, no symlink follow.
