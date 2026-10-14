@@ -202,6 +202,9 @@ class SequenceViewModel(
     val showProcessingModal: StateFlow<Boolean> = _showProcessingModal.asStateFlow()
     fun dismissProcessingModal() { _processingModalDismissed.value = true }
 
+    /** Put the processing screen back up after it was dismissed (macOS LeftPanel's Status button); a run in progress always has a status to show. */
+    fun reopenProcessingModal() { _processingModalDismissed.value = false }
+
     // ---- current preview ----
     private val _currentPreview = MutableStateFlow<ImageBitmap?>(null)
     val currentPreview: StateFlow<ImageBitmap?> = _currentPreview.asStateFlow()
@@ -695,10 +698,13 @@ class SequenceViewModel(
     }
 
     /** Granular reprocess (grid context menu) of the selected frames, or the current frame if none. */
-    fun reprocessSelected(type: com.star.proto.ReprocessingType) = scope.launch {
+    fun reprocessSelected(type: com.star.proto.ReprocessingType) {
         val indices = (_selected.value.takeIf { it.isNotEmpty() } ?: setOf(_currentIndex.value)).sorted()
-        runCatching { processing.reprocessFrames(sessionId, indices, type) }
-            .onFailure { reportFailure(it) }
+        // Like every run, this shows the processing screen again (macOS startProcessingModal).
+        startProcessingRun {
+            runCatching { processing.reprocessFrames(sessionId, indices, type) }
+                .onFailure { reportFailure(it) }
+        }
     }
 
     /**

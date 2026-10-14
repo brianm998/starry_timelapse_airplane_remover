@@ -57,12 +57,21 @@ fun LeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier, onProcessAll
     ) {
         Text(localized("ui.processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 
-        Button(
-            onClick = onProcessAll,
-            enabled = !busy,
-            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(localized("ui.process_all_frames_2")) }
+        if (processing) {
+            // The way back to the processing screen once it was dismissed; it starts nothing, so it is never disabled (macOS `.status`).
+            Button(
+                onClick = { vm.reopenProcessingModal() },
+                colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(localized("ui.status")) }
+        } else {
+            Button(
+                onClick = onProcessAll,
+                enabled = !busy,
+                colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(localized("ui.process_all_frames_2")) }
+        }
 
         OutlinedButton(onClick = { vm.processRemaining() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(localized("ui.process_frames_from_here_to_the_end"))

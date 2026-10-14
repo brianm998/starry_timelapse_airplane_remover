@@ -38,6 +38,7 @@ fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val playing by vm.isPlaying.collectAsState()
     val fps by vm.playbackFps.collectAsState()
     val showFilmstrip by vm.showFilmstrip.collectAsState()
+    val mode by vm.mode.collectAsState()
 
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -62,6 +63,9 @@ fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 GlyphButton("⏭", "Go to last frame (f)", vm::goToLast, enabled = !atEnd)
             }
         }
+
+        // What a run is doing, with its Stop, in every mode; scrub and grid hide it while playing (macOS: nothing else competes then).
+        if (mode == com.star.desktop.domain.InteractionMode.EDIT || !playing) ProcessingStatus(vm, mode)
 
         // editable frame number
         EditableFrameNumber(idx, vm.frameCount, onSet = vm::setCurrentIndex)

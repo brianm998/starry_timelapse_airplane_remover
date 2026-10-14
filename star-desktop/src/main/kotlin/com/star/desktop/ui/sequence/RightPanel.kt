@@ -1,14 +1,9 @@
 package com.star.desktop.ui.sequence
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.TooltipArea
-import androidx.compose.foundation.TooltipPlacement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Surface
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -41,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.ToolType
 import com.star.desktop.domain.usesOutliers
+import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.components.toolPainter
 import com.star.desktop.ui.sequence.edit.FrameTransform
 import com.star.desktop.ui.theme.StarColors
@@ -274,22 +270,6 @@ private fun ToolHelpButton(onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) { Text("i", color = StarColors.textPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
     }
-}
-
-/** Hover popup with a short help text, shown after the pointer rests on [content]. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun HoverTip(text: String, content: @Composable () -> Unit) {
-    TooltipArea(
-        tooltip = {
-            Surface(shape = RoundedCornerShape(4.dp), color = StarColors.prefsCard, shadowElevation = 4.dp) {
-                Text(text, color = StarColors.white, fontSize = 11.sp, modifier = Modifier.widthIn(max = 260.dp).padding(8.dp))
-            }
-        },
-        delayMillis = 400,
-        tooltipPlacement = TooltipPlacement.CursorPoint(offset = DpOffset(0.dp, 16.dp)),
-        content = content,
-    )
 }
 
 /**

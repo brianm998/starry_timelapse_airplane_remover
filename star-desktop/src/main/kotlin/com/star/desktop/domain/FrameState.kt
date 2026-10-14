@@ -8,6 +8,31 @@ object FrameState {
     fun isComplete(s: FrameProcessingState): Boolean = s == FrameProcessingState.FPS_COMPLETE
     fun isUnprocessed(s: FrameProcessingState): Boolean = s == FrameProcessingState.FPS_UNPROCESSED
 
+    /**
+     * Whether [s] is a stage a frame is in while something is being done to it (finding keypoints, aligning, filtering...), as
+     * opposed to one it rests in until its next stage starts (horizon detected, keypoints found, ready for the inter-frame
+     * work) or is finished or untouched in. The count of these stands for macOS's "frames processing now".
+     */
+    fun isWorking(s: FrameProcessingState): Boolean = s !in RESTING
+
+    private val RESTING: Set<FrameProcessingState> = setOf(
+        FrameProcessingState.FPS_UNPROCESSED,
+        FrameProcessingState.FPS_HORIZON_DETECTED,
+        FrameProcessingState.FPS_EARTH_ALIGNMENT_BASE_KP_DONE,
+        FrameProcessingState.FPS_EARTH_ALIGNMENT_COMPLETE,
+        FrameProcessingState.FPS_STAR_KEYPOINTS_FOUND,
+        FrameProcessingState.FPS_EARTH_KEYPOINTS_FOUND,
+        FrameProcessingState.FPS_STAR_ALIGNMENT_BASE_KP_DONE,
+        FrameProcessingState.FPS_STAR_ALIGNMENT_COMPLETE,
+        FrameProcessingState.FPS_STAR_ALIGNMENT_FAILED,
+        FrameProcessingState.FPS_READY_FOR_INTER_FRAME,
+        FrameProcessingState.FPS_OUTLIER_PROCESSING_COMPLETE,
+        FrameProcessingState.FPS_USER_MODIFIED,
+        FrameProcessingState.FPS_WAITING_TO_LOAD_IMAGES,
+        FrameProcessingState.FPS_COMPLETE,
+        FrameProcessingState.UNRECOGNIZED,
+    )
+
     /** Rough 0..1 progress for a per-frame bar (ordinal over the COMPLETE ordinal). */
     fun fraction(s: FrameProcessingState): Float {
         val max = FrameProcessingState.FPS_COMPLETE.number.toFloat().coerceAtLeast(1f)
