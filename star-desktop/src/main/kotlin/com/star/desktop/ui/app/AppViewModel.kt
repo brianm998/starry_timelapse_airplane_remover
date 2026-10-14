@@ -870,7 +870,7 @@ class AppViewModel(
         if (autoOpenPath != null) {
             when (com.star.desktop.ui.initial.inferOpenKind(autoOpenPath)) {
                 com.star.desktop.ui.initial.OpenKind.SEQUENCE -> openSequence(autoOpenPath)
-                com.star.desktop.ui.initial.OpenKind.VIDEO -> openVideo(autoOpenPath)
+                com.star.desktop.ui.initial.OpenKind.VIDEO -> openVideo(autoOpenPath, com.star.desktop.domain.FrameFormatChoice.TIFF16)
                 com.star.desktop.ui.initial.OpenKind.CONFIG -> openConfig(autoOpenPath)
             }
         }
@@ -908,7 +908,27 @@ class AppViewModel(
     }
 
     /** Output goes beside the video, as macOS puts it (the parent of the extracted frames' folder is the video's own folder), not in the daemon's hidden per-session scratch fallback. */
-    fun openVideo(path: String) = launchOpen(path, video = true, promptStartup = true) { sessions.openVideo(path, initialConfigBeside(path, savedDetectionType())) }
+    fun openVideo(path: String) { _pendingVideo.value = path }
+
+    /** A video the user chose, waiting on the import dialog that asks how its frames are written. */
+    private val _pendingVideo = MutableStateFlow<String?>(null)
+    val pendingVideo: StateFlow<String?> = _pendingVideo.asStateFlow()
+    fun cancelVideoImport() { _pendingVideo.value = null }
+
+    /** The import dialog's answer: decode the pending video to frames in [format] (at [jpegQuality], for JPEG) and open it. */
+    fun confirmVideoImport(format: com.star.desktop.domain.FrameFormatChoice, jpegQuality: Int) {
+        val path = _pendingVideo.value ?: return
+        _pendingVideo.value = null
+        openVideo(path, format, jpegQuality)
+    }
+
+    fun openVideo(
+        path: String,
+        format: com.star.desktop.domain.FrameFormatChoice,
+        jpegQuality: Int = com.star.desktop.domain.VideoImport.DEFAULT_JPEG_QUALITY,
+    ) = launchOpen(path, video = true, promptStartup = true) {
+        sessions.openVideo(path, initialConfigBeside(path, savedDetectionType()), format, jpegQuality)
+    }
 
     private var openJob: Job? = null
 

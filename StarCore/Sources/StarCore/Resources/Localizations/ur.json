@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "ویڈیو درآمد کریں",
+  "ui.video_import_blurb": "Star ویڈیو کو فی فریم ایک تصویر میں تبدیل کرتا ہے۔ چھوٹے فارمیٹ کم ڈسک جگہ لیتے ہیں لیکن اصل تفصیل کم محفوظ رکھتے ہیں۔",
+  "ui.video_frame_format": "فریم فارمیٹ",
+  "ui.frame_format_tiff16": "TIFF، 16 بٹ (بہترین معیار)",
+  "ui.frame_format_tiff8": "TIFF، 8 بٹ",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "معیار: {0}%",
+  "ui.video_import_disk_usage": "{2} × {3} کے {1} فریم کے لیے تقریباً {0} ڈسک جگہ درکار ہے",
+  "ui.video_import_disk_unknown": "یہ ویڈیو اپنا دورانیہ نہیں بتاتی، اس لیے درکار ڈسک جگہ کا اندازہ نہیں لگایا جا سکتا۔",
+  "ui.video_import_start": "درآمد کریں"
 }

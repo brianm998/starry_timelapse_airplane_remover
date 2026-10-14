@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Video importeren",
+  "ui.video_import_blurb": "Star zet de video om in één afbeelding per beeld. Kleinere formaten gebruiken minder schijfruimte maar behouden minder van de oorspronkelijke details.",
+  "ui.video_frame_format": "Beeldformaat",
+  "ui.frame_format_tiff16": "TIFF, 16 bit (beste kwaliteit)",
+  "ui.frame_format_tiff8": "TIFF, 8 bit",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Kwaliteit: {0}%",
+  "ui.video_import_disk_usage": "Er is ongeveer {0} schijfruimte nodig voor {1} beelden van {2} × {3}",
+  "ui.video_import_disk_unknown": "Deze video geeft zijn lengte niet aan, dus de benodigde schijfruimte kan niet worden geschat.",
+  "ui.video_import_start": "Importeren"
 }

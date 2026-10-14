@@ -32,6 +32,7 @@ import com.star.proto.GetAlignmentSequenceRequest
 import com.star.proto.GetBestHorizonRequest
 import com.star.proto.GetBestHorizonResponse
 import com.star.proto.GetBlobStepsRequest
+import com.star.proto.FrameFormat
 import com.star.proto.GetDefaultVideoPathRequest
 import com.star.proto.GetDefaultVideoPathResponse
 import com.star.proto.GetFramePreviewRequest
@@ -66,6 +67,8 @@ import com.star.proto.OutlierFeaturesResponse
 import com.star.proto.OutlierGroupList
 import com.star.proto.Point
 import com.star.proto.PreviewSize
+import com.star.proto.ProbeVideoRequest
+import com.star.proto.ProbeVideoResponse
 import com.star.proto.ProgressEvent
 import com.star.proto.RefinementStatusResponse
 import com.star.proto.ReprocessFramesRequest
@@ -170,12 +173,22 @@ class StarClient(private val conn: StdioConnection) {
 
     // ---- Session ----
 
-    fun openVideo(videoPath: String, initialConfig: Config = Config.getDefaultInstance()): Flow<OpenProgress> =
+    fun openVideo(
+        videoPath: String,
+        initialConfig: Config = Config.getDefaultInstance(),
+        frameFormat: FrameFormat = FrameFormat.FRAME_FORMAT_TIFF16,
+        jpegQuality: Int = 0,
+    ): Flow<OpenProgress> =
         serverStream(
             "Session.OpenVideo",
-            OpenVideoRequest.newBuilder().setVideoPath(videoPath).setInitialConfig(initialConfig).build(),
+            OpenVideoRequest.newBuilder().setVideoPath(videoPath).setInitialConfig(initialConfig)
+                .setFrameFormat(frameFormat).setJpegQuality(jpegQuality).build(),
             OpenProgress.parser(),
         )
+
+    /** A video's size and length from its header, and what a frame of each format costs in disk; `known` is false if it cannot be read. */
+    suspend fun probeVideo(videoPath: String): ProbeVideoResponse =
+        call("Session.ProbeVideo", ProbeVideoRequest.newBuilder().setVideoPath(videoPath).build(), ProbeVideoResponse.parser())
 
     /** As [openSequence], but streams how the frames are coming, and cancelling the collector cancels the open (no session is left behind). */
     fun openSequenceStream(sequenceDir: String, initialConfig: Config = Config.getDefaultInstance()): Flow<OpenProgress> =

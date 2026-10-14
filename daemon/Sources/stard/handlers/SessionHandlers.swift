@@ -58,8 +58,18 @@ enum SessionHandlers {
             let scratchDir = await sessions.scratchDir(for: sessionID)
             await streamOpen(id: id, transport: transport, sessions: sessions, scratchDir: scratchDir) { report in
                 try await Session.openVideo(sessionID: sessionID, scratchSessionDir: scratchDir, videoPath: req.videoPath,
-                                            protoConfig: req.initialConfig, report: report)
+                                            protoConfig: req.initialConfig, frameFormat: Mapping.frameDecodeFormat(from: req), report: report)
             }
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    /// `Session.ProbeVideo`: the size and length of a video, from its header, with what each frame format will cost in disk.
+    static func probeVideo(id: UInt64, payload: Data, transport: StdioTransport) async {
+        do {
+            let req = try Star_V1_ProbeVideoRequest(serializedBytes: payload)
+            try await transport.respond(id: id, payload: Mapping.probeVideoResponse(for: req.videoPath).serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

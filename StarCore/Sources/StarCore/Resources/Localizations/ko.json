@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "비디오 가져오기",
+  "ui.video_import_blurb": "Star는 비디오를 프레임당 이미지 한 장으로 변환합니다. 작은 형식은 디스크 공간을 덜 쓰지만 원본의 세부 정보가 덜 남습니다.",
+  "ui.video_frame_format": "프레임 형식",
+  "ui.frame_format_tiff16": "TIFF, 16비트(최고 품질)",
+  "ui.frame_format_tiff8": "TIFF, 8비트",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "품질: {0}%",
+  "ui.video_import_disk_usage": "{2} × {3} 프레임 {1}개에 약 {0}의 디스크 공간이 필요합니다",
+  "ui.video_import_disk_unknown": "이 비디오에는 길이 정보가 없어 필요한 디스크 공간을 추정할 수 없습니다.",
+  "ui.video_import_start": "가져오기"
 }

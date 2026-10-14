@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Importa video",
+  "ui.video_import_blurb": "Star trasforma il video in un'immagine per fotogramma. I formati più piccoli usano meno spazio su disco ma conservano meno dettagli originali.",
+  "ui.video_frame_format": "Formato dei fotogrammi",
+  "ui.frame_format_tiff16": "TIFF, 16 bit (qualità migliore)",
+  "ui.frame_format_tiff8": "TIFF, 8 bit",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Qualità: {0}%",
+  "ui.video_import_disk_usage": "Servono circa {0} di spazio su disco per {1} fotogrammi da {2} × {3}",
+  "ui.video_import_disk_unknown": "Questo video non indica la sua durata, quindi lo spazio su disco necessario non può essere stimato.",
+  "ui.video_import_start": "Importa"
 }

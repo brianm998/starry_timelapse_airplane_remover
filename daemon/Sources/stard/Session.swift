@@ -1022,13 +1022,14 @@ extension Session {
         return session
     }
 
-    // Decode a video file to TIFFs and open as a session.
+    // Decode a video file to frames (in `frameFormat`) and open as a session.
     // onProgress is called on each ffmpeg frame so the handler can stream IoProgress back to the client.
     static func openVideo(
         sessionID: String,
         scratchSessionDir: String,
         videoPath: String,
         protoConfig: Star_V1_Config,
+        frameFormat: FrameDecodeFormat = .tiff16,
         report: @escaping OpenReport = { _ in }
     ) async throws -> Session {
         try FileManager.default.createDirectory(atPath: scratchSessionDir, withIntermediateDirectories: true)
@@ -1036,7 +1037,7 @@ extension Session {
         let videoName = (videoPath as NSString).lastPathComponent
         report(OpenEvents.stage(.examiningVideo, name: videoName))
         let extracting = OnceFlag()
-        let (sequenceDir, vi) = try await decodeVideo(named: videoPath) { current, total, outputDir in
+        let (sequenceDir, vi) = try await decodeVideo(named: videoPath, format: frameFormat) { current, total, outputDir in
             if extracting.setOnce() { report(OpenEvents.stage(.extractingFrames)) }
             var io = Star_V1_IoProgress()
             io.current   = Int32(current)

@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Importuj wideo",
+  "ui.video_import_blurb": "Star zamienia wideo na jeden obraz na klatkę. Mniejsze formaty zajmują mniej miejsca na dysku, ale zachowują mniej szczegółów oryginału.",
+  "ui.video_frame_format": "Format klatek",
+  "ui.frame_format_tiff16": "TIFF, 16 bitów (najlepsza jakość)",
+  "ui.frame_format_tiff8": "TIFF, 8 bitów",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Jakość: {0}%",
+  "ui.video_import_disk_usage": "Potrzeba około {0} miejsca na dysku dla {1} klatek o rozmiarze {2} × {3}",
+  "ui.video_import_disk_unknown": "To wideo nie podaje swojej długości, więc nie można oszacować potrzebnego miejsca na dysku.",
+  "ui.video_import_start": "Importuj"
 }

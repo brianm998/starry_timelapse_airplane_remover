@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "ভিডিও আমদানি করুন",
+  "ui.video_import_blurb": "Star ভিডিওকে প্রতি ফ্রেমে একটি করে ছবিতে রূপান্তর করে। ছোট ফরম্যাট কম ডিস্ক জায়গা নেয়, তবে মূল বিবরণ কম থাকে।",
+  "ui.video_frame_format": "ফ্রেম ফরম্যাট",
+  "ui.frame_format_tiff16": "TIFF, ১৬ বিট (সেরা মান)",
+  "ui.frame_format_tiff8": "TIFF, ৮ বিট",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "মান: {0}%",
+  "ui.video_import_disk_usage": "{2} × {3} আকারের {1}টি ফ্রেমের জন্য প্রায় {0} ডিস্ক জায়গা লাগবে",
+  "ui.video_import_disk_unknown": "এই ভিডিওতে এর দৈর্ঘ্য উল্লেখ নেই, তাই প্রয়োজনীয় ডিস্ক জায়গার আনুমানিক হিসাব করা যাচ্ছে না।",
+  "ui.video_import_start": "আমদানি করুন"
 }

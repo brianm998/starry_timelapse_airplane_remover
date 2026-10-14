@@ -36,8 +36,16 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
         client().openConfig(configJsonPath).also { _session.value = it }
 
     /** Streams decode progress; the terminal `OpenProgress.done(SessionInfo)` is applied to [session]. */
-    fun openVideo(videoPath: String, initialConfig: Config = defaultInitialConfig()): Flow<OpenProgress> =
-        client().openVideo(videoPath, initialConfig)
+    fun openVideo(
+        videoPath: String,
+        initialConfig: Config = defaultInitialConfig(),
+        frameFormat: com.star.desktop.domain.FrameFormatChoice = com.star.desktop.domain.FrameFormatChoice.TIFF16,
+        jpegQuality: Int = com.star.desktop.domain.VideoImport.DEFAULT_JPEG_QUALITY,
+    ): Flow<OpenProgress> =
+        client().openVideo(videoPath, initialConfig, frameFormat.proto, jpegQuality)
+
+    /** What the video's header says, for the import dialog's disk estimate. */
+    suspend fun probeVideo(videoPath: String): com.star.proto.ProbeVideoResponse = client().probeVideo(videoPath)
 
     /** Streams how the frames are coming; the terminal `OpenProgress.done(SessionInfo)` is for the caller to apply with [applySessionInfo]. */
     fun openSequenceStream(dir: String, initialConfig: Config = defaultInitialConfig()): Flow<OpenProgress> =

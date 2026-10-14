@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "استيراد فيديو",
+  "ui.video_import_blurb": "يحوّل Star الفيديو إلى صورة لكل إطار. تستخدم التنسيقات الأصغر مساحة أقل على القرص لكنها تحتفظ بتفاصيل أقل من الأصل.",
+  "ui.video_frame_format": "تنسيق الإطارات",
+  "ui.frame_format_tiff16": "TIFF، 16 بت (أفضل جودة)",
+  "ui.frame_format_tiff8": "TIFF، 8 بت",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "الجودة: {0}%",
+  "ui.video_import_disk_usage": "يلزم حوالي {0} من مساحة القرص لعدد {1} من الإطارات بحجم {2} × {3}",
+  "ui.video_import_disk_unknown": "لا يذكر هذا الفيديو مدته، لذا لا يمكن تقدير مساحة القرص اللازمة.",
+  "ui.video_import_start": "استيراد"
 }

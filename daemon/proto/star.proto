@@ -80,7 +80,33 @@ message Warning {
 
 // ---- Session ----
 
-message OpenVideoRequest    { string video_path = 1; Config initial_config = 2; }
+// What the frames of an imported video are written as.  The default (0) is 16 bit tiff, what star always wrote before this choice existed.
+enum FrameFormat {
+  FRAME_FORMAT_TIFF16 = 0;
+  FRAME_FORMAT_TIFF8  = 1;
+  FRAME_FORMAT_JPEG   = 2;
+}
+
+message OpenVideoRequest {
+  string      video_path     = 1;
+  Config      initial_config = 2;
+  FrameFormat frame_format   = 3;   // default TIFF16
+  int32       jpeg_quality   = 4;   // 1..100, only for JPEG; 0 (unset) → 80
+}
+
+// Session.ProbeVideo: what the video's header says, without decoding it, so a dialog can tell the user how much disk the frames will take.
+message ProbeVideoRequest  { string video_path = 1; }
+message ProbeVideoResponse {
+  bool   known       = 1;   // false when the video could not be read; nothing else is set then
+  int32  width       = 2;
+  int32  height      = 3;
+  int32  frame_count = 4;   // 0 when the file does not say how many frames it has
+  // Estimated bytes one pixel of a frame takes on disk, so a client can work out the size for whatever it is showing:
+  // width * height * frame_count * bytes_per_pixel.  The estimates lean high, since they are for deciding whether there is room.
+  double          tiff16_bytes_per_pixel = 5;
+  double          tiff8_bytes_per_pixel  = 6;
+  repeated double jpeg_bytes_per_pixel   = 7;   // [i] is quality i + 1, so 100 entries
+}
 message OpenSequenceRequest { string sequence_dir = 1; Config initial_config = 2; }
 message OpenConfigRequest   { string config_json_path = 1; }
 

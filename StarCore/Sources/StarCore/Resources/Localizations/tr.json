@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Videoyu İçe Aktar",
+  "ui.video_import_blurb": "Star videoyu kare başına bir görüntüye dönüştürür. Daha küçük biçimler daha az disk alanı kullanır ancak özgün ayrıntıların daha azını korur.",
+  "ui.video_frame_format": "Kare biçimi",
+  "ui.frame_format_tiff16": "TIFF, 16 bit (en iyi kalite)",
+  "ui.frame_format_tiff8": "TIFF, 8 bit",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Kalite: %{0}",
+  "ui.video_import_disk_usage": "{2} × {3} boyutunda {1} kare için yaklaşık {0} disk alanı gerekir",
+  "ui.video_import_disk_unknown": "Bu video uzunluğunu belirtmiyor, bu nedenle gereken disk alanı tahmin edilemiyor.",
+  "ui.video_import_start": "İçe Aktar"
 }

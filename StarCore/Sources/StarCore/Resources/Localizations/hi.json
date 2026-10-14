@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "वीडियो आयात करें",
+  "ui.video_import_blurb": "Star वीडियो को प्रति फ़्रेम एक छवि में बदलता है। छोटे फ़ॉर्मेट कम डिस्क स्थान लेते हैं, लेकिन मूल विवरण कम सुरक्षित रखते हैं।",
+  "ui.video_frame_format": "फ़्रेम फ़ॉर्मेट",
+  "ui.frame_format_tiff16": "TIFF, 16 बिट (सर्वश्रेष्ठ गुणवत्ता)",
+  "ui.frame_format_tiff8": "TIFF, 8 बिट",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "गुणवत्ता: {0}%",
+  "ui.video_import_disk_usage": "{2} × {3} के {1} फ़्रेम के लिए लगभग {0} डिस्क स्थान चाहिए",
+  "ui.video_import_disk_unknown": "यह वीडियो अपनी अवधि नहीं बताता, इसलिए आवश्यक डिस्क स्थान का अनुमान नहीं लगाया जा सकता।",
+  "ui.video_import_start": "आयात करें"
 }

@@ -41,7 +41,9 @@ It is free software, both free to use and free to see and use the source code, u
 
 At a high level, Star takes as input an image sequence from a timelapse video.
 It does a bunch of processing on this, and then outputs a processed image sequence which has modifications made to it to hide streaks in the sky.
-Currently Star does not operate on video files directly, only image sequences which are separated by folder, and only 16 bit tiff images.
+Star can open a video file directly, or an image sequence which is separated by folder.
+When opening a video, Star first splits it into one image per frame, and you choose the format of those images: 16 bit TIFF (the default, and the best quality), 8 bit TIFF, or JPEG with a quality setting (80% by default). The dialog estimates how much disk space each choice will need.
+Image sequences can be TIFF, JPEG or PNG images. Processed images are written in the same format as the images they came from, so a JPEG sequence comes out as JPEGs, and an 8 bit TIFF sequence as 8 bit TIFFs.
 """.trimIndent()
 
 private val HOW_TO_TEXT = """

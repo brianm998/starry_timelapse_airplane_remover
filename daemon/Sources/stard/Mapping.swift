@@ -131,6 +131,36 @@ enum Mapping {
         }
     }
 
+    // MARK: - Video frame format
+
+    /// The format an `OpenVideoRequest` asks for; an unset quality is the default one.
+    static func frameDecodeFormat(from request: Star_V1_OpenVideoRequest) -> FrameDecodeFormat {
+        let kind: FrameDecodeFormat.Kind
+        switch request.frameFormat {
+        case .tiff8: kind = .tiff8
+        case .jpeg:  kind = .jpeg
+        default:     kind = .tiff16
+        }
+        let quality = request.jpegQuality == 0 ? FrameDecodeFormat.defaultJPEGQuality : Int(request.jpegQuality)
+        return FrameDecodeFormat(kind: kind, jpegQuality: quality)
+    }
+
+    /// The answer to `Session.ProbeVideo`.
+    static func probeVideoResponse(for videoPath: String) -> Star_V1_ProbeVideoResponse {
+        var response = Star_V1_ProbeVideoResponse()
+        guard let probe = VideoProbe.probe(videoAt: videoPath) else { return response }
+        response.known = true
+        response.width = Int32(probe.width)
+        response.height = Int32(probe.height)
+        response.frameCount = Int32(probe.frameCount ?? 0)
+        response.tiff16BytesPerPixel = FrameDecodeFormat.tiff16.estimatedBytesPerPixel
+        response.tiff8BytesPerPixel = FrameDecodeFormat.tiff8.estimatedBytesPerPixel
+        response.jpegBytesPerPixel = FrameDecodeFormat.jpegQualityRange.map {
+            FrameDecodeFormat(kind: .jpeg, jpegQuality: $0).estimatedBytesPerPixel
+        }
+        return response
+    }
+
     // MARK: - CleanMethod
 
     static func cleanMethod(from proto: Star_V1_Config) -> CleanMethod {

@@ -352,6 +352,9 @@ public final class ViewModel {
     var newRelease: GitHubRelease? = nil
     var newReleaseSheetShowing = false
 
+    /// A video the user has chosen but not yet said how to decode; the initial view asks.
+    var pendingVideoImport: PendingVideoImport? = nil
+
     var showUserPreferencesSheet = false
 
     func pushCursor(_ cursor: NSCursor) {
@@ -532,12 +535,12 @@ public final class ViewModel {
         }
     }
 
-    func startup(withVideoToProcess path: String) async throws {
+    func startup(withVideoToProcess path: String, format: FrameDecodeFormat = .tiff16) async throws {
         isLoadingImageSequence = true
 
         isProbingImageSequence = true
         let (outputDir, videoInfo) = try await Task.detached() {
-            try await decodeVideo(named: path) { currentFrame, totalFrames, outputDir in
+            try await decodeVideo(named: path, format: format) { currentFrame, totalFrames, outputDir in
                 Task { @MainActor in
                     self.isExtractingImageSequence = true
                     self.isProbingImageSequence = false

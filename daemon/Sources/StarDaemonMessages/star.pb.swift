@@ -25,6 +25,45 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// What the frames of an imported video are written as.  The default (0) is 16 bit tiff, what star always wrote before this choice existed.
+public enum Star_V1_FrameFormat: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case tiff16 // = 0
+  case tiff8 // = 1
+  case jpeg // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .tiff16
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .tiff16
+    case 1: self = .tiff8
+    case 2: self = .jpeg
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .tiff16: return 0
+    case .tiff8: return 1
+    case .jpeg: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Star_V1_FrameFormat] = [
+    .tiff16,
+    .tiff8,
+    .jpeg,
+  ]
+
+}
+
 /// What opening a source is doing, for the loading screen (macOS ImageSequenceLoadingView).  A video is examined, then its frames are
 /// extracted (IoProgress, below), then every source has its frames loaded (FramesLoaded).
 public enum Star_V1_OpenStage: SwiftProtobuf.Enum, Swift.CaseIterable {
@@ -1096,11 +1135,59 @@ public struct Star_V1_OpenVideoRequest: Sendable {
   /// Clears the value of `initialConfig`. Subsequent reads from it will return its default value.
   public mutating func clearInitialConfig() {self._initialConfig = nil}
 
+  /// default TIFF16
+  public var frameFormat: Star_V1_FrameFormat = .tiff16
+
+  /// 1..100, only for JPEG; 0 (unset) → 80
+  public var jpegQuality: Int32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _initialConfig: Star_V1_Config? = nil
+}
+
+/// Session.ProbeVideo: what the video's header says, without decoding it, so a dialog can tell the user how much disk the frames will take.
+public struct Star_V1_ProbeVideoRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var videoPath: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_ProbeVideoResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// false when the video could not be read; nothing else is set then
+  public var known: Bool = false
+
+  public var width: Int32 = 0
+
+  public var height: Int32 = 0
+
+  /// 0 when the file does not say how many frames it has
+  public var frameCount: Int32 = 0
+
+  /// Estimated bytes one pixel of a frame takes on disk, so a client can work out the size for whatever it is showing:
+  /// width * height * frame_count * bytes_per_pixel.  The estimates lean high, since they are for deciding whether there is room.
+  public var tiff16BytesPerPixel: Double = 0
+
+  public var tiff8BytesPerPixel: Double = 0
+
+  /// [i] is quality i + 1, so 100 entries
+  public var jpegBytesPerPixel: [Double] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 public struct Star_V1_OpenSequenceRequest: Sendable {
@@ -4121,6 +4208,10 @@ public struct Star_V1_GetBestHorizonResponse: Sendable {
 
 fileprivate let _protobuf_package = "star.v1"
 
+extension Star_V1_FrameFormat: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FRAME_FORMAT_TIFF16\0\u{1}FRAME_FORMAT_TIFF8\0\u{1}FRAME_FORMAT_JPEG\0")
+}
+
 extension Star_V1_OpenStage: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0OPEN_STAGE_UNSPECIFIED\0\u{1}OPEN_STAGE_EXAMINING_VIDEO\0\u{1}OPEN_STAGE_EXTRACTING_FRAMES\0\u{1}OPEN_STAGE_LOADING_FRAMES\0")
 }
@@ -4496,7 +4587,7 @@ extension Star_V1_Warning: SwiftProtobuf.Message, SwiftProtobuf._MessageImplemen
 
 extension Star_V1_OpenVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenVideoRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}video_path\0\u{3}initial_config\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}video_path\0\u{3}initial_config\0\u{3}frame_format\0\u{3}jpeg_quality\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4506,6 +4597,8 @@ extension Star_V1_OpenVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._Messag
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.videoPath) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._initialConfig) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.frameFormat) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.jpegQuality) }()
       default: break
       }
     }
@@ -4522,12 +4615,110 @@ extension Star_V1_OpenVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._Messag
     try { if let v = self._initialConfig {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    if self.frameFormat != .tiff16 {
+      try visitor.visitSingularEnumField(value: self.frameFormat, fieldNumber: 3)
+    }
+    if self.jpegQuality != 0 {
+      try visitor.visitSingularInt32Field(value: self.jpegQuality, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_OpenVideoRequest, rhs: Star_V1_OpenVideoRequest) -> Bool {
     if lhs.videoPath != rhs.videoPath {return false}
     if lhs._initialConfig != rhs._initialConfig {return false}
+    if lhs.frameFormat != rhs.frameFormat {return false}
+    if lhs.jpegQuality != rhs.jpegQuality {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_ProbeVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProbeVideoRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}video_path\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.videoPath) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.videoPath.isEmpty {
+      try visitor.visitSingularStringField(value: self.videoPath, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_ProbeVideoRequest, rhs: Star_V1_ProbeVideoRequest) -> Bool {
+    if lhs.videoPath != rhs.videoPath {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_ProbeVideoResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProbeVideoResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}known\0\u{1}width\0\u{1}height\0\u{3}frame_count\0\u{3}tiff16_bytes_per_pixel\0\u{3}tiff8_bytes_per_pixel\0\u{3}jpeg_bytes_per_pixel\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.known) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.width) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.height) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.frameCount) }()
+      case 5: try { try decoder.decodeSingularDoubleField(value: &self.tiff16BytesPerPixel) }()
+      case 6: try { try decoder.decodeSingularDoubleField(value: &self.tiff8BytesPerPixel) }()
+      case 7: try { try decoder.decodeRepeatedDoubleField(value: &self.jpegBytesPerPixel) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.known != false {
+      try visitor.visitSingularBoolField(value: self.known, fieldNumber: 1)
+    }
+    if self.width != 0 {
+      try visitor.visitSingularInt32Field(value: self.width, fieldNumber: 2)
+    }
+    if self.height != 0 {
+      try visitor.visitSingularInt32Field(value: self.height, fieldNumber: 3)
+    }
+    if self.frameCount != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameCount, fieldNumber: 4)
+    }
+    if self.tiff16BytesPerPixel.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.tiff16BytesPerPixel, fieldNumber: 5)
+    }
+    if self.tiff8BytesPerPixel.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.tiff8BytesPerPixel, fieldNumber: 6)
+    }
+    if !self.jpegBytesPerPixel.isEmpty {
+      try visitor.visitPackedDoubleField(value: self.jpegBytesPerPixel, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_ProbeVideoResponse, rhs: Star_V1_ProbeVideoResponse) -> Bool {
+    if lhs.known != rhs.known {return false}
+    if lhs.width != rhs.width {return false}
+    if lhs.height != rhs.height {return false}
+    if lhs.frameCount != rhs.frameCount {return false}
+    if lhs.tiff16BytesPerPixel != rhs.tiff16BytesPerPixel {return false}
+    if lhs.tiff8BytesPerPixel != rhs.tiff8BytesPerPixel {return false}
+    if lhs.jpegBytesPerPixel != rhs.jpegBytesPerPixel {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
