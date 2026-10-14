@@ -771,10 +771,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showNeighborFrameInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            During star alignment, we use this number for aligning and processing neighboring frames.  Lowest possible number is 1, which does work for many cases in selective processing.  However, 8 is a better option for general use, as it covers the case where neighboring frames have bad pixels at the same location.
-            Giving a value of 8 means that four neighboring frames on each side will be used, except for the edge cases at the ends of the video, where 8 neighbors are still used, but more on one side or the other as necessary.
-            """
+          infoText: localized("setting_help.neighbor_frames")
         ) {
             HStack {
                 HStack {
@@ -809,11 +806,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showStaticNeighborFrameInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            With difficult horizons, star can get better horizon results by merging
-            more neighboring horizons together.
-            Use this field when the camera is not moving, and include as many as you need to get a smoother horizon that doesn't change much between frames.
-            """
+          infoText: localized("setting_help.static_neighbor_frames")
         ) {
             HStack {
                 HStack {
@@ -850,9 +843,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showPixelThresholdInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            The pixel threshold is a factor used to weed out pixels that are statistically too much brigher than other aligned pixels at the same location.  Lower values like 0.5 get rid of more brighter pixels, higher values like 2.0 will allow more brighter pixels to pass through.  Used for both the subtraction image and for calculating what pixel values to replace airplanes with.
-            """
+          infoText: localized("setting_help.pixel_threshold")
         ) {
             HStack {
                 HStack {
@@ -887,9 +878,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentGroundHorizonExtensionInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Specify a number of pixels to extend the horizon by when aligning the ground.  This can help to make sure that the horizon itself is included in the area to find keypoints.
-            """
+          infoText: localized("setting_help.ground_horizon_extension")
         ) {
             HStack {
                 HStack {
@@ -923,9 +912,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentSkyHorizonExtensionInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Specify a number of pixels to extend the horizon by when aligning the sky.  This can help to avoid finding keypoints on the horizon itself, which moves differently than the sky does throughout videos.
-            """
+          infoText: localized("setting_help.sky_horizon_extension")
         ) {
             HStack {
                 HStack {
@@ -959,9 +946,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentMaxKeypointsInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Specify the maximum number of keypoints that should be considered by the alignment code.  Setting a lower value may speed things up but give worse alignment results.
-            """
+          infoText: localized("setting_help.max_keypoints")
         ) {
             HStack {
                 HStack {
@@ -995,17 +980,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentKeypointDivisorInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Divide each frame's dimensions by this before detecting keypoints on it.  1 detects at full resolution, 2 on a half size copy, 1.5 on a two thirds copy.
-
-            Keypoint detection is by far the most memory hungry and slowest step, and its cost scales with the number of pixels it is given — about 210 bytes per pixel, or roughly 38x the size of the frame itself.  Both time and peak memory fall as 1 over the divisor squared, so 4x at a divisor of 2 but 2.25x at 1.5.  On a 42 megapixel sequence a divisor of 2 is the difference between about 9GB and about 2GB per frame in flight.
-
-            What you pay for it is sharpness, and it is worth knowing why.  Keypoints never touch the output pixels — they only produce the alignment.  Detecting on a smaller copy makes each keypoint's position less precise, which leaves each neighbouring frame warped very slightly wrong, and the merge then averages stars that sit a fraction of a pixel apart.  That reads as softness in the final frame.  The error falls roughly in step with the divisor, so 1.5 gives back about half the softness of 2 while still skipping more than half the work.
-
-            1 by default.  Worth trying 1.5 on high resolution sequences, and comparing against a full resolution run.  Keypoint files are stored separately for each divisor, so changing it does not mix descriptors found at different scales.
-
-            If you find this already set to 1.5 without having touched it, the startup prompt did that: when a sequence's frames are larger than this machine can detect on at full resolution without the memory budget throttling concurrency, it offers the setting up front and pre-selects 1.5.  Changing it here overrides that for the rest of this run.
-            """
+          infoText: localized("setting_help.keypoint_divisor")
         ) {
             HStack {
                 HStack {
@@ -1041,9 +1016,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentWriteDebugImagesInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Turn this on to write out temporary alignment images to help debug what is going on if something is not right.  The files end up in /tmp.
-            """
+          infoText: localized("setting_help.write_debug_images")
         ) {
             HStack {
                 HStack {
@@ -1069,9 +1042,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentBaseImageThresholdValueInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            The Star alignment algorithm computes a mask for keypoint detection in the base image.  When computing this mask, in addition to discarding the ground, the sky is thresholded by this value.  What that means is only areas this bright or brighter will be scanned for keypoints.  This helps focus keypoint detection on the bright stars, and avoid clouds and other atmospheric phenomenon.  Lower values will give more key points on the base image during alignment.  Max value is 255.
-            """
+          infoText: localized("setting_help.base_image_threshold")
         ) {
             HStack {
                 HStack {
@@ -1105,9 +1076,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentBaseImageDilateSizeInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            The Star alignment algorithm computes a mask for keypoint detection in the base image.  When computing this mask, in addition to discarding the ground, the sky is thresholded by this value.  After thresholding, star will then dilate, or expand, the mask to include the given amount of pixels around the thresholded pixels.  This allows for the keypoint detection to see more of the transition of intensity, which can help keypoint detection.
-            """
+          infoText: localized("setting_help.base_image_dilation_size")
         ) {
             HStack {
                 HStack {
@@ -1141,10 +1110,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showCannyMinThresholdView,
           addSpacer: { addSpacer },
-          infoText: """
-            When Star is calculating the horizon for a frame, the Canny Edge Detection algorithm can be used to help define a better horizon.
-            This value is the min canny threshold.  Lower values give more edges, higher values less.
-            """
+          infoText: localized("setting_help.canny_min_threshold")
         ) {
             HStack {
                 HStack {
@@ -1180,9 +1146,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showHomographySmoothingEpsilon,
           addSpacer: { addSpacer },
-          infoText: """
-            How close do we want the deviation of neighbor homography to be when smoothing neighbor homography across frames when processing moving videos?  Smaller ε values give more smoothing.
-            """
+          infoText: localized("setting_help.homography_smoothing")
         ) {
             HStack {
                 HStack {
@@ -1218,10 +1182,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showCannyMaxThresholdView,
           addSpacer: { addSpacer },
-          infoText: """
-            When Star is calculating the horizon for a frame, the Canny Edge Detection algorithm can be used to help define a better horizon.
-            This value is the max canny threshold.  Lower values give more edges, higher values less.
-            """
+          infoText: localized("setting_help.canny_max_threshold")
         ) {
             HStack {
                 HStack {
@@ -1269,14 +1230,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showUseGPUForMergeInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Uses the GPU (Metal) for the alignment warp and median-merge steps of \
-            processing ONLY, when this Mac has hardware that supports it. Keypoint detection \
-            (the two toggles below, SIFT and AKAZE) is controlled separately and is not \
-            affected by this one either way. Turning this off always uses the CPU instead for \
-            warp/merge, which is slower but produces output that is not affected by the small \
-            numeric differences the GPU path documents for the merge step.
-            """
+          infoText: localized("setting_help.gpu_merge")
         ) {
             HStack {
                 HStack {
@@ -1309,13 +1263,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showUseGPUForSIFTInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Uses a from-scratch, GPU-accelerated reimplementation of SIFT's scale-space \
-            pyramid for sky (star) keypoint detection, in place of OpenCV's own SIFT. Off by \
-            default: this is a hand-ported reimplementation rather than a call into OpenCV, so \
-            it carries more behavioral-drift risk than the warp/merge kernels above. Requires \
-            GPU hardware regardless of this setting.
-            """
+          infoText: localized("setting_help.gpu_sift")
         ) {
             HStack {
                 HStack {
@@ -1348,13 +1296,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showUseGPUForAKAZEInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Uses a from-scratch, GPU-accelerated reimplementation of AKAZE's scale-space \
-            pyramid for earth (ground) keypoint detection, in place of OpenCV's own AKAZE. \
-            Off by default: this is a hand-ported reimplementation rather than a call into \
-            OpenCV, so it carries more behavioral-drift risk than the warp/merge kernels \
-            above. Requires GPU hardware regardless of this setting.
-            """
+          infoText: localized("setting_help.gpu_akaze")
         ) {
             HStack {
                 HStack {
@@ -1384,14 +1326,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showUseReferenceHorizonSmoothingInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            For moving timelapses with user-defined reference horizon frames, enabling this uses those \
-            reference horizons to filter out obviously wrong per-column horizon values on nearby frames. \
-            Columns whose detected position is a statistical outlier relative to the reference are \
-            replaced by the reference value; columns within normal variation are kept as detected. \
-            Frames beyond the max distance window fall through to normal horizon smoothing.
-            Only applies when Camera Motion is set to Moving.
-            """
+          infoText: localized("setting_help.reference_smoothing")
         ) {
             HStack {
                 HStack {
@@ -1418,12 +1353,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showReferenceHorizonSmoothingMaxDistanceInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            The maximum number of frames away from a user-defined reference horizon within which \
-            reference-based horizon smoothing is applied. For example, a value of 30 means any \
-            frame within 30 frames of a reference horizon frame will be smoothed against it. \
-            Frames further away than this distance use the normal median-merge horizon smoothing instead.
-            """
+          infoText: localized("setting_help.reference_smoothing_distance")
         ) {
             HStack {
                 HStack {
@@ -1459,14 +1389,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showUseReferenceHorizonBrightnessRefinementInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            For moving timelapses with user-defined reference horizon frames, enabling this uses the \
-            brightness statistics from those reference frames to refine per-pixel sky/ground \
-            classification near the horizon. Each pixel within the search radius of the widest known \
-            horizon bounds is scored by both its brightness (relative to the reference frame's median \
-            sky and ground brightness) and its vertical position, then reclassified as sky or ground. \
-            Only applies when Camera Motion is set to Moving.
-            """
+          infoText: localized("setting_help.brightness_refinement")
         ) {
             HStack {
                 HStack {
@@ -1493,12 +1416,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showReferenceHorizonBrightnessRefinementSearchRadiusInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            The number of pixels above and below the widest known horizon Y range (across all \
-            reference frames) within which brightness+position refinement is applied. Pixels \
-            outside this band are left unchanged. Larger values refine more of the image near \
-            the horizon; smaller values limit changes to pixels very close to the horizon.
-            """
+          infoText: localized("setting_help.brightness_refinement_search_radius")
         ) {
             HStack {
                 HStack {
@@ -1534,14 +1452,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showReferenceHorizonBrightnessRefinementHistogramBucketsInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            The number of buckets in the intensity histograms used to classify each pixel as \
-            sky or ground during brightness refinement. Each histogram spans the actual \
-            intensity range observed in that region (sky or ground) in the nearest reference \
-            frames, giving finer resolution within the real data range. Higher values provide \
-            more precise intensity matching but require more reference pixels per bucket to be \
-            reliable; lower values are more robust when few reference pixels are available.
-            """
+          infoText: localized("setting_help.brightness_refinement_buckets")
         ) {
             HStack {
                 HStack {
@@ -1577,14 +1488,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showReferenceHorizonNeighborhoodSizeInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            The side length of the square neighbourhood used when sampling pixel colour and \
-            intensity for reference-horizon statistics and per-pixel refinement. For each pixel, \
-            values from the neighbourhood are averaged (excluding pixels on the opposite side of \
-            the horizon mask in the stats pass) to produce a more stable colour estimate. Use an \
-            odd number (e.g. 1, 3, 5, 7); even values are treated as the next lower odd. Set to \
-            1 to use single-pixel sampling. Default is 5 (5×5 neighbourhood).
-            """
+          infoText: localized("setting_help.neighbourhood_size")
         ) {
             HStack {
                 HStack {
@@ -1620,11 +1524,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showHorizonSpikeRemovalEnabledInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            When enabled, a spike-removal pass runs after brightness refinement to eliminate \
-            narrow upward protrusions (wind turbines, towers, isolated star pixels) from the \
-            horizon line.
-            """
+          infoText: localized("setting_help.spike_removal")
         ) {
             HStack {
                 HStack {
@@ -1652,11 +1552,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showHorizonSpikeMaxWidthInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Maximum number of consecutive columns that can be removed as a spike. Runs wider \
-            than this are treated as legitimate terrain features (hills, ridgelines) and left \
-            unchanged. Increase this value to remove wider structures such as broad tower bases.
-            """
+          infoText: localized("setting_help.spike_max_width")
         ) {
             HStack {
                 HStack {
@@ -1693,12 +1589,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showHorizonSpikeMaxDeviationFractionInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            A column is considered a spike when its horizon Y is more than this fraction of the \
-            image height above the local median. For example, 0.02 means 2% of image height \
-            (≈9 px on a 460 px image, ≈80 px on a 4000 px image). Lower values catch shorter \
-            spikes; higher values only remove very tall protrusions.
-            """
+          infoText: localized("setting_help.spike_max_deviation")
         ) {
             HStack {
                 HStack {
@@ -1736,12 +1627,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showHorizonSpikeWindowHalfInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Half-width of the local-median window (in columns) used to establish the reference \
-            horizon level for spike detection. A larger window is more robust because the spike \
-            value itself is a smaller fraction of the median sample, so it has less influence on \
-            the reference level. Reduce if the horizon changes rapidly across the frame.
-            """
+          infoText: localized("setting_help.spike_window_half")
         ) {
             HStack {
                 HStack {
@@ -1778,9 +1664,7 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showProcessingModeInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            Star supports a number of different processing modes for selective processing.  On one end is faster processing and less accuracy, on the other end is slower processing and more touch up work.
-            """
+          infoText: localized("setting_help.selective_processing_mode")
         ) {
             HStack {
                 HStack {
@@ -1955,15 +1839,7 @@ extension ProcessingSettingsView {
         return InfoTextInstructionGridRow(
           showInfo: $showMemoryBudgetFractionInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            The fraction of total physical RAM that Star is allowed to reserve for in-flight operations. \
-            Values range from 0.1 (10%) to 0.95 (95%). The default of 0.85 leaves the OS and other apps \
-            roughly 15% headroom.
-
-            Lowering this value reduces the number of operations that can run concurrently, \
-            which prevents RAM exhaustion on machines shared with other heavy apps. \
-            Raising it can increase throughput if your system is mostly idle.
-            """
+          infoText: localized("setting_help.memory_budget")
         ) {
             HStack {
                 HStack {
@@ -1998,19 +1874,7 @@ extension ProcessingSettingsView {
         return InfoTextInstructionGridRow(
           showInfo: $showKeypointMultiplierInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            How many times the raw frame size (in bytes) to reserve per keypoint detection operation.
-
-            Keypoint detection (SIFT/AKAZE) builds a multi-octave Gaussian pyramid and keeps the full \
-            frame plus working buffers in memory. For 33 MP 16-bit images this can easily reach 6–10 GB \
-            per operation.
-
-            Raise this value if your system thrashes during keypoint detection — it reduces the number \
-            of concurrent operations allowed. Lower it if you have abundant RAM and want more throughput.
-            Default: 42, measured one operation at a time in a fresh process: 38x the frame at \
-            12 megapixels, 38x at 24 and 40x at 42, so 42 leaves only a little room to spare \
-            at the largest sizes. Not a value to lower.
-            """
+          infoText: localized("setting_help.keypoint_mem")
         ) {
             HStack {
                 HStack {
@@ -2044,24 +1908,7 @@ extension ProcessingSettingsView {
         return InfoTextInstructionGridRow(
           showInfo: $showOutlierMultiplierInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            How many times the raw frame size (in bytes) to reserve per outlier-detection operation.
-
-            Outlier detection subtracts the star-aligned frame from the original and blobs the \
-            difference. The blobber is the bulk of it, and unlike the other steps its cost \
-            depends on the picture, not just its size: it keeps one record per bright pixel, so \
-            a frame with a lot of residual left after alignment costs much more than a clean one. \
-            Measured one operation at a time in a fresh process, the blobber alone ran 1.3x the \
-            frame with nothing bright in it, 5.4x at a tenth of a percent of pixels bright, and \
-            7x at the worst density tried. The original and a copy of the subtraction image's \
-            pixels sit on top of that throughout. It also builds the aligned frame if that is \
-            not on disk yet.
-
-            Raise this if you see heavy swap usage during the outlier phase, especially on hazy \
-            sequences or ones that align poorly. Default: 9, plus the neighbor count of any merge \
-            inside the op that is small enough to keep all of its source frames in memory (see \
-            the merge streaming threshold).
-            """
+          infoText: localized("setting_help.outlier_mem")
         ) {
             HStack {
                 HStack {
@@ -2095,21 +1942,7 @@ extension ProcessingSettingsView {
         return InfoTextInstructionGridRow(
           showInfo: $showMergeMultiplierInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            How many times the raw frame size (in bytes) to reserve per merge operation.
-
-            The merge step composites the final output frame from the original and the \
-            star-aligned frame, building that aligned frame first if it is not on disk yet.
-
-            At the default streaming threshold that build keeps every warped neighbor in \
-            memory, so its cost does grow with the neighbor count — which is why the \
-            reserved amount below is not just this number. Only above the threshold does \
-            the build spill each warp to a scratch file instead and go flat.
-
-            Raise this if you see thrashing during the merge phase. Default: 6, plus the neighbor \
-            count of any merge inside the op that is small enough to keep all of its source \
-            frames in memory (see the merge streaming threshold).
-            """
+          infoText: localized("setting_help.merge_mem")
         ) {
             HStack {
                 HStack {
@@ -2143,20 +1976,7 @@ extension ProcessingSettingsView {
         return InfoTextInstructionGridRow(
           showInfo: $showHorizonMultiplierInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            How many times the frame size (in bytes) to reserve per horizon-detection operation.
-
-            Unlike the other multipliers, this one is a poor fit for the work it describes. \
-            Horizon detection runs its base methods on a 512-pixel-wide copy of the frame and \
-            caps the refinement step at 4096 wide, so its cost barely changes with the size of \
-            the frame you give it — measured one op at a time in a fresh process, 424MB at 6 \
-            megapixels against 966MB at 42, for seven times the pixels.
-
-            Because of that, the small end is covered by the horizon reservation floor below \
-            rather than by raising this. Raising it to cover 6 megapixels would need 13x, and \
-            13x at 42 megapixels would reserve close to 3GB for an operation that needs 1GB. \
-            Default: 7, calibrated at 24 megapixels.
-            """
+          infoText: localized("setting_help.horizon_mem")
         ) {
             HStack {
                 HStack {
@@ -2190,22 +2010,7 @@ extension ProcessingSettingsView {
         return InfoTextInstructionGridRow(
           showInfo: $showHorizonFloorInfo,
           addSpacer: { addSpacer },
-          infoText: """
-            The least memory, in megabytes, to reserve for one horizon-detection operation, \
-            whatever the horizon multiplier above works out to.
-
-            This exists because a horizon operation costs about the same no matter how big the \
-            frame is, so a plain multiple of the frame comes out too small on small frames. \
-            Measured one operation at a time in a fresh process, the multiplier alone covered \
-            only 57% of what one operation needed at 6 megapixels and 76% at 12, while covering \
-            133% at 24 and 175% at 42. Under-reserving is the harmful direction: it lets too \
-            many operations run at once and the machine runs out of memory.
-
-            Default: 900MB, which stops mattering at about 17 megapixels, where the multiplier \
-            grows past it — so this only affects smaller frames, and changes nothing at the size \
-            the multiplier was calibrated on. Raise it if a small-frame sequence still thrashes \
-            during the horizon phase. Set it to 0 to use the multiplier alone.
-            """
+          infoText: localized("setting_help.horizon_floor")
         ) {
             HStack {
                 HStack {

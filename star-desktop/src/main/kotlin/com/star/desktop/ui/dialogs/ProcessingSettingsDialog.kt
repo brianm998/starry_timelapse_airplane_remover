@@ -103,6 +103,16 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 return@Column
             }
 
+            // Which rows have their explanation open, by row id; the two buttons open and close all of them, the ones in folded groups too.
+            val info = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                OutlinedButton(onClick = { info.clear() }) { Text(localized("ui.hide_info"), fontSize = 12.sp) }
+                Button(
+                    onClick = { ALL_INFO_IDS.forEach { info[it] = true } },
+                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                ) { Text(localized("ui.show_info"), fontSize = 12.sp) }
+            }
+
             var clean by remember(cfg) { mutableStateOf(cfg.cleanMethod) }
             var detection by remember(cfg) { mutableStateOf(cfg.detectionType) }
             var horizon by remember(cfg) { mutableStateOf(cfg.horizonDetectionEnabled) }
@@ -120,7 +130,14 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             val gpuUnavailable = cfg.hasGpuHardwareAvailable() && !cfg.gpuHardwareAvailable
             val edit = SettingsEdit(horizon, tripod, clean, gpuUnavailable) { id -> boolEdits[id] ?: BOOL_FIELDS[id]?.get(cfg) ?: false }
 
-            SettingGroup(localized("ui.clean_method")) {
+            SettingGroup(
+                localized("ui.clean_method"), info = info, infoId = "clean",
+                help = choicesHelp(
+                    localized("ui.automatic") to localized("ui.mode_desc_automatic"),
+                    localized("ui.auto_selective") to localized("ui.mode_desc_auto_selective"),
+                    localized("ui.selective") to localized("ui.mode_desc_selective"),
+                ),
+            ) {
                 Segmented(
                     options = listOf(
                         CleanMethod.CLEAN_AUTOMATIC to localized("ui.automatic"),
@@ -137,7 +154,10 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             }
 
             // How strictly outliers are looked for: only means something when the method finds outlier groups at all.
-            SettingGroup(localized("ui.selective_processing_mode").removeSuffix(":"), enabled = edit.usesOutliers) {
+            SettingGroup(
+                localized("ui.selective_processing_mode").removeSuffix(":"), enabled = edit.usesOutliers,
+                info = info, infoId = "detection", help = localized("setting_help.selective_processing_mode"),
+            ) {
                 Segmented(
                     options = listOf(
                         DetectionType.DETECTION_MILD to localized("detection_type.mild"),
@@ -153,18 +173,32 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 )
             }
 
-            SettingGroup(localized("ui.scene_type").removeSuffix(":")) {
+            SettingGroup(
+                localized("ui.scene_type").removeSuffix(":"), info = info, infoId = "scene",
+                help = choicesHelp(
+                    localized("scene_type.sky_horizon") to localized("ui.sky_horizon_desc"),
+                    localized("scene_type.sky_only") to localized("ui.sky_only_desc"),
+                ),
+            ) {
                 Segmented(
                     options = listOf(true to localized("scene_type.sky_horizon"), false to localized("scene_type.sky_only")),
                     selected = horizon,
                     onSelect = { horizon = it },
+                    tip = { localized(if (it) "ui.sky_horizon_help" else "ui.sky_only_help") },
                 )
             }
-            SettingGroup(localized("ui.camera_motion").removeSuffix(":")) {
+            SettingGroup(
+                localized("ui.camera_motion").removeSuffix(":"), info = info, infoId = "camera",
+                help = choicesHelp(
+                    localized("camera_motion.fixed") to localized("ui.camera_fixed_desc"),
+                    localized("camera_motion.moving") to localized("ui.camera_moving_desc"),
+                ),
+            ) {
                 Segmented(
                     options = listOf(false to localized("camera_motion.fixed"), true to localized("camera_motion.moving")),
                     selected = tripod,
                     onSelect = { tripod = it },
+                    tip = { localized(if (it) "ui.camera_moving_help" else "ui.camera_fixed_help") },
                 )
             }
 
@@ -198,16 +232,16 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             }
 
             // Not an expert setting: GPU acceleration is one most people care about, so it is here without "Show Expert Settings" and open.
-            GpuGroup(cfg, edit, boolEdits, app.engineStatus.value.let { (it as? EngineStatus.Connected)?.daemonVersion })
+            GpuGroup(cfg, edit, boolEdits, info, app.engineStatus.value.let { (it as? EngineStatus.Connected)?.daemonVersion })
 
             ToggleRow(localized(if (showExpert) "ui.hide_expert_settings" else "ui.show_expert_settings"), showExpert) { app.setShowExpertSettings(it) }
             if (showExpert) {
                 // Only to word the "needs a newer engine" note; whether a field is supported
                 // is decided by its presence in the config the daemon sent, not by this.
                 val daemonVersion = (app.engineStatus.value as? EngineStatus.Connected)?.daemonVersion
-                ExpertGroup(localized("ui.alignment_settings"), ALIGNMENT_FIELDS, cfg, edit, boolEdits, textEdits, frameCount, daemonVersion)
-                ExpertGroup(localized("ui.horizon_settings"), HORIZON_FIELDS, cfg, edit, boolEdits, textEdits, frameCount, daemonVersion)
-                ExpertGroup(localized("ui.memory_settings"), MEMORY_FIELDS, cfg, edit, boolEdits, textEdits, frameCount, daemonVersion)
+                ExpertGroup(localized("ui.alignment_settings"), ALIGNMENT_FIELDS, cfg, edit, boolEdits, textEdits, info, frameCount, daemonVersion)
+                ExpertGroup(localized("ui.horizon_settings"), HORIZON_FIELDS, cfg, edit, boolEdits, textEdits, info, frameCount, daemonVersion)
+                ExpertGroup(localized("ui.memory_settings"), MEMORY_FIELDS, cfg, edit, boolEdits, textEdits, info, frameCount, daemonVersion)
             }
 
             val frameMax = frameCount
@@ -296,25 +330,78 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
 }
 
 @Composable
-private fun SettingGroup(title: String, enabled: Boolean = true, content: @Composable () -> Unit) {
+private fun SettingGroup(
+    title: String,
+    enabled: Boolean = true,
+    info: SnapshotStateMap<String, Boolean>? = null,
+    infoId: String? = null,
+    help: String? = null,
+    content: @Composable () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, color = if (enabled) StarColors.textSecondary else StarColors.textDisabled, fontSize = 12.sp)
+        if (info != null && infoId != null && help != null) {
+            InfoRow(infoId, info, help) { Text(title, color = if (enabled) StarColors.textSecondary else StarColors.textDisabled, fontSize = 12.sp) }
+        } else {
+            Text(title, color = if (enabled) StarColors.textSecondary else StarColors.textDisabled, fontSize = 12.sp)
+        }
         content()
     }
 }
 
+/** What each of a picker's choices means, under its title: a heading and a paragraph apiece (macOS's info panel for these rows). */
+private fun choicesHelp(vararg choices: Pair<String, String>): String = choices.joinToString("\n\n") { (name, meaning) -> "$name\n$meaning" }
+
 @Composable
-private fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, enabled: Boolean = true) {
+private fun <T> Segmented(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    enabled: Boolean = true,
+    /** What hovering an option says it means (macOS's `.help` on each choice). */
+    tip: (T) -> String? = { null },
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         options.forEach { (value, label) ->
             val isSel = value == selected
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(if (isSel) (if (enabled) StarColors.accent else StarColors.gray) else StarColors.cellDefault)
-                    .clickable(enabled = enabled) { onSelect(value) }
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-            ) { Text(label, color = if (isSel) Color.White else if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 11.sp) }
+            val option: @Composable () -> Unit = {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(if (isSel) (if (enabled) StarColors.accent else StarColors.gray) else StarColors.cellDefault)
+                        .clickable(enabled = enabled) { onSelect(value) }
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                ) { Text(label, color = if (isSel) Color.White else if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 11.sp) }
+            }
+            val text = tip(value)
+            if (text == null) option() else HoverTip(text, option)
+        }
+    }
+}
+
+/** The (i) beside a row: green to open the explanation of it, red to close it (macOS). */
+@Composable
+private fun InfoButton(open: Boolean, onClick: () -> Unit) {
+    HoverTip(localized(if (open) "ui.hide_information" else "ui.show_information")) {
+        Text(
+            "ⓘ", color = if (open) StarColors.red else StarColors.green, fontSize = 16.sp,
+            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp),
+        )
+    }
+}
+
+/**
+ * A row with its explanation: [content] and an (i) that opens [help] under it. [open] holds which rows are showing theirs, by [id], so the
+ * sheet's Show Info and Hide Info can open and close every one at once, the ones in folded groups too.
+ */
+@Composable
+private fun InfoRow(id: String, open: SnapshotStateMap<String, Boolean>, help: String?, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { content() }
+            if (help != null) InfoButton(open[id] == true) { open[id] = open[id] != true }
+        }
+        if (help != null && open[id] == true) {
+            Text(help, color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
         }
     }
 }
@@ -351,7 +438,53 @@ internal sealed interface ExpertField {
     val labelKey: String
     val has: (Config) -> Boolean
     val enabled: (SettingsEdit) -> Boolean
+
+    /** The catalogue entries that explain this setting (macOS's per-row info text), shown a paragraph each; none for a setting with nothing to say. */
+    val helpKeys: List<String> get() = FIELD_HELP[label].orEmpty()
 }
+
+/** What explains each field: the long-form text macOS shows under a row's (i), for those that have one, and what its two choices mean for a yes/no setting. */
+internal val FIELD_HELP: Map<String, List<String>> = mapOf(
+    "Neighbor frames" to listOf("setting_help.neighbor_frames"),
+    "Static neighbor frames" to listOf("setting_help.static_neighbor_frames"),
+    "Max keypoints" to listOf("setting_help.max_keypoints"),
+    "Ground horizon extension" to listOf("setting_help.ground_horizon_extension"),
+    "Sky horizon extension" to listOf("setting_help.sky_horizon_extension"),
+    "Base image dilate size" to listOf("setting_help.base_image_dilation_size"),
+    "Base image threshold" to listOf("setting_help.base_image_threshold"),
+    "Homography smoothing ε" to listOf("setting_help.homography_smoothing"),
+    "Allow earth alignment" to listOf("setting_help.allow_earth_alignment"),
+    "Keypoint detection divisor" to listOf("setting_help.keypoint_divisor"),
+    "Write debug images" to listOf("setting_help.write_debug_images"),
+    "Canny edge detection" to listOf("ui.canny_yes_desc", "ui.canny_no_desc"),
+    "Canny min threshold" to listOf("setting_help.canny_min_threshold"),
+    "Canny max threshold" to listOf("setting_help.canny_max_threshold"),
+    "Canny L2 gradient" to listOf("ui.l1_norm_help", "ui.l2_norm_help"),
+    "Reference horizon smoothing" to listOf("setting_help.reference_smoothing"),
+    "Smoothing max distance" to listOf("setting_help.reference_smoothing_distance"),
+    "Brightness refinement" to listOf("setting_help.brightness_refinement"),
+    "Refinement search radius" to listOf("setting_help.brightness_refinement_search_radius"),
+    "Refinement hist buckets" to listOf("setting_help.brightness_refinement_buckets"),
+    "Neighborhood size" to listOf("setting_help.neighbourhood_size"),
+    "Spike removal" to listOf("setting_help.spike_removal"),
+    "Spike max width" to listOf("setting_help.spike_max_width"),
+    "Spike max deviation" to listOf("setting_help.spike_max_deviation"),
+    "Spike window half" to listOf("setting_help.spike_window_half"),
+    "Keypoint mem ×" to listOf("setting_help.keypoint_mem"),
+    "Outlier mem ×" to listOf("setting_help.outlier_mem"),
+    "Merge mem ×" to listOf("setting_help.merge_mem"),
+    "Horizon mem ×" to listOf("setting_help.horizon_mem"),
+    "Horizon floor MB" to listOf("setting_help.horizon_floor"),
+    "Max keypoint ops" to listOf("setting_help.max_keypoint_ops"),
+    "Merge streaming MB" to listOf("setting_help.merge_streaming_mb"),
+    "Memory budget" to listOf("setting_help.memory_budget"),
+    "Use GPU for Align & Merge" to listOf("setting_help.gpu_merge"),
+    "Use GPU for SIFT" to listOf("setting_help.gpu_sift"),
+    "Use GPU for AKAZE" to listOf("setting_help.gpu_akaze"),
+)
+
+/** The text under a field's (i): each of its entries in the user's language, a paragraph apiece. */
+internal fun ExpertField.helpText(): String? = helpKeys.takeIf { it.isNotEmpty() }?.joinToString("\n\n") { localized(it) }
 
 /** A field that takes a number, which has a range it must stay in. */
 internal sealed interface NumberField : ExpertField {
@@ -517,6 +650,9 @@ internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
 
 private val ALL_FIELDS: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + PERFORMANCE_FIELDS
 
+/** Every row that has an explanation, which Show Info opens: the pickers and each field with help text. */
+private val ALL_INFO_IDS: List<String> = listOf("clean", "detection", "scene", "camera") + ALL_FIELDS.filter { it.helpKeys.isNotEmpty() }.map { it.label }
+
 /** The toggles by id, for the rules that read one toggle from another's row. */
 private val BOOL_FIELDS: Map<String, BoolField> = ALL_FIELDS.filterIsInstance<BoolField>().associateBy { it.label }
 
@@ -528,6 +664,7 @@ private fun ExpertGroup(
     edit: SettingsEdit,
     boolEdits: SnapshotStateMap<String, Boolean>,
     textEdits: SnapshotStateMap<String, String>,
+    info: SnapshotStateMap<String, Boolean>,
     frameCount: Int,
     daemonVersion: String?,
 ) {
@@ -542,18 +679,20 @@ private fun ExpertGroup(
                 return@forEach
             }
             val enabled = f.enabled(edit)
-            when (f) {
-                is BoolField -> ToggleRow(label, boolEdits[f.label] ?: f.get(cfg), enabled = enabled) { boolEdits[f.label] = it }
-                is IntField -> NumberRow(
-                    label, textEdits[f.label] ?: f.get(cfg).toString(), enabled,
-                    problem = if (f.isValid(textEdits[f.label] ?: f.get(cfg).toString(), frameCount)) null
-                    else localized("ui.enter_a_whole_number_from_a_to_b", f.min, f.maxFor(frameCount)),
-                ) { textEdits[f.label] = FieldInput.wholeNumberChars(it) }
-                is DoubleField -> NumberRow(
-                    label, textEdits[f.label] ?: f.get(cfg).toString(), enabled,
-                    problem = if (f.isValid(textEdits[f.label] ?: f.get(cfg).toString(), frameCount)) null
-                    else localized("ui.enter_a_number_from_a_to_b", FieldInput.bound(f.min), FieldInput.bound(f.max)),
-                ) { textEdits[f.label] = FieldInput.decimalChars(it) }
+            InfoRow(f.label, info, f.helpText()) {
+                when (f) {
+                    is BoolField -> ToggleRow(label, boolEdits[f.label] ?: f.get(cfg), enabled = enabled) { boolEdits[f.label] = it }
+                    is IntField -> NumberRow(
+                        label, textEdits[f.label] ?: f.get(cfg).toString(), enabled,
+                        problem = if (f.isValid(textEdits[f.label] ?: f.get(cfg).toString(), frameCount)) null
+                        else localized("ui.enter_a_whole_number_from_a_to_b", f.min, f.maxFor(frameCount)),
+                    ) { textEdits[f.label] = FieldInput.wholeNumberChars(it) }
+                    is DoubleField -> NumberRow(
+                        label, textEdits[f.label] ?: f.get(cfg).toString(), enabled,
+                        problem = if (f.isValid(textEdits[f.label] ?: f.get(cfg).toString(), frameCount)) null
+                        else localized("ui.enter_a_number_from_a_to_b", FieldInput.bound(f.min), FieldInput.bound(f.max)),
+                    ) { textEdits[f.label] = FieldInput.decimalChars(it) }
+                }
             }
         }
     }
@@ -576,7 +715,7 @@ private fun UnsupportedRow(label: String, daemonVersion: String?) {
  * line explains: without it a toggle that cannot be turned on would look broken rather than moot.
  */
 @Composable
-private fun GpuGroup(cfg: Config, edit: SettingsEdit, boolEdits: SnapshotStateMap<String, Boolean>, daemonVersion: String?) {
+private fun GpuGroup(cfg: Config, edit: SettingsEdit, boolEdits: SnapshotStateMap<String, Boolean>, info: SnapshotStateMap<String, Boolean>, daemonVersion: String?) {
     var expanded by remember { mutableStateOf(true) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -591,11 +730,13 @@ private fun GpuGroup(cfg: Config, edit: SettingsEdit, boolEdits: SnapshotStateMa
             PERFORMANCE_FIELDS.forEach { f ->
                 if (!f.has(cfg)) { UnsupportedRow(localized(f.labelKey).removeSuffix(":"), daemonVersion); return@forEach }
                 if (f is BoolField) {
-                    ToggleRow(
-                        localized(f.labelKey).removeSuffix(":"),
-                        if (!f.enabled(edit)) false else (boolEdits[f.label] ?: f.get(cfg)),
-                        enabled = f.enabled(edit),
-                    ) { boolEdits[f.label] = it }
+                    InfoRow(f.label, info, f.helpText()) {
+                        ToggleRow(
+                            localized(f.labelKey).removeSuffix(":"),
+                            if (!f.enabled(edit)) false else (boolEdits[f.label] ?: f.get(cfg)),
+                            enabled = f.enabled(edit),
+                        ) { boolEdits[f.label] = it }
+                    }
                 }
             }
         }

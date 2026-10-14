@@ -125,4 +125,49 @@ class SettingsRulesTest {
             com.star.desktop.i18n.Strings.setOverride(null)
         }
     }
+
+    // ---- the explanations
+
+    /** Every setting has something to say about itself (macOS's (i) on each row), and says it in the user's language. */
+    @Test fun everySettingHasHelpInTheCatalogue() {
+        com.star.desktop.i18n.Strings.setOverride("en")
+        try {
+            for (f in all) {
+                assertTrue(f.helpKeys.isNotEmpty(), "${f.label} has no help")
+                for (key in f.helpKeys) {
+                    val text = com.star.desktop.i18n.localized(key)
+                    assertFalse(text == key, "${f.label}: $key is not in the catalogue")
+                    assertTrue(text.length > 20, "${f.label}: $key says too little: $text")
+                }
+                assertTrue(f.helpText()!!.isNotBlank())
+            }
+        } finally {
+            com.star.desktop.i18n.Strings.setOverride(null)
+        }
+    }
+
+    @Test fun aYesNoSettingExplainsBothOfItsChoices() {
+        assertEquals(2, field("Canny edge detection").helpKeys.size)
+        assertEquals(2, field("Canny L2 gradient").helpKeys.size)
+        assertTrue(field("Canny edge detection").helpText()!!.contains("\n\n"), "a paragraph for each")
+    }
+
+    @Test fun helpIsKeptForRealFieldsOnly() {
+        val labels = all.map { it.label }.toSet()
+        assertEquals(emptySet(), FIELD_HELP.keys - labels, "help for a setting that is not there")
+    }
+
+    @Test fun everyTranslationOfTheHelpIsThere() {
+        for (code in com.star.desktop.i18n.Strings.languages.map { it.code }) {
+            com.star.desktop.i18n.Strings.setOverride(code)
+            try {
+                for (f in all) for (key in f.helpKeys) {
+                    val text = com.star.desktop.i18n.localized(key)
+                    assertFalse(text == key || text.isBlank(), "$code: ${f.label} / $key")
+                }
+            } finally {
+                com.star.desktop.i18n.Strings.setOverride(null)
+            }
+        }
+    }
 }
