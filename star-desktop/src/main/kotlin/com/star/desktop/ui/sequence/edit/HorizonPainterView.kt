@@ -92,8 +92,9 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     val imgW = vm.info.imageWidth
     val imgH = vm.info.imageHeight
 
-    // The state + transform persist across frame advances so brush size and Sky/Ground mode survive
-    // (macOS resetForNewFrame). Per-frame paint data is cleared in the LaunchedEffect below.
+    // The paint state persists across frame advances so brush size and Sky/Ground mode survive
+    // (macOS resetForNewFrame); per-frame paint data is cleared in the LaunchedEffect below. The
+    // transform is the session's: the zoom and pan are the same here as in the edit view.
     val state = remember { HorizonPaintState(imgW, imgH).also { it.isErasing = vm.horizonPaintErasing.value } }
     // The sky/ground mode outlives this painter: it is remembered for the next time it opens.
     LaunchedEffect(state) { snapshotFlow { state.isErasing }.collect { vm.setHorizonPaintErasing(it) } }
@@ -248,14 +249,18 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
         Box(
             Modifier.weight(1f).fillMaxSize()
                 .clipToBounds()
-                .onSizeChanged { canvasSize = it.toSize() }
+                .onSizeChanged { canvasSize = it.toSize(); transform.canvasChanged(canvasSize) }
+                // Scroll pans, Ctrl/Cmd-scroll zooms, middle- or Alt-drag pans (as in the edit view): the horizon can be
+                // painted precisely at a zoom where the brush is a few pixels. A pan drag is consumed before it gets to
+                // the painting gesture below, which only takes unconsumed presses.
+                .zoomAndPan(transform) { canvasSize }
                 .pointerHoverIcon(blankCursor)
                 .onPointerEvent(PointerEventType.Move) { hover = it.changes.firstOrNull()?.position }
                 .onPointerEvent(PointerEventType.Enter) { hover = it.changes.firstOrNull()?.position }
                 .onPointerEvent(PointerEventType.Exit) { hover = null }
                 .pointerInput(current, canvasSize) {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val down = awaitFirstDown(requireUnconsumed = true)
                         hover = down.position
                         dragging = true
                         // Paint on the initial press so a single click/tap dabs paint (macOS uses
