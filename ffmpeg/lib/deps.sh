@@ -81,11 +81,14 @@ build_x265() {
         sed -i.bak -E 's/-lgcc_s([[:space:]]|$)/\1/g' "$PREFIX/lib/pkgconfig/x265.pc"
         rm -f "$PREFIX/lib/pkgconfig/x265.pc.bak"
     fi
+    # Named as -l:libstdc++.a, not by its path: FFmpeg's configure moves a bare path into its
+    # linker flags, ahead of the test object and -lx265, so the archive is read before anything
+    # needs it and every probe of x265 fails with undefined operator new / __cxa_guard_*.
     if [ "$T_OS" = linux ]; then
         local libstdcxx
         libstdcxx=$("${CXX%% *}" -print-file-name=libstdc++.a)
         [ -f "$libstdcxx" ] || { echo "libstdc++.a not found (install the g++ static runtime)"; return 1; }
-        sed -i.bak "s|-lstdc++|$libstdcxx|" "$PREFIX/lib/pkgconfig/x265.pc"
+        sed -i.bak "s|-lstdc++|-l:libstdc++.a|" "$PREFIX/lib/pkgconfig/x265.pc"
         rm -f "$PREFIX/lib/pkgconfig/x265.pc.bak"
     fi
 }
