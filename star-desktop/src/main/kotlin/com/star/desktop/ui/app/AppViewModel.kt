@@ -294,7 +294,7 @@ class AppViewModel(
         currentSequence?.let {
             it.setViewMode(com.star.proto.FrameViewMode.VIEW_PROCESSED)
             it.goToFirst()
-            it.playForward()
+            it.startPlaybackForward() // from the start, forward, and not toggled off if it was already playing
         }
     }
 

@@ -49,7 +49,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             Item(localized("ui.grid_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
             Separator()
             Item(localized("ui.toggle_filmstrip"), enabled = hasSession) { svm?.toggleFilmstrip() }
-            Item(localized("ui.play_pause"), enabled = hasSession, shortcut = KeyShortcut(Key.Spacebar)) { svm?.togglePlayback() }
+            Item(localized("ui.play_pause"), enabled = hasSession, shortcut = KeyShortcut(Key.Spacebar)) { svm?.playForward() }
         }
 
         Menu(localized("ui.process"), mnemonic = 'P') {

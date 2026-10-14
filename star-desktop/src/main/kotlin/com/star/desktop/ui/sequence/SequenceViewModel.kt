@@ -568,34 +568,56 @@ class SequenceViewModel(
     fun setPlaybackFps(fps: Int) { _playbackFps.value = fps.coerceIn(1, 90) }
 
     fun togglePlayback() = if (_isPlaying.value) stopPlayback() else startPlayback()
+
+    /** Play forward, or stop (macOS play button: it sets the direction to forward, then toggles). Space does this. */
     fun playForward() { _playMode.value = VideoPlayMode.FORWARD; togglePlayback() }
     fun playReverse() { _playMode.value = VideoPlayMode.REVERSE; togglePlayback() }
+
+    /** Play from where it is going forward, and do nothing if already playing: never stops it (macOS `playFinalFrames`). */
+    fun startPlaybackForward() {
+        _playMode.value = VideoPlayMode.FORWARD
+        startPlayback()
+    }
+
+    /** The mode to go back to when playback stops (macOS `previousInteractionMode`). */
+    private var modeBeforePlayback: InteractionMode? = null
 
     fun startPlayback() {
         if (_isPlaying.value || frameCount <= 1) return
         _isPlaying.value = true
-        _mode.value = InteractionMode.SCRUB // macOS forces scrub + black bg while playing
-        val step = if (_playMode.value == VideoPlayMode.REVERSE) -1 else 1
+        // Editing is not possible while playing: macOS forces scrub (and a black background), and puts the
+        // mode back when it stops.
+        modeBeforePlayback = _mode.value
+        _mode.value = InteractionMode.SCRUB
+        prefetchAhead(_currentIndex.value, playbackStep(), PLAYBACK_LOOKAHEAD + 1)
         playbackJob = scope.launch {
             while (isActive && _isPlaying.value) {
-                val frameDelay = (1000L / _playbackFps.value).coerceAtLeast(11L)
-                delay(frameDelay)
-                val next = _currentIndex.value + step
+                val started = System.nanoTime()
+                val next = _currentIndex.value + playbackStep()
                 if (next < 0 || next >= frameCount) {        // stop at the boundary; no wrap
                     setCurrentIndex(if (next < 0) 0 else frameCount - 1)
-                    _isPlaying.value = false
+                    stopPlayback()
                     break
                 }
                 setCurrentIndex(next)
-                prefetchAround(next, step)
+                prefetchAhead(next + playbackStep() * (PLAYBACK_LOOKAHEAD - 1), playbackStep(), 1)
+                // Sleep what is left of the frame, not the whole of it: loading and showing the frame took time
+                // too, and a fixed sleep on top of that plays slower than the rate asked for.
+                val spentMs = (System.nanoTime() - started) / 1_000_000
+                delay(frameDelayMs(_playbackFps.value, spentMs))
             }
         }
     }
+
+    private fun playbackStep(): Int = if (_playMode.value == VideoPlayMode.REVERSE) -1 else 1
 
     fun stopPlayback() {
         _isPlaying.value = false
         playbackJob?.cancel()
         playbackJob = null
+        // Back to what it was before playing, e.g. editing.
+        modeBeforePlayback?.let { _mode.value = it }
+        modeBeforePlayback = null
     }
 
     /** Preview path for [index] in [mode], falling back through the other view modes. Null if none exist. */
@@ -661,6 +683,9 @@ class SequenceViewModel(
 
         private const val FAST_SKIP_AMOUNT = 20 // macOS fastSkipAmount
 
+        /** How many frames ahead of the one showing playback keeps loaded (macOS `videoPrefetchLookahead`). */
+        const val PLAYBACK_LOOKAHEAD = 30
+
         /**
          * What to show when the wanted mode has no preview yet. The original comes before the debug
          * images: a frame that is not finished shows its own picture, never its subtraction.
@@ -673,13 +698,24 @@ class SequenceViewModel(
         )
     }
 
-    /** Prefetch the next few frames in the play [direction] (+1 forward, -1 reverse). */
-    private fun prefetchAround(index: Int, direction: Int = 1) {
+    /**
+     * Load [count] frames' pictures into the cache, starting at [from] and moving in [direction] (+1 forward, -1
+     * reverse), in the view that is showing, so that playback finds them there instead of waiting on the disk.
+     */
+    private fun prefetchAhead(from: Int, direction: Int, count: Int) {
+        val mode = _viewMode.value
         scope.launch {
-            for (n in 1..3) {
-                val i = index + direction * n
-                if (i in 0 until frameCount) previewRefPath(i)?.let { imageCache.load(it, i) }
+            for (n in 0 until count) {
+                val i = from + direction * n
+                if (i in 0 until frameCount) previewRefPath(i, mode)?.let { imageCache.load(it, i) }
             }
         }
     }
 }
+
+/**
+ * How long to wait before the next frame of a playback at [fps], given that [spentMs] of the frame's time is already
+ * gone (macOS sleeps `interval - elapsed`); never negative, so a frame that was slower than its slot is followed at
+ * once by the next.
+ */
+internal fun frameDelayMs(fps: Int, spentMs: Long): Long = ((1000L / fps.coerceAtLeast(1)) - spentMs).coerceAtLeast(0L)
