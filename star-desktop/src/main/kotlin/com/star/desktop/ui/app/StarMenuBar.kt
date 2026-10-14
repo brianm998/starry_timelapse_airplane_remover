@@ -107,13 +107,13 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             // Accelerators per the authoritative Swift source (StarCommands.swift): 'a' removes all,
             // 'k' keeps all, 'u' clears undecided. (KOTLIN_CLIENT_SPEC §5.8's prose had a/k swapped.)
             Item(localized("ui.keep_all"), enabled = hasSession, shortcut = KeyShortcut(Key.K)) {
-                svm?.let { it.frameVMFor(it.currentIndex.value).keepAll() }
+                svm?.let { it.frameVMFor(it.currentIndex.value).keepAll(it.showTrash.value) }
             }
             Item(localized("ui.remove_all"), enabled = hasSession, shortcut = KeyShortcut(Key.A)) {
-                svm?.let { it.frameVMFor(it.currentIndex.value).removeAll() }
+                svm?.let { it.frameVMFor(it.currentIndex.value).removeAll(it.showTrash.value) }
             }
             Item(localized("ui.clear_undecided"), enabled = hasSession, shortcut = KeyShortcut(Key.U)) {
-                svm?.let { it.frameVMFor(it.currentIndex.value).clearUndecided() }
+                svm?.let { it.frameVMFor(it.currentIndex.value).clearUndecided(it.showTrash.value) }
             }
             Separator()
             ToolType.selectable.forEachIndexed { i, t ->

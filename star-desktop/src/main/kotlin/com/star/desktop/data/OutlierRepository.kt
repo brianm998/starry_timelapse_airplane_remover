@@ -35,6 +35,38 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
         rerender: Boolean = false,
     ): SetOutlierDecisionsResponse = c().setOutlierDecisions(sessionId, frameIndex, decisions, rerender)
 
+    /** Keep All / Remove All / Clear Undecided on one frame, the trash too when asked (`Outlier.SetAll`). */
+    suspend fun setAll(sessionId: String, frameIndex: Int, shouldRemove: Boolean, undecidedOnly: Boolean, includingTrash: Boolean) =
+        c().setAllOutliers(sessionId, frameIndex, shouldRemove, undecidedOnly, includingTrash)
+
+    /**
+     * Read an 8-bit mask PNG (255 = set) into a [TrashMask]: one boolean-ish byte per pixel, row-major. Used to draw the trash
+     * without a view per trashed group.
+     */
+    suspend fun loadMask(path: String): Mask? = withContext(Dispatchers.IO) {
+        val file = File(path)
+        if (!file.exists()) return@withContext null
+        try {
+            val img = ImageIO.read(file) ?: return@withContext null
+            val w = img.width
+            val h = img.height
+            val bytes = ByteArray(w * h)
+            val row = IntArray(w)
+            for (y in 0 until h) {
+                img.raster.getSamples(0, y, w, 1, 0, row)
+                val base = y * w
+                for (x in 0 until w) bytes[base + x] = if (row[x] > 0) 1 else 0
+            }
+            Mask(w, h, bytes)
+        } catch (e: Exception) {
+            Log.e("Outlier", e) { "failed to read mask $path" }
+            null
+        }
+    }
+
+    /** A set/unset flag per pixel, row-major. */
+    class Mask(val width: Int, val height: Int, val set: ByteArray)
+
     suspend fun renderFrame(sessionId: String, frameIndex: Int): ImageRef = c().renderFrame(sessionId, frameIndex)
 
     /** Run the decision-tree classifier on one frame's outliers (`Outlier.ApplyDecisionTree`). */

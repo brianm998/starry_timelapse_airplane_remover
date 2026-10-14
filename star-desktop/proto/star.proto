@@ -392,6 +392,17 @@ message ApplyDecisionTreeRequest {
 }
 message ApplyDecisionTreeResponse { FrameInfo frame = 1; ImageRef preview = 2; }
 
+// Set every outlier of one frame at once (Keep All / Remove All / Clear Undecided): `should_remove` is the decision to set,
+// `undecided_only` limits it to groups nobody has decided about, `including_trash` also takes the trashed groups, promoting
+// them out of the trash as macOS does.  Answered with the frame's new counts.
+message SetAllOutliersRequest {
+  string session_id      = 1;
+  int32  frame_index     = 2;
+  bool   should_remove   = 3;
+  bool   undecided_only  = 4;
+  bool   including_trash = 5;
+}
+
 message ApplyDecisionTreeAllFramesRequest {
   string session_id   = 1;
   bool   overwrite    = 2;

@@ -81,6 +81,17 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             }
         } else null
     }
+    // The trash, as a yellow mask under the groups, while it is shown (macOS computes its image when the toggle goes on).
+    val showTrash by vm.showTrash.collectAsState()
+    val trashOpacity by vm.trashOpacity.collectAsState()
+    var trashBitmap by remember(current) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(current, showTrash, usesOutliers, groups, trashOpacity) {
+        trashBitmap = if (showTrash && usesOutliers) {
+            fvm.loadTrashMask()?.let { mask ->
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { TrashOverlay.bitmap(mask, trashOpacity) }
+            }
+        } else null
+    }
     // The horizon line (macOS `showHorizonOnMainView`): fetched for this frame when it is shown, and again whenever the horizon
     // or the frame's being pending refinement may have changed (a reference saved, a refinement operation finished).
     val showHorizon by vm.showHorizonOnMainView.collectAsState()
@@ -132,11 +143,11 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                                         com.star.desktop.domain.ToolType.MULTI ->
                                             vm.openMultiSelect(SequenceViewModel.RectSelection(s.x, s.y, e.x, e.y))
                                         // Remove / Keep set every group wholly inside the box; Information lists them.
-                                        com.star.desktop.domain.ToolType.REMOVE -> fvm.setDecisionsInBox(true, s.x, s.y, e.x, e.y)
-                                        com.star.desktop.domain.ToolType.KEEP -> fvm.setDecisionsInBox(false, s.x, s.y, e.x, e.y)
+                                        com.star.desktop.domain.ToolType.REMOVE -> fvm.setDecisionsInBox(true, s.x, s.y, e.x, e.y, includingTrash = showTrash)
+                                        com.star.desktop.domain.ToolType.KEEP -> fvm.setDecisionsInBox(false, s.x, s.y, e.x, e.y, includingTrash = showTrash)
                                         com.star.desktop.domain.ToolType.INFORMATION ->
                                             vm.showInfoFor(fvm.groupsInBox(s.x, s.y, e.x, e.y).map { it.id })
-                                        else -> fvm.applyAreaTool(tool, s.x, s.y, e.x, e.y)
+                                        else -> fvm.applyAreaTool(tool, s.x, s.y, e.x, e.y, includingTrash = showTrash)
                                     }
                                 }
                                 selStartImg = null; selEndImg = null; dragging = false
@@ -210,6 +221,14 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             val al = fw / SequenceViewModel.ARROW_LENGTH_DIVISOR // arrow length (long/pointing axis)
             val ah = fw / SequenceViewModel.ARROW_HEIGHT_DIVISOR // arrow height (cross axis)
             val lw = (fw / 1440f * s).coerceAtLeast(1f)         // guide-line thickness
+            // Trash goes below the groups.
+            trashBitmap?.let { tb ->
+                drawImage(
+                    image = tb,
+                    dstOffset = IntOffset(o.x.roundToInt(), o.y.roundToInt()),
+                    dstSize = IntSize((fw * s).roundToInt(), (fh * s).roundToInt()),
+                )
+            }
             // The groups' own pixels, tinted by decision; small ones in the combined masks.
             outlierOverlay?.let { ov ->
                 drawImage(

@@ -51,7 +51,7 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
         defaultIndex = if (target.currentlyRemoves) 1 else 0,   // pre-select the opposite of the clicked group
         actionButtonLabel = { it.label },
         onCancel = vm::dismissMultiSheets,
-        onApply = { a, range, n -> vm.applyMultiChoice(a.shouldRemove, range, n) },
+        onApply = { a, range, n, _ -> vm.applyMultiChoice(a.shouldRemove, range, n) },
     )
 }
 
@@ -70,7 +70,8 @@ fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: S
         defaultIndex = 0,
         actionButtonLabel = { "Modify" },
         onCancel = vm::dismissMultiSheets,
-        onApply = { a, range, n -> vm.applyMultiSelect(a.shouldRemove, a.overlapping, range, n) },
+        onApply = { a, range, n, includingTrash -> vm.applyMultiSelect(a.shouldRemove, a.overlapping, range, n, includingTrash) },
+        trashInitially = vm.showTrash.value,
     )
 }
 
@@ -82,11 +83,14 @@ private fun MultiFrameSheet(
     defaultIndex: Int,
     actionButtonLabel: (MultiAction) -> String,
     onCancel: () -> Unit,
-    onApply: (MultiAction, MultiFrameRange, Int) -> Unit,
+    onApply: (MultiAction, MultiFrameRange, Int, Boolean) -> Unit,
+    /** null: no trash option (the multi-choice sheet acts on a chosen group); else whether it starts on, which is whether the trash is showing. */
+    trashInitially: Boolean? = null,
 ) {
     var actionIdx by remember { mutableStateOf(defaultIndex.coerceIn(0, actions.size - 1)) }
     var range by remember { mutableStateOf(MultiFrameRange.ALL) }
     var nText by remember { mutableStateOf("5") }
+    var includingTrash by remember { mutableStateOf(trashInitially ?: false) }
     val action = actions[actionIdx]
 
     Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = onCancel), contentAlignment = Alignment.Center) {
@@ -118,10 +122,16 @@ private fun MultiFrameSheet(
                     modifier = Modifier.width(180.dp),
                 )
             }
+            if (trashInitially != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.Switch(checked = includingTrash, onCheckedChange = { includingTrash = it })
+                    Text(localized("ui.trash"), color = StarColors.textPrimary, fontSize = 12.sp)
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
                 Button(
-                    onClick = { onApply(action, range, nText.toIntOrNull() ?: 5) },
+                    onClick = { onApply(action, range, nText.toIntOrNull() ?: 5, includingTrash) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                 ) { Text(actionButtonLabel(action)) }
             }

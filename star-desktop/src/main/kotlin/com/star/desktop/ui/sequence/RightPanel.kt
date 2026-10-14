@@ -98,9 +98,17 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             Text("✓$keep", color = StarColors.green, fontSize = 11.sp)
             Text("?$undecided", color = StarColors.orange, fontSize = 11.sp)
         }
-        BulkButton(localized("ui.keep_all"), StarColors.green, help = localized("ui.keep_all_of_the_outlier_groups_in_the_frame")) { fvm.keepAll() }
-        BulkButton(localized("ui.remove_all"), StarColors.red, help = localized("ui.remove_all_of_the_outlier_groups_in_the")) { fvm.removeAll() }
-        BulkButton(localized("ui.clear_undecided"), StarColors.gray) { fvm.clearUndecided() }
+        val showTrash by vm.showTrash.collectAsState()
+        // The trash, and what is in it: shown over the frame and, while it is, taken in by the tools below.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            androidx.compose.material3.Switch(checked = showTrash, onCheckedChange = vm::setShowTrash, enabled = usesOutliers)
+            Spacer(Modifier.width(6.dp))
+            Text(localized("ui.show_trash"), color = StarColors.white, fontSize = 11.sp)
+        }
+        info?.let { if (it.numTrashOutliers > 0) Text("${localized("ui.trash")}: ${it.numTrashOutliers}", color = StarColors.gray, fontSize = 11.sp) }
+        BulkButton(localized("ui.keep_all"), StarColors.green, help = localized("ui.keep_all_of_the_outlier_groups_in_the_frame")) { fvm.keepAll(showTrash) }
+        BulkButton(localized("ui.remove_all"), StarColors.red, help = localized("ui.remove_all_of_the_outlier_groups_in_the")) { fvm.removeAll(showTrash) }
+        BulkButton(localized("ui.clear_undecided"), StarColors.gray) { fvm.clearUndecided(showTrash) }
         BulkButton(
             localized("ui.decision_tree_all"), StarColors.blue,
             help = localized("ui.apply_the_outlier_group_decision_tree_to_all"), enabled = usesOutliers,

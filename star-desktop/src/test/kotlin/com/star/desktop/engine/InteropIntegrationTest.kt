@@ -835,6 +835,22 @@ class InteropIntegrationTest {
                     client.closeSession(info.sessionId); return@withEngine
                 }
                 val groups = client.listOutliers(info.sessionId, frameIdx).groupsList
+                // A9 / D6: Clear Undecided keeps the groups nobody has decided about (nothing is left undecided), and the trash
+                // can be read as a mask the view draws.
+                client.setAllOutliers(info.sessionId, frameIdx, shouldRemove = false, undecidedOnly = true, includingTrash = false)
+                assertTrue(
+                    client.listOutliers(info.sessionId, frameIdx).groupsList.none { it.shouldRemove == com.star.proto.RemoveReason.RR_UNDECIDED },
+                    "Clear Undecided left a group undecided",
+                )
+                val trashMask = client.getOutlierTrashImage(info.sessionId, frameIdx)
+                assertTrue(File(trashMask.path).exists(), "no trash mask was written")
+                assertEquals(info.imageWidth, trashMask.width)
+                if (client.getFrame(info.sessionId, frameIdx).numTrashOutliers > 0) {
+                    val img = javax.imageio.ImageIO.read(File(trashMask.path))
+                    val anyTrash = (0 until img.height step 7).any { y -> (0 until img.width).any { x -> img.raster.getSample(x, y, 0) > 0 } }
+                    assertTrue(anyTrash, "the frame has trash but its mask is empty")
+                }
+
                 fun decideAll(reason: com.star.proto.RemoveReason) = runBlocking {
                     client.setOutlierDecisions(
                         info.sessionId, frameIdx,

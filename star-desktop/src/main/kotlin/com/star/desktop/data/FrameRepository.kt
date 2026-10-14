@@ -27,6 +27,10 @@ class FrameRepository(private val clientProvider: () -> StarClient?) {
     suspend fun labelImage(sessionId: String, frameIndex: Int): ImageRef? =
         notReadyToNull { c().getOutlierLabelImage(sessionId, frameIndex) }
 
+    /** The mask of the frame's trashed groups (8-bit, 255 = trash), or null if outliers aren't loaded. */
+    suspend fun trashImage(sessionId: String, frameIndex: Int): ImageRef? =
+        notReadyToNull { c().getOutlierTrashImage(sessionId, frameIndex) }
+
     suspend fun setCleanMethod(sessionId: String, frameIndex: Int, cleanMethod: CleanMethod): FrameInfo =
         c().setFrameCleanMethod(sessionId, frameIndex, cleanMethod)
 

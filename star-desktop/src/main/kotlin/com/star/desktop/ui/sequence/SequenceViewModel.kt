@@ -344,7 +344,27 @@ class SequenceViewModel(
     fun currentFrameUsesOutliers(): Boolean =
         (frameVMFor(_currentIndex.value).info.value?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE).usesOutliers
 
-    fun setTool(t: ToolType) { if (currentFrameUsesOutliers()) _tool.value = t }
+    fun setTool(t: ToolType) {
+        if (!currentFrameUsesOutliers()) return
+        _tool.value = t
+        // Taking things back out of the trash only makes sense with the trash showing (macOS selectionMode's didSet).
+        if (t == ToolType.REMOVE_FROM_TRASH) _showTrash.value = true
+    }
+
+    // ---- trash (macOS shouldShowTrash / trashOpacity) ----
+
+    /**
+     * Whether the trash is shown over the frame and taken into account by the tools: razor, the Remove/Keep boxes, Keep All,
+     * Remove All, Clear Undecided, multi-select and DT Auto Only all pass it as `includingTrash`, as macOS does.
+     */
+    private val _showTrash = MutableStateFlow(false)
+    val showTrash: StateFlow<Boolean> = _showTrash.asStateFlow()
+    fun setShowTrash(show: Boolean) { _showTrash.value = show }
+
+    /** How strongly the trash is drawn (macOS default 0.7). */
+    private val _trashOpacity = MutableStateFlow(0.7f)
+    val trashOpacity: StateFlow<Float> = _trashOpacity.asStateFlow()
+    fun setTrashOpacity(v: Float) { _trashOpacity.value = v.coerceIn(0f, 1f) }
 
     /**
      * The session's clean method became [method] (macOS pushes the new effective method to every frame): what each
@@ -520,6 +540,7 @@ class SequenceViewModel(
             overwrite = !_classifyOnlyUnclassified.value,
             autoOnly = autoOnly,
             minimumSize = MINIMUM_CLASSIFICATION_SIZE,
+            includingTrash = _showTrash.value,
         )
     }
 
@@ -597,10 +618,10 @@ class SequenceViewModel(
     }
 
     /** Apply a keep/remove to outliers in the drag rectangle across [range] (multi-select sheet). */
-    fun applyMultiSelect(shouldRemove: Boolean, overlapping: Boolean, range: MultiFrameRange, n: Int) = scope.launch {
+    fun applyMultiSelect(shouldRemove: Boolean, overlapping: Boolean, range: MultiFrameRange, n: Int, includingTrash: Boolean = _showTrash.value) = scope.launch {
         val sel = _multiSelect.value ?: return@launch
         val (s, e) = range.indices(_currentIndex.value, frameCount, n)
-        runCatching { outliers.setDecisionsInArea(sessionId, s, e, shouldRemove, sel.startX, sel.startY, sel.endX, sel.endY, overlapping) }
+        runCatching { outliers.setDecisionsInArea(sessionId, s, e, shouldRemove, sel.startX, sel.startY, sel.endX, sel.endY, overlapping, includingTrash) }
             .onSuccess { framesChanged(it.framesList) }
             .onFailure { reportFailure(it) }
         dismissMultiSheets()

@@ -27,6 +27,7 @@ import com.star.proto.HorizonReferenceUpdatedRequest
 import com.star.proto.HorizonReferenceUpdatedResponse
 import com.star.proto.RefinementStatusResponse
 import com.star.proto.RunRefinementResponse
+import com.star.proto.SetAllOutliersRequest
 import com.star.proto.SetTunedHorizonParametersRequest
 import com.star.proto.TunedHorizonParametersResponse
 import com.star.proto.GetReferenceHorizonResponse
@@ -168,6 +169,20 @@ class StarClient(private val conn: StdioConnection) {
 
     suspend fun getOutlierLabelImage(sessionId: String, frameIndex: Int): ImageRef =
         call("Frame.GetOutlierLabelImage", frameRef(sessionId, frameIndex), ImageRef.parser())
+
+    /** An 8-bit mask of the frame's trashed outlier groups (255 = trash), for drawing the trash. */
+    suspend fun getOutlierTrashImage(sessionId: String, frameIndex: Int): ImageRef =
+        call("Frame.GetOutlierTrashImage", frameRef(sessionId, frameIndex), ImageRef.parser())
+
+    suspend fun setAllOutliers(
+        sessionId: String, frameIndex: Int, shouldRemove: Boolean, undecidedOnly: Boolean, includingTrash: Boolean,
+    ): SetOutlierDecisionsResponse =
+        call(
+            "Outlier.SetAll",
+            SetAllOutliersRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setShouldRemove(shouldRemove)
+                .setUndecidedOnly(undecidedOnly).setIncludingTrash(includingTrash).build(),
+            SetOutlierDecisionsResponse.parser(),
+        )
 
     suspend fun setFrameCleanMethod(sessionId: String, frameIndex: Int, cleanMethod: CleanMethod): FrameInfo =
         call(

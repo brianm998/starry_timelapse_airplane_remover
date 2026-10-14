@@ -148,6 +148,12 @@ class FrameViewModel(
         return if (g > 0) g else arrowGroupAt(x, y, frameWidth, frameHeight)
     }
 
+    /** The frame's trash as a mask the view draws in yellow while the trash is shown, or null if there is none to draw. */
+    suspend fun loadTrashMask(): OutlierRepository.Mask? {
+        val ref = frames.trashImage(sessionId, frameIndex) ?: return null
+        return outliers.loadMask(ref.path)
+    }
+
     fun decisionFor(groupId: Int): RemoveReason = _decisions.value[groupId] ?: RemoveReason.RR_UNDECIDED
 
     fun selectGroup(groupId: Int?) { _selected.value = groupId }
@@ -197,10 +203,10 @@ class FrameViewModel(
      * then refresh this frame's groups so the overlay reflects the new membership. [groupId] > 0 is
      * TRASH-only (single-tap): dump exactly that group, ignoring the rectangle.
      */
-    fun applyAreaTool(tool: ToolType, startX: Float, startY: Float, endX: Float, endY: Float, groupId: Int = 0) {
+    fun applyAreaTool(tool: ToolType, startX: Float, startY: Float, endX: Float, endY: Float, groupId: Int = 0, includingTrash: Boolean = false) {
         val areaTool = tool.toAreaTool() ?: return
         scope.launch {
-            runCatching { outliers.applyAreaTool(sessionId, frameIndex, areaTool, startX, startY, endX, endY, groupId = groupId) }
+            runCatching { outliers.applyAreaTool(sessionId, frameIndex, areaTool, startX, startY, endX, endY, includingTrash = includingTrash, groupId = groupId) }
                 .onFailure { reportFailure(it) }
             load(force = true)
         }
@@ -254,16 +260,23 @@ class FrameViewModel(
 
     fun setDecision(groupId: Int, reason: RemoveReason) = apply(listOf(groupId to reason))
 
-    // These act on the groups, which are only loaded once the frame has been looked at; from the menu or
-    // keys in scrub or grid mode they are not, so load them first rather than silently doing nothing.
-    fun keepAll() { scope.launch { ensureLoaded(); apply(_groups.value.map { it.id to RemoveReason.RR_USER_KEEP }) } }
-    fun removeAll() { scope.launch { ensureLoaded(); apply(_groups.value.map { it.id to RemoveReason.RR_USER_REMOVE }) } }
-    fun clearUndecided() {
+    /**
+     * Keep All / Remove All / Clear Undecided (macOS `userSelectAllOutliers` / `userSelectUndecidedOutliers`): done by the daemon
+     * over the frame's groups, which works whether or not this client has loaded them (from the menu or keys in scrub or grid mode it has
+     * not), and over the trash as well when [includingTrash]. Clear Undecided keeps the undecided groups.
+     */
+    private fun setAll(shouldRemove: Boolean, undecidedOnly: Boolean, includingTrash: Boolean) {
         scope.launch {
-            ensureLoaded()
-            apply(OutlierDecisions.clearingUndecided(_groups.value.map { it.id }, ::decisionFor))
+            runCatching { outliers.setAll(sessionId, frameIndex, shouldRemove, undecidedOnly, includingTrash) }
+                .onSuccess { applyInfo(it.frame) }
+                .onFailure { reportFailure(it) }
+            load(force = true)
         }
     }
+
+    fun keepAll(includingTrash: Boolean = false) = setAll(shouldRemove = false, undecidedOnly = false, includingTrash = includingTrash)
+    fun removeAll(includingTrash: Boolean = false) = setAll(shouldRemove = true, undecidedOnly = false, includingTrash = includingTrash)
+    fun clearUndecided(includingTrash: Boolean = false) = setAll(shouldRemove = false, undecidedOnly = true, includingTrash = includingTrash)
 
     private fun apply(changes: List<Pair<Int, RemoveReason>>) {
         if (changes.isEmpty()) return

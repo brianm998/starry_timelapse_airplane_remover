@@ -58,6 +58,33 @@ enum OutlierHandlers {
         }
     }
 
+    // Keep All / Remove All / Clear Undecided: set every outlier of one frame (macOS `userSelectAllOutliers` /
+    // `userSelectUndecidedOutliers`), including the trash when asked to.
+    static func setAll(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SetAllOutliersRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            await ensureOutliersLoaded(frame)
+            if req.undecidedOnly {
+                _ = await frame.userSelectUndecidedOutliers(toShouldRemove: req.shouldRemove, includingTrash: req.includingTrash)
+            } else {
+                _ = await frame.userSelectAllOutliers(toShouldRemove: req.shouldRemove, includingTrash: req.includingTrash)
+            }
+            await frame.markAsChanged()
+            await session.frameEdited(frame)
+            var resp = Star_V1_SetOutlierDecisionsResponse()
+            resp.frame = await session.frameInfo(frame, outlierGroups: await frame.getOutlierGroups())
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     // Re-run the decision-tree classifier over every frame's outlier groups.
     static func applyDecisionTreeAllFrames(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {

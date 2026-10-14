@@ -1895,6 +1895,29 @@ public struct Star_V1_ApplyDecisionTreeResponse: Sendable {
   fileprivate var _preview: Star_V1_ImageRef? = nil
 }
 
+/// Set every outlier of one frame at once (Keep All / Remove All / Clear Undecided): `should_remove` is the decision to set,
+/// `undecided_only` limits it to groups nobody has decided about, `including_trash` also takes the trashed groups, promoting
+/// them out of the trash as macOS does.  Answered with the frame's new counts.
+public struct Star_V1_SetAllOutliersRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var frameIndex: Int32 = 0
+
+  public var shouldRemove: Bool = false
+
+  public var undecidedOnly: Bool = false
+
+  public var includingTrash: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct Star_V1_ApplyDecisionTreeAllFramesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -4855,6 +4878,56 @@ extension Star_V1_ApplyDecisionTreeResponse: SwiftProtobuf.Message, SwiftProtobu
   public static func ==(lhs: Star_V1_ApplyDecisionTreeResponse, rhs: Star_V1_ApplyDecisionTreeResponse) -> Bool {
     if lhs._frame != rhs._frame {return false}
     if lhs._preview != rhs._preview {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_SetAllOutliersRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetAllOutliersRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}should_remove\0\u{3}undecided_only\0\u{3}including_trash\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.shouldRemove) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.undecidedOnly) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.includingTrash) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if self.frameIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameIndex, fieldNumber: 2)
+    }
+    if self.shouldRemove != false {
+      try visitor.visitSingularBoolField(value: self.shouldRemove, fieldNumber: 3)
+    }
+    if self.undecidedOnly != false {
+      try visitor.visitSingularBoolField(value: self.undecidedOnly, fieldNumber: 4)
+    }
+    if self.includingTrash != false {
+      try visitor.visitSingularBoolField(value: self.includingTrash, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_SetAllOutliersRequest, rhs: Star_V1_SetAllOutliersRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.frameIndex != rhs.frameIndex {return false}
+    if lhs.shouldRemove != rhs.shouldRemove {return false}
+    if lhs.undecidedOnly != rhs.undecidedOnly {return false}
+    if lhs.includingTrash != rhs.includingTrash {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
