@@ -773,6 +773,13 @@ class InteropIntegrationTest {
                 info.configJsonPath
             } ?: return
 
+            // A14: the session's config.json sits in the sequence's own temp output directory, where the macOS
+            // app keeps it (so both clients can open it from their recents), not in the daemon's scratch dir.
+            assertTrue(
+                configJson.startsWith(File(tmp, "star_temp_${File(seq).name}").path + "/") && configJson.endsWith("/config.json"),
+                "config.json is not in the sequence's temp output directory: $configJson",
+            )
+
             val (frameIdx, groupId, wanted) = edited!!
             withEngine { client ->
                 val info = client.openConfig(configJson)

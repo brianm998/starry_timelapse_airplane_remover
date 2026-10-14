@@ -9,15 +9,19 @@ import java.io.File
  * Client-local UI preferences in `~/.star.userprefs.json` — the ONLY file the client serializes.
  *
  * The `recentlyOpenedSequencelist` schema (`{ "<path>": <epochSeconds> }`) is shared with the macOS
- * Swift app (`UserPreferences.swift`), so recent files are visible across both clients. Unknown
- * fields written by the Swift app are preserved on read where practical and otherwise ignored.
+ * Swift app (`UserPreferences.swift`), so recent files are visible across both clients, and both open
+ * an entry as a session's `config.json`. Every change re-reads the file first and writes back only the
+ * keys it concerns, so keys this client does not know (the Swift app's) are kept as they are and a
+ * change the other app made while this one was running is not undone.
  */
 class LocalPreferences {
     private val prefsFile = File(System.getProperty("user.home"), ".star.userprefs.json")
     private val gson = Gson()
 
+    /** Serialises the read-modify-write of [edit], and guards the in-memory copies below. */
+    private val lock = Any()
+
     private val recent = linkedMapOf<String, Long>()
-    private val others = linkedMapOf<String, Any?>() // unknown keys written by the Swift app — preserved on save
 
     /** macOS `skipRenderPromptAfterProcessing`: once set, processing starts without the render prompt. */
     @Volatile
@@ -48,89 +52,94 @@ class LocalPreferences {
         private set
 
     init {
-        load()
-    }
-
-    fun setSkipRenderPrompt(value: Boolean) {
-        skipRenderPromptAfterProcessing = value
-        save()
-    }
-
-    fun setLanguage(value: String?) {
-        language = value
-        save()
-    }
-
-    fun setMovingHorizonCountMultiplier(value: Double) {
-        movingHorizonCountMultiplier = value
-        save()
-    }
-
-    /** Recent sequence paths, most-recent first. */
-    val recentFiles: List<String>
-        get() = synchronized(recent) { recent.entries.sortedByDescending { it.value }.map { it.key } }
-
-    fun addRecentFile(path: String) {
-        synchronized(recent) {
-            recent[path] = System.currentTimeMillis() / 1000L
-            if (recent.size > 20) {
-                recent.entries.sortedBy { it.value }.take(recent.size - 20).forEach { recent.remove(it.key) }
-            }
+        edit { map ->
+            // What the macOS app does on load: forget recents whose file is gone (an unplugged drive, a
+            // deleted project), rather than listing something that can only fail to open.
+            val gone = recentOf(map).keys.filter { !File(it).exists() }
+            if (gone.isNotEmpty()) map[RECENT_KEY] = recentOf(map).filterKeys { it !in gone }
         }
-        save()
     }
 
-    fun removeRecentFile(path: String) {
-        synchronized(recent) { recent.remove(path) }
-        save()
+    fun setSkipRenderPrompt(value: Boolean) = edit { it["skipRenderPromptAfterProcessing"] = value }
+
+    fun setLanguage(value: String?) = edit {
+        // Written only when set: absent means "follow the system", and the Swift side decodes a
+        // missing key to nil the same way.
+        if (value == null) it.remove("language") else it["language"] = value
     }
 
-    private fun load() {
-        if (!prefsFile.exists()) return
-        try {
+    fun setMovingHorizonCountMultiplier(value: Double) = edit { it["movingHorizonCountMultiplier"] = value }
+
+    /** The most recent sequence paths, most-recent first: at most [MAX_RECENT_SHOWN] of them. */
+    val recentFiles: List<String>
+        get() = synchronized(lock) {
+            recent.entries.sortedByDescending { it.value }.take(MAX_RECENT_SHOWN).map { it.key }
+        }
+
+    /**
+     * Record [path] as just opened: the session's config.json, which is what both clients open a recent
+     * entry as. The list is not trimmed on write: the file is shared with the macOS app, which keeps
+     * everything, and trimming here deleted its older entries.
+     */
+    fun addRecentFile(path: String) = edit { map ->
+        map[RECENT_KEY] = recentOf(map) + (path to (System.currentTimeMillis() / 1000L).toDouble())
+    }
+
+    fun removeRecentFile(path: String) = edit { map -> map[RECENT_KEY] = recentOf(map) - path }
+
+    private fun recentOf(map: Map<String, Any?>): Map<String, Any?> {
+        @Suppress("UNCHECKED_CAST")
+        return map[RECENT_KEY] as? Map<String, Any?> ?: emptyMap()
+    }
+
+    /** The file as it is now, empty when there is none or it cannot be read. */
+    private fun read(): MutableMap<String, Any?> {
+        if (!prefsFile.exists()) return linkedMapOf()
+        return try {
             val type = object : TypeToken<MutableMap<String, Any?>>() {}.type
-            val map: MutableMap<String, Any?> = gson.fromJson(prefsFile.readText(), type) ?: return
-            @Suppress("UNCHECKED_CAST")
-            val raw = map["recentlyOpenedSequencelist"] as? Map<String, Any?> ?: emptyMap()
-            synchronized(recent) {
-                recent.clear()
-                raw.forEach { (k, v) -> recent[k] = (v as? Double)?.toLong() ?: 0L }
-            }
-            skipRenderPromptAfterProcessing = map["skipRenderPromptAfterProcessing"] as? Boolean ?: false
-            language = (map["language"] as? String)?.takeIf { it.isNotEmpty() }
-            movingHorizonCountMultiplier =
-                (map["movingHorizonCountMultiplier"] as? Double)?.takeIf { it > 0 && it.isFinite() }
-            synchronized(others) {
-                others.clear()
-                map.forEach { (k, v) -> if (k !in MANAGED_KEYS) others[k] = v }
-            }
+            gson.fromJson<MutableMap<String, Any?>>(prefsFile.readText(), type) ?: linkedMapOf()
         } catch (e: Exception) {
             Log.w("Prefs") { "failed to read $prefsFile: ${e.message}" }
+            linkedMapOf()
         }
     }
 
-    private fun save() {
+    /**
+     * Change some of the preferences. The file is read again just before the change and written straight
+     * after, with only the keys [change] touches different: the macOS app writes the same file, and a
+     * copy read at startup and written back whole would undo whatever it changed in the meantime. What
+     * was written is then adopted as this instance's own copy.
+     */
+    private fun edit(change: (MutableMap<String, Any?>) -> Unit) = synchronized(lock) {
+        val map = read()
+        val before = gson.toJson(map)
+        change(map)
+        // Nothing to write, and no file to create just because the app was started.
+        if (gson.toJson(map) != before) write(map)
+        adopt(map)
+    }
+
+    private fun write(map: Map<String, Any?>) {
         try {
-            val out = LinkedHashMap<String, Any?>(synchronized(others) { LinkedHashMap(others) })
-            out["recentlyOpenedSequencelist"] = synchronized(recent) { LinkedHashMap(recent) }
-            out["skipRenderPromptAfterProcessing"] = skipRenderPromptAfterProcessing
-            // Written only when set: absent means "follow the system", and the Swift side
-            // decodes a missing key to nil the same way.
-            language?.let { out["language"] = it }
-            // likewise absent until the user first moves the horizon stepper
-            movingHorizonCountMultiplier?.let { out["movingHorizonCountMultiplier"] = it }
-            prefsFile.writeText(gson.toJson(out))
+            prefsFile.writeText(gson.toJson(map))
         } catch (e: Exception) {
             Log.w("Prefs") { "failed to write $prefsFile: ${e.message}" }
         }
     }
 
+    private fun adopt(map: Map<String, Any?>) {
+        recent.clear()
+        recentOf(map).forEach { (k, v) -> recent[k] = (v as? Double)?.toLong() ?: 0L }
+        skipRenderPromptAfterProcessing = map["skipRenderPromptAfterProcessing"] as? Boolean ?: false
+        language = (map["language"] as? String)?.takeIf { it.isNotEmpty() }
+        movingHorizonCountMultiplier =
+            (map["movingHorizonCountMultiplier"] as? Double)?.takeIf { it > 0 && it.isFinite() }
+    }
+
     private companion object {
-        val MANAGED_KEYS = setOf(
-            "recentlyOpenedSequencelist",
-            "skipRenderPromptAfterProcessing",
-            "language",
-            "movingHorizonCountMultiplier",
-        )
+        const val RECENT_KEY = "recentlyOpenedSequencelist"
+
+        /** How many recent entries this client lists. The file itself keeps all of them. */
+        const val MAX_RECENT_SHOWN = 20
     }
 }

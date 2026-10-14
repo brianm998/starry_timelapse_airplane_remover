@@ -507,6 +507,14 @@ final class WeakSessionRef: @unchecked Sendable {
 // MARK: - Factory
 
 extension Session {
+    /// Where a session opened from a sequence or a video keeps its config.json: in the sequence's own
+    /// temp output directory, which is where the macOS app writes it (`ConfigManager` handed the bare
+    /// name "config.json").  That is what makes it a path a client can record and open again, from either
+    /// client; the per-session scratch dir is a different one every time.
+    static func configJsonPath(for config: Config) -> String {
+        config.jsonPath(named: "config.json")
+    }
+
     // Open a sequence directory and build the session.
     static func openSequence(
         sessionID: String,
@@ -543,7 +551,7 @@ extension Session {
         }
         Mapping.applyExpertConfig(&config, from: protoConfig)
 
-        let configFilename = "\(scratchSessionDir)/config.json"
+        let configFilename = Session.configJsonPath(for: config)
         let configManager = await ConfigManager(configFilename: configFilename, config: config)
         await configManager.save()   // the initial file; nothing has updated the manager yet
         await constants.set(detectionType: config.detectionType)
@@ -616,7 +624,7 @@ extension Session {
         }
         Mapping.applyExpertConfig(&config, from: protoConfig)
 
-        let configFilename = "\(scratchSessionDir)/config.json"
+        let configFilename = Session.configJsonPath(for: config)
         let configManager = await ConfigManager(configFilename: configFilename, config: config)
         await configManager.save()   // the initial file; nothing has updated the manager yet
         await constants.set(detectionType: config.detectionType)

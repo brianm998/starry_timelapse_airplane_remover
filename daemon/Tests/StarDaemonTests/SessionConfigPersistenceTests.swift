@@ -52,7 +52,7 @@ final class SessionConfigPersistenceTests: XCTestCase {
         // cleanup, so whatever is in config.json at that moment is the whole record.
         // Decoded rather than grepped for the key, which the open-time write already put
         // there at its default and would answer for regardless of whether the update landed.
-        let configPath = "\(info.scratchSessionDir)/config.json"
+        let configPath = info.configJsonPath
         let onDisk = try JSONDecoder()
           .decode(Config.self, from: try Data(contentsOf: URL(fileURLWithPath: configPath)))
         XCTAssertEqual(onDisk.startupHorizonFrameIndices, [0, 1, 2],
@@ -106,7 +106,7 @@ final class SessionConfigPersistenceTests: XCTestCase {
         XCTAssertTrue(cleared.startupHorizonFrameIndices.isEmpty)
 
         var reopen = Star_V1_OpenConfigRequest()
-        reopen.configJsonPath = "\(info.scratchSessionDir)/config.json"
+        reopen.configJsonPath = info.configJsonPath
         let reopened: Star_V1_SessionInfo =
           try await daemon.call(method: "Session.OpenConfig", request: reopen)
         XCTAssertTrue(reopened.config.startupHorizonFrameIndices.isEmpty,
@@ -115,8 +115,10 @@ final class SessionConfigPersistenceTests: XCTestCase {
 
     // MARK: - where the session's config.json is
 
-    /// A session opened from a sequence keeps its config in the scratch dir, and says so.
-    func testASequenceSessionReportsItsScratchConfig() async throws {
+    /// A session opened from a sequence keeps its config where the macOS app does, in the sequence's own
+    /// temp output directory, and says so.  A path in the per-session scratch dir would be a different
+    /// one on every open, and one the macOS app has never heard of.
+    func testASequenceSessionKeepsItsConfigBesideItsOutput() async throws {
         let scratch = try makeScratchDir()
         defer { try? FileManager.default.removeItem(atPath: scratch) }
         let sequenceDir = try makeSequence(in: scratch, frames: 3)
@@ -130,7 +132,8 @@ final class SessionConfigPersistenceTests: XCTestCase {
         let info: Star_V1_SessionInfo =
           try await daemon.call(method: "Session.OpenSequence", request: openReq)
 
-        XCTAssertEqual(info.configJsonPath, "\(info.scratchSessionDir)/config.json")
+        XCTAssertEqual(info.configJsonPath, "\(info.config.tempOutputPath)/config.json")
+        XCTAssertNotEqual(info.configJsonPath, "\(info.scratchSessionDir)/config.json")
         XCTAssertTrue(FileManager.default.fileExists(atPath: info.configJsonPath),
                       "the path a client would resume from has to exist by the time it is "
                       + "handed one")

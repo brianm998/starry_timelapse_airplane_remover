@@ -167,6 +167,11 @@ private fun RecentFilesList(recent: List<String>, onOpen: (String) -> Unit, onRe
     ) {
         items(recent, key = { it }) { path ->
             val file = File(path)
+            // A session's config.json is named config.json whichever sequence it belongs to, so a row for one
+            // is titled by the folder it sits in, which names the sequence.
+            val isConfig = file.extension.equals("json", ignoreCase = true)
+            val title = if (isConfig) file.parentFile?.name ?: file.name else file.name
+            val location = if (isConfig) file.parentFile?.parent else file.parent
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -177,8 +182,8 @@ private fun RecentFilesList(recent: List<String>, onOpen: (String) -> Unit, onRe
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(file.name, color = StarColors.textPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(file.parent ?: path, color = StarColors.textDisabled, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(title, color = StarColors.textPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(location ?: path, color = StarColors.textDisabled, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(8.dp))
                 Box(

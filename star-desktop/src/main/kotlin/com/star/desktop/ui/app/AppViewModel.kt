@@ -683,16 +683,20 @@ class AppViewModel(
         // Normally the open has already closed what was open; this is for the restart-after-crash route,
         // where the old session died with the engine. Before anything below sets state for the new one.
         teardownSequence()
-        if (addToRecent) {
-            prefs.addRecentFile(path)
-            _recentFiles.value = prefs.recentFiles
-        }
         // The session's on-disk config.json — the resume path for crash recovery (cross-client
         // resume). Reported by the daemon rather than built from the scratch dir: a session
         // opened from a config keeps writing to the caller's own file, which is somewhere
         // else entirely, so the constructed path named a file nothing ever wrote and
         // restartEngine() gave up on a session that was perfectly resumable.
-        lastResumePath = info.configJsonPath.ifEmpty { "${info.scratchSessionDir}/config.json" }
+        val configPath = info.configJsonPath.ifEmpty { "${info.scratchSessionDir}/config.json" }
+        lastResumePath = configPath
+        if (addToRecent) {
+            // The config, whatever was opened: that is what the macOS app records, and what either client
+            // opens a recent entry as, resuming the session rather than starting a fresh one (with its
+            // startup questions, and a video decoded again) from the folder or video it came from.
+            prefs.addRecentFile(configPath)
+            _recentFiles.value = prefs.recentFiles
+        }
         _engineDown.value = null
         // Warn if the session was last written by a different engine version (req #4).
         val engineVer = (engine.status.value as? EngineStatus.Connected)?.daemonVersion

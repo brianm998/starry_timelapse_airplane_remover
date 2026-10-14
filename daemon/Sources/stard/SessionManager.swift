@@ -27,9 +27,10 @@ actor SessionManager {
             await OutputWriteFailures.shared.reset()
 
             let config = await session.configManager.config()
+            // The file this session actually writes: where a restart of a killed run has to resume from.
             await RunMarkerStore.shared.update(
               frameCount: await session.frameCount,
-              resumeConfigPath: config.jsonPath(named: "config.json"),
+              resumeConfigPath: session.configJsonPath,
               imageWidth: config.imageWidth,
               imageHeight: config.imageHeight,
               imageBytesPerPixel: config.imageBytesPerPixel

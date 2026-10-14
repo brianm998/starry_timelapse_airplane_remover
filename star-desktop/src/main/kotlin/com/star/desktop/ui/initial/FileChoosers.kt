@@ -14,9 +14,12 @@ data class OpenAction(val kind: OpenKind, val path: String)
 private val VIDEO_EXTS = setOf("mov", "mp4", "m4v", "avi", "mkv", "mpg", "mpeg")
 private val IMAGE_EXTS = setOf("jpg", "jpeg", "tif", "tiff", "png")
 
-/** Infer how to open [path]: a `config.json` resumes; a video extension imports; else a sequence dir. */
+/**
+ * Infer how to open [path]: a `.json` is a session's config and resumes it; a video extension imports;
+ * else a sequence dir. (Older recent entries are the folder or video itself, not its config.)
+ */
 fun inferOpenKind(path: String): OpenKind = when {
-    path.endsWith("config.json", ignoreCase = true) -> OpenKind.CONFIG
+    path.endsWith(".json", ignoreCase = true) -> OpenKind.CONFIG
     path.substringAfterLast('.', "").lowercase() in VIDEO_EXTS -> OpenKind.VIDEO
     else -> OpenKind.SEQUENCE
 }
