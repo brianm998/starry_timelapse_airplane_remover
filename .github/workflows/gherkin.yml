@@ -289,7 +289,7 @@ jobs:
           grep -E "Executed 1 test, with 0 failures" gherkin-gui.log
           # every "Executed N tests" line must be the one-test line: nothing else ran, nothing was skipped
           ! grep -E "Executed [0-9]+ tests?" gherkin-gui.log | grep -v "Executed 1 test, with 0 failures"
-          grep -E "Test case '.*testOpenAndProcessFeature.*' passed" gherkin-gui.log
+          grep -E "Test [Cc]ase '.*testOpenAndProcessFeature.*' passed" gherkin-gui.log
 
       # The screenshots in here are the only evidence of a GUI failure.
       - name: Upload the xcresult
