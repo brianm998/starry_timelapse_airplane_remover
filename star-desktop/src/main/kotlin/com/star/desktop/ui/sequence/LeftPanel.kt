@@ -105,6 +105,9 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
         OutlinedButton(onClick = { vm.reprocessCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(localized("ui.reprocess_current_force"))
         }
+        OutlinedButton(onClick = { vm.findOutliersCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text(localized("ui.find_outliers_for_this_frame"))
+        }
 
         if (processing) {
             OutlinedButton(

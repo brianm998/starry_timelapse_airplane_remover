@@ -3,6 +3,9 @@ package com.star.desktop.ui.app
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import com.star.desktop.domain.InteractionMode
@@ -15,7 +18,7 @@ import com.star.desktop.domain.ToolType
  *
  * Modes/process/outlier shortcuts live on the menu bar (E/S/G, A/K/U, ⌘O/⌘W/⌘,). Here we add the
  * navigation + tool shortcuts that aren't menu-driven: arrows for frame nav, digits 1–8 for tools
- * (edit mode only).
+ * (in every mode).
  */
 fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
@@ -23,6 +26,8 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
     // While the horizon painter is open its own keys (brush size, sky/ground, reset, return, escape) are the ones that
     // count; r would otherwise render the frame under it, and the arrows move off the frame being painted.
     if (svm.horizonPaintMode.value) return false
+    // Ctrl, Cmd and Alt with a letter are the menu's (Ctrl+R would render the frame, Ctrl+Z skip back), not the plain keys that move and edit.
+    if (event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return false
 
     when (event.key) {
         Key.DirectionLeft -> { svm.previous(); return true }
@@ -47,8 +52,10 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
         }
     }
 
+    // The tools are on 1-8 in every mode (macOS), so the choice is there when the user gets back to the frame; a frame whose method has
+    // no use for them (setTool) leaves the tool alone.
     val digit = DIGIT_KEYS[event.key]
-    if (digit != null && svm.mode.value == InteractionMode.EDIT) {
+    if (digit != null) {
         ToolType.forShortcut(digit)?.let { svm.setTool(it) }
         return true
     }

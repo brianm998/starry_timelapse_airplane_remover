@@ -489,6 +489,11 @@ class SequenceViewModel(
         processing.reprocessFrames(sessionId, indices, _reprocessType.value)
     }
 
+    /** Find the outliers of the current frame again, keeping its alignment (macOS `FindOutliersOnCurrentFrameButton`). */
+    fun findOutliersCurrent() = startProcessingRun {
+        processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_OUTLIERS)
+    }
+
     /** Reprocess the current frame from scratch (macOS `ReProcessCurrentFrameButton`). */
     fun reprocessCurrent() = startProcessingRun {
         processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_EVERYTHING)
