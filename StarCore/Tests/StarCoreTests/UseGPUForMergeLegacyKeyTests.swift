@@ -1,4 +1,5 @@
 import XCTest
+import StarCppBridge
 @testable import StarCore
 import StarCppBridge
 

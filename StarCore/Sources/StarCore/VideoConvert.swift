@@ -29,7 +29,8 @@ public struct VideoInfo: Sendable {
 }
 
 
-/// Process a video: extract frames and audio and video information
+/// Process a video: extract frames and audio and video information.  The audio, if it has any, is kept
+/// beside the frames by `AudioSidecar`, in its own codec where that is possible.
 public func decodeVideo(
     named inputPath: String,
     progress: @escaping ProgressCallback
@@ -50,6 +51,7 @@ public func decodeVideo(
 
     let ffprobePath = ToolPaths.ffprobe
     let ffmpegPath = ToolPaths.ffmpeg
+    Log.i("decoding \(inputPath) with ffmpeg at \(ffmpegPath)")
 
     let totalFramesTask = Task {
         try shellOut(
@@ -68,17 +70,14 @@ public func decodeVideo(
     
     let totalFrames = Int(totalFramesStr.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
 
-    // On macOS decode on the GPU/media engine (VideoToolbox) where the codec supports it;
-    // ffmpeg falls back to software decoding on its own where it doesn't.
-    #if os(macOS)
-    let decodeArguments = ["-hwaccel", "videotoolbox"]
-    #else
-    let decodeArguments: [String] = []
-    #endif
+    // software decode unless the user opted in; see FFmpegHardware for why
+    var decodeArguments = FFmpegHardware.decodeArguments()
+    decodeArguments += ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"]
+    let framesArguments = decodeArguments
 
     let ffmpegTask = Task {
         try runFFmpegWithProgress(
-          arguments: decodeArguments + ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"],
+          arguments: framesArguments,
           totalFrames: totalFrames,
           outputFolder: outputFolder,
           progress: progress
@@ -134,13 +133,11 @@ public func decodeVideo(
         ).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    let hasAudio = await hasAudioTask.value
-
-    if hasAudio {
-        _ = try shellOut(to: ffmpegPath, arguments: [
-            "-i", inputPath, "-vn", "-acodec", "copy", "\(outputFolder)/audio.aac"
-        ])
-    }
+    // The sound goes beside the frames, for a render to put back.  Keeping it never fails the
+    // import (see AudioSidecar): a video whose sound cannot be kept comes in without it.
+    let sourceHasAudio = await hasAudioTask.value
+    let keptAudio = sourceHasAudio ? AudioSidecar.extract(from: inputPath, into: outputFolder) : nil
+    let hasAudio = keptAudio != nil
 
     try await ffmpegTask.value
     
@@ -249,7 +246,12 @@ private final class FFmpegRun: @unchecked Sendable {
     {
         Log.d("starting ffmpeg run with arguments \(arguments)")
         process.executableURL = URL(fileURLWithPath: ffmpegPath)
-        process.arguments = arguments
+        // -hide_banner: the banner is the build's whole configure line, which would otherwise
+        //   head every error message shown to the user.
+        // -nostdin and a null stdin: ffmpeg polls stdin for keypresses ('q' quits), so a child that
+        //   inherits a terminal or a pipe takes input meant for whoever else reads it.
+        process.arguments = ["-hide_banner", "-nostdin"] + arguments
+        process.standardInput = FileHandle.nullDevice
         process.standardError = pipe
         process.standardOutput = nil
 
@@ -273,7 +275,12 @@ private final class FFmpegRun: @unchecked Sendable {
             }
         }
 
-        try process.run()
+        do {
+            try process.run()
+        } catch {
+            pipe.fileHandleForReading.readabilityHandler = nil
+            throw ToolLaunchError(path: ffmpegPath, underlying: error)
+        }
     }
 
     /// Return when the process has exited.

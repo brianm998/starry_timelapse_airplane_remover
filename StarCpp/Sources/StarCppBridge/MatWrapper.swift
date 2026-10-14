@@ -70,6 +70,13 @@ public final class MatWrapper: @unchecked Sendable {
         mat_wrapper_write_to(ref, filename)
     }
 
+    /// Writes an uncompressed TIFF without fsync, for intermediate caches that are rebuilt
+    /// when missing or unreadable. Uncompressed so loading it takes the direct-read path.
+    @discardableResult
+    public func writeCache(to filename: String) -> Bool {
+        mat_wrapper_write_cache_to(ref, filename)
+    }
+
     @discardableResult
     public func saveJpeg(quality: UInt32, filename: String) -> Bool {
         mat_wrapper_save_jpeg(ref, quality, filename)

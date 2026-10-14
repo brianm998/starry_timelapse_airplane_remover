@@ -127,20 +127,37 @@ public enum CombinedHorizonDetector {
         Log.i("CombinedHorizonDetector: image \(imgW)x\(imgH), working \(sW)x\(sH)")
 
         // Run base methods in parallel
+        //
+        // The four that are plain loops over pixels run through `NativeWork`: each is
+        // seconds of single-threaded CPU, and run directly in this async function they
+        // each parked a cooperative-pool thread for that long. Otsu stays here because
+        // it awaits `horizonMask`, an async API of its own.
         async let otsuResult = runOtsu(scaled: scaled, image: image, prior: prior)
-        async let dpResult = runDP(scaled: scaled, image: image, params: bandedParams,
-                                   searchTopFraction: searchTop,
-                                   searchBottomFraction: searchBottom)
-        let sioxResult = runSIOX(scaled: scaled, image: image, params: bandedParams)
-        let gradResult = runGradProfile(scaled: scaled, image: image,
-                                        searchTopFraction: searchTop,
-                                        searchBottomFraction: searchBottom)
-        let texResult = runTexture(scaled: scaled, image: image,
-                                   searchTopFraction: searchTop,
-                                   searchBottomFraction: searchBottom)
+        let dpParams = bandedParams
+        async let dpResult = NativeWork.run {
+            runDP(scaled: scaled, image: image, params: dpParams,
+                  searchTopFraction: searchTop,
+                  searchBottomFraction: searchBottom)
+        }
+        async let sioxTask = NativeWork.run {
+            runSIOX(scaled: scaled, image: image, params: dpParams)
+        }
+        async let gradTask = NativeWork.run {
+            runGradProfile(scaled: scaled, image: image,
+                           searchTopFraction: searchTop,
+                           searchBottomFraction: searchBottom)
+        }
+        async let texTask = NativeWork.run {
+            runTexture(scaled: scaled, image: image,
+                       searchTopFraction: searchTop,
+                       searchBottomFraction: searchBottom)
+        }
 
         let otsuY = await otsuResult
         let dpY = await dpResult
+        let sioxResult = await sioxTask
+        let gradResult = await gradTask
+        let texResult = await texTask
 
         // Log base method results
         let otsuDefined = otsuY?.compactMap({ $0 }).count ?? 0
@@ -270,15 +287,29 @@ public enum CombinedHorizonDetector {
         var bestMask: PixelatedImage? = nil
         var bestScore: Double = -1
 
-        for brush in params.brushRadii {
-            let mask = runRandomWalker(
-                image: image,
-                baseHorizonY: combinedY,
-                brushRadius: brush,
-                beta: params.rwBeta,
-                maxWorkingWidth: params.rwMaxWorkingWidth
-            )
+        // The Random Walker solves are single-threaded, one per brush radius, and nothing
+        // couples them: run them side by side on native threads, then pick in the
+        // configured order so ties break exactly as the serial loop did.
+        let radii = params.brushRadii
+        let rwBeta = params.rwBeta
+        let rwWidth = params.rwMaxWorkingWidth
+        let seedY = combinedY
+        let masks: [PixelatedImage] = await withTaskGroup(of: (Int, PixelatedImage).self) { group in
+            for (index, brush) in radii.enumerated() {
+                group.addTask {
+                    (index, await NativeWork.run {
+                        runRandomWalker(image: image, baseHorizonY: seedY, brushRadius: brush,
+                                        beta: rwBeta, maxWorkingWidth: rwWidth)
+                    })
+                }
+            }
+            var collected: [(Int, PixelatedImage)] = []
+            for await item in group { collected.append(item) }
+            return collected.sorted { $0.0 < $1.0 }.map { $0.1 }
+        }
 
+        for (index, mask) in masks.enumerated() {
+            let brush = radii[index]
             // Score by horizon quality: smoothness + coverage
             let score = selfScore(mask: mask, imageHeight: imgH)
             Log.d("CombinedHorizonDetector: brush=\(brush) selfScore=\(String(format: "%.4f", score))")
@@ -379,7 +410,7 @@ public enum CombinedHorizonDetector {
         params: Params,
         searchTopFraction: Double = 0.0,
         searchBottomFraction: Double = 1.0
-    ) async -> [Int?]? {
+    ) -> [Int?]? {
         var bestMask: PixelatedImage? = nil
         var bestScore = -1.0
 

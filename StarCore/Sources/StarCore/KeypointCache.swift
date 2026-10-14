@@ -71,8 +71,10 @@ public actor KeypointCache {
 
         cacheMisses += 1
 
+        // A YAML parse is seconds of blocked thread for a big feature set: native thread,
+        // not a cooperative-pool one, and under the CPU gate.
         let task: Task<OCVFeatureSet?, Never> = Task.detached(priority: .userInitiated) {
-            OCVFeatureSet.load(fromFilename: filename)
+            await NativeWork.run { OCVFeatureSet.load(fromFilename: filename) }
         }
         inFlight[filename] = task
         let result = await task.value

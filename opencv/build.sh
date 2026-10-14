@@ -126,6 +126,40 @@ else
     cd opencv
 fi
 
+# ── QoS patch (macOS) ─────────────────────────────────────────────────
+# OpenCV's parallel backend on macOS is GCD, and cv::parallel_for_ dispatches onto
+# dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0): its workers always run at
+# default QoS, whatever QoS the calling thread has. So lowering star's QoS (the Balanced
+# and Light "Use of this Mac" settings) did nothing to OpenCV's own loops, which is where
+# most of the CPU goes. DISPATCH_APPLY_AUTO (macOS 10.13+; our deployment target is 14)
+# asks GCD for worker threads that match the calling thread's configuration, QoS included.
+#
+# Applied on EVERY build, not only on a fresh clone: cached sources get it too. Idempotent
+# (the grep makes a second run a no-op).
+#
+# What it measurably does, on macOS 27 / M5 Max (StarCpp/Tests/.../OpenCVQoSTests.swift):
+# even unpatched, dispatch_apply on the global queue ran the bodies at the caller's QoS, so
+# that half of the premise above did not hold. The patch changes the *width*: a .background
+# caller gets 6 worker threads where the unpatched queue used all 18, so Light takes fewer
+# cores, not just lower-priority ones. It is the only GCD dispatch in the OpenCV modules
+# star builds; re-check with
+#   grep -rln -e dispatch_apply -e dispatch_get_global_queue opencv/modules
+# after any version bump. Linux and Windows do not use the GCD backend, and have no QoS.
+if [ "$PLATFORM" = "Darwin" ]; then
+    PARALLEL_CPP=modules/core/src/parallel.cpp
+    if ! grep -q "DISPATCH_APPLY_AUTO" "$PARALLEL_CPP"; then
+        sed -i '' \
+            's/dispatch_queue_t concurrent_queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);/dispatch_queue_t concurrent_queue = DISPATCH_APPLY_AUTO; \/\/ star: inherit the caller'"'"'s QoS/' \
+            "$PARALLEL_CPP"
+        if ! grep -q "DISPATCH_APPLY_AUTO" "$PARALLEL_CPP"; then
+            echo "ERROR: could not apply the DISPATCH_APPLY_AUTO patch to $PARALLEL_CPP"
+            echo "       (the GCD branch of cv::parallel_for_ changed? see the comment above)"
+            exit 1
+        fi
+        echo "==> Patched $PARALLEL_CPP to use DISPATCH_APPLY_AUTO"
+    fi
+fi
+
 if [ "$PLATFORM" = "Darwin" ]; then
     #
     # macOS build via build_framework.py

@@ -55,7 +55,7 @@ public class FrameSaveQueue {
     ) async throws {
         // Read the config here, on the main actor, before detaching.
         let config = frame.configManager.config()
-        let saveMonitor = monitor(concurrency: config.numberOfFramesToProcessConcurrently)
+        let saveMonitor = monitor(concurrency: config.frameConcurrency)
 
         Task.detached(priority: .high) {
             Log.d("frame \(frame.frameIndex) saveNow")

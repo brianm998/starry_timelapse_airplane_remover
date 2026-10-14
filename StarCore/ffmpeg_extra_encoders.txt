@@ -1,0 +1,26 @@
+# Encoders the Render Video dialog offers that the table generators cannot get from the ffmpeg
+# they run, read by write_ffmpeg_codec_swift.pl and ../ffmpeg/muxer_codecs.c.
+#
+# The generators describe whatever ffmpeg regenerate_ffmpeg_tables.sh builds, which is a Mac's.
+# FFmpeg's configure refuses to enable NVIDIA NVENC anywhere but Linux and Windows, so a Mac's
+# ffmpeg has no h264_nvenc to describe, and without a line here the encoders would be absent
+# from the tables on every platform.  (AMD's AMF does compile on a Mac and is in the tables
+# straight from the build.)
+#
+# One encoder per line:
+#
+#   encoder | codec it encodes | description, as `ffmpeg -h encoder=` prints it | pixel formats
+#
+# Rules for the pixel formats, which are what the dialog offers once the encoder is chosen:
+#   - software formats only.  The GPU's own surface formats (cuda, d3d11, ...) are never usable
+#     from star's still-image input, and the dialog filters them out whether or not they are here.
+#   - list the common ones, not every one: each must work, so the first is the dialog's default
+#     and the rest are what a user can reach.  Every format listed has to be one the real
+#     encoder accepts; ffmpeg/smoke_test.sh checks that against the Linux and Windows builds in
+#     CI, so a wrong line fails there instead of failing a user's export.
+#
+# The muxers an encoder can write follow from its codec (every H.264 encoder fits the same
+# containers), so there is nothing to list for them.
+h264_nvenc | h264 | NVIDIA NVENC H.264 encoder | yuv420p nv12 yuv444p
+hevc_nvenc | hevc | NVIDIA NVENC hevc encoder | yuv420p nv12 p010le yuv444p
+av1_nvenc  | av1  | NVIDIA NVENC av1 encoder  | yuv420p nv12 p010le

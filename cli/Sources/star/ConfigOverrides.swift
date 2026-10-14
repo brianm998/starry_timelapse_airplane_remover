@@ -80,6 +80,8 @@ struct ConfigOverrides {
     var maxConcurrentKeypointOps: Int?
     var horizonReservationFloorMB: Int?
     var numberOfFramesToProcessConcurrently: Int?
+    /// `--use`. How much of this Mac star may use.
+    var resourceProfile: ResourceProfile?
     var ignoreLowerPixels: Int?
 
     func apply(to config: inout Config) {
@@ -121,7 +123,12 @@ struct ConfigOverrides {
         if let horizonReservationFloorMB {
             config.horizonReservationFloorMB = horizonReservationFloorMB
         }
+        if let resourceProfile { config.resourceProfile = resourceProfile }
         if let numberOfFramesToProcessConcurrently {
+            // `-n` is Custom's pipeline depth cap. Opening Custom from whichever profile is
+            // in effect first, so `-n 8` caps the queue and leaves every other limit as it
+            // was; the cap alone would otherwise be ignored by Full, Balanced and Light.
+            config.makeCustom()
             config.numberOfFramesToProcessConcurrently = numberOfFramesToProcessConcurrently
         }
         if let ignoreLowerPixels { config.ignoreLowerPixels = ignoreLowerPixels }

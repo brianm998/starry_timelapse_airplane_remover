@@ -16,6 +16,40 @@ import MetalPerformanceShaders
 
 public enum GPUOps {
 
+    /// Bounds how many GPU entry points are inside Metal at once, across every caller.
+    /// Resizable while running — see `setConcurrency`.
+    static let gate = BlockingGate(max: 8)
+
+    private static let stateLock = NSLock()
+    nonisolated(unsafe) private static var _dutyCycle = 1.0
+    nonisolated(unsafe) private static var _busyNanoseconds: UInt64 = 0
+
+    /// Width of the GPU gate. In-flight work finishes under the old width.
+    public static func setConcurrency(_ slots: Int) { gate.set(max: slots) }
+
+    public static var concurrency: Int { gate.max }
+
+    /// Fraction (0, 1] of the device this process may hold: after each GPU op the slot is
+    /// kept for as long as the op ran, scaled by `1/duty - 1`. 1 means no throttling.
+    public static func setDutyCycle(_ duty: Double) {
+        stateLock.withLock { _dutyCycle = min(max(duty, 0.05), 1.0) }
+    }
+
+    static var dutyCycle: Double { stateLock.withLock { _dutyCycle } }
+
+    /// Seconds spent inside GPU slots since launch (wall time of the entry points, which
+    /// is the GPU's work plus the encode and wait around it). For the resource governor.
+    public static var busySeconds: Double {
+        Double(stateLock.withLock { _busyNanoseconds }) / 1_000_000_000
+    }
+
+    /// GPU entry points currently waiting for a slot.
+    public static var waiting: Int { gate.waiting }
+
+    static func record(busyNanoseconds: UInt64) {
+        stateLock.withLock { _busyNanoseconds &+= busyNanoseconds }
+    }
+
     /// Registers the Metal backend with the C++ layer if this machine has one, and
     /// reports whether it did. Idempotent and safe to call from every client's
     /// startup path — `StarCore.ImageCache.init()` is where it is actually called,
@@ -77,6 +111,30 @@ public enum GPUOps {
         return false
         #endif
     }()
+
+    /// How many merges (`medianMerge` and `alignedMerge` together) have run on
+    /// the GPU since launch, split by whether the GPU read and wrote the images
+    /// where they already were or had them copied — see `MetalGPUBackend.runMerge`.
+    /// For tests and diagnostics: on unified memory a merge that copies still
+    /// gives the right answer, just slower and with an extra frame's worth of
+    /// memory per image, so nothing else would notice.
+    static func mergeCounts() -> (inPlace: Int, copied: Int) {
+        #if canImport(Metal) && os(macOS)
+        return activeBackend?.mergeCounts() ?? (0, 0)
+        #else
+        return (0, 0)
+        #endif
+    }
+
+    /// Makes every merge take the path a discrete GPU takes — copy the images in,
+    /// have the GPU write a `.storageModeManaged` buffer, synchronize it and copy
+    /// it out — even on unified memory. For tests: otherwise that path only runs
+    /// on hardware the suite may not be running on.
+    static func setDiscreteMergesForTesting(_ on: Bool) {
+        #if canImport(Metal) && os(macOS)
+        activeBackend?.setDiscreteMerges(on)
+        #endif
+    }
 }
 
 #if canImport(Metal) && os(macOS)
@@ -162,21 +220,60 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// number picked in a vacuum. Re-measure again if this backend ever
     /// targets a GPU with unified memory, or if `alignedMerge`'s own buffer
     /// strategy changes.
-    private let gpuSlots = DispatchSemaphore(value: 8)
+    ///
+    /// Both have since happened, and the value was left alone on purpose. On an
+    /// M5 Max the 8 slots let up to 8 of the old `alignedMerge`'s ~3.6GB of
+    /// per-frame buffers (33MP) exist at once, which is how a 36GB machine went
+    /// into swap — but the fix for that was to stop allocating, not to queue
+    /// harder: the fused `alignedMerge` reads and writes the frames in place on
+    /// unified memory, so a slot it holds pins nothing new, and every frame's
+    /// GPU work goes through this one queue whatever the slot count.
+    /// On a discrete GPU each slot it holds still has every input copied (9
+    /// frames for 8 neighbours) plus the result, about half of what the old
+    /// version held. The pyramid builders are unchanged by any of this.
+    ///
+    /// The width now lives in `GPUOps.gate`, which can be resized mid-run
+    /// (`GPUOps.setConcurrency`) and is shared by every entry point.
+
+    /// The merges' bookkeeping: see `GPUOps.mergeCounts` and
+    /// `GPUOps.setDiscreteMergesForTesting`.
+    private let mergeStateLock = NSLock()
+    private var inPlaceMerges = 0
+    private var copiedMerges = 0
+    private var discreteMerges = false
+
+    func mergeCounts() -> (inPlace: Int, copied: Int) {
+        mergeStateLock.withLock { (inPlaceMerges, copiedMerges) }
+    }
+
+    func setDiscreteMerges(_ on: Bool) {
+        mergeStateLock.withLock { discreteMerges = on }
+    }
 
     /// Runs `body` inside `gpuSlots`. Every public entry point below must go
     /// through this rather than calling into Metal directly.
     private func withGPUSlot<T>(_ body: () -> T) -> T {
-        gpuSlots.wait()
-        defer { gpuSlots.signal() }
-        return body()
+        GPUOps.gate.acquire()
+        defer { GPUOps.gate.release() }
+        let start = DispatchTime.now().uptimeNanoseconds
+        let result = body()
+        let used = DispatchTime.now().uptimeNanoseconds - start
+        GPUOps.record(busyNanoseconds: used)
+        // Duty cycle: after an op that used the GPU for `t`, keep the slot for another
+        // `t * (1/duty - 1)` so this caller's share of the device is at most `duty`.
+        let duty = GPUOps.dutyCycle
+        if duty < 1.0, duty > 0 {
+            let pause = Double(used) * (1.0 / duty - 1.0) / 1_000_000_000
+            if pause > 0 { Thread.sleep(forTimeInterval: pause) }
+        }
+        return result
     }
     let warpU8: MTLComputePipelineState
     let warpU16: MTLComputePipelineState
-    let warpAndCoverageU8: MTLComputePipelineState
-    let warpAndCoverageU16: MTLComputePipelineState
     let medianU8: MTLComputePipelineState
     let medianU16: MTLComputePipelineState
+    let alignedMergeU8: MTLComputePipelineState
+    let alignedMergeU16: MTLComputePipelineState
     let downsampleNearest2xF32: MTLComputePipelineState
     let downsampleArea2xF32: MTLComputePipelineState
     let scharrXF32: MTLComputePipelineState
@@ -201,10 +298,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
             }
             self.warpU8 = try pipeline("warp_u8")
             self.warpU16 = try pipeline("warp_u16")
-            self.warpAndCoverageU8 = try pipeline("warp_and_coverage_u8")
-            self.warpAndCoverageU16 = try pipeline("warp_and_coverage_u16")
             self.medianU8 = try pipeline("median_merge_u8")
             self.medianU16 = try pipeline("median_merge_u16")
+            self.alignedMergeU8 = try pipeline("aligned_merge_u8")
+            self.alignedMergeU16 = try pipeline("aligned_merge_u16")
             self.downsampleNearest2xF32 = try pipeline("downsample_nearest_2x_f32")
             self.downsampleArea2xF32 = try pipeline("downsample_area_2x_f32")
             self.scharrXF32 = try pipeline("scharr_x_f32")
@@ -329,6 +426,13 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// A deliberate, small, documented output difference — see
     /// GPU_IMPLEMENTATION_GUIDE.md ยง2 and GPUMedianMergeTests for the measured size
     /// of it.
+    ///
+    /// Like `alignedMerge`, it reads every source where it already is on unified
+    /// memory and writes `dst` in place (see "Binding images for the merges"
+    /// below), rather than packing all `count` sources into one new buffer. At
+    /// 33MP the static-earth merge's 17 sources made that buffer 3.3GB, filled by
+    /// one thread, on every frame — the same per-frame allocation that put the
+    /// aligned merge's machine into swap.
     func medianMerge(sources: UnsafeMutablePointer<MatWrapperRef?>, count: Int,
                      misses: MatWrapperRef?, outlierThreshold: Double, includeAll: Bool,
                      dst: MatWrapperRef) -> Bool {
@@ -341,171 +445,123 @@ private final class MetalGPUBackend: @unchecked Sendable {
     private func medianMergeImpl(sources: UnsafeMutablePointer<MatWrapperRef?>, count: Int,
                                  misses: MatWrapperRef?, outlierThreshold: Double, includeAll: Bool,
                                  dst: MatWrapperRef) -> Bool {
-        guard count > 0, count <= 17, let first = sources[0] else { return false }
-        let rows = Int(mat_wrapper_rows(first))
-        let cols = Int(mat_wrapper_cols(first))
-        let channels = Int(mat_wrapper_channels(first))
-        let bitsPerComponent = mat_wrapper_bits_per_component(first)
-        guard rows > 0, cols > 0, channels >= 1, channels <= 4,
-              rows == Int(mat_wrapper_rows(dst)), cols == Int(mat_wrapper_cols(dst)),
-              channels == Int(mat_wrapper_channels(dst)),
-              bitsPerComponent == mat_wrapper_bits_per_component(dst)
+        guard count > 0, count <= Self.maxMergeSources, let first = sources[0],
+              let format = MergeFormat(of: first)
         else { return false }
+        let pipeline = format.bytesPerComponent == 1 ? medianU8 : medianU16
 
-        let bytesPerComponent: Int
-        let pipeline: MTLComputePipelineState
-        switch bitsPerComponent {
-        case 8: bytesPerComponent = 1; pipeline = medianU8
-        case 16: bytesPerComponent = 2; pipeline = medianU16
-        default: return false
-        }
-
-        // Allocate the Metal buffers first and `memcpy` straight into their
-        // `.contents()`, rather than packing into a Swift `[UInt8]` and handing
-        // that to `makeBuffer(bytes:...)` (which copies it again itself). At up
-        // to 17 sources and 42MP that second copy was a real multi-hundred-MB
-        // duplicate allocation and pass, on top of the one PCIe crossing this
-        // data already has to make to reach a discrete GPU's `.storageModeShared`
-        // memory — see `gpuSlots`'s doc comment for the concurrent-frame cost of
-        // that crossing.
-        let rowBytes = cols * channels * bytesPerComponent
-        guard let srcBuf = device.makeBuffer(length: rowBytes * rows * count, options: .storageModeShared),
-              let missesBuf = device.makeBuffer(length: max(1, cols * rows), options: .storageModeShared),
-              let dstBuf = device.makeBuffer(length: rowBytes * rows, options: .storageModeShared),
-              let cmdBuf = queue.makeCommandBuffer(),
-              let encoder = cmdBuf.makeComputeCommandEncoder()
-        else { return false }
-
-        let srcBase = srcBuf.contents()
+        var planes: [MergePlane] = []
+        planes.reserveCapacity(count + 1)
         for i in 0..<count {
-            guard let s = sources[i],
-                  Int(mat_wrapper_rows(s)) == rows, Int(mat_wrapper_cols(s)) == cols,
-                  Int(mat_wrapper_channels(s)) == channels,
-                  mat_wrapper_bits_per_component(s) == bitsPerComponent,
-                  let ptr = mat_wrapper_data_ptr(s)
-            else { return false }
-            let step = Int(mat_wrapper_step(s))
-            let base = srcBase.advanced(by: i * rowBytes * rows)
-            for y in 0..<rows {
-                memcpy(base.advanced(by: y * rowBytes), ptr.advanced(by: y * step), rowBytes)
-            }
+            guard let source = sources[i], let plane = format.plane(of: source) else { return false }
+            planes.append(plane)
         }
-
-        // includeAll never allocates a coverage plane on the C++ side (misses ==
-        // nullptr), and the kernel is told so via `includeAllFlag` rather than by
-        // inferring it from a null buffer — Metal has no null-buffer convention as
-        // clean as C's, so a real (tiny, unread, zeroed) buffer stands in.
-        memset(missesBuf.contents(), 0, max(1, cols * rows))
+        guard let dstPlane = format.plane(of: dst) else { return false }
+        // The coverage plane, when there is one, is bound like one more input. It
+        // has to describe exactly these sources, or it would skip real samples.
         if let misses {
-            guard Int(mat_wrapper_rows(misses)) == rows, Int(mat_wrapper_cols(misses)) == cols,
-                  let mptr = mat_wrapper_data_ptr(misses)
+            guard Int(mat_wrapper_rows(misses)) == format.rows, Int(mat_wrapper_cols(misses)) == format.cols,
+                  mat_wrapper_channels(misses) == 1, mat_wrapper_bits_per_component(misses) == 8,
+                  let pointer = mat_wrapper_data_ptr(misses)
             else { return false }
-            let mstep = Int(mat_wrapper_step(misses))
-            let missesBase = missesBuf.contents()
-            for y in 0..<rows {
-                memcpy(missesBase.advanced(by: y * cols), mptr.advanced(by: y * mstep), cols)
+            let step = Int(mat_wrapper_step(misses))
+            guard step >= format.cols else { return false }
+            planes.append(MergePlane(pointer: pointer, step: step,
+                                     length: (format.rows - 1) * step + format.cols))
+        }
+
+        return runMerge(inputs: planes, dst: dstPlane, format: format) { encoder, bound in
+            let bpc = format.bytesPerComponent
+            var sourceSteps = [Int32](repeating: 0, count: Self.maxMergeSources)
+            for i in 0..<count { sourceSteps[i] = Int32(bound.inputs[i].step / bpc) }
+            let missesBinding = misses == nil ? bound.inputs[0] : bound.inputs[count]
+            var width = Int32(format.cols), height = Int32(format.rows), chans = Int32(format.channels)
+            var dstStep = Int32(bound.dst.step / bpc)
+            var missesStep = Int32(missesBinding.step)
+            var sourceCount = Int32(count)
+            var threshold = Float(outlierThreshold)
+            var includeAllFlag: Int32 = includeAll ? 1 : 0
+            var hasMisses: Int32 = misses == nil ? 0 : 1
+
+            encoder.setComputePipelineState(pipeline)
+            encoder.setBuffer(bound.inputs[0].buffer, offset: bound.inputs[0].offset, index: 0)
+            encoder.setBuffer(bound.dst.buffer, offset: bound.dst.offset, index: 1)
+            encoder.setBuffer(missesBinding.buffer, offset: missesBinding.offset, index: 2)
+            encoder.setBytes(sourceSteps, length: sourceSteps.count * MemoryLayout<Int32>.stride, index: 3)
+            encoder.setBytes(&width, length: MemoryLayout<Int32>.size, index: 4)
+            encoder.setBytes(&height, length: MemoryLayout<Int32>.size, index: 5)
+            encoder.setBytes(&chans, length: MemoryLayout<Int32>.size, index: 6)
+            encoder.setBytes(&dstStep, length: MemoryLayout<Int32>.size, index: 7)
+            encoder.setBytes(&missesStep, length: MemoryLayout<Int32>.size, index: 8)
+            encoder.setBytes(&sourceCount, length: MemoryLayout<Int32>.size, index: 9)
+            encoder.setBytes(&threshold, length: MemoryLayout<Float>.size, index: 10)
+            encoder.setBytes(&includeAllFlag, length: MemoryLayout<Int32>.size, index: 11)
+            // Sources 1..<count at 12..., and the rest of the 16 slots pointed at
+            // source 0 only so that no declared buffer is ever left unbound.
+            for slot in 1..<Self.maxMergeSources {
+                let source = slot < count ? bound.inputs[slot] : bound.inputs[0]
+                encoder.setBuffer(source.buffer, offset: source.offset, index: 11 + slot)
             }
+            encoder.setBytes(&hasMisses, length: MemoryLayout<Int32>.size, index: 28)
+            dispatch(encoder: encoder, pipeline: pipeline, width: format.cols, height: format.rows)
         }
-
-        var width = Int32(cols), height = Int32(rows), chans = Int32(channels)
-        var sourceCount = Int32(count)
-        var threshold = Float(outlierThreshold)
-        var includeAllFlag: Int32 = includeAll ? 1 : 0
-
-        encoder.setComputePipelineState(pipeline)
-        encoder.setBuffer(srcBuf, offset: 0, index: 0)
-        encoder.setBuffer(missesBuf, offset: 0, index: 1)
-        encoder.setBuffer(dstBuf, offset: 0, index: 2)
-        encoder.setBytes(&width, length: MemoryLayout<Int32>.size, index: 3)
-        encoder.setBytes(&height, length: MemoryLayout<Int32>.size, index: 4)
-        encoder.setBytes(&chans, length: MemoryLayout<Int32>.size, index: 5)
-        encoder.setBytes(&sourceCount, length: MemoryLayout<Int32>.size, index: 6)
-        encoder.setBytes(&threshold, length: MemoryLayout<Float>.size, index: 7)
-        encoder.setBytes(&includeAllFlag, length: MemoryLayout<Int32>.size, index: 8)
-
-        dispatch(encoder: encoder, pipeline: pipeline, width: cols, height: rows)
-        encoder.endEncoding()
-        cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
-        guard cmdBuf.status == .completed else { return false }
-
-        guard let dstPtr = mat_wrapper_data_ptr(dst) else { return false }
-        let dstStepBytes = Int(mat_wrapper_step(dst))
-        let outBase = dstBuf.contents()
-        for y in 0..<rows {
-            memcpy(UnsafeMutableRawPointer(mutating: dstPtr).advanced(by: y * dstStepBytes),
-                   outBase.advanced(by: y * rowBytes), rowBytes)
-        }
-        return true
     }
 
-    // MARK: - Aligned merge (batched)
+    // MARK: - Aligned merge (fused)
 
-    /// One frame's whole aligned merge — every neighbour's warp plus the final
-    /// sigma-clipped median merge — on ONE `MTLCommandBuffer`, replacing what
-    /// `ia_align_and_median_merge` (ImageAligner.cpp) used to do as
-    /// `neighbourCount * 2 + 1` separate GPU round-trips (`warp`/`warpCoverage`
-    /// per neighbour via the plain `warp` entry point above, then one call to
-    /// `medianMerge`). See GPU_MERGE_BATCHING_FIX.md for the measurements that
-    /// motivated this: each round-trip's fixed cost (a fresh
-    /// `.storageModeShared` allocation, a command buffer, a synchronous
-    /// `waitUntilCompleted`, a `memcpy` back out) measured larger than the GPU
-    /// kernel work itself, so paying it 17 times per frame was a 2.35x
-    /// regression against the CPU path at real 42MP/8-neighbour scale — this
-    /// is modelled on `buildSiftPyramid`/`buildAkazePyramid` (one command
-    /// buffer, one `waitUntilCompleted`), not on `warp`/`medianMergeImpl`.
+    /// One frame's whole aligned merge — every neighbour's warp, the coverage
+    /// count and the sigma-clipped median merge — as ONE kernel dispatch
+    /// (`aligned_merge_*`) that, for each destination pixel, warps every
+    /// neighbour to it on the spot, counts the neighbours whose warp does not
+    /// reach it, and merges. No warped copy of any neighbour ever exists. On
+    /// unified memory the kernel also reads the decoded images and writes the
+    /// result where they already are (`bindInPlace`), so a merge allocates
+    /// nothing and copies nothing.
     ///
-    /// Two things are fused beyond just "one command buffer," both worth
-    /// calling out:
+    /// What it replaced was already one command buffer per frame — see
+    /// GPU_MERGE_BATCHING_FIX.md for the round-trip problem that fixed — but it
+    /// still spent its time moving memory rather than computing. Measured on an
+    /// M5 Max (36GB unified memory) on a 7008x4672 16-bit RGB frame with 8
+    /// neighbours, frames already decoded, in a test process sharing the machine
+    /// with a running star (hence the wide ranges):
     ///
-    /// 1. Every source (`base` plus every warped neighbour) is written
-    ///    directly into ONE shared, tightly-packed buffer at the exact layout
-    ///    `median_merge_generic` (see `medianMerge` above / the shader source
-    ///    below) already expects — `sources[i*width*height*channels + ...]`,
-    ///    no per-source step. The base is `memcpy`'d in (respecting its own,
-    ///    possibly padded, step); every neighbour's warp dispatch targets its
-    ///    slot directly via a byte-offset `MTLBuffer` binding, so there is no
-    ///    intermediate per-neighbour buffer this function has to allocate,
-    ///    warp into, then re-pack for the merge the way `medianMergeImpl` (a
-    ///    standalone call, receiving already-separate source Mats) has to.
+    /// | | wall per merge | extra memory | GPU executing |
+    /// |---|---|---|---|
+    /// | CPU path | 0.37-0.78s | +1.9GB | — |
+    /// | a warp dispatch per neighbour into a packed buffer, then a merge | 0.24-0.35s | +3.6GB | ~0.04s |
+    /// | this | 0.08-0.13s | +0MB | ~0.05s |
     ///
-    /// 2. `warpCoverage`'s old redundant second warp call — running the whole
-    ///    kernel again on an all-255 probe image purely to learn which
-    ///    destination pixels a warp reached — is gone entirely here. The
-    ///    `warp_and_coverage_*` kernels below write that as a second output
-    ///    of the SAME dispatch that produces the real warped image: every
-    ///    pixel this warp does not reach is written as an explicit zero (this
-    ///    function does not pre-zero neighbour slots the way `warp` pre-zeros
-    ///    `dst` — the kernel's every code path now writes every pixel, real
-    ///    value or zero) and increments a shared per-pixel miss count, the
-    ///    exact `CoverageMisses` contract `medianMergeTyped` depends on
-    ///    (ImageAligner.cpp). This is safe as a plain, non-atomic `+= 1`
-    ///    because every neighbour's dispatch runs in the SAME
-    ///    `MTLComputeCommandEncoder`, in encoding order, by Metal's default
-    ///    serial dispatch semantics — the exact guarantee `buildAkazePyramid`
-    ///    already relies on for its own `fed_step_f32` -> `add_in_place_f32`
-    ///    read-after-write chain, just applied across dispatches instead of
-    ///    within a level's own step loop.
+    /// The old version's 3.6GB was every neighbour copied into a new shared
+    /// buffer (1.6GB), the packed warps (1.8GB), a misses plane and the result,
+    /// all freshly allocated per frame, all invisible to `MemoryMonitor`'s
+    /// ledger, and up to `gpuSlots` (8) frames inside at once — 29GB of a 36GB
+    /// machine before anything else in the run is counted.
+    /// A real 33MP run went into swap there and its aligned merges took 77-260s
+    /// each, against 2-4s once the run was cut to 4-6 frames. Four at a time
+    /// this one holds nothing but the results: twelve merges, measured twice,
+    /// took 1.2-2.0s a merge on the CPU, peaking 5.6-7.5GB higher, and
+    /// 0.07-0.27s a merge here, peaking 0.1-1.8GB higher.
     ///
-    /// 3. Getting each neighbour's raw pixels onto the GPU at all turned out to
-    ///    be a second, independent cost batching alone does not touch — see the
-    ///    `.storageModeManaged` and `rawBuf`/`concurrentPerform` comments below
-    ///    for what was measured and what it bought. Read GPU_MERGE_BATCHING_FIX.md
-    ///    for the honest bottom line: batching plus both of those changes took
-    ///    this function's own GPU/CPU ratio from a documented 2.35x regression
-    ///    down to roughly 1.3x at real 42MP/8-neighbour concurrency — a real,
-    ///    substantial improvement, but not (yet) the "GPU is faster" crossover
-    ///    the original investigation hoped batching alone would produce. The
-    ///    remaining gap is memory bandwidth, not round-trip count: this
-    ///    function's own timing breakdown showed getting ~750MB of source
-    ///    pixels resident and the ~84MB result back out costs more, on this
-    ///    machine, than the CPU path's entire warp-and-merge computation.
+    /// Its output is byte-identical to that version's (checked on a full 33MP
+    /// frame, and on smaller ones with both `includeAll` settings), and
+    /// `GPUOpsTests.testFusedAlignedMergeMatchesTheStandaloneKernelsExactly`
+    /// holds it, byte for byte, to the merge the standalone `warp` and
+    /// `medianMerge` kernels make of the same frames — they share `warp_tap`,
+    /// `warp_value` and `sigma_clipped_median`, so the warp, the coverage the
+    /// merge counts and the selection cannot drift apart.
+    ///
+    /// A discrete GPU cannot read the images where they are, so there they are
+    /// copied in and the result copied back out (`bindByCopy`) — still without
+    /// the packed-warps buffer. That path is checked for correctness on Apple
+    /// silicon with a discrete GPU's storage modes forced
+    /// (`GPUOps.setDiscreteMergesForTesting`), but its speed has not been
+    /// measured on a discrete GPU.
     ///
     /// The streaming/spill path (`MergeSpiller`, ImageAligner.cpp) deliberately
     /// does NOT call this — it holds only one warp resident at a time by
-    /// design, which a single command buffer holding every neighbour's warp at
-    /// once works directly against. It keeps calling `warp`/`warpCoverage`
-    /// above, one round-trip at a time, exactly as before.
+    /// design, which handing every neighbour to one dispatch works directly
+    /// against. It keeps calling `warp`/`warpCoverage` above, one round-trip at
+    /// a time, exactly as before.
     ///
     /// `neighbours`/`homographies` are parallel arrays: neighbour i's forward
     /// (src -> dst) homography is `homographies[i*9 ..< i*9+9]`, row-major,
@@ -528,247 +584,257 @@ private final class MetalGPUBackend: @unchecked Sendable {
     private func alignedMergeImpl(base: MatWrapperRef, neighbours: UnsafeMutablePointer<MatWrapperRef?>,
                                   neighbourCount: Int, homographies: UnsafePointer<Double>,
                                   outlierThreshold: Double, includeAll: Bool, dst: MatWrapperRef) -> Bool {
-        // count is base + every neighbour -- the same <= 17 cap medianMergeImpl
-        // enforces, since this reuses that same median_merge_u8/u16 pipeline
-        // unmodified over GPU-resident buffers.
-        let count = neighbourCount + 1
-        guard neighbourCount > 0, count <= 17 else { return false }
-
-        let rows = Int(mat_wrapper_rows(base))
-        let cols = Int(mat_wrapper_cols(base))
-        let channels = Int(mat_wrapper_channels(base))
-        let bitsPerComponent = mat_wrapper_bits_per_component(base)
-        guard rows > 0, cols > 0, channels >= 1, channels <= 4,
-              rows == Int(mat_wrapper_rows(dst)), cols == Int(mat_wrapper_cols(dst)),
-              channels == Int(mat_wrapper_channels(dst)),
-              bitsPerComponent == mat_wrapper_bits_per_component(dst)
+        guard neighbourCount > 0, neighbourCount < Self.maxMergeSources,
+              let format = MergeFormat(of: base)
         else { return false }
+        let pipeline = format.bytesPerComponent == 1 ? alignedMergeU8 : alignedMergeU16
 
+        // Every image has to match base's geometry exactly — the caller
+        // (`tryGPUAlignedMerge`, ImageAligner.cpp) filters neighbours by that
+        // before calling, so a mismatch here is refused rather than dropped, since
+        // a dropped neighbour would make the GPU and CPU paths disagree about
+        // which neighbours contributed.
+        guard let basePlane = format.plane(of: base), let dstPlane = format.plane(of: dst) else { return false }
+        var planes = [basePlane]
+        planes.reserveCapacity(neighbourCount + 1)
+        for i in 0..<neighbourCount {
+            guard let neighbour = neighbours[i], let plane = format.plane(of: neighbour) else { return false }
+            planes.append(plane)
+        }
+
+        // Each neighbour's INVERSE homography (dst -> src), the convention the
+        // warp kernels sample with — same inversion as `warpImpl`.
+        var hInv = [Float](repeating: 0, count: (Self.maxMergeSources - 1) * 9)
+        for i in 0..<neighbourCount {
+            guard let inverse = invert3x3(homographies + i * 9) else { return false }
+            for k in 0..<9 { hInv[i * 9 + k] = Float(inverse[k]) }
+        }
+
+        return runMerge(inputs: planes, dst: dstPlane, format: format) { encoder, bound in
+            let bpc = format.bytesPerComponent
+            var width = Int32(format.cols), height = Int32(format.rows), chans = Int32(format.channels)
+            var baseStep = Int32(bound.inputs[0].step / bpc)
+            var dstStep = Int32(bound.dst.step / bpc)
+            var neighbourSteps = [Int32](repeating: 0, count: Self.maxMergeSources - 1)
+            for i in 0..<neighbourCount { neighbourSteps[i] = Int32(bound.inputs[i + 1].step / bpc) }
+            var count = Int32(neighbourCount)
+            var threshold = Float(outlierThreshold)
+            var includeAllFlag: Int32 = includeAll ? 1 : 0
+
+            encoder.setComputePipelineState(pipeline)
+            encoder.setBuffer(bound.inputs[0].buffer, offset: bound.inputs[0].offset, index: 0)
+            encoder.setBuffer(bound.dst.buffer, offset: bound.dst.offset, index: 1)
+            encoder.setBytes(hInv, length: hInv.count * MemoryLayout<Float>.stride, index: 2)
+            encoder.setBytes(neighbourSteps, length: neighbourSteps.count * MemoryLayout<Int32>.stride, index: 3)
+            encoder.setBytes(&width, length: MemoryLayout<Int32>.size, index: 4)
+            encoder.setBytes(&height, length: MemoryLayout<Int32>.size, index: 5)
+            encoder.setBytes(&chans, length: MemoryLayout<Int32>.size, index: 6)
+            encoder.setBytes(&baseStep, length: MemoryLayout<Int32>.size, index: 7)
+            encoder.setBytes(&dstStep, length: MemoryLayout<Int32>.size, index: 8)
+            encoder.setBytes(&count, length: MemoryLayout<Int32>.size, index: 9)
+            encoder.setBytes(&threshold, length: MemoryLayout<Float>.size, index: 10)
+            encoder.setBytes(&includeAllFlag, length: MemoryLayout<Int32>.size, index: 11)
+            // Neighbours at 12..., and the rest of the 16 slots pointed at the base
+            // only so that no declared buffer is ever left unbound.
+            for slot in 1..<Self.maxMergeSources {
+                let source = slot <= neighbourCount ? bound.inputs[slot] : bound.inputs[0]
+                encoder.setBuffer(source.buffer, offset: source.offset, index: 11 + slot)
+            }
+            dispatch(encoder: encoder, pipeline: pipeline, width: format.cols, height: format.rows)
+        }
+    }
+
+    // MARK: - Binding images for the merges
+
+    /// The most images one merge reads: the base (or first source) plus 16 more,
+    /// each bound at its own buffer index — 0, then 12...27 — by the
+    /// `median_merge_*` and `aligned_merge_*` kernels, which select from a
+    /// 17-entry array.
+    static let maxMergeSources = 17
+
+    /// The pixel layout every image in one merge shares: the first image's, which
+    /// every other one (and `dst`) has to match exactly.
+    private struct MergeFormat {
+        let rows: Int, cols: Int, channels: Int
+        let bitsPerComponent: Int64
         let bytesPerComponent: Int
-        let warpPipeline: MTLComputePipelineState
-        let mergePipeline: MTLComputePipelineState
-        switch bitsPerComponent {
-        case 8: bytesPerComponent = 1; warpPipeline = warpAndCoverageU8; mergePipeline = medianU8
-        case 16: bytesPerComponent = 2; warpPipeline = warpAndCoverageU16; mergePipeline = medianU16
-        default: return false
+        var rowBytes: Int { cols * channels * bytesPerComponent }
+
+        /// nil for anything the merge kernels have no instantiation for.
+        init?(of ref: MatWrapperRef) {
+            rows = Int(mat_wrapper_rows(ref))
+            cols = Int(mat_wrapper_cols(ref))
+            channels = Int(mat_wrapper_channels(ref))
+            bitsPerComponent = mat_wrapper_bits_per_component(ref)
+            guard rows > 0, cols > 0, channels >= 1, channels <= 4,
+                  bitsPerComponent == 8 || bitsPerComponent == 16
+            else { return nil }
+            bytesPerComponent = Int(bitsPerComponent) / 8
         }
 
-        guard let basePtr = mat_wrapper_data_ptr(base) else { return false }
-        let baseStepBytes = Int(mat_wrapper_step(base))
-        // Tightly packed -- see this function's doc comment point 1. Every
-        // neighbour's warp dispatch below writes directly at this layout, so
-        // (unlike medianMergeImpl) there is no separate re-pack pass.
-        let rowBytes = cols * channels * bytesPerComponent
-        // Every neighbour's warp dispatch binds `sourcesBuf` at a per-slot BYTE
-        // offset (`(i+1) * rowBytes * rows`, below) rather than the zero offset
-        // every other GPU entry point in this file uses -- Metal requires
-        // `setBuffer(_:offset:index:)` offsets to be 4-byte aligned, which a
-        // tightly-packed row is not guaranteed to be for every channel/depth
-        // combination (e.g. an odd-width single-channel 8-bit frame). Real
-        // frames in this codebase are always even-width 16-bit, where this
-        // guard never fires; it exists so an unusual input falls back to the
-        // CPU path instead of risking undefined GPU behaviour.
-        guard rowBytes % 4 == 0 else { return false }
+        /// Where `ref`'s pixels are, or nil when it does not have exactly this layout.
+        func plane(of ref: MatWrapperRef) -> MergePlane? {
+            guard Int(mat_wrapper_rows(ref)) == rows, Int(mat_wrapper_cols(ref)) == cols,
+                  Int(mat_wrapper_channels(ref)) == channels,
+                  mat_wrapper_bits_per_component(ref) == bitsPerComponent,
+                  let pointer = mat_wrapper_data_ptr(ref)
+            else { return nil }
+            let step = Int(mat_wrapper_step(ref))
+            guard step >= rowBytes, step % bytesPerComponent == 0 else { return nil }
+            return MergePlane(pointer: pointer, step: step, length: (rows - 1) * step + rowBytes)
+        }
+    }
 
-        // `.storageModeManaged`, not `.shared`, for the two big buffers a whole
-        // frame's worth of data moves through (`sourcesBuf`, `dstBuf`) -- unlike
-        // `warp`/`medianMergeImpl` above, which pay one small `.shared` transfer
-        // per call and were never the thing measured slow. Measured directly:
-        // switching just these two buffers (plus `missesBuf`, below) from
-        // `.shared` to `.managed` cut this function's own SOLO (no concurrency,
-        // so not a `gpuSlots` question) GPU/CPU ratio from 1.8x to 1.3x for one
-        // 42MP/8-neighbour frame -- see GPU_MERGE_BATCHING_FIX.md for the
-        // full before/after numbers this and the `rawBuf` change below produced
-        // together. `.shared` memory on this discrete Vega has no
-        // unified-memory fast path (see `gpuSlots`'s doc comment: PCIe, not a
-        // pointer handoff), so a kernel reading/writing a `.shared` buffer pays
-        // that PCIe cost on every access *during* the dispatch, not just at
-        // transfer time -- and this function's buffers are hundreds of MB to
-        // over a GB (`sourcesBuf` is `rowBytes * rows * count`, ~750MB at
-        // 42MP/9 sources), read and written by nine dispatches each.
-        // `.storageModeManaged` keeps the authoritative copy in VRAM once
-        // transferred, exactly like `buildSiftPyramid`/`buildAkazePyramid`'s
-        // textures (same reasoning, different resource type) -- the CPU-write
-        // side needs `didModifyRange` after writing the base image in, and the
-        // CPU-read side needs an explicit blit `synchronize` before reading
-        // `dstBuf` back (both below); GPU-to-GPU visibility (a warp dispatch's
-        // write, the merge dispatch's read) needs neither, since that ordering
-        // is already guaranteed by this encoder's default serial dispatch order
-        // regardless of storage mode. `missesBuf` is also `.managed`, for the
-        // same reason -- at ~40MB (one byte per pixel at 42MP) it is not the
-        // tiny plane its `.shared` counterpart in `medianMergeImpl` above is at
-        // that function's much smaller call sizes, and every one of this
-        // function's 9 dispatches (8 warps + the merge) touches all of it.
-        // `hBuf` alone stays `.shared`: 9 floats, never read back by the CPU,
-        // not worth the bookkeeping.
-        guard let sourcesBuf = device.makeBuffer(length: rowBytes * rows * count, options: .storageModeManaged),
-              let missesBuf = device.makeBuffer(length: max(1, cols * rows), options: .storageModeManaged),
-              let dstBuf = device.makeBuffer(length: rowBytes * rows, options: .storageModeManaged),
-              let cmdBuf = queue.makeCommandBuffer()
+    /// Where one image's pixels are on the CPU side.
+    private struct MergePlane {
+        let pointer: UnsafeRawPointer
+        let step: Int
+        /// Bytes from the first pixel to the end of the last row's pixels — not
+        /// `rows * step`, which reaches past the data when the last row is padded.
+        let length: Int
+    }
+
+    /// One image's pixels as a merge kernel sees them: a buffer, the byte offset
+    /// of the first pixel inside it, and the row stride in bytes.
+    private struct MergeBinding {
+        let buffer: MTLBuffer
+        let offset: Int
+        let step: Int
+    }
+
+    /// How a merge's images reach the GPU, plus what to do once it is done.
+    private struct MergeBindings {
+        /// In the order the inputs were given.
+        let inputs: [MergeBinding]
+        let dst: MergeBinding
+        /// A `.storageModeManaged` destination needs a blit `synchronize` before the
+        /// CPU can read it; nil when there is nothing to synchronize.
+        let managedDst: MTLBuffer?
+        /// Runs after the command buffer completes: copies the result out when the
+        /// GPU wrote into a buffer of its own rather than into `dst` itself.
+        let finish: () -> Void
+    }
+
+    /// Binds `inputs` and `dst` for the GPU, has `encode` record the dispatch, and
+    /// runs it to completion — the part `medianMerge` and `alignedMerge` share.
+    /// On unified memory the GPU reads and writes the images in place
+    /// (`bindInPlace`); on a discrete GPU, or if an image cannot be wrapped, they
+    /// are copied (`bindByCopy`).
+    private func runMerge(inputs: [MergePlane], dst: MergePlane, format: MergeFormat,
+                          encode: (MTLComputeCommandEncoder, MergeBindings) -> Void) -> Bool {
+        let unified = device.hasUnifiedMemory && !mergeStateLock.withLock({ discreteMerges })
+        let inPlace = unified ? bindInPlace(inputs: inputs, dst: dst) : nil
+        if unified && inPlace == nil {
+            Log.d("GPU merge: could not hand the GPU these images in place; copying them")
+        }
+        guard let bound = inPlace ?? bindByCopy(inputs: inputs, dst: dst, rows: format.rows,
+                                                rowBytes: format.rowBytes, managedDst: !unified),
+              let cmdBuf = queue.makeCommandBuffer(),
+              let encoder = cmdBuf.makeComputeCommandEncoder()
         else { return false }
 
-        // Slot 0 is always the base image -- it is never warped, so it is the
-        // only slot filled from the CPU side rather than by a dispatch, copied
-        // row by row to respect its own (possibly padded) step. `didModifyRange`
-        // tells Metal about this CPU-side write so the GPU's later read (inside
-        // the merge dispatch) sees it -- required for `.storageModeManaged`,
-        // unlike the `.shared` buffers elsewhere in this file.
-        let sourcesBase = sourcesBuf.contents()
-        for y in 0..<rows {
-            memcpy(sourcesBase.advanced(by: y * rowBytes), basePtr.advanced(by: y * baseStepBytes), rowBytes)
+        encode(encoder, bound)
+        encoder.endEncoding()
+
+        if let managedDst = bound.managedDst {
+            guard let sync = cmdBuf.makeBlitCommandEncoder() else { return false }
+            sync.synchronize(resource: managedDst)
+            sync.endEncoding()
         }
-        sourcesBuf.didModifyRange(0..<(rowBytes * rows))
-        // Always zeroed, including under includeAll (which never reads it) --
-        // matching medianMergeImpl's own unconditional memset, for the same
-        // reason: one code path regardless of includeAll is simpler than two.
-        // `didModifyRange` again, for the same reason as `sourcesBuf` above.
-        let missesLength = max(1, cols * rows)
-        memset(missesBuf.contents(), 0, missesLength)
-        missesBuf.didModifyRange(0..<missesLength)
-
-        var width = Int32(cols), height = Int32(rows), chans = Int32(channels)
-
-        // Every neighbour's raw (still-unwarped) pixels go into ONE buffer
-        // instead of one `device.makeBuffer(bytes:...)` allocation per
-        // neighbour (what an earlier version of this function did, and what
-        // `warpImpl` above still does for its own single-neighbour case) --
-        // allocated once here and filled by explicit `memcpy`s below, one per
-        // neighbour, run concurrently. Measured: neither choice of allocation
-        // API was the point -- a single-threaded copy of 8 neighbours' ~84MB
-        // each (672MB total) cost about the same (~0.33-0.4s) whether the
-        // destination was `makeBuffer(bytes:...)`, this buffer's `.contents()`,
-        // or a plain `malloc`'d region, which means the cost is ordinary
-        // single-core memory bandwidth on this machine moving *this machine's*
-        // source data, not anything about Metal or GPU-visible memory. See the
-        // `concurrentPerform` call below for what this bought once spread
-        // across cores instead.
-        //
-        // Neighbours are validated (just above) to share base's rows/cols/
-        // channels/bits, but not necessarily its row step -- an unpadded
-        // OpenCV Mat of that shape always would, but this does not assume it,
-        // so each neighbour's own step sizes its own slot.
-        // `nonisolated(unsafe)`: mutated only by the sequential validation loop
-        // just below, then only read (at disjoint indices, one per iteration)
-        // from the `concurrentPerform` closure further down -- safe by
-        // construction, but the compiler cannot see that a `DispatchQueue.
-        // concurrentPerform` call is synchronous and each iteration touches a
-        // different index.
-        nonisolated(unsafe) var neighbourStepsBytes = [Int](repeating: 0, count: neighbourCount)
-        nonisolated(unsafe) var neighbourOffsets = [Int](repeating: 0, count: neighbourCount)
-        nonisolated(unsafe) var neighbourPtrs = [UnsafeRawPointer?](repeating: nil, count: neighbourCount)
-        var rawTotal = 0
-        for i in 0..<neighbourCount {
-            guard let neighbour = neighbours[i] else { return false }
-            guard Int(mat_wrapper_rows(neighbour)) == rows, Int(mat_wrapper_cols(neighbour)) == cols,
-                  Int(mat_wrapper_channels(neighbour)) == channels,
-                  mat_wrapper_bits_per_component(neighbour) == bitsPerComponent,
-                  let neighbourPtr = mat_wrapper_data_ptr(neighbour)
-            else { return false }
-            let neighbourStepBytes = Int(mat_wrapper_step(neighbour))
-            // Same 4-byte offset-alignment requirement as `rowBytes` above --
-            // this becomes a `setBuffer(_:offset:index:)` offset into `rawBuf`
-            // below.
-            guard neighbourStepBytes % bytesPerComponent == 0, neighbourStepBytes % 4 == 0
-            else { return false }
-            neighbourStepsBytes[i] = neighbourStepBytes
-            neighbourOffsets[i] = rawTotal
-            neighbourPtrs[i] = neighbourPtr
-            rawTotal += neighbourStepBytes * rows
-        }
-        guard let rawBuf = device.makeBuffer(length: max(1, rawTotal), options: .storageModeShared)
-        else { return false }
-        // Each neighbour's copy is independent (disjoint source, disjoint
-        // destination range), so this spreads it across cores instead of
-        // paying the ~0.35s single-threaded cost (see above) on the one thread
-        // already doing the rest of this function's work. Measured gain was
-        // modest (roughly 1.2x, not close to core-count-proportional) --
-        // consistent with the single-threaded number already being close to
-        // this machine's aggregate memory bandwidth for a copy this size,
-        // which more threads reading/writing the same memory subsystem cannot
-        // multiply. Kept anyway: it is a real, free reduction on the thread
-        // that matters (the one blocking on `waitUntilCompleted` next), not a
-        // regression risk, and costs nothing when `neighbourCount` is small.
-        nonisolated(unsafe) let rawBase = rawBuf.contents()
-        DispatchQueue.concurrentPerform(iterations: neighbourCount) { i in
-            let step = neighbourStepsBytes[i]
-            memcpy(rawBase.advanced(by: neighbourOffsets[i]), neighbourPtrs[i]!, step * rows)
-        }
-
-        // Every neighbour's warp+coverage dispatch goes on ONE encoder -- see
-        // this function's doc comment point 2 for why the plain, non-atomic
-        // `misses` increment inside each dispatch is safe across this loop.
-        guard let warpEncoder = cmdBuf.makeComputeCommandEncoder() else { return false }
-        for i in 0..<neighbourCount {
-            guard let hInv = invert3x3(homographies + i * 9) else { return false }
-            let srcStepElems = Int32(neighbourStepsBytes[i] / bytesPerComponent)
-            var dstStep = Int32(cols * channels)   // tightly packed destination slot
-            var hInvFloat = hInv.map { Float($0) }
-
-            guard let hBuf = device.makeBuffer(bytes: &hInvFloat, length: 9 * MemoryLayout<Float>.stride,
-                                               options: .storageModeShared)
-            else { return false }
-
-            var srcStep = srcStepElems
-
-            warpEncoder.setComputePipelineState(warpPipeline)
-            warpEncoder.setBuffer(rawBuf, offset: neighbourOffsets[i], index: 0)
-            // Byte offset into the shared sources buffer: slot 0 is the base,
-            // so neighbour i lands at slot i+1.
-            warpEncoder.setBuffer(sourcesBuf, offset: (i + 1) * rowBytes * rows, index: 1)
-            warpEncoder.setBuffer(hBuf, offset: 0, index: 2)
-            warpEncoder.setBytes(&width, length: MemoryLayout<Int32>.size, index: 3)
-            warpEncoder.setBytes(&height, length: MemoryLayout<Int32>.size, index: 4)
-            warpEncoder.setBytes(&chans, length: MemoryLayout<Int32>.size, index: 5)
-            warpEncoder.setBytes(&srcStep, length: MemoryLayout<Int32>.size, index: 6)
-            warpEncoder.setBytes(&dstStep, length: MemoryLayout<Int32>.size, index: 7)
-            warpEncoder.setBuffer(missesBuf, offset: 0, index: 8)
-
-            dispatch(encoder: warpEncoder, pipeline: warpPipeline, width: cols, height: rows)
-        }
-        warpEncoder.endEncoding()
-
-        // The final merge, reading directly from the now GPU-resident sources
-        // and misses buffers this encoder's dispatches just filled -- no CPU
-        // round trip in between. Same pipeline, same buffer layout, as the
-        // standalone `medianMerge` above.
-        guard let mergeEncoder = cmdBuf.makeComputeCommandEncoder() else { return false }
-        var sourceCount = Int32(count)
-        var threshold = Float(outlierThreshold)
-        var includeAllFlag: Int32 = includeAll ? 1 : 0
-        mergeEncoder.setComputePipelineState(mergePipeline)
-        mergeEncoder.setBuffer(sourcesBuf, offset: 0, index: 0)
-        mergeEncoder.setBuffer(missesBuf, offset: 0, index: 1)
-        mergeEncoder.setBuffer(dstBuf, offset: 0, index: 2)
-        mergeEncoder.setBytes(&width, length: MemoryLayout<Int32>.size, index: 3)
-        mergeEncoder.setBytes(&height, length: MemoryLayout<Int32>.size, index: 4)
-        mergeEncoder.setBytes(&chans, length: MemoryLayout<Int32>.size, index: 5)
-        mergeEncoder.setBytes(&sourceCount, length: MemoryLayout<Int32>.size, index: 6)
-        mergeEncoder.setBytes(&threshold, length: MemoryLayout<Float>.size, index: 7)
-        mergeEncoder.setBytes(&includeAllFlag, length: MemoryLayout<Int32>.size, index: 8)
-        dispatch(encoder: mergeEncoder, pipeline: mergePipeline, width: cols, height: rows)
-        mergeEncoder.endEncoding()
-
-        // `.storageModeManaged` needs an explicit GPU->CPU sync before a
-        // CPU-side read (here, the readback loop below) sees what the GPU
-        // wrote -- same requirement, same fix, as buildSiftPyramid/
-        // buildAkazePyramid's own blit-encoder `synchronize` before their
-        // final readback.
-        guard let syncEncoder = cmdBuf.makeBlitCommandEncoder() else { return false }
-        syncEncoder.synchronize(resource: dstBuf)
-        syncEncoder.endEncoding()
 
         cmdBuf.commit()
         cmdBuf.waitUntilCompleted()
         guard cmdBuf.status == .completed else { return false }
-
-        guard let dstPtr = mat_wrapper_data_ptr(dst) else { return false }
-        let dstStepBytes = Int(mat_wrapper_step(dst))
-        let outBase = dstBuf.contents()
-        for y in 0..<rows {
-            memcpy(UnsafeMutableRawPointer(mutating: dstPtr).advanced(by: y * dstStepBytes),
-                   outBase.advanced(by: y * rowBytes), rowBytes)
+        bound.finish()
+        mergeStateLock.withLock {
+            if inPlace != nil { inPlaceMerges += 1 } else { copiedMerges += 1 }
         }
         return true
+    }
+
+    /// Unified memory: hand the GPU the images' own pixels, no copies at all.
+    ///
+    /// `makeBuffer(bytesNoCopy:)` takes only whole pages, and an OpenCV buffer
+    /// starts wherever its allocator put it, so each image is wrapped from the
+    /// page its first pixel is on to the end of the page its last pixel is on,
+    /// and bound at the first pixel's offset inside that. The kernels read and
+    /// write only inside each image's own pixels, never the rest of those
+    /// pages. Nothing here owns the memory (`deallocator: nil`): every image
+    /// outlives the merge, which waits for the GPU before returning.
+    ///
+    /// Returns nil when any one image cannot be wrapped, and the caller copies
+    /// them all instead.
+    private func bindInPlace(inputs: [MergePlane], dst: MergePlane) -> MergeBindings? {
+        func wrap(_ plane: MergePlane) -> MergeBinding? {
+            let page = Int(getpagesize())
+            let address = Int(bitPattern: plane.pointer)
+            let start = address & ~(page - 1)
+            let offset = address - start
+            let length = (offset + plane.length + page - 1) & ~(page - 1)
+            // A device-buffer offset has to be aligned to what the kernel reads
+            // through it; 4 covers both pixel depths.
+            guard offset % 4 == 0,
+                  let pageStart = UnsafeMutableRawPointer(bitPattern: start),
+                  let buffer = device.makeBuffer(bytesNoCopy: pageStart, length: length,
+                                                 options: .storageModeShared, deallocator: nil)
+            else { return nil }
+            return MergeBinding(buffer: buffer, offset: offset, step: plane.step)
+        }
+        guard let dstBinding = wrap(dst) else { return nil }
+        var inputBindings: [MergeBinding] = []
+        inputBindings.reserveCapacity(inputs.count)
+        for input in inputs {
+            guard let binding = wrap(input) else { return nil }
+            inputBindings.append(binding)
+        }
+        return MergeBindings(inputs: inputBindings, dst: dstBinding, managedDst: nil, finish: {})
+    }
+
+    /// A discrete GPU (or an image unified memory could not wrap): copy every
+    /// input into one buffer and have the GPU write a buffer of its own, copied
+    /// out once it is done.
+    ///
+    /// The inputs go in `.storageModeShared`, which is how the two-pass aligned
+    /// merge this replaced moved its neighbours and was measured on the iMac
+    /// Pro's Vega; the result goes in `.storageModeManaged` on a discrete GPU for
+    /// the same reason that version gave: a kernel writing `.shared` memory there
+    /// pays PCIe on every access. Each input is copied on its own thread — they
+    /// are independent, and one thread copying every source was the slowest
+    /// part of both merges' old versions.
+    private func bindByCopy(inputs: [MergePlane], dst: MergePlane,
+                            rows: Int, rowBytes: Int, managedDst: Bool) -> MergeBindings? {
+        // Slots start 256-byte aligned, comfortably past any offset rule Metal has
+        // for a device buffer.
+        var offsets: [Int] = []
+        var total = 0
+        for input in inputs {
+            offsets.append(total)
+            total += (input.length + 255) & ~255
+        }
+        guard let inputBuffer = device.makeBuffer(length: max(total, 1), options: .storageModeShared)
+        else { return nil }
+        let dstMode: MTLResourceOptions = managedDst ? .storageModeManaged : .storageModeShared
+        guard let output = device.makeBuffer(length: rowBytes * rows, options: dstMode) else { return nil }
+
+        nonisolated(unsafe) let inputBase = inputBuffer.contents()
+        DispatchQueue.concurrentPerform(iterations: inputs.count) { i in
+            memcpy(inputBase.advanced(by: offsets[i]), inputs[i].pointer, inputs[i].length)
+        }
+
+        nonisolated(unsafe) let outPointer = UnsafeMutableRawPointer(mutating: dst.pointer)
+        let dstStep = dst.step
+        return MergeBindings(
+          inputs: inputs.indices.map {
+              MergeBinding(buffer: inputBuffer, offset: offsets[$0], step: inputs[$0].step)
+          },
+          dst: MergeBinding(buffer: output, offset: 0, step: rowBytes),
+          managedDst: managedDst ? output : nil,
+          finish: {
+              let source = output.contents()
+              for y in 0..<rows {
+                  memcpy(outPointer.advanced(by: y * dstStep), source.advanced(by: y * rowBytes), rowBytes)
+              }
+          })
     }
 
     // MARK: - SIFT Gaussian pyramid
@@ -1172,22 +1238,32 @@ private final class MetalGPUBackend: @unchecked Sendable {
         return x >= 0 && x < width && y >= 0 && y < height;
     }
 
+    // Where one destination pixel samples a warped source, and whether it samples
+    // anything at all. Every warp kernel below goes through warp_tap and
+    // warp_value, so the image warp, the coverage the merge counts and the fused
+    // aligned merge cannot drift apart.
+    struct WarpTap {
+        int ix, iy;
+        float w00, w10, w01, w11, wsum;
+        bool v00, v10, v01, v11;
+        bool covered;
+    };
+
     // homography is the INVERSE mapping (dst -> src), row-major 3x3 -- the same
     // convention cv::warpPerspective uses internally for a forward-mapping H.
-    template <typename T, int MAXV>
-    inline void warp_generic(device const T* src, device T* dst,
-                             constant float* hInv,
-                             int width, int height, int channels,
-                             int srcStep, int dstStep, uint2 gid)
-    {
-        if ((int)gid.x >= width || (int)gid.y >= height) return;
+    // `covered` is false exactly where cv::warpPerspective's BORDER_TRANSPARENT
+    // leaves the destination untouched: none of the four sample corners exist in
+    // the source (or the projection degenerates).
+    inline WarpTap warp_tap(constant float* hInv, int px, int py, int width, int height) {
+        WarpTap t;
+        t.covered = false;
 
-        float x = float(gid.x), y = float(gid.y);
+        float x = float(px), y = float(py);
         float w = hInv[6] * x + hInv[7] * y + hInv[8];
-        if (fabs(w) < 1e-12f) return;
+        if (fabs(w) < 1e-12f) return t;
         float sx = (hInv[0] * x + hInv[1] * y + hInv[2]) / w;
         float sy = (hInv[3] * x + hInv[4] * y + hInv[5]) / w;
-        if (!isfinite(sx) || !isfinite(sy)) return;
+        if (!isfinite(sx) || !isfinite(sy)) return t;
 
         int ix = int(floor(sx));
         int iy = int(floor(sy));
@@ -1210,30 +1286,54 @@ private final class MetalGPUBackend: @unchecked Sendable {
         fx = float(fxi) / kTabSize;
         fy = float(fyi) / kTabSize;
 
-        float w00 = (1.0f - fx) * (1.0f - fy);
-        float w10 = fx * (1.0f - fy);
-        float w01 = (1.0f - fx) * fy;
-        float w11 = fx * fy;
+        t.w00 = (1.0f - fx) * (1.0f - fy);
+        t.w10 = fx * (1.0f - fy);
+        t.w01 = (1.0f - fx) * fy;
+        t.w11 = fx * fy;
 
-        bool v00 = sample_valid(ix,     iy,     width, height);
-        bool v10 = sample_valid(ix + 1, iy,     width, height);
-        bool v01 = sample_valid(ix,     iy + 1, width, height);
-        bool v11 = sample_valid(ix + 1, iy + 1, width, height);
-        if (!v00 && !v10 && !v01 && !v11) return;   // fully outside: dst stays zero
+        t.v00 = sample_valid(ix,     iy,     width, height);
+        t.v10 = sample_valid(ix + 1, iy,     width, height);
+        t.v01 = sample_valid(ix,     iy + 1, width, height);
+        t.v11 = sample_valid(ix + 1, iy + 1, width, height);
+        if (!t.v00 && !t.v10 && !t.v01 && !t.v11) return t;   // fully outside
 
-        float wsum = (v00 ? w00 : 0.0f) + (v10 ? w10 : 0.0f)
-                   + (v01 ? w01 : 0.0f) + (v11 ? w11 : 0.0f);
-        if (wsum <= 1e-6f) return;
+        t.wsum = (t.v00 ? t.w00 : 0.0f) + (t.v10 ? t.w10 : 0.0f)
+               + (t.v01 ? t.w01 : 0.0f) + (t.v11 ? t.w11 : 0.0f);
+        if (t.wsum <= 1e-6f) return t;
+
+        t.ix = ix;
+        t.iy = iy;
+        t.covered = true;
+        return t;
+    }
+
+    // Channel `c` of a covered tap: the bilinear sample, renormalised by the
+    // weights of the corners that exist, rounded to the pixel type.
+    template <typename T, int MAXV>
+    inline T warp_value(device const T* src, int srcStep, int channels, thread const WarpTap& t, int c) {
+        float acc = 0;
+        if (t.v00) acc += t.w00 * float(src[(size_t)t.iy * srcStep + (size_t)t.ix * channels + c]);
+        if (t.v10) acc += t.w10 * float(src[(size_t)t.iy * srcStep + (size_t)(t.ix + 1) * channels + c]);
+        if (t.v01) acc += t.w01 * float(src[(size_t)(t.iy + 1) * srcStep + (size_t)t.ix * channels + c]);
+        if (t.v11) acc += t.w11 * float(src[(size_t)(t.iy + 1) * srcStep + (size_t)(t.ix + 1) * channels + c]);
+        float val = acc / t.wsum;
+        return T(clamp(val + 0.5f, 0.0f, float(MAXV)));
+    }
+
+    template <typename T, int MAXV>
+    inline void warp_generic(device const T* src, device T* dst,
+                             constant float* hInv,
+                             int width, int height, int channels,
+                             int srcStep, int dstStep, uint2 gid)
+    {
+        if ((int)gid.x >= width || (int)gid.y >= height) return;
+
+        WarpTap t = warp_tap(hInv, int(gid.x), int(gid.y), width, height);
+        if (!t.covered) return;   // dst stays zero
 
         size_t dstBase = (size_t)gid.y * (size_t)dstStep + (size_t)gid.x * (size_t)channels;
         for (int c = 0; c < channels; ++c) {
-            float acc = 0;
-            if (v00) acc += w00 * float(src[(size_t)iy * srcStep + (size_t)ix * channels + c]);
-            if (v10) acc += w10 * float(src[(size_t)iy * srcStep + (size_t)(ix + 1) * channels + c]);
-            if (v01) acc += w01 * float(src[(size_t)(iy + 1) * srcStep + (size_t)ix * channels + c]);
-            if (v11) acc += w11 * float(src[(size_t)(iy + 1) * srcStep + (size_t)(ix + 1) * channels + c]);
-            float val = acc / wsum;
-            dst[dstBase + c] = T(clamp(val + 0.5f, 0.0f, float(MAXV)));
+            dst[dstBase + c] = warp_value<T, MAXV>(src, srcStep, channels, t, c);
         }
     }
 
@@ -1263,215 +1363,277 @@ private final class MetalGPUBackend: @unchecked Sendable {
         warp_generic<ushort, 65535>(src, dst, hInv, width, height, channels, srcStep, dstStep, gid);
     }
 
-    // Same warp as warp_generic above, but also writes a coverage-misses
-    // contribution as a second output of the SAME dispatch, instead of a caller
-    // running the whole kernel again on a synthetic all-255 probe image
-    // (warpCoverage, ImageAligner.cpp) -- see MetalGPUBackend.alignedMerge's doc
-    // comment for why this is safe to accumulate with a plain, non-atomic `+= 1`
-    // across the several dispatches (one per neighbour) that share `misses`.
-    //
-    // Unlike warp_generic, every code path here WRITES dst -- real value or an
-    // explicit zero -- rather than leaving an unreached pixel untouched and
-    // relying on the destination having been pre-zeroed. alignedMerge does not
-    // pre-zero a neighbour's slot in the shared sources buffer, so this kernel's
-    // full-grid coverage (every (x, y) in [0, width) x [0, height) is written by
-    // exactly one thread, via the bounds check just below) is what keeps the
-    // "zero means no data" invariant the merge depends on true.
-    template <typename T, int MAXV>
-    inline void warp_and_coverage_generic(device const T* src, device T* dst,
-                                          device uchar* misses,
-                                          constant float* hInv,
-                                          int width, int height, int channels,
-                                          int srcStep, int dstStep, uint2 gid)
-    {
-        if ((int)gid.x >= width || (int)gid.y >= height) return;
-
-        size_t dstBase = (size_t)gid.y * (size_t)dstStep + (size_t)gid.x * (size_t)channels;
-        size_t missIdx = (size_t)gid.y * (size_t)width + (size_t)gid.x;
-
-        float x = float(gid.x), y = float(gid.y);
-        float w = hInv[6] * x + hInv[7] * y + hInv[8];
-        bool covered = fabs(w) >= 1e-12f;
-        float sx = 0.0f, sy = 0.0f;
-        if (covered) {
-            sx = (hInv[0] * x + hInv[1] * y + hInv[2]) / w;
-            sy = (hInv[3] * x + hInv[4] * y + hInv[5]) / w;
-            covered = isfinite(sx) && isfinite(sy);
+    // Sorts v[0, n) ascending in place and returns the sample medianMergeTyped
+    // (ImageAligner.cpp) selects. The first `missCount` entries of the sorted
+    // array are no-data zeros (absent sources read 0, the type's minimum, so
+    // they sort to the front) and are skipped by count alone -- the
+    // CoverageMisses contract. What is left is sigma-clipped at
+    // mean + outlierThreshold * stddev, and the midpoint of what survives wins.
+    // includeAll counts every source and skips the clip.
+    inline float sigma_clipped_median(thread float* v, int n, int missCount, bool includeAll,
+                                      float outlierThreshold) {
+        // insertion sort ascending -- n <= 17
+        for (int i = 1; i < n; ++i) {
+            float key = v[i];
+            int j = i - 1;
+            while (j >= 0 && v[j] > key) { v[j + 1] = v[j]; --j; }
+            v[j + 1] = key;
         }
 
-        int ix = 0, iy = 0;
-        float fx = 0.0f, fy = 0.0f;
-        bool v00 = false, v10 = false, v01 = false, v11 = false;
-        float w00 = 0.0f, w10 = 0.0f, w01 = 0.0f, w11 = 0.0f, wsum = 0.0f;
+        const int minIndex = includeAll ? 0 : min(missCount, n);
+        const int first = includeAll ? 0 : min(minIndex, n - 1);
+        const int cnt = n - first;
 
-        if (covered) {
-            ix = int(floor(sx));
-            iy = int(floor(sy));
-            fx = sx - float(ix);
-            fy = sy - float(iy);
+        float sum = 0;
+        for (int i = first; i < n; ++i) sum += v[i];
+        const float mean = sum / float(cnt);
 
-            // Same OpenCV INTER_TAB_SIZE fractional-position quantization as
-            // warp_generic above -- see that function's doc comment.
-            const float kTabSize = 32.0f;
-            int fxi = int(round(fx * kTabSize));
-            if (fxi >= int(kTabSize)) { fxi -= int(kTabSize); ix += 1; }
-            int fyi = int(round(fy * kTabSize));
-            if (fyi >= int(kTabSize)) { fyi -= int(kTabSize); iy += 1; }
-            fx = float(fxi) / kTabSize;
-            fy = float(fyi) / kTabSize;
+        float m2 = 0;
+        for (int i = first; i < n; ++i) { float d = v[i] - mean; m2 += d * d; }
+        const float threshold = mean + outlierThreshold * sqrt(m2 / float(cnt));
 
-            w00 = (1.0f - fx) * (1.0f - fy);
-            w10 = fx * (1.0f - fy);
-            w01 = (1.0f - fx) * fy;
-            w11 = fx * fy;
-
-            v00 = sample_valid(ix,     iy,     width, height);
-            v10 = sample_valid(ix + 1, iy,     width, height);
-            v01 = sample_valid(ix,     iy + 1, width, height);
-            v11 = sample_valid(ix + 1, iy + 1, width, height);
-            covered = v00 || v10 || v01 || v11;
-            if (covered) {
-                wsum = (v00 ? w00 : 0.0f) + (v10 ? w10 : 0.0f)
-                     + (v01 ? w01 : 0.0f) + (v11 ? w11 : 0.0f);
-                covered = wsum > 1e-6f;
+        int maxIndex = n;
+        if (!includeAll) {
+            for (int z = first; z < n; ++z) {
+                if (v[z] < threshold) maxIndex = z; else break;
             }
         }
 
-        if (!covered) {
-            for (int c = 0; c < channels; ++c) dst[dstBase + c] = T(0);
-            misses[missIdx] = misses[missIdx] + 1;
-            return;
-        }
-
-        for (int c = 0; c < channels; ++c) {
-            float acc = 0;
-            if (v00) acc += w00 * float(src[(size_t)iy * srcStep + (size_t)ix * channels + c]);
-            if (v10) acc += w10 * float(src[(size_t)iy * srcStep + (size_t)(ix + 1) * channels + c]);
-            if (v01) acc += w01 * float(src[(size_t)(iy + 1) * srcStep + (size_t)ix * channels + c]);
-            if (v11) acc += w11 * float(src[(size_t)(iy + 1) * srcStep + (size_t)(ix + 1) * channels + c]);
-            float val = acc / wsum;
-            dst[dstBase + c] = T(clamp(val + 0.5f, 0.0f, float(MAXV)));
-        }
+        int idx = (minIndex + maxIndex) / 2;
+        if (idx >= n) idx = n - 1;
+        if (idx < first) idx = first;
+        return v[idx];
     }
 
-    kernel void warp_and_coverage_u8(device const uchar* src [[buffer(0)]],
-                                     device uchar* dst [[buffer(1)]],
-                                     constant float* hInv [[buffer(2)]],
-                                     constant int& width [[buffer(3)]],
-                                     constant int& height [[buffer(4)]],
-                                     constant int& channels [[buffer(5)]],
-                                     constant int& srcStep [[buffer(6)]],
-                                     constant int& dstStep [[buffer(7)]],
-                                     device uchar* misses [[buffer(8)]],
-                                     uint2 gid [[thread_position_in_grid]])
-    {
-        warp_and_coverage_generic<uchar, 255>(src, dst, misses, hInv, width, height, channels,
-                                              srcStep, dstStep, gid);
-    }
+    // Sources 1..16 of a merge, each bound at its own buffer index by the
+    // kernels below (12...27; source 0 is at buffer 0).
+    template <typename T>
+    struct MergeSources {
+        device const T* src[16];
+    };
 
-    kernel void warp_and_coverage_u16(device const ushort* src [[buffer(0)]],
-                                      device ushort* dst [[buffer(1)]],
-                                      constant float* hInv [[buffer(2)]],
-                                      constant int& width [[buffer(3)]],
-                                      constant int& height [[buffer(4)]],
-                                      constant int& channels [[buffer(5)]],
-                                      constant int& srcStep [[buffer(6)]],
-                                      constant int& dstStep [[buffer(7)]],
-                                      device uchar* misses [[buffer(8)]],
-                                      uint2 gid [[thread_position_in_grid]])
-    {
-        warp_and_coverage_generic<ushort, 65535>(src, dst, misses, hInv, width, height, channels,
-                                                 srcStep, dstStep, gid);
-    }
-
-    // Sources are packed tightly (no per-source step): source i, row y, pixel x,
-    // channel c is at sources[i*width*height*channels + y*width*channels + x*channels + c].
-    // `misses[y*width + x]` counts how many of the FIRST `misses[...]` sources (in
-    // array order, matching CoverageMisses in ImageAligner.cpp) have no sample here
-    // -- ignored when includeAllFlag != 0, in which case every source counts.
+    // Each source is read where it is, with its own row step (`sourceSteps[i]`,
+    // in elements): source 0 at buffer 0, sources 1...16 at buffers 12...27.
+    // When `hasMisses` is set, `misses` (row step `missesStep`, in bytes) counts
+    // per pixel how many of the FIRST misses[...] sources (in array order,
+    // matching CoverageMisses in ImageAligner.cpp) have no sample there --
+    // ignored when includeAllFlag != 0, in which case every source counts.
     template <typename T, int MAXV>
-    inline void median_merge_generic(device const T* sources, device const uchar* misses,
-                                     device T* dst,
+    inline void median_merge_generic(device const T* source0, thread const MergeSources<T>& rest,
+                                     constant int* sourceSteps,
+                                     device const uchar* misses, int missesStep, bool hasMisses,
+                                     device T* dst, int dstStep,
                                      int width, int height, int channels, int count,
                                      float outlierThreshold, int includeAllFlag, uint2 gid)
     {
         if ((int)gid.x >= width || (int)gid.y >= height) return;
-
-        const int frameStride = width * height * channels;
-        const int pixelBase = gid.y * width * channels + gid.x * channels;
+        const int x = int(gid.x), y = int(gid.y);
         const bool includeAll = includeAllFlag != 0;
-        const int missCount = includeAll ? 0 : int(misses[gid.y * width + gid.x]);
-        const int n = count;
+        const int missCount = (includeAll || !hasMisses) ? 0 : int(misses[(size_t)y * missesStep + x]);
 
         for (int c = 0; c < channels; ++c) {
             float v[17];
-            for (int i = 0; i < n; ++i) v[i] = float(sources[i * frameStride + pixelBase + c]);
-
-            // insertion sort ascending -- n <= 17, and absent sources (value 0,
-            // the type's minimum) sort to the front, which is what lets `first`
-            // below skip them by count alone.
-            for (int i = 1; i < n; ++i) {
-                float key = v[i];
-                int j = i - 1;
-                while (j >= 0 && v[j] > key) { v[j + 1] = v[j]; --j; }
-                v[j + 1] = key;
+            v[0] = float(source0[(size_t)y * sourceSteps[0] + (size_t)x * channels + c]);
+            for (int i = 1; i < count; ++i) {
+                v[i] = float(rest.src[i - 1][(size_t)y * sourceSteps[i] + (size_t)x * channels + c]);
             }
-
-            const int minIndex = includeAll ? 0 : min(missCount, n);
-            const int first = includeAll ? 0 : min(minIndex, n - 1);
-            const int cnt = n - first;
-
-            float sum = 0;
-            for (int i = first; i < n; ++i) sum += v[i];
-            const float mean = sum / float(cnt);
-
-            float m2 = 0;
-            for (int i = first; i < n; ++i) { float d = v[i] - mean; m2 += d * d; }
-            const float threshold = mean + outlierThreshold * sqrt(m2 / float(cnt));
-
-            int maxIndex = n;
-            if (!includeAll) {
-                for (int z = first; z < n; ++z) {
-                    if (v[z] < threshold) maxIndex = z; else break;
-                }
-            }
-
-            int idx = (minIndex + maxIndex) / 2;
-            if (idx >= n) idx = n - 1;
-            if (idx < first) idx = first;
-
-            dst[pixelBase + c] = T(clamp(v[idx], 0.0f, float(MAXV)));
+            const float picked = sigma_clipped_median(v, count, missCount, includeAll, outlierThreshold);
+            dst[(size_t)y * dstStep + (size_t)x * channels + c] = T(clamp(picked, 0.0f, float(MAXV)));
         }
     }
 
-    kernel void median_merge_u8(device const uchar* sources [[buffer(0)]],
-                                device const uchar* misses [[buffer(1)]],
-                                device uchar* dst [[buffer(2)]],
-                                constant int& width [[buffer(3)]],
-                                constant int& height [[buffer(4)]],
-                                constant int& channels [[buffer(5)]],
-                                constant int& count [[buffer(6)]],
-                                constant float& outlierThreshold [[buffer(7)]],
-                                constant int& includeAllFlag [[buffer(8)]],
+    kernel void median_merge_u8(device const uchar* s0 [[buffer(0)]],
+                                device uchar* dst [[buffer(1)]],
+                                device const uchar* misses [[buffer(2)]],
+                                constant int* sourceSteps [[buffer(3)]],
+                                constant int& width [[buffer(4)]],
+                                constant int& height [[buffer(5)]],
+                                constant int& channels [[buffer(6)]],
+                                constant int& dstStep [[buffer(7)]],
+                                constant int& missesStep [[buffer(8)]],
+                                constant int& count [[buffer(9)]],
+                                constant float& outlierThreshold [[buffer(10)]],
+                                constant int& includeAllFlag [[buffer(11)]],
+                                device const uchar* s1 [[buffer(12)]],
+                                device const uchar* s2 [[buffer(13)]],
+                                device const uchar* s3 [[buffer(14)]],
+                                device const uchar* s4 [[buffer(15)]],
+                                device const uchar* s5 [[buffer(16)]],
+                                device const uchar* s6 [[buffer(17)]],
+                                device const uchar* s7 [[buffer(18)]],
+                                device const uchar* s8 [[buffer(19)]],
+                                device const uchar* s9 [[buffer(20)]],
+                                device const uchar* s10 [[buffer(21)]],
+                                device const uchar* s11 [[buffer(22)]],
+                                device const uchar* s12 [[buffer(23)]],
+                                device const uchar* s13 [[buffer(24)]],
+                                device const uchar* s14 [[buffer(25)]],
+                                device const uchar* s15 [[buffer(26)]],
+                                device const uchar* s16 [[buffer(27)]],
+                                constant int& hasMisses [[buffer(28)]],
                                 uint2 gid [[thread_position_in_grid]])
     {
-        median_merge_generic<uchar, 255>(sources, misses, dst, width, height, channels, count,
+        MergeSources<uchar> rest = {{ s1, s2, s3, s4, s5, s6, s7, s8,
+                                      s9, s10, s11, s12, s13, s14, s15, s16 }};
+        median_merge_generic<uchar, 255>(s0, rest, sourceSteps, misses, missesStep, hasMisses != 0,
+                                         dst, dstStep, width, height, channels, count,
                                          outlierThreshold, includeAllFlag, gid);
     }
 
-    kernel void median_merge_u16(device const ushort* sources [[buffer(0)]],
-                                 device const uchar* misses [[buffer(1)]],
-                                 device ushort* dst [[buffer(2)]],
-                                 constant int& width [[buffer(3)]],
-                                 constant int& height [[buffer(4)]],
-                                 constant int& channels [[buffer(5)]],
-                                 constant int& count [[buffer(6)]],
-                                 constant float& outlierThreshold [[buffer(7)]],
-                                 constant int& includeAllFlag [[buffer(8)]],
+    kernel void median_merge_u16(device const ushort* s0 [[buffer(0)]],
+                                 device ushort* dst [[buffer(1)]],
+                                 device const uchar* misses [[buffer(2)]],
+                                 constant int* sourceSteps [[buffer(3)]],
+                                 constant int& width [[buffer(4)]],
+                                 constant int& height [[buffer(5)]],
+                                 constant int& channels [[buffer(6)]],
+                                 constant int& dstStep [[buffer(7)]],
+                                 constant int& missesStep [[buffer(8)]],
+                                 constant int& count [[buffer(9)]],
+                                 constant float& outlierThreshold [[buffer(10)]],
+                                 constant int& includeAllFlag [[buffer(11)]],
+                                 device const ushort* s1 [[buffer(12)]],
+                                 device const ushort* s2 [[buffer(13)]],
+                                 device const ushort* s3 [[buffer(14)]],
+                                 device const ushort* s4 [[buffer(15)]],
+                                 device const ushort* s5 [[buffer(16)]],
+                                 device const ushort* s6 [[buffer(17)]],
+                                 device const ushort* s7 [[buffer(18)]],
+                                 device const ushort* s8 [[buffer(19)]],
+                                 device const ushort* s9 [[buffer(20)]],
+                                 device const ushort* s10 [[buffer(21)]],
+                                 device const ushort* s11 [[buffer(22)]],
+                                 device const ushort* s12 [[buffer(23)]],
+                                 device const ushort* s13 [[buffer(24)]],
+                                 device const ushort* s14 [[buffer(25)]],
+                                 device const ushort* s15 [[buffer(26)]],
+                                 device const ushort* s16 [[buffer(27)]],
+                                 constant int& hasMisses [[buffer(28)]],
                                  uint2 gid [[thread_position_in_grid]])
     {
-        median_merge_generic<ushort, 65535>(sources, misses, dst, width, height, channels, count,
+        MergeSources<ushort> rest = {{ s1, s2, s3, s4, s5, s6, s7, s8,
+                                       s9, s10, s11, s12, s13, s14, s15, s16 }};
+        median_merge_generic<ushort, 65535>(s0, rest, sourceSteps, misses, missesStep, hasMisses != 0,
+                                            dst, dstStep, width, height, channels, count,
                                             outlierThreshold, includeAllFlag, gid);
+    }
+
+    // One frame's whole aligned merge in one pass: for every destination pixel,
+    // warp each neighbour to it on the spot, count the neighbours whose warp does
+    // not reach it, and merge them with the base -- the result warp_generic
+    // (once for each neighbour, and once more over a solid probe for its
+    // coverage) followed by median_merge_generic produces, without a warped copy
+    // of any neighbour ever existing. A neighbour that does not
+    // reach a pixel contributes a zero there and one to its miss count, the
+    // CoverageMisses contract medianMergeTyped (ImageAligner.cpp) depends on.
+    //
+    // The tap is recomputed per channel rather than kept for all neighbours at
+    // once: sixteen taps' worth of registers would spill, and the arithmetic it
+    // saves is a rounding error next to the memory traffic.
+    template <typename T, int MAXV>
+    inline void aligned_merge_generic(device const T* base, device T* dst,
+                                      thread const MergeSources<T>& neighbours,
+                                      constant int* neighbourSteps, constant float* hInv,
+                                      int width, int height, int channels,
+                                      int baseStep, int dstStep, int neighbourCount,
+                                      float outlierThreshold, int includeAllFlag, uint2 gid)
+    {
+        if ((int)gid.x >= width || (int)gid.y >= height) return;
+        const int x = int(gid.x), y = int(gid.y);
+        const bool includeAll = includeAllFlag != 0;
+        const int n = neighbourCount + 1;
+        int missCount = 0;
+
+        for (int c = 0; c < channels; ++c) {
+            float v[17];
+            v[0] = float(base[(size_t)y * baseStep + (size_t)x * channels + c]);
+            for (int i = 0; i < neighbourCount; ++i) {
+                WarpTap t = warp_tap(hInv + i * 9, x, y, width, height);
+                if (t.covered) {
+                    v[i + 1] = float(warp_value<T, MAXV>(neighbours.src[i], neighbourSteps[i], channels, t, c));
+                } else {
+                    v[i + 1] = 0.0f;
+                    if (c == 0) ++missCount;
+                }
+            }
+            const float picked = sigma_clipped_median(v, n, includeAll ? 0 : missCount, includeAll,
+                                                      outlierThreshold);
+            dst[(size_t)y * dstStep + (size_t)x * channels + c] = T(clamp(picked, 0.0f, float(MAXV)));
+        }
+    }
+
+    kernel void aligned_merge_u8(device const uchar* base [[buffer(0)]],
+                                 device uchar* dst [[buffer(1)]],
+                                 constant float* hInv [[buffer(2)]],
+                                 constant int* neighbourSteps [[buffer(3)]],
+                                 constant int& width [[buffer(4)]],
+                                 constant int& height [[buffer(5)]],
+                                 constant int& channels [[buffer(6)]],
+                                 constant int& baseStep [[buffer(7)]],
+                                 constant int& dstStep [[buffer(8)]],
+                                 constant int& neighbourCount [[buffer(9)]],
+                                 constant float& outlierThreshold [[buffer(10)]],
+                                 constant int& includeAllFlag [[buffer(11)]],
+                                 device const uchar* n0 [[buffer(12)]],
+                                 device const uchar* n1 [[buffer(13)]],
+                                 device const uchar* n2 [[buffer(14)]],
+                                 device const uchar* n3 [[buffer(15)]],
+                                 device const uchar* n4 [[buffer(16)]],
+                                 device const uchar* n5 [[buffer(17)]],
+                                 device const uchar* n6 [[buffer(18)]],
+                                 device const uchar* n7 [[buffer(19)]],
+                                 device const uchar* n8 [[buffer(20)]],
+                                 device const uchar* n9 [[buffer(21)]],
+                                 device const uchar* n10 [[buffer(22)]],
+                                 device const uchar* n11 [[buffer(23)]],
+                                 device const uchar* n12 [[buffer(24)]],
+                                 device const uchar* n13 [[buffer(25)]],
+                                 device const uchar* n14 [[buffer(26)]],
+                                 device const uchar* n15 [[buffer(27)]],
+                                 uint2 gid [[thread_position_in_grid]])
+    {
+        MergeSources<uchar> neighbours = {{ n0, n1, n2, n3, n4, n5, n6, n7,
+                                                 n8, n9, n10, n11, n12, n13, n14, n15 }};
+        aligned_merge_generic<uchar, 255>(base, dst, neighbours, neighbourSteps, hInv,
+                                          width, height, channels, baseStep, dstStep,
+                                          neighbourCount, outlierThreshold, includeAllFlag, gid);
+    }
+
+    kernel void aligned_merge_u16(device const ushort* base [[buffer(0)]],
+                                  device ushort* dst [[buffer(1)]],
+                                  constant float* hInv [[buffer(2)]],
+                                  constant int* neighbourSteps [[buffer(3)]],
+                                  constant int& width [[buffer(4)]],
+                                  constant int& height [[buffer(5)]],
+                                  constant int& channels [[buffer(6)]],
+                                  constant int& baseStep [[buffer(7)]],
+                                  constant int& dstStep [[buffer(8)]],
+                                  constant int& neighbourCount [[buffer(9)]],
+                                  constant float& outlierThreshold [[buffer(10)]],
+                                  constant int& includeAllFlag [[buffer(11)]],
+                                  device const ushort* n0 [[buffer(12)]],
+                                  device const ushort* n1 [[buffer(13)]],
+                                  device const ushort* n2 [[buffer(14)]],
+                                  device const ushort* n3 [[buffer(15)]],
+                                  device const ushort* n4 [[buffer(16)]],
+                                  device const ushort* n5 [[buffer(17)]],
+                                  device const ushort* n6 [[buffer(18)]],
+                                  device const ushort* n7 [[buffer(19)]],
+                                  device const ushort* n8 [[buffer(20)]],
+                                  device const ushort* n9 [[buffer(21)]],
+                                  device const ushort* n10 [[buffer(22)]],
+                                  device const ushort* n11 [[buffer(23)]],
+                                  device const ushort* n12 [[buffer(24)]],
+                                  device const ushort* n13 [[buffer(25)]],
+                                  device const ushort* n14 [[buffer(26)]],
+                                  device const ushort* n15 [[buffer(27)]],
+                                  uint2 gid [[thread_position_in_grid]])
+    {
+        MergeSources<ushort> neighbours = {{ n0, n1, n2, n3, n4, n5, n6, n7,
+                                                  n8, n9, n10, n11, n12, n13, n14, n15 }};
+        aligned_merge_generic<ushort, 65535>(base, dst, neighbours, neighbourSteps, hInv,
+                                             width, height, channels, baseStep, dstStep,
+                                             neighbourCount, outlierThreshold, includeAllFlag, gid);
     }
 
     // Exact 2x nearest-neighbour downsample, matching buildGaussianPyramid's own

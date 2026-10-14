@@ -311,6 +311,7 @@ enum Mapping {
         // always shows the daemon's own machine's hardware, not a stale answer from
         // whenever the daemon happened to start.
         out.gpuHardwareAvailable = Config.isGPUHardwareAvailable
+        out.resourceProfile = c.resourceProfile.rawValue
         out.useGpuForSift = c.useGPUForSIFT
         out.useGpuForAkaze = c.useGPUForAKAZE
         // Not an expert setting — recorded state.  Always sent, so a client that re-opens a
@@ -374,6 +375,11 @@ enum Mapping {
         if p.hasMaxConcurrentKeypointOps { c.maxConcurrentKeypointOps = Int(p.maxConcurrentKeypointOps) }
         if p.hasMergeStreamingThresholdMb { c.mergeStreamingThresholdMB = Int(p.mergeStreamingThresholdMb) }
         if p.hasUseGpuAcceleration { c.useGPUForMerge = p.useGpuAcceleration }
+        // Unknown names are ignored rather than rejected: a newer client may know profiles
+        // this daemon does not, and keeping the config's own is the safe answer.
+        if p.hasResourceProfile, let profile = ResourceProfile(rawValue: p.resourceProfile) {
+            c.resourceProfile = profile
+        }
         if p.hasUseGpuForSift { c.useGPUForSIFT = p.useGpuForSift }
         if p.hasUseGpuForAkaze { c.useGPUForAKAZE = p.useGpuForAkaze }
         // gpu_hardware_available is read-only (see protoConfig) and deliberately not

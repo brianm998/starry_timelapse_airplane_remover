@@ -182,6 +182,11 @@ final class ConfigRoundTripTests: XCTestCase {
         try put("pixelFormat", Self.other(than: Config().pixelFormat))
         try put("muxer", Self.other(than: Config().muxer))
         try put("frameRate", Self.other(than: Config().frameRate))
+        try put("resourceProfile", ResourceProfile.light)       // default is .full
+        try put("customResources",
+                CustomResourceLimits(cpuWidth: 3, qos: .background, gpuWidth: 2,
+                                     gpuDutyCycle: 0.5, diskStreamsPerVolume: 1,
+                                     ioPolicy: .throttle))
 
         // collections that default to empty: there is nothing in them to perturb
         try put("startupHorizonFrameIndices", [3, 9, 17])
@@ -345,5 +350,59 @@ private enum JSONValue: Codable, CustomStringConvertible {
         case .object(let v): "{\(v.map { "\($0.key): \($0.value)" }.joined(separator: ", "))}"
         case .null:          "null"
         }
+    }
+}
+
+
+/// The video settings are names from ffmpeg's tables, and an ffmpeg that is newer than the one a
+/// config was saved with can lack one of them.  That must not make the config unreadable.
+final class ConfigVideoSettingsTests: XCTestCase {
+
+    private func decode(_ json: String) throws -> Config {
+        try JSONDecoder().decode(Config.self, from: Data(json.utf8))
+    }
+
+    func testSettingsThatAreStillKnownAreKept() throws {
+        let config = try decode("""
+          {"codec": "h264", "encoder": "libx264", "pixelFormat": "yuv420p", "muxer": "mp4"}
+          """)
+        XCTAssertEqual(config.codec, .h264)
+        XCTAssertEqual(config.encoder, .libx264)
+        XCTAssertEqual(config.pixelFormat, .yuv420p)
+        XCTAssertEqual(config.muxer, .mp4)
+    }
+
+    /// The previous build's ffmpeg had libaom-av1 and libopenh264; this one does not.  A config
+    /// saved against it still has to load.
+    func testAnEncoderThisBuildDoesNotKnowLeavesAReadableConfigWithTheDefaultSettings() throws {
+        let config = try decode("""
+          {"codec": "av1", "encoder": "libaom_av1", "pixelFormat": "yuv420p10le", "muxer": "mkv",
+           "pixelThreshold": 7.5}
+          """)
+        let defaults = Config()
+        XCTAssertEqual(config.codec, defaults.codec)
+        XCTAssertEqual(config.encoder, defaults.encoder)
+        XCTAssertEqual(config.pixelFormat, defaults.pixelFormat)
+        XCTAssertEqual(config.muxer, defaults.muxer)
+        XCTAssertEqual(config.pixelThreshold, 7.5, "the rest of the config is read as usual")
+    }
+
+    /// Half a change is worse than none: an old codec with the default encoder would be
+    /// something ffmpeg cannot do.
+    func testOneUnknownNameResetsAllFourSoTheyStayConsistent() throws {
+        let config = try decode("""
+          {"codec": "hevc", "encoder": "libx265", "pixelFormat": "a_format_from_the_future", "muxer": "mp4"}
+          """)
+        let defaults = Config()
+        XCTAssertEqual(config.codec, defaults.codec)
+        XCTAssertEqual(config.encoder, defaults.encoder)
+        XCTAssertEqual(config.pixelFormat, defaults.pixelFormat)
+        XCTAssertEqual(config.muxer, defaults.muxer)
+    }
+
+    func testAConfigWithNoVideoSettingsGetsTheDefaults() throws {
+        let config = try decode("{}")
+        XCTAssertEqual(config.codec, Config().codec)
+        XCTAssertEqual(config.encoder, Config().encoder)
     }
 }

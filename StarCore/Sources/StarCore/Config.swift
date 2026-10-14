@@ -514,12 +514,66 @@ public struct Config: Codable, Sendable {
     /// over-reserves against both rather than splitting them, because under-reserving
     /// costs the machine while over-reserving only costs concurrency.
     public func effectiveKeypointMemoryMultiplier() -> Int {
-        let divisor = quantizedKeypointDivisor
-        guard divisor > 1.0 else { return keypointMemoryMultiplier }
+        effectiveKeypointMemoryMultiplier(for: .sky)
+    }
 
-        let fixed = 4
-        let scaleSpace = max(keypointMemoryMultiplier - fixed, 0)
-        let scaled = Int((Double(scaleSpace) / (divisor * divisor)).rounded(.up))
+    /// Which detector a keypoint op runs: sky is SIFT, earth is AKAZE.
+    public enum KeypointDetector: Sendable {
+        case sky
+        case earth
+    }
+
+    /// What one keypoint op should reserve, per detector *and* per path (the GPU port or
+    /// OpenCV), as a multiple of the working frame.
+    ///
+    /// The GPU ports were measured for the first time on 2026-10-03, on a 36GB M5 Max, one
+    /// `ia_find_features` per fresh process (`KeypointFootprintMeasurement`), at 33MP and
+    /// 42MP. Whole-op peak as a multiple of the working frame, the two sizes agreeing to
+    /// within 0.3x:
+    ///
+    ///                       divisor 1.0      1.5      2.0
+    ///     sky   OpenCV        42.3          21.9     12.9
+    ///     sky   GPU           53.9          29.4     17.2
+    ///     earth OpenCV        28.0-28.7     16.3     10.9
+    ///     earth GPU           38.5-38.8     20.9     13.8
+    ///
+    /// The GPU SIFT port costs ~30% MORE than OpenCV's, not less — its scale space lives in
+    /// unified-memory buffers on top of what the CPU path holds. And `useGPUForSIFT`
+    /// defaults to on wherever a GPU exists, so before this the default sky reservation
+    /// (42x) was under what the default path peaked at (53.9x) at every divisor.
+    ///
+    /// Each path is modelled as `fixed + scaleSpace / divisor²` with `scaleSpace` scaled
+    /// from `keypointMemoryMultiplier - 4` (the 38x of the CPU sky path at the default 42),
+    /// fitted to the table above with ~5% headroom at full resolution and the divisor rows
+    /// covered by the model's shape:
+    ///
+    ///     path          fixed  factor   at 42:  1.0   1.5   2.0   (against measured above)
+    ///     sky   OpenCV    4     1.00           42    21    14
+    ///     sky   GPU      12     1.16           57    32    24
+    ///     earth OpenCV    7     0.61           31    18    13
+    ///     earth GPU       8     0.87           42    23    17
+    ///
+    /// Earth on OpenCV reads lower than the shared 42 it was charged before, and the old
+    /// comment's "earth costs about half" (18.7-20.5x, real frames) is not what this
+    /// synthetic frame measured (28x); the higher figure is the one used, so it errs toward
+    /// reserving too much.
+    public func effectiveKeypointMemoryMultiplier(for detector: KeypointDetector) -> Int {
+        let gpu: Bool
+        let fixed: Int
+        let factor: Double
+        switch detector {
+        case .sky:
+            gpu = useGPUForSIFT && GPUCapability.isAvailable()
+            fixed = gpu ? 12 : 4
+            factor = gpu ? 1.16 : 1.0
+        case .earth:
+            gpu = useGPUForAKAZE && GPUCapability.isAvailable()
+            fixed = gpu ? 8 : 7
+            factor = gpu ? 0.87 : 0.61
+        }
+        let divisor = max(quantizedKeypointDivisor, 1.0)
+        let scaleSpace = Double(max(keypointMemoryMultiplier - 4, 0)) * factor
+        let scaled = Int((scaleSpace / (divisor * divisor)).rounded(.up))
         return max(fixed + scaled, 1)
     }
 
@@ -785,7 +839,8 @@ public struct Config: Codable, Sendable {
     // the muxer (container) of the incoming and outgoing video
     public var muxer: FFmpegMuxer = .mov
 
-    // did the incoming video have an audio track?
+    // did the incoming video have a sound track that was kept beside its frames, for a render to
+    // put back?  (see AudioSidecar: a sound that could not be kept counts as none)
     public var hasAudio: Bool = false
 
     // do horizon processing or not.
@@ -898,7 +953,23 @@ public struct Config: Codable, Sendable {
     // How many frames the pipeline may work on at once.  Physical cores rather than the
     // logical count `ProcessInfo` reports: see `PhysicalCores`, which explains why the
     // hyperthreads are not worth counting here and why over-counting them costs RAM.
+    //
+    // Since the resource profile, this is Custom's "pipeline depth cap" and nothing else:
+    // the other profiles size the queue from the machine (`Config.resources`). Old configs
+    // keep the key, and it takes effect when they switch to Custom.
     public var numberOfFramesToProcessConcurrently: Int = PhysicalCores.count
+
+    /// How much of this Mac star may use. See `ResourceProfile`, `Config.resources`.
+    /// Defaults to Full, and so does every config that predates the setting.
+    public var resourceProfile: ResourceProfile = .full
+
+    /// In Full, let the resource governor add disk streams above Full's width while they
+    /// keep buying throughput. It never goes below Full's own width, so it cannot be
+    /// slower than fixed Full by construction. Ignored by the other profiles.
+    public var resourceAutoTune: Bool = true
+
+    /// The editable limits behind `.custom`; ignored by the other profiles.
+    public var customResources: CustomResourceLimits = .fromFull
     
     // Removed: horizonVerticalShiftAmount.  It scooted the horizon mask up by a
     // hand-entered number of pixels before compositing the star-aligned sky over the
@@ -1237,7 +1308,7 @@ public struct Config: Codable, Sendable {
     
     // threshold used for throwing out bad pixels before replacing with them
     // good vs
-    var pixelThreshold: Double = 1.2
+    public var pixelThreshold: Double = 1.2
     
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
@@ -1404,10 +1475,30 @@ public struct Config: Codable, Sendable {
         self.ignoreLowerPixels = try c.decodeIfPresent(Int.self, forKey: .ignoreLowerPixels) ?? self.ignoreLowerPixels
 
         self.frameRate = try c.decodeIfPresent(FrameRate.self, forKey: .frameRate) ?? self.frameRate
-        self.codec = try c.decodeIfPresent(FFmpegCodec.self, forKey: .codec) ?? self.codec
-        self.encoder = try c.decodeIfPresent(FFmpegEncoder.self, forKey: .encoder) ?? self.encoder
-        self.pixelFormat = try c.decodeIfPresent(FFmpegPixelFormat.self, forKey: .pixelFormat) ?? self.pixelFormat
-        self.muxer = try c.decodeIfPresent(FFmpegMuxer.self, forKey: .muxer) ?? self.muxer
+        // These four are names from the tables of the ffmpeg star shipped when the config was
+        // written, and a later ffmpeg can lack one: a config saved with the previous build can
+        // say libaom-av1, which the current one does not have.  A config that cannot be read
+        // for that reason is worse than one that renders with the default settings, and an
+        // encoder from one codec next to a different codec is no use either, so if any of the
+        // four is not a name the tables know, all four stay at the defaults.
+        let savedCodec = try? c.decodeIfPresent(FFmpegCodec.self, forKey: .codec)
+        let savedEncoder = try? c.decodeIfPresent(FFmpegEncoder.self, forKey: .encoder)
+        let savedPixelFormat = try? c.decodeIfPresent(FFmpegPixelFormat.self, forKey: .pixelFormat)
+        let savedMuxer = try? c.decodeIfPresent(FFmpegMuxer.self, forKey: .muxer)
+        // (separate statements: Swift 6.4 will not type-check one long boolean expression here)
+        var videoSettingsAreReadable = true
+        if c.contains(.codec) && savedCodec == nil { videoSettingsAreReadable = false }
+        if c.contains(.encoder) && savedEncoder == nil { videoSettingsAreReadable = false }
+        if c.contains(.pixelFormat) && savedPixelFormat == nil { videoSettingsAreReadable = false }
+        if c.contains(.muxer) && savedMuxer == nil { videoSettingsAreReadable = false }
+        if videoSettingsAreReadable {
+            self.codec = savedCodec ?? self.codec
+            self.encoder = savedEncoder ?? self.encoder
+            self.pixelFormat = savedPixelFormat ?? self.pixelFormat
+            self.muxer = savedMuxer ?? self.muxer
+        } else {
+            Log.w("the config names a video codec, encoder, pixel format or container this build does not know; using the default video settings")
+        }
         self.hasAudio = try c.decodeIfPresent(Bool.self, forKey: .hasAudio) ?? self.hasAudio
 
         self.horizonDetectionEnabled = try c.decodeIfPresent(Bool.self, forKey: .horizonDetectionEnabled) ?? self.horizonDetectionEnabled
@@ -1429,6 +1520,10 @@ public struct Config: Codable, Sendable {
         self.horizonMinY = try c.decodeIfPresent(Int.self, forKey: .horizonMinY)
         self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
         self.numberOfFramesToProcessConcurrently = try c.decodeIfPresent(Int.self, forKey: .numberOfFramesToProcessConcurrently) ?? self.numberOfFramesToProcessConcurrently
+        // Old configs have no profile and start at Full; their frame count waits in Custom.
+        self.resourceProfile = try c.decodeIfPresent(ResourceProfile.self, forKey: .resourceProfile) ?? self.resourceProfile
+        self.customResources = try c.decodeIfPresent(CustomResourceLimits.self, forKey: .customResources) ?? self.customResources
+        self.resourceAutoTune = try c.decodeIfPresent(Bool.self, forKey: .resourceAutoTune) ?? self.resourceAutoTune
 
 
         self.allowEarthAlignment = try c.decodeIfPresent(Bool.self, forKey: .allowEarthAlignment) ?? self.allowEarthAlignment
@@ -1872,7 +1967,13 @@ public struct Config: Codable, Sendable {
     public func residentBuildExtraMultiplier(alignedNeighbours: Int?,
                                              staticNeighbours: Int?) -> Int {
         let aligned = alignedNeighbours ?? numberAlignedNeighborFrames
-        let statics = staticNeighbours ?? numberStaticNeighborFrames
+        // The static-earth build only runs when the earth is median-merged in place, i.e.
+        // the tripod head did not move (the `alignmentType == .earth,
+        // !config.tripodHeadWasMoving` branch in FrameAlignmentProcessor). On a moving
+        // run the earth is aligned with `aligned` neighbours instead, so charging for the
+        // 17-source resident build there reserved 21x where 13x is held — on the
+        // reference sequence that capped 12 admissible merge ops at 7.
+        let statics = tripodHeadWasMoving ? 0 : (staticNeighbours ?? numberStaticNeighborFrames)
 
         var extra = 0
         if !mergeStreams(sourceCount: aligned + 1) {
@@ -1952,11 +2053,18 @@ public struct Config: Codable, Sendable {
     /// frame count was the smaller term, which is why it appeared to do nothing at
     /// 12MP and everything at 42MP.
     public func keypointConcurrency(physicalMemory: UInt64) -> KeypointConcurrency {
-        let budget = UInt64(Double(physicalMemory) * maxMatMemoryFraction)
-        let bytesPerOp = workingFrameBytes * UInt64(max(effectiveKeypointMemoryMultiplier(), 1))
+        let budget = UInt64(Double(physicalMemory) * effectiveMemoryFraction)
+        // The memory term uses the CHEAPEST path's reservation, so this limiter never refuses
+        // what the ledger would admit: the ledger (MemoryMonitor) is the real memory gate and
+        // charges each op its own path's figure, sky or earth. With one gate for both kinds
+        // of op, sizing it from the dearest path (as a single multiplier did) capped the
+        // count at what the sky ops alone fit, though earth ops cost a quarter to a third less.
+        let multiplier = min(effectiveKeypointMemoryMultiplier(for: .sky),
+                             effectiveKeypointMemoryMultiplier(for: .earth))
+        let bytesPerOp = workingFrameBytes * UInt64(max(multiplier, 1))
 
-        var limit = max(1, numberOfFramesToProcessConcurrently)
-        var binding = "numberOfFramesToProcessConcurrently"
+        var limit = frameConcurrency
+        var binding = "frame concurrency"
 
         var budgetLimit: Int? = nil
         if bytesPerOp > 0 {
@@ -2047,9 +2155,14 @@ public struct Config: Codable, Sendable {
         let pixels = imageWidth * imageHeight
         guard perPixel > 0, pixels > 0, physicalMemory > 0 else { return nil }
 
-        let frameConcurrency = max(1, numberOfFramesToProcessConcurrently)
-        let bytesPerPixelPerOp = perPixel * max(keypointMemoryMultiplier, 1)
-        let budget = Double(physicalMemory) * maxMatMemoryFraction
+        let frameConcurrency = self.frameConcurrency
+        // What full resolution would cost on the sky path actually in use (it is the dearer
+        // of the two), so the answer does not move once a divisor is already set.
+        var fullResolution = self
+        fullResolution.alignmentKeypointDetectionDivisor = 1.0
+        let bytesPerPixelPerOp = perPixel * max(
+          fullResolution.effectiveKeypointMemoryMultiplier(for: .sky), 1)
+        let budget = Double(physicalMemory) * effectiveMemoryFraction
 
         // The largest frame that still fits frameConcurrency ops in the budget.
         let threshold = Int(budget / Double(frameConcurrency * bytesPerPixelPerOp))

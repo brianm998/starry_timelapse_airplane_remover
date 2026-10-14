@@ -168,9 +168,55 @@ val hostResourceDir: String = run {
     }
 }
 
+// The CPU architectures an executable file contains, read from its header (Mach-O, ELF or PE), or
+// null if it is none of those. Same idea as StarCore's ToolPaths.problem(with:): an ffmpeg that cannot
+// run on the machine it was packaged for is found here, not by a user whose video import then fails
+// with "Bad CPU type in executable" -- which is what an x86_64-only ffmpeg did on every Apple silicon Mac.
+fun executableArchitectures(file: File): List<String>? {
+    val head = ByteArray(4096)
+    val n = file.inputStream().use { it.read(head) }
+    if (n < 8) return null
+    fun u32(at: Int, big: Boolean): Long {
+        if (at + 4 > n) return -1
+        val b = (0 until 4).map { head[at + it].toLong() and 0xFF }
+        return if (big) (b[0] shl 24) or (b[1] shl 16) or (b[2] shl 8) or b[3]
+        else (b[3] shl 24) or (b[2] shl 16) or (b[1] shl 8) or b[0]
+    }
+    fun u16(at: Int, big: Boolean): Int {
+        if (at + 2 > n) return -1
+        val a = head[at].toInt() and 0xFF
+        val b = head[at + 1].toInt() and 0xFF
+        return if (big) (a shl 8) or b else (b shl 8) or a
+    }
+    fun machO(cpu: Long) = when (cpu) {
+        0x0100000CL -> "arm64"; 0x01000007L -> "x86_64"; 0x00000007L -> "i386"; 0x0000000CL -> "arm"; else -> "unknown"
+    }
+    val magic = u32(0, true)
+    if (magic == 0xCAFEBABEL || magic == 0xCAFEBABFL) { // universal Mach-O: big endian count, then {cputype, ...} records
+        val count = u32(4, true).toInt()
+        if (count <= 0 || count >= 32) return null
+        val stride = if (magic == 0xCAFEBABEL) 20 else 32
+        return (0 until count).map { machO(u32(8 + it * stride, true)) }
+    }
+    if (u32(0, false) == 0xFEEDFACFL || u32(0, false) == 0xFEEDFACEL) return listOf(machO(u32(4, false)))
+    if (head[0].toInt() == 0x7F && head[1].toInt() == 0x45 && head[2].toInt() == 0x4C && head[3].toInt() == 0x46) {
+        return when (u16(18, head[5].toInt() == 2)) { 0x3E -> listOf("x86_64"); 0xB7 -> listOf("arm64"); 0x03 -> listOf("i386"); 0x28 -> listOf("arm"); else -> listOf("unknown") }
+    }
+    if (head[0].toInt() == 0x4D && head[1].toInt() == 0x5A) {
+        val pe = u32(0x3C, false).toInt()
+        if (pe > 0 && pe + 6 <= n && head[pe].toInt() == 0x50 && head[pe + 1].toInt() == 0x45) {
+            return when (u16(pe + 4, false)) { 0x8664 -> listOf("x86_64"); 0xAA64 -> listOf("arm64"); 0x014C -> listOf("i386"); else -> listOf("unknown") }
+        }
+    }
+    return null
+}
+
 // Stage the native daemon + ffmpeg/ffprobe into app-resources/<os-arch>/ for the bundle.
 //   stard:   -Pstard=<path>, else daemon/.build/release/stard, else daemon/.build/debug/stard
-//   ffmpeg:  -Pffmpegdir=<dir>, else repo-root external_binaries/bin (git-ignored; see ffmpeg/build_ci.sh)
+//   ffmpeg:  -Pffmpegdir=<dir>, else repo-root external_binaries/bin (git-ignored): `ffmpeg/build_ci.sh
+//            external_binaries/bin` is what CI ships; `ffmpeg/build.sh --install` leaves this machine's own
+//            GPU-enabled build there instead. See ffmpeg/README.md.
+// The staged ffmpeg and ffprobe must be built for the architecture this bundle is for.
 tasks.register("stageAppResources") {
     group = "star"
     description = "Copy host-OS stard + ffmpeg/ffprobe into app-resources/<os-arch>/ for nativeDistributions bundling."
@@ -269,6 +315,24 @@ tasks.register("stageAppResources") {
         val ffDir = (findProperty("ffmpegdir") as String?)?.let { file(it) } ?: rootProject.file("../external_binaries/bin")
         stage(File(ffDir, "ffmpeg$exe"), "ffmpeg$exe")
         stage(File(ffDir, "ffprobe$exe"), "ffprobe$exe")
+        // ffmpeg is GPL here (it contains x264 and x265): its licence and where its source is go with it.
+        stage(File(ffDir, "LICENSE-ffmpeg.txt"), "LICENSE-ffmpeg.txt")
+        stage(File(ffDir, "BUILDINFO.txt"), "ffmpeg-BUILDINFO.txt")
+
+        // The bundle is for the host this build runs on (see hostResourceDir). A tool for another
+        // architecture would package without complaint and fail on the first video the user opens.
+        val hostArch = if (hostResourceDir.endsWith("arm64")) "arm64" else "x86_64"
+        for (name in listOf("ffmpeg$exe", "ffprobe$exe")) {
+            val staged = File(outDir, name)
+            if (!staged.exists()) continue
+            val archs = executableArchitectures(staged)
+            if (archs != null && hostArch !in archs) {
+                val msg = "stageAppResources: $name is built for ${archs.joinToString()}, but this bundle is for $hostArch " +
+                    "(app-resources/$hostResourceDir). Build the right one with ffmpeg/build_ci.sh or ffmpeg/build.sh --install, or point -Pffmpegdir at it."
+                if (packagingRequested) throw GradleException(msg)
+                logger.warn("$msg (not packaging, so continuing)")
+            }
+        }
 
         // Decorative initial-screen background video — same asset the macOS gui bundles from
         // gui/videos (see its .gitignore entry: too large for git, fetched from the `ci-assets`

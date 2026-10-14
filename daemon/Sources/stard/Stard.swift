@@ -75,6 +75,10 @@ struct Stard: AsyncParsableCommand {
 
         await RunMarkerStore.shared.begin(client: "stard", logPath: diagnosticLogPath)
 
+        // Find out which video encoders this machine can use (and start the GPU ones once) in the
+        // background, so that the client's first request for them is not what waits.
+        FFmpegCapabilities.shared.warmUp()
+
         // Ensure scratch root exists.
         try FileManager.default.createDirectory(atPath: scratchDir, withIntermediateDirectories: true)
 

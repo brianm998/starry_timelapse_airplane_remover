@@ -396,6 +396,31 @@ final class TiffDirectReadTests: XCTestCase {
         XCTAssertEqual(reloaded.channels, 3)
     }
 
+    /// The cache writer is the opposite: uncompressed, so star's own intermediates take the
+    /// direct read, and the pixels come back exactly.
+    func testACacheFileStarWroteIsFastReadableAndRoundTrips() throws {
+        let width = 64, height = 9
+        let data = UnsafeMutablePointer<UInt16>.allocate(capacity: width * height * 3)
+        for i in 0..<(width * height * 3) { data[i] = UInt16(truncatingIfNeeded: i * 977) }
+        let mat = MatWrapper(width: width, height: height,
+                             cvType: MatWrapper.cvType(forBitsPerComponent: 16,
+                                                       componentsPerPixel: 3),
+                             bytesPerRow: width * 3 * MemoryLayout<UInt16>.size,
+                             data: UnsafeMutableRawPointer(data),
+                             takeOwnership: true)
+        let path = scratch.appendingPathComponent("cache.tiff").path
+        XCTAssertTrue(mat.writeCache(to: path))
+        XCTAssertTrue(MatWrapper.tiffIsFastReadable(path),
+                      "an uncompressed cache write must be readable through tiffReadDirect")
+
+        let reloaded = try XCTUnwrap(MatWrapper.load(fromFilename: path))
+        XCTAssertEqual(reloaded.cols, width)
+        XCTAssertEqual(reloaded.rows, height)
+        let src = mat.dataPtr!.assumingMemoryBound(to: UInt16.self)
+        let dst = reloaded.dataPtr!.assumingMemoryBound(to: UInt16.self)
+        for i in 0..<(width * height * 3) { XCTAssertEqual(src[i], dst[i]); if src[i] != dst[i] { break } }
+    }
+
     /// Anything that is not a TIFF at all, and files that are damaged. The probe reads
     /// untrusted bytes and computes offsets from them, so it has to refuse rather than
     /// reach past the end of a file — and it must not throw, since `mat_wrapper_load` is
