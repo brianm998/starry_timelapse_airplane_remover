@@ -40,11 +40,15 @@ import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
+import com.star.desktop.util.FileReveal
 import com.star.proto.ProgressEvent
 import com.star.proto.VideoCapabilities
 import com.star.proto.VideoEncodeSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.star.desktop.i18n.localized
+import java.io.File
 
 /**
  * Render Video sheet (macOS `RenderVideoSheetView`): cascading pickers driven by
@@ -94,6 +98,7 @@ fun RenderVideoDialog(app: AppViewModel) {
             Picker("Frame rate", frameRates.map { it.toString() }, frameRate.toString()) { frameRate = it.toDoubleOrNull() ?: frameRate }
 
             var status by remember { mutableStateOf<String?>(null) }
+            var videoPath by remember { mutableStateOf<String?>(null) }   // where the last render went, once it has
             var progress by remember { mutableStateOf<Float?>(null) }
             var rendering by remember { mutableStateOf(false) }
 
@@ -102,20 +107,28 @@ fun RenderVideoDialog(app: AppViewModel) {
                 if (rendering || encoder.isEmpty()) return
                 (app.screen.value as? AppScreen.Sequence)?.vm?.processing?.stop() // free the shared progress slot
                 rendering = true
+                videoPath = null
                 status = "Rendering…"
                 val settings = VideoEncodeSettings.newBuilder()
                     .setFrameRate(frameRate).setCodec(codec).setEncoder(encoder)
                     .setPixelFormat(pixelFormat).setMuxer(muxer).build()
                 scope.launch {
                     try {
+                        // No path is asked for, so the daemon names the file and says where it put it.
+                        var writtenTo: String? = null
                         app.export.exportVideo(sid, "", settings).collect { ev ->
-                            if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) {
-                                val io = ev.ioProgress
-                                progress = if (io.total > 0) io.current.toFloat() / io.total else null
-                                status = "Rendering ${io.current} / ${io.total}"
+                            when (ev.kindCase) {
+                                ProgressEvent.KindCase.IO_PROGRESS -> {
+                                    val io = ev.ioProgress
+                                    progress = if (io.total > 0) io.current.toFloat() / io.total else null
+                                    status = "Rendering ${io.current} / ${io.total}"
+                                }
+                                ProgressEvent.KindCase.VIDEO_EXPORTED -> writtenTo = ev.videoExported.outputVideoPath
+                                else -> Unit
                             }
                         }
-                        status = "Done"
+                        status = renderedStatus(writtenTo)
+                        videoPath = writtenTo?.takeIf { it.isNotEmpty() }
                     } catch (e: Throwable) {
                         status = "Error: ${e.message}"
                     } finally {
@@ -124,11 +137,18 @@ fun RenderVideoDialog(app: AppViewModel) {
                 }
             }
 
+            fun reveal(path: String) {
+                scope.launch {
+                    val shown = withContext(Dispatchers.IO) { FileReveal.reveal(File(path)) }
+                    if (!shown) status = "Could not open the file manager. The video is at $path"
+                }
+            }
+
             // Auto-start when opened from the render prompt's "Yes" (once codecs + a default encoder load).
             val autoStart by app.renderVideoAutoStart.collectAsState()
             LaunchedEffect(autoStart, encoder) { if (autoStart && !rendering && encoder.isNotEmpty()) doRender() }
 
-            status?.let { Text(it, color = StarColors.textSecondary, fontSize = 12.sp) }
+            status?.let { RenderStatusRow(it, videoPath, ::reveal) }
             if (rendering) LinearProgressIndicator(progress = { progress ?: 0f }, modifier = Modifier.fillMaxWidth(), color = StarColors.accent)
 
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
@@ -142,6 +162,36 @@ fun RenderVideoDialog(app: AppViewModel) {
         }
     }
 }
+
+/**
+ * What the dialog says once the video is written: where it is, as the daemon reported it. The dialog
+ * asks for no path, so the daemon chooses one and this is the only place the user can see it. The
+ * sentence is the catalogue's, which the Mac app's dialog uses too, so it reads in the user's language.
+ * An engine that does not report the path (one older than the event) gets the plain "Done".
+ */
+internal fun renderedStatus(videoPath: String?): String =
+    if (videoPath.isNullOrEmpty()) "Done" else localized("ui.successfully_rendered", videoPath)
+
+/**
+ * The line under the pickers: how the render is going or how it ended, and once a video is written the
+ * button that shows it in the file manager, as the Mac app's dialog has.
+ */
+@Composable
+internal fun RenderStatusRow(status: String, videoPath: String?, onReveal: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(status, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        if (videoPath != null) {
+            OutlinedButton(onClick = { onReveal(videoPath) }) { Text(revealLabel()) }
+        }
+    }
+}
+
+/**
+ * What the button says. A Mac has a Finder and the catalogue already says "Reveal In Finder" in every
+ * language; Windows and Linux have no Finder, so they get the plain "Show In Folder".
+ */
+internal fun revealLabel(osName: String = System.getProperty("os.name").orEmpty()): String =
+    if (FileReveal.platform(osName) == FileReveal.Platform.MAC) localized("ui.reveal_in_finder") else localized("ui.show_in_folder")
 
 @Composable
 private fun Picker(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {

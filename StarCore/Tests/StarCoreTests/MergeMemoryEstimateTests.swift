@@ -206,3 +206,33 @@ final class MergeMemoryEstimateTests: XCTestCase {
                              c.mergeMemoryMultiplier)
     }
 }
+
+// MARK: - The static-earth build is only charged when it runs
+
+extension MergeMemoryEstimateTests {
+
+    /// Reference sequence: 7008x4672 16-bit RGB, moving tripod, 8 aligned neighbours.
+    /// The 17-source static build never runs there, so a merge op is 6 + 7 = 13x, not 21x.
+    func testMovingTripodDoesNotChargeTheStaticEarthBuild() {
+        var c = Config()
+        c.imageWidth = 7008
+        c.imageHeight = 4672
+        c.imageBytesPerPixel = 6
+        c.imageBitsPerComponent = 16
+        c.tripodHeadWasMoving = true
+
+        let statics = c.numberStaticNeighborFrames
+        XCTAssertEqual(c.effectiveMergeMemoryMultiplier(alignedNeighbours: 8,
+                                                        staticNeighbours: statics),
+                       c.mergeMemoryMultiplier + 7 + c.concurrentLoadExtraMultiplier)
+        XCTAssertEqual(c.effectiveOutlierMemoryMultiplier(alignedNeighbours: 8,
+                                                          staticNeighbours: statics),
+                       c.outlierMemoryMultiplier + 7 + c.concurrentLoadExtraMultiplier)
+
+        c.tripodHeadWasMoving = false
+        XCTAssertGreaterThan(c.effectiveMergeMemoryMultiplier(alignedNeighbours: 8,
+                                                              staticNeighbours: statics),
+                             c.mergeMemoryMultiplier + 7 + c.concurrentLoadExtraMultiplier,
+                             "a static run still holds all of its static sources")
+    }
+}

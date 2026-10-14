@@ -99,7 +99,7 @@ Packages available (named `star_cli_*` for the command-line tool, `star_app_*` f
 - **macOS:** `Star.app` (the native GUI) and the `star` command-line tool.
 - **Windows and Linux:** Star Desktop (the graphical client) and the `star` command-line tool.
 
-Either or both can be installed. The installers are self-contained — it bundles OpenCV and ffmpeg with no external dependencies required.
+Either or both can be installed. The installers are self-contained — they bundle OpenCV and ffmpeg (native on Apple silicon and Intel, with VideoToolbox hardware encoding on a Mac) with no external dependencies required. The `star` command-line tool works on image sequences and does not use ffmpeg. See [ffmpeg/README.md](ffmpeg/README.md) for how ffmpeg is built.
 
 Star is under active development. For questions or bug reports, open an issue on GitHub.
 

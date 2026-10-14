@@ -317,6 +317,19 @@ public enum ImageAligner {
         let r = ia_debug_warp(src.ref, homography.ref, useGPU)
         return r.map { MatWrapper(ref: $0) }
     }
+
+    /// Test-only: the raw merge of `sources` (the base first), with the coverage
+    /// plane given rather than derived. See `ia_debug_median_merge`'s comment.
+    public static func debugMedianMerge(_ sources: [MatWrapper], misses: MatWrapper?,
+                                        outlierThreshold: Double, includeAll: Bool,
+                                        useGPU: Bool) -> MatWrapper? {
+        var refs = sources.map { $0.ref as MatWrapperRef? }
+        let r = refs.withUnsafeMutableBufferPointer { buf in
+            ia_debug_median_merge(buf.baseAddress, Int32(buf.count), misses?.ref,
+                                  outlierThreshold, includeAll, useGPU)
+        }
+        return r.map { MatWrapper(ref: $0) }
+    }
 }
 
 // MARK: - Supporting types

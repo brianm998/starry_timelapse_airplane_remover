@@ -62,6 +62,9 @@ bool       mat_wrapper_owns_data(MatWrapperRef ref);
 /// and the Swift caller had no way to know the frame had not been written. On a full disk a
 /// run would report success with output frames missing.
 bool          mat_wrapper_write_to(MatWrapperRef ref, const char *filename);
+// Uncompressed TIFF, atomic rename, no fsync: for intermediates that are recomputed when
+// missing or unreadable.
+bool          mat_wrapper_write_cache_to(MatWrapperRef ref, const char *filename);
 
 /// Write the mat as a JPEG at `quality`. Returns whether it was written.
 bool          mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality,

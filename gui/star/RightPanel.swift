@@ -288,27 +288,13 @@ struct RightPanel: View {
                             
                             let frameView = viewModel.currentFrameView
 
-                            AlignedNeighborFrameOverrideView(
-                              focusedField: $focusedField
-                            )
-
                             if !config.tripodHeadWasMoving {
                                 StaticNeighborFrameOverrideView(
                                   focusedField: $focusedField
                                 )
                             }
 
-                            EditableNumberOfFramesToProcessConcurrentlyView(
-                              focusedField: $focusedField,
-                              textColor: .white,
-                              alwaysOpen: false
-                            )
-
-                            MemoryMultiplierView(
-                              focusedField: $focusedField,
-                              textColor: .white,
-                              alwaysOpen: false
-                            )
+                            ResourceProfileView(textColor: .white)
 
                             Picker(localized("ui.redo"), selection: $viewModel.reprocessingType) {
                                 ForEach(FrameReprocessingType.allCases, id: \.self) { value in
@@ -623,72 +609,6 @@ struct EditableNumberOfFramesToProcessView: View {
     }
 }
 
-/// Shows and edits the per-frame override for numberAlignedNeighborFrames.
-/// When the current frame has an override, a "Reset" button reverts it to the
-/// global default.  Changing the value invalidates existing star-alignment
-/// images and immediately triggers reprocessing for that frame.
-struct AlignedNeighborFrameOverrideView: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<FocusedField?>.Binding
-
-    @State private var localCount: Int = 8
-
-    var body: some View {
-        @Bindable var viewModel = viewModel
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                /*
-                if viewModel.currentFrameHasAlignedNeighborOverride {
-                    Text(localized("ui.custom"))
-                      .foregroundColor(.yellow)
-                      .font(.caption)
-                } else {
-                    Text(localized("ui.default"))
-                      .foregroundColor(.white)
-                      .font(.caption)
-                }
-                Spacer()*/
-                if viewModel.currentFrameHasAlignedNeighborOverride {
-                    Button(localized("ui.reset")) {
-                        viewModel.clearAlignedNeighborFrameOverride(forFrame: viewModel.currentIndex)
-                    }
-                    .font(.caption)
-                    .buttonStyle(.bordered)
-                    .tint(.orange)
-                }
-            }
-            EditableNumberView(
-              value: $localCount,
-              minValue: 1,
-              maxValue: viewModel.imageSequenceSize - 1,
-              fullTextProvider: { localized("ui.slider.align_neighbors", $0) },
-              prefixText: localized("ui.slider.align_with"),
-              suffixTextProvider: { _ in localized("ui.slider.neighbor_frames") },
-              textColor: viewModel.currentFrameHasAlignedNeighborOverride ? .yellow : .white,
-              focusedField: focusedField,
-              focusField: .frameAlignedNeighborFrames,
-              alwaysOpen: false,
-              commitAction: { newVal in
-                  viewModel.set(alignedNeighborFrames: newVal, forFrame: viewModel.currentIndex)
-              }
-            )
-        }
-        .onAppear { localCount = viewModel.currentFrameAlignedNeighborCount }
-        .onChange(of: viewModel.currentIndex) {
-            localCount = viewModel.currentFrameAlignedNeighborCount
-        }
-        .onChange(of: viewModel.alignedNeighborFrameOverrides) {
-            localCount = viewModel.currentFrameAlignedNeighborCount
-        }
-        .onChange(of: viewModel.numberOfAlignedNeighborFrames) {
-            // if the global default changes, update display when not overridden
-            if !viewModel.currentFrameHasAlignedNeighborOverride {
-                localCount = viewModel.numberOfAlignedNeighborFrames
-            }
-        }
-    }
-}
-
 /// Shows and edits the per-frame override for numberStaticNeighborFrames.
 /// When the current frame has an override, a "Reset" button reverts it to the
 /// global default.  Changing the value triggers an immediate merged-horizon
@@ -754,6 +674,118 @@ struct StaticNeighborFrameOverrideView: View {
                 localCount = viewModel.numberStaticNeighborFrames
             }
         }
+    }
+}
+
+/// "Use of this Mac": Full / Balanced / Light, plus Custom… for every limit by hand, and the
+/// resource governor's one-line answer to "what is holding this run back?".
+struct ResourceProfileView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    let textColor: Color
+
+    @State private var showCustom = false
+    @State private var status: String? = nil
+
+    private var profileBinding: Binding<ResourceProfile?> {
+        Binding(
+          get: { viewModel.resourceProfile == .custom ? nil : viewModel.resourceProfile },
+          set: { if let value = $0 { viewModel.resourceProfile = value } }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(localized("ui.use_of_this_mac"))
+              .foregroundColor(textColor)
+            // Stacked, not a segmented row: the right panel is narrow, and four buttons
+            // side by side made the control wider than everything around it.
+            Picker("", selection: profileBinding) {
+                Text(localized("ui.use_full")).foregroundColor(textColor).tag(ResourceProfile?.some(.full))
+                Text(localized("ui.use_balanced")).foregroundColor(textColor).tag(ResourceProfile?.some(.balanced))
+                Text(localized("ui.use_light")).foregroundColor(textColor).tag(ResourceProfile?.some(.light))
+            }
+              .pickerStyle(.radioGroup)
+              .colorScheme(.dark)
+              .labelsHidden()
+            Button(localized("ui.use_custom")) {
+                if viewModel.resourceProfile != .custom {
+                    viewModel.resourceProfile = .custom
+                }
+                showCustom = true
+            }
+              .buttonStyle(.borderedProminent)
+              .tint(viewModel.resourceProfile == .custom ? .accentColor : .gray)
+              .controlSize(.small)
+              .popover(isPresented: $showCustom) {
+                  ResourceCustomLimitsView()
+                    .environment(viewModel)
+              }
+            if let status {
+                Text(status)
+                  .font(.caption)
+                  .foregroundColor(.gray)
+            }
+        }
+        .help(localized("ui.use_of_this_mac_help"))
+        .task {
+            // The governor samples every few seconds; ask at the same pace.
+            while !Task.isCancelled {
+                if let latest = await ResourceGovernor.shared.latest {
+                    status = latest.limitedBy.map {
+                        localized("ui.use_status_limited", $0.description)
+                    } ?? localized("ui.use_status_none")
+                } else {
+                    status = nil
+                }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+}
+
+/// Every limit behind a profile as an editable field. Opened pre-filled from the profile it
+/// was opened from; changes reach the running pipeline at once.
+struct ResourceCustomLimitsView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    var body: some View {
+        @Bindable var viewModel = viewModel
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(localized("ui.use_custom_title"))
+              .font(.headline)
+            Stepper(value: $viewModel.numberOfFramesToProcessConcurrently, in: 1...1024) {
+                Text("\(localized("ui.use_custom_pipeline_depth")): \(viewModel.numberOfFramesToProcessConcurrently)")
+            }
+            VStack(alignment: .leading) {
+                Text("\(localized("ui.use_custom_memory")): \(viewModel.memoryBudgetFraction, specifier: "%.2f")")
+                Slider(value: $viewModel.memoryBudgetFraction, in: 0.1...0.95)
+            }
+            Stepper(value: $viewModel.customResources.cpuWidth, in: 1...256) {
+                Text("\(localized("ui.use_custom_cpu")): \(viewModel.customResources.cpuWidth)")
+            }
+            Stepper(value: $viewModel.customResources.gpuWidth, in: 1...32) {
+                Text("\(localized("ui.use_custom_gpu")): \(viewModel.customResources.gpuWidth)")
+            }
+            VStack(alignment: .leading) {
+                Text("\(localized("ui.use_custom_gpu_duty")): \(viewModel.customResources.gpuDutyCycle, specifier: "%.2f")")
+                Slider(value: $viewModel.customResources.gpuDutyCycle, in: 0.05...1.0)
+            }
+            Stepper(value: $viewModel.customResources.diskStreamsPerVolume, in: 1...16) {
+                Text("\(localized("ui.use_custom_disk")): \(viewModel.customResources.diskStreamsPerVolume)")
+            }
+            Picker(localized("ui.use_custom_qos"), selection: $viewModel.customResources.qos) {
+                Text(localized("ui.use_custom_qos_user_initiated")).tag(ResourceQoS.userInitiated)
+                Text(localized("ui.use_custom_qos_utility")).tag(ResourceQoS.utility)
+                Text(localized("ui.use_custom_qos_background")).tag(ResourceQoS.background)
+            }
+            Picker(localized("ui.use_custom_io"), selection: $viewModel.customResources.ioPolicy) {
+                Text(localized("ui.use_custom_io_default")).tag(ResourceIOPolicy.default)
+                Text(localized("ui.use_custom_io_utility")).tag(ResourceIOPolicy.utility)
+                Text(localized("ui.use_custom_io_throttle")).tag(ResourceIOPolicy.throttle)
+            }
+        }
+        .padding()
+        .frame(width: 420)
     }
 }
 

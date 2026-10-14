@@ -23,7 +23,7 @@ enum ExportHandlers {
 
             let frames = await session.frames
             let config = await session.configManager.config()
-            let concurrency = max(1, config.numberOfFramesToProcessConcurrently)
+            let concurrency = config.frameConcurrency
 
             // Finish all frames concurrently, respecting the configured limit.
             let finishTask = Task {
@@ -77,8 +77,10 @@ enum ExportHandlers {
 
     // Return the codec→encoder→{pixel_formats, muxers} capability graph used to
     // populate the Render Video dialog's cascading pickers.  Mirrors StarCore's
-    // FFmpegCodec.availableVideoCodecs / codec.encoders / encoder.pixelFormats /
-    // encoder.supportedMuxers relationships.
+    // FFmpegCodec.availableVideoCodecs / codec.availableEncoders / encoder.usablePixelFormats /
+    // encoder.supportedMuxers relationships: only what the bundled ffmpeg has and this machine
+    // can run (a GPU encoder appears only on a machine with the GPU), and only pixel formats
+    // a folder of images can be converted to.
     static func getVideoCapabilities(id: UInt64, payload: Data, transport: StdioTransport) async {
         do {
             var caps = Star_V1_VideoCapabilities()
@@ -89,11 +91,11 @@ enum ExportHandlers {
             for codec in FFmpegCodec.availableVideoCodecs {
                 var cc = Star_V1_CodecCaps()
                 cc.codec = codec.rawValue
-                for enc in codec.encoders {
+                for enc in codec.availableEncoders {
                     var ec = Star_V1_EncoderCaps()
                     ec.encoder       = enc.rawValue
                     ec.pixelFormats  = VideoExport.prioritized(
-                        enc.pixelFormats.map { $0.rawValue }, preferred: VideoExport.preferredPixelFormats)
+                        enc.usablePixelFormats.map { $0.rawValue }, preferred: VideoExport.preferredPixelFormats)
                     ec.muxers        = VideoExport.prioritized(
                         enc.supportedMuxers.map { $0.rawValue }, preferred: VideoExport.preferredMuxers)
                     cc.encoders.append(ec)
@@ -106,8 +108,52 @@ enum ExportHandlers {
         }
     }
 
+    // The encode settings an export uses, and whether it puts the video's own sound back.
+    //
+    // The settings come from (priority order):
+    //   1. the request, if it names a codec (the desktop's Render Video dialog always does)
+    //   2. the VideoInfo the session was opened with (decoded from the source video)
+    //   3. the config's video fields (may be defaults)
+    //
+    // Whether there is sound to put back is not one of them.  A request's settings say how to
+    // encode; they cannot say what the video that was imported had, so that comes from the
+    // session whichever settings are used.  This used to read `false` for every request that
+    // carried settings, which was every request the desktop client sent, and each export of a
+    // video with sound came out silent.  A session resumed from its config has no VideoInfo of
+    // its own, but the config recorded the sound when the video was first opened.
+    static func videoInfo(for request: Star_V1_VideoEncodeSettings,
+                          opened: VideoInfo?,
+                          config: Config) -> VideoInfo
+    {
+        let hasAudio = opened?.hasAudio ?? config.hasAudio
+        if let fromRequest = Mapping.videoInfo(from: request, hasAudio: hasAudio) {
+            return fromRequest
+        }
+        return opened ?? Mapping.videoInfoFromConfig(config)
+    }
+
+    // Where an export writes its video: the request's path, or if it left that empty (the
+    // desktop's dialog does) the one the protocol promises, `<basename>.<container's extension>`.
+    // That is beside the folder of rendered frames, which is where the Mac app's dialog puts it too.
+    static func outputVideoPath(requested: String, config: Config, muxer: FFmpegMuxer) -> String {
+        guard requested.isEmpty else { return requested }
+        return VideoExport.defaultOutputPath(config: config, muxer: muxer)
+    }
+
+    // The event that tells a client where an export's video went.  The client may not have named
+    // the file (the desktop's dialog never does), so the daemon says, and as an absolute path: a
+    // relative one is relative to the daemon's working directory, which nobody else can see.
+    static func videoExportedEvent(path: String) -> Star_V1_ProgressEvent {
+        var exported = Star_V1_VideoExportedEvent()
+        exported.outputVideoPath = URL(fileURLWithPath: path).path
+        var event = Star_V1_ProgressEvent()
+        event.kind = .videoExported(exported)
+        return event
+    }
+
     // Assemble the processed output frames back into a video using ffmpeg.
-    // Streams ProgressEvent items (io_progress, sequence_state) while encoding.
+    // Streams ProgressEvent items (io_progress, sequence_state) while encoding, and when the video
+    // is written, a video_exported with where it went.
     //
     // The frames are the ones processing has already written to the output sequence directory
     // (MergeOp finishes each frame as the graph runs), so Export.RenderSequence is not needed
@@ -120,26 +166,16 @@ enum ExportHandlers {
                 await transport.sendError(id: id, message: "session not found", code: 404); return
             }
 
-            // Resolve encode settings (priority order):
-            //   1. Explicit settings in the request (codec field not empty)
-            //   2. VideoInfo stored on the session (decoded from the source video)
-            //   3. Config's video fields (may be defaults)
-            // Whether there is an audio track is a fact about the source, not an encode
-            // setting, so it comes from the session either way.
             let config = await session.configManager.config()
-            let sourceHasAudio = await session.videoInfo?.hasAudio ?? config.hasAudio
-            let vi: VideoInfo
-            if let fromReq = Mapping.videoInfo(from: req.settings, hasAudio: sourceHasAudio) {
-                vi = fromReq
-            } else if let stored = await session.videoInfo {
-                vi = stored
-            } else {
-                vi = Mapping.videoInfoFromConfig(config)
-            }
+            let opened = await session.videoInfo
+            let vi = videoInfo(for: req.settings, opened: opened, config: config)
             guard vi.frameRate.rawValue > 0 else {
                 await transport.sendError(id: id, message: "invalid frame rate \(vi.frameRate.rawValue)")
                 return
             }
+
+            // The file to write: the request's, or the protocol's default when it names none.
+            let videoPath = outputVideoPath(requested: req.outputVideoPath, config: config, muxer: vi.muxer)
 
             let outputPath = config.outputPath
 
@@ -150,7 +186,7 @@ enum ExportHandlers {
             guard !found.files.isEmpty else {
                 await transport.sendError(
                     id: id,
-                    message: "no processed frames found in \(frameDir); process the sequence first")
+                    message: "nothing to export: no processed frames found in \(frameDir); process the sequence first")
                 return
             }
             if !found.missing.isEmpty {
@@ -161,15 +197,19 @@ enum ExportHandlers {
             }
             let totalFrames = found.files.count
 
-            // The decoded-frames directory of a video import is also where its audio.aac is.
+            // Derive the decoded-frames directory from the image sequence filenames
+            // so we can find the sound file decodeVideo kept beside them, if it did.
             let decodedDir = (filenames.first as NSString?)?.deletingLastPathComponent ?? outputPath
-            let audioFile  = "\(decodedDir)/audio.aac"
-            let audioPath  = vi.hasAudio && FileManager.default.fileExists(atPath: audioFile) ? audioFile : nil
 
-            let outputVideoPath = req.outputVideoPath.isEmpty
-                ? VideoExport.defaultOutputPath(config: config, muxer: vi.muxer)
-                : req.outputVideoPath
+            // What the output container will take of that sound: as it is, AAC, Opus, or nothing.
+            // The container is the one the arguments below name with `-f`.
+            let audio = vi.hasAudio  // StarCore.VideoInfo.hasAudio
+              ? AudioSidecar.plan(in: decodedDir,
+                                  formatArguments: ["-f", vi.muxer.rawValue],
+                                  outputExtension: "")
+              : AudioPlan.none("the video has none")
 
+            // The list is a file for as long as ffmpeg takes to read it.
             let listPath = "\(await session.scratchSessionDir)/export-\(UUID().uuidString).ffconcat"
             try VideoExport.concatList(files: found.files, frameRate: vi.frameRate)
                 .write(toFile: listPath, atomically: true, encoding: .utf8)
@@ -177,9 +217,9 @@ enum ExportHandlers {
 
             let ffmpegArgs = VideoExport.arguments(
                 listPath: listPath,
-                audioPath: audioPath,
+                audio: audio,
                 videoInfo: vi,
-                outputVideoPath: outputVideoPath
+                outputVideoPath: videoPath
             )
 
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
@@ -221,6 +261,11 @@ enum ExportHandlers {
             if case .failure(let err) = await encodeTask.result {
                 await transport.sendError(id: id, message: "\(err)")
                 return
+            }
+
+            // The video is written; say where.
+            if let data = try? videoExportedEvent(path: videoPath).serializedData() {
+                await transport.sendStreamItem(id: id, payload: data)
             }
 
             await transport.sendStreamEnd(id: id)

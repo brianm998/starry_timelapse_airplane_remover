@@ -1594,11 +1594,40 @@ public final class ImageSequenceViewModel {
         }
     }
     
+    /// How much of this Mac star may use. Changing it reaches the run in progress through
+    /// `ConfigManager.onUpdate` → `FrameGraphBuilder.update(from:)`, which moves every
+    /// gate, the QoS of new work, the I/O policy, the memory budget and the queue width.
+    var resourceProfile: ResourceProfile {
+        didSet {
+            var realConfig = config.config()
+            if resourceProfile == .custom {
+                // Open Custom pre-filled from the profile it was opened from.
+                realConfig.resourceProfile = oldValue
+                realConfig.makeCustom()
+                customResources = realConfig.customResources
+                numberOfFramesToProcessConcurrently = realConfig.numberOfFramesToProcessConcurrently
+                memoryBudgetFraction = realConfig.maxMatMemoryFraction
+                realConfig = config.config()
+            }
+            realConfig.resourceProfile = resourceProfile
+            config.update(realConfig)
+        }
+    }
+
+    /// The editable limits behind `.custom`.
+    var customResources: CustomResourceLimits {
+        didSet {
+            var realConfig = config.config()
+            realConfig.customResources = customResources
+            config.update(realConfig)
+        }
+    }
+
+    /// Custom's pipeline depth cap: the old "frames at once" number.
     var numberOfFramesToProcessConcurrently: Int {
         didSet {
             var realConfig = config.config()
             realConfig.numberOfFramesToProcessConcurrently = numberOfFramesToProcessConcurrently
-            Log.d("FUCKING update numberOfFramesToProcessConcurrently \(numberOfFramesToProcessConcurrently)")
             config.update(realConfig)
         }
     }
@@ -2021,6 +2050,8 @@ public final class ImageSequenceViewModel {
         self.alignedNeighborFrameOverrides = config.alignedNeighborFrameOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
+        self.resourceProfile = config.resourceProfile
+        self.customResources = config.customResources
         self.reprocessOnSettingsChange = config.reprocessOnSettingsChange
         self.memoryBudgetFraction = config.maxMatMemoryFraction
         self.keypointMemoryMultiplier = config.keypointMemoryMultiplier
@@ -2110,7 +2141,7 @@ public final class ImageSequenceViewModel {
         
         Log.d("loaded imageInfo \(imageInfo)")
 
-        self.appNapDisabler.begin()
+        self.appNapDisabler.begin(light: config.resourceProfile == .light)
         
         self.matInstancesTask = Task { [weak self] in 
             while(self != nil) { 
@@ -3544,26 +3575,29 @@ public final class ImageSequenceViewModel {
  */
         
         let hasAudio = realConfig.hasAudio
-        let audioPath = "\(realConfig.imageSequencePath)/\(realConfig.imageSequenceDirname)/audio.aac"
+        let audioDirectory = "\(realConfig.imageSequencePath)/\(realConfig.imageSequenceDirname)"
 
         /*videoRenderTask = */Task.detached {
             do {
+                // What the container will take of the video's own sound: as it is, AAC, Opus, or
+                // nothing (see AudioSidecar).  Worked out here, off the main actor, because it asks ffmpeg.
+                let audio = hasAudio
+                  ? AudioSidecar.plan(in: audioDirectory, formatArguments: ["-f", muxer.rawValue], outputExtension: "")
+                  : AudioPlan.none("this video has none")
+
                 var arguments: [String] = [
                     "-y",                                                              // overwrite
                     "-framerate", rawFrameRate,                                        // frame rate
                     "-pattern_type", "glob", "-i",                                    // input image glob
                     "\(outputPath)/\(basename)/*.\(realConfig.fileExtension)",        // input images
                 ]
-                if hasAudio {
-                    arguments += ["-i", audioPath]
-                }
+                arguments += audio.inputArguments
                 arguments += [
                     "-c:v", encoder.rawValue,         // encoder
                     "-pix_fmt", pixelFormat.rawValue, // pixel format
                 ]
-                if hasAudio {
-                    arguments += ["-c:a", "copy"]
-                }
+                arguments += encoder.defaultQualityArguments // for the GPU encoders whose own default is poor
+                arguments += audio.codecArguments
                 arguments += [
                     "-f", muxer.rawValue,             // muxer
                     "\(outputPath)/\(filename)"       // output filename
@@ -3595,13 +3629,15 @@ public final class ImageSequenceViewModel {
 final class AppNapDisabler {
     private var activity: NSObjectProtocol?
 
-    func begin() {
+    /// `.userInitiated` keeps the machine's full attention on a run in Full and Balanced.
+    /// Under Light it drops to a background activity — still holding off idle system sleep,
+    /// which a long run needs, but no longer asking the system to favour star over other apps.
+    func begin(light: Bool = false) {
+        let options: ProcessInfo.ActivityOptions = light
+            ? [.background, .idleSystemSleepDisabled, .suddenTerminationDisabled]
+            : [.userInitiated, .idleSystemSleepDisabled, .suddenTerminationDisabled]
         activity = ProcessInfo.processInfo.beginActivity(
-            options: [
-                .userInitiated,
-                .idleSystemSleepDisabled,
-                .suddenTerminationDisabled
-            ],
+            options: options,
             reason: "Long-running video processing"
         )
     }

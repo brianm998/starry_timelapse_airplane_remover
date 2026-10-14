@@ -281,15 +281,10 @@ struct ProcessingModalView: View {
               // The same control the right panel carries, which this modal covers up while
               // it is on screen.  Editing it while a run is going is the point: a changed
               // config goes through `ConfigManager.onUpdate` to
-              // `FrameGraphBuilder.update(from:)`, which sets the operation queue's
-              // `maxConcurrentOperationCount` there and then.
-              EditableNumberOfFramesToProcessConcurrentlyView(
-                focusedField: $focusedField,
-                textColor: .gray,
-                alwaysOpen: false
-              )
+              // `FrameGraphBuilder.update(from:)`, which moves every gate, the memory budget
+              // and the operation queue's width there and then.
+              ResourceProfileView(textColor: .gray)
                 .font(.caption)
-                .help(localized("ui.number_of_frames_to_process_concurrently_help"))
           }
         ) {
             alignmentCharts

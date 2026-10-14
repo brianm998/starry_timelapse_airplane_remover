@@ -57,16 +57,19 @@ typedef bool (*GPUMedianMergeFunc)(MatWrapperRef *sources, int count,
                                    double outlierThreshold, bool includeAll,
                                    MatWrapperRef dst);
 
-// A GPU-accelerated ALIGNED merge for one frame: batches every neighbour's warp
-// plus the final sigma-clipped median merge onto a single Metal command buffer,
-// replacing what would otherwise be `neighbourCount * 2 + 1` separate GPU
-// round-trips (GPUWarpFunc for the image, again for coverage, per neighbour,
-// then GPUMedianMergeFunc) with exactly one. See GPU_MERGE_BATCHING_FIX.md for
-// why that round-trip count mattered: each one pays a fixed allocate/submit/
-// wait/readback cost that measured larger than the GPU kernel work itself, so
-// paying it 17 times per frame (star's default 8 neighbours) turned a genuine
-// win (the SIFT/AKAZE pyramid builders, which batch the same way) into a
-// measured 2.35x regression versus the CPU path.
+// A GPU-accelerated ALIGNED merge for one frame: every neighbour's warp, the
+// coverage count and the final sigma-clipped median merge in one GPU round-trip,
+// replacing what would otherwise be `neighbourCount * 2 + 1` separate ones
+// (GPUWarpFunc for the image, again for coverage, per neighbour, then
+// GPUMedianMergeFunc). See GPU_MERGE_BATCHING_FIX.md for why that round-trip
+// count mattered: each one pays a fixed allocate/submit/wait/readback cost that
+// measured larger than the GPU kernel work itself, so paying it 17 times per
+// frame (star's default 8 neighbours) turned a genuine win (the SIFT/AKAZE
+// pyramid builders, which batch the same way) into a measured 2.35x regression
+// versus the CPU path. The Metal backend does it as one kernel that warps each
+// neighbour per destination pixel rather than into a buffer of its own, and on
+// unified memory reads and writes these MatWrappers' pixels in place — see
+// MetalGPUBackend.alignedMerge in GPUOps.swift.
 //
 // `base` is the always-included base frame — it is never warped, exactly like
 // every other merge entry point in this header. `neighbours` is an array of
@@ -87,8 +90,9 @@ typedef bool (*GPUMedianMergeFunc)(MatWrapperRef *sources, int count,
 // their coverage misses, and handing base + every warp to GPUMedianMergeFunc.
 //
 // `1 + neighbourCount` must not exceed 17, the same fixed cap
-// GPUMedianMergeFunc already has (its kernel's `float v[17]` — this reuses that
-// same median-merge kernel internally, unmodified, over GPU-resident buffers).
+// GPUMedianMergeFunc already has: the Metal kernel binds each neighbour at its
+// own buffer index (16 of them) and shares GPUMedianMergeFunc's selection code,
+// `float v[17]` included.
 //
 // Returns false on any failure or unsupported case (channel count, pixel
 // depth, too many sources, oversized frame); the caller then redoes the WHOLE

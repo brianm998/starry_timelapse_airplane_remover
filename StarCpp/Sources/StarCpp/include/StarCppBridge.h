@@ -11,6 +11,7 @@
 #include "HomographyLie.h"
 #include "OCVFeatureSet.h"
 #include "ImageCache_C.h"
+#include "QoSProbe.h"
 
 #ifdef __cplusplus
 extern "C" {

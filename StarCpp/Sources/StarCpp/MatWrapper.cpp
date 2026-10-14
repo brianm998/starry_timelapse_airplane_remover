@@ -442,7 +442,8 @@ bool mat_wrapper_owns_data(MatWrapperRef ref) {
 // concurrent writers (same process or two) always get their own temp file, so the worst
 // that can happen is a clean last-one-wins at the rename.
 static bool writeMatAtomically(const cv::Mat &mat, const std::string &fname,
-                               const std::vector<int> &params, const char *logLabel) {
+                               const std::vector<int> &params, const char *logLabel,
+                               bool durable = true) {
     if (mat.empty()) {
         Log_w("%s: not writing empty mat to %s", logLabel, fname.c_str());
         return false;
@@ -475,8 +476,14 @@ static bool writeMatAtomically(const cv::Mat &mat, const std::string &fname,
         return false;
     }
 
-    int fd = open(tmp.c_str(), O_RDONLY);
-    if (fd >= 0) { fsync(fd); close(fd); }
+    // `durable == false` is for cache files that are recomputed when missing or
+    // unreadable: the rename below is still atomic, so a reader never sees a torn file,
+    // and after a crash an unflushed one fails to decode and is rebuilt.  Skipping the
+    // fsync keeps a full-size write from queueing behind the disk's whole write backlog.
+    if (durable) {
+        int fd = open(tmp.c_str(), O_RDONLY);
+        if (fd >= 0) { fsync(fd); close(fd); }
+    }
 
     // std::filesystem::rename replaces an existing destination atomically
     // on every platform we support (POSIX rename(2) does this natively;
@@ -508,6 +515,23 @@ bool mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
         Log_e("writeTo: %s OpenCV Exception: %s", filename, e.what());
     } catch (...) {
         Log_e("writeTo: %s unknown exception", filename);
+    }
+    return false;
+}
+
+bool mat_wrapper_write_cache_to(MatWrapperRef ref, const char *filename) {
+    if (!ref) return false;
+    try {
+        Log_d("writeCacheTo: %s", filename);
+        // Uncompressed, so `mat_wrapper_load` can read it back through tiffReadDirect:
+        // LZW saved 0-8% on this data and cost every re-read a trip through imread.
+        std::vector<int> params = {cv::IMWRITE_TIFF_COMPRESSION, 1};
+        return writeMatAtomically(ref->mat, std::string(filename), params,
+                                  "writeCacheTo", /*durable=*/false);
+    } catch (const cv::Exception &e) {
+        Log_e("writeCacheTo: %s OpenCV Exception: %s", filename, e.what());
+    } catch (...) {
+        Log_e("writeCacheTo: %s unknown exception", filename);
     }
     return false;
 }

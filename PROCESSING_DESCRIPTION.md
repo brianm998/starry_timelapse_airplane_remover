@@ -487,9 +487,10 @@ place and behaves identically.
 - [`opencv/`](opencv/) — OpenCV is built locally as a static archive
   (`libopencv2.a`) for each target platform. Built in tree, not via
   a system package, so the binary is fully self-contained.
-- [`ffmpeg-build/`](ffmpeg-build/), [`build-universal-ffmpeg.sh`](build-universal-ffmpeg.sh)
-  — `ffmpeg` is built universal (arm64+x86_64 on macOS) and bundled
-  in the app's `Resources` for video import/export.
+- [`ffmpeg/`](ffmpeg/) — `ffmpeg` and `ffprobe` are built from source, static, with GPU
+  support (VideoToolbox, NVENC, AMF, ...), universal (arm64+x86_64) on macOS, and bundled
+  next to the executable in the app for video import/export. See
+  [`ffmpeg/README.md`](ffmpeg/README.md).
 
 ### Per-platform release scripts
 
@@ -512,7 +513,8 @@ decision-tree library, build the CLI, then package.
 
 - The `star` CLI binary (statically linked against OpenCV and
   StarDecisionTrees).
-- A bundled `ffmpeg` binary for video I/O.
+- In the GUI app and the desktop app's bundle, a bundled `ffmpeg` and `ffprobe`
+  for video I/O. The CLI works on image sequences and does not use them.
 - The compiled decision-tree static library, baked into the binary.
 
 The result is a single drop-in installer per platform with no

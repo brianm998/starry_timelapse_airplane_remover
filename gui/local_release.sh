@@ -4,6 +4,15 @@ set -e
 
 # build star gui for local testing — no notarization, active arch only
 
+# stop here, saying what to fix, if a prerequisite is missing; this has to come
+# before anything below touches the build dir or the Xcode project
+source "$(dirname "$0")/../preflight.sh"
+preflight_eigen
+preflight_decision_trees_release
+preflight_gui_videos
+preflight_ffmpeg
+preflight_finish
+
 BUILD_DIR=.build
 APP_NAME=Star
 STAR_VERSION=`cd ../StarCore ; perl version.pl`

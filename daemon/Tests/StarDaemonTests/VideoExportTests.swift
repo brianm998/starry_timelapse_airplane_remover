@@ -46,6 +46,11 @@ final class VideoExportTests: XCTestCase {
                   pixelFormat: .yuv444p10le, muxer: muxer, hasAudio: hasAudio)
     }
 
+    private let copiedAudio = AudioPlan(inputArguments: ["-i", "/a/audio.aac"],
+                                        codecArguments: ["-c:a", "copy"],
+                                        summary: "the original aac, copied as it is")
+    private let noAudio = AudioPlan.none("the video has none")
+
     // MARK: - where the frames are
 
     /// The files have to be looked for exactly where StarCore's own naming says processing put
@@ -117,8 +122,8 @@ final class VideoExportTests: XCTestCase {
 
     // MARK: - the concat list
 
-    func testTheConcatListHoldsEveryFrameWithItsDuration() {
-        let list = VideoExport.concatList(files: ["/o/a.tif", "/o/b.tif"], frameRate: .fps_25)
+    func testTheConcatListHoldsEveryFrameWithItsDuration() throws {
+        let list = try VideoExport.concatList(files: ["/o/a.tif", "/o/b.tif"], frameRate: .fps_25)
         XCTAssertEqual(list, """
             ffconcat version 1.0
             file '/o/a.tif'
@@ -135,15 +140,15 @@ final class VideoExportTests: XCTestCase {
     /// 29.97 fps up ffmpeg's constant-frame-rate output then duplicates frames: a 40-frame list
     /// encoded to 41 frames at 30 fps and 42 at 60.  It is the same rate in both lines, so the
     /// frame's own length and the spacing of the frames agree.
-    func testEveryEntryStatesTheFrameRateToTheImageDemuxerAsWellAsTheSpacing() {
-        let list = VideoExport.concatList(files: ["/o/a.tif"], frameRate: .fps_59_94)
+    func testEveryEntryStatesTheFrameRateToTheImageDemuxerAsWellAsTheSpacing() throws {
+        let list = try VideoExport.concatList(files: ["/o/a.tif"], frameRate: .fps_59_94)
         XCTAssertTrue(list.contains("\noption framerate 59.94\n"), list)
         XCTAssertTrue(list.contains("\nduration 0.016683350\n"), list)
     }
 
-    func testTheDurationIsTheReciprocalOfTheFrameRate() {
+    func testTheDurationIsTheReciprocalOfTheFrameRate() throws {
         // fps_23_976 is the literal 23.976, as the gui's render passes it to ffmpeg, not 24000/1001
-        let list = VideoExport.concatList(files: ["/o/a.tif"], frameRate: .fps_23_976)
+        let list = try VideoExport.concatList(files: ["/o/a.tif"], frameRate: .fps_23_976)
         XCTAssertTrue(list.contains("duration 0.041708375"), list)
     }
 
@@ -158,7 +163,7 @@ final class VideoExportTests: XCTestCase {
 
     func testTheCommandLineReadsTheListAndEncodesToTheOutputPath() {
         let args = VideoExport.arguments(
-          listPath: "/scratch/list.ffconcat", audioPath: nil,
+          listPath: "/scratch/list.ffconcat", audio: noAudio,
           videoInfo: videoInfo(frameRate: .fps_30, encoder: .prores, muxer: .mov),
           outputVideoPath: "/o/out.mov")
 
@@ -173,7 +178,7 @@ final class VideoExportTests: XCTestCase {
 
     func testTheFrameRateIsAnOutputOptionAfterEveryInput() throws {
         let args = VideoExport.arguments(
-          listPath: "/l", audioPath: "/a/audio.aac", videoInfo: videoInfo(), outputVideoPath: "/o/out.mov")
+          listPath: "/l", audio: copiedAudio, videoInfo: videoInfo(), outputVideoPath: "/o/out.mov")
         let lastInput = try XCTUnwrap(args.lastIndex(of: "-i"))
         let rate = try XCTUnwrap(args.firstIndex(of: "-r"))
         XCTAssertGreaterThan(rate, lastInput, "before an -i, -r would be read as an input option")
@@ -181,7 +186,7 @@ final class VideoExportTests: XCTestCase {
 
     func testAudioIsAddedAsASecondInputAndCopied() {
         let args = VideoExport.arguments(
-          listPath: "/l", audioPath: "/a/audio.aac", videoInfo: videoInfo(hasAudio: true), outputVideoPath: "/o/out.mov")
+          listPath: "/l", audio: copiedAudio, videoInfo: videoInfo(hasAudio: true), outputVideoPath: "/o/out.mov")
         XCTAssertEqual(args.filter { $0 == "-i" }.count, 2)
         XCTAssertTrue(zip(args, args.dropFirst()).contains { $0 == "-i" && $1 == "/a/audio.aac" })
         XCTAssertTrue(zip(args, args.dropFirst()).contains { $0 == "-c:a" && $1 == "copy" })
@@ -189,14 +194,14 @@ final class VideoExportTests: XCTestCase {
 
     func testWithoutAudioThereIsNoAudioInputOrCodec() {
         let args = VideoExport.arguments(
-          listPath: "/l", audioPath: nil, videoInfo: videoInfo(), outputVideoPath: "/o/out.mov")
+          listPath: "/l", audio: noAudio, videoInfo: videoInfo(), outputVideoPath: "/o/out.mov")
         XCTAssertEqual(args.filter { $0 == "-i" }.count, 1)
         XCTAssertFalse(args.contains("-c:a"))
     }
 
     func testWithoutAnEncoderTheCodecNamesIt() {
         let args = VideoExport.arguments(
-          listPath: "/l", audioPath: nil, videoInfo: videoInfo(encoder: nil), outputVideoPath: "/o/out.mov")
+          listPath: "/l", audio: noAudio, videoInfo: videoInfo(encoder: nil), outputVideoPath: "/o/out.mov")
         XCTAssertTrue(zip(args, args.dropFirst()).contains { $0 == "-c:v" && $1 == FFmpegCodec.prores.rawValue })
     }
 
@@ -204,6 +209,54 @@ final class VideoExportTests: XCTestCase {
         let config = config(sequence: "night", outputPath: "/o")
         XCTAssertEqual(VideoExport.defaultOutputPath(config: config, muxer: .mp4), "/o/\(config.basename).mp4")
         XCTAssertTrue(config.basename.hasPrefix("night-star-v-"))
+    }
+
+    /// What the sound becomes is the plan's to say, so a container that cannot hold the original
+    /// gets it re-encoded, with the options that go with that.
+    func testReEncodedAudioIsPassedThroughAsPlanned() {
+        let aac = AudioPlan(inputArguments: ["-i", "/a/audio.mka"],
+                            codecArguments: ["-c:a", "aac", "-b:a", "320k"],
+                            summary: "re-encoded to AAC")
+        let args = VideoExport.arguments(
+          listPath: "/l", audio: aac, videoInfo: videoInfo(hasAudio: true), outputVideoPath: "/o/out.mov")
+        XCTAssertTrue(zip(args, args.dropFirst()).contains { $0 == "-i" && $1 == "/a/audio.mka" })
+        XCTAssertTrue(zip(args, args.dropFirst()).contains { $0 == "-c:a" && $1 == "aac" })
+        XCTAssertFalse(args.contains("copy"))
+    }
+
+    /// NVENC's own default is a 2 Mbit/s target; the options that fix it follow the pixel format.
+    func testAnEncoderWhoseDefaultQualityIsPoorGetsItsOwnOptions() throws {
+        let args = VideoExport.arguments(
+          listPath: "/l", audio: noAudio,
+          videoInfo: VideoInfo(frameRate: .fps_24, codec: .h264, encoder: .h264_nvenc,
+                               pixelFormat: .yuv420p, muxer: .mp4, hasAudio: false),
+          outputVideoPath: "/o/out.mp4")
+        let pixFmt = try XCTUnwrap(args.firstIndex(of: "-pix_fmt"))
+        XCTAssertEqual(Array(args[(pixFmt + 2)..<(pixFmt + 8)]), ["-rc", "vbr", "-cq", "19", "-b:v", "0"])
+    }
+
+    func testAnEncoderWithAGoodDefaultGetsNoExtraOptions() {
+        let args = VideoExport.arguments(
+          listPath: "/l", audio: noAudio, videoInfo: videoInfo(), outputVideoPath: "/o/out.mov")
+        XCTAssertFalse(args.contains("-cq"))
+        XCTAssertFalse(args.contains("-rc"))
+    }
+
+    /// Matroska's muxer is called `matroska` and its files are `.mkv`; a file named `.matroska`
+    /// opens in nothing.
+    func testTheDefaultNameEndsInTheContainersFileExtensionNotItsMuxerName() {
+        let config = config(sequence: "night", outputPath: "/o")
+        XCTAssertTrue(VideoExport.defaultOutputPath(config: config, muxer: .matroska).hasSuffix(".mkv"))
+    }
+
+    /// The list is a directive to a line, so a name with a line break in it is refused rather than
+    /// written as two lines that mean something else.
+    func testANameWithALineBreakIsRefused() {
+        for name in ["/o/two\nlines.tif", "/o/carriage\rreturn.tif"] {
+            XCTAssertThrowsError(try VideoExport.concatList(files: ["/o/fine.tif", name], frameRate: .fps_24)) { error in
+                XCTAssertTrue("\(error)".contains("line break"), "\(error)")
+            }
+        }
     }
 
     func testPrioritizedPutsPreferredFirstAndKeepsTheRest() {

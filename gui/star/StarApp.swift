@@ -192,6 +192,10 @@ struct StarApp: App {
 
         Log.i("Starting Up")
 
+        // Find out which video encoders this Mac can use (and start the GPU ones once) in the
+        // background, so that the Render Video dialog does not wait for it when it opens.
+        FFmpegCapabilities.shared.warmUp()
+
         // Synchronously, before the Task below and before any window exists: a crash during
         // startup is still a crash, and the gui is where an unreported one hurts most —
         // there is no terminal it could have left a message in.

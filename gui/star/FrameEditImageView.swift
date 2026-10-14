@@ -67,6 +67,25 @@ public struct FrameEditImageView: View {
     }
 
     
+    /// In the default mode the full-size aligned TIFFs are never written, so opening one at
+    /// full resolution builds it now (uncompressed, no fsync) and then shows it.
+    private func makeFullSizeAlignedImageIfNeeded() async {
+        let mode = viewModel.frameViewMode
+        guard mode.isRecomputableCache,
+              let frame = frameViewModel.frame,
+              !frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                               ofType: mode, atSize: .original),
+              await frame.canProduceAlignedImage(of: mode)
+        else { return }
+        do {
+            try await frame.ensureFullSizeAlignedImage(of: mode)
+            frameViewModel.existingImages.insert(mode)
+            frameViewModel.reloadID = UUID()
+        } catch {
+            Log.w("frame \(frame.frameIndex) could not build its \(mode) image: \(error)")
+        }
+    }
+
     private var previewImage: some View {
         frameViewModel.previewImage(type: viewModel.frameViewMode)
     }
@@ -160,6 +179,9 @@ public struct FrameEditImageView: View {
 
                 if viewModel.showFullResolution {
                     self.fullResolutionImage
+                      .task(id: "\(frameViewModel.frameIndex) \(viewModel.frameViewMode.rawValue)") {
+                          await makeFullSizeAlignedImageIfNeeded()
+                      }
                 } else {
                     self.previewImage
                 }

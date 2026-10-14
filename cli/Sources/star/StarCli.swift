@@ -220,6 +220,9 @@ struct StarCli: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: ArgumentHelp(localized("cli.help.num_concurrent_renders")))
     var numConcurrentRenders: UInt?
 
+    @Option(name: .long, help: ArgumentHelp(localized("cli.help.use")))
+    var use: ResourceProfile?
+
     @Option(name: .shortAndLong, help: ArgumentHelp(localized("cli.help.detection_type")))
     var detectionType: DetectionType?
 
@@ -303,6 +306,7 @@ struct StarCli: AsyncParsableCommand {
           maxConcurrentKeypointOps: maxKeypointOps,
           horizonReservationFloorMB: horizonReservationFloorMB,
           numberOfFramesToProcessConcurrently: numConcurrentRenders.map { Int($0) },
+          resourceProfile: use,
           ignoreLowerPixels: ignoreLowerPixels
         )
     }
@@ -775,6 +779,8 @@ func printReports(for markers: [RunMarker]) {
 // needs ArgumentParser, so it's here in cli land
 // allows the log level to be expressed on the command line as an argument
 extension Log.Level: @retroactive ExpressibleByArgument { }
+
+extension ResourceProfile: @retroactive ExpressibleByArgument { }
 
 extension DetectionType: @retroactive ExpressibleByArgument { }
 

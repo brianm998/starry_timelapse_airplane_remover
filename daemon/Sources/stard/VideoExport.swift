@@ -55,14 +55,24 @@ enum VideoExport {
     /// spacing: at 24 and 25 fps that is harmless, but from 29.97 up it duplicates frames, up to
     /// one at the start and one at the end (a 40-frame list made 41 frames at 30 fps and 42 at
     /// 60).  With both, the output has exactly one frame per entry at every rate.
-    static func concatList(files: [String], frameRate: FrameRate) -> String {
+    ///
+    /// The list is a line to a directive, so a name with a line break in it cannot be written: it
+    /// is refused, not written as two lines that mean something else.
+    static func concatList(files: [String], frameRate: FrameRate) throws -> String {
         let rate = frameRate.rawString
         let duration = String(format: "%.9f", 1.0 / frameRate.rawValue)
         var list = "ffconcat version 1.0\n"
         for file in files {
+            if file.contains("\n") || file.contains("\r") { throw UnlistableName(path: file) }
             list += "file \(quoted(file))\noption framerate \(rate)\nduration \(duration)\n"
         }
         return list
+    }
+
+    /// A name that cannot be written in a list, because the list is one directive to a line.
+    struct UnlistableName: Error, CustomStringConvertible {
+        let path: String
+        var description: String { "the frame file name \(path.debugDescription) contains a line break" }
     }
 
     /// `path` as a single-quoted concat-list token.  Inside the quotes ffmpeg reads every
@@ -86,33 +96,37 @@ enum VideoExport {
 
     /// The video's path when the client did not choose one: next to the output sequence's
     /// directory, named after it, in the chosen container.  The macOS gui's render sheet
-    /// defaults to the same name.
+    /// defaults to the same name.  The extension is the container's own, not its muxer name:
+    /// Matroska's muxer is called `matroska` and its files are `.mkv`, and a file named
+    /// `.matroska` opens in nothing.
     static func defaultOutputPath(config: Config, muxer: FFmpegMuxer) -> String {
-        "\(config.outputPath)/\(config.basename).\(muxer.rawValue)"
+        "\(config.outputPath)/\(config.basename).\(muxer.defaultFileExtension ?? muxer.rawValue)"
     }
 
-    /// The ffmpeg command line that encodes the frames listed in `listPath` — plus the audio
-    /// track at `audioPath`, when there is one — to `outputVideoPath`.
+    /// The ffmpeg command line that encodes the frames listed in `listPath` — plus the video's
+    /// own sound, as `audio` plans it — to `outputVideoPath`, in the container `videoInfo` names.
     ///
     /// `-r` follows the inputs, so it is the output frame rate: with the list's per-frame
     /// durations it gives exactly one output frame per image in constant-frame-rate
     /// containers, and sets the stream's rate in the others.
     static func arguments(
         listPath: String,
-        audioPath: String?,
+        audio: AudioPlan,
         videoInfo: VideoInfo,
         outputVideoPath: String
     ) -> [String] {
         let encoderName = videoInfo.encoder?.rawValue ?? videoInfo.codec.rawValue
 
         var args = ["-f", "concat", "-safe", "0", "-i", listPath]
-        if let audioPath { args += ["-i", audioPath] }
+        args += audio.inputArguments
         args += [
             "-r", videoInfo.frameRate.rawString,
             "-c:v", encoderName,
             "-pix_fmt", videoInfo.pixelFormat.rawValue,
         ]
-        if audioPath != nil { args += ["-c:a", "copy"] }
+        // for the GPU encoders whose own default quality is poor (see FFmpegHardware.swift)
+        args += videoInfo.encoder?.defaultQualityArguments ?? []
+        args += audio.codecArguments
         args += ["-f", videoInfo.muxer.rawValue, "-y", outputVideoPath]
         return args
     }

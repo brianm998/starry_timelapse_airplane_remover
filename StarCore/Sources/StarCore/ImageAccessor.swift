@@ -417,52 +417,74 @@ public struct ImageAccessor: Sendable {
         )
     }
     
-    // make this use the file access guard
+    // Every full-size write and every preview write goes through `IOWork`, which holds one
+    // of the destination volume's streams for the write and does it off the cooperative
+    // pool. This used to be `Task.detached`, which stays *on* the pool: a 196MB TIFF save
+    // is seconds of blocked thread, and the pool has only core-count threads.
     private func saveInt(_ image: PixelatedImage,
                          frameIndex: Int,
                          as type: FrameViewMode,
                          atSize size: ImageDisplaySize,
-                         overwrite: Bool) async 
+                         overwrite: Bool) async
     {
-        await Task.detached(priority: .medium) {
-            if let filename = nameForImage(frameIndex: frameIndex,
-                                           ofType: type,
-                                           atSize: size)
-            {
-                switch size {
-                case .original where type == .final:
-                    // The user's actual product. A failure here is recorded rather than
-                    // discarded — before the write path could report one, a full disk meant
-                    // star worked through the whole sequence, wrote nothing, and exited 0.
-                    if !image.writeTIFFEncoding(toFilename: filename) {
-                        await OutputWriteFailures.shared.record(path: filename,
-                                                                frameIndex: frameIndex)
-                    }
-                case .original:
-                    // Every other type saved at original size (earthAligned, starAligned,
-                    // autoProcessed, ...) is an intermediate cache file under tempOutputPath,
-                    // not the delivered output. A write failure there is worth a log line —
-                    // it'll just be recreated next run — but not the critical "disk full,
-                    // your render is at risk" alert that OutputWriteFailures raises.
-                    if !image.writeTIFFEncoding(toFilename: filename) {
-                        Log.w("frame \(frameIndex) failed to write intermediate image of type \(type) to \(filename)")
-                    }
-                default:
-                    // everything but originals gets downscaled and saved as a jpeg
-                    if let smallSize = sizeOf(size),
-                       let downScaled = image.downScaleTo(
-                         width: UInt(smallSize.width),
-                         height: UInt(smallSize.height)
-                       )
-                    {
-                        downScaled.saveJpeg(withQuality: 60, filename: filename)
-                        imageSavedClosure?(downScaled, frameIndex, type, size)
-                    }
-                }
-            } else {
-                Log.w("no place to save image of type \(type) at size \(size)")
+        guard let filename = nameForImage(frameIndex: frameIndex,
+                                          ofType: type,
+                                          atSize: size)
+        else {
+            Log.w("no place to save image of type \(type) at size \(size)")
+            return
+        }
+
+        switch size {
+        case .original where type == .final:
+            // The user's actual product. A failure here is recorded rather than
+            // discarded — before the write path could report one, a full disk meant
+            // star worked through the whole sequence, wrote nothing, and exited 0.
+            let ok = await IOWork.run(path: filename, bytes: image.byteCount) {
+                image.writeTIFFEncoding(toFilename: filename)
             }
-        }.value
+            if !ok {
+                await OutputWriteFailures.shared.record(path: filename,
+                                                        frameIndex: frameIndex)
+            }
+        case .original where type.isRecomputableCache:
+            // A cache of work that is recomputed when missing: uncompressed so the
+            // reload takes the direct read, and no fsync — a torn one after a
+            // crash fails to decode and `loadOrCreateAlignedImage` rebuilds it.
+            let ok = await IOWork.run(path: filename, bytes: image.byteCount) {
+                image.writeCacheTIFF(toFilename: filename)
+            }
+            if !ok {
+                Log.w("frame \(frameIndex) failed to write intermediate image of type \(type) to \(filename)")
+            }
+        case .original:
+            // Every other type saved at original size (autoProcessed, ...) is either
+            // hard-linked into the output folder as the final frame or an intermediate
+            // under tempOutputPath. A write failure there is worth a log line — it'll
+            // just be recreated next run — but not the critical "disk full, your
+            // render is at risk" alert that OutputWriteFailures raises.
+            let ok = await IOWork.run(path: filename, bytes: image.byteCount) {
+                image.writeTIFFEncoding(toFilename: filename)
+            }
+            if !ok {
+                Log.w("frame \(frameIndex) failed to write intermediate image of type \(type) to \(filename)")
+            }
+        default:
+            // everything but originals gets downscaled and saved as a jpeg. The
+            // downscale is CPU work (the CPU gate); only the write holds a stream.
+            if let smallSize = sizeOf(size) {
+                let downScaled = await NativeWork.run {
+                    image.downScaleTo(width: UInt(smallSize.width),
+                                      height: UInt(smallSize.height))
+                }
+                if let downScaled {
+                    await IOWork.run(path: filename, bytes: downScaled.byteCount) {
+                        downScaled.saveJpeg(withQuality: 60, filename: filename)
+                    }
+                    imageSavedClosure?(downScaled, frameIndex, type, size)
+                }
+            }
+        }
     }
 
     public func nameForImage(

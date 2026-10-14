@@ -1684,7 +1684,9 @@ final public actor FrameHorizonProcessor {
         // Captures for Sendable closure.
         let skyFloor   = scaledSkyFloor
         let gndCeiling = scaledGndCeiling
-        var scaledY: [Int?] = await Task.detached(priority: .userInitiated) {
+        // A per-pixel LAB pass over the whole frame: CPU for seconds, so on a native
+        // thread under the CPU gate rather than blocking a cooperative-pool thread.
+        var scaledY: [Int?] = await NativeWork.run {
 
             // ── Linearise LUT ─────────────────────────────────────────────────
             let linearLUT: [Float] = (0..<256).map { v in
@@ -1879,7 +1881,7 @@ final public actor FrameHorizonProcessor {
                 result[ix] = max(unknownTop, min(horizonY, unknownBot))
             }
             return result
-        }.value
+        }
 
         // 4. Linear-interpolate gaps between painted image columns.
         var lastValidIdx: Int? = nil

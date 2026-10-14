@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(Metal)
+import Metal
+#endif
 @testable import StarCppBridge
 
 /// Coverage for the Metal-backed warp and median-merge kernels registered by
@@ -295,6 +298,209 @@ final class GPUOpsTests: XCTestCase {
                                          "GPU and CPU picked values far outside the source "
                                          + "set's own spread at (\(x), \(y))")
             }
+        }
+    }
+
+    // MARK: - aligned merge: the fused kernel, held to the standalone ones
+
+    /// A 3-channel 16-bit frame and eight neighbours, each rotated and shifted
+    /// like a real star-field neighbour so every warp leaves real holes along the
+    /// edges -- the coverage-misses accounting has work to do -- and big enough
+    /// (1.8MB an image) that each spans many pages. Served from memory by the
+    /// image loader rather than written to disk.
+    private struct AlignedMergeFixture {
+        let width: Int, height: Int
+        let base: MatWrapper
+        let neighbours: [MatWrapper]
+        let infos: [AlignmentNeighborInfo]
+        let homography: [Int: MatWrapper]
+    }
+
+    private func alignedMergeFixture() -> AlignedMergeFixture {
+        let width = 640, height = 480, channels = 3
+        func frame(_ seed: Int) -> MatWrapper {
+            makeMat(width: width, height: height, channels: channels) { x, y, c in
+                var h = UInt32(truncatingIfNeeded: (x &* 73_856_093) ^ (y &* 19_349_663) ^ (c &* 83_492_791) ^ (seed &* 2_654_435))
+                h ^= h >> 13; h &*= 0x5bd1e995; h ^= h >> 15
+                let sky = 6000 + (x * 7 + y * 5) % 3000 + c * 500
+                return (x * 31 + y * 17) % 997 == 0 ? 50000 : UInt16(sky + Int(h % 600))
+            }
+        }
+        let base = frame(0)
+        var neighbours: [MatWrapper] = []
+        var infos: [AlignmentNeighborInfo] = []
+        var homography: [Int: MatWrapper] = [:]
+        var pool: [String: MatWrapper] = [:]
+        for (i, offset) in [-4, -3, -2, -1, 1, 2, 3, 4].enumerated() {
+            let n = frame(i + 1)
+            let name = "memory://neighbour-\(i)"
+            pool[name] = n
+            neighbours.append(n)
+            infos.append(AlignmentNeighborInfo(filename: name, maskFilename: nil, keypoints: nil,
+                                               frameIndex: Int32(offset)))
+            let theta = 0.004 * Double(offset)
+            let cx = Double(width) / 2, cy = Double(height) / 2
+            homography[offset] = MatWrapper(homographyValues: [
+              cos(theta), -sin(theta), cx - cos(theta) * cx + sin(theta) * cy - 3.7 * Double(offset),
+              sin(theta), cos(theta), cy - sin(theta) * cx - cos(theta) * cy + 1.3 * Double(offset),
+              0, 0, 1])
+        }
+        ImageCache.setLoader { pool[$0] }
+        return AlignedMergeFixture(width: width, height: height, base: base, neighbours: neighbours,
+                                   infos: infos, homography: homography)
+    }
+
+    /// Exact equality of two 16-bit images, reported as a count and the first
+    /// difference rather than `XCTAssertEqual`'s dump of every sample.
+    private func assertSamePixels(_ a: MatWrapper, _ b: MatWrapper, _ message: String,
+                                  file: StaticString = #filePath, line: UInt = #line) throws {
+        XCTAssertEqual(a.rows, b.rows, message, file: file, line: line)
+        XCTAssertEqual(a.cols, b.cols, message, file: file, line: line)
+        XCTAssertEqual(a.type, b.type, message, file: file, line: line)
+        let pa = try XCTUnwrap(a.dataPtr), pb = try XCTUnwrap(b.dataPtr)
+        let perRow = a.cols * a.channels
+        var differing = 0
+        var first: (x: Int, y: Int, a: UInt16, b: UInt16)?
+        for y in 0..<a.rows {
+            let ra = pa.advanced(by: y * a.step).assumingMemoryBound(to: UInt16.self)
+            let rb = pb.advanced(by: y * b.step).assumingMemoryBound(to: UInt16.self)
+            for i in 0..<perRow where ra[i] != rb[i] {
+                differing += 1
+                if first == nil { first = (i / a.channels, y, ra[i], rb[i]) }
+            }
+        }
+        if let first {
+            XCTFail("\(message): \(differing) of \(a.rows * perRow) samples differ, the first at "
+                    + "(\(first.x), \(first.y)): \(first.a) vs \(first.b)", file: file, line: line)
+        }
+    }
+
+    /// A one-byte-per-pixel plane over `bytes` — a coverage probe or a misses
+    /// count. `takeOwnership: true` copies, so `bytes` only has to outlive the call.
+    private func plane8(width: Int, height: Int, _ bytes: inout [UInt8]) -> MatWrapper {
+        bytes.withUnsafeMutableBytes { raw in
+            MatWrapper(width: width, height: height,
+                       cvType: MatWrapper.cvType(forBitsPerComponent: 8, componentsPerPixel: 1),
+                       bytesPerRow: width, data: raw.baseAddress!, takeOwnership: true)
+        }
+    }
+
+    private func fusedMerge(_ f: AlignedMergeFixture, includeAll: Bool) throws -> MatWrapper {
+        let result = try XCTUnwrap(ImageAligner.alignAndMedianMerge(
+          baseImage: f.base, baseFrameIndex: 0, neighbors: f.infos, homography: f.homography,
+          outlierThreshold: 1.2, includeAll: includeAll, useGPU: true))
+        XCTAssertEqual(result.warpCount, f.neighbours.count)
+        return result.merged
+    }
+
+    /// The fused aligned merge warps every neighbour, counts which pixels each
+    /// warp misses and merges, all in one kernel, with no warped copy of any
+    /// neighbour ever existing. This holds it to the merge built the long way
+    /// round from the standalone kernels -- each neighbour warped on its own,
+    /// its coverage read off a warp of a solid probe, then the standalone median
+    /// merge -- exactly, byte for byte. They share their warp and selection code
+    /// (`warp_tap`, `warp_value`, `sigma_clipped_median`), so any difference
+    /// means the fused kernel is feeding them something different.
+    func testFusedAlignedMergeMatchesTheStandaloneKernelsExactly() throws {
+        let f = alignedMergeFixture()
+        let pixels = f.width * f.height
+        var solid = [UInt8](repeating: 255, count: pixels)
+        let probeMat = plane8(width: f.width, height: f.height, &solid)
+
+        var warped: [MatWrapper] = []
+        var misses = [UInt8](repeating: 0, count: pixels)
+        for (i, neighbour) in f.neighbours.enumerated() {
+            let h = try XCTUnwrap(f.homography[Int(f.infos[i].frameIndex)])
+            warped.append(try XCTUnwrap(ImageAligner.debugWarp(neighbour, homography: h, useGPU: true)))
+            let covered = try XCTUnwrap(ImageAligner.debugWarp(probeMat, homography: h, useGPU: true))
+            let coveredBytes = try XCTUnwrap(covered.dataPtr).assumingMemoryBound(to: UInt8.self)
+            for y in 0..<f.height {
+                for x in 0..<f.width where coveredBytes[y * covered.step + x] == 0 { misses[y * f.width + x] += 1 }
+            }
+        }
+        XCTAssertGreaterThan(misses.filter { $0 > 0 }.count, 0, "the fixture's warps should leave holes")
+        let missesMat = plane8(width: f.width, height: f.height, &misses)
+
+        for includeAll in [false, true] {
+            let fused = try fusedMerge(f, includeAll: includeAll)
+            let reference = try XCTUnwrap(ImageAligner.debugMedianMerge(
+              [f.base] + warped, misses: includeAll ? nil : missesMat,
+              outlierThreshold: 1.2, includeAll: includeAll, useGPU: true))
+            try assertSamePixels(fused, reference,
+                                 "fused and standalone GPU merges differ (includeAll: \(includeAll))")
+        }
+    }
+
+    /// A discrete GPU cannot read the images where they are, so there the fused
+    /// merge copies them in and copies a `.storageModeManaged` result back out.
+    /// That has to be the same merge, to the byte, as the unified-memory one.
+    func testDiscreteGPUAlignedMergeAgreesExactlyWithTheUnifiedMemoryOne() throws {
+        let f = alignedMergeFixture()
+        for includeAll in [false, true] {
+            let normal = try fusedMerge(f, includeAll: includeAll)
+
+            let before = GPUOps.mergeCounts()
+            GPUOps.setDiscreteMergesForTesting(true)
+            defer { GPUOps.setDiscreteMergesForTesting(false) }
+            let copied = try fusedMerge(f, includeAll: includeAll)
+            XCTAssertEqual(GPUOps.mergeCounts().copied, before.copied + 1,
+                           "the discrete path should have copied")
+
+            try assertSamePixels(normal, copied,
+                                 "discrete and unified-memory merges differ (includeAll: \(includeAll))")
+        }
+    }
+
+    /// On unified memory the GPU reads and writes the images where they already
+    /// are. Copying instead would still give the right answer -- just slower,
+    /// and holding another frame's worth of memory per image -- so only this
+    /// count would show it.
+    func testAlignedMergeRunsInPlaceOnUnifiedMemory() throws {
+        #if canImport(Metal)
+        try XCTSkipUnless(MTLCreateSystemDefaultDevice()?.hasUnifiedMemory == true,
+                          "a discrete GPU always copies")
+        #endif
+        let f = alignedMergeFixture()
+        let before = GPUOps.mergeCounts()
+        _ = try fusedMerge(f, includeAll: false)
+        let after = GPUOps.mergeCounts()
+        XCTAssertEqual(after.inPlace, before.inPlace + 1)
+        XCTAssertEqual(after.copied, before.copied)
+    }
+
+    /// The standalone median merge -- the static-earth merge's, with up to 17
+    /// sources -- reads its sources in place on unified memory too, and its
+    /// discrete-GPU path, which copies them, has to give the same bytes,
+    /// coverage plane or not.
+    func testStandaloneMergeIsTheSameInPlaceAndCopied() throws {
+        let f = alignedMergeFixture()
+        let sources = [f.base] + f.neighbours
+        var holes = [UInt8](repeating: 0, count: f.width * f.height)
+        for i in holes.indices { holes[i] = UInt8((i / 13) % 5) }
+        let misses = plane8(width: f.width, height: f.height, &holes)
+
+        for plane in [nil, misses] {
+            func merged() throws -> MatWrapper {
+                try XCTUnwrap(ImageAligner.debugMedianMerge(sources, misses: plane, outlierThreshold: 1.2,
+                                                            includeAll: false, useGPU: true))
+            }
+            let before = GPUOps.mergeCounts()
+            let inPlace = try merged()
+            #if canImport(Metal)
+            if MTLCreateSystemDefaultDevice()?.hasUnifiedMemory == true {
+                XCTAssertEqual(GPUOps.mergeCounts().inPlace, before.inPlace + 1,
+                               "unified memory should merge in place")
+            }
+            #endif
+
+            GPUOps.setDiscreteMergesForTesting(true)
+            defer { GPUOps.setDiscreteMergesForTesting(false) }
+            let copiedBefore = GPUOps.mergeCounts().copied
+            let copied = try merged()
+            XCTAssertEqual(GPUOps.mergeCounts().copied, copiedBefore + 1, "the discrete path should have copied")
+
+            try assertSamePixels(inPlace, copied,
+                                 "in-place and copied standalone merges differ (misses: \(plane != nil))")
         }
     }
 }

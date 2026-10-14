@@ -1580,6 +1580,19 @@ public struct Star_V1_Config: @unchecked Sendable {
   /// Clears the value of `useGpuForAkaze`. Subsequent reads from it will return its default value.
   public mutating func clearUseGpuForAkaze() {_uniqueStorage()._useGpuForAkaze = nil}
 
+  /// How much of this Mac star may use: "full" (the default), "balanced", "light" or
+  /// "custom". Maps to StarCore Config.resourceProfile. Unset keeps whatever the session's
+  /// config already has. For "custom" the limits are number_of_frames_to_process_concurrently
+  /// (the pipeline depth cap) and the editable fields StarCore keeps beside it.
+  public var resourceProfile: String {
+    get {_storage._resourceProfile ?? String()}
+    set {_uniqueStorage()._resourceProfile = newValue}
+  }
+  /// Returns true if `resourceProfile` has been explicitly set.
+  public var hasResourceProfile: Bool {_storage._resourceProfile != nil}
+  /// Clears the value of `resourceProfile`. Subsequent reads from it will return its default value.
+  public mutating func clearResourceProfile() {_uniqueStorage()._resourceProfile = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2218,6 +2231,14 @@ public struct Star_V1_ProgressEvent: Sendable {
     set {kind = .sequenceState(newValue)}
   }
 
+  public var videoExported: Star_V1_VideoExportedEvent {
+    get {
+      if case .videoExported(let v)? = kind {return v}
+      return Star_V1_VideoExportedEvent()
+    }
+    set {kind = .videoExported(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_Kind: Equatable, Sendable {
@@ -2227,6 +2248,7 @@ public struct Star_V1_ProgressEvent: Sendable {
     case outliersLoaded(Star_V1_OutliersLoaded)
     case ioProgress(Star_V1_IoProgress)
     case sequenceState(Star_V1_SequenceStateEvent)
+    case videoExported(Star_V1_VideoExportedEvent)
 
   }
 
@@ -2305,6 +2327,21 @@ public struct Star_V1_SequenceStateEvent: Sendable {
   public init() {}
 }
 
+/// Export.Video sends one of these after it has written the video and before the stream ends. The
+/// request may not have named the file (an empty output_video_path), so this is how a client learns
+/// where the video went.
+public struct Star_V1_VideoExportedEvent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var outputVideoPath: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct Star_V1_ExportVideoRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2312,7 +2349,7 @@ public struct Star_V1_ExportVideoRequest: Sendable {
 
   public var sessionID: String = String()
 
-  /// empty → daemon derives "<basename>.<muxer>"
+  /// empty → daemon derives "<basename>.<muxer>" beside the frames; the VideoExportedEvent says where it went
   public var outputVideoPath: String = String()
 
   /// defaults to the session config's persisted settings
@@ -3630,7 +3667,7 @@ extension Star_V1_UpdateConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{3}resource_profile\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -3686,6 +3723,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _gpuHardwareAvailable: Bool? = nil
     var _useGpuForSift: Bool? = nil
     var _useGpuForAkaze: Bool? = nil
+    var _resourceProfile: String? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -3749,6 +3787,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _gpuHardwareAvailable = source._gpuHardwareAvailable
       _useGpuForSift = source._useGpuForSift
       _useGpuForAkaze = source._useGpuForAkaze
+      _resourceProfile = source._resourceProfile
     }
   }
 
@@ -3820,6 +3859,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 54: try { try decoder.decodeSingularBoolField(value: &_storage._gpuHardwareAvailable) }()
         case 55: try { try decoder.decodeSingularBoolField(value: &_storage._useGpuForSift) }()
         case 56: try { try decoder.decodeSingularBoolField(value: &_storage._useGpuForAkaze) }()
+        case 57: try { try decoder.decodeSingularStringField(value: &_storage._resourceProfile) }()
         default: break
         }
       }
@@ -3991,6 +4031,9 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       try { if let v = _storage._useGpuForAkaze {
         try visitor.visitSingularBoolField(value: v, fieldNumber: 56)
       } }()
+      try { if let v = _storage._resourceProfile {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 57)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -4053,6 +4096,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._gpuHardwareAvailable != rhs_storage._gpuHardwareAvailable {return false}
         if _storage._useGpuForSift != rhs_storage._useGpuForSift {return false}
         if _storage._useGpuForAkaze != rhs_storage._useGpuForAkaze {return false}
+        if _storage._resourceProfile != rhs_storage._resourceProfile {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -5205,7 +5249,7 @@ extension Star_V1_CancelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageI
 
 extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgressEvent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_state\0\u{3}frame_saving_state\0\u{3}frame_existing\0\u{3}outliers_loaded\0\u{3}io_progress\0\u{3}sequence_state\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_state\0\u{3}frame_saving_state\0\u{3}frame_existing\0\u{3}outliers_loaded\0\u{3}io_progress\0\u{3}sequence_state\0\u{3}video_exported\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5286,6 +5330,19 @@ extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
           self.kind = .sequenceState(v)
         }
       }()
+      case 7: try {
+        var v: Star_V1_VideoExportedEvent?
+        var hadOneofValue = false
+        if let current = self.kind {
+          hadOneofValue = true
+          if case .videoExported(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.kind = .videoExported(v)
+        }
+      }()
       default: break
       }
     }
@@ -5320,6 +5377,10 @@ extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     case .sequenceState?: try {
       guard case .sequenceState(let v)? = self.kind else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
+    case .videoExported?: try {
+      guard case .videoExported(let v)? = self.kind else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     }()
     case nil: break
     }
@@ -5508,6 +5569,36 @@ extension Star_V1_SequenceStateEvent: SwiftProtobuf.Message, SwiftProtobuf._Mess
 
   public static func ==(lhs: Star_V1_SequenceStateEvent, rhs: Star_V1_SequenceStateEvent) -> Bool {
     if lhs.state != rhs.state {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_VideoExportedEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VideoExportedEvent"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_video_path\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.outputVideoPath) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.outputVideoPath.isEmpty {
+      try visitor.visitSingularStringField(value: self.outputVideoPath, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_VideoExportedEvent, rhs: Star_V1_VideoExportedEvent) -> Bool {
+    if lhs.outputVideoPath != rhs.outputVideoPath {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

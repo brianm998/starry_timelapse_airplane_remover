@@ -234,6 +234,11 @@ message Config {
   // Also still gated by gpu_hardware_available.
   optional bool   use_gpu_for_sift                                     = 55;
   optional bool   use_gpu_for_akaze                                    = 56;
+  // How much of this Mac star may use: "full" (the default), "balanced", "light" or
+  // "custom". Maps to StarCore Config.resourceProfile. Unset keeps whatever the session's
+  // config already has. For "custom" the limits are number_of_frames_to_process_concurrently
+  // (the pipeline depth cap) and the editable fields StarCore keeps beside it.
+  optional string resource_profile                                     = 57;
 }
 
 enum CleanMethod {
@@ -469,6 +474,7 @@ message ProgressEvent {
     OutliersLoaded     outliers_loaded     = 4;
     IoProgress         io_progress         = 5;
     SequenceStateEvent sequence_state      = 6;
+    VideoExportedEvent video_exported      = 7;
   }
 }
 
@@ -477,10 +483,14 @@ message FrameSavingEvent   { int32 frame_index = 1; int32 old_state = 2; int32 n
 message OutliersLoaded     { int32 frame_index = 1; int32 state = 2; }
 message IoProgress         { int32 current = 1; int32 total = 2; string output_dir = 3; }
 message SequenceStateEvent { string state = 1; }
+// Export.Video sends one of these after it has written the video and before the stream ends. The
+// request may not have named the file (an empty output_video_path), so this is how a client learns
+// where the video went.
+message VideoExportedEvent { string output_video_path = 1; }  // absolute
 
 message ExportVideoRequest {
   string              session_id        = 1;
-  string              output_video_path = 2;  // empty → daemon derives "<basename>.<muxer>"
+  string              output_video_path = 2;  // empty → daemon derives "<basename>.<muxer>" beside the frames; the VideoExportedEvent says where it went
   VideoEncodeSettings settings          = 3;  // defaults to the session config's persisted settings
 }
 
