@@ -86,6 +86,13 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         ToolType.selectable.forEachIndexed { i, t ->
             ToolRow(t, number = i + 1, selected = t == tool, enabled = usesOutliers, onClick = { vm.setTool(t) })
         }
+        // With this on, clicking a group that has a decision opens the multi-choice sheet whatever the tool (macOS "multi choice").
+        val multiChoice by vm.multiChoiceMode.collectAsState()
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            androidx.compose.material3.Switch(checked = multiChoice, onCheckedChange = vm::setMultiChoiceMode, enabled = usesOutliers)
+            Spacer(Modifier.width(6.dp))
+            Text(localized("ui.multi_choice"), color = StarColors.white, fontSize = 11.sp)
+        }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
 
@@ -144,6 +151,15 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             localized("ui.re_run_horizon_refinement"), StarColors.orange,
             help = localized("ui.re_run_brightness_position_refinement_for"), enabled = refinementPending && !busy,
         ) { vm.runHorizonRefinement() }
+
+        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
+        // How strongly the outlier groups, the trash and the frame itself are drawn (macOS: three sliders, in memory only).
+        val outlierOpacity by vm.outlierOpacity.collectAsState()
+        val trashOpacity by vm.trashOpacity.collectAsState()
+        val frameOpacity by vm.frameOpacity.collectAsState()
+        OpacitySlider(localized("ui.outlier_group_opacity"), outlierOpacity, vm::setOutlierOpacity, usesOutliers)
+        OpacitySlider(localized("ui.trash_opacity"), trashOpacity, vm::setTrashOpacity, usesOutliers)
+        OpacitySlider(localized("ui.frame_opacity"), frameOpacity, vm::setFrameOpacity, usesOutliers)
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         ZoomControls(vm)
@@ -319,6 +335,13 @@ private fun ZoomControls(vm: SequenceViewModel) {
         enabled = limit - fit > 1e-4f,
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/** One of the opacity sliders: its name, and 0 to 1. */
+@Composable
+private fun OpacitySlider(label: String, value: Float, onChange: (Float) -> Unit, enabled: Boolean) {
+    Text(label, color = StarColors.textPrimary, fontSize = 11.sp)
+    androidx.compose.material3.Slider(value = value, onValueChange = onChange, valueRange = 0f..1f, enabled = enabled, modifier = Modifier.fillMaxWidth())
 }
 
 /** A scale for the Max field: "1", "2.5", not "1.0000". */

@@ -371,6 +371,21 @@ class SequenceViewModel(
     val trashOpacity: StateFlow<Float> = _trashOpacity.asStateFlow()
     fun setTrashOpacity(v: Float) { _trashOpacity.value = v.coerceIn(0f, 1f) }
 
+    /** How strongly the outlier groups (and the trash, the boxes, the arrows) are drawn over the frame (macOS default 1). Not kept between runs, as on macOS. */
+    private val _outlierOpacity = MutableStateFlow(1f)
+    val outlierOpacity: StateFlow<Float> = _outlierOpacity.asStateFlow()
+    fun setOutlierOpacity(v: Float) { _outlierOpacity.value = v.coerceIn(0f, 1f) }
+
+    /** How much of the frame shows (macOS default 1): below that it is dimmed with black, so the outliers stand out against it. */
+    private val _frameOpacity = MutableStateFlow(1f)
+    val frameOpacity: StateFlow<Float> = _frameOpacity.asStateFlow()
+    fun setFrameOpacity(v: Float) { _frameOpacity.value = v.coerceIn(0f, 1f) }
+
+    /** The "Multi Choice" switch (macOS `multiChoice`): while it is on, clicking a group that has a decision opens the multi-choice sheet instead of changing it. */
+    private val _multiChoiceMode = MutableStateFlow(false)
+    val multiChoiceMode: StateFlow<Boolean> = _multiChoiceMode.asStateFlow()
+    fun setMultiChoiceMode(on: Boolean) { _multiChoiceMode.value = on }
+
     /**
      * The session's clean method became [method] (macOS pushes the new effective method to every frame): what each
      * frame view model holds, including its clean method, is out of date, and the tool is reset when the method

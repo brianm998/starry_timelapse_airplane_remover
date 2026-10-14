@@ -63,3 +63,23 @@ All paths are relative to the repo root.
   hide-all lists or the spacer logic.
 - **Effect:** "Show info" leaves that one row's help hidden (and "Hide info" leaves it open if it was opened by hand).
 - **Fix:** add its toggle to the three lists.
+
+## 7. The multi-select / multi-choice sheets show raw catalogue keys for the frame choices
+
+- **Where:** `gui/star/MultiSelectSheetView.swift:5-14` (`MultiSelectionType.localizedName`), shown as the radio list in both
+  `MultiSelectSheetView` and `MultiChoiceSheetView`.
+- **What's wrong:** `localizedName` looks up `multi_selection.\(rawValue)`, but the raw values are English phrases
+  ("all frames", "from this frame to the end", …) while the catalogue entries are keyed by case name
+  (`multi_selection.all`, `multi_selection.allAfter`, `multi_selection.allBefore`, `multi_selection.someAfter`,
+  `multi_selection.someBefore`). A missing key comes back as the key itself (`StarLocalization.string(forKey:)`).
+- **Effect:** the radio rows read `multi_selection.all frames` and so on, in every language.
+- **Fix:** look up by case name (give the enum a `key` or make the raw values the case names). The other two pickers in those
+  files (`multi_removal.*`, `multi_paint.*`) already match.
+
+## 8. "From this frame to the end" says it covers one frame too many
+
+- **Where:** `gui/star/MultiSelectSheetView.swift:77` and `gui/star/MultiChoiceSheetView.swift:58`
+  (`let numFrames = frames.count - currentIndex + 1`).
+- **What's wrong:** frames `currentIndex ... count - 1` are `count - currentIndex` frames, not one more. The sentence
+  ("… in N frames from frame X to the end") is wrong by one. (`.allBefore` is right: `currentIndex + 1`.)
+- **Fix:** drop the `+ 1`.
