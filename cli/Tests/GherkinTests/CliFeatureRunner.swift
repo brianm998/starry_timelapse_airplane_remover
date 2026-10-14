@@ -5,7 +5,6 @@ import XCTest
 /// Runs a generated `Feature` against the built `star` binary as a subprocess. Black-box: this target
 /// does not import `star`, StarCore or StarDecisionTrees. The step vocabulary is `StepAction`; every
 /// case has to appear in `methodMap` or the run fails naming what is implemented.
-@MainActor
 final class CliFeatureRunner {
     struct RunnerError: Error, CustomStringConvertible {
         let description: String
@@ -26,11 +25,14 @@ final class CliFeatureRunner {
 
     // MARK: dispatch table
 
-    static let methodMap: [StepAction: (CliFeatureRunner) throws -> Void] = [
-        .openSequence: { try $0.openSequence() },
-        .processEveryFrame: { try $0.processEveryFrame() },
-        .outputFramesWritten: { try $0.outputFramesWritten() },
-    ]
+    // Computed, not stored: a stored dictionary of closures is not concurrency-safe in Swift 6 mode.
+    static var methodMap: [StepAction: (CliFeatureRunner) throws -> Void] {
+        [
+            .openSequence: { try $0.openSequence() },
+            .processEveryFrame: { try $0.processEveryFrame() },
+            .outputFramesWritten: { try $0.outputFramesWritten() },
+        ]
+    }
 
     func run(_ feature: Feature) throws {
         guard !feature.steps.isEmpty else { throw RunnerError("feature \"\(feature.name)\" has no steps: refusing to pass vacuously") }
@@ -44,13 +46,11 @@ final class CliFeatureRunner {
         }
     }
 
+    /// Reports the step by name. Not XCTContext.runActivity: it is main-actor isolated, which would force the test class onto
+    /// the main actor, and SwiftPM's generated Linux test discovery cannot call a main-actor test method.
     private func activity(_ name: String, _ body: () throws -> Void) throws {
-        #if os(Linux)
         print("STEP: \(name)")
         try body()
-        #else
-        try XCTContext.runActivity(named: name) { _ in try body() }
-        #endif
     }
 
     // MARK: placeholders
