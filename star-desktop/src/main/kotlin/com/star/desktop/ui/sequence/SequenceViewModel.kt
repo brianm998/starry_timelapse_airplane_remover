@@ -382,7 +382,7 @@ class SequenceViewModel(
     }
 
     // ---- render ----
-    /** Paint the current frame with its decisions (`Outlier.RenderFrame`) and show the result. */
+    /** Write the current frame's finished image from its decisions (`Outlier.RenderFrame`) and show it again. */
     fun renderCurrentFrame() = scope.launch {
         if (_rendering.value || isProcessing.value) return@launch
         val idx = _currentIndex.value
@@ -390,12 +390,10 @@ class SequenceViewModel(
         _renderProgress.value = null // indeterminate: a single frame
         try {
             val ref = outliers.renderFrame(sessionId, idx)
-            imageCache.invalidate(ref.path) // daemon overwrites the same path — drop the stale bitmap
-            val bmp = imageCache.load(ref.path)
-            if (_currentIndex.value == idx && bmp != null) {
-                _currentPreview.value = bmp
-                _previewAvailable.value = true
-            }
+            // The daemon rewrote the frame's final image in place, so the bitmap cached for that path is
+            // stale; show the frame again in whatever view is selected (the processed view reads it).
+            imageCache.invalidate(ref.path)
+            loadPreview(idx, _viewMode.value)
         } catch (e: Throwable) {
             Log.w("Sequence") { "render current frame failed: ${e.message}" }
             reportFailure(e) { localized("ui.render_failed", e.message ?: e) }

@@ -312,28 +312,30 @@ actor Session {
         await saveQueue.readyToSave(frame: frame) { }
     }
 
+    /// Write `frame`'s finished image from its current decisions right now, instead of when its save
+    /// timer fires, and return once it is written (macOS "Render this frame": `FrameSaveQueue.saveNow`
+    /// loads the frame's outliers, finishes it and marks it handled).  A save of the frame already under
+    /// way is let finish first, since it may have begun before the latest edit.  False if the frame could
+    /// not be saved, or the save did not end within `timeout`.
+    func renderNow(_ frame: FrameAirplaneRemover, timeout: Duration = .seconds(600)) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        guard await waitForSave(of: frame, until: deadline) else { return false }
+        guard await beginSave(frame) else { return false }
+        return await waitForSave(of: frame, until: deadline)
+    }
+
     /// Save every frame whose edits are still waiting (in purgatory, or already queued or being
     /// saved) and return once they have all been written.  A frame is never saved twice: one
     /// that is already past purgatory is only waited for.  Gives up after `timeout` rather than
     /// holding a close or a shutdown hostage to a save that never ends.
     func flushSaves(timeout: Duration = .seconds(120)) async {
-        guard let saveQueue else { return }
         var waiting: [FrameAirplaneRemover] = []
         for frame in frames {
             switch await frame.savingState() {
             case .notSaving:
                 continue
             case .inPurgatory:
-                // Claim it before the queue's own timer can: it only saves a frame that is
-                // still in purgatory when it fires.
-                await frame.set(frameSavingState: .savePending)
-                do {
-                    try await saveQueue.saveNow(frame: frame) { }
-                } catch {
-                    Log.e("stard: could not save frame \(frame.frameIndex): \(error)")
-                    await frame.set(frameSavingState: .notSaving)
-                    continue
-                }
+                _ = await beginSave(frame)
             case .savePending, .saving:
                 break
             }
@@ -343,13 +345,44 @@ actor Session {
         Log.i("stard: waiting for \(waiting.count) frame(s) to finish saving")
         let deadline = ContinuousClock.now + timeout
         for frame in waiting {
-            while await frame.savingState() != .notSaving {
-                if ContinuousClock.now > deadline {
-                    Log.e("stard: gave up waiting for frame \(frame.frameIndex) to finish saving")
-                    return
-                }
-                try? await Task.sleep(nanoseconds: 50_000_000)
+            guard await waitForSave(of: frame, until: deadline) else {
+                Log.e("stard: gave up waiting for frame \(frame.frameIndex) to finish saving")
+                return
             }
+        }
+    }
+
+    /// Start saving `frame` at once, without waiting for it.  False if there is nothing to start: no
+    /// queue, a save already under way, or one that could not be started.
+    private func beginSave(_ frame: FrameAirplaneRemover) async -> Bool {
+        guard let saveQueue else { return false }
+        switch await frame.savingState() {
+        case .savePending, .saving: return false
+        case .notSaving, .inPurgatory: break
+        }
+        // Claim it before the queue's own timer can: that only saves a frame still in purgatory
+        // when it fires.  The save itself is what puts it back to `notSaving`.
+        await frame.set(frameSavingState: .savePending)
+        do {
+            try await saveQueue.saveNow(frame: frame) { }
+            return true
+        } catch {
+            Log.e("stard: could not save frame \(frame.frameIndex): \(error)")
+            await frame.set(frameSavingState: .notSaving)
+            return false
+        }
+    }
+
+    /// Wait until `frame` is no longer queued or being saved.  Frames in purgatory are not waited for:
+    /// that is ten seconds of nothing.  False if `deadline` came first.
+    private func waitForSave(of frame: FrameAirplaneRemover, until deadline: ContinuousClock.Instant) async -> Bool {
+        while true {
+            switch await frame.savingState() {
+            case .notSaving, .inPurgatory: return true
+            case .savePending, .saving: break
+            }
+            if ContinuousClock.now > deadline { return false }
+            try? await Task.sleep(nanoseconds: 50_000_000)
         }
     }
 

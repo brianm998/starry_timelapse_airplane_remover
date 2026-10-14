@@ -5,8 +5,12 @@ import SwiftProtobuf
 import logging
 
 enum ExportHandlers {
-    // Render all output frames by calling finish() on each frame.
-    // Streams ProgressEvent items (frame_saving_state, sequence_state) while writing.
+    // Write the finished image of every frame that does not have one that is up to date, the way "Render
+    // this frame" does for one: the frame's outliers are loaded first (a resumed session has them
+    // purged to disk, and a frame finished without them has nothing removed), and a frame that is
+    // already complete, with no edit waiting to be saved, is left alone.
+    // Streams ProgressEvent items while writing: frame_saving_state from the session's callback bridges, as
+    // each frame is written, and io_progress (frames done of all frames) as each one ends.
     // This stream is a subscriber of its own for as long as the render runs, so the existing
     // callback bridges emit events to it as each frame writes its output, alongside the client's
     // long-lived Processing.StreamProgress, which hears them too.  The completion event goes to
@@ -25,26 +29,43 @@ enum ExportHandlers {
             let frames = await session.frames
             let config = await session.configManager.config()
             let concurrency = max(1, config.numberOfFramesToProcessConcurrently)
+            let total = Int32(frames.count)
 
             // Finish all frames concurrently, respecting the configured limit.
             let finishTask = Task {
+                var done: Int32 = 0
+                let reportProgress = { (done: Int32) in
+                    var io = Star_V1_IoProgress()
+                    io.current = done
+                    io.total = total
+                    var prog = Star_V1_ProgressEvent()
+                    prog.kind = .ioProgress(io)
+                    cont.yield(prog)
+                }
                 await withTaskGroup(of: Void.self) { group in
                     var inFlight = 0
                     for frame in frames {
                         if inFlight >= concurrency {
                             await group.next()
                             inFlight -= 1
+                            done += 1
+                            reportProgress(done)
                         }
                         group.addTask {
-                            do {
-                                try await frame.finish()
-                            } catch {
-                                Log.e("Export.RenderSequence: frame \(frame.frameIndex) finish error: \(error)")
+                            if await frame.processingState() == .complete, await frame.savingState() == .notSaving {
+                                return
+                            }
+                            await ensureOutliersLoaded(frame)
+                            if await !session.renderNow(frame) {
+                                Log.e("Export.RenderSequence: frame \(frame.frameIndex) could not be rendered")
                             }
                         }
                         inFlight += 1
                     }
-                    await group.waitForAll()
+                    while await group.next() != nil {
+                        done += 1
+                        reportProgress(done)
+                    }
                 }
                 // Signal sequence completion so the stream can end.
                 var ev = Star_V1_SequenceStateEvent()

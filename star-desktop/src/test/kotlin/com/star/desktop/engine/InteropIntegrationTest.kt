@@ -773,4 +773,60 @@ class InteropIntegrationTest {
             tmp.deleteRecursively()
         }
     }
+
+    /**
+     * A2: "Render this frame" writes the finished image from the frame's decisions (it used to hand back a copy of
+     * the unedited original), and "Render All" reports its progress.
+     */
+    @Test
+    fun renderFrameReflectsTheDecisions() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] renderFrameReflectsTheDecisions — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-render").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                processToCompletion(client, info.sessionId)
+                val frameIdx = (0 until info.frameCount).firstOrNull { client.listOutliers(info.sessionId, it).groupsCount > 0 }
+                if (frameIdx == null) {
+                    println("[skip] renderFrameReflectsTheDecisions — no frame has outlier groups after processing")
+                    client.closeSession(info.sessionId); return@withEngine
+                }
+                val groups = client.listOutliers(info.sessionId, frameIdx).groupsList
+                fun decideAll(reason: com.star.proto.RemoveReason) = runBlocking {
+                    client.setOutlierDecisions(
+                        info.sessionId, frameIdx,
+                        groups.map { com.star.proto.OutlierDecision.newBuilder().setGroupId(it.id).setDecision(reason).build() },
+                    )
+                }
+
+                decideAll(com.star.proto.RemoveReason.RR_USER_KEEP)
+                val kept = File(client.renderFrame(info.sessionId, frameIdx).path).readBytes()
+                decideAll(com.star.proto.RemoveReason.RR_USER_REMOVE)
+                val removed = File(client.renderFrame(info.sessionId, frameIdx).path).readBytes()
+                val original = File(client.getFramePreview(info.sessionId, frameIdx, com.star.proto.FrameViewMode.VIEW_ORIGINAL).path).readBytes()
+
+                assertTrue(!removed.contentEquals(kept), "rendering after removing every outlier gave the same picture as keeping them all")
+                assertTrue(!removed.contentEquals(original), "the render of a frame with its outliers removed is just the original")
+
+                // Render All: every frame is done (or skipped as already done) and the bar is told.
+                val io = mutableListOf<Pair<Int, Int>>()
+                client.renderSequence(info.sessionId).collect { ev ->
+                    if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) io += ev.ioProgress.current to ev.ioProgress.total
+                }
+                assertTrue(io.isNotEmpty(), "Render All reported no progress")
+                assertEquals(info.frameCount to info.frameCount, io.last(), "Render All did not end at N of N")
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
 }

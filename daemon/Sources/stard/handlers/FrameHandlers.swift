@@ -36,42 +36,17 @@ enum FrameHandlers {
             let frameIdx = Int(req.frameIndex)
             let starViewMode = Mapping.frameViewMode(from: req.viewMode)
 
-            guard let previewPath = frame.imageAccessor.nameForImage(
-                frameIndex: frameIdx,
-                ofType: starViewMode,
-                atSize: .preview
-            ) else {
-                await transport.sendError(id: id, message: "no preview path for frame \(frameIdx) mode \(starViewMode)"); return
+            // Generated on demand, like the macOS GUI, which never pre-generates previews on open
+            // (it makes them via PreviewOp / ImageAccessor.makeMissingImage as views appear): a
+            // freshly opened sequence has none on disk, and without this every Frame.GetPreview
+            // would fail and the Kotlin client would show blank frames forever.  For .original this
+            // always succeeds (the source frame exists); for processed/aligned types it only
+            // succeeds once processing has written that full-resolution image.
+            guard let ref = await PreviewFiles.ref(for: frame, mode: starViewMode) else {
+                Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) unavailable (not generated yet)")
+                await transport.sendError(id: id, message: "preview not yet generated: frame \(frameIdx) mode \(starViewMode)"); return
             }
-
-            // Lazily generate the preview JPEG if it doesn't exist yet, by downscaling the
-            // full-resolution image of this type. This mirrors the macOS GUI, which never
-            // pre-generates previews on open — it creates them on demand via PreviewOp /
-            // ImageAccessor.makeMissingImage as views appear. Without this, a freshly opened
-            // sequence (Session.OpenSequence) has no previews on disk and every Frame.GetPreview
-            // fails, so the Kotlin client shows blank frames + "loading…" thumbnails forever.
-            // For .original this always succeeds (the source frame exists); for processed/aligned
-            // types it only succeeds once processing has written that full-res image.
-            if !FileManager.default.fileExists(atPath: previewPath) {
-                Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) preview missing at \(previewPath) — generating on demand")
-                _ = try? await frame.imageAccessor.makeMissingImage(
-                    frameIndex: frameIdx,
-                    ofType: starViewMode,
-                    andSize: .preview
-                )
-            }
-
-            guard FileManager.default.fileExists(atPath: previewPath) else {
-                Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) still unavailable at \(previewPath) (not generated yet)")
-                await transport.sendError(id: id, message: "preview not yet generated: \(previewPath)"); return
-            }
-            Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) serving \(previewPath)")
-
-            var ref = Star_V1_ImageRef()
-            ref.path = previewPath
-            ref.width = Int32(frame.width)
-            ref.height = Int32(frame.height)
-            ref.format = "jpg"
+            Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) serving \(ref.path)")
             try await transport.respond(id: id, payload: ref.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
