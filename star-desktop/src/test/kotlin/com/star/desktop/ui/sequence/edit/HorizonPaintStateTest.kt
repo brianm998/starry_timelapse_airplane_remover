@@ -115,3 +115,30 @@ class CanSaveHorizonTest {
         assertEquals(false, canSaveHorizon(HorizonPhase.REFINEMENT, true, 0, saving = true))
     }
 }
+
+/** What closing the painter does with the horizon on it (macOS saves unless the user cancelled). */
+class ShouldSaveOnCloseTest {
+    @Test fun aRefinedHorizonIsSavedWhenThePainterIsClosedByToggle() {
+        assertTrue(shouldSaveOnClose(startup = false, phase = HorizonPhase.REFINEMENT, savedAlready = false, cancelled = false, saving = false))
+    }
+
+    /** Cancel (and Esc) are the way to throw the work away. */
+    @Test fun cancelDiscards() {
+        assertEquals(false, shouldSaveOnClose(false, HorizonPhase.REFINEMENT, savedAlready = false, cancelled = true, saving = false))
+    }
+
+    /** The startup flow has its own Continue / Cancel, and records progress against the saved references. */
+    @Test fun theStartupFlowNeverSavesOnClose() {
+        assertEquals(false, shouldSaveOnClose(true, HorizonPhase.REFINEMENT, false, false, false))
+    }
+
+    @Test fun nothingBeforeARefinedHorizonExists() {
+        assertEquals(false, shouldSaveOnClose(false, HorizonPhase.BAND_SELECTION, false, false, false))
+        assertEquals(false, shouldSaveOnClose(false, HorizonPhase.COMPUTING, false, false, false))
+    }
+
+    @Test fun notTwice() {
+        assertEquals(false, shouldSaveOnClose(false, HorizonPhase.REFINEMENT, savedAlready = true, cancelled = false, saving = false))
+        assertEquals(false, shouldSaveOnClose(false, HorizonPhase.REFINEMENT, savedAlready = false, cancelled = false, saving = true))
+    }
+}

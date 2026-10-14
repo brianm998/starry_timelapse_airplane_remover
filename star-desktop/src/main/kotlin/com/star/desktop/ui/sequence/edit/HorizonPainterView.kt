@@ -99,6 +99,8 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     var refining by remember { mutableStateOf(0) }          // in-flight random-walker passes
     var errorText by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }          // a save is in flight: a second must not start (macOS isSaving)
+    var savedAlready by remember { mutableStateOf(false) }    // the horizon on screen is already the saved one
+    var cancelledExplicitly by remember { mutableStateOf(false) } // Cancel / Esc: the one way out that discards
 
     val startup by vm.horizonPainterStartup.collectAsState()
     val startupIndices by vm.startupHorizonIndices.collectAsState()
@@ -109,11 +111,24 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     val frameJob = remember(current) { SupervisorJob() }
     DisposableEffect(current) { onDispose { frameJob.cancel() } }
 
+    // Closing the painter any way but Cancel keeps the work (macOS saves in `onDisappear`): H, leaving edit mode, the
+    // panel button. Only a refined horizon is worth saving (band selection has none), and the startup flow has its own
+    // Continue / Cancel. Launched in the view model's scope: this composable's own dies with it.
+    DisposableEffect(Unit) {
+        onDispose {
+            val index = vm.currentIndex.value
+            if (shouldSaveOnClose(vm.horizonPainterStartup.value, state.phase, savedAlready, cancelledExplicitly, saving)) {
+                vm.saveHorizonReferenceInBackground(index, state.horizonSnapshot(), imgW, imgH)
+            }
+        }
+    }
+
     // Seed any existing horizon (reference > merged > raw) → jump to refinement; else band selection.
     LaunchedEffect(current) {
         refining = 0
         errorText = null
         hover = null
+        savedAlready = false
         state.resetForNewFrame()
         val existing = runCatching { app.horizonRepo.bestExisting(vm.sessionId, current, imgW, imgH) }.getOrNull()
         if (existing != null && existing.any { it >= 0 }) {
@@ -177,6 +192,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
         errorText = null
         return try {
             app.horizonRepo.setReference(vm.sessionId, frameIdx, y, imgW, imgH, setStaticReference = startup)
+            savedAlready = true
             true
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -323,13 +339,24 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
                     if (saveReference(frameIdx)) app.startupHorizonAdvanceOrContinue()
                 }
             },
-            onCancel = { if (startup) app.cancelStartupHorizon() else vm.toggleHorizonPaint() },
+            onCancel = {
+                cancelledExplicitly = true
+                if (startup) app.cancelStartupHorizon() else vm.toggleHorizonPaint()
+            },
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
 private const val ANT_DASH = 6f
+
+/**
+ * Whether closing the painter should save what is on it (macOS `onDisappear`): only outside the startup flow (which
+ * has its own Continue / Cancel), only from refinement (band selection has no horizon yet), and only if the user did
+ * not cancel, it is not already saved, and a save is not already running.
+ */
+internal fun shouldSaveOnClose(startup: Boolean, phase: HorizonPhase, savedAlready: Boolean, cancelled: Boolean, saving: Boolean): Boolean =
+    !startup && phase == HorizonPhase.REFINEMENT && !savedAlready && !cancelled && !saving
 
 /**
  * Whether the painted horizon may be saved right now (macOS `canSave`): refinement has produced one, no refinement
@@ -476,7 +503,7 @@ private fun HorizonControlBar(
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = StarColors.accent)
             Text(localized("ui.computing_horizon"), color = StarColors.textSecondary, fontSize = 12.sp)
             Spacer(Modifier.weight(1f))
-            OutlinedButton(onClick = onCancel) { Text(if (startup) "Cancel" else "Done") }
+            OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
             return@Row
         }
 
@@ -517,7 +544,7 @@ private fun HorizonControlBar(
             }
         }
 
-        OutlinedButton(onClick = onCancel) { Text(if (startup) "Cancel" else "Done") }
+        OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
     }
 }
 

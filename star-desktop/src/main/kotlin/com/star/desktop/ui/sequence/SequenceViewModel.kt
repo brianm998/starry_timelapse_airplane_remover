@@ -420,6 +420,18 @@ class SequenceViewModel(
             .onFailure { reportFailure(it) }
     }
 
+    /**
+     * Save a reference horizon for [frameIndex] without anyone waiting for it: the painter closing keeps what was painted,
+     * and the painter's own coroutines are gone by then. A failure is only logged (macOS `try?`).
+     */
+    fun saveHorizonReferenceInBackground(frameIndex: Int, horizonY: List<Int>, width: Int, height: Int) {
+        if (horizonY.none { it >= 0 }) return
+        scope.launch {
+            runCatching { horizon.setReference(sessionId, frameIndex, horizonY, width, height, setStaticReference = false) }
+                .onFailure { Log.w("Horizon") { "saving the reference horizon of frame $frameIndex on close failed: ${it.message}" } }
+        }
+    }
+
     /** Per-cell grid horizon overlay (kind + per-column Y), or null if none. */
     suspend fun gridHorizonOverlay(index: Int, width: Int, height: Int) =
         horizon.getOverlay(sessionId, index, width, height)
