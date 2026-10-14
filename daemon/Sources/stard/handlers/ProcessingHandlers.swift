@@ -31,6 +31,23 @@ enum ProcessingHandlers {
         }
     }
 
+    /// `Processing.Restart`: stop the run in progress, wait for it to stop, and start over the range asked for (the settings changed over a run
+    /// that was going).  Answered once the new run has been started.
+    static func restart(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_StartProcessingRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404)
+                return
+            }
+            let (startIdx, endIdx) = frameRange(start: req.startIndex, end: req.endIndex)
+            await session.restartProcessing(startIndex: startIdx, endIndex: endIdx)
+            try await transport.respond(id: id, payload: Star_V1_StartProcessingResponse().serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     // Processing.StreamProgress: stays open and yields ProgressEvent items.
     static func streamProgress(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {

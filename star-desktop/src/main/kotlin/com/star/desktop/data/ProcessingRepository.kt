@@ -120,6 +120,23 @@ class ProcessingRepository(
     }
 
     /**
+     * Stop the run in progress and start it again over the same range under the settings as they now are, as one step: the daemon waits for the
+     * stop, and does not announce it, so to anything watching this is the run going on rather than one cancelled and another begun.
+     */
+    suspend fun restart(sessionId: String, startIndex: Int = 0, endIndex: Int = -1) {
+        _sequenceState.value = null
+        _stepProgress.value = null
+        _processing.value = true
+        startedSinceCancel = true
+        try {
+            c().restartProcessing(sessionId, startIndex, endIndex)
+        } catch (e: Throwable) {
+            _processing.value = false
+            throw e
+        }
+    }
+
+    /**
      * Stop the run. The daemon answers once what was running has stopped, which can take a while, so
      * the UI goes idle at once rather than after the answer.
      */

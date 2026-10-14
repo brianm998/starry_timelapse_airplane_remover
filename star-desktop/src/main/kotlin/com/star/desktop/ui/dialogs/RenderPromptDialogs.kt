@@ -101,7 +101,7 @@ fun HorizonRefinementPrompt(vm: com.star.desktop.ui.sequence.SequenceViewModel, 
 
 /** [onScrimClick] null means a click outside the card does nothing; [onDefaultAction] is what Return does, [onEscape] what Esc does. */
 @Composable
-private fun PromptCard(
+internal fun PromptCard(
     onScrimClick: (() -> Unit)?,
     onDefaultAction: () -> Unit,
     onEscape: (() -> Unit)? = null,

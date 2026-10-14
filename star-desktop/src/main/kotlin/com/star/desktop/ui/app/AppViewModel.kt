@@ -277,6 +277,28 @@ class AppViewModel(
         }
     }
 
+    /**
+     * What applying [config] would do to the work already on disk (the settings sheet's red line, and Process Now becoming Update); null when
+     * the daemon could not say, which the sheet reads as nothing to warn about.
+     */
+    suspend fun previewConfigChange(config: Config): com.star.proto.ConfigChangePreview? =
+        runCatching { sessions.previewConfigChange(config) }.getOrNull()
+
+    /**
+     * The answer to "re-process the already processed frames with these settings?": apply [config] with [reprocess] set as the answer, which
+     * decides whether a change throws away what it invalidated and builds it again, or keeps it and applies only to the frames still to do. A
+     * run that is going is restarted so that the change reaches the frames it has not got to (its graph was planned under the old settings);
+     * otherwise processing starts, with the usual question about rendering after.
+     */
+    fun updateSettingsAndProcess(config: Config, reprocess: Boolean) {
+        scope.launch {
+            val running = currentSequence?.isProcessing?.value == true
+            runCatching { updateSessionConfig(config.toBuilder().setReprocessOnSettingsChange(reprocess).build()) }.onFailure { report(it.message ?: it.toString()) }
+            closeSettings()
+            if (running) currentSequence?.restartProcessing() else requestProcessAll()
+        }
+    }
+
     private val _showSettings = MutableStateFlow(false)
     val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
     fun openSettings() { _showSettings.value = true }

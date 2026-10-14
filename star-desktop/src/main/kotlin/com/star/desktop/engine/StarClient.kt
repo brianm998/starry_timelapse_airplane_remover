@@ -74,6 +74,7 @@ import com.star.proto.ReprocessFramesRequest
 import com.star.proto.ReprocessFramesResponse
 import com.star.proto.ReprocessingType
 import com.star.proto.SessionInfo
+import com.star.proto.ConfigChangePreview
 import com.star.proto.KeypointDivisorAdvice
 import com.star.proto.SequenceProgress
 import com.star.proto.SessionRef
@@ -186,6 +187,13 @@ class StarClient(private val conn: StdioConnection) {
 
     suspend fun updateConfig(sessionId: String, config: Config): Config =
         call("Sequence.UpdateConfig", UpdateConfigRequest.newBuilder().setSessionId(sessionId).setConfig(config).build(), Config.parser())
+
+    /**
+     * What applying [config] would do to the work already on disk, without applying it: which cached stages it would invalidate, and whether
+     * there is finished work for that to contradict (the settings sheet's "already processed frames have different settings").
+     */
+    suspend fun previewConfigChange(sessionId: String, config: Config): ConfigChangePreview =
+        call("Sequence.PreviewConfigChange", UpdateConfigRequest.newBuilder().setSessionId(sessionId).setConfig(config).build(), ConfigChangePreview.parser())
 
     /** Whether full resolution keypoint detection suits the sequence on this machine, and what to suggest otherwise (macOS `keypointDivisorAdvice`). */
     suspend fun getKeypointAdvice(sessionId: String): KeypointDivisorAdvice =
@@ -376,6 +384,14 @@ class StarClient(private val conn: StdioConnection) {
 
     fun streamProgress(sessionId: String): Flow<ProgressEvent> =
         serverStream("Processing.StreamProgress", sessionRef(sessionId), ProgressEvent.parser())
+
+    /** Stop the run in progress, wait until it has stopped, and start over the range with the settings as they now are. */
+    suspend fun restartProcessing(sessionId: String, startIndex: Int = 0, endIndex: Int = -1): StartProcessingResponse =
+        call(
+            "Processing.Restart",
+            StartProcessingRequest.newBuilder().setSessionId(sessionId).setStartIndex(startIndex).setEndIndex(endIndex).build(),
+            StartProcessingResponse.parser(),
+        )
 
     suspend fun cancelProcessing(sessionId: String): CancelResponse =
         call("Processing.Cancel", sessionRef(sessionId), CancelResponse.parser())

@@ -136,6 +136,14 @@ message SessionRef           { string session_id = 1; }
 
 message UpdateConfigRequest { string session_id = 1; Config config = 2; }
 
+// What applying a proposed config would do to the work already on disk, asked before it is applied (macOS settings sheet: the red "already
+// processed frames have different settings" line, and Process Now becoming Update). Compared against the settings the last run began with (the
+// session's snapshot; the config as it stood when this was first asked if none has run).
+message ConfigChangePreview {
+  repeated string stale_stages = 1;           // the cached stages the change would invalidate: horizon, mergedHorizon, keypoints, alignment, outliers, output
+  bool contradicts_finished_work = 2;         // some stage is stale AND there is finished work for it to contradict (StarCore SettingsChangeState)
+}
+
 message Config {
   string        output_path                              = 1;
   string        temp_output_path                         = 2;
@@ -258,6 +266,10 @@ message Config {
   // config already has. For "custom" the limits are number_of_frames_to_process_concurrently
   // (the pipeline depth cap) and the editable fields StarCore keeps beside it.
   optional string resource_profile                                     = 57;
+  // Whether a settings change that contradicts frames already processed throws away what it invalidated and builds it again (true, the default),
+  // or keeps it and applies the new settings only to the frames still to do. StarCore Config.reprocessOnSettingsChange; the answer to the
+  // "reprocess already processed frames?" question (see Sequence.PreviewConfigChange).
+  optional bool   reprocess_on_settings_change                         = 58;
 }
 
 enum CleanMethod {

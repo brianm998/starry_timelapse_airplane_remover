@@ -21,6 +21,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import com.star.desktop.domain.SettingsChange
+import com.star.desktop.ui.app.AppScreen
+import com.star.desktop.ui.components.HoverTip
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -54,6 +61,8 @@ import com.star.desktop.i18n.localized
 fun ProcessingSettingsDialog(app: AppViewModel) {
     val scope = rememberCoroutineScope()
     val loaded by produceState<Config?>(null) { value = runCatching { app.sessions.getConfig() }.getOrNull() }
+    // What the daemon says applying the edits would do to the work on disk; written by the effect below as the edits settle.
+    var change by remember { mutableStateOf(SettingsChange.NONE) }
 
     Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = app::closeSettings), contentAlignment = Alignment.Center) {
         Column(
@@ -67,6 +76,14 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(localized("ui.processing_settings"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+
+            // Under the title, and only over a sequence that has work on disk this change contradicts: a sequence nothing has been done to is
+            // what this sheet was built for, and there is nothing to warn about there.
+            if (change.contradictsFinishedWork) {
+                HoverTip(localized("ui.already_processed_frames_have_different_settings_help")) {
+                    Text(localized("ui.already_processed_frames_have_different_settings"), color = StarColors.red, fontSize = 14.sp)
+                }
+            }
 
             val cfg = loaded
             if (cfg == null) {
@@ -190,8 +207,8 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 }
             }
 
-            // Save the settings and close; with [processNow] go on to start processing (macOS "Process Now").
-            val save: (Boolean) -> Unit = { processNow ->
+            // The config the edits make: what Save applies, and what the daemon is asked about to say whether it contradicts finished work.
+            val proposed: Config = run {
                 val b = cfg.toBuilder()
                     .setCleanMethod(clean)
                     .setDetectionType(detection)
@@ -210,9 +227,24 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                         is DoubleField -> textEdits[f.label]?.toDoubleOrNull()?.let { f.set(b, it) }
                     }
                 }
-                val updated = b.build()
+                b.build()
+            }
+
+            // Asked of the daemon after each edit, once they stop (a number being typed is a burst of them): does this contradict frames already
+            // processed? Then the sheet says so, and the button that goes on is Update.
+            LaunchedEffect(proposed) {
+                delay(300)
+                change = SettingsChange.of(app.previewConfigChange(proposed))
+            }
+            val screen by app.screen.collectAsState()
+            val svm = (screen as? AppScreen.Sequence)?.vm
+            val processing by (svm?.isProcessing ?: remember { MutableStateFlow(false) }).collectAsState()
+            var askUpdate by remember { mutableStateOf(false) }
+
+            // Save the settings and close; with [processNow] go on to start processing (macOS "Process Now").
+            val save: (Boolean) -> Unit = { processNow ->
                 scope.launch {
-                    runCatching { app.updateSessionConfig(updated) }
+                    runCatching { app.updateSessionConfig(proposed) }
                     app.closeSettings()
                     if (processNow) app.requestProcessAll()
                 }
@@ -221,9 +253,30 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 OutlinedButton(onClick = app::closeSettings) { Text(localized("ui.cancel")) }
                 OutlinedButton(onClick = { save(false) }) { Text(localized("ui.save")) }
                 Button(
-                    onClick = { save(true) },
+                    // Update, over frames this change contradicts, asks before it acts: it does not start a run over an untouched sequence, it
+                    // changes one that is part done.
+                    onClick = { if (change.contradictsFinishedWork) askUpdate = true else save(true) },
+                    enabled = change.canProcess(processing),
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text(localized("ui.process_now")) }
+                ) { Text(localized(change.processKey)) }
+            }
+            if (askUpdate) {
+                // The whole question as the title. No is first and Esc, and does the safe thing: nothing is deleted, and the new settings
+                // apply only to the frames still to do. Yes, which Return takes, throws away what the change invalidated and builds it again.
+                PromptCard(
+                    onScrimClick = null,
+                    onDefaultAction = { askUpdate = false; app.updateSettingsAndProcess(proposed, reprocess = true) },
+                    onEscape = { askUpdate = false; app.updateSettingsAndProcess(proposed, reprocess = false) },
+                ) {
+                    Text(localized("ui.reprocess_already_processed_frames_question"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                        OutlinedButton(onClick = { askUpdate = false; app.updateSettingsAndProcess(proposed, reprocess = false) }) { Text(localized("ui.no")) }
+                        Button(
+                            onClick = { askUpdate = false; app.updateSettingsAndProcess(proposed, reprocess = true) },
+                            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                        ) { Text(localized("ui.yes")) }
+                    }
+                }
             }
         }
     }

@@ -560,6 +560,9 @@ class SequenceViewModel(
     }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
 
+    /** Stop the run in progress and start it over under the settings as they now are (macOS `updateSettingsAndProcess` over a live run). */
+    fun restartProcessing() = startProcessingRun { processing.restart(sessionId, 0, -1) }
+
     // ---- full resolution (macOS showFullResolution) ----
     //
     // The preview is about 1600 pixels wide, however large the frame is; zoomed in far enough to see single pixels it is a blur.

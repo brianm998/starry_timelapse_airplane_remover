@@ -196,15 +196,7 @@ actor Session {
     /// Apply the settings a client sent (`Sequence.UpdateConfig`) and persist them.  Returns the
     /// config as it now stands.
     func updateConfig(from proto: Star_V1_Config) async -> Config {
-        var config = await configManager.config()
-        config.cleanMethod = Mapping.cleanMethod(from: proto)
-        config.detectionType = Mapping.detectionType(from: proto.detectionType)
-        config.horizonDetectionEnabled = proto.horizonDetectionEnabled
-        config.tripodHeadWasMoving = proto.tripodHeadWasMoving
-        if proto.numberOfFramesToProcessConcurrently > 0 {
-            config.numberOfFramesToProcessConcurrently = Int(proto.numberOfFramesToProcessConcurrently)
-        }
-        Mapping.applyExpertConfig(&config, from: proto)
+        let config = Session.applying(proto, to: await configManager.config())
         await configManager.update(config)
         // The client is told the config is applied; make that include the
         // file, since update() writes asynchronously now.
@@ -214,6 +206,71 @@ actor Session {
         // (macOS sets it on change too).
         await constants.set(detectionType: config.detectionType)
         return config
+    }
+
+    /// `config` with the settings a client sent applied to it: what `updateConfig(from:)` would leave, without leaving it.
+    static func applying(_ proto: Star_V1_Config, to config: Config) -> Config {
+        var config = config
+        config.cleanMethod = Mapping.cleanMethod(from: proto)
+        config.detectionType = Mapping.detectionType(from: proto.detectionType)
+        config.horizonDetectionEnabled = proto.horizonDetectionEnabled
+        config.tripodHeadWasMoving = proto.tripodHeadWasMoving
+        if proto.numberOfFramesToProcessConcurrently > 0 {
+            config.numberOfFramesToProcessConcurrently = Int(proto.numberOfFramesToProcessConcurrently)
+        }
+        Mapping.applyExpertConfig(&config, from: proto)
+        return config
+    }
+
+    // MARK: - Settings changes over finished work
+
+    /// The settings the last run began with, which a settings change is compared against to tell whether it contradicts the frames on disk
+    /// (macOS `settingsSnapshot`).  Taken when a run starts, since the run adopts whatever the settings then are; until one has, the first
+    /// question asked takes it from the config as it stood then, so a change the user made and put off is still a change the frames lack.
+    private(set) var settingsSnapshot: Config?
+
+    /// Whether the survey taken when this session opened found nothing done to the sequence; nil before it has been taken.
+    var openedSequenceWasUntouched: Bool?
+
+    /// What applying `proto` would do to the work already on disk, without applying it (`Sequence.PreviewConfigChange`): which cached stages it
+    /// would invalidate, and whether there is finished work for that to contradict (StarCore's `SettingsChangeState`).
+    func previewConfigChange(_ proto: Star_V1_Config) async -> Star_V1_ConfigChangePreview {
+        let current = await configManager.config()
+        let snapshot = settingsSnapshot ?? current
+        if settingsSnapshot == nil { settingsSnapshot = current }
+
+        let proposed = Session.applying(proto, to: current)
+        let stale = ArtifactInputs.current(from: proposed).staleStages(comparedTo: ArtifactInputs.current(from: snapshot))
+
+        // The counts are only worth a look at each frame when they can matter: a live run counts before its first frame is written, and
+        // nothing counts when no stage is stale.
+        let isProcessing = activeRun != nil
+        var complete = 0
+        var userModified = 0
+        if !stale.isEmpty && !isProcessing {
+            for frame in frames {
+                switch await frame.processingState() {
+                case .complete: complete += 1
+                case .userModified: userModified += 1
+                default: break
+                }
+            }
+        }
+        var out = Star_V1_ConfigChangePreview()
+        out.staleStages = ArtifactStage.allCases.filter { stale.contains($0) }.map(\.rawValue)
+        out.contradictsFinishedWork = SettingsChangeState.contradictsFinishedWork(
+            isProcessingFrames: isProcessing, completeFrameCount: complete, userModifiedFrameCount: userModified,
+            openedSequenceWasUntouched: openedSequenceWasUntouched, changedStages: stale)
+        return out
+    }
+
+    /// For tests: stand in for the survey `didOpen()` takes.
+    func setOpened(untouched: Bool?) { openedSequenceWasUntouched = untouched }
+
+    /// Called once the session is open for a client: takes the survey the settings question needs and starts the background previews.
+    func didOpen() async {
+        openedSequenceWasUntouched = await surveyProgress().isUntouched
+        startPreviewPrewarm()
     }
 
     // Set/clear the static reference-horizon flag and persist config.json (resume/interop).
@@ -236,6 +293,8 @@ actor Session {
         runGeneration += 1
         let generation = runGeneration
         activeRun = generation
+        // The run adopts whatever the settings now are, so this is the baseline the next settings change is compared against.
+        settingsSnapshot = await configManager.config()
         await beginStepReports(generation: generation, types: ProcessingSteps.types(for: await configManager.config()))
         // Before the graph is built, which surveys the disk: a horizon reference the user painted and put off
         // applying is taken on by this run, so starting one is a way through it and not a way around it.  Over
@@ -319,6 +378,14 @@ actor Session {
         await stop.value
         stopTask = nil
         if announce { emitSequenceState("cancelled") }
+    }
+
+    /// `Processing.Restart`: stop the run in progress, wait until it has stopped, and start over the same range with whatever the settings now
+    /// are.  The stop is not announced: to a client watching, a restart is not a run that was cancelled.  Without a run it is a start.
+    func restartProcessing(startIndex: Int = 0, endIndex: Int? = nil) async {
+        guard !closed else { return }
+        await stopRun(announce: false)
+        await startProcessing(startIndex: startIndex, endIndex: endIndex)
     }
 
     // Re-run the whole frame graph after a reference-horizon change. With hasStaticReferenceHorizon

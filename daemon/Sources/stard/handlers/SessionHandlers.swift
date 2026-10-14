@@ -17,7 +17,7 @@ enum SessionHandlers {
                 protoConfig: req.initialConfig
             )
             await sessions.add(session: session)
-            await session.startPreviewPrewarm()
+            await session.didOpen()
             let config = await session.configManager.config()
             let imageInfo = await session.imageInfo
             let frameCount = await session.frameCount
@@ -39,7 +39,7 @@ enum SessionHandlers {
                 configPath: req.configJsonPath
             )
             await sessions.add(session: session)
-            await session.startPreviewPrewarm()
+            await session.didOpen()
             let config = await session.configManager.config()
             let imageInfo = await session.imageInfo
             let frameCount = await session.frameCount
@@ -132,7 +132,7 @@ enum SessionHandlers {
             await transport.sendError(id: id, message: "\(error)")
         case .success(let session):
             await sessions.add(session: session)
-            await session.startPreviewPrewarm()
+            await session.didOpen()
             let config     = await session.configManager.config()
             let imageInfo  = await session.imageInfo
             let frameCount = await session.frameCount

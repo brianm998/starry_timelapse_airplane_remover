@@ -61,4 +61,18 @@ enum SequenceHandlers {
             await transport.sendError(id: id, message: "\(error)")
         }
     }
+
+    /// What applying a proposed config would do to the work already on disk, without applying it.
+    static func previewConfigChange(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_UpdateConfigRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found: \(req.sessionID)", code: 404)
+                return
+            }
+            try await transport.respond(id: id, payload: session.previewConfigChange(req.config).serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
 }

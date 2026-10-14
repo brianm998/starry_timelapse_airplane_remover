@@ -489,6 +489,77 @@ class InteropIntegrationTest {
     }
 
     /**
+     * G1: over a sequence nothing has been done to, a change to what the output is built from is stale but contradicts nothing; once the
+     * frames are processed the same change contradicts them, and one that only changes how the work is done never does. The flag that
+     * answers the question travels, and a restart over finished work runs to the end without announcing a cancel.
+     */
+    @Test
+    fun settingsChangesOverFinishedWork() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] settingsChangesOverFinishedWork — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-settings").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                val states = java.util.concurrent.CopyOnWriteArrayList<String>()
+                val sub = CoroutineScope(SupervisorJob()).launch {
+                    runCatching {
+                        client.streamProgress(info.sessionId).collect { ev ->
+                            if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) states.add(ev.sequenceState.state)
+                        }
+                    }
+                }
+                suspend fun finished(after: Int): String? = withTimeoutOrNull(1_200_000) {
+                    while (true) {
+                        states.drop(after).firstOrNull { it in setOf("done", "error", "cancelled") }?.let { return@withTimeoutOrNull it }
+                        delay(100)
+                    }
+                    @Suppress("UNREACHABLE_CODE") null
+                }
+
+                val base = client.getConfig(info.sessionId)
+                val moreKeypoints = base.toBuilder().setAlignmentMaxKeypoints(base.alignmentMaxKeypoints + 1000).build()
+                val moreConcurrency = base.toBuilder().setNumberOfFramesToProcessConcurrently(base.numberOfFramesToProcessConcurrently + 1).build()
+                delay(400)
+
+                val untouched = client.previewConfigChange(info.sessionId, moreKeypoints)
+                assertTrue("keypoints" in untouched.staleStagesList, "${untouched.staleStagesList}")
+                assertFalse(untouched.contradictsFinishedWork, "nothing has been done to this sequence, so nothing is contradicted")
+
+                client.startProcessing(info.sessionId, 0, -1)
+                assertEquals("done", finished(0), "the run did not finish cleanly")
+
+                val processed = client.previewConfigChange(info.sessionId, moreKeypoints)
+                assertTrue(processed.contradictsFinishedWork, "frames are written, and this changes what they were built from: $processed")
+                val knob = client.previewConfigChange(info.sessionId, moreConcurrency)
+                assertTrue(knob.staleStagesList.isEmpty() && !knob.contradictsFinishedWork, "concurrency changes how, not what: $knob")
+
+                // The answer travels: a config saved with it off stays off.
+                val off = client.updateConfig(info.sessionId, base.toBuilder().setReprocessOnSettingsChange(false).build())
+                assertFalse(off.reprocessOnSettingsChange)
+                assertFalse(client.getConfig(info.sessionId).reprocessOnSettingsChange)
+
+                // A restart over finished work runs to the end, and the stop it makes is not announced as a cancel.
+                val seen = states.size
+                client.restartProcessing(info.sessionId, 0, -1)
+                assertEquals("done", finished(seen), "the restarted run did not finish: ${states.drop(seen)}")
+                assertFalse("cancelled" in states.drop(seen), "a restart is not a cancel: ${states.drop(seen)}")
+                sub.cancel()
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
+    /**
      * F3: the daemon says whether full resolution keypoint detection suits the sequence on this machine, with the numbers behind it; and a
      * divisor the client writes is the divisor in the config afterwards (sending one is also what marks it chosen).
      */

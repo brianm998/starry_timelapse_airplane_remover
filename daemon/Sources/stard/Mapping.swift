@@ -5,7 +5,6 @@ import StarDaemonMessages
 
 // Bidirectional type mapping between StarCore types and proto types.
 enum Mapping {
-
     // MARK: - FrameViewMode
 
     static func frameViewMode(from proto: Star_V1_FrameViewMode) -> StarCore.FrameViewMode {
@@ -271,6 +270,7 @@ enum Mapping {
         out.writeOutlierGroupFiles = c.writeOutlierGroupFiles
         out.writeFramePreviewFiles = c.writeFramePreviewFiles
         out.starVersion = c.starVersion
+        out.reprocessOnSettingsChange = c.reprocessOnSettingsChange
         var ves = Star_V1_VideoEncodeSettings()
         ves.frameRate   = c.frameRate.rawValue
         ves.codec       = c.codec.rawValue
@@ -380,6 +380,7 @@ enum Mapping {
         if p.hasHorizonReservationFloorMb { c.horizonReservationFloorMB = Int(p.horizonReservationFloorMb) }
         if p.hasMaxConcurrentKeypointOps { c.maxConcurrentKeypointOps = Int(p.maxConcurrentKeypointOps) }
         if p.hasMergeStreamingThresholdMb { c.mergeStreamingThresholdMB = Int(p.mergeStreamingThresholdMb) }
+        if p.hasReprocessOnSettingsChange { c.reprocessOnSettingsChange = p.reprocessOnSettingsChange }
         if p.hasUseGpuAcceleration { c.useGPUForMerge = p.useGpuAcceleration }
         // Unknown names are ignored rather than rejected: a newer client may know profiles
         // this daemon does not, and keeping the config's own is the safe answer.
