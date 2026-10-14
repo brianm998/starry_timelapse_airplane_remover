@@ -44,6 +44,12 @@ actor Session {
     /// stream that tries to attach is ended at once.
     private var closed = false
 
+    /// Where a user's edits are written down.  StarCore's own queue, the one the macOS app uses:
+    /// a frame is put in "purgatory" when it is edited, and ten seconds after the last edit its
+    /// finished image and decisions are written.  Built with the frame graph because the class
+    /// is main-actor isolated.
+    private var saveQueue: FrameSaveQueue?
+
     init(
         sessionID: String,
         scratchSessionDir: String,
@@ -91,6 +97,8 @@ actor Session {
         callbacks.frameOutliersLoadedCallback = { frameIndex, loadingState in
             Task { await weakSelf.session?.onOutliersLoaded(frameIndex: frameIndex, state: loadingState) }
         }
+
+        saveQueue = await MainActor.run { FrameSaveQueue() }
 
         var built: [FrameAirplaneRemover] = []
         for (frameIndex, filename) in filenames.enumerated() {
@@ -285,11 +293,64 @@ actor Session {
         if activeRun != nil || stopTask != nil {
             await stopRun(announce: false)
         }
-        // A1: flush save queue here
+        await flushSaves()
         await configManager.flush()
         let subscribers = progressSubscribers.values
         progressSubscribers.removeAll()
         for cont in subscribers { cont.finish() }
+    }
+
+    // MARK: - Saving edits
+
+    /// A user edit has been made to `frame`: write its decisions down now, so that a crash before
+    /// the save timer fires still keeps them, and queue the frame for saving once the user has
+    /// left it alone for a while (what leaving a frame does in the macOS app).  Every edit
+    /// restarts that wait, so a burst of clicks is one save.
+    func frameEdited(_ frame: FrameAirplaneRemover) async {
+        guard !closed, let saveQueue else { return }
+        await frame.writeOutliersRemoveReasons()
+        await saveQueue.readyToSave(frame: frame) { }
+    }
+
+    /// Save every frame whose edits are still waiting (in purgatory, or already queued or being
+    /// saved) and return once they have all been written.  A frame is never saved twice: one
+    /// that is already past purgatory is only waited for.  Gives up after `timeout` rather than
+    /// holding a close or a shutdown hostage to a save that never ends.
+    func flushSaves(timeout: Duration = .seconds(120)) async {
+        guard let saveQueue else { return }
+        var waiting: [FrameAirplaneRemover] = []
+        for frame in frames {
+            switch await frame.savingState() {
+            case .notSaving:
+                continue
+            case .inPurgatory:
+                // Claim it before the queue's own timer can: it only saves a frame that is
+                // still in purgatory when it fires.
+                await frame.set(frameSavingState: .savePending)
+                do {
+                    try await saveQueue.saveNow(frame: frame) { }
+                } catch {
+                    Log.e("stard: could not save frame \(frame.frameIndex): \(error)")
+                    await frame.set(frameSavingState: .notSaving)
+                    continue
+                }
+            case .savePending, .saving:
+                break
+            }
+            waiting.append(frame)
+        }
+        guard !waiting.isEmpty else { return }
+        Log.i("stard: waiting for \(waiting.count) frame(s) to finish saving")
+        let deadline = ContinuousClock.now + timeout
+        for frame in waiting {
+            while await frame.savingState() != .notSaving {
+                if ContinuousClock.now > deadline {
+                    Log.e("stard: gave up waiting for frame \(frame.frameIndex) to finish saving")
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
     }
 
     // MARK: - Progress subscribers

@@ -33,7 +33,12 @@ enum DaemonHandlers {
         }
     }
 
-    static func shutdown(id: UInt64, payload: Data, transport: StdioTransport) async {
+    static func shutdown(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        // Close every open session before answering: the answer is the client's cue that it is
+        // safe to exit, and an edit still waiting for its save timer is lost if the process goes.
+        for session in await sessions.all {
+            await session.close()
+        }
         do {
             let resp = Star_V1_ShutdownResponse()
             try await transport.respond(id: id, payload: resp.serializedData())

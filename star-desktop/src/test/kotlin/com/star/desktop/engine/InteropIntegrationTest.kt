@@ -48,6 +48,31 @@ class InteropIntegrationTest {
     }
 
     /**
+     * Process the whole sequence and return when the run ends, failing with the daemon's own message if it
+     * ends in an error (a run that errors never says `done`, so waiting for `done` alone just times out).
+     */
+    private suspend fun processToCompletion(client: StarClient, sessionId: String, timeoutMs: Long = 1_200_000) {
+        val ended = CompletableDeferred<ProgressEvent>()
+        val sub = CoroutineScope(SupervisorJob()).launch {
+            runCatching {
+                client.streamProgress(sessionId).collect { ev ->
+                    if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state in setOf("done", "error", "cancelled")) {
+                        ended.complete(ev)
+                    }
+                }
+            }
+        }
+        try {
+            delay(400)
+            client.startProcessing(sessionId, 0, -1)
+            val ev = withTimeoutOrNull(timeoutMs) { ended.await() } ?: error("processing timed out")
+            assertEquals("done", ev.sequenceState.state, "processing did not finish cleanly: ${ev.sequenceState.message}")
+        } finally {
+            sub.cancel()
+        }
+    }
+
+    /**
      * §8.3 cross-client interop gate (config-compatibility slice): a session described by a config.json
      * must resume identically across independent daemon processes, and the on-disk config format must
      * be stable. (Pixel-identity of rendered output is a separate, fixture+processing-heavy check.)
@@ -686,4 +711,66 @@ class InteropIntegrationTest {
         dir.walkTopDown()
             .filter { it.isFile && it.extension.lowercase() in setOf("tif", "tiff", "png", "jpg", "jpeg") }
             .associate { it.name to MessageDigest.getInstance("SHA-256").digest(it.readBytes()).joinToString("") { b -> "%02x".format(b) } }
+
+    /**
+     * A1: a decision is not lost when the session closes. The daemon writes it down at once and saves the
+     * frame's finished image when the session closes, instead of leaving both to a timer or to Render All.
+     * Process, edit one frame, close, reopen the config in a *new* daemon: the decision is still there, and
+     * an output image was rewritten after the edit.
+     */
+    @Test
+    fun editsSurviveCloseAndReopen() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] editsSurviveCloseAndReopen — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-edits").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            var edited: Triple<Int, Int, com.star.proto.RemoveReason>? = null
+            var editedAt = 0L
+            val configJson = withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                processToCompletion(client, info.sessionId)
+
+                val frameIdx = (0 until info.frameCount).firstOrNull { client.listOutliers(info.sessionId, it).groupsCount > 0 }
+                if (frameIdx == null) {
+                    println("[skip] editsSurviveCloseAndReopen — no frame has outlier groups after processing")
+                    client.closeSession(info.sessionId); return@withEngine null
+                }
+                val group = client.listOutliers(info.sessionId, frameIdx).groupsList.first()
+                val wanted = if (group.shouldRemove == com.star.proto.RemoveReason.RR_USER_KEEP)
+                    com.star.proto.RemoveReason.RR_USER_REMOVE else com.star.proto.RemoveReason.RR_USER_KEEP
+                // File times are whole seconds on some filesystems; leave a gap so "after the edit" is meaningful.
+                delay(1_100)
+                editedAt = System.currentTimeMillis()
+                client.setOutlierDecisions(
+                    info.sessionId, frameIdx,
+                    listOf(com.star.proto.OutlierDecision.newBuilder().setGroupId(group.id).setDecision(wanted).build()),
+                )
+                edited = Triple(frameIdx, group.id, wanted)
+                // Closing must save the frame now, not ten seconds from now.
+                client.closeSession(info.sessionId)
+                info.configJsonPath
+            } ?: return
+
+            val (frameIdx, groupId, wanted) = edited!!
+            withEngine { client ->
+                val info = client.openConfig(configJson)
+                val again = client.listOutliers(info.sessionId, frameIdx).groupsList.first { it.id == groupId }
+                assertEquals(wanted, again.shouldRemove, "the decision did not survive closing and reopening")
+                client.closeSession(info.sessionId)
+            }
+            val rewritten = tmp.walkTopDown().filter {
+                it.isFile && it.extension.lowercase() in setOf("tif", "tiff", "jpg", "jpeg", "png") && it.lastModified() >= editedAt
+            }.toList()
+            assertTrue(rewritten.isNotEmpty(), "no image was written after the edit: closing the session did not save the frame")
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
 }

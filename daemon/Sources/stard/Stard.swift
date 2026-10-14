@@ -104,7 +104,7 @@ struct Stard: AsyncParsableCommand {
         // stop rather than being cut off mid-frame.
         StarShutdown.install(clientName: "stard") {
             for session in await sessions.all {
-                await session.cancelProcessing()
+                await session.close()   // stops the run and writes out pending edits
             }
         }
 

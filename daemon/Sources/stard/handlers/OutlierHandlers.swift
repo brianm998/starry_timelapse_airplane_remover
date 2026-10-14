@@ -55,6 +55,7 @@ enum OutlierHandlers {
                 await frame.applyDecisionTreeToAllOutliers(overwrite: req.overwrite, minimumSize: minSize)
             }
             await frame.markAsChanged()
+            await session.frameEdited(frame)
             var resp = Star_V1_ApplyDecisionTreeResponse()
             resp.frame = await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups())
             if req.rerender, let ref = await renderPreview(session: session, frameIndex: Int(req.frameIndex), width: frame.width, height: frame.height) {
@@ -82,6 +83,7 @@ enum OutlierHandlers {
                 guard await frame.getOutlierGroups() != nil else { continue } // skip frames with no outliers on disk
                 await frame.applyDecisionTreeToAllOutliers(overwrite: req.overwrite, minimumSize: minSize)
                 await frame.markAsChanged()
+                await session.frameEdited(frame)
                 resp.frames.append(await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups()))
             }
             try await transport.respond(id: id, payload: resp.serializedData())
@@ -116,7 +118,7 @@ enum OutlierHandlers {
                         await frame.userSelectAllOutliers(toShouldRemove: req.shouldRemove, between: a, and: b, includingTrash: req.includingTrash)
                     }
                     await frame.markAsChanged()
-                    await frame.writeOutliersRemoveReasons()
+                    await session.frameEdited(frame)
                     resp.frames.append(await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups()))
                     if req.rerender, let ref = await renderPreview(session: session, frameIndex: i, width: frame.width, height: frame.height) {
                         resp.previews.append(ref)
@@ -153,7 +155,7 @@ enum OutlierHandlers {
                     await ensureOutliersLoaded(frame)
                     _ = await frame.userSelectAllOutliers(toShouldRemove: req.shouldRemove, overlapping: refGroup)
                     await frame.markAsChanged()
-                    await frame.writeOutliersRemoveReasons()
+                    await session.frameEdited(frame)
                     resp.frames.append(await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups()))
                     if req.rerender, let ref = await renderPreview(session: session, frameIndex: i, width: frame.width, height: frame.height) {
                         resp.previews.append(ref)
@@ -216,6 +218,8 @@ enum OutlierHandlers {
             case .areaToolUnspecified, .UNRECOGNIZED:
                 await transport.sendError(id: id, message: "unspecified area tool", code: 400); return
             }
+
+            await session.frameEdited(frame)
 
             var resp = Star_V1_ApplyOutlierAreaToolResponse()
             resp.frame = await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups())
@@ -294,6 +298,7 @@ enum OutlierHandlers {
             }
 
             await frame.markAsChanged()
+            await session.frameEdited(frame)
 
             var resp = Star_V1_SetOutlierDecisionsResponse()
             resp.frame = await Mapping.frameInfo(frame: frame, outlierGroups: groups)

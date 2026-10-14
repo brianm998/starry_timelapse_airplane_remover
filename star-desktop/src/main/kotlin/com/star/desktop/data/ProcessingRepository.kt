@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 
 /**
@@ -40,9 +41,17 @@ class ProcessingRepository(
     private val _outlierLoadState = MutableStateFlow<Map<Int, Int>>(emptyMap())
     val outlierLoadState: StateFlow<Map<Int, Int>> = _outlierLoadState.asStateFlow()
 
-    /** Per-frame saving state (0..3) from `frame_saving_state`. */
+    /** Per-frame saving state from `frame_saving_state`: 0 not saving, 1 in purgatory, 2 save pending, 3 saving. */
     private val _savingState = MutableStateFlow<Map<Int, Int>>(emptyMap())
     val savingState: StateFlow<Map<Int, Int>> = _savingState.asStateFlow()
+
+    /**
+     * How many frames have edits that are not written to disk yet (in purgatory, waiting, or being
+     * saved). Closing the session or quitting with this above zero is losing work unless the daemon
+     * is given the chance to finish — see the "work in progress" check.
+     */
+    private val _pendingSaves = MutableStateFlow(0)
+    val pendingSaves: StateFlow<Int> = _pendingSaves.asStateFlow()
 
     data class Io(val current: Int, val total: Int, val outputDir: String)
     private val _ioProgress = MutableStateFlow<Io?>(null)
@@ -133,8 +142,10 @@ class ProcessingRepository(
         when (ev.kindCase) {
             ProgressEvent.KindCase.FRAME_STATE ->
                 _frameStates.update { it + (ev.frameState.frameIndex to ev.frameState.state) }
-            ProgressEvent.KindCase.FRAME_SAVING_STATE ->
-                _savingState.update { it + (ev.frameSavingState.frameIndex to ev.frameSavingState.newState) }
+            ProgressEvent.KindCase.FRAME_SAVING_STATE -> {
+                val states = _savingState.updateAndGet { it + (ev.frameSavingState.frameIndex to ev.frameSavingState.newState) }
+                _pendingSaves.value = states.count { it.value != SAVING_NOT_SAVING }
+            }
             ProgressEvent.KindCase.OUTLIERS_LOADED ->
                 _outlierLoadState.update { it + (ev.outliersLoaded.frameIndex to ev.outliersLoaded.state) }
             ProgressEvent.KindCase.IO_PROGRESS ->
@@ -152,5 +163,10 @@ class ProcessingRepository(
                 Log.d("Processing") { "frame ${ev.frameExisting} already exists" }
             else -> Unit
         }
+    }
+
+    private companion object {
+        /** `FrameSavingState.notSaving` in the daemon's `frame_saving_state` events. */
+        const val SAVING_NOT_SAVING = 0
     }
 }

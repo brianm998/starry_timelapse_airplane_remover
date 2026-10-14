@@ -158,6 +158,9 @@ enum FrameHandlers {
             default:                  cm = .automatic(false)
             }
             await frame.set(cleanMethod: cm)
+            // The finished image depends on the method, so it has to be written again.
+            await frame.markAsChanged()
+            await session.frameEdited(frame)
             let groups = await frame.getOutlierGroups()
             let fi = await Mapping.frameInfo(frame: frame, outlierGroups: groups)
             try await transport.respond(id: id, payload: fi.serializedData())

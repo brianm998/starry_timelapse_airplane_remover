@@ -39,8 +39,14 @@ final class SessionCloseTests: XCTestCase {
         let info = try await sequence.getImageInfo()
         let sessionDir = scratch.appendingPathComponent("session").path
         try FileManager.default.createDirectory(atPath: sessionDir, withIntermediateDirectories: true)
+        // Paths of its own: a frame graph creates its output directories from these, and with the
+        // default (empty) ones they land in the current directory.
+        var config = Config()
+        config.outputPath = scratch.appendingPathComponent("output").path
+        config.tempOutputPath = scratch.appendingPathComponent("temp").path
+        let finalConfig = config
         let configManager = await MainActor.run {
-            ConfigManager(configFilename: "\(sessionDir)/config.json", config: Config())
+            ConfigManager(configFilename: "\(sessionDir)/config.json", config: finalConfig)
         }
         return Session(sessionID: "s", scratchSessionDir: sessionDir,
                        configJsonPath: "\(sessionDir)/config.json",
@@ -121,5 +127,43 @@ final class SessionCloseTests: XCTestCase {
         let path = await session.configJsonPath
         let onDisk = try JSONDecoder().decode(Config.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
         XCTAssertEqual(onDisk.startupHorizonFramePosition, 3, "the pending config write was not flushed")
+    }
+
+    /// An edit is saved ten seconds after it is made.  Closing the session cannot wait for that:
+    /// it has to save the frame there and then, and not return until it is written.
+    func testClosingSavesAnEditedFrameInsteadOfWaitingForItsTimer() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+
+        await session.frameEdited(frame)
+        var inPurgatory = false
+        for _ in 0..<100 {   // the queue puts the frame there from a task of its own
+            if await frame.savingState() == .inPurgatory { inPurgatory = true; break }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(inPurgatory, "an edit did not queue the frame for saving")
+
+        let started = Date()
+        await session.close()
+
+        let state = await frame.savingState()
+        XCTAssertEqual(state, .notSaving, "Close returned with the frame still waiting to be saved")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 8,
+                          "Close waited for the save timer instead of saving at once")
+    }
+
+    func testAnEditAfterTheCloseIsNotQueued() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+        await session.close()
+
+        await session.frameEdited(frame)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let state = await frame.savingState()
+        XCTAssertEqual(state, .notSaving, "a closed session queued a save")
     }
 }
