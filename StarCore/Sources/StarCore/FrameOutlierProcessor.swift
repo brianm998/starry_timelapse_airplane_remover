@@ -671,6 +671,7 @@ final public actor FrameOutlierProcessor {
 
     public func applyDecisionTreeToAllOutliers(
       overwrite: Bool = true,
+      keepingUserDecisions: Bool = false,
       minimumSize: Int? = nil
     ) async {
       Log.d("frame \(frameIndex) applyDecisionTreeToAll \(await outlierGroups?.members.count ?? 0) Outliers")
@@ -688,7 +689,7 @@ final public actor FrameOutlierProcessor {
                     values = values.filter { $0.size > minimumSize }
                 }
 
-                await classifier.classifyAll(values, overwrite: overwrite)
+                await classifier.classifyAll(values, overwrite: overwrite, keepingUserDecisions: keepingUserDecisions)
                 let endTime = Date().timeIntervalSince1970
                 Task { @MainActor in
                     await classifierFrame.updateCombineSubjects()
@@ -910,7 +911,7 @@ fileprivate class OutlierClassifier {
 
     // classifies OutlierGroup actors in OutlierGroups, marking them as removable or not
     // uses the .all classifier, which digs into neighboring frames for more data
-    func classifyAll(_ outliers: [OutlierGroup], overwrite: Bool = false) async {
+    func classifyAll(_ outliers: [OutlierGroup], overwrite: Bool = false, keepingUserDecisions: Bool = false) async {
 //        await Task.detached(priority: .userInitiated) {
         //let dataHarvester = await FrameDataHarvester(for: self.frame)
             await withTaskGroup(of: Void.self) { taskGroup in
@@ -922,7 +923,11 @@ fileprivate class OutlierClassifier {
                     for chunk in outliers.split(into: max) {
                         taskGroup.addTask {
                             for group in chunk {
-                                if await group.shouldRemove() == nil || overwrite {
+                                let existing = await group.shouldRemove()
+                                // a user's Keep/Remove is not the classifier's to replace when a run
+                                // (the merge, on a frame edited but not yet rendered) asks to keep them
+                                if case .userSelected = existing, keepingUserDecisions { continue }
+                                if existing == nil || overwrite {
                                     // only apply classifier when no other classification is otherwise present
                                     //let featureData = await group.featureData(dataHarvester: dataHarvester)
                                     let classification = await classifier.classification(of: group)
