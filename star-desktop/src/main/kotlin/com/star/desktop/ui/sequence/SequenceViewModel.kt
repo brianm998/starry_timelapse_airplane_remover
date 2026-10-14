@@ -224,6 +224,11 @@ class SequenceViewModel(
     private val _fastAdvancement = MutableStateFlow(FastAdvancementType.NORMAL)
     val fastAdvancement: StateFlow<FastAdvancementType> = _fastAdvancement.asStateFlow()
     fun setFastAdvancement(t: FastAdvancementType) { _fastAdvancement.value = t }
+
+    /** How many frames the fast buttons move by in the normal strategy (macOS `fastSkipAmount`, 20 to start with; not kept between runs). */
+    private val _fastSkipAmount = MutableStateFlow(FastAdvancementType.DEFAULT_SKIP_AMOUNT)
+    val fastSkipAmount: StateFlow<Int> = _fastSkipAmount.asStateFlow()
+    fun setFastSkipAmount(n: Int) { _fastSkipAmount.value = n.coerceIn(0, FastAdvancementType.MAX_SKIP_AMOUNT) }
     private var playbackJob: Job? = null
 
     // ---- render (Outlier.RenderFrame / Export.RenderSequence) ----
@@ -451,6 +456,25 @@ class SequenceViewModel(
     /** Process the current frame, keeping whatever is already done (macOS `.none` reprocessing). */
     fun processCurrent() = startProcessingRun {
         processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_NONE)
+    }
+
+    // ---- "re-process the next N frames" (macOS RightPanel) ----
+
+    /** What to throw away before the frames are processed again (macOS `reprocessingType`: nothing to start with; not kept between runs). */
+    private val _reprocessType = MutableStateFlow(com.star.proto.ReprocessingType.REPROCESS_NONE)
+    val reprocessType: StateFlow<com.star.proto.ReprocessingType> = _reprocessType.asStateFlow()
+    fun setReprocessType(t: com.star.proto.ReprocessingType) { _reprocessType.value = t }
+
+    /** How many frames from this one the button works on (macOS `numberOfFramesToProcess`). */
+    private val _framesToProcess = MutableStateFlow(1)
+    val framesToProcess: StateFlow<Int> = _framesToProcess.asStateFlow()
+    fun setFramesToProcess(n: Int) { _framesToProcess.value = n.coerceIn(1, frameCount.coerceAtLeast(1)) }
+
+    /** Process the current frame and the ones after it, clearing first what [reprocessType] says (macOS "Re-Process the next N"). */
+    fun reprocessNext() = startProcessingRun {
+        val from = _currentIndex.value
+        val indices = (from until (from + _framesToProcess.value).coerceAtMost(frameCount)).toList()
+        processing.reprocessFrames(sessionId, indices, _reprocessType.value)
     }
 
     /** Reprocess the current frame from scratch (macOS `ReProcessCurrentFrameButton`). */
@@ -831,14 +855,15 @@ class SequenceViewModel(
     fun fastPrevious() = fastSkip(forward = false)
 
     /**
-     * Fast-skip per the active [FastAdvancementType]: NORMAL jumps [FAST_SKIP_AMOUNT] frames;
+     * Fast-skip per the active [FastAdvancementType]: NORMAL jumps [fastSkipAmount] frames;
      * the category modes scan frame-by-frame (via `Frame.Get` counts) to the next non-empty frame,
      * stopping at the sequence boundary (macOS `transition(until:)`).
      */
     private fun fastSkip(forward: Boolean) {
         val mode = _fastAdvancement.value
         if (mode == FastAdvancementType.NORMAL) {
-            setCurrentIndex(_currentIndex.value + if (forward) FAST_SKIP_AMOUNT else -FAST_SKIP_AMOUNT)
+            val amount = _fastSkipAmount.value
+            setCurrentIndex(_currentIndex.value + if (forward) amount else -amount)
             return
         }
         scope.launch {
@@ -995,7 +1020,6 @@ class SequenceViewModel(
         /** How many frames either side of the current one keep their hit-testing label map. */
         const val LABEL_RETENTION = 2
 
-        private const val FAST_SKIP_AMOUNT = 20 // macOS fastSkipAmount
 
         /** How many frames ahead of the one showing playback keeps loaded (macOS `videoPrefetchLookahead`). */
         const val PLAYBACK_LOOKAHEAD = 30

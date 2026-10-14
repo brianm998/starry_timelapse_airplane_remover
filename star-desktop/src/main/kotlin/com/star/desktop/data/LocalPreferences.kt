@@ -71,6 +71,12 @@ class LocalPreferences {
      */
     fun bool(key: String): Boolean? = snapshot[key] as? Boolean
 
+    /** A text preference (this client's, or one the macOS app also stores under the same key); null when it has never been set. */
+    fun string(key: String): String? = snapshot[key] as? String
+
+    /** Set a text preference; null forgets it. */
+    fun setString(key: String, value: String?) = edit { if (value == null) it.remove(key) else it[key] = value }
+
     /** A list of strings preference (this client's own, such as the outlier table's columns); null when it has never been set. */
     fun strings(key: String): List<String>? = (snapshot[key] as? List<*>)?.filterIsInstance<String>()
 

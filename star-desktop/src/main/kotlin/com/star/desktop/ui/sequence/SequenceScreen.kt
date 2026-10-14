@@ -57,7 +57,7 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
                             com.star.desktop.ui.sequence.edit.FrameEditView(vm)
                         }
                     }
-                    if (rightShowing) RightPanel(vm)
+                    if (rightShowing) RightPanel(app, vm)
                     else com.star.desktop.ui.components.CollapsedPanelRail({ vm.setRightPanel(true) }, pointLeft = true)
                 }
                 InteractionMode.GRID -> Row(Modifier.fillMaxSize()) {

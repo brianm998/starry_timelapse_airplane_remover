@@ -242,6 +242,20 @@ class AppViewModel(
         return updated
     }
 
+    /**
+     * The detection-type picker beside "re-process the next N frames" (macOS RightPanel): applied to the session, and kept as the user's
+     * choice for the next one under the key the macOS app uses (`processingType`, the type's name).
+     */
+    fun setDetectionType(type: com.star.proto.DetectionType) {
+        scope.launch {
+            val current = runCatching { sessions.getConfig() }.getOrNull() ?: return@launch
+            if (current.detectionType != type) {
+                runCatching { updateSessionConfig(current.toBuilder().setDetectionType(type).build()) }.onFailure { report(it.message ?: it.toString()) }
+            }
+            prefs.setString("processingType", type.name.removePrefix("DETECTION_").lowercase())
+        }
+    }
+
     private val _showSettings = MutableStateFlow(false)
     val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
     fun openSettings() { _showSettings.value = true }

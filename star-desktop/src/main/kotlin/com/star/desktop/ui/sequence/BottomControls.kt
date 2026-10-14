@@ -39,6 +39,7 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
     val fps by vm.playbackFps.collectAsState()
     val showFilmstrip by vm.showFilmstrip.collectAsState()
     val mode by vm.mode.collectAsState()
+    val skip by vm.fastSkipAmount.collectAsState()
 
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -54,12 +55,12 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
                 val atEnd = idx >= vm.frameCount - 1
                 val multi = vm.frameCount > 1
                 GlyphButton("⏮", "Go to first frame (b)", vm::goToFirst, enabled = !atStart)
-                GlyphButton("⏪", "Back 20 frames (z)", vm::fastPrevious, enabled = !atStart)
+                GlyphButton("⏪", "Back $skip frames (z)", vm::fastPrevious, enabled = !atStart)
                 GlyphButton("◂", "Previous frame (←)", vm::previous, enabled = !atStart, fontSize = 13)
                 GlyphButton("◀", "Play in reverse (w)", vm::playReverse, enabled = multi, size = 40, fontSize = 20)
                 GlyphButton("▶", "Play (space)", vm::playForward, enabled = multi, size = 40, fontSize = 20)
                 GlyphButton("▸", "Next frame (→)", vm::next, enabled = !atEnd, fontSize = 13)
-                GlyphButton("⏩", "Forward 20 frames (x)", vm::fastForward, enabled = !atEnd)
+                GlyphButton("⏩", "Forward $skip frames (x)", vm::fastForward, enabled = !atEnd)
                 GlyphButton("⏭", "Go to last frame (f)", vm::goToLast, enabled = !atEnd)
             }
         }

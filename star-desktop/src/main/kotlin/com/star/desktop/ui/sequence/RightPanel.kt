@@ -41,6 +41,7 @@ import com.star.desktop.ui.components.toolPainter
 import com.star.desktop.ui.sequence.edit.FrameTransform
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.CleanMethod
+import com.star.proto.ReprocessingType
 import com.star.desktop.i18n.localized
 
 /**
@@ -48,7 +49,7 @@ import com.star.desktop.i18n.localized
  * Phase 4 (outlier editing); this presents the 8 tools (shortcuts 1–8) with selection highlight.
  */
 @Composable
-fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
+fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val tool by vm.tool.collectAsState()
     val current by vm.currentIndex.collectAsState()
     val fvm = androidx.compose.runtime.remember(current) { vm.frameVMFor(current) }
@@ -179,34 +180,120 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         )
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
-        Text(localized("ui.fast_skip_z_x"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-        val fastLabels = FAST_MODES.toMap()
+        // How the fast buttons (z / x) move, and what they do in the strategy chosen (macOS "Fast Advancement Type").
+        Text(localized("ui.fast_advancement_type"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         com.star.desktop.ui.components.VerticalStarPicker(
-            options = FAST_MODES.map { it.first },
+            options = FastAdvancementType.entries,
             selected = fastAdv,
-            label = { fastLabels[it] ?: "" },
+            label = { it.label },
             onSelect = { vm.setFastAdvancement(it) },
             modifier = Modifier.fillMaxWidth(),
         )
+        val skipAmount by vm.fastSkipAmount.collectAsState()
+        Text(fastAdv.description(skipAmount), color = StarColors.textSecondary, fontSize = 10.sp)
+        if (fastAdv == FastAdvancementType.NORMAL) {
+            Text(localized("ui.fast_skip"), color = StarColors.textPrimary, fontSize = 11.sp)
+            androidx.compose.material3.Slider(
+                value = skipAmount.toFloat(),
+                onValueChange = { vm.setFastSkipAmount(it.toInt()) },
+                valueRange = 0f..FastAdvancementType.MAX_SKIP_AMOUNT.toFloat(),
+                steps = FastAdvancementType.MAX_SKIP_AMOUNT - 1,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(localized("ui.n_frames_lower", skipAmount), color = StarColors.textSecondary, fontSize = 10.sp)
+        }
+
+        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
+        ReprocessControls(app, vm)
       }
       com.star.desktop.ui.components.PanelChevron("»", { vm.setRightPanel(false) }, Modifier.padding(6.dp))
     }
 }
+
+/**
+ * "Re-process the next N frames" (macOS RightPanel): what to throw away first, the button that processes from this frame on, how many
+ * frames, and the detection strength they are processed with; and "Render Updates", which writes this frame's decisions into its image.
+ */
+@Composable
+private fun ReprocessControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel) {
+    val type by vm.reprocessType.collectAsState()
+    val processing by vm.isProcessing.collectAsState()
+    val rendering by vm.rendering.collectAsState()
+    val busy = processing || rendering
+    val frames by vm.framesToProcess.collectAsState()
+    val session by app.sessions.session.collectAsState()
+    val current by vm.currentIndex.collectAsState()
+    val info by vm.frameVMFor(current).info.collectAsState()
+
+    Text(localized("ui.redo"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+    com.star.desktop.ui.components.VerticalStarPicker(
+        options = REDO_TYPES,
+        selected = type,
+        label = { redoLabel(it) },
+        onSelect = vm::setReprocessType,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    BulkButton(
+        localized(when (type) {
+            ReprocessingType.REPROCESS_NONE -> "ui.process_the_next"
+            ReprocessingType.REPROCESS_ALL_HORIZONS -> "ui.re_process_all_horizons"
+            else -> "ui.re_process_the_next"
+        }),
+        StarColors.orange, enabled = !busy,
+    ) { vm.reprocessNext() }
+    if (type != ReprocessingType.REPROCESS_ALL_HORIZONS) {
+        var text by androidx.compose.runtime.remember(frames) { androidx.compose.runtime.mutableStateOf(frames.toString()) }
+        val parsed = text.toIntOrNull()
+        val valid = parsed != null && parsed in 1..vm.frameCount
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = text,
+                onValueChange = { text = it.filter(Char::isDigit); text.toIntOrNull()?.takeIf { n -> n in 1..vm.frameCount }?.let(vm::setFramesToProcess) },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = if (valid) StarColors.white else StarColors.red, fontSize = 11.sp),
+                cursorBrush = SolidColor(StarColors.white),
+                modifier = Modifier.width(44.dp).clip(RoundedCornerShape(3.dp)).background(StarColors.cellDefault).padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+            Text(localized(if (frames == 1) "ui.slider.frame_as" else "ui.slider.frames_as"), color = StarColors.white, fontSize = 11.sp)
+        }
+        val detection = session?.config?.detectionType ?: com.star.proto.DetectionType.DETECTION_STRONG
+        com.star.desktop.ui.components.VerticalStarPicker(
+            options = DETECTION_TYPES,
+            selected = detection,
+            label = { localized("detection_type." + it.name.removePrefix("DETECTION_").lowercase()) },
+            onSelect = app::setDetectionType,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    // Writes the frame's decisions into its finished image; there is nothing to write until its outliers are loaded.
+    BulkButton(localized("ui.render_updates"), StarColors.blue, enabled = info?.outliersLoaded == true && !rendering) { vm.renderCurrentFrame() }
+}
+
+/** What the redo picker can clear first (macOS `FrameReprocessingType`), in macOS's order. */
+private val REDO_TYPES = listOf(
+    ReprocessingType.REPROCESS_EVERYTHING, ReprocessingType.REPROCESS_ALIGNMENT, ReprocessingType.REPROCESS_OUTLIERS,
+    ReprocessingType.REPROCESS_HORIZONS, ReprocessingType.REPROCESS_ALL_HORIZONS, ReprocessingType.REPROCESS_NONE,
+)
+
+private fun redoLabel(t: ReprocessingType): String = localized(when (t) {
+    ReprocessingType.REPROCESS_EVERYTHING -> "ui.re_process_everything"
+    ReprocessingType.REPROCESS_ALIGNMENT -> "ui.re_process_alignment"
+    ReprocessingType.REPROCESS_OUTLIERS -> "ui.re_process_outliers"
+    ReprocessingType.REPROCESS_HORIZONS -> "ui.re_process_horizons"
+    ReprocessingType.REPROCESS_ALL_HORIZONS -> "ui.re_process_all_horizons"
+    else -> "ui.redo_none"
+})
+
+private val DETECTION_TYPES = listOf(
+    com.star.proto.DetectionType.DETECTION_MILD, com.star.proto.DetectionType.DETECTION_STRONG,
+    com.star.proto.DetectionType.DETECTION_STRONGER, com.star.proto.DetectionType.DETECTION_EXCESSIVE, com.star.proto.DetectionType.DETECTION_CUSTOM,
+)
 
 /** Per-frame clean methods (proto `CleanMethod`) with display labels matching the macOS picker. */
 private val CLEAN_METHODS: List<Pair<CleanMethod, String>> = listOf(
     CleanMethod.CLEAN_AUTOMATIC to "Automatic",
     CleanMethod.CLEAN_AUTOMATIC_TRUE to "Auto + Outliers",
     CleanMethod.CLEAN_SELECTIVE to "Selective",
-)
-
-/** Fast-skip strategies for the z/x transport keys (macOS `FastAdvancementType`). */
-private val FAST_MODES: List<Pair<FastAdvancementType, String>> = listOf(
-    FastAdvancementType.NORMAL to "Skip 20 frames",
-    FastAdvancementType.SKIP_EMPTIES to "Skip empty frames",
-    FastAdvancementType.TO_NEXT_POSITIVE to "Next w/ removals",
-    FastAdvancementType.TO_NEXT_NEGATIVE to "Next w/ keeps",
-    FastAdvancementType.TO_NEXT_UNKNOWN to "Next undecided",
 )
 
 @OptIn(ExperimentalFoundationApi::class)
