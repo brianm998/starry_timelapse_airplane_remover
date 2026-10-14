@@ -230,6 +230,18 @@ class AppViewModel(
 
     val export = com.star.desktop.data.ExportRepository { engine.client }
 
+    /**
+     * Apply [config] to the open session (`Sequence.UpdateConfig`), and tell what is showing if the clean method
+     * changed, so frames loaded earlier do not keep reporting the old one and the tool is reset if the new method
+     * has none. Throws if the daemon refuses it.
+     */
+    suspend fun updateSessionConfig(config: Config): Config {
+        val before = sessions.session.value?.config?.cleanMethod
+        val updated = sessions.updateConfig(config)
+        if (before != null && updated.cleanMethod != before) currentSequence?.cleanMethodChanged(updated.cleanMethod)
+        return updated
+    }
+
     private val _showSettings = MutableStateFlow(false)
     val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
     fun openSettings() { _showSettings.value = true }
@@ -528,7 +540,7 @@ class AppViewModel(
      */
     private suspend fun applyRemovalChoices(cleanMethod: CleanMethod? = null, allowEarthAlignment: Boolean = true) {
         val current = runCatching { sessions.getConfig() }.getOrNull() ?: return
-        runCatching { sessions.updateConfig(withRemovalChoices(current, cleanMethod, allowEarthAlignment)) }
+        runCatching { updateSessionConfig(withRemovalChoices(current, cleanMethod, allowEarthAlignment)) }
     }
 
     init {

@@ -12,6 +12,8 @@ import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.MultiFrameRange
 import com.star.desktop.domain.ToolType
+import com.star.desktop.domain.toolAfterCleanMethodChange
+import com.star.desktop.domain.usesOutliers
 import com.star.desktop.domain.VideoPlayMode
 import com.star.desktop.util.Log
 import com.star.proto.FrameProcessingState
@@ -306,10 +308,20 @@ class SequenceViewModel(
      * The editing tools only apply then; plain automatic mode has nothing for them to act on.
      */
     fun currentFrameUsesOutliers(): Boolean =
-        (frameVMFor(_currentIndex.value).info.value?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE) !=
-            com.star.proto.CleanMethod.CLEAN_AUTOMATIC
+        (frameVMFor(_currentIndex.value).info.value?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE).usesOutliers
 
     fun setTool(t: ToolType) { if (currentFrameUsesOutliers()) _tool.value = t }
+
+    /**
+     * The session's clean method became [method] (macOS pushes the new effective method to every frame): what each
+     * frame view model holds, including its clean method, is out of date, and the tool is reset when the method
+     * has no use for one.
+     */
+    fun cleanMethodChanged(method: com.star.proto.CleanMethod) {
+        frameVMs.values.forEach { it.invalidate() }
+        frameVMFor(_currentIndex.value).load(force = true)
+        _tool.value = toolAfterCleanMethodChange(_tool.value, method)
+    }
     fun toggleFilmstrip() { _showFilmstrip.value = !_showFilmstrip.value }
 
     fun setCurrentIndex(i: Int) {

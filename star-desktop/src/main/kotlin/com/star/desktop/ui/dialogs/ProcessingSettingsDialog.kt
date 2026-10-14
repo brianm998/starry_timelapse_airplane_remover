@@ -190,7 +190,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                         }
                         val updated = b.build()
                         scope.launch {
-                            runCatching { app.sessions.updateConfig(updated) }
+                            runCatching { app.updateSessionConfig(updated) }
                             app.closeSettings()
                         }
                     },

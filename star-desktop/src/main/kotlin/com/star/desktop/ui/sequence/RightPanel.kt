@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.ToolType
+import com.star.desktop.domain.usesOutliers
 import com.star.desktop.ui.components.toolPainter
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.CleanMethod
@@ -74,7 +75,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         // clean method actually reviews outliers (macOS `currentFrameUsesOutliers`) — plain
         // automatic mode replaces every bad pixel with no per-frame review, so there is nothing
         // for these tools to act on.
-        val usesOutliers = (info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE) != CleanMethod.CLEAN_AUTOMATIC
+        val usesOutliers = (info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE).usesOutliers
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             ToolHelpButton { showToolHelp = true }
