@@ -160,6 +160,11 @@ class FrameViewModel(
 
     fun decisionFor(groupId: Int): RemoveReason = _decisions.value[groupId] ?: RemoveReason.RR_UNDECIDED
 
+    /** The daemon changed one group (its line); take it in place, without loading the frame again. */
+    fun groupChanged(group: OutlierGroup) {
+        _groups.update { list -> list.map { if (it.id == group.id) group else it } }
+    }
+
     fun selectGroups(groupIds: Set<Int>) { _selection.value = groupIds }
 
     fun selectGroup(groupId: Int?) { _selection.value = groupId?.let { setOf(it) } ?: emptySet() }

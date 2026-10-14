@@ -250,6 +250,24 @@ enum OutlierHandlers {
         }
     }
 
+    /// A group as the client sees it: its size, bounds, decision and (worked out now, if it had not been) its line.
+    static func protoGroup(_ group: OutlierGroup) async -> Star_V1_OutlierGroup {
+        var pg = Star_V1_OutlierGroup()
+        pg.id = UInt32(group.id)
+        pg.size = UInt64(group.size)
+        pg.bounds = Mapping.protoBoundingBox(group.bounds)
+        pg.brightness = UInt64(group.brightness)
+        let rr = await group.shouldRemove()
+        pg.shouldRemove = Mapping.protoRemoveReason(rr)
+
+        if let rr, case .fromClassifier(let score) = rr {
+            pg.classificationScore = score
+        }
+
+        if let line = await group.line() { pg.line = Mapping.protoLine(line) }
+        return pg
+    }
+
     static func list(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_FrameRef(serializedBytes: payload)
@@ -265,26 +283,7 @@ enum OutlierHandlers {
             }
             var list = Star_V1_OutlierGroupList()
             for group in await groups.members.values {
-                var pg = Star_V1_OutlierGroup()
-                pg.id = UInt32(group.id)
-                pg.size = UInt64(group.size)
-                pg.bounds = Mapping.protoBoundingBox(group.bounds)
-                pg.brightness = UInt64(group.brightness)
-                let rr = await group.shouldRemove()
-                pg.shouldRemove = Mapping.protoRemoveReason(rr)
-
-                if let rr, case .fromClassifier(let score) = rr {
-                    pg.classificationScore = score
-                }
-
-                if let line = await group.line() {
-                    var pl = Star_V1_Line()
-                    pl.theta = line.theta
-                    pl.rho = line.rho
-                    pl.votes = Int32(line.votes)
-                    pg.line = pl
-                }
-                list.groups.append(pg)
+                list.groups.append(await protoGroup(group))
             }
             try await transport.respond(id: id, payload: list.serializedData())
         } catch {

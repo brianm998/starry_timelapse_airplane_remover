@@ -63,7 +63,7 @@ private fun runApp(args: Array<String>) = application {
         Window(
             onCloseRequest = vm::closeOutlierWindow,
             title = localized("ui.outliers_for_frame", listed?.frameIndex ?: looking),
-            state = rememberWindowState(size = DpSize(560.dp, 480.dp)),
+            state = rememberWindowState(size = DpSize(960.dp, 720.dp)),
         ) {
             com.star.desktop.ui.theme.StarTheme {
                 com.star.desktop.ui.windows.OutlierWindowView(svm)

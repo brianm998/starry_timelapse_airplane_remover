@@ -32,6 +32,16 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
     suspend fun features(sessionId: String, frameIndex: Int, groupIds: List<Int> = emptyList()): List<com.star.proto.OutlierFeatureRow> =
         c().getOutlierFeatures(sessionId, frameIndex, groupIds).rowsList
 
+    suspend fun lineCandidates(sessionId: String, frameIndex: Int, groupId: Int): List<com.star.proto.LineCandidate> =
+        c().getLineCandidates(sessionId, frameIndex, groupId).candidatesList
+
+    suspend fun setLine(sessionId: String, frameIndex: Int, groupId: Int, candidate: com.star.proto.LineCandidate): OutlierGroup =
+        c().setLine(sessionId, frameIndex, groupId, candidate).group
+
+    suspend fun houghArgs(): List<com.star.proto.HoughLineFinderArg> = c().getHoughLineFinderArgs().argsList
+
+    suspend fun setHoughArg(name: String, value: Double): List<com.star.proto.HoughLineFinderArg> = c().setHoughLineFinderArg(name, value).argsList
+
     suspend fun setDecisions(
         sessionId: String,
         frameIndex: Int,

@@ -398,6 +398,55 @@ class InteropIntegrationTest {
     }
 
     /**
+     * D9: the lines the Hough finder proposes for a group, choosing one as the group's line, and the finder's arguments.
+     */
+    @Test
+    fun houghLinesForTheWindow() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] houghLinesForTheWindow — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        withEngine { client ->
+            val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).build()
+            val info = client.openSequence(File(seq).absolutePath, cfg)
+            processToCompletion(client, info.sessionId)
+
+            val frameIdx = (0 until info.frameCount).firstOrNull { client.listOutliers(info.sessionId, it).groupsCount > 0 }
+            if (frameIdx == null) {
+                println("[skip] houghLinesForTheWindow — no frame has outlier groups after processing")
+                client.closeSession(info.sessionId); return@withEngine
+            }
+            val group = client.listOutliers(info.sessionId, frameIdx).groupsList.maxBy { it.size }
+
+            val candidates = client.getLineCandidates(info.sessionId, frameIdx, group.id).candidatesList
+            assertTrue(candidates.isNotEmpty(), "the finder offered no line for group ${group.id}")
+            assertEquals(candidates.map { it.intensityScore }.sortedDescending(), candidates.map { it.intensityScore }, "best fit should come first")
+
+            // Choosing the last candidate (not the one the group already has) changes the group's line, and the frame's list shows it.
+            val chosen = candidates.last()
+            val after = client.setLine(info.sessionId, frameIdx, group.id, chosen).group
+            assertEquals(chosen.line.theta, after.line.theta, 1e-9)
+            assertEquals(chosen.line.rho, after.line.rho, 1e-9)
+            val listed = client.listOutliers(info.sessionId, frameIdx).groupsList.first { it.id == group.id }
+            assertEquals(chosen.line.theta, listed.line.theta, 1e-9, "the chosen line should stay the group's line")
+
+            // The finder's arguments: both are listed, one changes, and it is put back so the daemon is left as it was.
+            val args = client.getHoughLineFinderArgs().argsList
+            assertEquals(setOf("imageDataBorderSize", "maxLineConstant"), args.map { it.name }.toSet())
+            assertTrue(args.all { it.isInteger && it.description.isNotBlank() })
+            val max = args.first { it.name == "maxLineConstant" }
+            val changed = client.setHoughLineFinderArg("maxLineConstant", 123.0).argsList.first { it.name == "maxLineConstant" }
+            assertEquals(123.0, changed.value)
+            assertEquals(max.value, client.setHoughLineFinderArg("maxLineConstant", max.value).argsList.first { it.name == "maxLineConstant" }.value)
+            assertTrue(runCatching { client.setHoughLineFinderArg("nope", 1.0) }.isFailure, "an unknown argument should be refused")
+
+            client.closeSession(info.sessionId)
+        }
+    }
+
+    /**
      * A6: the daemon keeps a set of progress subscribers, so a second stream (Export.RenderSequence,
      * Horizon.Reprocess) neither takes over nor kills the client's long-lived StreamProgress, and both of
      * those streams now end by themselves. The long-lived stream must hear the `done` of the run after them.

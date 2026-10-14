@@ -103,7 +103,8 @@ fun OutlierWindowView(vm: SequenceViewModel) {
     var chooserOpen by remember { mutableStateOf(false) }
     val visible = remember(chosenColumns) { OutlierTable.visible(chosenColumns) }
 
-    Row(Modifier.fillMaxSize().background(StarColors.appBackground).padding(8.dp)) {
+    Column(Modifier.fillMaxSize().background(StarColors.appBackground).padding(8.dp)) {
+    Row(Modifier.weight(1f).fillMaxWidth()) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Text(
                 localized("ui.info_about_n_outlier_groups", sorted?.size ?: 0),
@@ -167,6 +168,8 @@ fun OutlierWindowView(vm: SequenceViewModel) {
         } else {
             Text("«", color = StarColors.textSecondary, fontSize = 16.sp, modifier = Modifier.clickable { chooserOpen = true }.padding(horizontal = 6.dp))
         }
+    }
+    OutlierLinesPanel(vm, windowFrame, selection, groups)
     }
 }
 

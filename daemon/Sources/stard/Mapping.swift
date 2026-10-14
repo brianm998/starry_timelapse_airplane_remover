@@ -1,5 +1,6 @@
 import Foundation
 import StarCore
+import StarCppBridge
 import StarDaemonMessages
 
 // Bidirectional type mapping between StarCore types and proto types.
@@ -167,6 +168,16 @@ enum Mapping {
         out.minY = Int32(bb.min.y)
         out.maxX = Int32(bb.max.x)
         out.maxY = Int32(bb.max.y)
+        return out
+    }
+
+    // MARK: - Line
+
+    static func protoLine(_ line: Line) -> Star_V1_Line {
+        var out = Star_V1_Line()
+        out.theta = line.theta
+        out.rho = line.rho
+        out.votes = Int32(clamping: line.votes)
         return out
     }
 

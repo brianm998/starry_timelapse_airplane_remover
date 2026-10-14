@@ -98,6 +98,10 @@ extension Dispatcher {
         register(method: "Outlier.SetAll")                     { id, payload, transport in await OutlierHandlers.setAll(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.ApplyAreaTool")              { id, payload, transport in await OutlierHandlers.applyAreaTool(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.GetFeatures")                { id, payload, transport in await OutlierHandlers.getFeatures(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.GetLineCandidates")          { id, payload, transport in await LineHandlers.getCandidates(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.SetLine")                    { id, payload, transport in await LineHandlers.setLine(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Debug.GetHoughLineFinderArgs")       { id, payload, transport in await LineHandlers.getArgs(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
+        register(method: "Debug.SetHoughLineFinderArgs")       { id, payload, transport in await LineHandlers.setArg(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
 
         // Processing
         register(method: "Processing.Start")          { id, payload, transport in await ProcessingHandlers.start(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

@@ -545,6 +545,40 @@ class SequenceViewModel(
         }
     }
 
+    /** The lines the Hough finder proposes for one group, best fit first; nothing when they could not be had. */
+    suspend fun lineCandidates(frameIndex: Int, groupId: Int): List<com.star.proto.LineCandidate> =
+        failureAsEmpty { outliers.lineCandidates(sessionId, frameIndex, groupId) }
+
+    /** Make [candidate] the line of a group: the frame's drawing of its streak line follows. */
+    fun setOutlierLine(frameIndex: Int, groupId: Int, candidate: com.star.proto.LineCandidate) {
+        scope.launch {
+            try {
+                frameVMFor(frameIndex).groupChanged(outliers.setLine(sessionId, frameIndex, groupId, candidate))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                reportFailure(e)
+            }
+        }
+    }
+
+    /** The Hough line finder's arguments, as the daemon has them. */
+    suspend fun houghArgs(): List<com.star.proto.HoughLineFinderArg> = failureAsEmpty { outliers.houghArgs() }
+
+    /** Set one of the finder's arguments; all of them as they are then. (Empty, and an error shown, if the daemon refused it.) */
+    suspend fun setHoughArg(name: String, value: Double): List<com.star.proto.HoughLineFinderArg> =
+        failureAsEmpty { outliers.setHoughArg(name, value) }
+
+    private suspend fun <T> failureAsEmpty(block: suspend () -> List<T>): List<T> =
+        try {
+            block()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            reportFailure(e)
+            emptyList()
+        }
+
     /** The window was closed: back to listing the frame being looked at, and nothing stays highlighted for it (macOS `onDisappear`). */
     fun outlierWindowClosed() {
         _infoRows.value = null

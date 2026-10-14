@@ -58,6 +58,14 @@ import com.star.proto.OpenVideoRequest
 import com.star.proto.OutlierDecision
 import com.star.proto.OutlierGroupList
 import com.star.proto.GetOutlierFeaturesRequest
+import com.star.proto.GetLineCandidatesRequest
+import com.star.proto.GetHoughLineFinderArgsRequest
+import com.star.proto.HoughLineFinderArgs
+import com.star.proto.LineCandidate
+import com.star.proto.LineCandidatesResponse
+import com.star.proto.SetHoughLineFinderArgRequest
+import com.star.proto.SetLineRequest
+import com.star.proto.SetLineResponse
 import com.star.proto.OutlierFeaturesResponse
 import com.star.proto.Point
 import com.star.proto.PreviewSize
@@ -221,6 +229,33 @@ class StarClient(private val conn: StdioConnection) {
             "Outlier.GetFeatures",
             GetOutlierFeaturesRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).addAllGroupIds(groupIds).build(),
             OutlierFeaturesResponse.parser(),
+        )
+
+    /** The lines the Hough finder proposes for one group, best fit first (`Outlier.GetLineCandidates`). */
+    suspend fun getLineCandidates(sessionId: String, frameIndex: Int, groupId: Int): LineCandidatesResponse =
+        call(
+            "Outlier.GetLineCandidates",
+            GetLineCandidatesRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setGroupId(groupId).build(),
+            LineCandidatesResponse.parser(),
+        )
+
+    /** Make [candidate] the line of one group; the group as it is then comes back (`Outlier.SetLine`). */
+    suspend fun setLine(sessionId: String, frameIndex: Int, groupId: Int, candidate: LineCandidate): SetLineResponse =
+        call(
+            "Outlier.SetLine",
+            SetLineRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setGroupId(groupId).setCandidate(candidate).build(),
+            SetLineResponse.parser(),
+        )
+
+    suspend fun getHoughLineFinderArgs(): HoughLineFinderArgs =
+        call("Debug.GetHoughLineFinderArgs", GetHoughLineFinderArgsRequest.getDefaultInstance(), HoughLineFinderArgs.parser())
+
+    /** Set one of the finder's arguments by name; all of them come back as they are then. */
+    suspend fun setHoughLineFinderArg(name: String, value: Double): HoughLineFinderArgs =
+        call(
+            "Debug.SetHoughLineFinderArgs",
+            SetHoughLineFinderArgRequest.newBuilder().setName(name).setValue(value).build(),
+            HoughLineFinderArgs.parser(),
         )
 
     suspend fun renderFrame(sessionId: String, frameIndex: Int): ImageRef =
