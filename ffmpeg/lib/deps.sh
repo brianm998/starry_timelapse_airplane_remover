@@ -167,15 +167,16 @@ build_ffmpeg() {
         # configure's own message is only "x265 not found"; the reason is in config.log, which
         # is gone with the work tree, so put the end of it (the failed probe) and the pkg-config
         # view of the codecs where the CI log keeps it.
-        echo "---- tail of ffbuild/config.log ----"
-        tail -n 20 ffbuild/config.log | cut -c1-300 || true
-        echo "---- every x265 probe command in config.log ----"
-        grep -n -i -A2 "x265" ffbuild/config.log | grep -v "undefined reference\|in function" | tail -n 40 | cut -c1-900 || true
+        # (run_step shows only the last 60 lines of this log, so keep the total under that)
         echo "---- environment ----"
         env | grep -i "pkg_config\|^CC=\|^CXX=\|FLAGS" || true
         echo "---- pkg-config view of x265 ----"
-        cat "$PREFIX/lib/pkgconfig/x265.pc" || true
+        grep '^Libs' "$PREFIX/lib/pkgconfig/x265.pc" || true
         pkg-config --static --libs x265 || true
+        echo "---- last probe in config.log (its commands, minus the linker's complaints) ----"
+        local last
+        last=$(grep -n '^BEGIN ' ffbuild/config.log | tail -n 1 | cut -d: -f1)
+        sed -n "${last:-1},\$p" ffbuild/config.log | grep -v "undefined reference\|in function" | cut -c1-1200 | head -n 28 || true
         return 1
     fi
     make -j"$JOBS"
