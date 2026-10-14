@@ -295,11 +295,15 @@ private final class FFmpegRun: @unchecked Sendable {
             }
         }
         handleOutput = handle
-        pipe.fileHandleForReading.readabilityHandler = { fileHandle in
+        // Typed as @Sendable here rather than left to be inferred from the assignment: Swift 6.0 (CI's, on both macOS and Linux) does not
+        // infer it for a closure assigned to this optional property inside an initializer, and rejects the assignment as converting a
+        // non-sendable function value.  Newer compilers accept either.
+        let onReadable: @Sendable (FileHandle) -> Void = { fileHandle in
             let data = fileHandle.availableData
             guard !data.isEmpty else { return }
             handle(data)
         }
+        pipe.fileHandleForReading.readabilityHandler = onReadable
 
         do {
             try process.run()

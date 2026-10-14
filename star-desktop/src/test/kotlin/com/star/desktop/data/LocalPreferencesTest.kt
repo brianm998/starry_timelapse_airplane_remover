@@ -99,6 +99,9 @@ class LocalPreferencesTest {
 
     // ---- recent files: shared with the macOS app, which opens every entry as a session's config.json ----
 
+    /** [text] as a JSON string literal: a Windows path is full of backslashes, which a hand-quoted one would leave as invalid escapes. */
+    private fun json(text: String): String = com.google.gson.Gson().toJson(text)
+
     private fun recentInFile(): Map<*, *> {
         val parsed = com.google.gson.Gson().fromJson(prefsFile.readText(), Map::class.java)
         return parsed["recentlyOpenedSequencelist"] as Map<*, *>
@@ -117,7 +120,7 @@ class LocalPreferencesTest {
     @Test fun recentEntriesWhoseFileIsGoneAreForgottenOnLoad() {
         val kept = File(home, "kept.json").also { it.writeText("{}") }
         prefsFile.writeText(
-            """{"recentlyOpenedSequencelist":{"${kept.path}":10.0,"${home.path}/gone.json":20.0},"language":"fr"}""",
+            """{"recentlyOpenedSequencelist":{${json(kept.path)}:10.0,${json("${home.path}/gone.json")}:20.0},"language":"fr"}""",
         )
         val prefs = LocalPreferences()
         assertEquals(listOf(kept.path), prefs.recentFiles)
@@ -134,7 +137,7 @@ class LocalPreferencesTest {
 
         // The macOS app opens something and turns a setting on, after this client started.
         prefsFile.writeText(
-            """{"recentlyOpenedSequencelist":{"${a.path}":5.0,"${b.path}":9999999999.0},"showHorizonOnMainView":true}""",
+            """{"recentlyOpenedSequencelist":{${json(a.path)}:5.0,${json(b.path)}:9999999999.0},"showHorizonOnMainView":true}""",
         )
         prefs.setLanguage("de")
 
