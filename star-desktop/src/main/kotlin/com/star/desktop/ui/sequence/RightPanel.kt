@@ -41,6 +41,7 @@ import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.ToolType
 import com.star.desktop.domain.usesOutliers
 import com.star.desktop.ui.components.toolPainter
+import com.star.desktop.ui.sequence.edit.FrameTransform
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.CleanMethod
 import com.star.desktop.i18n.localized
@@ -113,6 +114,9 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             Text(localized("ui.only_unclassified"), color = StarColors.orange, fontSize = 11.sp)
         }
         selected?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
+
+        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
+        ZoomControls(vm)
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         Text(localized("ui.clean_method"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
@@ -235,3 +239,51 @@ private fun HoverTip(text: String, content: @Composable () -> Unit) {
         content = content,
     )
 }
+
+/**
+ * Zoom (macOS RightPanel): a slider from fit up to the maximum, and the maximum itself, editable ("Max: 1" = 100%, up to
+ * 10). The same transform the wheel, Ctrl-wheel and double-click change, so the slider follows them.
+ */
+@Composable
+private fun ZoomControls(vm: SequenceViewModel) {
+    val t = vm.transform
+    val canvas = t.canvas
+    val fit = t.baseScale(canvas)
+    val limit = maxOf(fit, t.maxScale)
+    val scale = t.scale(canvas).coerceIn(fit, limit)
+    var maxText by androidx.compose.runtime.remember(t.maxScale) { androidx.compose.runtime.mutableStateOf(formatScale(t.maxScale)) }
+    val parsed = maxText.toFloatOrNull()
+    val valid = parsed != null && parsed >= fit.coerceAtLeast(FrameTransform.MIN_MAX_SCALE) && parsed <= FrameTransform.MAX_SCALE_LIMIT
+
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(localized("ui.zoom"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(localized("ui.slider.max_zoom_prefix"), color = StarColors.textSecondary, fontSize = 11.sp)
+            androidx.compose.foundation.text.BasicTextField(
+                value = maxText,
+                onValueChange = {
+                    maxText = it
+                    it.toFloatOrNull()?.let { v -> if (v >= fit && v <= FrameTransform.MAX_SCALE_LIMIT) t.setMaxScale(v, canvas) }
+                },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = if (valid) StarColors.white else StarColors.red, fontSize = 11.sp),
+                cursorBrush = SolidColor(StarColors.white),
+                modifier = Modifier
+                    .width(40.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(StarColors.cellDefault)
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+        }
+    }
+    androidx.compose.material3.Slider(
+        value = scale,
+        onValueChange = { t.setScale(it, canvas) },
+        valueRange = fit..(limit.coerceAtLeast(fit + 1e-4f)),
+        enabled = limit - fit > 1e-4f,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** A scale for the Max field: "1", "2.5", not "1.0000". */
+internal fun formatScale(v: Float): String = if (v == v.toInt().toFloat()) v.toInt().toString() else "%.2f".format(java.util.Locale.ROOT, v).trimEnd('0').trimEnd('.')

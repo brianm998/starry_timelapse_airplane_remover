@@ -97,7 +97,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     val state = remember { HorizonPaintState(imgW, imgH).also { it.isErasing = vm.horizonPaintErasing.value } }
     // The sky/ground mode outlives this painter: it is remembered for the next time it opens.
     LaunchedEffect(state) { snapshotFlow { state.isErasing }.collect { vm.setHorizonPaintErasing(it) } }
-    val transform = remember { FrameTransform(imgW, imgH) }
+    val transform = vm.transform
     var canvasSize by remember { mutableStateOf(Size.Zero) }
     var hover by remember { mutableStateOf<Offset?>(null) } // canvas-space pointer for the brush ring
     var dragging by remember { mutableStateOf(false) }      // a stroke is being painted: the ants hold still

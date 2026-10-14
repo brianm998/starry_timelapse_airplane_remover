@@ -62,6 +62,12 @@ class SequenceViewModel(
     private val scope: CoroutineScope =
         CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
 
+    /**
+     * The zoom and pan of the frame, one for the session: shared by the edit view and the horizon painter, and not
+     * reset when the frame changes (macOS keeps `currentZoomScale` on its view model too).
+     */
+    val transform = com.star.desktop.ui.sequence.edit.FrameTransform(info.imageWidth, info.imageHeight)
+
     // ---- interaction state ----
     private val _mode = MutableStateFlow(InteractionMode.SCRUB) // macOS default is scrub
     val mode: StateFlow<InteractionMode> = _mode.asStateFlow()

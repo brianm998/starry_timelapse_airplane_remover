@@ -33,18 +33,15 @@ import androidx.compose.ui.draw.clipToBounds
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Double-tap-to-zoom target level (macOS's is derived from view geometry; a fixed level is close enough here). */
-private const val DOUBLE_TAP_ZOOM = 3f
-
 /**
  * Edit-mode center view (macOS `FrameEditView` + `OutlierGroupView`): the frame image with
- * scroll-to-zoom / drag-to-pan, double-click-to-zoom, the outlier overlay, and click hit-testing —
- * all driven by one [FrameTransform] so they stay aligned at every zoom/pan.
+ * zoom and pan ([zoomAndPan]), double-click between fit and actual size, the outlier overlay, and click
+ * hit-testing — all driven by the session's one [FrameTransform] so they stay aligned at every zoom/pan, and
+ * so the zoom does not reset when the frame changes.
  *
  * Pinch (macOS `ZoomableModifier`'s `MagnificationGesture`): Compose Desktop has no multi-touch
  * trackpad gesture API (it targets mouse + single-pointer input), so there is no dedicated pinch
- * handler here — the scroll-to-zoom handler below already responds to a trackpad's two-finger
- * scroll the same as a mouse wheel, which is the closest equivalent this platform offers.
+ * handler here; a trackpad's two-finger scroll pans, and Ctrl/Cmd with it zooms.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -65,7 +62,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val hovered by fvm.hovered.collectAsState()
     val labelMap by fvm.labelMap.collectAsState()
 
-    val transform = remember(current) { FrameTransform(vm.info.imageWidth, vm.info.imageHeight) }
+    val transform = vm.transform
     var canvasSize by remember { mutableStateOf(Size.Zero) }
     var dragging by remember { mutableStateOf(false) }
     // Rubber-band selection (image coords) while the multi tool drags.
@@ -86,15 +83,8 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             .background(StarColors.appBackground)
             .clipToBounds()
             .pointerHoverIcon(cursorIcon, overrideDescendants = true)
-            .onSizeChanged { canvasSize = it.toSize() }
-            .onPointerEvent(PointerEventType.Scroll) { ev ->
-                val change = ev.changes.firstOrNull() ?: return@onPointerEvent
-                val dy = change.scrollDelta.y
-                if (dy != 0f) {
-                    transform.zoomBy(if (dy < 0) 1.1f else 1f / 1.1f, change.position, canvasSize)
-                    change.consume()
-                }
-            }
+            .onSizeChanged { canvasSize = it.toSize(); transform.canvasChanged(canvasSize) }
+            .zoomAndPan(transform) { canvasSize }
             .pointerInput(tool, canvasSize) {
                 // The finally clears transient drag state if this gesture is cancelled because `tool`/`canvasSize`
                 // changed mid-drag (Compose disposes the pointerInput then; onDragEnd/Cancel may not run), so the
@@ -123,7 +113,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                             onDragStart = { dragging = true },
                             onDragEnd = { dragging = false },
                             onDragCancel = { dragging = false },
-                        ) { change, drag -> transform.panBy(drag); change.consume() }
+                        ) { change, drag -> transform.panBy(drag, canvasSize); change.consume() }
                     }
                 } finally {
                     dragging = false; selStartImg = null; selEndImg = null
@@ -145,11 +135,8 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                         }
                     },
                     // Double-tap zoom (macOS `ZoomableModifier.doubleTapGesture`): toggle between
-                    // fit-to-canvas and a fixed magnified level, keeping the tapped point stationary.
-                    onDoubleTap = { pos ->
-                        val target = if (transform.userZoom > 1f) 1f else DOUBLE_TAP_ZOOM
-                        transform.zoomBy(target / transform.userZoom, pos, canvasSize)
-                    },
+                    // fit-to-canvas and actual size, keeping the tapped point stationary.
+                    onDoubleTap = { pos -> transform.toggleFitActual(pos, canvasSize) },
                 )
             }
             // Hover tracking drives arrow/line color + visibility (macOS `arrowSelected`).
