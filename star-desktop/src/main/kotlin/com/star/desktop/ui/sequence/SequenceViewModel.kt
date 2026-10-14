@@ -294,6 +294,27 @@ class SequenceViewModel(
         _frameRevisions.value = _frameRevisions.value.let { it + (index to ((it[index] ?: 0) + 1)) }
     }
 
+    // State the `init` block's collectors read the moment they start; a property declared below it would still be null then.
+    private val _showFullResolution = MutableStateFlow(false)
+    val showFullResolution: StateFlow<Boolean> = _showFullResolution.asStateFlow()
+    fun setShowFullResolution(show: Boolean) { _showFullResolution.value = show }
+
+    private val _fullResolution = MutableStateFlow<ImageBitmap?>(null)
+    /** The current frame's full-size image while [showFullResolution] is on and the view is zoomed in; else null. */
+    val fullResolution: StateFlow<ImageBitmap?> = _fullResolution.asStateFlow()
+    private var fullResolutionJob: Job? = null
+    private val fullResolutionVersion = MutableStateFlow(0)
+
+    /** Whether any refinement is waiting: what enables "Re-run Horizon Refinement". */
+    private val _refinementPending = MutableStateFlow(false)
+    val refinementPending: StateFlow<Boolean> = _refinementPending.asStateFlow()
+
+    /**
+     * Bumped whenever a frame's horizon, or whether it is pending, may have changed: a reference was saved, the question was
+     * answered, a refinement operation finished. Overlays that draw a frame's horizon load it keyed on this.
+     */
+    private val _horizonVersion = MutableStateFlow(0)
+    val horizonVersion: StateFlow<Int> = _horizonVersion.asStateFlow()
     init {
         // Subscribe to progress BEFORE any Processing.Start (the daemon attaches its continuation lazily).
         processing.subscribe(sessionId)
@@ -581,16 +602,6 @@ class SequenceViewModel(
     // for the current frame only (a 42 MP frame is some 170 MB), made by the daemon on demand, and dropped when the frame, the view
     // mode or the zoom changes.
 
-    private val _showFullResolution = MutableStateFlow(false)
-    val showFullResolution: StateFlow<Boolean> = _showFullResolution.asStateFlow()
-    fun setShowFullResolution(show: Boolean) { _showFullResolution.value = show }
-
-    private val _fullResolution = MutableStateFlow<ImageBitmap?>(null)
-    /** The current frame's full-size image while [showFullResolution] is on and the view is zoomed in; else null. */
-    val fullResolution: StateFlow<ImageBitmap?> = _fullResolution.asStateFlow()
-    private var fullResolutionJob: Job? = null
-    private val fullResolutionVersion = MutableStateFlow(0)
-
     private fun watchFullResolution() {
         @OptIn(kotlinx.coroutines.FlowPreview::class)
         combine(
@@ -727,16 +738,6 @@ class SequenceViewModel(
     private val _refinementPrompt = MutableStateFlow<RefinementPrompt?>(null)
     val refinementPrompt: StateFlow<RefinementPrompt?> = _refinementPrompt.asStateFlow()
 
-    /** Whether any refinement is waiting: what enables "Re-run Horizon Refinement". */
-    private val _refinementPending = MutableStateFlow(false)
-    val refinementPending: StateFlow<Boolean> = _refinementPending.asStateFlow()
-
-    /**
-     * Bumped whenever a frame's horizon, or whether it is pending, may have changed: a reference was saved, the question was
-     * answered, a refinement operation finished. Overlays that draw a frame's horizon load it keyed on this.
-     */
-    private val _horizonVersion = MutableStateFlow(0)
-    val horizonVersion: StateFlow<Int> = _horizonVersion.asStateFlow()
     fun horizonChanged() { _horizonVersion.value++ }
 
     /**
