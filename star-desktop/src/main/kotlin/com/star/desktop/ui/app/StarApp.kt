@@ -64,7 +64,8 @@ fun StarApp(vm: AppViewModel) {
             }
             val showInfo by vm.showInfoDialog.collectAsState()
             if (showInfo) {
-                com.star.desktop.ui.dialogs.InfoDialog(onClose = vm::closeInfoDialog)
+                val infoType by vm.currentInfoType.collectAsState()
+                com.star.desktop.ui.dialogs.InfoDialog(selected = infoType, onSelect = vm::setInfoType, onClose = vm::closeInfoDialog)
             }
             val startupStep by vm.startupStep.collectAsState()
             if (startupStep != null && screen is AppScreen.Sequence) {

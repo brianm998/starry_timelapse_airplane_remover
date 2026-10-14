@@ -404,6 +404,11 @@ class AppViewModel(
     fun openInfoDialog() { _showInfoDialog.value = true }
     fun closeInfoDialog() { _showInfoDialog.value = false }
 
+    // Which tab of the Info dialog was last open, kept for the app's life (macOS `ViewModel.currentInfoType`), not for each time it opens.
+    private val _currentInfoType = MutableStateFlow(com.star.desktop.ui.dialogs.InfoType.ABOUT)
+    val currentInfoType: StateFlow<com.star.desktop.ui.dialogs.InfoType> = _currentInfoType.asStateFlow()
+    fun setInfoType(type: com.star.desktop.ui.dialogs.InfoType) { _currentInfoType.value = type }
+
     // §4.4: non-blocking warning when a resumed session's config.starVersion ≠ the running engine.
     private val _versionWarning = MutableStateFlow<String?>(null)
     val versionWarning: StateFlow<String?> = _versionWarning.asStateFlow()
