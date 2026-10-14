@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "นำเข้าวิดีโอ",
+  "ui.video_import_blurb": "Star แปลงวิดีโอเป็นภาพหนึ่งภาพต่อเฟรม รูปแบบที่เล็กกว่าใช้พื้นที่ดิสก์น้อยกว่า แต่เก็บรายละเอียดต้นฉบับไว้ได้น้อยกว่า",
+  "ui.video_frame_format": "รูปแบบเฟรม",
+  "ui.frame_format_tiff16": "TIFF 16 บิต (คุณภาพดีที่สุด)",
+  "ui.frame_format_tiff8": "TIFF 8 บิต",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "คุณภาพ: {0}%",
+  "ui.video_import_disk_usage": "ต้องใช้พื้นที่ดิสก์ประมาณ {0} สำหรับ {1} เฟรม ขนาด {2} × {3}",
+  "ui.video_import_disk_unknown": "วิดีโอนี้ไม่ระบุความยาว จึงประมาณพื้นที่ดิสก์ที่ต้องใช้ไม่ได้",
+  "ui.video_import_start": "นำเข้า"
 }

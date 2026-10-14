@@ -121,6 +121,15 @@ struct InitialView: View {
                 }
                 Spacer()
             }
+              .sheet(item: $viewModel.pendingVideoImport) { pending in
+                  VideoImportSheetView(
+                    pending: pending,
+                    onImport: { format in
+                        viewModel.pendingVideoImport = nil
+                        startupWithVideoToProcess(pending.path, format: format)
+                    },
+                    onCancel: { viewModel.pendingVideoImport = nil })
+              }
               .sheet(isPresented: $viewModel.newReleaseSheetShowing) {
                   NewReleaseSheetView(isVisible: $viewModel.newReleaseSheetShowing,
                                       viewModel: viewModel)
@@ -302,10 +311,15 @@ struct InitialView: View {
         }
     }
 
+    /// A video has been chosen: ask how its frames are to be written, then `startupWithVideoToProcess(_:format:)`.
     func startupWithVideoToProcess(_ path: String) {
+        viewModel.pendingVideoImport = PendingVideoImport(path: path)
+    }
+
+    func startupWithVideoToProcess(_ path: String, format: FrameDecodeFormat) {
         viewModel.eraserTask = Task.detached(priority: .userInitiated) {
             do {
-                try await viewModel.startup(withVideoToProcess: path)
+                try await viewModel.startup(withVideoToProcess: path, format: format)
                 Task { @MainActor in
                     viewModel.imageSequence?.initialLoadInProgress = true
                 }

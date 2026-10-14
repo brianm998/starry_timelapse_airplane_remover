@@ -69,6 +69,15 @@ fun StarApp(vm: AppViewModel) {
             if (showRenderVideo && screen is AppScreen.Sequence) {
                 com.star.desktop.ui.dialogs.RenderVideoDialog(vm)
             }
+            val pendingVideo by vm.pendingVideo.collectAsState()
+            pendingVideo?.let { path ->
+                com.star.desktop.ui.dialogs.VideoImportDialog(
+                    videoPath = path,
+                    probe = { vm.sessions.probeVideo(it) },
+                    onImport = vm::confirmVideoImport,
+                    onCancel = vm::cancelVideoImport,
+                )
+            }
             val showInfo by vm.showInfoDialog.collectAsState()
             if (showInfo) {
                 val infoType by vm.currentInfoType.collectAsState()

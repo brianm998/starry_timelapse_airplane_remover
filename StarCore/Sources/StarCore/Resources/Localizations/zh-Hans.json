@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "导入视频",
+  "ui.video_import_blurb": "Star 会将视频转换为每帧一张图像。较小的格式占用的磁盘空间更少，但保留的原始细节也更少。",
+  "ui.video_frame_format": "帧格式",
+  "ui.frame_format_tiff16": "TIFF，16 位（最佳质量）",
+  "ui.frame_format_tiff8": "TIFF，8 位",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "质量：{0}%",
+  "ui.video_import_disk_usage": "{1} 帧 {2} × {3} 的图像大约需要 {0} 磁盘空间",
+  "ui.video_import_disk_unknown": "此视频未注明时长，因此无法估算所需的磁盘空间。",
+  "ui.video_import_start": "导入"
 }

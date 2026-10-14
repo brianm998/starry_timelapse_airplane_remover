@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Nhập video",
+  "ui.video_import_blurb": "Star chuyển video thành một ảnh cho mỗi khung hình. Định dạng nhỏ hơn dùng ít dung lượng đĩa hơn nhưng giữ lại ít chi tiết gốc hơn.",
+  "ui.video_frame_format": "Định dạng khung hình",
+  "ui.frame_format_tiff16": "TIFF, 16 bit (chất lượng tốt nhất)",
+  "ui.frame_format_tiff8": "TIFF, 8 bit",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Chất lượng: {0}%",
+  "ui.video_import_disk_usage": "Cần khoảng {0} dung lượng đĩa cho {1} khung hình {2} × {3}",
+  "ui.video_import_disk_unknown": "Video này không cho biết độ dài nên không thể ước tính dung lượng đĩa cần thiết.",
+  "ui.video_import_start": "Nhập"
 }

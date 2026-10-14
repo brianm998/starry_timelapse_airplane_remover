@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "ビデオを読み込む",
+  "ui.video_import_blurb": "Star はビデオを1フレームにつき1枚の画像に変換します。小さい形式はディスク容量を節約できますが、元のディテールが少なくなります。",
+  "ui.video_frame_format": "フレームの形式",
+  "ui.frame_format_tiff16": "TIFF、16ビット（最高画質）",
+  "ui.frame_format_tiff8": "TIFF、8ビット",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "画質：{0}%",
+  "ui.video_import_disk_usage": "{2} × {3} のフレーム {1} 枚に、約 {0} のディスク容量が必要です",
+  "ui.video_import_disk_unknown": "このビデオには長さが記載されていないため、必要なディスク容量を見積もれません。",
+  "ui.video_import_start": "読み込む"
 }

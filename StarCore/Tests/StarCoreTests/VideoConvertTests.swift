@@ -97,6 +97,33 @@ final class VideoConvertTests: XCTestCase {
         XCTAssertGreaterThan(progressed.highest, 0, "no progress was reported")
     }
 
+    /// Each format the importer offers writes its own files, and the jpeg is smaller than the 8 bit tiff, which is
+    /// smaller than the 16 bit one.
+    func testDecodingInEachFrameFormat() async throws {
+        let video = try makeSourceVideo()
+        var sizes: [FrameDecodeFormat.Kind: Int] = [:]
+        for format in [FrameDecodeFormat.tiff16, .tiff8, .jpeg] {
+            let (directory, _) = try await decodeVideo(named: video, format: format) { _, _, _ in }
+            let files = try FileManager.default.contentsOfDirectory(atPath: directory)
+                .filter { $0.hasPrefix("image_") }
+            XCTAssertEqual(files.count, 24, "\(format)")
+            XCTAssertTrue(files.allSatisfy { $0.hasSuffix(".\(format.fileExtension)") }, "\(format) \(files.prefix(2))")
+            let size = try FileManager.default.attributesOfItem(atPath: "\(directory)/\(files.sorted()[0])")[.size] as! Int
+            sizes[format.kind] = size
+            try FileManager.default.removeItem(atPath: directory)
+        }
+        XCTAssertLessThan(sizes[.tiff8]!, sizes[.tiff16]!)
+        XCTAssertLessThan(sizes[.jpeg]!, sizes[.tiff8]!)
+    }
+
+    func testProbingAVideoGivesItsSizeAndFrameCount() throws {
+        let video = try makeSourceVideo()
+        let probe = try XCTUnwrap(VideoProbe.probe(videoAt: video))
+        XCTAssertEqual(probe.width, 640)
+        XCTAssertEqual(probe.height, 360)
+        XCTAssertEqual(probe.frameCount, 24)
+    }
+
     /// The export direction: the decoded frames back into a video, as the daemon's export does.
     func testEncodingTheFramesBackIntoAVideo() async throws {
         let video = try makeSourceVideo()

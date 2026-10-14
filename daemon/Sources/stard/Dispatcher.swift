@@ -75,6 +75,7 @@ extension Dispatcher {
         register(method: "Blob.SetCustomSteps") { id, payload, transport in await BlobHandlers.setCustomSteps(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
 
         // Session
+        register(method: "Session.ProbeVideo")   { id, payload, transport in await SessionHandlers.probeVideo(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
         register(method: "Session.OpenSequence") { id, payload, transport in await SessionHandlers.openSequence(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Session.OpenConfig")   { id, payload, transport in await SessionHandlers.openConfig(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Session.OpenVideo")    { id, payload, transport in await SessionHandlers.openVideo(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

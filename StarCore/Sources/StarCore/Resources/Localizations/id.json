@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Impor Video",
+  "ui.video_import_blurb": "Star mengubah video menjadi satu gambar per bingkai. Format yang lebih kecil memakai lebih sedikit ruang disk tetapi menyimpan lebih sedikit detail asli.",
+  "ui.video_frame_format": "Format bingkai",
+  "ui.frame_format_tiff16": "TIFF, 16 bit (kualitas terbaik)",
+  "ui.frame_format_tiff8": "TIFF, 8 bit",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Kualitas: {0}%",
+  "ui.video_import_disk_usage": "Dibutuhkan sekitar {0} ruang disk untuk {1} bingkai berukuran {2} × {3}",
+  "ui.video_import_disk_unknown": "Video ini tidak menyebutkan durasinya, sehingga ruang disk yang dibutuhkan tidak dapat diperkirakan.",
+  "ui.video_import_start": "Impor"
 }

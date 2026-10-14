@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Importovat video",
+  "ui.video_import_blurb": "Star převede video na jeden obrázek na snímek. Menší formáty zabírají méně místa na disku, ale zachovají méně původních detailů.",
+  "ui.video_frame_format": "Formát snímků",
+  "ui.frame_format_tiff16": "TIFF, 16 bitů (nejlepší kvalita)",
+  "ui.frame_format_tiff8": "TIFF, 8 bitů",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Kvalita: {0} %",
+  "ui.video_import_disk_usage": "Je potřeba asi {0} místa na disku pro {1} snímků o velikosti {2} × {3}",
+  "ui.video_import_disk_unknown": "Toto video neuvádí svou délku, takže potřebné místo na disku nelze odhadnout.",
+  "ui.video_import_start": "Importovat"
 }

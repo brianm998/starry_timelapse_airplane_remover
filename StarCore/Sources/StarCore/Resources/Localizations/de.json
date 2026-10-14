@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Video importieren",
+  "ui.video_import_blurb": "Star wandelt das Video in ein Bild pro Einzelbild um. Kleinere Formate brauchen weniger Speicherplatz, behalten aber weniger Originaldetails.",
+  "ui.video_frame_format": "Bildformat",
+  "ui.frame_format_tiff16": "TIFF, 16 Bit (beste Qualität)",
+  "ui.frame_format_tiff8": "TIFF, 8 Bit",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Qualität: {0} %",
+  "ui.video_import_disk_usage": "Es werden etwa {0} Speicherplatz für {1} Einzelbilder mit {2} × {3} benötigt",
+  "ui.video_import_disk_unknown": "Dieses Video gibt seine Länge nicht an, daher lässt sich der benötigte Speicherplatz nicht abschätzen.",
+  "ui.video_import_start": "Importieren"
 }

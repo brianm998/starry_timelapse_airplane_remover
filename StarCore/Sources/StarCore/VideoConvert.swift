@@ -33,6 +33,7 @@ public struct VideoInfo: Sendable {
 /// beside the frames by `AudioSidecar`, in its own codec where that is possible.
 public func decodeVideo(
     named inputPath: String,
+    format: FrameDecodeFormat = .tiff16,
     progress: @escaping ProgressCallback
 ) async throws -> (outputDirectory: String, videoInfo: VideoInfo) {
     let inputURL = URL(fileURLWithPath: inputPath)
@@ -81,7 +82,7 @@ public func decodeVideo(
 
     // software decode unless the user opted in; see FFmpegHardware for why
     var decodeArguments = FFmpegHardware.decodeArguments()
-    decodeArguments += ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"]
+    decodeArguments += ["-i", inputPath] + format.ffmpegOutputArguments(in: outputFolder)
     let framesArguments = decodeArguments
 
     // The cancellable run, so that a caller who gives up stops ffmpeg rather than leaving it to decode the rest of the video.  Not

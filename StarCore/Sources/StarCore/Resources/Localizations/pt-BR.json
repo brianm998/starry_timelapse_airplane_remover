@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Importar vídeo",
+  "ui.video_import_blurb": "O Star transforma o vídeo em uma imagem por quadro. Formatos menores usam menos espaço em disco, mas mantêm menos detalhes originais.",
+  "ui.video_frame_format": "Formato dos quadros",
+  "ui.frame_format_tiff16": "TIFF, 16 bits (melhor qualidade)",
+  "ui.frame_format_tiff8": "TIFF, 8 bits",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Qualidade: {0}%",
+  "ui.video_import_disk_usage": "São necessários cerca de {0} de espaço em disco para {1} quadros de {2} × {3}",
+  "ui.video_import_disk_unknown": "Este vídeo não informa sua duração, portanto não é possível estimar o espaço em disco necessário.",
+  "ui.video_import_start": "Importar"
 }

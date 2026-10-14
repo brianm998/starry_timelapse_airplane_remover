@@ -1057,5 +1057,15 @@
   "ui.use_custom_io_throttle": "Throttled",
   "ui.use_custom_done": "Done",
   "ui.use_status_limited": "Limited by: {0}",
-  "ui.use_status_none": "Not limited by a resource"
+  "ui.use_status_none": "Not limited by a resource",
+  "ui.video_import_title": "Импорт видео",
+  "ui.video_import_blurb": "Star превращает видео в одно изображение на кадр. Меньшие форматы занимают меньше места на диске, но сохраняют меньше исходных деталей.",
+  "ui.video_frame_format": "Формат кадров",
+  "ui.frame_format_tiff16": "TIFF, 16 бит (лучшее качество)",
+  "ui.frame_format_tiff8": "TIFF, 8 бит",
+  "ui.frame_format_jpeg": "JPEG",
+  "ui.jpeg_quality": "Качество: {0}%",
+  "ui.video_import_disk_usage": "Потребуется около {0} места на диске для {1} кадров размером {2} × {3}",
+  "ui.video_import_disk_unknown": "В этом видео не указана его длительность, поэтому нужное место на диске оценить нельзя.",
+  "ui.video_import_start": "Импортировать"
 }
