@@ -34,6 +34,8 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             let config = await configManager.config()
             if config.tripodHeadWasMoving {
                 await validateMovingStarAlignment()
+                // an abort cancels this op: there is no earth alignment to validate either
+                if self.isCancelled { return }
             } else {
                 // tripod was stationary
                 try await self.validateStaticStarAlignment()
@@ -361,8 +363,15 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         let nonNilCount = entries.lazy.filter { $0.homography != nil }.count
         guard nonNilCount > 0 else {
             Log.e("No homography results found")
-            errorClosure("no homographies found")
+            let message = "no usable star alignment was found between these frames, " +
+              "so the sequence cannot be processed"
             self.cancel()
+            // see validateStaticStarAlignment: cancelling this op alone releases its dependents
+            if let abortClosure {
+                abortClosure(message)
+            } else {
+                errorClosure(message)
+            }
             return
         }
         Log.d("validateMovingStarAlignment (gap-fill approach) \(nonNilCount) homographies of \(entries.count) frames")

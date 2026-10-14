@@ -92,6 +92,8 @@ public class FrameSaveQueue {
                     await frame.changesHandled()
                 } catch {
                     Log.e("frame \(frame.frameIndex) frame save error: \(error)")
+                    await StarWarnings.shared.post(
+                      .frameFinishFailed(frameIndex: frame.frameIndex, reason: "\(error)"))
                 }
                 // Every throwing call above is inside the do/catch, and neither
                 // reserve() nor frame.set() throws, so this is always reached.

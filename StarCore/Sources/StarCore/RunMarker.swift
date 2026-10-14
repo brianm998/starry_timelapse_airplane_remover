@@ -181,7 +181,7 @@ public struct RunMarker: Codable, Sendable, Equatable {
         // then goes on to finish normally. A sequence with an untrackable ground would
         // otherwise have every later kill of it blamed on memory.
         case .outputWriteFailed, .lowDiskSpace, .previousRunDied,
-             .artifactsInvalidated, .groundAlignmentFailed, .none:
+             .artifactsInvalidated, .groundAlignmentFailed, .frameFinishFailed, .none:
             memoryWarning = false
         }
 

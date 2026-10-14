@@ -86,6 +86,12 @@ public struct StarWarning: Sendable, Codable, Equatable {
         /// the one condition here a user could otherwise only discover by looking at the
         /// finished ground and wondering why it is dirty.
         case groundAlignmentFailed
+
+        /// Finishing a frame — loading its outliers, assembling and writing its image —
+        /// threw, or quietly produced an image with no removal applied.  The frame's
+        /// output is then missing or still has the airplanes in it, which nothing else
+        /// would tell the user: a failed save used to reach only the log.
+        case frameFinishFailed
     }
 
     /// How bad it is.  `critical` means "this run is in real danger of being killed";
@@ -148,6 +154,7 @@ public struct StarWarning: Sendable, Codable, Equatable {
         case .lowDiskSpace:          return localized("warning.title.low_disk_space")
         case .artifactsInvalidated:  return localized("warning.title.artifacts_invalidated")
         case .groundAlignmentFailed: return localized("warning.title.ground_alignment_failed")
+        case .frameFinishFailed:     return localized("warning.title.frame_finish_failed")
         }
     }
 
@@ -168,7 +175,7 @@ public struct StarWarning: Sendable, Codable, Equatable {
             return true
         case .oversizedReservation, .memoryGatingDisabled, .previousRunDied,
              .outputWriteFailed, .lowDiskSpace, .artifactsInvalidated,
-             .groundAlignmentFailed:
+             .groundAlignmentFailed, .frameFinishFailed:
             return false
         }
     }
@@ -179,6 +186,16 @@ public struct StarWarning: Sendable, Codable, Equatable {
             return "\(message) \(suggestion)"
         }
         return message
+    }
+}
+
+extension StarWarning {
+    /// A frame whose finishing failed or was skipped: see `Kind.frameFinishFailed`.
+    static func frameFinishFailed(frameIndex: Int, reason: String) -> StarWarning {
+        StarWarning(kind: .frameFinishFailed,
+                    severity: .warning,
+                    message: localized("warning.frame_finish_failed.message", frameIndex, reason),
+                    suggestion: localized("warning.frame_finish_failed.suggestion"))
     }
 }
 

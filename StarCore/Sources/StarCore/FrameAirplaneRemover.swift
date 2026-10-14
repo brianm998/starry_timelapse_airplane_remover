@@ -1193,6 +1193,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                   starAlignedImage.height == earthAlignedImage.height &&
                   horizonMask.image.height == earthAlignedImage.height)
             else {
+                await StarWarnings.shared.post(
+                  .frameFinishFailed(frameIndex: frameIndex,
+                                     reason: "the aligned images and horizon mask differ in size, so no airplanes were removed"))
                 Log.e("cannot remove airplanes with starAlignedImage.width \(starAlignedImage.width) earthAlignedImage.width \(earthAlignedImage.width) horizonMask.image.width \(horizonMask.image.width) starAlignedImage.height \(starAlignedImage.height) earthAlignedImage.height \(earthAlignedImage.height) horizonMask.image.height \(horizonMask.image.height)")
                 return
             }
@@ -1214,6 +1217,9 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // remove every outlier in the list with pixels from the adjecent frames
         guard let outlierGroups = await outlierProcessor.getOutlierGroups() else {
             Log.e("cannot remove pixels without outlier groups")
+            await StarWarnings.shared.post(
+              .frameFinishFailed(frameIndex: frameIndex,
+                                 reason: "its outlier groups were not loaded, so no airplanes were removed"))
             return
         }
 

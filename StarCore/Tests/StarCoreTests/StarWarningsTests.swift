@@ -241,7 +241,7 @@ final class PassingConditionTests: XCTestCase {
     func testTheFactsAboutARunDoNot() {
         for kind in [StarWarning.Kind.outputWriteFailed, .lowDiskSpace, .previousRunDied,
                      .oversizedReservation, .memoryGatingDisabled, .artifactsInvalidated,
-                     .groundAlignmentFailed] {
+                     .groundAlignmentFailed, .frameFinishFailed] {
             XCTAssertFalse(warning(kind).describesAPassingCondition, "\(kind)")
         }
     }
@@ -253,7 +253,8 @@ final class PassingConditionTests: XCTestCase {
                                              .footprintOverBudget]
         let staying: Set<StarWarning.Kind> = [.outputWriteFailed, .lowDiskSpace, .previousRunDied,
                                              .oversizedReservation, .memoryGatingDisabled,
-                                             .artifactsInvalidated, .groundAlignmentFailed]
+                                             .artifactsInvalidated, .groundAlignmentFailed,
+                                             .frameFinishFailed]
         XCTAssertTrue(passing.isDisjoint(with: staying))
         XCTAssertEqual(passing.count + staying.count, StarWarning.Kind.allCases.count,
                        "a new StarWarning.Kind needs classifying in describesAPassingCondition")
