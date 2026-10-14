@@ -114,23 +114,31 @@ final class MappingTests: XCTestCase {
         }
     }
 
-    /// What an ImageSaved event can name: the four views a client can ask for, and nothing else.
-    func testOnlyTheViewsAClientCanAskForAreAnnounced() {
+    /// What an ImageSaved event can name, and what a client can ask for: every image the pipeline keeps for a frame.
+    func testEveryImageTheCoreKeepsCanBeAskedForAndAnnounced() {
         XCTAssertEqual(Mapping.protoFrameViewMode(.original), .viewOriginal)
         XCTAssertEqual(Mapping.protoFrameViewMode(.final), .viewProcessed)
         XCTAssertEqual(Mapping.protoFrameViewMode(.subtraction), .viewSubtraction)
         XCTAssertEqual(Mapping.protoFrameViewMode(.validation), .viewValidation)
-        XCTAssertNil(Mapping.protoFrameViewMode(.starAligned))
-        XCTAssertNil(Mapping.protoFrameViewMode(.horizon))
+        XCTAssertEqual(Mapping.protoFrameViewMode(.starAligned), .viewStarAligned)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.horizon), .viewHorizon)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.userHorizon), .viewUserHorizon)
     }
 
-    /// And going back out gets the same view: announcing a save and asking for the preview agree.
+    /// And going back out gets the same view: announcing a save and asking for the preview agree, for every image.
     func testAnAnnouncedViewIsTheOneThatCanBeAskedFor() {
-        for type in [FrameViewMode.original, .final, .subtraction, .validation] {
+        for type in FrameViewMode.allCases {
             let wire = Mapping.protoFrameViewMode(type)
-            XCTAssertNotNil(wire)
+            XCTAssertNotNil(wire, "\(type) has no wire value")
             XCTAssertEqual(wire.map(Mapping.frameViewMode(from:)), type)
         }
+    }
+
+    /// The wire values are all different, so no two images are confused on the way.
+    func testNoTwoImagesShareAWireValue() {
+        let wires = FrameViewMode.allCases.compactMap { Mapping.protoFrameViewMode($0) }
+        XCTAssertEqual(Set(wires).count, FrameViewMode.allCases.count)
+        XCTAssertEqual(Star_V1_FrameViewMode.allCases.filter { $0 != .UNRECOGNIZED(-1) }.count, FrameViewMode.allCases.count)
     }
 
     // MARK: - homography results

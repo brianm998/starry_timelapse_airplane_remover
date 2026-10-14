@@ -149,12 +149,36 @@ public enum Star_V1_PreviewSize: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
+/// Every image the pipeline keeps for a frame (StarCore `FrameViewMode`).  VIEW_PROCESSED is the finished image, whichever clean
+/// method made it.
 public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case viewOriginal // = 0
   case viewProcessed // = 1
   case viewSubtraction // = 2
   case viewValidation // = 3
+
+  /// computed horizon mask
+  case viewHorizon // = 4
+
+  /// the horizon mask merged from the neighbours
+  case viewMergedHorizon // = 5
+
+  /// the horizon painted by the user
+  case viewUserHorizon // = 6
+  case viewStarAligned // = 7
+  case viewFailedStarAligned // = 8
+  case viewEarthAligned // = 9
+  case viewFailedEarthAligned // = 10
+
+  /// blobs found in the subtraction
+  case viewBlobs // = 11
+  case viewRemoveMask // = 12
+
+  /// the output of each clean method, before it is linked as the final one
+  case viewAutoProcessed // = 13
+  case viewAutoSelectiveProcessed // = 14
+  case viewSelectiveProcessed // = 15
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -167,6 +191,18 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 1: self = .viewProcessed
     case 2: self = .viewSubtraction
     case 3: self = .viewValidation
+    case 4: self = .viewHorizon
+    case 5: self = .viewMergedHorizon
+    case 6: self = .viewUserHorizon
+    case 7: self = .viewStarAligned
+    case 8: self = .viewFailedStarAligned
+    case 9: self = .viewEarthAligned
+    case 10: self = .viewFailedEarthAligned
+    case 11: self = .viewBlobs
+    case 12: self = .viewRemoveMask
+    case 13: self = .viewAutoProcessed
+    case 14: self = .viewAutoSelectiveProcessed
+    case 15: self = .viewSelectiveProcessed
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -177,6 +213,18 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .viewProcessed: return 1
     case .viewSubtraction: return 2
     case .viewValidation: return 3
+    case .viewHorizon: return 4
+    case .viewMergedHorizon: return 5
+    case .viewUserHorizon: return 6
+    case .viewStarAligned: return 7
+    case .viewFailedStarAligned: return 8
+    case .viewEarthAligned: return 9
+    case .viewFailedEarthAligned: return 10
+    case .viewBlobs: return 11
+    case .viewRemoveMask: return 12
+    case .viewAutoProcessed: return 13
+    case .viewAutoSelectiveProcessed: return 14
+    case .viewSelectiveProcessed: return 15
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -187,6 +235,18 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     .viewProcessed,
     .viewSubtraction,
     .viewValidation,
+    .viewHorizon,
+    .viewMergedHorizon,
+    .viewUserHorizon,
+    .viewStarAligned,
+    .viewFailedStarAligned,
+    .viewEarthAligned,
+    .viewFailedEarthAligned,
+    .viewBlobs,
+    .viewRemoveMask,
+    .viewAutoProcessed,
+    .viewAutoSelectiveProcessed,
+    .viewSelectiveProcessed,
   ]
 
 }
@@ -1669,6 +1729,10 @@ public struct Star_V1_FrameInfo: Sendable {
   /// This frame is waiting for horizon refinement, because a reference horizon it interpolates from was
   /// repainted and the work has not run yet (drawn in orange).  See Horizon.ReferenceUpdated.
   public var refinementPending: Bool = false
+
+  /// The images this frame has on disk right now, as the client can ask for them (Frame.GetPreview): VIEW_ORIGINAL is always there.
+  /// What the view-mode pickers offer, and grey out.
+  public var availableModes: [Star_V1_FrameViewMode] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3324,7 +3388,7 @@ extension Star_V1_PreviewSize: SwiftProtobuf._ProtoNameProviding {
 }
 
 extension Star_V1_FrameViewMode: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0\u{1}VIEW_HORIZON\0\u{1}VIEW_MERGED_HORIZON\0\u{1}VIEW_USER_HORIZON\0\u{1}VIEW_STAR_ALIGNED\0\u{1}VIEW_FAILED_STAR_ALIGNED\0\u{1}VIEW_EARTH_ALIGNED\0\u{1}VIEW_FAILED_EARTH_ALIGNED\0\u{1}VIEW_BLOBS\0\u{1}VIEW_REMOVE_MASK\0\u{1}VIEW_AUTO_PROCESSED\0\u{1}VIEW_AUTO_SELECTIVE_PROCESSED\0\u{1}VIEW_SELECTIVE_PROCESSED\0")
 }
 
 extension Star_V1_FrameProcessingState: SwiftProtobuf._ProtoNameProviding {
@@ -4553,7 +4617,7 @@ extension Star_V1_FrameRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
 
 extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FrameInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0\u{3}num_positive_outliers\0\u{3}num_negative_outliers\0\u{3}num_undecided_outliers\0\u{3}clean_method\0\u{3}num_trash_outliers\0\u{3}outliers_loaded\0\u{3}refinement_pending\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0\u{3}num_positive_outliers\0\u{3}num_negative_outliers\0\u{3}num_undecided_outliers\0\u{3}clean_method\0\u{3}num_trash_outliers\0\u{3}outliers_loaded\0\u{3}refinement_pending\0\u{3}available_modes\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4570,6 +4634,7 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
       case 7: try { try decoder.decodeSingularInt32Field(value: &self.numTrashOutliers) }()
       case 8: try { try decoder.decodeSingularBoolField(value: &self.outliersLoaded) }()
       case 9: try { try decoder.decodeSingularBoolField(value: &self.refinementPending) }()
+      case 10: try { try decoder.decodeRepeatedEnumField(value: &self.availableModes) }()
       default: break
       }
     }
@@ -4603,6 +4668,9 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if self.refinementPending != false {
       try visitor.visitSingularBoolField(value: self.refinementPending, fieldNumber: 9)
     }
+    if !self.availableModes.isEmpty {
+      try visitor.visitPackedEnumField(value: self.availableModes, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -4616,6 +4684,7 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if lhs.numTrashOutliers != rhs.numTrashOutliers {return false}
     if lhs.outliersLoaded != rhs.outliersLoaded {return false}
     if lhs.refinementPending != rhs.refinementPending {return false}
+    if lhs.availableModes != rhs.availableModes {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

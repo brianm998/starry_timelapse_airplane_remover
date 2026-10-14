@@ -17,18 +17,50 @@ enum Mapping {
         case .viewProcessed:   return .final
         case .viewSubtraction: return .subtraction
         case .viewValidation:  return .validation
+        case .viewHorizon:               return .horizon
+        case .viewMergedHorizon:         return .mergedHorizon
+        case .viewUserHorizon:           return .userHorizon
+        case .viewStarAligned:           return .starAligned
+        case .viewFailedStarAligned:     return .failedStarAligned
+        case .viewEarthAligned:          return .earthAligned
+        case .viewFailedEarthAligned:    return .failedEarthAligned
+        case .viewBlobs:                 return .blobs
+        case .viewRemoveMask:            return .removeMask
+        case .viewAutoProcessed:         return .autoProcessed
+        case .viewAutoSelectiveProcessed: return .autoSelectiveProcessed
+        case .viewSelectiveProcessed:    return .selectiveProcessed
         default:               return .original
         }
     }
 
-    /// The view mode a client can ask for that `type` is, or nil for the types only the macOS app shows.
+    /// The view mode a client can ask for that `type` is: every image the pipeline keeps has one.
     static func protoFrameViewMode(_ type: StarCore.FrameViewMode) -> Star_V1_FrameViewMode? {
         switch type {
-        case .original:    return .viewOriginal
-        case .final:       return .viewProcessed
-        case .subtraction: return .viewSubtraction
-        case .validation:  return .viewValidation
-        default:           return nil
+        case .original:               return .viewOriginal
+        case .final:                  return .viewProcessed
+        case .subtraction:            return .viewSubtraction
+        case .validation:             return .viewValidation
+        case .horizon:                return .viewHorizon
+        case .mergedHorizon:          return .viewMergedHorizon
+        case .userHorizon:            return .viewUserHorizon
+        case .starAligned:            return .viewStarAligned
+        case .failedStarAligned:      return .viewFailedStarAligned
+        case .earthAligned:           return .viewEarthAligned
+        case .failedEarthAligned:     return .viewFailedEarthAligned
+        case .blobs:                  return .viewBlobs
+        case .removeMask:             return .viewRemoveMask
+        case .autoProcessed:          return .viewAutoProcessed
+        case .autoSelectiveProcessed: return .viewAutoSelectiveProcessed
+        case .selectiveProcessed:     return .viewSelectiveProcessed
+        }
+    }
+
+    /// The images [frame] has on disk now that a client can ask for; the original is always among them.
+    static func availableModes(of frame: FrameAirplaneRemover) -> [Star_V1_FrameViewMode] {
+        StarCore.FrameViewMode.allCases.compactMap { type in
+            guard let mode = protoFrameViewMode(type) else { return nil }
+            if type == .original { return mode }
+            return frame.imageAccessor.imageExists(frameIndex: frame.frameIndex, ofType: type, atSize: .original) ? mode : nil
         }
     }
 
@@ -450,6 +482,7 @@ enum Mapping {
             fi.numTrashOutliers     = Int32(await groups.getTrash().count)
             fi.outliersLoaded       = true
         }
+        fi.availableModes = availableModes(of: frame)
         return fi
     }
 

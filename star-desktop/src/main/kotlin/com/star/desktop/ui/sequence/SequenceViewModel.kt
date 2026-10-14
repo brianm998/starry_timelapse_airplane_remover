@@ -285,6 +285,11 @@ class SequenceViewModel(
         processing.imageSaved
             .onEach { saved ->
                 imageCache.invalidateFrame(saved.frameIndex)
+                // Every image the pipeline keeps is announced when it is written (the aligned frames, the masks...); only the ones
+                // that can be on screen are worth redrawing it for: the one being shown, and the original and final of the thumbnails.
+                if (saved.viewMode != _viewMode.value &&
+                    saved.viewMode != FrameViewMode.VIEW_PROCESSED && saved.viewMode != FrameViewMode.VIEW_ORIGINAL
+                ) return@onEach
                 bumpRevision(saved.frameIndex)
                 if (saved.frameIndex == _currentIndex.value) {
                     loadPreview(saved.frameIndex, _viewMode.value)
@@ -751,20 +756,12 @@ class SequenceViewModel(
         horizon.getOverlay(sessionId, index, width, height)
 
     /**
-     * The view modes that actually have a preview on disk for [index] (no fallback) — drives the
-     * edit-mode "Show:" picker so only modes that exist for the shown frame appear. Mirrors macOS
-     * `FrameViewModel.hasImage(type:)`: `.original` is always present, the rest appear as processing
-     * writes them.
+     * The view modes that have an image on disk for [index], from the daemon's own list: drives the left panel's "Show" list and
+     * greys out the pills of a mode the frame does not have (macOS `FrameViewModel.hasImage(type:)`). The original is always there;
+     * the rest appear as processing writes them. Asking for a preview of each to find out would generate the ones that were missing.
      */
-    suspend fun availableViewModes(index: Int): List<FrameViewMode> {
-        val candidates = listOf(
-            FrameViewMode.VIEW_ORIGINAL,
-            FrameViewMode.VIEW_PROCESSED,
-            FrameViewMode.VIEW_SUBTRACTION,
-            FrameViewMode.VIEW_VALIDATION,
-        )
-        return candidates.filter { runCatching { frames.previewPath(sessionId, index, it) }.getOrNull() != null }
-    }
+    suspend fun availableViewModes(index: Int): List<FrameViewMode> =
+        runCatching { frames.info(sessionId, index).availableModesList }.getOrNull()?.ifEmpty { null } ?: listOf(FrameViewMode.VIEW_ORIGINAL)
 
     // ---- multi-frame outlier sheets (macOS MultiChoice / MultiSelect) ----
     data class MultiChoiceTarget(val frameIndex: Int, val groupId: Int, val currentlyRemoves: Boolean)

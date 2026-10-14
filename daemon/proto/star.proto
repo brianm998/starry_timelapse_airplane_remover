@@ -268,6 +268,9 @@ message FrameInfo {
   // This frame is waiting for horizon refinement, because a reference horizon it interpolates from was
   // repainted and the work has not run yet (drawn in orange).  See Horizon.ReferenceUpdated.
   bool                 refinement_pending      = 9;
+  // The images this frame has on disk right now, as the client can ask for them (Frame.GetPreview): VIEW_ORIGINAL is always there.
+  // What the view-mode pickers offer, and grey out.
+  repeated FrameViewMode available_modes       = 10;
 }
 
 message GetFramePreviewRequest {
@@ -285,11 +288,25 @@ enum PreviewSize {
   PREVIEW_SIZE_ORIGINAL  = 2;
 }
 
+// Every image the pipeline keeps for a frame (StarCore `FrameViewMode`).  VIEW_PROCESSED is the finished image, whichever clean
+// method made it.
 enum FrameViewMode {
   VIEW_ORIGINAL    = 0;
   VIEW_PROCESSED   = 1;
   VIEW_SUBTRACTION = 2;
   VIEW_VALIDATION  = 3;
+  VIEW_HORIZON                 = 4;    // computed horizon mask
+  VIEW_MERGED_HORIZON          = 5;    // the horizon mask merged from the neighbours
+  VIEW_USER_HORIZON            = 6;    // the horizon painted by the user
+  VIEW_STAR_ALIGNED            = 7;
+  VIEW_FAILED_STAR_ALIGNED     = 8;
+  VIEW_EARTH_ALIGNED           = 9;
+  VIEW_FAILED_EARTH_ALIGNED    = 10;
+  VIEW_BLOBS                   = 11;   // blobs found in the subtraction
+  VIEW_REMOVE_MASK             = 12;
+  VIEW_AUTO_PROCESSED          = 13;   // the output of each clean method, before it is linked as the final one
+  VIEW_AUTO_SELECTIVE_PROCESSED = 14;
+  VIEW_SELECTIVE_PROCESSED     = 15;
 }
 
 message ImageRef { string path = 1; int32 width = 2; int32 height = 3; string format = 4; }

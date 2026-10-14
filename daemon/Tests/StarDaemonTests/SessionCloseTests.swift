@@ -187,4 +187,18 @@ final class SessionCloseTests: XCTestCase {
         XCTAssertEqual(loaded.numPositiveOutliers + loaded.numNegativeOutliers + loaded.numUndecidedOutliers, 0)
         await session.close()
     }
+
+    // MARK: - FrameInfo.available_modes
+
+    /// A frame nothing has been done to has only its source image; the picker greys out the rest.
+    func testFrameInfoListsTheImagesTheFrameHas() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+
+        let info = await Mapping.frameInfo(frame: frame, outlierGroups: nil)
+        XCTAssertEqual(info.availableModes, [.viewOriginal])
+        await session.close()
+    }
 }
