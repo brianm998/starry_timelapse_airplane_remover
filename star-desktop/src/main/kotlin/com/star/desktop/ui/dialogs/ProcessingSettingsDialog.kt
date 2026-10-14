@@ -1,6 +1,7 @@
 package com.star.desktop.ui.dialogs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,50 +13,58 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import com.star.desktop.domain.SettingsChange
-import com.star.desktop.ui.app.AppScreen
-import com.star.desktop.ui.components.HoverTip
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.FieldInput
+import com.star.desktop.domain.SettingsChange
+import com.star.desktop.domain.SettingsEdit
 import com.star.desktop.engine.EngineStatus
+import com.star.desktop.i18n.localized
+import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.components.GlyphButton
+import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.CleanMethod
 import com.star.proto.Config
 import com.star.proto.DetectionType
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import com.star.desktop.i18n.localized
 
 /**
- * Processing settings sheet (macOS `ProcessingSettingsView`). Edits the config fields the daemon's
- * `Sequence.UpdateConfig` actually applies (clean method, detection type, horizon, tripod,
- * concurrency); other config is read-only today and labeled as such.
+ * Processing settings sheet (macOS `ProcessingSettingsView`): the clean method and how strictly outliers are found, the scene and camera, how much
+ * of this Mac to use, and, behind "Show Expert Settings", every tuning setting the engine has.
+ *
+ * Rows that do not apply to what is chosen are greyed (a sky-only sequence has no horizon to tune; a sub-setting means nothing while the setting
+ * above it is off). A number outside its range is marked and Save waits until it is put right. Only what was changed is sent: Save resending every
+ * setting would mark each one as chosen by the user, including ones the engine picks for itself (the keypoint divisor). Clicking outside the sheet
+ * does nothing, so a stray click cannot throw the edits away, and a save that fails says why and leaves the sheet up.
  */
 @Composable
 fun ProcessingSettingsDialog(app: AppViewModel) {
@@ -63,15 +72,18 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
     val loaded by produceState<Config?>(null) { value = runCatching { app.sessions.getConfig() }.getOrNull() }
     // What the daemon says applying the edits would do to the work on disk; written by the effect below as the edits settle.
     var change by remember { mutableStateOf(SettingsChange.NONE) }
+    val screen by app.screen.collectAsState()
+    val svm = (screen as? AppScreen.Sequence)?.vm
+    val processing by (svm?.isProcessing ?: remember { MutableStateFlow(false) }).collectAsState()
+    val frameCount = svm?.frameCount ?: 1
 
-    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = app::closeSettings), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
         Column(
             modifier = Modifier
-                .widthIn(max = 520.dp)
+                .widthIn(max = 560.dp)
                 .clip(StarShapes.card)
                 .background(StarColors.prefsCard)
                 .verticalScroll(rememberScrollState())
-                .clickable(enabled = false) {}
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -98,17 +110,22 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             var concurrency by remember(cfg) { mutableStateOf(cfg.numberOfFramesToProcessConcurrently.coerceAtLeast(1)) }
             // Daemons that predate the profile send none: they behave as Full.
             var useProfile by remember(cfg) { mutableStateOf(if (cfg.hasResourceProfile()) cfg.resourceProfile else "full") }
-            var showExpert by remember { mutableStateOf(false) }
+            val showExpert by app.showExpertSettings.collectAsState()
             // Expert-field edits: bools and raw text (parsed on save) keyed by field label.
             val boolEdits = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
             val textEdits = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, String>() }
 
-            SettingGroup("Clean Method") {
+            // Only the daemon's own machine's hardware is known here; a client's own machine may differ, so this reflects what the *daemon* can
+            // actually do. Absent (older daemon) means "unknown," not "unsupported" -- do not disable.
+            val gpuUnavailable = cfg.hasGpuHardwareAvailable() && !cfg.gpuHardwareAvailable
+            val edit = SettingsEdit(horizon, tripod, clean, gpuUnavailable) { id -> boolEdits[id] ?: BOOL_FIELDS[id]?.get(cfg) ?: false }
+
+            SettingGroup(localized("ui.clean_method")) {
                 Segmented(
                     options = listOf(
-                        CleanMethod.CLEAN_AUTOMATIC to "Automatic",
-                        CleanMethod.CLEAN_AUTOMATIC_TRUE to "Auto-Selective",
-                        CleanMethod.CLEAN_SELECTIVE to "Selective",
+                        CleanMethod.CLEAN_AUTOMATIC to localized("ui.automatic"),
+                        CleanMethod.CLEAN_AUTOMATIC_TRUE to localized("ui.auto_selective"),
+                        CleanMethod.CLEAN_SELECTIVE to localized("ui.selective"),
                     ),
                     selected = clean,
                     onSelect = { clean = it },
@@ -119,21 +136,35 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 )
             }
 
-            SettingGroup("Detection Strength") {
+            // How strictly outliers are looked for: only means something when the method finds outlier groups at all.
+            SettingGroup(localized("ui.selective_processing_mode").removeSuffix(":"), enabled = edit.usesOutliers) {
                 Segmented(
                     options = listOf(
-                        DetectionType.DETECTION_MILD to "Mild",
-                        DetectionType.DETECTION_STRONG to "Strong",
-                        DetectionType.DETECTION_STRONGER to "Stronger",
-                        DetectionType.DETECTION_EXCESSIVE to "Excessive",
+                        DetectionType.DETECTION_MILD to localized("detection_type.mild"),
+                        DetectionType.DETECTION_STRONG to localized("detection_type.strong"),
+                        DetectionType.DETECTION_STRONGER to localized("detection_type.stronger"),
+                        DetectionType.DETECTION_EXCESSIVE to localized("detection_type.excessive"),
                     ),
                     selected = detection,
                     onSelect = { detection = it },
+                    enabled = edit.usesOutliers,
                 )
             }
 
-            ToggleRow("Horizon detection", horizon) { horizon = it }
-            ToggleRow("Tripod head was moving", tripod) { tripod = it }
+            SettingGroup(localized("ui.scene_type").removeSuffix(":")) {
+                Segmented(
+                    options = listOf(true to localized("scene_type.sky_horizon"), false to localized("scene_type.sky_only")),
+                    selected = horizon,
+                    onSelect = { horizon = it },
+                )
+            }
+            SettingGroup(localized("ui.camera_motion").removeSuffix(":")) {
+                Segmented(
+                    options = listOf(false to localized("camera_motion.fixed"), true to localized("camera_motion.moving")),
+                    selected = tripod,
+                    onSelect = { tripod = it },
+                )
+            }
 
             SettingGroup(localized("ui.use_of_this_mac")) {
                 Segmented(
@@ -157,74 +188,70 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             if (useProfile == "custom") {
                 SettingGroup(localized("ui.use_custom_pipeline_depth")) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GlyphButton("−", "Fewer", { concurrency = (concurrency - 1).coerceAtLeast(1) }, size = 24, fontSize = 14)
+                        GlyphButton("−", localized("ui.fewer"), { concurrency = (concurrency - 1).coerceAtLeast(1) }, size = 24, fontSize = 14)
                         Text("$concurrency", color = StarColors.textPrimary, fontSize = 14.sp)
-                        GlyphButton("+", "More", { concurrency += 1 }, size = 24, fontSize = 14)
+                        GlyphButton("+", localized("ui.more"), { concurrency += 1 }, size = 24, fontSize = 14)
                     }
                 }
             }
 
-            ToggleRow(if (showExpert) "Hide Expert Settings" else "Show Expert Settings", showExpert) { showExpert = it }
+            ToggleRow(localized(if (showExpert) "ui.hide_expert_settings" else "ui.show_expert_settings"), showExpert) { app.setShowExpertSettings(it) }
             if (showExpert) {
                 // Only to word the "needs a newer engine" note; whether a field is supported
                 // is decided by its presence in the config the daemon sent, not by this.
                 val daemonVersion = (app.engineStatus.value as? EngineStatus.Connected)?.daemonVersion
-                ExpertGroup("Alignment", ALIGNMENT_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
-                ExpertGroup("Horizon", HORIZON_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
-                ExpertGroup("Memory", MEMORY_FIELDS, cfg, boolEdits, textEdits, daemonVersion)
-                SettingGroup("Performance") {
+                ExpertGroup(localized("ui.alignment_settings"), ALIGNMENT_FIELDS, cfg, edit, boolEdits, textEdits, frameCount, daemonVersion)
+                ExpertGroup(localized("ui.horizon_settings"), HORIZON_FIELDS, cfg, edit, boolEdits, textEdits, frameCount, daemonVersion)
+                ExpertGroup(localized("ui.memory_settings"), MEMORY_FIELDS, cfg, edit, boolEdits, textEdits, frameCount, daemonVersion)
+                SettingGroup(localized("ui.gpu_settings")) {
                     // Three independent GPU toggles, each naming the specific step it applies
                     // to rather than reading as "GPU for everything."
-                    Text(
-                        "Each toggle below applies to one step only: alignment/merge, or "
-                            + "SIFT/AKAZE keypoint detection.",
-                        color = StarColors.textDisabled, fontSize = 10.sp,
-                    )
-                    // Only the daemon's own machine's hardware is known here; a client's own
-                    // machine may differ, so this reflects what the *daemon* can actually do.
-                    // Absent (older daemon) means "unknown," not "unsupported" -- do not disable.
-                    val gpuUnsupported = cfg.hasGpuHardwareAvailable() && !cfg.gpuHardwareAvailable
+                    Text(localized("ui.gpu_settings_scope_note"), color = StarColors.textDisabled, fontSize = 10.sp)
                     PERFORMANCE_FIELDS.forEach { f ->
-                        if (!f.has(cfg)) { UnsupportedRow(f.label, daemonVersion); return@forEach }
+                        if (!f.has(cfg)) { UnsupportedRow(localized(f.labelKey), daemonVersion); return@forEach }
                         when (f) {
-                            is BoolField -> {
-                                val gpuGated = f.label in GPU_FIELD_LABELS && gpuUnsupported
-                                ToggleRow(
-                                    f.label,
-                                    if (gpuGated) false else (boolEdits[f.label] ?: f.get(cfg)),
-                                    enabled = !gpuGated,
-                                ) { boolEdits[f.label] = it }
-                            }
+                            is BoolField -> ToggleRow(
+                                localized(f.labelKey).removeSuffix(":"),
+                                if (!f.enabled(edit)) false else (boolEdits[f.label] ?: f.get(cfg)),
+                                enabled = f.enabled(edit),
+                            ) { boolEdits[f.label] = it }
                             else -> Unit
                         }
                     }
                     // Read-only hardware fact, not a setting -- shown so "on but this Mac has
                     // no supported GPU" is never mistaken for "off", and why the toggle above
                     // is greyed out and forced off when unsupported.
-                    if (cfg.hasGpuHardwareAvailable()) {
-                        GPUHardwareStatusRow(cfg.gpuHardwareAvailable)
-                    }
+                    if (cfg.hasGpuHardwareAvailable()) GPUHardwareStatusRow(cfg.gpuHardwareAvailable)
                 }
             }
 
+            val frameMax = frameCount
+            // The expert fields this sheet is going to send: the ones that apply, with a value that differs from what the daemon has.
+            val problems = ALL_FIELDS.filter { f ->
+                f.has(cfg) && f.enabled(edit) && f is NumberField && textEdits[f.label]?.let { !f.isValid(it, frameMax) } == true
+            }.map { it.label }.toSet()
+
             // The config the edits make: what Save applies, and what the daemon is asked about to say whether it contradicts finished work.
+            // Only the changes are in it: resending every setting would mark each as chosen by the user, including the ones the engine picks
+            // for itself.
             val proposed: Config = run {
-                val b = cfg.toBuilder()
+                val b = Config.newBuilder()
                     .setCleanMethod(clean)
                     .setDetectionType(detection)
                     .setHorizonDetectionEnabled(horizon)
                     .setTripodHeadWasMoving(tripod)
                     .setNumberOfFramesToProcessConcurrently(concurrency)
-                    .setResourceProfile(useProfile)
-                // Apply expert edits (cfg already carries current values; only changed ones differ).
-                // Unsupported fields are skipped: they render as read-only so there
-                // should be no edit to apply, and sending one to a daemon that does
-                // not know the field would be a silent no-op at best.
-                (ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + PERFORMANCE_FIELDS).filter { it.has(cfg) }.forEach { f ->
+                if (cfg.hasResourceProfile() && cfg.resourceProfile != useProfile || !cfg.hasResourceProfile() && useProfile != "full") {
+                    b.setResourceProfile(useProfile)
+                }
+                // Unsupported fields are skipped: they render as read-only so there should be no edit to apply, and sending one to a daemon that
+                // does not know the field would be a silent no-op at best. A field that does not apply, or whose text is not a valid number,
+                // is not sent either.
+                ALL_FIELDS.filter { it.has(cfg) && it.enabled(edit) }.forEach { f ->
                     when (f) {
-                        is BoolField -> boolEdits[f.label]?.let { f.set(b, it) }
-                        is IntField -> textEdits[f.label]?.toIntOrNull()?.let { f.set(b, it.coerceIn(f.min, f.max)) }
-                        is DoubleField -> textEdits[f.label]?.toDoubleOrNull()?.let { f.set(b, it.coerceIn(f.min, f.max)) }
+                        is BoolField -> boolEdits[f.label]?.takeIf { it != f.get(cfg) }?.let { f.set(b, it) }
+                        is IntField -> textEdits[f.label]?.let { FieldInput.int(it, f.min, f.maxFor(frameMax)) }?.takeIf { it != f.get(cfg) }?.let { f.set(b, it) }
+                        is DoubleField -> textEdits[f.label]?.let { FieldInput.double(it, f.min, f.max) }?.takeIf { it != f.get(cfg) }?.let { f.set(b, it) }
                     }
                 }
                 b.build()
@@ -236,27 +263,28 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 delay(300)
                 change = SettingsChange.of(app.previewConfigChange(proposed))
             }
-            val screen by app.screen.collectAsState()
-            val svm = (screen as? AppScreen.Sequence)?.vm
-            val processing by (svm?.isProcessing ?: remember { MutableStateFlow(false) }).collectAsState()
             var askUpdate by remember { mutableStateOf(false) }
 
-            // Save the settings and close; with [processNow] go on to start processing (macOS "Process Now").
+            // Save the settings and close; with [processNow] go on to start processing (macOS "Process Now"). A save the daemon refuses is
+            // said, and the sheet stays up with the edits in it.
             val save: (Boolean) -> Unit = { processNow ->
                 scope.launch {
-                    runCatching { app.updateSessionConfig(proposed) }
-                    app.closeSettings()
-                    if (processNow) app.requestProcessAll()
+                    val saved = runCatching { app.updateSessionConfig(proposed) }
+                    saved.onFailure { app.report(it.message ?: it.toString()) }
+                    if (saved.isSuccess) {
+                        app.closeSettings()
+                        if (processNow) app.requestProcessAll()
+                    }
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = app::closeSettings) { Text(localized("ui.cancel")) }
-                OutlinedButton(onClick = { save(false) }) { Text(localized("ui.save")) }
+                OutlinedButton(onClick = { save(false) }, enabled = problems.isEmpty()) { Text(localized("ui.save")) }
                 Button(
                     // Update, over frames this change contradicts, asks before it acts: it does not start a run over an untouched sequence, it
                     // changes one that is part done.
                     onClick = { if (change.contradictsFinishedWork) askUpdate = true else save(true) },
-                    enabled = change.canProcess(processing),
+                    enabled = change.canProcess(processing) && problems.isEmpty(),
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                 ) { Text(localized(change.processKey)) }
             }
@@ -283,25 +311,25 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
 }
 
 @Composable
-private fun SettingGroup(title: String, content: @Composable () -> Unit) {
+private fun SettingGroup(title: String, enabled: Boolean = true, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, color = StarColors.textSecondary, fontSize = 12.sp)
+        Text(title, color = if (enabled) StarColors.textSecondary else StarColors.textDisabled, fontSize = 12.sp)
         content()
     }
 }
 
 @Composable
-private fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+private fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, enabled: Boolean = true) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         options.forEach { (value, label) ->
             val isSel = value == selected
             Box(
                 Modifier
                     .clip(RoundedCornerShape(5.dp))
-                    .background(if (isSel) StarColors.accent else StarColors.cellDefault)
-                    .clickable { onSelect(value) }
+                    .background(if (isSel) (if (enabled) StarColors.accent else StarColors.gray) else StarColors.cellDefault)
+                    .clickable(enabled = enabled) { onSelect(value) }
                     .padding(horizontal = 10.dp, vertical = 5.dp),
-            ) { Text(label, color = if (isSel) Color.White else StarColors.textPrimary, fontSize = 11.sp) }
+            ) { Text(label, color = if (isSel) Color.White else if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 11.sp) }
         }
     }
 }
@@ -328,58 +356,128 @@ private fun ToggleRow(label: String, value: Boolean, enabled: Boolean = true, on
 /// which field: it is exact, it is per field, and it needs no maintenance as fields are
 /// added. The version string is only used to word the message. (Reflection would be the
 /// other option, but the client uses protobuf-lite, which has no descriptors.)
+///
+/// `label` is the field's stable id (the key of the edit maps, and what the tests name it by);
+/// what the row says is `labelKey`'s text in the user's language. `enabled` says whether the
+/// row applies to what is being edited (see [SettingsEdit]); a row that does not is greyed and
+/// its edit, if any, is not sent.
 internal sealed interface ExpertField {
     val label: String
+    val labelKey: String
     val has: (Config) -> Boolean
+    val enabled: (SettingsEdit) -> Boolean
 }
-internal class IntField(override val label: String, val get: (Config) -> Int, val set: (Config.Builder, Int) -> Config.Builder, val min: Int, val max: Int, override val has: (Config) -> Boolean) : ExpertField
+
+/** A field that takes a number, which has a range it must stay in. */
+internal sealed interface NumberField : ExpertField {
+    /** Whether [text] is a number this field accepts when the open sequence has [frameCount] frames. */
+    fun isValid(text: String, frameCount: Int): Boolean
+}
+
+private val ALWAYS: (SettingsEdit) -> Boolean = { true }
+
+internal class IntField(
+    override val label: String,
+    override val labelKey: String,
+    val get: (Config) -> Int,
+    val set: (Config.Builder, Int) -> Config.Builder,
+    val min: Int,
+    val max: Int,
+    override val has: (Config) -> Boolean,
+    override val enabled: (SettingsEdit) -> Boolean = ALWAYS,
+    /** The largest value for a sequence of this many frames, for the settings that count neighbors (never more than the others there are). */
+    val maxForFrames: ((Int) -> Int)? = null,
+) : NumberField {
+    fun maxFor(frameCount: Int): Int = maxForFrames?.invoke(frameCount)?.coerceIn(min, max) ?: max
+    override fun isValid(text: String, frameCount: Int) = FieldInput.int(text, min, maxFor(frameCount)) != null
+}
+
 internal class DoubleField(
     override val label: String,
+    override val labelKey: String,
     val get: (Config) -> Double,
     val set: (Config.Builder, Double) -> Config.Builder,
     override val has: (Config) -> Boolean,
     /** Inclusive bounds on what the field accepts; a value outside them is not applied. Unbounded unless the setting has a range that means something. */
     val min: Double = Double.NEGATIVE_INFINITY,
     val max: Double = Double.POSITIVE_INFINITY,
+    override val enabled: (SettingsEdit) -> Boolean = ALWAYS,
+) : NumberField {
+    override fun isValid(text: String, frameCount: Int) = FieldInput.double(text, min, max) != null
+}
+
+internal class BoolField(
+    override val label: String,
+    override val labelKey: String,
+    val get: (Config) -> Boolean,
+    val set: (Config.Builder, Boolean) -> Config.Builder,
+    override val has: (Config) -> Boolean,
+    override val enabled: (SettingsEdit) -> Boolean = ALWAYS,
 ) : ExpertField
-internal class BoolField(override val label: String, val get: (Config) -> Boolean, val set: (Config.Builder, Boolean) -> Config.Builder, override val has: (Config) -> Boolean) : ExpertField
+
+// The ids the rules refer to.
+private const val CANNY = "Canny edge detection"
+private const val SMOOTHING = "Reference horizon smoothing"
+private const val BRIGHTNESS = "Brightness refinement"
+private const val SPIKES = "Spike removal"
+
+/** The horizon rows: moot for a sky-only sequence. */
+private val NEEDS_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly }
+
+/** The reference-horizon rows: they smooth between horizons the user painted, which only a camera that moved has. */
+private val NEEDS_MOVING_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly && !it.cameraFixed }
 
 internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
-    IntField("Neighbor frames", { it.numberAlignedNeighborFrames }, { b, v -> b.setNumberAlignedNeighborFrames(v) }, 1, 1000, { it.hasNumberAlignedNeighborFrames() }),
-    IntField("Static neighbor frames", { it.numberStaticNeighborFrames }, { b, v -> b.setNumberStaticNeighborFrames(v) }, 1, 1000, { it.hasNumberStaticNeighborFrames() }),
-    IntField("Max keypoints", { it.alignmentMaxKeypoints }, { b, v -> b.setAlignmentMaxKeypoints(v) }, 4, 10000, { it.hasAlignmentMaxKeypoints() }),
-    IntField("Ground horizon extension", { it.alignmentGroundHorizonExtension }, { b, v -> b.setAlignmentGroundHorizonExtension(v) }, 0, 10000, { it.hasAlignmentGroundHorizonExtension() }),
-    IntField("Sky horizon extension", { it.alignmentSkyHorizonExtension }, { b, v -> b.setAlignmentSkyHorizonExtension(v) }, 0, 10000, { it.hasAlignmentSkyHorizonExtension() }),
-    IntField("Base image dilate size", { it.alignmentBaseImageDilateSize }, { b, v -> b.setAlignmentBaseImageDilateSize(v) }, 4, 10000, { it.hasAlignmentBaseImageDilateSize() }),
-    IntField("Base image threshold", { it.alignmentBaseImageThresholdValue }, { b, v -> b.setAlignmentBaseImageThresholdValue(v) }, 1, 255, { it.hasAlignmentBaseImageThresholdValue() }),
-    DoubleField("Homography smoothing ε", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }, { it.hasHomographySmoothingEpsilon() }),
-    BoolField("Allow earth alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }, { it.hasAllowEarthAlignment() }),
-    // Detect on a half-size copy of each frame.  Keypoint detection is the most memory
-    // hungry step and its cost is per pixel, so this cuts it by about 4x, at some cost in
-    // alignment quality.  Keypoint files are kept separately per setting, so switching
-    // back and forth does not mix the two.
-    // Replaced the "Half resolution keypoints" switch. DoubleField has no min/max, unlike
-    // IntField, so a value under 1 is reachable from here; StarCore clamps anything <= 1 to
-    // full resolution rather than honouring it, so that is harmless but not meaningful.
-    DoubleField("Keypoint detection divisor", { it.alignmentKeypointDetectionDivisor }, { b, v -> b.setAlignmentKeypointDetectionDivisor(v) }, { it.hasAlignmentKeypointDetectionDivisor() }),
-    BoolField("Write debug images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }, { it.hasAlignmentWriteDebugImages() }),
+    IntField("Neighbor frames", "ui.neighbor_frame_count", { it.numberAlignedNeighborFrames }, { b, v -> b.setNumberAlignedNeighborFrames(v) }, 1, 1000, { it.hasNumberAlignedNeighborFrames() },
+        maxForFrames = { it - 1 }),
+    // Only a camera that did not move has frames whose horizons can be merged; a moving camera uses the aligned neighbors above.
+    IntField("Static neighbor frames", "ui.static_neighbor_frame_count", { it.numberStaticNeighborFrames }, { b, v -> b.setNumberStaticNeighborFrames(v) }, 1, 1000, { it.hasNumberStaticNeighborFrames() },
+        enabled = { it.cameraFixed }, maxForFrames = { it - 1 }),
+    IntField("Max keypoints", "ui.max_keypoints", { it.alignmentMaxKeypoints }, { b, v -> b.setAlignmentMaxKeypoints(v) }, 4, 10000, { it.hasAlignmentMaxKeypoints() }),
+    IntField("Ground horizon extension", "ui.ground_horizon_extension", { it.alignmentGroundHorizonExtension }, { b, v -> b.setAlignmentGroundHorizonExtension(v) }, 0, 10000, { it.hasAlignmentGroundHorizonExtension() }),
+    IntField("Sky horizon extension", "ui.sky_horizon_extension", { it.alignmentSkyHorizonExtension }, { b, v -> b.setAlignmentSkyHorizonExtension(v) }, 0, 10000, { it.hasAlignmentSkyHorizonExtension() }),
+    IntField("Base image dilate size", "ui.base_image_dilation_size", { it.alignmentBaseImageDilateSize }, { b, v -> b.setAlignmentBaseImageDilateSize(v) }, 4, 10000, { it.hasAlignmentBaseImageDilateSize() }),
+    IntField("Base image threshold", "ui.base_image_threshold", { it.alignmentBaseImageThresholdValue }, { b, v -> b.setAlignmentBaseImageThresholdValue(v) }, 1, 255, { it.hasAlignmentBaseImageThresholdValue() }),
+    DoubleField("Homography smoothing ε", "ui.homography_smoothing", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }, { it.hasHomographySmoothingEpsilon() },
+        min = 0.0, max = 10.0, enabled = NEEDS_HORIZON),
+    BoolField("Allow earth alignment", "ui.allow_earth_alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }, { it.hasAllowEarthAlignment() }),
+    // Detect on a smaller copy of each frame.  Keypoint detection is the most memory hungry step and its cost is per pixel, so this cuts it by
+    // about the square of the divisor, at some cost in alignment quality.  Keypoint files are kept separately per setting, so switching back and
+    // forth does not mix the two.  1 (full size) to 8, both inclusive; StarCore clamps anything <= 1 to full resolution.
+    DoubleField("Keypoint detection divisor", "ui.keypoint_divisor", { it.alignmentKeypointDetectionDivisor }, { b, v -> b.setAlignmentKeypointDetectionDivisor(v) }, { it.hasAlignmentKeypointDetectionDivisor() },
+        min = 1.0, max = 8.0),
+    BoolField("Write debug images", "ui.write_debug_images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }, { it.hasAlignmentWriteDebugImages() }),
 )
 
 internal val HORIZON_FIELDS: List<ExpertField> = listOf(
-    BoolField("Canny edge detection", { it.useCannyForHorizonDetection }, { b, v -> b.setUseCannyForHorizonDetection(v) }, { it.hasUseCannyForHorizonDetection() }),
-    DoubleField("Canny min threshold", { it.cannyMinThreshold }, { b, v -> b.setCannyMinThreshold(v) }, { it.hasCannyMinThreshold() }),
-    DoubleField("Canny max threshold", { it.cannyMaxThreshold }, { b, v -> b.setCannyMaxThreshold(v) }, { it.hasCannyMaxThreshold() }),
-    BoolField("Canny L2 gradient", { it.cannyUseL2Gradient }, { b, v -> b.setCannyUseL2Gradient(v) }, { it.hasCannyUseL2Gradient() }),
-    BoolField("Reference horizon smoothing", { it.useReferenceHorizonSmoothing }, { b, v -> b.setUseReferenceHorizonSmoothing(v) }, { it.hasUseReferenceHorizonSmoothing() }),
-    IntField("Smoothing max distance", { it.referenceHorizonSmoothingMaxDistance }, { b, v -> b.setReferenceHorizonSmoothingMaxDistance(v) }, 1, 10000, { it.hasReferenceHorizonSmoothingMaxDistance() }),
-    BoolField("Brightness refinement", { it.useReferenceHorizonBrightnessRefinement }, { b, v -> b.setUseReferenceHorizonBrightnessRefinement(v) }, { it.hasUseReferenceHorizonBrightnessRefinement() }),
-    IntField("Refinement search radius", { it.referenceHorizonBrightnessRefinementSearchRadius }, { b, v -> b.setReferenceHorizonBrightnessRefinementSearchRadius(v) }, 1, 10000, { it.hasReferenceHorizonBrightnessRefinementSearchRadius() }),
-    IntField("Refinement hist buckets", { it.referenceHorizonBrightnessRefinementHistBuckets }, { b, v -> b.setReferenceHorizonBrightnessRefinementHistBuckets(v) }, 2, 65536, { it.hasReferenceHorizonBrightnessRefinementHistBuckets() }),
-    IntField("Neighborhood size", { it.referenceHorizonNeighborhoodSize }, { b, v -> b.setReferenceHorizonNeighborhoodSize(v) }, 1, 99, { it.hasReferenceHorizonNeighborhoodSize() }),
-    BoolField("Spike removal", { it.horizonSpikeRemovalEnabled }, { b, v -> b.setHorizonSpikeRemovalEnabled(v) }, { it.hasHorizonSpikeRemovalEnabled() }),
-    IntField("Spike max width", { it.horizonSpikeMaxWidth }, { b, v -> b.setHorizonSpikeMaxWidth(v) }, 1, 500, { it.hasHorizonSpikeMaxWidth() }),
-    DoubleField("Spike max deviation", { it.horizonSpikeMaxDeviationFraction }, { b, v -> b.setHorizonSpikeMaxDeviationFraction(v) }, { it.hasHorizonSpikeMaxDeviationFraction() }),
-    IntField("Spike window half", { it.horizonSpikeWindowHalf }, { b, v -> b.setHorizonSpikeWindowHalf(v) }, 10, 2000, { it.hasHorizonSpikeWindowHalf() }),
+    BoolField(CANNY, "ui.canny_edge_detection", { it.useCannyForHorizonDetection }, { b, v -> b.setUseCannyForHorizonDetection(v) }, { it.hasUseCannyForHorizonDetection() },
+        enabled = NEEDS_HORIZON),
+    DoubleField("Canny min threshold", "ui.canny_min_threshold", { it.cannyMinThreshold }, { b, v -> b.setCannyMinThreshold(v) }, { it.hasCannyMinThreshold() },
+        min = 1.0, max = 300.0, enabled = { !it.skyOnly && it.isOn(CANNY) }),
+    DoubleField("Canny max threshold", "ui.canny_max_threshold", { it.cannyMaxThreshold }, { b, v -> b.setCannyMaxThreshold(v) }, { it.hasCannyMaxThreshold() },
+        min = 1.0, max = 300.0, enabled = { !it.skyOnly && it.isOn(CANNY) }),
+    BoolField("Canny L2 gradient", "ui.canny_gradient_method", { it.cannyUseL2Gradient }, { b, v -> b.setCannyUseL2Gradient(v) }, { it.hasCannyUseL2Gradient() },
+        enabled = { !it.skyOnly && it.isOn(CANNY) }),
+    BoolField(SMOOTHING, "ui.reference_horizon_smoothing", { it.useReferenceHorizonSmoothing }, { b, v -> b.setUseReferenceHorizonSmoothing(v) }, { it.hasUseReferenceHorizonSmoothing() },
+        enabled = NEEDS_MOVING_HORIZON),
+    IntField("Smoothing max distance", "ui.reference_smoothing_distance", { it.referenceHorizonSmoothingMaxDistance }, { b, v -> b.setReferenceHorizonSmoothingMaxDistance(v) }, 1, 10000, { it.hasReferenceHorizonSmoothingMaxDistance() },
+        enabled = { NEEDS_MOVING_HORIZON(it) && it.isOn(SMOOTHING) }),
+    BoolField(BRIGHTNESS, "ui.reference_horizon_brightness_refinement", { it.useReferenceHorizonBrightnessRefinement }, { b, v -> b.setUseReferenceHorizonBrightnessRefinement(v) }, { it.hasUseReferenceHorizonBrightnessRefinement() },
+        enabled = NEEDS_MOVING_HORIZON),
+    IntField("Refinement search radius", "ui.brightness_refinement_search_radius", { it.referenceHorizonBrightnessRefinementSearchRadius }, { b, v -> b.setReferenceHorizonBrightnessRefinementSearchRadius(v) }, 1, 10000, { it.hasReferenceHorizonBrightnessRefinementSearchRadius() },
+        enabled = { NEEDS_MOVING_HORIZON(it) && it.isOn(BRIGHTNESS) }),
+    IntField("Refinement hist buckets", "ui.brightness_refinement_histogram_buckets", { it.referenceHorizonBrightnessRefinementHistBuckets }, { b, v -> b.setReferenceHorizonBrightnessRefinementHistBuckets(v) }, 2, 65536, { it.hasReferenceHorizonBrightnessRefinementHistBuckets() },
+        enabled = { NEEDS_MOVING_HORIZON(it) && it.isOn(BRIGHTNESS) }),
+    IntField("Neighborhood size", "ui.reference_horizon_neighbourhood_size", { it.referenceHorizonNeighborhoodSize }, { b, v -> b.setReferenceHorizonNeighborhoodSize(v) }, 1, 99, { it.hasReferenceHorizonNeighborhoodSize() },
+        enabled = { NEEDS_MOVING_HORIZON(it) && it.isOn(BRIGHTNESS) }),
+    BoolField(SPIKES, "ui.horizon_spike_removal", { it.horizonSpikeRemovalEnabled }, { b, v -> b.setHorizonSpikeRemovalEnabled(v) }, { it.hasHorizonSpikeRemovalEnabled() },
+        enabled = { NEEDS_MOVING_HORIZON(it) && it.isOn(BRIGHTNESS) }),
+    IntField("Spike max width", "ui.spike_max_width_columns", { it.horizonSpikeMaxWidth }, { b, v -> b.setHorizonSpikeMaxWidth(v) }, 1, 500, { it.hasHorizonSpikeMaxWidth() },
+        enabled = { NEEDS_MOVING_HORIZON(it) && it.isOn(BRIGHTNESS) && it.isOn(SPIKES) }),
+    DoubleField("Spike max deviation", "ui.spike_max_deviation_fraction", { it.horizonSpikeMaxDeviationFraction }, { b, v -> b.setHorizonSpikeMaxDeviationFraction(v) }, { it.hasHorizonSpikeMaxDeviationFraction() },
+        min = 0.001, max = 0.5, enabled = { NEEDS_MOVING_HORIZON(it) && it.isOn(BRIGHTNESS) && it.isOn(SPIKES) }),
+    IntField("Spike window half", "ui.spike_detection_window_half", { it.horizonSpikeWindowHalf }, { b, v -> b.setHorizonSpikeWindowHalf(v) }, 10, 2000, { it.hasHorizonSpikeWindowHalf() },
+        enabled = { NEEDS_MOVING_HORIZON(it) && it.isOn(BRIGHTNESS) && it.isOn(SPIKES) }),
 )
 
 // NOTE: labels are the keys of the edit maps, so they have to stay unique across all
@@ -390,21 +488,21 @@ internal val HORIZON_FIELDS: List<ExpertField> = listOf(
 // no floor, no explicit cap, and never stream. 0 has to be reachable, and the daemon
 // honours a present 0 rather than substituting its default.
 internal val MEMORY_FIELDS: List<ExpertField> = listOf(
-    IntField("Keypoint mem ×", { it.keypointMemoryMultiplier }, { b, v -> b.setKeypointMemoryMultiplier(v) }, 1, 200, { it.hasKeypointMemoryMultiplier() }),
-    IntField("Outlier mem ×", { it.outlierMemoryMultiplier }, { b, v -> b.setOutlierMemoryMultiplier(v) }, 1, 50, { it.hasOutlierMemoryMultiplier() }),
-    IntField("Merge mem ×", { it.mergeMemoryMultiplier }, { b, v -> b.setMergeMemoryMultiplier(v) }, 1, 50, { it.hasMergeMemoryMultiplier() }),
-    IntField("Horizon mem ×", { it.horizonMemoryMultiplier }, { b, v -> b.setHorizonMemoryMultiplier(v) }, 1, 50, { it.hasHorizonMemoryMultiplier() }),
+    IntField("Keypoint mem ×", "ui.keypoint_mem", { it.keypointMemoryMultiplier }, { b, v -> b.setKeypointMemoryMultiplier(v) }, 1, 200, { it.hasKeypointMemoryMultiplier() }),
+    IntField("Outlier mem ×", "ui.outlier_mem", { it.outlierMemoryMultiplier }, { b, v -> b.setOutlierMemoryMultiplier(v) }, 1, 50, { it.hasOutlierMemoryMultiplier() }),
+    IntField("Merge mem ×", "ui.merge_mem", { it.mergeMemoryMultiplier }, { b, v -> b.setMergeMemoryMultiplier(v) }, 1, 50, { it.hasMergeMemoryMultiplier() }),
+    IntField("Horizon mem ×", "ui.horizon_mem", { it.horizonMemoryMultiplier }, { b, v -> b.setHorizonMemoryMultiplier(v) }, 1, 50, { it.hasHorizonMemoryMultiplier() }),
     // Horizon detection costs about the same whatever the frame size, so the multiplier
     // above under-reserves on small frames.  This floor is what covers them; it stops
     // mattering around 17MP.  0 = no floor.
-    IntField("Horizon floor MB", { it.horizonReservationFloorMb }, { b, v -> b.setHorizonReservationFloorMb(v) }, 0, 16384, { it.hasHorizonReservationFloorMb() }),
+    IntField("Horizon floor MB", "ui.horizon_floor_mb", { it.horizonReservationFloorMb }, { b, v -> b.setHorizonReservationFloorMb(v) }, 0, 16384, { it.hasHorizonReservationFloorMb() }),
     // 0 = no explicit cap; the memory budget decides.
-    IntField("Max keypoint ops", { it.maxConcurrentKeypointOps }, { b, v -> b.setMaxConcurrentKeypointOps(v) }, 0, 256, { it.hasMaxConcurrentKeypointOps() }),
+    IntField("Max keypoint ops", "ui.max_keypoint_ops", { it.maxConcurrentKeypointOps }, { b, v -> b.setMaxConcurrentKeypointOps(v) }, 0, 256, { it.hasMaxConcurrentKeypointOps() }),
     // 0 = never stream, keep every source frame resident.
-    IntField("Merge streaming MB", { it.mergeStreamingThresholdMb }, { b, v -> b.setMergeStreamingThresholdMb(v) }, 0, 65536, { it.hasMergeStreamingThresholdMb() }),
+    IntField("Merge streaming MB", "ui.merge_streaming_mb", { it.mergeStreamingThresholdMb }, { b, v -> b.setMergeStreamingThresholdMb(v) }, 0, 65536, { it.hasMergeStreamingThresholdMb() }),
     // The fraction of this machine's memory star may reserve for work in flight: 0.1 to 0.95, inclusive (the daemon clamps to the same). The default
     // 0.85 leaves the rest of the machine about 15%. Applied as given only under the Custom use of this Mac.
-    DoubleField("Memory budget", { it.maxMatMemoryFraction }, { b, v -> b.setMaxMatMemoryFraction(v) }, { it.hasMaxMatMemoryFraction() }, min = 0.1, max = 0.95),
+    DoubleField("Memory budget", "ui.memory_budget", { it.maxMatMemoryFraction }, { b, v -> b.setMaxMatMemoryFraction(v) }, { it.hasMaxMatMemoryFraction() }, min = 0.1, max = 0.95),
 )
 
 // On by default in StarCore's own Config, so a daemon this dialog talks to always sends
@@ -423,38 +521,54 @@ internal const val GPU_FOR_AKAZE_LABEL = "Use GPU for AKAZE"
 
 internal val GPU_FIELD_LABELS = setOf(GPU_FOR_MERGE_LABEL, GPU_FOR_SIFT_LABEL, GPU_FOR_AKAZE_LABEL)
 
+/** Greyed and forced off on a machine with no GPU star can use: a toggle that could be turned on there would be a lie. */
+private val NEEDS_GPU: (SettingsEdit) -> Boolean = { !it.gpuUnavailable }
+
 internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
-    BoolField(GPU_FOR_MERGE_LABEL, { it.useGpuAcceleration }, { b, v -> b.setUseGpuAcceleration(v) }, { it.hasUseGpuAcceleration() }),
-    BoolField(GPU_FOR_SIFT_LABEL, { it.useGpuForSift }, { b, v -> b.setUseGpuForSift(v) }, { it.hasUseGpuForSift() }),
-    BoolField(GPU_FOR_AKAZE_LABEL, { it.useGpuForAkaze }, { b, v -> b.setUseGpuForAkaze(v) }, { it.hasUseGpuForAkaze() }),
+    BoolField(GPU_FOR_MERGE_LABEL, "ui.use_gpu_for_merge", { it.useGpuAcceleration }, { b, v -> b.setUseGpuAcceleration(v) }, { it.hasUseGpuAcceleration() }, enabled = NEEDS_GPU),
+    BoolField(GPU_FOR_SIFT_LABEL, "ui.use_gpu_for_sift", { it.useGpuForSift }, { b, v -> b.setUseGpuForSift(v) }, { it.hasUseGpuForSift() }, enabled = NEEDS_GPU),
+    BoolField(GPU_FOR_AKAZE_LABEL, "ui.use_gpu_for_akaze", { it.useGpuForAkaze }, { b, v -> b.setUseGpuForAkaze(v) }, { it.hasUseGpuForAkaze() }, enabled = NEEDS_GPU),
 )
+
+private val ALL_FIELDS: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + PERFORMANCE_FIELDS
+
+/** The toggles by id, for the rules that read one toggle from another's row. */
+private val BOOL_FIELDS: Map<String, BoolField> = ALL_FIELDS.filterIsInstance<BoolField>().associateBy { it.label }
 
 @Composable
 private fun ExpertGroup(
     title: String,
     fields: List<ExpertField>,
     cfg: Config,
+    edit: SettingsEdit,
     boolEdits: SnapshotStateMap<String, Boolean>,
     textEdits: SnapshotStateMap<String, String>,
+    frameCount: Int,
     daemonVersion: String?,
 ) {
     SettingGroup(title) {
         fields.forEach { f ->
+            val label = localized(f.labelKey).removeSuffix(":")
             if (!f.has(cfg)) {
                 // Shown rather than hidden, so it is clear the setting exists and what is
                 // missing. Deliberately not editable: there is nothing on the other end to
                 // apply it.
-                UnsupportedRow(f.label, daemonVersion)
+                UnsupportedRow(label, daemonVersion)
                 return@forEach
             }
+            val enabled = f.enabled(edit)
             when (f) {
-                is BoolField -> ToggleRow(f.label, boolEdits[f.label] ?: f.get(cfg)) { boolEdits[f.label] = it }
-                is IntField -> NumberRow(f.label, textEdits[f.label] ?: f.get(cfg).toString()) {
-                    textEdits[f.label] = it.filter { c -> c.isDigit() }
-                }
-                is DoubleField -> NumberRow(f.label, textEdits[f.label] ?: f.get(cfg).toString()) {
-                    textEdits[f.label] = it.filter { c -> c.isDigit() || c == '.' }
-                }
+                is BoolField -> ToggleRow(label, boolEdits[f.label] ?: f.get(cfg), enabled = enabled) { boolEdits[f.label] = it }
+                is IntField -> NumberRow(
+                    label, textEdits[f.label] ?: f.get(cfg).toString(), enabled,
+                    problem = if (f.isValid(textEdits[f.label] ?: f.get(cfg).toString(), frameCount)) null
+                    else localized("ui.enter_a_whole_number_from_a_to_b", f.min, f.maxFor(frameCount)),
+                ) { textEdits[f.label] = FieldInput.wholeNumberChars(it) }
+                is DoubleField -> NumberRow(
+                    label, textEdits[f.label] ?: f.get(cfg).toString(), enabled,
+                    problem = if (f.isValid(textEdits[f.label] ?: f.get(cfg).toString(), frameCount)) null
+                    else localized("ui.enter_a_number_from_a_to_b", FieldInput.bound(f.min), FieldInput.bound(f.max)),
+                ) { textEdits[f.label] = FieldInput.decimalChars(it) }
             }
         }
     }
@@ -465,7 +579,7 @@ private fun UnsupportedRow(label: String, daemonVersion: String?) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, color = StarColors.textDisabled, fontSize = 12.sp, modifier = Modifier.weight(1f))
         Text(
-            if (daemonVersion == null) "needs a newer engine" else "needs an engine newer than $daemonVersion",
+            if (daemonVersion == null) localized("ui.needs_a_newer_engine") else localized("ui.needs_an_engine_newer_than", daemonVersion),
             color = StarColors.textDisabled, fontSize = 10.sp,
         )
     }
@@ -488,16 +602,31 @@ private fun GPUHardwareStatusRow(available: Boolean) {
     }
 }
 
+/**
+ * A label and a box for a number. A value that is not in range marks the box red and says what the range is, under it; a row that does not apply
+ * is greyed and cannot be edited.
+ */
 @Composable
-private fun NumberRow(label: String, value: String, onChange: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-        OutlinedTextField(
-            value = value,
-            onValueChange = onChange,
-            singleLine = true,
-            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
-            modifier = Modifier.widthIn(max = 110.dp),
-        )
+private fun NumberRow(label: String, value: String, enabled: Boolean, problem: String?, onChange: (String) -> Unit) {
+    val shownProblem = problem.takeIf { enabled }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(label, color = if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                enabled = enabled,
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 12.sp, color = if (enabled) StarColors.textPrimary else StarColors.textDisabled),
+                cursorBrush = SolidColor(StarColors.white),
+                modifier = Modifier
+                    .widthIn(min = 90.dp, max = 110.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(StarColors.sidePanel)
+                    .border(1.dp, if (shownProblem != null) StarColors.red else StarColors.cellDefault, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            )
+        }
+        if (shownProblem != null) Text(shownProblem, color = StarColors.red, fontSize = 10.sp, modifier = Modifier.align(Alignment.End))
     }
 }

@@ -299,6 +299,12 @@ class AppViewModel(
         }
     }
 
+    // "Show Expert Settings" is remembered while a sequence is open, so closing the sheet and coming back finds it as it was left
+    // (macOS keeps it on the sequence's view model for the same reason).
+    private val _showExpertSettings = MutableStateFlow(false)
+    val showExpertSettings: StateFlow<Boolean> = _showExpertSettings.asStateFlow()
+    fun setShowExpertSettings(show: Boolean) { _showExpertSettings.value = show }
+
     private val _showSettings = MutableStateFlow(false)
     val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
     fun openSettings() { _showSettings.value = true }
@@ -784,6 +790,7 @@ class AppViewModel(
         autoRenderAfterProcessing = false
         awaitingProcessingPrompt = false
         _showSettings.value = false
+        _showExpertSettings.value = false
         _sequenceProgress.value = null
         _showRenderVideo.value = false
         _renderVideoAutoStart.value = false

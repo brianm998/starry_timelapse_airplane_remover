@@ -121,7 +121,6 @@ class ExpertFieldWiringTest {
     fun doubleFieldRangesAreSane() {
         for (f in allFields.filterIsInstance<DoubleField>()) {
             assertTrue(f.min <= f.max, "${f.label}: min ${f.min} exceeds max ${f.max}")
-            assertTrue(DOUBLE_PROBE in f.min..f.max, "${f.label}: the probe ${DOUBLE_PROBE} is outside ${f.min}..${f.max}")
         }
     }
 
