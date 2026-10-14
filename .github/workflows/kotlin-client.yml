@@ -125,6 +125,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # release.sh cloned OpenCV above, and its Android sample wrapper jar is not one
+      # setup-gradle recognises, so it fails wrapper validation. Only star-desktop's matters.
+      - name: Drop OpenCV's vendored Android Gradle wrapper
+        run: rm -rf opencv/opencv/platforms/android
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 

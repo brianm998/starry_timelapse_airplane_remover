@@ -50,11 +50,11 @@ object FileReveal {
     }
 
     /**
-     * The folder of a forward-slash [path], cut on the string: `File.parent` would rewrite it with
-     * the host's separator, so the answer would depend on the machine the test runs on.
+     * The folder of [path], cut on the string at either separator: `File.parent` would rewrite a
+     * forward-slash path with the host's separator, so the answer would depend on the machine.
      */
     private fun parentFolder(path: String): String? {
-        val cut = path.lastIndexOf('/')
+        val cut = path.lastIndexOfAny(charArrayOf('/', '\\'))
         return when {
             cut < 0 -> null
             cut == 0 -> "/"
