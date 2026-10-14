@@ -185,6 +185,7 @@
   "ui.aligned_state": "সাজানো: {0}",
   "ui.alignment": "অ্যালাইনমেন্ট",
   "ui.alignment_2": "অ্যালাইনমেন্ট",
+  "ui.alignment_chart_help": "Ctrl+স্ক্রল (Mac-এ ⌘+স্ক্রল) করলে জুম হয়, টানলে সরে, ক্লিক করলে ফ্রেমে যায়।",
   "ui.alignment_done": "অ্যালাইনমেন্ট সম্পন্ন",
   "ui.alignment_error": "অ্যালাইনমেন্ট ত্রুটি: {0}",
   "ui.alignment_information_window": "অ্যালাইনমেন্ট তথ্য উইন্ডো",

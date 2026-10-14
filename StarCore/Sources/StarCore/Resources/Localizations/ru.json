@@ -185,6 +185,7 @@
   "ui.aligned_state": "Выравнивание: {0}",
   "ui.alignment": "выравнивание",
   "ui.alignment_2": "Выравнивание",
+  "ui.alignment_chart_help": "Ctrl+прокрутка (⌘+прокрутка на Mac) — масштаб, перетаскивание — сдвиг, щелчок — переход к кадру.",
   "ui.alignment_done": "Выравнивание завершено",
   "ui.alignment_error": "Ошибка выравнивания: {0}",
   "ui.alignment_information_window": "Окно сведений о выравнивании",

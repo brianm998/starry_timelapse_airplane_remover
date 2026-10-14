@@ -185,6 +185,7 @@
   "ui.aligned_state": "Zarovnání: {0}",
   "ui.alignment": "zarovnání",
   "ui.alignment_2": "Zarovnání",
+  "ui.alignment_chart_help": "Ctrl+kolečko (na Macu ⌘+kolečko) přibližuje, tažení posouvá, kliknutí přejde na snímek.",
   "ui.alignment_done": "Zarovnání dokončeno",
   "ui.alignment_error": "Chyba zarovnání: {0}",
   "ui.alignment_information_window": "Okno informací o zarovnání",

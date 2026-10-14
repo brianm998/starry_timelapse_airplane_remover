@@ -185,6 +185,7 @@
   "ui.aligned_state": "ہم آہنگ: {0}",
   "ui.alignment": "ہم آہنگی",
   "ui.alignment_2": "ہم آہنگی",
+  "ui.alignment_chart_help": "Ctrl+اسکرول (Mac پر ⌘+اسکرول) سے زوم ہوتا ہے، گھسیٹنے سے حرکت ہوتی ہے، کلک سے اس فریم پر جاتے ہیں۔",
   "ui.alignment_done": "ہم آہنگی مکمل",
   "ui.alignment_error": "ہم آہنگی میں خامی: {0}",
   "ui.alignment_information_window": "ہم آہنگی کی معلومات کی ونڈو",

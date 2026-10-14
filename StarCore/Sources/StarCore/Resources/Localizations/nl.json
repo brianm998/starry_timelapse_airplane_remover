@@ -185,6 +185,7 @@
   "ui.aligned_state": "Uitgelijnd: {0}",
   "ui.alignment": "uitlijning",
   "ui.alignment_2": "Uitlijning",
+  "ui.alignment_chart_help": "Ctrl+scrollen (⌘+scrollen op een Mac) zoomt, slepen verschuift, klikken gaat naar dat beeld.",
   "ui.alignment_done": "Uitlijning klaar",
   "ui.alignment_error": "Uitlijnfout: {0}",
   "ui.alignment_information_window": "Venster met uitlijninformatie",

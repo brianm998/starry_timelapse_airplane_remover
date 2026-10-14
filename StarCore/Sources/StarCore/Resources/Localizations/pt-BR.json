@@ -185,6 +185,7 @@
   "ui.aligned_state": "Alinhado: {0}",
   "ui.alignment": "alinhamento",
   "ui.alignment_2": "Alinhamento",
+  "ui.alignment_chart_help": "Ctrl+rolar (⌘+rolar no Mac) dá zoom, arrastar move e clicar vai para o quadro.",
   "ui.alignment_done": "Alinhamento concluído",
   "ui.alignment_error": "Erro de alinhamento: {0}",
   "ui.alignment_information_window": "Janela de informações de alinhamento",

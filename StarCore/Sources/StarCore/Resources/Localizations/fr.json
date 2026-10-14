@@ -185,6 +185,7 @@
   "ui.aligned_state": "Aligné : {0}",
   "ui.alignment": "alignement",
   "ui.alignment_2": "Alignement",
+  "ui.alignment_chart_help": "Ctrl+molette (⌘+molette sur Mac) zoome, le glissement déplace, un clic va à l’image.",
   "ui.alignment_done": "Alignement terminé",
   "ui.alignment_error": "Erreur d'alignement : {0}",
   "ui.alignment_information_window": "Fenêtre d'informations d'alignement",

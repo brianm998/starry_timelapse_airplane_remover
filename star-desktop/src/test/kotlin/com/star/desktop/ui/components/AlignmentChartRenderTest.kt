@@ -37,6 +37,9 @@ class AlignmentChartRenderTest {
 
     private val frames = 300
 
+    /** Ctrl held, which is what makes the wheel zoom rather than scroll the page. */
+    private val ctrl = androidx.compose.ui.input.pointer.PointerKeyboardModifiers(isCtrlPressed = true)
+
     /** A sequence with a drifting alignment: each neighbor's deviation follows a slow wave, a few of them distrusted. */
     private fun data(): AlignmentData = AlignmentData(
         (0 until frames).map { f ->
@@ -114,21 +117,54 @@ class AlignmentChartRenderTest {
         val plain = render("alignment_charts_plain")
         val zoomed = render("alignment_charts_zoomed") { scene ->
             hover(scene, Offset(400f, 150f))
-            scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(0f, -4f))
+            scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(0f, -4f), keyboardModifiers = ctrl)
             scene.render(48_000_000)
         }
         assertTrue(differs(plain, zoomed), "the wheel did nothing")
     }
 
+    @Test fun theWheelAloneLeavesTheChartForThePageToScroll() {
+        val plain = render("alignment_charts_plain")
+        val scrolled = render("alignment_charts_scrolled") { scene ->
+            hover(scene, Offset(400f, 150f))
+            scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(0f, -4f))
+            scene.render(48_000_000)
+        }
+        // Only the pointer's own tooltip differs from an untouched chart; the frames shown are the same, so the x axis labels are.
+        // The same pointer movements without the wheel (a scroll event carries the pointer to its position, as a move does).
+        val hovered = render("alignment_charts_hover_only") { scene ->
+            hover(scene, Offset(400f, 150f))
+            scene.sendPointerEvent(PointerEventType.Move, Offset(400f, 150f))
+            scene.render(48_000_000)
+        }
+        assertTrue(!differs(hovered, scrolled), "the plain wheel moved the chart")
+        assertTrue(differs(plain, hovered))
+    }
+
+    @Test fun aSidewaysScrollPansAZoomedChart() {
+        val zoomed = render("alignment_charts_zoomed_only") { scene ->
+            hover(scene, Offset(400f, 150f))
+            scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(0f, -6f), keyboardModifiers = ctrl)
+            scene.render(48_000_000)
+        }
+        val swiped = render("alignment_charts_swiped") { scene ->
+            hover(scene, Offset(400f, 150f))
+            scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(0f, -6f), keyboardModifiers = ctrl)
+            scene.render(48_000_000)
+            repeat(5) { scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(2f, 0f)); scene.render(64_000_000L) }
+        }
+        assertTrue(differs(zoomed, swiped), "a sideways scroll did not move the chart")
+    }
+
     @Test fun draggingPansAZoomedChart() {
         val zoomed = render("alignment_charts_zoomed_only") { scene ->
             hover(scene, Offset(400f, 150f))
-            scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(0f, -6f))
+            scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(0f, -6f), keyboardModifiers = ctrl)
             scene.render(48_000_000)
         }
         val panned = render("alignment_charts_panned") { scene ->
             hover(scene, Offset(400f, 150f))
-            scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(0f, -6f))
+            scene.sendPointerEvent(PointerEventType.Scroll, Offset(400f, 150f), scrollDelta = Offset(0f, -6f), keyboardModifiers = ctrl)
             scene.render(48_000_000)
             scene.sendPointerEvent(PointerEventType.Press, Offset(400f, 150f), buttons = androidx.compose.ui.input.pointer.PointerButtons(isPrimaryPressed = true))
             scene.render(64_000_000)
@@ -154,5 +190,29 @@ class AlignmentChartRenderTest {
         assertTrue(picked.size == 1, "one click is one pick: $picked")
         // The plot runs from x=62 to x=890 over frames 0..299: the click at 400 is a bit past frame 120.
         assertTrue(picked.single() in 115..135, "picked ${picked.single()}")
+    }
+
+    /** The chart as the left panel shows it: the panel's width, no axis titles, the slider along its top. */
+    @Test fun theCompactChartFitsThePanel() {
+        val alignment = data()
+        val scene = ImageComposeScene(width = 220, height = 220, density = Density(1f)) {
+            StarTheme {
+                Column(Modifier.fillMaxSize().padding(12.dp)) {
+                    DeviationChart(alignment.starPoints, frames, current = 120, onPick = {}, chartHeight = 170.dp, compact = true)
+                }
+            }
+        }
+        try {
+            scene.render()
+            val image = scene.render(100_000_000)
+            System.getProperty("star.render.dump")?.takeIf { it.isNotBlank() }?.let {
+                File(it, "alignment_chart_compact.png").apply { parentFile.mkdirs() }.writeBytes(image.encodeToData(EncodedImageFormat.PNG)!!.bytes)
+            }
+            val bitmap = org.jetbrains.skia.Bitmap.makeFromImage(image)
+            val colored = countPixels(bitmap) { r, g, b -> maxOf(r, g, b) - minOf(r, g, b) > 80 }
+            assertTrue(colored > 100, "the compact chart drew no lines ($colored)")
+        } finally {
+            scene.close()
+        }
     }
 }

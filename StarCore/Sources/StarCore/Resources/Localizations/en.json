@@ -185,6 +185,7 @@
   "ui.aligned_state": "Aligned: {0}",
   "ui.alignment": "alignment",
   "ui.alignment_2": "Alignment",
+  "ui.alignment_chart_help": "Ctrl+scroll (⌘+scroll on a Mac) zooms, dragging pans, clicking goes to that frame.",
   "ui.alignment_done": "Alignment Done",
   "ui.alignment_error": "Alignment Error: {0}",
   "ui.alignment_information_window": "Alignment Information Window",

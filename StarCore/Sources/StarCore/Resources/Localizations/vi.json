@@ -185,6 +185,7 @@
   "ui.aligned_state": "Đã căn: {0}",
   "ui.alignment": "căn chỉnh",
   "ui.alignment_2": "Căn chỉnh",
+  "ui.alignment_chart_help": "Ctrl+cuộn (⌘+cuộn trên Mac) để thu phóng, kéo để di chuyển, nhấp để đến khung hình.",
   "ui.alignment_done": "Căn chỉnh xong",
   "ui.alignment_error": "Lỗi căn chỉnh: {0}",
   "ui.alignment_information_window": "Cửa sổ thông tin căn chỉnh",

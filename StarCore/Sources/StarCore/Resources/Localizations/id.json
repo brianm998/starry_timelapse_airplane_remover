@@ -185,6 +185,7 @@
   "ui.aligned_state": "Selaras: {0}",
   "ui.alignment": "penyelarasan",
   "ui.alignment_2": "Penyelarasan",
+  "ui.alignment_chart_help": "Ctrl+gulir (⌘+gulir di Mac) untuk zoom, seret untuk menggeser, klik untuk membuka bingkai.",
   "ui.alignment_done": "Penyelarasan selesai",
   "ui.alignment_error": "Galat penyelarasan: {0}",
   "ui.alignment_information_window": "Jendela informasi penyelarasan",

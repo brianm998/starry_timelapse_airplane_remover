@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -72,10 +74,11 @@ import kotlin.math.roundToInt
 
 private const val NO_FRAME = -1
 
-private val LEFT_MARGIN = 54.dp
-private val BOTTOM_MARGIN = 38.dp
-private val TOP_MARGIN = 18.dp
-private val RIGHT_MARGIN = 10.dp
+/** Room around the plot for the axes' numbers and titles; the small version, for a chart in a narrow panel, has no titles and less of everything. */
+private class Margins(val left: androidx.compose.ui.unit.Dp, val bottom: androidx.compose.ui.unit.Dp, val top: androidx.compose.ui.unit.Dp, val right: androidx.compose.ui.unit.Dp)
+
+private val FULL_MARGINS = Margins(54.dp, 38.dp, 18.dp, 10.dp)
+private val COMPACT_MARGINS = Margins(30.dp, 18.dp, 14.dp, 6.dp)
 
 private val PALETTE = listOf(
     Color(0.0f, 0.478f, 1.0f),       // blue
@@ -106,6 +109,7 @@ fun DeviationChart(
     onPick: (Int) -> Unit,
     modifier: Modifier = Modifier,
     chartHeight: androidx.compose.ui.unit.Dp = 240.dp,
+    compact: Boolean = false,
 ) {
     var height by remember { mutableStateOf(AlignmentCharts.DEFAULT_HEIGHT.toFloat()) }
     val series = remember(points) { AlignmentCharts.byOffset(points) }
@@ -117,14 +121,14 @@ fun DeviationChart(
             Slider(
                 value = height, onValueChange = { height = it },
                 valueRange = AlignmentCharts.MIN_HEIGHT.toFloat()..AlignmentCharts.MAX_HEIGHT.toFloat(),
-                modifier = Modifier.width(240.dp).height(24.dp),
+                modifier = (if (compact) Modifier.weight(1f) else Modifier.width(240.dp)).height(24.dp),
                 colors = SliderDefaults.colors(thumbColor = StarColors.accent, activeTrackColor = StarColors.accent, inactiveTrackColor = StarColors.cellDefault),
             )
         }
         TimelineChart(
             frameCount = frameCount, current = current, onPick = onPick,
             yRange = { -height.toDouble()..height.toDouble() },
-            xTitle = localized("ui.frame_index"), yTitle = localized("ui.deviation"),
+            xTitle = localized("ui.frame_index"), yTitle = localized("ui.deviation"), compact = compact,
             modifier = Modifier.fillMaxWidth().height(chartHeight),
             drawSeries = { domain, x, y ->
                 for ((offset, pts) in series) {
@@ -165,6 +169,7 @@ fun KeypointChart(
     onPick: (Int) -> Unit,
     modifier: Modifier = Modifier,
     chartHeight: androidx.compose.ui.unit.Dp = 200.dp,
+    compact: Boolean = false,
 ) {
     val known = remember(counts) { counts.withIndex().filter { it.value != null }.map { it.index to it.value!! } }
     TimelineChart(
@@ -173,7 +178,7 @@ fun KeypointChart(
             // Fitted to what is showing: from nothing up to the most any visible frame has, so zooming in on a quiet stretch shows its detail.
             0.0..max(1.0, (known.maxOfOrNull { it.second } ?: 1).toDouble() * 1.05)
         },
-        xTitle = localized("ui.frame_index"), yTitle = localized("ui.number_of_key_points"),
+        xTitle = localized("ui.frame_index"), yTitle = localized("ui.number_of_key_points"), compact = compact,
         modifier = modifier.fillMaxWidth().height(chartHeight),
         drawSeries = { domain, x, y ->
             val path = Path()
@@ -209,6 +214,7 @@ private fun TimelineChart(
     yRange: () -> ClosedFloatingPointRange<Double>,
     xTitle: String,
     yTitle: String,
+    compact: Boolean,
     modifier: Modifier,
     drawSeries: DrawScope.(domain: XDomain, x: (Int) -> Float, y: (Double) -> Float) -> Unit,
     hover: (frame: Int, value: Double) -> Hover?,
@@ -219,10 +225,11 @@ private fun TimelineChart(
     var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     var pointer by remember { mutableStateOf<Offset?>(null) }
     val density = LocalDensity.current
-    val left = with(density) { LEFT_MARGIN.toPx() }
-    val right = with(density) { RIGHT_MARGIN.toPx() }
-    val top = with(density) { TOP_MARGIN.toPx() }
-    val bottom = with(density) { BOTTOM_MARGIN.toPx() }
+    val margins = if (compact) COMPACT_MARGINS else FULL_MARGINS
+    val left = with(density) { margins.left.toPx() }
+    val right = with(density) { margins.right.toPx() }
+    val top = with(density) { margins.top.toPx() }
+    val bottom = with(density) { margins.bottom.toPx() }
     val plot = Rect(left, top, max(left + 1f, size.width - right), max(top + 1f, size.height - bottom))
     val measurer = rememberTextMeasurer()
 
@@ -242,10 +249,22 @@ private fun TimelineChart(
             .onPointerEvent(PointerEventType.Exit) { pointer = null }
             .onPointerEvent(PointerEventType.Scroll) { event ->
                 val change = event.changes.first()
-                // Zoomed about the frame under the pointer, a tenth at a time; the wheel's direction is the page's: up is toward you, zooming in.
-                val factor = 1.12.pow((-change.scrollDelta.y).toDouble())
-                domain = domain.zoomed(factor, frameCount, anchor = frameAt(change.position.x).toDouble())
-                change.consume()
+                val modifiers = event.keyboardModifiers
+                when {
+                    // Zoomed about the frame under the pointer, with Ctrl (⌘ on a Mac) held: the plain wheel is for scrolling the page the charts are
+                    // on, which a chart that took every turn of it would stop at.
+                    modifiers.isCtrlPressed || modifiers.isMetaPressed -> {
+                        val factor = 1.12.pow((-change.scrollDelta.y).toDouble())
+                        domain = domain.zoomed(factor, frameCount, anchor = frameAt(change.position.x).toDouble())
+                        change.consume()
+                    }
+                    // A sideways scroll (a trackpad swipe, Shift and the wheel) moves along the frames, a twentieth of the picture a notch.
+                    abs(change.scrollDelta.x) > 0f -> {
+                        val step = (change.scrollDelta.x * domain.span * 0.05f).let { if (abs(it) < 1f) Math.signum(it) else it }
+                        domain = domain.panned(step.roundToInt(), frameCount)
+                        change.consume()
+                    }
+                }
             }
             .pointerInput(frameCount, plot.left, plot.width) { detectTapGestures { pos -> if (pos.x >= plot.left) onPick(frameAt(pos.x)) } }
             .pointerInput(frameCount, plot.width) {
@@ -263,7 +282,7 @@ private fun TimelineChart(
             },
     ) {
         Canvas(Modifier.matchParentSize()) {
-            drawAxes(measurer, plot, domain, range, xTitle, yTitle)
+            drawAxes(measurer, plot, domain, range, xTitle, yTitle, compact)
             clipRect(plot.left, plot.top - 1f, plot.right, plot.bottom + 1f) {
                 drawSeries(domain, ::xOf, ::yOf)
                 if (current in domain) {
@@ -275,7 +294,7 @@ private fun TimelineChart(
                 }
             }
             if (current in domain) {
-                drawText(measurer, localized("ui.current"), Offset(xOf(current) + 4f, 1f), TextStyle(color = StarColors.red, fontSize = 11.sp))
+                drawText(measurer, localized("ui.current"), Offset(xOf(current) + 4f, 1f), TextStyle(color = StarColors.red, fontSize = if (compact) 9.sp else 11.sp))
             }
         }
         hovering?.let { Tooltip(it, Offset(xOf(it.frame), yOf(it.value)), size) }
@@ -283,23 +302,25 @@ private fun TimelineChart(
 }
 
 private fun DrawScope.drawAxes(
-    measurer: TextMeasurer, plot: Rect, domain: XDomain, range: ClosedFloatingPointRange<Double>, xTitle: String, yTitle: String,
+    measurer: TextMeasurer, plot: Rect, domain: XDomain, range: ClosedFloatingPointRange<Double>, xTitle: String, yTitle: String, compact: Boolean,
 ) {
-    val label = TextStyle(color = StarColors.textSecondary, fontSize = 10.sp)
+    val label = TextStyle(color = StarColors.textSecondary, fontSize = if (compact) 9.sp else 10.sp)
     val grid = StarColors.gray.copy(alpha = 0.25f)
 
-    for (v in ChartTicks.nice(range.start, range.endInclusive, 5)) {
+    for (v in ChartTicks.nice(range.start, range.endInclusive, if (compact) 3 else 5)) {
         val y = plot.bottom - ((v - range.start) / (range.endInclusive - range.start)).toFloat() * plot.height
         drawLine(grid, Offset(plot.left, y), Offset(plot.right, y), 1f)
         val text = measurer.measure(ChartTicks.label(v), label)
         drawText(text, topLeft = Offset(plot.left - text.size.width - 6f, y - text.size.height / 2f))
     }
-    for (f in ChartTicks.nice(domain.lower.toDouble(), domain.upper.toDouble(), 6)) {
+    for (f in ChartTicks.nice(domain.lower.toDouble(), domain.upper.toDouble(), if (compact) 3 else 6)) {
         val x = plot.left + ((f - domain.lower) / max(domain.span, 1)).toFloat() * plot.width
         drawLine(grid, Offset(x, plot.top), Offset(x, plot.bottom), 1f)
         val text = measurer.measure(ChartTicks.label(f), label)
         drawText(text, topLeft = Offset(x - text.size.width / 2f, plot.bottom + 4f))
     }
+    // A chart in a narrow panel has no room for titles; the panel's own heading says what it is.
+    if (compact) return
     val titleStyle = TextStyle(color = StarColors.textSecondary, fontSize = 11.sp)
     val xt = measurer.measure(xTitle, titleStyle)
     drawText(xt, topLeft = Offset(plot.left + (plot.width - xt.size.width) / 2f, size.height - xt.size.height - 2f))

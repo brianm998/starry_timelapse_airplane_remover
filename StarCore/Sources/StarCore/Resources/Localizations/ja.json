@@ -185,6 +185,7 @@
   "ui.aligned_state": "位置合わせ: {0}",
   "ui.alignment": "アライメント",
   "ui.alignment_2": "アライメント",
+  "ui.alignment_chart_help": "Ctrl＋スクロール（Macは⌘＋スクロール）で拡大縮小、ドラッグで移動、クリックでそのフレームへ移動します。",
   "ui.alignment_done": "アライメント完了",
   "ui.alignment_error": "アライメントエラー: {0}",
   "ui.alignment_information_window": "アライメント情報ウインドウ",

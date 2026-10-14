@@ -185,6 +185,7 @@
   "ui.aligned_state": "Ausgerichtet: {0}",
   "ui.alignment": "Ausrichtung",
   "ui.alignment_2": "Ausrichtung",
+  "ui.alignment_chart_help": "Strg+Scrollen (am Mac ⌘+Scrollen) zoomt, Ziehen verschiebt, ein Klick springt zum Bild.",
   "ui.alignment_done": "Ausrichtung fertig",
   "ui.alignment_error": "Ausrichtungsfehler: {0}",
   "ui.alignment_information_window": "Fenster mit Ausrichtungsinformationen",

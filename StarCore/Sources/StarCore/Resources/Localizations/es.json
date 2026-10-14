@@ -185,6 +185,7 @@
   "ui.aligned_state": "Alineado: {0}",
   "ui.alignment": "alineación",
   "ui.alignment_2": "Alineación",
+  "ui.alignment_chart_help": "Ctrl+desplazar (⌘+desplazar en Mac) hace zoom, arrastrar desplaza y un clic va a ese fotograma.",
   "ui.alignment_done": "Alineación completada",
   "ui.alignment_error": "Error de alineación: {0}",
   "ui.alignment_information_window": "Ventana de información de alineación",

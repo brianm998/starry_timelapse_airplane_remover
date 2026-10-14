@@ -185,6 +185,7 @@
   "ui.aligned_state": "已对齐：{0}",
   "ui.alignment": "对齐",
   "ui.alignment_2": "对齐",
+  "ui.alignment_chart_help": "按住 Ctrl（Mac 上为 ⌘）并滚动可缩放，拖动可平移，单击可跳到该帧。",
   "ui.alignment_done": "对齐完成",
   "ui.alignment_error": "对齐错误：{0}",
   "ui.alignment_information_window": "对齐信息窗口",

@@ -19,12 +19,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +40,7 @@ import com.star.desktop.domain.FrameStateCounts
 import com.star.desktop.domain.StepRow
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.DeviationChart
 import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
@@ -81,6 +86,8 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
 
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 StepsView(rows, hasReport = report != null)
+                HorizontalDivider(color = StarColors.cellDefault)
+                AlignmentSection(app, svm)
             }
 
             HorizontalDivider(color = StarColors.cellDefault)
@@ -171,6 +178,49 @@ private fun ResourceProfileControl(app: AppViewModel) {
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
             }
+        }
+    }
+}
+
+/**
+ * The alignment charts the run is producing (macOS `ProcessingModalPanel`'s alignment section): the star deviation chart, and the earth one
+ * when earth alignment is on, filling in as frames align, with a "waiting" line in their place until the first result lands so the panel does
+ * not jump. The checkbox hides them, which makes the panel shorter on a small window; it is kept in the preferences, since this screen is
+ * rebuilt every time it is dismissed and brought back.
+ */
+@Composable
+private fun AlignmentSection(app: AppViewModel, svm: SequenceViewModel) {
+    var show by remember { mutableStateOf(app.prefs.showAlignmentInProcessingWindow) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(localized("ui.alignment_2"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            HoverTip(localized("ui.show_alignment_results_help")) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = show, onCheckedChange = { show = it; app.prefs.showAlignmentInProcessingWindow = it })
+                    Text(localized("ui.show_alignment_results"), color = StarColors.textSecondary, fontSize = 11.sp)
+                }
+            }
+        }
+        if (show) AlignmentCharts(svm)
+    }
+}
+
+@Composable
+private fun AlignmentCharts(svm: SequenceViewModel) {
+    val data by svm.alignment.collectAsState()
+    val current by svm.currentIndex.collectAsState()
+    val alignment = data
+    if (alignment != null && alignment.hasStar) {
+        Text(localized("ui.deviation_in_star_alignment"), color = StarColors.textSecondary, fontSize = 11.sp)
+        DeviationChart(alignment.starPoints, svm.frameCount, current, svm::setCurrentIndex, chartHeight = 220.dp)
+        if (alignment.allowEarth && alignment.hasEarth) {
+            Text(localized("ui.deviation_in_earth_alignment"), color = StarColors.textSecondary, fontSize = 11.sp)
+            DeviationChart(alignment.earthPoints, svm.frameCount, current, svm::setCurrentIndex, chartHeight = 220.dp)
+        }
+    } else {
+        // Nothing has aligned yet. An empty chart reads as a failure rather than as a step that has not run, so say which it is.
+        Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
+            Text(localized("ui.waiting_for_alignment_data"), color = StarColors.textSecondary, fontSize = 13.sp)
         }
     }
 }

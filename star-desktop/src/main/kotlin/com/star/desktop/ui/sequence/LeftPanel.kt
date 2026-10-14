@@ -36,6 +36,7 @@ import com.star.desktop.domain.ProcessingButtonRole
 import com.star.desktop.domain.ViewModes
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.DeviationChart
 import com.star.desktop.ui.components.ExpandToggle
 import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.components.VerticalStarPicker
@@ -140,12 +141,26 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
             fontSize = 11.sp,
         )
 
+        // How far the star alignment moved the pictures, filling in as frames align (macOS draws it here at 200 by 200).
+        AlignmentThumbnail(vm)
+
         ProcessingStats(counts)
 
         // "Show:" — pick which image of the frame the center shows (macOS frameModeView).
         ShowViewModes(vm)
       }
       com.star.desktop.ui.components.PanelChevron("«", { vm.setLeftPanel(false) }, Modifier.padding(6.dp))
+    }
+}
+
+/** The star deviation chart in the panel's width, with its Height slider; nothing until some frame has aligned. */
+@Composable
+private fun AlignmentThumbnail(vm: SequenceViewModel) {
+    val data by vm.alignment.collectAsState()
+    val current by vm.currentIndex.collectAsState()
+    val alignment = data
+    if (alignment != null && alignment.hasStar) {
+        DeviationChart(alignment.starPoints, vm.frameCount, current, vm::setCurrentIndex, chartHeight = 170.dp, compact = true)
     }
 }
 

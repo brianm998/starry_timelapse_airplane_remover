@@ -185,6 +185,7 @@
   "ui.aligned_state": "المحاذاة: {0}",
   "ui.alignment": "المحاذاة",
   "ui.alignment_2": "المحاذاة",
+  "ui.alignment_chart_help": "Ctrl+التمرير (⌘+التمرير على Mac) للتكبير، والسحب للتحريك، والنقر للانتقال إلى الإطار.",
   "ui.alignment_done": "اكتملت المحاذاة",
   "ui.alignment_error": "خطأ في المحاذاة: {0}",
   "ui.alignment_information_window": "نافذة معلومات المحاذاة",

@@ -185,6 +185,7 @@
   "ui.aligned_state": "Hizalama: {0}",
   "ui.alignment": "hizalama",
   "ui.alignment_2": "Hizalama",
+  "ui.alignment_chart_help": "Ctrl+kaydırma (Mac’te ⌘+kaydırma) yakınlaştırır, sürükleme kaydırır, tıklama o kareye gider.",
   "ui.alignment_done": "Hizalama tamamlandı",
   "ui.alignment_error": "Hizalama hatası: {0}",
   "ui.alignment_information_window": "Hizalama bilgisi penceresi",

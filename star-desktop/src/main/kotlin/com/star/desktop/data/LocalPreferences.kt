@@ -96,6 +96,14 @@ class LocalPreferences {
         get() = bool("showHorizonOnMainView") ?: false
         set(value) = setBool("showHorizonOnMainView", value)
 
+    /**
+     * macOS `showAlignmentInProcessingWindow`: whether the processing screen draws its alignment charts. On unless turned off; kept here
+     * and not in the screen's own state, which is rebuilt every time the screen is dismissed and brought back.
+     */
+    var showAlignmentInProcessingWindow: Boolean
+        get() = bool("showAlignmentInProcessingWindow") ?: true
+        set(value) = setBool("showAlignmentInProcessingWindow", value)
+
     fun setSkipRenderPrompt(value: Boolean) = edit { it["skipRenderPromptAfterProcessing"] = value }
 
     fun setLanguage(value: String?) = edit {

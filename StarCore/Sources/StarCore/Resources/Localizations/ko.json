@@ -185,6 +185,7 @@
   "ui.aligned_state": "정렬: {0}",
   "ui.alignment": "정렬",
   "ui.alignment_2": "정렬",
+  "ui.alignment_chart_help": "Ctrl+스크롤(Mac은 ⌘+스크롤)로 확대/축소, 드래그로 이동, 클릭하면 해당 프레임으로 이동합니다.",
   "ui.alignment_done": "정렬 완료",
   "ui.alignment_error": "정렬 오류: {0}",
   "ui.alignment_information_window": "정렬 정보 윈도우",

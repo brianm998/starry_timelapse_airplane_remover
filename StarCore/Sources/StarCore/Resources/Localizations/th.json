@@ -185,6 +185,7 @@
   "ui.aligned_state": "จัดวางแล้ว: {0}",
   "ui.alignment": "การจัดวาง",
   "ui.alignment_2": "การจัดวาง",
+  "ui.alignment_chart_help": "Ctrl+เลื่อน (⌘+เลื่อนบน Mac) เพื่อซูม ลากเพื่อเลื่อนดู คลิกเพื่อไปยังเฟรม",
   "ui.alignment_done": "จัดวางเสร็จแล้ว",
   "ui.alignment_error": "การจัดวางผิดพลาด: {0}",
   "ui.alignment_information_window": "หน้าต่างข้อมูลการจัดวาง",

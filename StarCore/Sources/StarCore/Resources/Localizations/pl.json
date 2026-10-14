@@ -185,6 +185,7 @@
   "ui.aligned_state": "Wyrównanie: {0}",
   "ui.alignment": "wyrównanie",
   "ui.alignment_2": "Wyrównanie",
+  "ui.alignment_chart_help": "Ctrl+przewijanie (⌘+przewijanie na Macu) powiększa, przeciąganie przesuwa, kliknięcie przechodzi do klatki.",
   "ui.alignment_done": "Wyrównanie zakończone",
   "ui.alignment_error": "Błąd wyrównania: {0}",
   "ui.alignment_information_window": "Okno informacji o wyrównaniu",

@@ -65,6 +65,7 @@ fun AlignmentWindowView(@Suppress("UNUSED_PARAMETER") app: AppViewModel, svm: Se
         val earthShowing = alignment.allowEarth && alignment.hasEarth
 
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(localized("ui.alignment_chart_help"), color = StarColors.textDisabled, fontSize = 11.sp)
             if (alignment.hasStar) {
                 if (showStarDeviation) {
                     ChartTitle(localized("ui.deviation_in_star_alignment"))

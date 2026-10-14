@@ -177,6 +177,14 @@ class LocalPreferencesBooleansTest {
         assertEquals(false, LocalPreferences().showHorizonPainterInstructions)
     }
 
+    /** The processing screen's charts: on until turned off, under the macOS app's own key so the two clients share the choice. */
+    @Test fun theProcessingWindowsAlignmentChartsAreOnUntilTurnedOff() {
+        assertTrue(LocalPreferences().showAlignmentInProcessingWindow)
+        LocalPreferences().showAlignmentInProcessingWindow = false
+        assertTrue(prefsFile.readText().contains("\"showAlignmentInProcessingWindow\":false"), prefsFile.readText())
+        assertEquals(false, LocalPreferences().showAlignmentInProcessingWindow)
+    }
+
     @Test fun turningThemBackOnWorks() {
         val p = LocalPreferences()
         p.showHorizonPainterInstructions = false

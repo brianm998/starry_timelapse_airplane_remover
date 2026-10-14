@@ -185,6 +185,7 @@
   "ui.aligned_state": "Allineato: {0}",
   "ui.alignment": "allineamento",
   "ui.alignment_2": "Allineamento",
+  "ui.alignment_chart_help": "Ctrl+scorrimento (⌘+scorrimento su Mac) ingrandisce, trascinando si sposta, un clic va al fotogramma.",
   "ui.alignment_done": "Allineamento completato",
   "ui.alignment_error": "Errore di allineamento: {0}",
   "ui.alignment_information_window": "Finestra informazioni allineamento",

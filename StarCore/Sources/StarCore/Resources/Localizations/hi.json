@@ -185,6 +185,7 @@
   "ui.aligned_state": "संरेखित: {0}",
   "ui.alignment": "अलाइनमेंट",
   "ui.alignment_2": "अलाइनमेंट",
+  "ui.alignment_chart_help": "Ctrl+स्क्रॉल (Mac पर ⌘+स्क्रॉल) से ज़ूम होता है, खींचने से खिसकता है, क्लिक करने से उस फ़्रेम पर जाते हैं।",
   "ui.alignment_done": "अलाइनमेंट पूर्ण",
   "ui.alignment_error": "अलाइनमेंट त्रुटि: {0}",
   "ui.alignment_information_window": "अलाइनमेंट जानकारी विंडो",
