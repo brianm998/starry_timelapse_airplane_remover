@@ -6,6 +6,7 @@ import com.star.proto.ComputeHorizonInBandRequest
 import com.star.proto.GetHorizonOverlayResponse
 import com.star.proto.GetReferenceHorizonResponse
 import com.star.proto.HorizonReferenceUpdatedResponse
+import com.star.proto.TunedHorizonParametersResponse
 import com.star.proto.HorizonBandMethod
 import com.star.proto.HorizonColumns
 import com.star.proto.ProgressEvent
@@ -57,6 +58,13 @@ class HorizonRepository(private val clientProvider: () -> StarClient?) {
     /** Tell the daemon the reference of [frameIndex] was saved. Null on an RPC error. */
     suspend fun referenceUpdated(sessionId: String, frameIndex: Int, applyToNearby: Boolean): HorizonReferenceUpdatedResponse =
         c().horizonReferenceUpdated(sessionId, frameIndex, applyToNearby)
+
+    /** The painter's max downward extension, or null if the daemon cannot say. */
+    suspend fun tunedParameters(sessionId: String): TunedHorizonParametersResponse? =
+        runCatching { c().getTunedHorizonParameters(sessionId) }.getOrNull()
+
+    suspend fun setMaxDownwardExtension(sessionId: String, value: Int): TunedHorizonParametersResponse =
+        c().setTunedHorizonMaxDownwardExtension(sessionId, value)
 
     /** Whether any horizon refinement is waiting (what enables "Re-run Horizon Refinement"). */
     suspend fun refinementPending(sessionId: String): Boolean =

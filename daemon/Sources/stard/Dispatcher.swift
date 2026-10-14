@@ -116,6 +116,8 @@ extension Dispatcher {
         register(method: "Horizon.GetReference")   { id, payload, transport in await HorizonHandlers.getReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.ClearReference") { id, payload, transport in await HorizonHandlers.clearReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.ReferenceUpdated") { id, payload, transport in await HorizonHandlers.referenceUpdated(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.GetTunedParameters") { id, payload, transport in await HorizonHandlers.getTunedParameters(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.SetTunedParameters") { id, payload, transport in await HorizonHandlers.setTunedParameters(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.GetRefinementStatus") { id, payload, transport in await HorizonHandlers.refinementStatus(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.DeferRefinement") { id, payload, transport in await HorizonHandlers.deferRefinement(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.RunRefinement")   { id, payload, transport in await HorizonHandlers.runRefinement(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

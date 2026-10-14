@@ -246,6 +246,56 @@ enum HorizonHandlers {
         }
     }
 
+    // The tuned horizon parameters are one file for the whole sequence, but are read and written through a frame's
+    // horizon processor, which knows where the sequence's directory is; any frame will do.
+    private static func tunedParameters(_ params: HorizonTunedParameters, config: Config) -> Star_V1_TunedHorizonParametersResponse {
+        var resp = Star_V1_TunedHorizonParametersResponse()
+        resp.maxDownwardExtension = Int32(params.maxDownwardExtension)
+        resp.effectiveMaxDownwardExtension = Int32(HorizonTunedParameters.effectiveMaxDownwardExtension(
+            configured: params.maxDownwardExtension,
+            searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius))
+        return resp
+    }
+
+    // Horizon.GetTunedParameters
+    static func getTunedParameters(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SessionRef(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: 0) else {
+                await transport.sendError(id: id, message: "the sequence has no frames", code: 404); return
+            }
+            let params = await frame.loadTunedHorizonParameters()
+            let resp = tunedParameters(params, config: await session.config())
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // Horizon.SetTunedParameters: change the stepper's value, leaving the other tuned parameters as they are.  It reaches a frame's
+    // horizon the next time that frame's merged horizon is built, not the ones already on disk.
+    static func setTunedParameters(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SetTunedHorizonParametersRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: 0) else {
+                await transport.sendError(id: id, message: "the sequence has no frames", code: 404); return
+            }
+            var params = await frame.loadTunedHorizonParameters()
+            params.maxDownwardExtension = max(0, Int(req.maxDownwardExtension))
+            try await frame.saveTunedHorizonParameters(params)
+            let resp = tunedParameters(params, config: await session.config())
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     // Horizon.GetRefinementStatus: whether any refinement is waiting.
     static func refinementStatus(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {

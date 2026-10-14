@@ -27,6 +27,8 @@ import com.star.proto.HorizonReferenceUpdatedRequest
 import com.star.proto.HorizonReferenceUpdatedResponse
 import com.star.proto.RefinementStatusResponse
 import com.star.proto.RunRefinementResponse
+import com.star.proto.SetTunedHorizonParametersRequest
+import com.star.proto.TunedHorizonParametersResponse
 import com.star.proto.GetReferenceHorizonResponse
 import com.star.proto.ReprocessHorizonsRequest
 import com.star.proto.SetReferenceHorizonRequest
@@ -348,6 +350,17 @@ class StarClient(private val conn: StdioConnection) {
             "Horizon.ReferenceUpdated",
             HorizonReferenceUpdatedRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setApplyToNearby(applyToNearby).build(),
             HorizonReferenceUpdatedResponse.parser(),
+        )
+
+    /** The painter's "max downward extension": as stored (0 = derive) and as in force. */
+    suspend fun getTunedHorizonParameters(sessionId: String): TunedHorizonParametersResponse =
+        call("Horizon.GetTunedParameters", sessionRef(sessionId), TunedHorizonParametersResponse.parser())
+
+    suspend fun setTunedHorizonMaxDownwardExtension(sessionId: String, maxDownwardExtension: Int): TunedHorizonParametersResponse =
+        call(
+            "Horizon.SetTunedParameters",
+            SetTunedHorizonParametersRequest.newBuilder().setSessionId(sessionId).setMaxDownwardExtension(maxDownwardExtension).build(),
+            TunedHorizonParametersResponse.parser(),
         )
 
     suspend fun getHorizonRefinementStatus(sessionId: String): RefinementStatusResponse =

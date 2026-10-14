@@ -618,6 +618,18 @@ message HorizonReferenceUpdatedResponse {
   int32 affected_frame_count = 1;   // frames the run would touch
   int32 render_count         = 2;   // of those, the ones it would render again
 }
+// How far below the reference-derived line the brightness refinement may put the horizon: the horizon painter's
+// "↓Npx" stepper.  One value for the whole sequence (horizonReference/tuned_parameters.json).  0 stored means
+// "derive it from the refinement search radius", so the effective value, the one in force, is returned beside it.
+message TunedHorizonParametersResponse {
+  int32 max_downward_extension           = 1;   // as stored; 0 = derive
+  int32 effective_max_downward_extension = 2;   // what is actually in force
+}
+message SetTunedHorizonParametersRequest {
+  string session_id = 1;
+  int32  max_downward_extension = 2;
+}
+
 // Whether any horizon refinement is waiting: what enables "Re-run Horizon Refinement".  Not just the marked
 // frames: a reference painted beside another has no frames in between, and still has its own output to render again.
 message RefinementStatusResponse {

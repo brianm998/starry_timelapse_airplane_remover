@@ -933,6 +933,16 @@ class InteropIntegrationTest {
                 processToCompletion(client, info.sessionId)
                 val n = info.frameCount
 
+                // B8: the max-downward-extension stepper's value is one number for the sequence, stored apart from the derived default.
+                val before = client.getTunedHorizonParameters(info.sessionId)
+                assertEquals(0, before.maxDownwardExtension, "nothing is stored until the stepper is used")
+                assertTrue(before.effectiveMaxDownwardExtension > 0, "the derived default is what is in force")
+                val raised = client.setTunedHorizonMaxDownwardExtension(info.sessionId, before.effectiveMaxDownwardExtension + 10)
+                assertEquals(before.effectiveMaxDownwardExtension + 10, raised.maxDownwardExtension)
+                assertEquals(raised.maxDownwardExtension, raised.effectiveMaxDownwardExtension, "a stored value is the one in force")
+                assertEquals(raised, client.getTunedHorizonParameters(info.sessionId), "what was set is what is read back")
+                client.setTunedHorizonMaxDownwardExtension(info.sessionId, 0)   // back to derived, for the rest of the test
+
                 // Paint a reference on frame 3.
                 val w = info.imageWidth
                 val h = info.imageHeight

@@ -118,6 +118,11 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     var refining by remember { mutableStateOf(0) }          // in-flight random-walker passes
     var errorText by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }          // a save is in flight: a second must not start (macOS isSaving)
+    // The max-downward-extension stepper's value for the sequence: as stored (0 = derived) and as in force.
+    var maxDownward by remember { mutableStateOf(MaxDownward(0, 0)) }
+    LaunchedEffect(Unit) {
+        app.horizonRepo.tunedParameters(vm.sessionId)?.let { maxDownward = MaxDownward(it.maxDownwardExtension, it.effectiveMaxDownwardExtension) }
+    }
     var applyToNearby by remember { mutableStateOf(true) }   // macOS applyToNearbyFrames: on until turned off
     var savedAlready by remember { mutableStateOf(false) }    // the horizon on screen is already the saved one
     var cancelledExplicitly by remember { mutableStateOf(false) } // Cancel / Esc: the one way out that discards
@@ -419,6 +424,16 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             startup = startup, startupIndices = startupIndices, startupPos = startupPos,
             refining = refining, saving = saving, errorText = errorText,
             applyToNearby = applyToNearby, onApplyToNearbyChange = { applyToNearby = it },
+            maxDownward = maxDownward,
+            onMaxDownwardStep = { delta ->
+                val next = nextMaxDownwardExtension(maxDownward, delta)
+                // Shown at once; what the daemon answers (the effective value in force) is what stays.
+                maxDownward = maxDownward.copy(configured = next)
+                scope.launch {
+                    runCatching { app.horizonRepo.setMaxDownwardExtension(vm.sessionId, next) }
+                        .onSuccess { maxDownward = MaxDownward(it.maxDownwardExtension, it.effectiveMaxDownwardExtension) }
+                }
+            },
             onReset = doReset,
             onSave = doSave,
             onContinue = doContinue,
@@ -601,6 +616,8 @@ private fun HorizonControlBar(
     errorText: String?,
     applyToNearby: Boolean,
     onApplyToNearbyChange: (Boolean) -> Unit,
+    maxDownward: MaxDownward,
+    onMaxDownwardStep: (Int) -> Unit,
     onReset: () -> Unit,
     onSave: () -> Unit,
     onContinue: () -> Unit,
@@ -644,6 +661,11 @@ private fun HorizonControlBar(
         } else {
             DividerDot()
             Text(localized("ui.paint_across_horizon", coverage), color = StarColors.yellow, fontSize = 12.sp)
+        }
+
+        if (phase == HorizonPhase.REFINEMENT) {
+            DividerDot()
+            MaxDownwardExtensionControl(maxDownward, onMaxDownwardStep)
         }
 
         if (!startup && phase == HorizonPhase.REFINEMENT) {
@@ -702,6 +724,41 @@ private fun BrushSizeControl(state: HorizonPaintState) {
         ) { Text("+") }
     }
 }
+
+/**
+ * How far below the reference-derived line the brightness refinement may put the horizon (the "↓Npx" stepper). [configured] is
+ * what is stored, 0 meaning "derive it from the refinement search radius"; [effective] is the number in force, which is what
+ * is shown, so the readout is never a bare 0.
+ */
+internal data class MaxDownward(val configured: Int, val effective: Int)
+
+/** The stored value after stepping by [delta] (macOS ±10): from the derived number on screen when nothing is stored, never below 0. */
+internal fun nextMaxDownwardExtension(current: MaxDownward, delta: Int): Int {
+    val base = if (current.configured > 0) current.configured else current.effective
+    return maxOf(0, base + delta)
+}
+
+@Composable
+private fun MaxDownwardExtensionControl(value: MaxDownward, onStep: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        OutlinedButton(
+            onClick = { onStep(-MAX_DOWNWARD_STEP) },
+            enabled = value.configured > 0,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        ) { Text("−") }
+        Text(
+            "↓${value.effective}px",
+            color = if (value.configured > 0) StarColors.textSecondary else StarColors.textDisabled,
+            fontSize = 11.sp,
+        )
+        OutlinedButton(
+            onClick = { onStep(MAX_DOWNWARD_STEP) },
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        ) { Text("+") }
+    }
+}
+
+private const val MAX_DOWNWARD_STEP = 10
 
 @Composable
 private fun SkyGroundToggle(state: HorizonPaintState) {

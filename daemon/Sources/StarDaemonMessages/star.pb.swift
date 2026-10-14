@@ -2807,6 +2807,39 @@ public struct Star_V1_HorizonReferenceUpdatedResponse: Sendable {
   public init() {}
 }
 
+/// How far below the reference-derived line the brightness refinement may put the horizon: the horizon painter's
+/// "↓Npx" stepper.  One value for the whole sequence (horizonReference/tuned_parameters.json).  0 stored means
+/// "derive it from the refinement search radius", so the effective value, the one in force, is returned beside it.
+public struct Star_V1_TunedHorizonParametersResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// as stored; 0 = derive
+  public var maxDownwardExtension: Int32 = 0
+
+  /// what is actually in force
+  public var effectiveMaxDownwardExtension: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_SetTunedHorizonParametersRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var maxDownwardExtension: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// Whether any horizon refinement is waiting: what enables "Re-run Horizon Refinement".  Not just the marked
 /// frames: a reference painted beside another has no frames in between, and still has its own output to render again.
 public struct Star_V1_RefinementStatusResponse: Sendable {
@@ -6580,6 +6613,76 @@ extension Star_V1_HorizonReferenceUpdatedResponse: SwiftProtobuf.Message, SwiftP
   public static func ==(lhs: Star_V1_HorizonReferenceUpdatedResponse, rhs: Star_V1_HorizonReferenceUpdatedResponse) -> Bool {
     if lhs.affectedFrameCount != rhs.affectedFrameCount {return false}
     if lhs.renderCount != rhs.renderCount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_TunedHorizonParametersResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TunedHorizonParametersResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}max_downward_extension\0\u{3}effective_max_downward_extension\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.maxDownwardExtension) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.effectiveMaxDownwardExtension) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.maxDownwardExtension != 0 {
+      try visitor.visitSingularInt32Field(value: self.maxDownwardExtension, fieldNumber: 1)
+    }
+    if self.effectiveMaxDownwardExtension != 0 {
+      try visitor.visitSingularInt32Field(value: self.effectiveMaxDownwardExtension, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_TunedHorizonParametersResponse, rhs: Star_V1_TunedHorizonParametersResponse) -> Bool {
+    if lhs.maxDownwardExtension != rhs.maxDownwardExtension {return false}
+    if lhs.effectiveMaxDownwardExtension != rhs.effectiveMaxDownwardExtension {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_SetTunedHorizonParametersRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetTunedHorizonParametersRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}max_downward_extension\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.maxDownwardExtension) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if self.maxDownwardExtension != 0 {
+      try visitor.visitSingularInt32Field(value: self.maxDownwardExtension, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_SetTunedHorizonParametersRequest, rhs: Star_V1_SetTunedHorizonParametersRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.maxDownwardExtension != rhs.maxDownwardExtension {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

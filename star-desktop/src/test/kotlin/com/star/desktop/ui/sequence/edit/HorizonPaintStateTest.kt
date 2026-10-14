@@ -238,3 +238,22 @@ class PainterKeyActionTest {
             androidx.compose.ui.input.key.Key.R, androidx.compose.ui.input.key.KeyEventType.KeyUp)))
     }
 }
+
+/** The "↓Npx" stepper (macOS `adjustMaxDownwardExtension`). */
+class MaxDownwardExtensionTest {
+    /** Stepping down from the derived default starts from the number on screen, not from the stored 0: the first "−" is not a no-op. */
+    @Test fun steppingFromTheDerivedDefaultStartsFromTheNumberOnScreen() {
+        assertEquals(40, nextMaxDownwardExtension(MaxDownward(configured = 0, effective = 50), -10))
+        assertEquals(60, nextMaxDownwardExtension(MaxDownward(configured = 0, effective = 50), +10))
+    }
+
+    @Test fun aStoredValueIsSteppedFromItself() {
+        assertEquals(70, nextMaxDownwardExtension(MaxDownward(configured = 60, effective = 60), +10))
+        assertEquals(50, nextMaxDownwardExtension(MaxDownward(configured = 60, effective = 60), -10))
+    }
+
+    @Test fun itNeverGoesBelowZero() {
+        assertEquals(0, nextMaxDownwardExtension(MaxDownward(configured = 5, effective = 5), -10))
+        assertEquals(0, nextMaxDownwardExtension(MaxDownward(configured = 0, effective = 4), -10))
+    }
+}
