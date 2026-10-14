@@ -4,7 +4,6 @@
 import StarGherkinKernel
 import XCTest
 
-@MainActor
 final class GeneratedFeatureTests: XCTestCase {
     func testOpenAndProcessFeature() throws {
         try CliFeatureRunner(testCase: self).run(Features.openAndProcess)

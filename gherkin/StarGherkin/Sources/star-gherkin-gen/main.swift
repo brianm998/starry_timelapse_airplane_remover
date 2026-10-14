@@ -304,7 +304,7 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
     """))
 
     // ── Swift test entry points ──
-    func swiftTests(tag: String, runner: String, cls: String, module: String) -> String {
+    func swiftTests(tag: String, runner: String, cls: String, mainActor: Bool) -> String {
         let methods = features.filter { $0.tags.contains(tag) }.map {
             "    func test\(capitalised($0.basename))Feature() throws {\n        try \(runner)(testCase: self).run(Features.\($0.basename))\n    }\n"
         }.joined(separator: "\n")
@@ -313,16 +313,15 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
         import StarGherkinKernel
         import XCTest
 
-        @MainActor
-        final class \(cls): XCTestCase {
+        \(mainActor ? "@MainActor\n" : "")final class \(cls): XCTestCase {
         \(methods)}
 
         """
     }
     outs.append(Output(path: "cli/Tests/GherkinTests/GeneratedFeatureTests.swift",
-                       content: swiftTests(tag: "@cli", runner: "CliFeatureRunner", cls: "GeneratedFeatureTests", module: "cli")))
+                       content: swiftTests(tag: "@cli", runner: "CliFeatureRunner", cls: "GeneratedFeatureTests", mainActor: false)))
     outs.append(Output(path: "gui/starUITests/GeneratedFeatureUITests.swift",
-                       content: swiftTests(tag: "@mac-gui", runner: "GuiFeatureRunner", cls: "GeneratedFeatureUITests", module: "gui")))
+                       content: swiftTests(tag: "@mac-gui", runner: "GuiFeatureRunner", cls: "GeneratedFeatureUITests", mainActor: true)))
 
     // ── Kotlin ──
     let ktPkg = "star-desktop/src/gherkinTest/kotlin/com/star/desktop/gherkin/generated"
