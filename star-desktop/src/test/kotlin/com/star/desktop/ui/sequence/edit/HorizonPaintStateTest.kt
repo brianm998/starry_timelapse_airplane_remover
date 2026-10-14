@@ -92,3 +92,26 @@ class HorizonPaintStateTest {
         assertTrue(state.horizonAt(100) >= sky.skyFloor[100], "the sky stroke's floor was not honoured")
     }
 }
+
+/** When the painter's Save / Next / Continue may be used. */
+class CanSaveHorizonTest {
+    @Test fun aRefinedHorizonWithNothingRunningCanBeSaved() {
+        assertTrue(canSaveHorizon(HorizonPhase.REFINEMENT, hasHorizon = true, refining = 0, saving = false))
+    }
+
+    @Test fun notBeforeARefinedHorizonExists() {
+        assertEquals(false, canSaveHorizon(HorizonPhase.BAND_SELECTION, true, 0, false))
+        assertEquals(false, canSaveHorizon(HorizonPhase.COMPUTING, true, 0, false))
+        assertEquals(false, canSaveHorizon(HorizonPhase.REFINEMENT, hasHorizon = false, refining = 0, saving = false))
+    }
+
+    /** Saved while a pass was running, it stored the horizon from before the pass. */
+    @Test fun notWhileARefinementPassIsRunning() {
+        assertEquals(false, canSaveHorizon(HorizonPhase.REFINEMENT, true, refining = 1, saving = false))
+    }
+
+    /** Two saves at once advanced two frames for one horizon. */
+    @Test fun notWhileASaveIsInFlight() {
+        assertEquals(false, canSaveHorizon(HorizonPhase.REFINEMENT, true, 0, saving = true))
+    }
+}

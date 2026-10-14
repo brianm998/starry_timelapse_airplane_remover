@@ -98,6 +98,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     var hover by remember { mutableStateOf<Offset?>(null) } // canvas-space pointer for the brush ring
     var refining by remember { mutableStateOf(0) }          // in-flight random-walker passes
     var errorText by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }          // a save is in flight: a second must not start (macOS isSaving)
 
     val startup by vm.horizonPainterStartup.collectAsState()
     val startupIndices by vm.startupHorizonIndices.collectAsState()
@@ -160,6 +161,30 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             else errorText = "Refinement failed — try another stroke"
         } finally {
             refining = max(0, refining - 1)
+        }
+    }
+
+    /**
+     * Save the painted horizon as frame [frameIdx]'s reference. True only if the daemon took it: on a failure the
+     * painter stays open and says why (macOS `saveError`), and nothing that follows a save (closing, advancing to
+     * the next startup frame) happens for a horizon that was not saved. In the startup flow the save also marks the
+     * sequence as having a static reference horizon; outside it, an edit to one frame's horizon must not.
+     */
+    suspend fun saveReference(frameIdx: Int): Boolean {
+        val y = state.horizonSnapshot()
+        if (saving || y.none { it >= 0 }) return false
+        saving = true
+        errorText = null
+        return try {
+            app.horizonRepo.setReference(vm.sessionId, frameIdx, y, imgW, imgH, setStaticReference = startup)
+            true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            errorText = e.message ?: e.toString()
+            false
+        } finally {
+            saving = false
         }
     }
 
@@ -279,29 +304,23 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
         HorizonControlBar(
             state = state,
             startup = startup, startupIndices = startupIndices, startupPos = startupPos,
-            refining = refining, errorText = errorText,
+            refining = refining, saving = saving, errorText = errorText,
             onReset = { frameJob.cancelChildren(); refining = 0; state.clear() },
             onSave = { reprocess ->
                 val frameIdx = current
                 scope.launch {
-                    val y = state.horizonSnapshot()
-                    if (y.any { it >= 0 }) {
-                        runCatching { app.horizonRepo.setReference(vm.sessionId, frameIdx, y, imgW, imgH, setStaticReference = true) }
+                    if (saveReference(frameIdx)) {
                         if (reprocess) {
                             runCatching { app.horizonRepo.reprocess(vm.sessionId, listOf(frameIdx)).collect { } }
                         }
+                        if (!startup) vm.toggleHorizonPaint()
                     }
-                    if (!startup) vm.toggleHorizonPaint()
                 }
             },
             onContinue = {
                 val frameIdx = current
                 scope.launch {
-                    val y = state.horizonSnapshot()
-                    if (y.any { it >= 0 }) {
-                        runCatching { app.horizonRepo.setReference(vm.sessionId, frameIdx, y, imgW, imgH, setStaticReference = true) }
-                    }
-                    app.startupHorizonAdvanceOrContinue()
+                    if (saveReference(frameIdx)) app.startupHorizonAdvanceOrContinue()
                 }
             },
             onCancel = { if (startup) app.cancelStartupHorizon() else vm.toggleHorizonPaint() },
@@ -311,6 +330,14 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
 }
 
 private const val ANT_DASH = 6f
+
+/**
+ * Whether the painted horizon may be saved right now (macOS `canSave`): refinement has produced one, no refinement
+ * pass is still running (a save then would store the horizon from before it), and no save is already under way (two
+ * at once advanced two startup frames for one horizon).
+ */
+internal fun canSaveHorizon(phase: HorizonPhase, hasHorizon: Boolean, refining: Int, saving: Boolean): Boolean =
+    phase == HorizonPhase.REFINEMENT && hasHorizon && refining == 0 && !saving
 
 private fun cursorColor(state: HorizonPaintState): Color = when (state.phase) {
     HorizonPhase.BAND_SELECTION -> StarColors.yellow
@@ -416,6 +443,7 @@ private fun HorizonControlBar(
     startupIndices: List<Int>,
     startupPos: Int,
     refining: Int,
+    saving: Boolean,
     errorText: String?,
     onReset: () -> Unit,
     onSave: (reprocess: Boolean) -> Unit,
@@ -429,6 +457,7 @@ private fun HorizonControlBar(
     val coverage = v.let { (state.bandCoverage * 100).roundToInt() }
     val hasHorizon = v.let { state.hasHorizon() }
     val hasMore = startupIndices.isNotEmpty() && startupPos + 1 < startupIndices.size
+    val canSave = canSaveHorizon(phase, hasHorizon, refining, saving)
 
     Row(
         modifier
@@ -474,14 +503,14 @@ private fun HorizonControlBar(
         if (phase == HorizonPhase.REFINEMENT) {
             if (startup) {
                 Button(
-                    enabled = hasHorizon && refining == 0,
+                    enabled = canSave,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     onClick = onContinue,
                 ) { Text(if (hasMore) "Next" else "Continue") }
             } else {
-                OutlinedButton(enabled = hasHorizon && refining == 0, onClick = { onSave(false) }) { Text(localized("ui.save")) }
+                OutlinedButton(enabled = canSave, onClick = { onSave(false) }) { Text(localized("ui.save")) }
                 Button(
-                    enabled = hasHorizon && refining == 0,
+                    enabled = canSave,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     onClick = { onSave(true) },
                 ) { Text(localized("ui.save_reprocess")) }
