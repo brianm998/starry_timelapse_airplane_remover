@@ -44,6 +44,7 @@ fun StarApp(vm: AppViewModel) {
             when (val s = screen) {
                 is AppScreen.Initial -> InitialView(vm)
                 is AppScreen.Loading -> LoadingView(s.title, s.detail, s.fraction)
+                is AppScreen.Opening -> com.star.desktop.ui.loading.OpeningView(s.progress, onCancel = vm::cancelOpen)
                 is AppScreen.Sequence -> SequenceScreen(vm, s.vm)
             }
 

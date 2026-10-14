@@ -37,6 +37,12 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
     fun openVideo(videoPath: String, initialConfig: Config = defaultInitialConfig()): Flow<OpenProgress> =
         client().openVideo(videoPath, initialConfig)
 
+    /** Streams how the frames are coming; the terminal `OpenProgress.done(SessionInfo)` is for the caller to apply with [applySessionInfo]. */
+    fun openSequenceStream(dir: String, initialConfig: Config = defaultInitialConfig()): Flow<OpenProgress> =
+        client().openSequenceStream(dir, initialConfig)
+
+    fun openConfigStream(configJsonPath: String): Flow<OpenProgress> = client().openConfigStream(configJsonPath)
+
     /** Apply a `SessionInfo` learned out-of-band (e.g. the terminal item of `openVideo`). */
     fun applySessionInfo(info: SessionInfo) { _session.value = info }
 

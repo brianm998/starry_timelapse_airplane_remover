@@ -147,6 +147,22 @@ class StarClient(private val conn: StdioConnection) {
             OpenProgress.parser(),
         )
 
+    /** As [openSequence], but streams how the frames are coming, and cancelling the collector cancels the open (no session is left behind). */
+    fun openSequenceStream(sequenceDir: String, initialConfig: Config = Config.getDefaultInstance()): Flow<OpenProgress> =
+        serverStream(
+            "Session.OpenSequenceStream",
+            OpenSequenceRequest.newBuilder().setSequenceDir(sequenceDir).setInitialConfig(initialConfig).build(),
+            OpenProgress.parser(),
+        )
+
+    /** As [openConfig], streamed and cancellable like [openSequenceStream]. */
+    fun openConfigStream(configJsonPath: String): Flow<OpenProgress> =
+        serverStream(
+            "Session.OpenConfigStream",
+            OpenConfigRequest.newBuilder().setConfigJsonPath(configJsonPath).build(),
+            OpenProgress.parser(),
+        )
+
     suspend fun openSequence(sequenceDir: String, initialConfig: Config = Config.getDefaultInstance()): SessionInfo =
         call(
             "Session.OpenSequence",

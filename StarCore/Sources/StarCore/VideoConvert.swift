@@ -47,6 +47,10 @@ public func decodeVideo(
       .path
     let fileManager = FileManager.default
 
+    // Whether this call is the one that makes the folder: a decode that is given up on takes back what it made, and only that.  Frames
+    // left half written would make the next attempt at the same video fail (ffmpeg will not overwrite them), and a folder that was
+    // there before is not this call's to remove.
+    let createdOutputFolder = !fileManager.fileExists(atPath: outputFolder)
     try? fileManager.createDirectory(atPath: outputFolder, withIntermediateDirectories: true)
 
     let ffprobePath = ToolPaths.ffprobe
@@ -65,6 +69,11 @@ public func decodeVideo(
         )
     }
     let totalFramesStr = try await totalFramesTask.value
+    // Counting the frames is a probe that cannot be interrupted, so this is the first place a caller that gave up on the video is noticed.
+    do { try Task.checkCancellation() } catch {
+        if createdOutputFolder { try? fileManager.removeItem(atPath: outputFolder) }
+        throw error
+    }
 
     // XXX report counting frames here
     
@@ -75,8 +84,10 @@ public func decodeVideo(
     decodeArguments += ["-i", inputPath, "-pix_fmt", "rgb48le", "\(outputFolder)/image_%04d.tiff"]
     let framesArguments = decodeArguments
 
+    // The cancellable run, so that a caller who gives up stops ffmpeg rather than leaving it to decode the rest of the video.  Not
+    // cancelled, it does the same thing as `runFFmpegWithProgress`.
     let ffmpegTask = Task {
-        try runFFmpegWithProgress(
+        try await runCancellableFFmpegWithProgress(
           arguments: framesArguments,
           totalFrames: totalFrames,
           outputFolder: outputFolder,
@@ -84,99 +95,109 @@ public func decodeVideo(
         )
     }
 
-    let hasAudioTask = Task {
-        (try? shellOut(
-           to: ffprobePath,
-           arguments: [
-             "-v", "error", "-select_streams", "a:0",
-             "-show_entries", "stream=codec_type",
-             "-of", "default=noprint_wrappers=1:nokey=1",
-             inputPath
-           ]
-         ).trimmingCharacters(in: .whitespacesAndNewlines)) == "audio"
-    }
+    do {
+        return try await withTaskCancellationHandler {
+            let hasAudioTask = Task {
+                (try? shellOut(
+                   to: ffprobePath,
+                   arguments: [
+                     "-v", "error", "-select_streams", "a:0",
+                     "-show_entries", "stream=codec_type",
+                     "-of", "default=noprint_wrappers=1:nokey=1",
+                     inputPath
+                   ]
+                 ).trimmingCharacters(in: .whitespacesAndNewlines)) == "audio"
+            }
 
-    let frameRateTask = Task {
-        try shellOut(
-          to: ffprobePath,
-          arguments: [
-            "-v", "error", "-select_streams", "v:0",
-            "-show_entries", "stream=r_frame_rate",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            inputPath
-          ]
-        ).trimmingCharacters(in: .whitespacesAndNewlines)        
-    }
+            let frameRateTask = Task {
+                try shellOut(
+                  to: ffprobePath,
+                  arguments: [
+                    "-v", "error", "-select_streams", "v:0",
+                    "-show_entries", "stream=r_frame_rate",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    inputPath
+                  ]
+                ).trimmingCharacters(in: .whitespacesAndNewlines)        
+            }
 
-    let codecTask = Task {
-        try shellOut(
-          to: ffprobePath,
-          arguments: [
-            "-v", "error", "-select_streams", "v:0",
-            "-show_entries", "stream=codec_name",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            inputPath
-          ]
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+            let codecTask = Task {
+                try shellOut(
+                  to: ffprobePath,
+                  arguments: [
+                    "-v", "error", "-select_streams", "v:0",
+                    "-show_entries", "stream=codec_name",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    inputPath
+                  ]
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
 
-    let pixFmtTask = Task {
-        try shellOut(
-          to: ffprobePath,
-          arguments:
-            [
-              "-v", "error", "-select_streams", "v:0",
-              "-show_entries", "stream=pix_fmt",
-              "-of", "default=noprint_wrappers=1:nokey=1",
-              inputPath
-            ]
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+            let pixFmtTask = Task {
+                try shellOut(
+                  to: ffprobePath,
+                  arguments:
+                    [
+                      "-v", "error", "-select_streams", "v:0",
+                      "-show_entries", "stream=pix_fmt",
+                      "-of", "default=noprint_wrappers=1:nokey=1",
+                      inputPath
+                    ]
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
 
-    // The sound goes beside the frames, for a render to put back.  Keeping it never fails the
-    // import (see AudioSidecar): a video whose sound cannot be kept comes in without it.
-    let sourceHasAudio = await hasAudioTask.value
-    let keptAudio = sourceHasAudio ? AudioSidecar.extract(from: inputPath, into: outputFolder) : nil
-    let hasAudio = keptAudio != nil
+            // The sound goes beside the frames, for a render to put back.  Keeping it never fails the
+            // import (see AudioSidecar): a video whose sound cannot be kept comes in without it.
+            let sourceHasAudio = await hasAudioTask.value
+            let keptAudio = sourceHasAudio ? AudioSidecar.extract(from: inputPath, into: outputFolder) : nil
+            let hasAudio = keptAudio != nil
 
-    try await ffmpegTask.value
+            try await ffmpegTask.value
     
-    let frameRateRaw = try await frameRateTask.value
+            let frameRateRaw = try await frameRateTask.value
 
-    var frameRate: FrameRate = .fps_24
-    let strValue = frameRateRaw.components(separatedBy: "/")[0]
-    if let doubleValue = Double(strValue) {
-        frameRate = FrameRate(rawValue: doubleValue)
-    }
+            var frameRate: FrameRate = .fps_24
+            let strValue = frameRateRaw.components(separatedBy: "/")[0]
+            if let doubleValue = Double(strValue) {
+                frameRate = FrameRate(rawValue: doubleValue)
+            }
 
-    var codec: FFmpegCodec = .prores
-    if let value = FFmpegCodec(rawValue: try await codecTask.value) {
-        codec = value
-    }
+            var codec: FFmpegCodec = .prores
+            if let value = FFmpegCodec(rawValue: try await codecTask.value) {
+                codec = value
+            }
 
-    var pixFmt: FFmpegPixelFormat = .yuv444p10le
-    let stringValue = try await pixFmtTask.value
-    if let value = FFmpegPixelFormat(rawValue: stringValue) {
-        pixFmt = value
-    }
+            var pixFmt: FFmpegPixelFormat = .yuv444p10le
+            let stringValue = try await pixFmtTask.value
+            if let value = FFmpegPixelFormat(rawValue: stringValue) {
+                pixFmt = value
+            }
 
-    var muxer: FFmpegMuxer = .mov
-    if let ext = inputPath.components(separatedBy: ".").last,
-       let value = FFmpegMuxer(rawValue: ext)
-    {
-        muxer = value
-    }
+            var muxer: FFmpegMuxer = .mov
+            if let ext = inputPath.components(separatedBy: ".").last,
+               let value = FFmpegMuxer(rawValue: ext)
+            {
+                muxer = value
+            }
 
-    let videoInfo = VideoInfo(
-      frameRate: frameRate,
-      codec: codec,
-      encoder: codec.encoder(for: pixFmt),
-      pixelFormat: pixFmt,
-      muxer: muxer,
-      hasAudio: hasAudio
-    )
+            let videoInfo = VideoInfo(
+              frameRate: frameRate,
+              codec: codec,
+              encoder: codec.encoder(for: pixFmt),
+              pixelFormat: pixFmt,
+              muxer: muxer,
+              hasAudio: hasAudio
+            )
     
-    return (outputFolder, videoInfo)
+
+            return (outputFolder, videoInfo)
+        } onCancel: {
+            ffmpegTask.cancel()
+        }
+    } catch is CancellationError {
+        if createdOutputFolder { try? fileManager.removeItem(atPath: outputFolder) }
+        throw CancellationError()
+    }
 }
 
 public func runFFmpegWithProgress(

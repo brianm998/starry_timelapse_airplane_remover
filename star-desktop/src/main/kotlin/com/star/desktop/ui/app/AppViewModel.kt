@@ -18,20 +18,28 @@ import com.star.proto.Config
 import com.star.proto.OpenProgress
 import com.star.proto.SequenceProgress
 import com.star.proto.SessionInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** What the root window is showing. */
 sealed interface AppScreen {
     data object Initial : AppScreen
     data class Loading(val title: String, val detail: String?, val fraction: Float?) : AppScreen
+
+    /** A source is being opened, with the Cancel that stops it (macOS `ImageSequenceLoadingView`). */
+    data class Opening(val progress: com.star.desktop.domain.LoadingProgress) : AppScreen
     data class Sequence(val vm: SequenceViewModel) : AppScreen
 }
 
@@ -646,7 +654,7 @@ class AppViewModel(
                 // "engine stopped" badge, and the user found out only by trying to open something and
                 // getting "RPC error -1: engine not connected". A deliberate restart() sets
                 // `restarting` to suppress this.
-                if (st is EngineStatus.Failed && _screen.value !is AppScreen.Loading && !restarting) {
+                if (st is EngineStatus.Failed && _screen.value !is AppScreen.Loading && _screen.value !is AppScreen.Opening && !restarting) {
                     _engineDown.value = st.message
                 }
             }
@@ -660,45 +668,62 @@ class AppViewModel(
         }
     }
 
-    fun openSequence(dir: String) = launchOpen("Opening image sequence", dir, promptStartup = true) {
-        sessions.openSequence(dir, initialConfigBeside(dir))
+    fun openSequence(dir: String) = launchOpen(dir, video = false, promptStartup = true) { sessions.openSequenceStream(dir, initialConfigBeside(dir)) }
+
+    fun openConfig(path: String) = launchOpen(path, video = false) { sessions.openConfigStream(path) }
+
+    /** Output goes beside the video, as macOS puts it (the parent of the extracted frames' folder is the video's own folder), not in the daemon's hidden per-session scratch fallback. */
+    fun openVideo(path: String) = launchOpen(path, video = true, promptStartup = true) { sessions.openVideo(path, initialConfigBeside(path)) }
+
+    private var openJob: Job? = null
+
+    /**
+     * The loading screen's Cancel: give up on the source being opened and go back to the start screen. Cancelling the job is what stops the
+     * daemon (it is told, stops ffmpeg if it was decoding, and leaves no session behind). Does nothing once the open has finished, so a click
+     * that races the last frame cannot leave a session open behind the start screen.
+     */
+    fun cancelOpen() {
+        var wasOpening = false
+        _screen.update { wasOpening = it is AppScreen.Opening; if (wasOpening) AppScreen.Initial else it }
+        if (wasOpening) openJob?.cancel()
     }
 
-    fun openConfig(path: String) = launchOpen("Resuming session", path) { sessions.openConfig(path) }
-
-    fun openVideo(path: String) {
-        scope.launch {
+    /** Open a source from [source], which streams how it is going and ends with the session: shows that on the loading screen, then the sequence. */
+    private fun launchOpen(path: String, video: Boolean, promptStartup: Boolean = false, source: () -> Flow<OpenProgress>) {
+        openJob = scope.launch {
             ensureConnected()
             if (engine.client == null) {
-                showEngineDown() // as launchOpen: say why, with Restart, not "engine not connected"
+                // Opening would only fail with "RPC error -1: engine not connected" — what the Windows
+                // user kept getting. Show why the engine isn't there, with Restart, instead.
+                showEngineDown()
                 return@launch
             }
-            _screen.value = AppScreen.Loading("Importing video", path, null)
+            var progress = com.star.desktop.domain.LoadingProgress.starting(java.io.File(path).name, video)
+            _screen.value = AppScreen.Opening(progress)
             try {
                 closeOpenSession() // opening over an open session: cancel it, close it, then open
                 var info: SessionInfo? = null
-                // Output beside the video, as macOS puts it (the parent of the extracted frames' folder is the
-                // video's own folder), not in the daemon's hidden per-session scratch fallback.
-                sessions.openVideo(path, initialConfigBeside(path)).collect { p ->
-                    when (p.kindCase) {
-                        OpenProgress.KindCase.PROGRESS -> {
-                            val io = p.progress
-                            val frac = if (io.total > 0) io.current.toFloat() / io.total else null
-                            _screen.value = AppScreen.Loading("Importing video", "${io.current} / ${io.total}", frac)
-                        }
-                        OpenProgress.KindCase.DONE -> info = p.done
-                        else -> Unit
+                source().collect { event ->
+                    if (event.kindCase == OpenProgress.KindCase.DONE) {
+                        info = event.done
+                    } else {
+                        progress = progress.after(event)
+                        // Only while the loading screen is still up: a Cancel has already put the start screen back.
+                        _screen.update { if (it is AppScreen.Opening) AppScreen.Opening(progress) else it }
                     }
                 }
-                val finalInfo = info
-                if (finalInfo != null) {
-                    sessions.applySessionInfo(finalInfo)
-                    onOpened(path, finalInfo, promptStartup = true)
-                } else {
-                    fail("video import produced no session")
+                val opened = info ?: run { fail(if (video) "video import produced no session" else "opening produced no session"); return@launch }
+                if (_screen.value !is AppScreen.Opening) {
+                    // Cancelled just as it finished: the daemon has a session nobody here will use.
+                    withContext(NonCancellable) { runCatching { engine.client?.closeSession(opened.sessionId) } }
+                    return@launch
                 }
+                sessions.applySessionInfo(opened)
+                onOpened(path, opened, promptStartup = promptStartup)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
-                fail(e.message ?: "failed to import video")
+                fail(e.message ?: if (video) "failed to import video" else "failed to open")
             }
         }
     }
@@ -796,25 +821,6 @@ class AppViewModel(
     }
 
     suspend fun shutdown() = engine.shutdown()
-
-    private fun launchOpen(title: String, path: String, promptStartup: Boolean = false, block: suspend () -> SessionInfo) {
-        scope.launch {
-            ensureConnected()
-            if (engine.client == null) {
-                // Opening would only fail with "RPC error -1: engine not connected" — what the Windows
-                // user kept getting. Show why the engine isn't there, with Restart, instead.
-                showEngineDown()
-                return@launch
-            }
-            _screen.value = AppScreen.Loading(title, path, null)
-            try {
-                closeOpenSession() // opening over an open session: cancel it, close it, then open
-                onOpened(path, block(), promptStartup = promptStartup)
-            } catch (e: Throwable) {
-                fail(e.message ?: "failed to open")
-            }
-        }
-    }
 
     private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true, promptStartup: Boolean = false) {
         // Normally the open has already closed what was open; this is for the restart-after-crash route,

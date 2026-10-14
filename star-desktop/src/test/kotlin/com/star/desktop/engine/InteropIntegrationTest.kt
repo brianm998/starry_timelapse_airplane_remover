@@ -3,12 +3,14 @@ package com.star.desktop.engine
 import com.star.desktop.data.SessionRepository
 import com.star.proto.CleanMethod
 import com.star.proto.Config
+import com.star.proto.OpenProgress
 import com.star.proto.ProgressEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -35,6 +37,7 @@ class InteropIntegrationTest {
     private val configPath: String? = System.getProperty("star.it.config")?.takeIf { it.isNotBlank() }
     private val seqPath: String? = System.getProperty("star.it.seq")?.takeIf { it.isNotBlank() }
     private val runProcess: Boolean = System.getProperty("star.it.process") == "true"
+    private fun stardPath(): String? = System.getProperty("star.stard.path")?.takeIf { it.isNotBlank() }
 
     /** Spawn a fresh stard, run [block] with a connected client, then shut down. */
     private fun <T> withEngine(block: suspend (StarClient) -> T): T = runBlocking {
@@ -353,6 +356,100 @@ class InteropIntegrationTest {
             assertTrue(shovel.hasFrame(), "shovel returned no frame")
 
             client.closeSession(info.sessionId)
+        }
+    }
+
+    /**
+     * F4: opening a sequence or a config as a stream says what it is opening, how many frames are loaded (counting up to all of them), and
+     * ends with the session; and a config opened again names its sequence.
+     */
+    @Test
+    fun openingStreamsItsProgress() {
+        val seq = seqPath ?: run {
+            println("[skip] openingStreamsItsProgress — set -Dstar.it.seq=<sequence dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-open").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            withEngine { client ->
+                val events = client.openSequenceStream(seqCopy.absolutePath, cfg).toList()
+                val first = events.first()
+                assertEquals(OpenProgress.KindCase.STAGE, first.kindCase, "the first thing said is what is being opened")
+                assertEquals(com.star.proto.OpenStage.OPEN_STAGE_LOADING_FRAMES, first.stage.stage)
+                assertEquals(seqCopy.name, first.stage.name)
+                val info = events.last().also { assertEquals(OpenProgress.KindCase.DONE, it.kindCase, "the session comes last") }.done
+                val loaded = events.filter { it.kindCase == OpenProgress.KindCase.LOADED }.map { it.loaded }
+                assertTrue(loaded.isNotEmpty(), "no loading progress")
+                assertEquals(0, loaded.first().loaded, "starts from none")
+                assertEquals(info.frameCount, loaded.last().loaded, "ends with every frame")
+                assertTrue(loaded.all { it.total == info.frameCount })
+                assertEquals(loaded.map { it.loaded }, loaded.map { it.loaded }.sorted(), "never goes backwards")
+
+                // The same sequence again from its config, in another daemon: named from the config, not from the path it was opened by.
+                val configPath = info.configJsonPath
+                client.closeSession(info.sessionId)
+                val again = client.openConfigStream(configPath).toList()
+                val named = again.first { it.kindCase == OpenProgress.KindCase.STAGE }.stage
+                assertEquals(seqCopy.name, named.name, "a config names the sequence it opens")
+                assertEquals(info.frameCount, again.last().done.frameCount)
+                client.closeSession(again.last().done.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
+    /**
+     * F4: giving up on a video that is being opened stops ffmpeg, takes back the frames it had written, leaves no session, and the same
+     * video can then be opened again (ffmpeg would refuse to write over what a half-finished decode left).
+     */
+    @Test
+    fun cancellingAVideoOpenStopsFfmpegAndTakesBackItsFrames() {
+        if (!runProcess || stardPath() == null) {
+            println("[skip] cancellingAVideoOpenStopsFfmpegAndTakesBackItsFrames — set -Dstar.it.process=true -Dstar.stard.path=<stard>")
+            return
+        }
+        val ffmpeg = File("../external_binaries/bin/ffmpeg").takeIf { it.canExecute() }
+        if (ffmpeg == null) {
+            println("[skip] cancellingAVideoOpenStopsFfmpegAndTakesBackItsFrames — no ffmpeg to make a video with")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-video").toFile()
+        try {
+            val video = File(tmp, "clip.mov")
+            // Big frames, so that decoding goes on for a good while after the first one: this must be cancelled in the middle of it.
+            val made = ProcessBuilder(
+                ffmpeg.path, "-y", "-f", "lavfi", "-i", "testsrc2=size=3840x2160:rate=30", "-t", "2", "-c:v", "mpeg4", "-q:v", "2", video.path,
+            ).redirectErrorStream(true).start().also { it.inputStream.readBytes() }.waitFor()
+            assertEquals(0, made, "could not make a test video")
+            val frames = File(tmp, "clip")
+
+            fun cancelAfterFirstFrame(client: StarClient) {
+                val seen = runBlocking {
+                    withTimeoutOrNull(120_000) { client.openVideo(video.path).first { it.kindCase == OpenProgress.KindCase.PROGRESS } }
+                }
+                assertTrue(seen != null, "no frames were extracted")
+            }
+
+            withEngine { client ->
+                cancelAfterFirstFrame(client)
+                // Give the daemon time to see the cancel, stop ffmpeg and clean up.
+                val deadline = System.currentTimeMillis() + 30_000
+                while (frames.exists() && System.currentTimeMillis() < deadline) Thread.sleep(200)
+                assertFalse(frames.exists(), "the frames a cancelled decode had written were left behind")
+                val running = ProcessBuilder("pgrep", "-f", "${frames.path}/image_").start().also { it.inputStream.readBytes() }.waitFor()
+                assertEquals(1, running, "ffmpeg is still decoding the video that was cancelled")
+                assertEquals(0, runBlocking { client.listSessions().sessionsCount }, "a cancelled open left a session behind")
+
+                // And the video can be opened again.
+                cancelAfterFirstFrame(client)
+            }
+        } finally {
+            tmp.deleteRecursively()
         }
     }
 

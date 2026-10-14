@@ -77,8 +77,9 @@ actor Session {
         self.videoInfo = videoInfo
     }
 
-    // Build FrameAirplaneRemover graph (does not start processing).
-    func buildFrameGraph() async throws {
+    // Build FrameAirplaneRemover graph (does not start processing).  `report` is told how many frames have been loaded (a screen is
+    // waiting on them), and a cancelled caller stops it between frames.
+    func buildFrameGraph(report: OpenReport? = nil) async throws {
         let config = await configManager.config()
         let filenames = await imageSequence.filenames
         var frameIndexToBaseNameMap: [Int: String] = [:]
@@ -114,7 +115,11 @@ actor Session {
         saveQueue = await MainActor.run { FrameSaveQueue() }
 
         var built: [FrameAirplaneRemover] = []
+        built.reserveCapacity(filenames.count)
+        var lastReported = Date.distantPast
+        report?(OpenEvents.loaded(0, of: filenames.count))
         for (frameIndex, filename) in filenames.enumerated() {
+            try Task.checkCancellation()
             let basename = removePath(fromString: filename)
             let frame = try await FrameAirplaneRemover(
                 with: configManager,
@@ -131,7 +136,14 @@ actor Session {
                 imageAccessor: imageAccessor
             )
             built.append(frame)
+            // At most about twenty a second: a thousand frames is a thousand tiny messages otherwise, and nobody reads them that fast.
+            let now = Date()
+            if let report, built.count == filenames.count || now.timeIntervalSince(lastReported) >= 0.05 {
+                lastReported = now
+                report(OpenEvents.loaded(built.count, of: filenames.count))
+            }
         }
+        try Task.checkCancellation()
         await doublyLink(frames: built)
         frames = built
     }
@@ -861,13 +873,15 @@ extension Session {
         sessionID: String,
         scratchSessionDir: String,
         sequenceDir: String,
-        protoConfig: Star_V1_Config
+        protoConfig: Star_V1_Config,
+        report: @escaping OpenReport = { _ in }
     ) async throws -> Session {
         try FileManager.default.createDirectory(atPath: scratchSessionDir, withIntermediateDirectories: true)
 
         // The sequence's directory name and parent path. StarCore's ImageAccessor locates the
         // original frames at "\(imageSequencePath)/\(imageSequenceDirname)", so these must be exact.
         let (seqName, seqPath) = splitDirPath(sequenceDir)
+        report(OpenEvents.stage(.loadingFrames, name: seqName))
 
         let outputPath = protoConfig.outputPath.isEmpty ? "\(scratchSessionDir)/output" : protoConfig.outputPath
 
@@ -923,7 +937,7 @@ extension Session {
             imageSequence: imageSequence,
             imageInfo: imageInfo
         )
-        try await session.buildFrameGraph()
+        try await session.buildFrameGraph(report: report)
         return session
     }
 
@@ -934,11 +948,24 @@ extension Session {
         scratchSessionDir: String,
         videoPath: String,
         protoConfig: Star_V1_Config,
-        onProgress: @Sendable @escaping (Int, Int, String) -> Void
+        report: @escaping OpenReport = { _ in }
     ) async throws -> Session {
         try FileManager.default.createDirectory(atPath: scratchSessionDir, withIntermediateDirectories: true)
 
-        let (sequenceDir, vi) = try await decodeVideo(named: videoPath, progress: onProgress)
+        let videoName = (videoPath as NSString).lastPathComponent
+        report(OpenEvents.stage(.examiningVideo, name: videoName))
+        let extracting = OnceFlag()
+        let (sequenceDir, vi) = try await decodeVideo(named: videoPath) { current, total, outputDir in
+            if extracting.setOnce() { report(OpenEvents.stage(.extractingFrames)) }
+            var io = Star_V1_IoProgress()
+            io.current   = Int32(current)
+            io.total     = Int32(total)
+            io.outputDir = outputDir
+            var progress = Star_V1_OpenProgress()
+            progress.kind = .progress(io)
+            report(progress)
+        }
+        report(OpenEvents.stage(.loadingFrames))
 
         // Originals live in the decoded-frames directory, not next to the source video — derive the
         // sequence name/path from sequenceDir so ImageAccessor resolves the originals correctly.
@@ -997,7 +1024,7 @@ extension Session {
             imageInfo: imageInfo,
             videoInfo: vi
         )
-        try await session.buildFrameGraph()
+        try await session.buildFrameGraph(report: report)
         return session
     }
 
@@ -1005,12 +1032,14 @@ extension Session {
     static func openConfig(
         sessionID: String,
         scratchSessionDir: String,
-        configPath: String
+        configPath: String,
+        report: @escaping OpenReport = { _ in }
     ) async throws -> Session {
         try FileManager.default.createDirectory(atPath: scratchSessionDir, withIntermediateDirectories: true)
 
         let configManager = try await ConfigManager(configFilename: configPath)
         let config = await configManager.config()
+        report(OpenEvents.stage(.loadingFrames, name: config.imageSequenceDirname))
         await constants.set(detectionType: config.detectionType)
 
         let sequenceDir = "\(config.imageSequencePath)/\(config.imageSequenceDirname)"
@@ -1041,7 +1070,7 @@ extension Session {
             imageSequence: imageSequence,
             imageInfo: imageInfo
         )
-        try await session.buildFrameGraph()
+        try await session.buildFrameGraph(report: report)
         return session
     }
 }
@@ -1078,5 +1107,41 @@ private extension OutlierLoadingState {
         case .loading:  return 1
         case .loaded:   return 2
         }
+    }
+}
+
+/// Told what opening a source is doing, as it does it.  Called from whatever thread the work is on.
+typealias OpenReport = @Sendable (Star_V1_OpenProgress) -> Void
+
+/// The events an open reports, built in one place.
+enum OpenEvents {
+    static func stage(_ stage: Star_V1_OpenStage, name: String = "") -> Star_V1_OpenProgress {
+        var event = Star_V1_OpenStageEvent()
+        event.stage = stage
+        event.name = name
+        var progress = Star_V1_OpenProgress()
+        progress.kind = .stage(event)
+        return progress
+    }
+
+    static func loaded(_ loaded: Int, of total: Int) -> Star_V1_OpenProgress {
+        var event = Star_V1_FramesLoaded()
+        event.loaded = Int32(loaded)
+        event.total = Int32(total)
+        var progress = Star_V1_OpenProgress()
+        progress.kind = .loaded(event)
+        return progress
+    }
+}
+
+/// True the first time it is asked, from any thread.
+final class OnceFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var set = false
+    func setOnce() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if set { return false }
+        set = true
+        return true
     }
 }

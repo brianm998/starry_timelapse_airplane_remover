@@ -25,6 +25,56 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
+/// What opening a source is doing, for the loading screen (macOS ImageSequenceLoadingView).  A video is examined, then its frames are
+/// extracted (IoProgress, below), then every source has its frames loaded (FramesLoaded).
+public enum Star_V1_OpenStage: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+
+  /// counting what is in the video before any of it is decoded; nothing to measure yet
+  case examiningVideo // = 1
+
+  /// IoProgress carries how many
+  case extractingFrames // = 2
+
+  /// FramesLoaded carries how many
+  case loadingFrames // = 3
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .examiningVideo
+    case 2: self = .extractingFrames
+    case 3: self = .loadingFrames
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .examiningVideo: return 1
+    case .extractingFrames: return 2
+    case .loadingFrames: return 3
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Star_V1_OpenStage] = [
+    .unspecified,
+    .examiningVideo,
+    .extractingFrames,
+    .loadingFrames,
+  ]
+
+}
+
 public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case cleanAutomatic // = 0
@@ -1032,6 +1082,37 @@ public struct Star_V1_OpenConfigRequest: Sendable {
   public init() {}
 }
 
+public struct Star_V1_OpenStageEvent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var stage: Star_V1_OpenStage = .unspecified
+
+  /// what is being opened, for the title (the sequence's folder, or the video's file); empty when this event has no new name
+  public var name: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_FramesLoaded: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var loaded: Int32 = 0
+
+  public var total: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// The stream of Session.OpenVideo, Session.OpenSequenceStream and Session.OpenConfigStream: stage and progress events, then `done` last.
+/// Cancelling the call (a transport CANCEL) stops the open, stops ffmpeg if it was decoding, and leaves no session behind.
 public struct Star_V1_OpenProgress: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1055,11 +1136,29 @@ public struct Star_V1_OpenProgress: Sendable {
     set {kind = .done(newValue)}
   }
 
+  public var stage: Star_V1_OpenStageEvent {
+    get {
+      if case .stage(let v)? = kind {return v}
+      return Star_V1_OpenStageEvent()
+    }
+    set {kind = .stage(newValue)}
+  }
+
+  public var loaded: Star_V1_FramesLoaded {
+    get {
+      if case .loaded(let v)? = kind {return v}
+      return Star_V1_FramesLoaded()
+    }
+    set {kind = .loaded(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_Kind: Equatable, Sendable {
     case progress(Star_V1_IoProgress)
     case done(Star_V1_SessionInfo)
+    case stage(Star_V1_OpenStageEvent)
+    case loaded(Star_V1_FramesLoaded)
 
   }
 
@@ -3650,6 +3749,10 @@ public struct Star_V1_GetBestHorizonResponse: Sendable {
 
 fileprivate let _protobuf_package = "star.v1"
 
+extension Star_V1_OpenStage: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0OPEN_STAGE_UNSPECIFIED\0\u{1}OPEN_STAGE_EXAMINING_VIDEO\0\u{1}OPEN_STAGE_EXTRACTING_FRAMES\0\u{1}OPEN_STAGE_LOADING_FRAMES\0")
+}
+
 extension Star_V1_CleanMethod: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CLEAN_AUTOMATIC\0\u{1}CLEAN_AUTOMATIC_TRUE\0\u{1}CLEAN_SELECTIVE\0")
 }
@@ -4028,9 +4131,79 @@ extension Star_V1_OpenConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._Messa
   }
 }
 
+extension Star_V1_OpenStageEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OpenStageEvent"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}stage\0\u{1}name\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.stage) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.stage != .unspecified {
+      try visitor.visitSingularEnumField(value: self.stage, fieldNumber: 1)
+    }
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_OpenStageEvent, rhs: Star_V1_OpenStageEvent) -> Bool {
+    if lhs.stage != rhs.stage {return false}
+    if lhs.name != rhs.name {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_FramesLoaded: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FramesLoaded"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}loaded\0\u{1}total\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.loaded) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.total) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.loaded != 0 {
+      try visitor.visitSingularInt32Field(value: self.loaded, fieldNumber: 1)
+    }
+    if self.total != 0 {
+      try visitor.visitSingularInt32Field(value: self.total, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_FramesLoaded, rhs: Star_V1_FramesLoaded) -> Bool {
+    if lhs.loaded != rhs.loaded {return false}
+    if lhs.total != rhs.total {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension Star_V1_OpenProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenProgress"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}progress\0\u{1}done\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}progress\0\u{1}done\0\u{1}stage\0\u{1}loaded\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4064,6 +4237,32 @@ extension Star_V1_OpenProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
           self.kind = .done(v)
         }
       }()
+      case 3: try {
+        var v: Star_V1_OpenStageEvent?
+        var hadOneofValue = false
+        if let current = self.kind {
+          hadOneofValue = true
+          if case .stage(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.kind = .stage(v)
+        }
+      }()
+      case 4: try {
+        var v: Star_V1_FramesLoaded?
+        var hadOneofValue = false
+        if let current = self.kind {
+          hadOneofValue = true
+          if case .loaded(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.kind = .loaded(v)
+        }
+      }()
       default: break
       }
     }
@@ -4082,6 +4281,14 @@ extension Star_V1_OpenProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
     case .done?: try {
       guard case .done(let v)? = self.kind else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .stage?: try {
+      guard case .stage(let v)? = self.kind else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .loaded?: try {
+      guard case .loaded(let v)? = self.kind else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     }()
     case nil: break
     }

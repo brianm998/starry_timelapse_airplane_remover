@@ -65,10 +65,28 @@ message OpenVideoRequest    { string video_path = 1; Config initial_config = 2; 
 message OpenSequenceRequest { string sequence_dir = 1; Config initial_config = 2; }
 message OpenConfigRequest   { string config_json_path = 1; }
 
+// What opening a source is doing, for the loading screen (macOS ImageSequenceLoadingView).  A video is examined, then its frames are
+// extracted (IoProgress, below), then every source has its frames loaded (FramesLoaded).
+enum OpenStage {
+  OPEN_STAGE_UNSPECIFIED       = 0;
+  OPEN_STAGE_EXAMINING_VIDEO   = 1;   // counting what is in the video before any of it is decoded; nothing to measure yet
+  OPEN_STAGE_EXTRACTING_FRAMES = 2;   // IoProgress carries how many
+  OPEN_STAGE_LOADING_FRAMES    = 3;   // FramesLoaded carries how many
+}
+message OpenStageEvent {
+  OpenStage stage = 1;
+  string    name  = 2;   // what is being opened, for the title (the sequence's folder, or the video's file); empty when this event has no new name
+}
+message FramesLoaded { int32 loaded = 1; int32 total = 2; }
+
+// The stream of Session.OpenVideo, Session.OpenSequenceStream and Session.OpenConfigStream: stage and progress events, then `done` last.
+// Cancelling the call (a transport CANCEL) stops the open, stops ffmpeg if it was decoding, and leaves no session behind.
 message OpenProgress {
   oneof kind {
-    IoProgress   progress = 1;
-    SessionInfo  done     = 2;
+    IoProgress     progress = 1;
+    SessionInfo    done     = 2;
+    OpenStageEvent stage    = 3;
+    FramesLoaded   loaded   = 4;
   }
 }
 

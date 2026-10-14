@@ -340,7 +340,7 @@ final class DispatcherTests: XCTestCase {
     func testTheExpectedMethodSurfaceIsRegistered() throws {
         let expected: Set<String> = [
           "Daemon.Hello", "Daemon.Shutdown",
-          "Session.OpenSequence", "Session.OpenConfig", "Session.OpenVideo",
+          "Session.OpenSequence", "Session.OpenConfig", "Session.OpenVideo", "Session.OpenSequenceStream", "Session.OpenConfigStream",
           "Session.Close", "Session.List",
           "Sequence.GetConfig", "Sequence.UpdateConfig", "Sequence.GetProgressSurvey", "Sequence.GetKeypointAdvice",
           "Frame.Get", "Frame.GetPreview", "Frame.GetOutlierLabelImage", "Frame.GetOutlierTrashImage", "Frame.SetCleanMethod", "Frame.SetNeighborOverride",

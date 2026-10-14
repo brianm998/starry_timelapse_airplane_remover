@@ -48,67 +48,99 @@ enum SessionHandlers {
         }
     }
 
+    /// `Session.OpenVideo`: decodes the video to frames, then opens them; streams how it is going, then the session.
     static func openVideo(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_OpenVideoRequest(serializedBytes: payload)
             let sessionID = await sessions.newSessionID()
             let scratchDir = await sessions.scratchDir(for: sessionID)
-
-            // Bridge the synchronous ffmpeg progress callback to an AsyncStream.
-            let (stream, cont) = AsyncStream<Star_V1_OpenProgress>.makeStream()
-
-            // Run decodeVideo + frame-graph build in a detached task.
-            // When it completes (or fails) it finishes the stream so the loop below exits.
-            let sessionTask: Task<Session, Error> = Task {
-                defer { cont.finish() }
-                return try await Session.openVideo(
-                    sessionID: sessionID,
-                    scratchSessionDir: scratchDir,
-                    videoPath: req.videoPath,
-                    protoConfig: req.initialConfig
-                ) { current, total, outputDir in
-                    var io = Star_V1_IoProgress()
-                    io.current   = Int32(current)
-                    io.total     = Int32(total)
-                    io.outputDir = outputDir
-                    var prog = Star_V1_OpenProgress()
-                    prog.kind = .progress(io)
-                    cont.yield(prog)
-                }
+            await streamOpen(id: id, transport: transport, sessions: sessions, scratchDir: scratchDir) { report in
+                try await Session.openVideo(sessionID: sessionID, scratchSessionDir: scratchDir, videoPath: req.videoPath,
+                                            protoConfig: req.initialConfig, report: report)
             }
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
 
-            // Forward IoProgress items to the client while decoding + graph-build run.
+    /// `Session.OpenSequenceStream`: as `OpenSequence`, but streams how the frames are coming (`FramesLoaded`) and can be cancelled.
+    static func openSequenceStream(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_OpenSequenceRequest(serializedBytes: payload)
+            let sessionID = await sessions.newSessionID()
+            let scratchDir = await sessions.scratchDir(for: sessionID)
+            await streamOpen(id: id, transport: transport, sessions: sessions, scratchDir: scratchDir) { report in
+                try await Session.openSequence(sessionID: sessionID, scratchSessionDir: scratchDir, sequenceDir: req.sequenceDir,
+                                               protoConfig: req.initialConfig, report: report)
+            }
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    /// `Session.OpenConfigStream`: as `OpenConfig`, but streams how the frames are coming and can be cancelled.
+    static func openConfigStream(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_OpenConfigRequest(serializedBytes: payload)
+            let sessionID = await sessions.newSessionID()
+            let scratchDir = await sessions.scratchDir(for: sessionID)
+            await streamOpen(id: id, transport: transport, sessions: sessions, scratchDir: scratchDir) { report in
+                try await Session.openConfig(sessionID: sessionID, scratchSessionDir: scratchDir, configPath: req.configJsonPath, report: report)
+            }
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    /// Run an open and answer as a stream: its stage and progress events as it works, then the new session's info as the last item.
+    ///
+    /// Cancelling the call cancels the work (which stops ffmpeg if it was decoding, and otherwise stops between frames), and whatever session
+    /// the work had already made is closed and its scratch directory removed: the client has gone, and nothing else knows about it.  The work
+    /// is its own task, not a child of this one, because the events have to be forwarded from here while it runs.
+    private static func streamOpen(
+        id: UInt64, transport: StdioTransport, sessions: SessionManager, scratchDir: String,
+        open: @escaping @Sendable (_ report: @escaping OpenReport) async throws -> Session
+    ) async {
+        let (stream, continuation) = AsyncStream<Star_V1_OpenProgress>.makeStream()
+        let work = Task<Session, Error> {
+            defer { continuation.finish() }
+            return try await open { continuation.yield($0) }
+        }
+
+        let outcome: Result<Session, Error> = await withTaskCancellationHandler {
             for await item in stream {
                 if let data = try? item.serializedData() {
                     await transport.sendStreamItem(id: id, payload: data)
                 }
             }
+            return await work.result
+        } onCancel: {
+            work.cancel()
+        }
 
-            let session: Session
-            do {
-                session = try await sessionTask.value
-            } catch {
-                await transport.sendError(id: id, message: "\(error)")
-                return
-            }
+        if Task.isCancelled {
+            if case .success(let session) = outcome { await session.close() }
+            try? FileManager.default.removeItem(atPath: scratchDir)
+            Log.i("stard: an open was cancelled by its client")
+            return
+        }
 
+        switch outcome {
+        case .failure(let error):
+            await transport.sendError(id: id, message: "\(error)")
+        case .success(let session):
             await sessions.add(session: session)
-
-            // Send final SessionInfo as the last stream item, then STREAM_END.
             let config     = await session.configManager.config()
             let imageInfo  = await session.imageInfo
             let frameCount = await session.frameCount
-            let vi         = await session.videoInfo
             let info = Mapping.sessionInfo(session: session, config: config, imageInfo: imageInfo,
-                                           frameCount: frameCount, videoInfo: vi)
+                                           frameCount: frameCount, videoInfo: await session.videoInfo)
             var done = Star_V1_OpenProgress()
             done.kind = .done(info)
             if let data = try? done.serializedData() {
                 await transport.sendStreamItem(id: id, payload: data)
             }
             await transport.sendStreamEnd(id: id)
-        } catch {
-            await transport.sendError(id: id, message: "\(error)")
         }
     }
 

@@ -73,6 +73,8 @@ extension Dispatcher {
         register(method: "Session.OpenSequence") { id, payload, transport in await SessionHandlers.openSequence(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Session.OpenConfig")   { id, payload, transport in await SessionHandlers.openConfig(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Session.OpenVideo")    { id, payload, transport in await SessionHandlers.openVideo(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Session.OpenSequenceStream") { id, payload, transport in await SessionHandlers.openSequenceStream(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Session.OpenConfigStream")   { id, payload, transport in await SessionHandlers.openConfigStream(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Session.Close")        { id, payload, transport in await SessionHandlers.close(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Session.List")         { id, payload, transport in await SessionHandlers.list(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
