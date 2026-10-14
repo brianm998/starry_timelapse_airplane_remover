@@ -168,7 +168,11 @@ build_ffmpeg() {
         # is gone with the work tree, so put the end of it (the failed probe) and the pkg-config
         # view of the codecs where the CI log keeps it.
         echo "---- tail of ffbuild/config.log ----"
-        tail -n 60 ffbuild/config.log || true
+        tail -n 20 ffbuild/config.log | cut -c1-300 || true
+        echo "---- every x265 probe command in config.log ----"
+        grep -n -i -A2 "x265" ffbuild/config.log | grep -v "undefined reference\|in function" | tail -n 40 | cut -c1-900 || true
+        echo "---- environment ----"
+        env | grep -i "pkg_config\|^CC=\|^CXX=\|FLAGS" || true
         echo "---- pkg-config view of x265 ----"
         cat "$PREFIX/lib/pkgconfig/x265.pc" || true
         pkg-config --static --libs x265 || true
