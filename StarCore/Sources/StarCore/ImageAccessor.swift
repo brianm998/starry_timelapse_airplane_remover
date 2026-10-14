@@ -734,6 +734,25 @@ public struct ImageAccessor: Sendable {
         return nil
     }
     
+    /// Write an 8-bit JPEG copy of a frame's full-size image of `type` to `filename`, for a client that cannot read the file the
+    /// pipeline wrote (a 16-bit TIFF).  The preview and thumbnail are made the same way, at their smaller sizes.  False if the
+    /// frame has no such image yet.
+    public nonisolated func writeFullSizeDisplayCopy(
+      frameIndex: Int,
+      ofType type: FrameViewMode,
+      to filename: String,
+      quality: UInt = 90
+    ) async throws -> Bool {
+        guard let fullResImage = try await load(frameIndex: frameIndex, type: type, atSize: .original),
+              let eightBit = fullResImage.ensureEightBit
+        else { return false }
+        try ensureParentDirectoriesExist(for: filename)
+        if FileManager.default.fileExists(atPath: filename) {
+            try FileManager.default.removeItem(atPath: filename)
+        }
+        return eightBit.saveJpeg(withQuality: quality, filename: filename)
+    }
+
     private func createMissingImage(
       frameIndex: Int,
       ofType type: FrameViewMode,

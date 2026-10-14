@@ -317,6 +317,17 @@ public struct HoughLineFinder: Sendable {
         public let intensityScore: Double
         public let pixelScore: Double
         public let border: Int
+
+        public init(line: Line,
+                    intensityScore: Double,
+                    pixelScore: Double,
+                    border: Int)
+        {
+            self.line = line
+            self.intensityScore = intensityScore
+            self.pixelScore = pixelScore
+            self.border = border
+        }
     }
     
     public var lineData: [LineInfo] {

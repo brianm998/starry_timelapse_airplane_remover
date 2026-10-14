@@ -9,6 +9,7 @@ import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.MenuBar
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.ToolType
+import com.star.desktop.domain.usesOutliers
 import com.star.desktop.ui.initial.OpenKind
 import com.star.desktop.ui.initial.chooseDirectory
 import com.star.desktop.ui.initial.chooseFile
@@ -44,18 +45,36 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         }
 
         Menu(localized("ui.view"), mnemonic = 'V') {
-            Item(localized("ui.edit_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
-            Item(localized("ui.scrub_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
-            Item(localized("ui.grid_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
+            // Disabled while the horizon painter is open: Compose delivers a menu accelerator before it delivers the key
+            // to the view, so E would switch mode instead of selecting ground, and S or G during the startup painting
+            // would leave the painter without its startup flow (macOS disables S there).
+            val painting = svm?.horizonPaintMode?.collectAsState()?.value == true
+            Item(localized("ui.edit_mode"), enabled = hasSession && !painting, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
+            Item(localized("ui.scrub_mode"), enabled = hasSession && !painting, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
+            Item(localized("ui.grid_mode"), enabled = hasSession && !painting, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
             Separator()
             Item(localized("ui.toggle_filmstrip"), enabled = hasSession) { svm?.toggleFilmstrip() }
-            Item(localized("ui.play_pause"), enabled = hasSession, shortcut = KeyShortcut(Key.Spacebar)) { svm?.togglePlayback() }
+            // Tab also does this, but a focused control can take Tab for focus traversal before it gets here, so the menu is the way that always works.
+            Item(localized("ui.toggle_side_panels"), enabled = hasSession) { svm?.toggleSidePanels() }
+            Item(localized("ui.play_pause"), enabled = hasSession, shortcut = KeyShortcut(Key.Spacebar)) { svm?.playForward() }
         }
 
         Menu(localized("ui.process"), mnemonic = 'P') {
-            Item(localized("ui.process_all_frames_2"), enabled = hasSession) { svm?.processAll() }
-            Item(localized("ui.process_remaining"), enabled = hasSession) { svm?.processRemaining() }
+            // Through the app, not straight to the session: it is what asks about rendering a video before and after.
+            Item(localized("ui.process_all_frames_2"), enabled = hasSession) { app.requestProcessAll() }
+            Item(localized("ui.process_frames_from_here_to_the_end"), enabled = hasSession) { svm?.processRemaining() }
             Item(localized("ui.process_current_frame"), enabled = hasSession) { svm?.processCurrent() }
+            Item(localized("ui.re_process_this_frame_from_the_start"), enabled = hasSession) { svm?.reprocessCurrent() }
+            Item(localized("ui.find_outliers_for_this_frame"), enabled = hasSession) { svm?.findOutliersCurrent() }
+            Separator()
+            // The classifier over this frame's outliers, and writing the decisions into its picture (also on the d and r keys).
+            val currentFrame = svm?.currentIndex?.collectAsState()?.value ?: 0
+            val currentMethod = svm?.frameVMFor(currentFrame)?.info?.collectAsState()?.value?.cleanMethod
+            val usesOutliers = currentMethod?.usesOutliers ?: true
+            Item(localized("ui.decision_tree_all"), enabled = hasSession && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame() }
+            Item(localized("ui.dt_auto_only"), enabled = hasSession && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame(autoOnly = true) }
+            Item(localized("ui.render_this_frame"), enabled = hasSession) { svm?.renderCurrentFrame() }
+            Item(localized("ui.render_all_frames"), enabled = hasSession) { svm?.renderAllFrames() }
             Separator()
             Item(localized("ui.cancel_processing"), enabled = hasSession) { svm?.cancelProcessing() }
             Separator()
@@ -67,10 +86,12 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         }
 
         Menu(localized("ui.window"), mnemonic = 'W') {
-            Item(localized("ui.outlier_table"), enabled = hasSession, shortcut = primaryShortcut(Key.X, alt = true)) { app.toggleOutlierWindow() }
-            Item(localized("ui.alignment_2"), enabled = hasSession, shortcut = primaryShortcut(Key.A, alt = true)) { app.toggleAlignmentWindow() }
+            Item(localized("ui.outlier_table"), enabled = hasSession, shortcut = windowShortcut(Key.O, IS_MAC)) { app.toggleOutlierWindow() }
+            Item(localized("ui.alignment_2"), enabled = hasSession, shortcut = windowShortcut(Key.A, IS_MAC)) { app.toggleAlignmentWindow() }
             Separator()
-            Item(localized("ui.paint_reference_horizon"), enabled = hasSession, shortcut = KeyShortcut(Key.H)) {
+            // The same item closes the painter while it is open, and says so (macOS).
+            val paintingHorizon = svm?.horizonPaintMode?.collectAsState()?.value == true
+            Item(localized(if (paintingHorizon) "ui.close_horizon_painter" else "ui.paint_reference_horizon"), enabled = hasSession, shortcut = KeyShortcut(Key.H)) {
                 svm?.let { if (it.mode.value != InteractionMode.EDIT) it.setMode(InteractionMode.EDIT); it.toggleHorizonPaint() }
             }
         }
@@ -102,13 +123,13 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             // Accelerators per the authoritative Swift source (StarCommands.swift): 'a' removes all,
             // 'k' keeps all, 'u' clears undecided. (KOTLIN_CLIENT_SPEC §5.8's prose had a/k swapped.)
             Item(localized("ui.keep_all"), enabled = hasSession, shortcut = KeyShortcut(Key.K)) {
-                svm?.let { it.frameVMFor(it.currentIndex.value).keepAll() }
+                svm?.let { it.frameVMFor(it.currentIndex.value).keepAll(it.showTrash.value) }
             }
             Item(localized("ui.remove_all"), enabled = hasSession, shortcut = KeyShortcut(Key.A)) {
-                svm?.let { it.frameVMFor(it.currentIndex.value).removeAll() }
+                svm?.let { it.frameVMFor(it.currentIndex.value).removeAll(it.showTrash.value) }
             }
             Item(localized("ui.clear_undecided"), enabled = hasSession, shortcut = KeyShortcut(Key.U)) {
-                svm?.let { it.frameVMFor(it.currentIndex.value).clearUndecided() }
+                svm?.let { it.frameVMFor(it.currentIndex.value).clearUndecided(it.showTrash.value) }
             }
             Separator()
             ToolType.selectable.forEachIndexed { i, t ->
@@ -119,7 +140,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
 }
 
 /** True on macOS — used to map the primary modifier to Cmd there and Ctrl elsewhere. */
-private val IS_MAC: Boolean = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
+internal val IS_MAC: Boolean = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
 
 /**
  * The platform's primary-accelerator modifier: Cmd on macOS, Ctrl on Windows/Linux. Compose Desktop's
@@ -128,3 +149,10 @@ private val IS_MAC: Boolean = System.getProperty("os.name").orEmpty().lowercase(
  */
 private fun primaryShortcut(key: Key, alt: Boolean = false, shift: Boolean = false): KeyShortcut =
     KeyShortcut(key, meta = IS_MAC, ctrl = !IS_MAC, alt = alt, shift = shift)
+
+/**
+ * The shortcut of a window item (the outlier table, the alignment window). On macOS it is Option plus the letter, as in the Mac app; elsewhere
+ * Ctrl+Alt+letter, since a plain Alt+letter opens a menu by its mnemonic on Windows and Linux. The menu shows whichever it is.
+ */
+internal fun windowShortcut(key: Key, isMac: Boolean): KeyShortcut =
+    if (isMac) KeyShortcut(key, alt = true) else KeyShortcut(key, ctrl = true, alt = true)

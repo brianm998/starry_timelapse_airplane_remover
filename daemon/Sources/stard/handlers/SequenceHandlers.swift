@@ -26,20 +26,7 @@ enum SequenceHandlers {
                 await transport.sendError(id: id, message: "session not found: \(req.sessionID)", code: 404)
                 return
             }
-            var config = await session.configManager.config()
-            let proto = req.config
-            config.cleanMethod = Mapping.cleanMethod(from: proto)
-            config.detectionType = Mapping.detectionType(from: proto.detectionType)
-            config.horizonDetectionEnabled = proto.horizonDetectionEnabled
-            config.tripodHeadWasMoving = proto.tripodHeadWasMoving
-            if proto.numberOfFramesToProcessConcurrently > 0 {
-                config.numberOfFramesToProcessConcurrently = Int(proto.numberOfFramesToProcessConcurrently)
-            }
-            Mapping.applyExpertConfig(&config, from: proto)
-            await session.configManager.update(config)
-            // The client is told the config is applied; make that include the
-            // file, since update() writes asynchronously now.
-            await session.configManager.flush()
+            let config = await session.updateConfig(from: req.config)
             try await transport.respond(id: id, payload: Mapping.protoConfig(config).serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")

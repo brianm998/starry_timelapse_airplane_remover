@@ -190,36 +190,40 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 }
             }
 
+            // Save the settings and close; with [processNow] go on to start processing (macOS "Process Now").
+            val save: (Boolean) -> Unit = { processNow ->
+                val b = cfg.toBuilder()
+                    .setCleanMethod(clean)
+                    .setDetectionType(detection)
+                    .setHorizonDetectionEnabled(horizon)
+                    .setTripodHeadWasMoving(tripod)
+                    .setNumberOfFramesToProcessConcurrently(concurrency)
+                    .setResourceProfile(useProfile)
+                // Apply expert edits (cfg already carries current values; only changed ones differ).
+                // Unsupported fields are skipped: they render as read-only so there
+                // should be no edit to apply, and sending one to a daemon that does
+                // not know the field would be a silent no-op at best.
+                (ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + PERFORMANCE_FIELDS).filter { it.has(cfg) }.forEach { f ->
+                    when (f) {
+                        is BoolField -> boolEdits[f.label]?.let { f.set(b, it) }
+                        is IntField -> textEdits[f.label]?.toIntOrNull()?.let { f.set(b, it.coerceIn(f.min, f.max)) }
+                        is DoubleField -> textEdits[f.label]?.toDoubleOrNull()?.let { f.set(b, it) }
+                    }
+                }
+                val updated = b.build()
+                scope.launch {
+                    runCatching { app.updateSessionConfig(updated) }
+                    app.closeSettings()
+                    if (processNow) app.requestProcessAll()
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = app::closeSettings) { Text(localized("ui.cancel")) }
+                OutlinedButton(onClick = { save(false) }) { Text(localized("ui.save")) }
                 Button(
-                    onClick = {
-                        val b = cfg.toBuilder()
-                            .setCleanMethod(clean)
-                            .setDetectionType(detection)
-                            .setHorizonDetectionEnabled(horizon)
-                            .setTripodHeadWasMoving(tripod)
-                            .setNumberOfFramesToProcessConcurrently(concurrency)
-                            .setResourceProfile(useProfile)
-                        // Apply expert edits (cfg already carries current values; only changed ones differ).
-                        // Unsupported fields are skipped: they render as read-only so there
-                        // should be no edit to apply, and sending one to a daemon that does
-                        // not know the field would be a silent no-op at best.
-                        (ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + PERFORMANCE_FIELDS).filter { it.has(cfg) }.forEach { f ->
-                            when (f) {
-                                is BoolField -> boolEdits[f.label]?.let { f.set(b, it) }
-                                is IntField -> textEdits[f.label]?.toIntOrNull()?.let { f.set(b, it.coerceIn(f.min, f.max)) }
-                                is DoubleField -> textEdits[f.label]?.toDoubleOrNull()?.let { f.set(b, it) }
-                            }
-                        }
-                        val updated = b.build()
-                        scope.launch {
-                            runCatching { app.sessions.updateConfig(updated) }
-                            app.closeSettings()
-                        }
-                    },
+                    onClick = { save(true) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text(localized("ui.save")) }
+                ) { Text(localized("ui.process_now")) }
             }
         }
     }

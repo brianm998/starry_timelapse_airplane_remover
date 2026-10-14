@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -35,12 +37,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -48,6 +53,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -90,14 +105,27 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     val imgW = vm.info.imageWidth
     val imgH = vm.info.imageHeight
 
-    // The state + transform persist across frame advances so brush size and Sky/Ground mode survive
-    // (macOS resetForNewFrame). Per-frame paint data is cleared in the LaunchedEffect below.
-    val state = remember { HorizonPaintState(imgW, imgH) }
-    val transform = remember { FrameTransform(imgW, imgH) }
+    // The paint state persists across frame advances so brush size and Sky/Ground mode survive
+    // (macOS resetForNewFrame); per-frame paint data is cleared in the LaunchedEffect below. The
+    // transform is the session's: the zoom and pan are the same here as in the edit view.
+    val state = remember { HorizonPaintState(imgW, imgH).also { it.isErasing = vm.horizonPaintErasing.value } }
+    // The sky/ground mode outlives this painter: it is remembered for the next time it opens.
+    LaunchedEffect(state) { snapshotFlow { state.isErasing }.collect { vm.setHorizonPaintErasing(it) } }
+    val transform = vm.transform
     var canvasSize by remember { mutableStateOf(Size.Zero) }
     var hover by remember { mutableStateOf<Offset?>(null) } // canvas-space pointer for the brush ring
+    var dragging by remember { mutableStateOf(false) }      // a stroke is being painted: the ants hold still
     var refining by remember { mutableStateOf(0) }          // in-flight random-walker passes
     var errorText by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }          // a save is in flight: a second must not start (macOS isSaving)
+    // The max-downward-extension stepper's value for the sequence: as stored (0 = derived) and as in force.
+    var maxDownward by remember { mutableStateOf(MaxDownward(0, 0)) }
+    LaunchedEffect(Unit) {
+        app.horizonRepo.tunedParameters(vm.sessionId)?.let { maxDownward = MaxDownward(it.maxDownwardExtension, it.effectiveMaxDownwardExtension) }
+    }
+    var applyToNearby by remember { mutableStateOf(true) }   // macOS applyToNearbyFrames: on until turned off
+    var savedAlready by remember { mutableStateOf(false) }    // the horizon on screen is already the saved one
+    var cancelledExplicitly by remember { mutableStateOf(false) } // Cancel / Esc: the one way out that discards
 
     val startup by vm.horizonPainterStartup.collectAsState()
     val startupIndices by vm.startupHorizonIndices.collectAsState()
@@ -108,11 +136,24 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     val frameJob = remember(current) { SupervisorJob() }
     DisposableEffect(current) { onDispose { frameJob.cancel() } }
 
+    // Closing the painter any way but Cancel keeps the work (macOS saves in `onDisappear`): H, leaving edit mode, the
+    // panel button. Only a refined horizon is worth saving (band selection has none), and the startup flow has its own
+    // Continue / Cancel. Launched in the view model's scope: this composable's own dies with it.
+    DisposableEffect(Unit) {
+        onDispose {
+            val index = vm.currentIndex.value
+            if (shouldSaveOnClose(vm.horizonPainterStartup.value, state.phase, savedAlready, cancelledExplicitly, saving)) {
+                vm.saveHorizonReferenceInBackground(index, state.solvedHorizonSnapshot(), imgW, imgH)
+            }
+        }
+    }
+
     // Seed any existing horizon (reference > merged > raw) → jump to refinement; else band selection.
     LaunchedEffect(current) {
         refining = 0
         errorText = null
         hover = null
+        savedAlready = false
         state.resetForNewFrame()
         val existing = runCatching { app.horizonRepo.bestExisting(vm.sessionId, current, imgW, imgH) }.getOrNull()
         if (existing != null && existing.any { it >= 0 }) {
@@ -143,7 +184,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
 
     // Refinement (macOS triggerObjectSelection): re-solve the random-walker over the brushed columns.
     suspend fun runRefine(frameIdx: Int, brush: IntRange, erasing: Boolean, baseline: IntArray?) {
-        val margin = max(20, imgW / 100)
+        val margin = HorizonPaintState.REFINE_MARGIN
         val expanded = max(0, brush.first - margin)..min(imgW - 1, brush.last + margin)
         val inputs = state.localBand(expanded, brush, erasing, taperWidth = max(1, margin / 2))
         val gen = state.generation()
@@ -156,10 +197,45 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             )
             // Discard if the frame advanced or the paint was reset while the walker ran (shared state).
             if (vm.currentIndex.value != frameIdx || state.generation() != gen) return
-            if (result != null) state.applyRefinedHorizon(result, expanded, baseline)
-            else errorText = "Refinement failed — try another stroke"
+            if (result != null) {
+                state.applyRefinedHorizon(result, expanded, baseline, erasing)
+            } else {
+                // Show the horizon the solver last gave, not the stroke's optimistic nudge that it did not confirm.
+                state.restoreSolvedHorizon()
+                errorText = "Refinement failed — try another stroke"
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            state.restoreSolvedHorizon()
+            errorText = "Refinement failed — try another stroke"
         } finally {
             refining = max(0, refining - 1)
+        }
+    }
+
+    /**
+     * Save the painted horizon as frame [frameIdx]'s reference. True only if the daemon took it: on a failure the
+     * painter stays open and says why (macOS `saveError`), and nothing that follows a save (closing, advancing to
+     * the next startup frame) happens for a horizon that was not saved. In the startup flow the save also marks the
+     * sequence as having a static reference horizon; outside it, an edit to one frame's horizon must not.
+     */
+    suspend fun saveReference(frameIdx: Int): Boolean {
+        val y = state.solvedHorizonSnapshot()   // what the solver produced, not the interim shape a stroke is showing
+        if (saving || y.none { it >= 0 }) return false
+        saving = true
+        errorText = null
+        return try {
+            app.horizonRepo.setReference(vm.sessionId, frameIdx, y, imgW, imgH, setStaticReference = startup)
+            savedAlready = true
+            true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            errorText = e.message ?: e.toString()
+            false
+        } finally {
+            saving = false
         }
     }
 
@@ -188,19 +264,71 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     }
     val fillColor = if (state.phase == HorizonPhase.REFINEMENT) StarColors.blue.copy(alpha = 0.30f) else StarColors.yellow.copy(alpha = 0.28f)
 
-    Column(modifier.fillMaxSize().background(StarColors.appBackground)) {
+    // What the buttons do, also what Return, Esc and R do from the keyboard.
+    val doReset = { frameJob.cancelChildren(); refining = 0; state.clear() }
+    val doSave = {
+        val frameIdx = current
+        scope.launch {
+            if (saveReference(frameIdx)) {
+                // With "apply to nearby frames" the daemon marks the frames that interpolate from this reference and the
+                // sequence screen asks whether to redo them now (the painter closes, so it cannot host the question).
+                vm.horizonReferenceSaved(frameIdx, applyToNearby)
+                if (!startup) vm.toggleHorizonPaint()
+            }
+        }
+        Unit
+    }
+    val doContinue = {
+        val frameIdx = current
+        scope.launch {
+            if (saveReference(frameIdx)) app.startupHorizonAdvanceOrContinue()
+        }
+        Unit
+    }
+    val doCancel = {
+        cancelledExplicitly = true
+        if (startup) app.cancelStartupHorizon() else vm.toggleHorizonPaint()
+    }
+
+    // Keyboard: the brush and the mode without the pointer leaving the frame, as on macOS. The root takes the focus so the
+    // keys are heard without a click first; the menu's own accelerators for these letters are disabled while painting
+    // (Compose delivers an accelerator before it delivers the key to the view).
+    val keyFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { keyFocus.requestFocus() } }
+    val keyHandler = Modifier.onPreviewKeyEvent { event ->
+        val action = painterKeyAction(event) ?: return@onPreviewKeyEvent false
+        when (action) {
+            HorizonPainterKey.SHRINK_BRUSH -> state.shrinkBrush()
+            HorizonPainterKey.GROW_BRUSH -> state.growBrush()
+            HorizonPainterKey.TOGGLE_MODE -> if (state.phase == HorizonPhase.REFINEMENT) state.isErasing = !state.isErasing
+            HorizonPainterKey.SKY -> if (state.phase == HorizonPhase.REFINEMENT) state.isErasing = false
+            HorizonPainterKey.GROUND -> if (state.phase == HorizonPhase.REFINEMENT) state.isErasing = true
+            HorizonPainterKey.RESET -> if (state.phase == HorizonPhase.REFINEMENT || state.hasBand()) doReset()
+            HorizonPainterKey.CANCEL -> doCancel()
+            HorizonPainterKey.SAVE ->
+                if (canSaveHorizon(state.phase, state.hasSolvedHorizon(), refining, saving)) { if (startup) doContinue() else doSave() }
+        }
+        true
+    }
+
+    Column(modifier.fillMaxSize().background(StarColors.appBackground).focusRequester(keyFocus).focusable().then(keyHandler)) {
         Box(
             Modifier.weight(1f).fillMaxSize()
                 .clipToBounds()
-                .onSizeChanged { canvasSize = it.toSize() }
+                .onSizeChanged { canvasSize = it.toSize(); transform.canvasChanged(canvasSize) }
+                // Scroll pans, Ctrl/Cmd-scroll zooms, middle- or Alt-drag pans (as in the edit view): the horizon can be
+                // painted precisely at a zoom where the brush is a few pixels. A pan drag is consumed before it gets to
+                // the painting gesture below, which only takes unconsumed presses.
+                .zoomAndPan(transform) { canvasSize }
                 .pointerHoverIcon(blankCursor)
                 .onPointerEvent(PointerEventType.Move) { hover = it.changes.firstOrNull()?.position }
                 .onPointerEvent(PointerEventType.Enter) { hover = it.changes.firstOrNull()?.position }
                 .onPointerEvent(PointerEventType.Exit) { hover = null }
                 .pointerInput(current, canvasSize) {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val down = awaitFirstDown(requireUnconsumed = true)
                         hover = down.position
+                        dragging = true
                         // Paint on the initial press so a single click/tap dabs paint (macOS uses
                         // DragGesture(minimumDistance: 0); detectDragGestures would swallow taps).
                         if (state.phase != HorizonPhase.COMPUTING) {
@@ -222,6 +350,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
                                 }
                             }
                         } while (event.changes.any { it.pressed })
+                        dragging = false
 
                         // Stroke ended → trigger detection / refinement.
                         when (state.phase) {
@@ -264,49 +393,51 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
                 areaPath?.let { path ->
                     drawPath(path, fillColor)
                     // Marching ants: white dashes with offset black dashes between them.
-                    drawPath(path, Color.White, style = Stroke(width = 1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(ANT_DASH, ANT_DASH), antsPhase)))
-                    drawPath(path, Color.Black, style = Stroke(width = 1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(ANT_DASH, ANT_DASH), antsPhase + ANT_DASH)))
+                    // Not reading the animated phase while dragging is what stops it redrawing every tick: the outline still
+                    // follows the brush, but the dashes do not crawl over a shape that changes with every event.
+                    val phase = if (dragging) 0f else antsPhase
+                    drawPath(path, Color.White, style = Stroke(width = 1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(ANT_DASH, ANT_DASH), phase)))
+                    drawPath(path, Color.Black, style = Stroke(width = 1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(ANT_DASH, ANT_DASH), phase + ANT_DASH)))
                 }
-                hover?.let { drawBrushCursor(it, state.brushRadius * s, cursorColor(state)) }
+                hover?.let { drawBrushCursor(it, state.brushRadius * s, cursorColor(state, refining > 0)) }
+            }
+
+            // What the pointer would do, beside the brush ring (macOS draws it to the ring's upper right).
+            hover?.let { at ->
+                val ringR = state.brushRadius * transform.scale(canvasSize)
+                Text(
+                    cursorLabel(state, refining > 0),
+                    color = cursorColor(state, refining > 0),
+                    fontSize = 11.sp,
+                    modifier = Modifier.offset { IntOffset((at.x + ringR + 6f).roundToInt(), (at.y - ringR - 22f).roundToInt()) },
+                )
             }
 
             // Instruction tip overlays the top of the frame (startup only; macOS parity).
             if (startup) {
-                HorizonInstructionTip(isMoving = startupIndices.size > 1, modifier = Modifier.align(Alignment.TopCenter))
+                HorizonInstructionTip(app.prefs, isMoving = startupIndices.size > 1, modifier = Modifier.align(Alignment.TopCenter))
             }
         }
 
         HorizonControlBar(
             state = state,
             startup = startup, startupIndices = startupIndices, startupPos = startupPos,
-            refining = refining, errorText = errorText,
-            onReset = { frameJob.cancelChildren(); refining = 0; state.clear() },
-            onSave = { reprocess ->
-                val frameIdx = current
+            refining = refining, saving = saving, errorText = errorText,
+            applyToNearby = applyToNearby, onApplyToNearbyChange = { applyToNearby = it },
+            maxDownward = maxDownward,
+            onMaxDownwardStep = { delta ->
+                val next = nextMaxDownwardExtension(maxDownward, delta)
+                // Shown at once; what the daemon answers (the effective value in force) is what stays.
+                maxDownward = maxDownward.copy(configured = next)
                 scope.launch {
-                    val y = state.horizonSnapshot()
-                    if (y.any { it >= 0 }) {
-                        runCatching { app.horizonRepo.setReference(vm.sessionId, frameIdx, y, imgW, imgH, setStaticReference = true) }
-                        if (reprocess) {
-                            vm.processing.stop()
-                            runCatching { app.horizonRepo.reprocess(vm.sessionId, listOf(frameIdx)).collect { } }
-                            vm.processing.subscribe(vm.sessionId)
-                        }
-                    }
-                    if (!startup) vm.toggleHorizonPaint()
+                    runCatching { app.horizonRepo.setMaxDownwardExtension(vm.sessionId, next) }
+                        .onSuccess { maxDownward = MaxDownward(it.maxDownwardExtension, it.effectiveMaxDownwardExtension) }
                 }
             },
-            onContinue = {
-                val frameIdx = current
-                scope.launch {
-                    val y = state.horizonSnapshot()
-                    if (y.any { it >= 0 }) {
-                        runCatching { app.horizonRepo.setReference(vm.sessionId, frameIdx, y, imgW, imgH, setStaticReference = true) }
-                    }
-                    app.startupHorizonAdvanceOrContinue()
-                }
-            },
-            onCancel = { if (startup) app.cancelStartupHorizon() else vm.toggleHorizonPaint() },
+            onReset = doReset,
+            onSave = doSave,
+            onContinue = doContinue,
+            onCancel = doCancel,
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -314,10 +445,65 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
 
 private const val ANT_DASH = 6f
 
-private fun cursorColor(state: HorizonPaintState): Color = when (state.phase) {
+/** What a key does in the horizon painter (macOS `brushKeyboardHandlers` and `actionKeyboardHandlers`). */
+internal enum class HorizonPainterKey { SHRINK_BRUSH, GROW_BRUSH, TOGGLE_MODE, SKY, GROUND, RESET, CANCEL, SAVE }
+
+/**
+ * The painter's action for [event], or null if the key is not one of its own (it then goes on to the rest of the window).
+ * `[` / `]` size the brush, `-` flips sky and ground, `p` is sky, `e` ground, `r` starts over, Esc cancels and Return saves
+ * (the caller applies the same conditions as the button). Only on key-down, and never with Ctrl, Cmd or Alt held, which
+ * are other shortcuts' business. The bracket keys are matched by the character they type as well as by their key, since a
+ * layout that needs a modifier for them reports a different key.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+internal fun painterKeyAction(event: KeyEvent): HorizonPainterKey? {
+    if (event.type != KeyEventType.KeyDown) return null
+    if (event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return null
+    val typed = event.utf16CodePoint
+    return when {
+        event.key == Key.LeftBracket || typed == '['.code -> HorizonPainterKey.SHRINK_BRUSH
+        event.key == Key.RightBracket || typed == ']'.code -> HorizonPainterKey.GROW_BRUSH
+        event.key == Key.Minus || typed == '-'.code -> HorizonPainterKey.TOGGLE_MODE
+        event.key == Key.P -> HorizonPainterKey.SKY
+        event.key == Key.E -> HorizonPainterKey.GROUND
+        event.key == Key.R -> HorizonPainterKey.RESET
+        event.key == Key.Escape -> HorizonPainterKey.CANCEL
+        event.key == Key.Enter || event.key == Key.NumPadEnter -> HorizonPainterKey.SAVE
+        else -> null
+    }
+}
+
+/**
+ * Whether closing the painter should save what is on it (macOS `onDisappear`): only outside the startup flow (which
+ * has its own Continue / Cancel), only from refinement (band selection has no horizon yet), and only if the user did
+ * not cancel, it is not already saved, and a save is not already running.
+ */
+internal fun shouldSaveOnClose(startup: Boolean, phase: HorizonPhase, savedAlready: Boolean, cancelled: Boolean, saving: Boolean): Boolean =
+    !startup && phase == HorizonPhase.REFINEMENT && !savedAlready && !cancelled && !saving
+
+/**
+ * Whether the painted horizon may be saved right now (macOS `canSave`): refinement has produced one, no refinement
+ * pass is still running (a save then would store the horizon from before it), and no save is already under way (two
+ * at once advanced two startup frames for one horizon).
+ */
+internal fun canSaveHorizon(phase: HorizonPhase, hasHorizon: Boolean, refining: Int, saving: Boolean): Boolean =
+    phase == HorizonPhase.REFINEMENT && hasHorizon && refining == 0 && !saving
+
+private fun cursorColor(state: HorizonPaintState, refining: Boolean): Color = when (state.phase) {
     HorizonPhase.BAND_SELECTION -> StarColors.yellow
     HorizonPhase.COMPUTING -> StarColors.gray
-    HorizonPhase.REFINEMENT -> if (state.isErasing) StarColors.red else StarColors.green
+    HorizonPhase.REFINEMENT -> if (refining) StarColors.gray else if (state.isErasing) StarColors.red else StarColors.green
+}
+
+/** What the brush is for right now, in words (macOS cursor label); grey and "Calculating..." while the solver runs. */
+private fun cursorLabel(state: HorizonPaintState, refining: Boolean): String = when (state.phase) {
+    HorizonPhase.BAND_SELECTION -> localized("ui.select_area_with_horizon")
+    HorizonPhase.COMPUTING -> localized("ui.calculating")
+    HorizonPhase.REFINEMENT -> when {
+        refining -> localized("ui.calculating")
+        state.isErasing -> localized("ui.select_ground")
+        else -> localized("ui.select_sky")
+    }
 }
 
 private fun DrawScope.drawBrushCursor(center: Offset, radius: Float, color: Color) {
@@ -374,9 +560,11 @@ private inline fun runsOf(width: Int, valueAt: (Int) -> Int): List<IntRange> {
 // ---- instruction tip (startup only; macOS HorizonPainterStartupInstructionsView) ----
 
 @Composable
-private fun HorizonInstructionTip(isMoving: Boolean, modifier: Modifier = Modifier) {
+private fun HorizonInstructionTip(prefs: com.star.desktop.data.LocalPreferences, isMoving: Boolean, modifier: Modifier = Modifier) {
     var dismissed by remember { mutableStateOf(false) }
-    if (dismissed) return
+    var dontShowAgain by remember { mutableStateOf(false) }
+    // The preference outlives this session; Preferences turns it back on (macOS showHorizonPainterInstructions).
+    if (dismissed || !prefs.showHorizonPainterInstructions) return
     Column(
         modifier
             .padding(top = 12.dp, start = 20.dp, end = 20.dp)
@@ -399,12 +587,18 @@ private fun HorizonInstructionTip(isMoving: Boolean, modifier: Modifier = Modifi
                 "the horizon so the selected area covers the horizon line. Once you've selected across the " +
                 "full width, Star detects the sky automatically. If it looks right, hit " +
                 (if (isMoving) "Next/Continue" else "Continue") +
-                ". Otherwise use the Sky and Ground brushes to add to or remove from the selection, and the " +
-                "− / + buttons to resize the brush.",
+                ". Otherwise use the Sky and Ground brushes to add to or remove from the selection. Use the '[' and ']' " +
+                "keys (or the − / + buttons) to shrink and enlarge the brush.",
             color = StarColors.textSecondary, fontSize = 12.sp,
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            OutlinedButton(onClick = { dismissed = true }) { Text(localized("ui.got_it")) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+            androidx.compose.material3.Checkbox(checked = dontShowAgain, onCheckedChange = { dontShowAgain = it })
+            Text(localized("ui.don_t_show_again"), color = Color.White, fontSize = 12.sp)
+            Spacer(Modifier.size(16.dp))
+            OutlinedButton(onClick = {
+                if (dontShowAgain) prefs.showHorizonPainterInstructions = false
+                dismissed = true
+            }) { Text(localized("ui.got_it")) }
         }
     }
 }
@@ -418,9 +612,14 @@ private fun HorizonControlBar(
     startupIndices: List<Int>,
     startupPos: Int,
     refining: Int,
+    saving: Boolean,
     errorText: String?,
+    applyToNearby: Boolean,
+    onApplyToNearbyChange: (Boolean) -> Unit,
+    maxDownward: MaxDownward,
+    onMaxDownwardStep: (Int) -> Unit,
     onReset: () -> Unit,
-    onSave: (reprocess: Boolean) -> Unit,
+    onSave: () -> Unit,
     onContinue: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -429,8 +628,9 @@ private fun HorizonControlBar(
     val v = state.version
     val phase = state.phase
     val coverage = v.let { (state.bandCoverage * 100).roundToInt() }
-    val hasHorizon = v.let { state.hasHorizon() }
+    val hasHorizon = v.let { state.hasSolvedHorizon() }
     val hasMore = startupIndices.isNotEmpty() && startupPos + 1 < startupIndices.size
+    val canSave = canSaveHorizon(phase, hasHorizon, refining, saving)
 
     Row(
         modifier
@@ -449,7 +649,7 @@ private fun HorizonControlBar(
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = StarColors.accent)
             Text(localized("ui.computing_horizon"), color = StarColors.textSecondary, fontSize = 12.sp)
             Spacer(Modifier.weight(1f))
-            OutlinedButton(onClick = onCancel) { Text(if (startup) "Cancel" else "Done") }
+            OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
             return@Row
         }
 
@@ -463,7 +663,22 @@ private fun HorizonControlBar(
             Text(localized("ui.paint_across_horizon", coverage), color = StarColors.yellow, fontSize = 12.sp)
         }
 
-        OutlinedButton(onClick = onReset) { Text(localized("ui.reset")) }
+        if (phase == HorizonPhase.REFINEMENT) {
+            DividerDot()
+            MaxDownwardExtensionControl(maxDownward, onMaxDownwardStep)
+        }
+
+        if (!startup && phase == HorizonPhase.REFINEMENT) {
+            DividerDot()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Switch(checked = applyToNearby, onCheckedChange = onApplyToNearbyChange)
+                Spacer(Modifier.size(6.dp))
+                Text(localized("ui.apply_to_nearby_frames"), color = StarColors.textSecondary, fontSize = 11.sp)
+            }
+        }
+
+        // Nothing to start over from until something is painted (macOS disables Reset in band selection until then).
+        OutlinedButton(onClick = onReset, enabled = phase == HorizonPhase.REFINEMENT || v.let { state.hasBand() }) { Text(localized("ui.reset")) }
 
         Spacer(Modifier.weight(1f))
 
@@ -476,21 +691,20 @@ private fun HorizonControlBar(
         if (phase == HorizonPhase.REFINEMENT) {
             if (startup) {
                 Button(
-                    enabled = hasHorizon && refining == 0,
+                    enabled = canSave,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     onClick = onContinue,
                 ) { Text(if (hasMore) "Next" else "Continue") }
             } else {
-                OutlinedButton(enabled = hasHorizon && refining == 0, onClick = { onSave(false) }) { Text(localized("ui.save")) }
                 Button(
-                    enabled = hasHorizon && refining == 0,
+                    enabled = canSave,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                    onClick = { onSave(true) },
-                ) { Text(localized("ui.save_reprocess")) }
+                    onClick = onSave,
+                ) { Text(localized("ui.save")) }
             }
         }
 
-        OutlinedButton(onClick = onCancel) { Text(if (startup) "Cancel" else "Done") }
+        OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
     }
 }
 
@@ -510,6 +724,41 @@ private fun BrushSizeControl(state: HorizonPaintState) {
         ) { Text("+") }
     }
 }
+
+/**
+ * How far below the reference-derived line the brightness refinement may put the horizon (the "↓Npx" stepper). [configured] is
+ * what is stored, 0 meaning "derive it from the refinement search radius"; [effective] is the number in force, which is what
+ * is shown, so the readout is never a bare 0.
+ */
+internal data class MaxDownward(val configured: Int, val effective: Int)
+
+/** The stored value after stepping by [delta] (macOS ±10): from the derived number on screen when nothing is stored, never below 0. */
+internal fun nextMaxDownwardExtension(current: MaxDownward, delta: Int): Int {
+    val base = if (current.configured > 0) current.configured else current.effective
+    return maxOf(0, base + delta)
+}
+
+@Composable
+private fun MaxDownwardExtensionControl(value: MaxDownward, onStep: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        OutlinedButton(
+            onClick = { onStep(-MAX_DOWNWARD_STEP) },
+            enabled = value.configured > 0,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        ) { Text("−") }
+        Text(
+            "↓${value.effective}px",
+            color = if (value.configured > 0) StarColors.textSecondary else StarColors.textDisabled,
+            fontSize = 11.sp,
+        )
+        OutlinedButton(
+            onClick = { onStep(MAX_DOWNWARD_STEP) },
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        ) { Text("+") }
+    }
+}
+
+private const val MAX_DOWNWARD_STEP = 10
 
 @Composable
 private fun SkyGroundToggle(state: HorizonPaintState) {

@@ -18,6 +18,9 @@ import com.star.proto.Config
 import com.star.proto.OpenProgress
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,6 +116,58 @@ internal fun movingHorizonCountMultiplier(chosen: Int, total: Int): Double =
     chosen.toDouble() / suggestedMovingHorizonCount(total)
 
 /**
+ * Where the startup flow goes after "was the camera moving?": straight to the removal question when the
+ * sequence has no horizon, otherwise to choosing horizons, one for a static camera and several for a moving
+ * one (macOS `MovingView`).
+ */
+internal fun stepAfterCameraMotion(hasHorizon: Boolean, moving: Boolean): StartupStep = when {
+    !hasHorizon -> StartupStep.REMOVAL
+    moving -> StartupStep.SELECT_MOVING_HORIZONS
+    else -> StartupStep.SELECT_HORIZON
+}
+
+/**
+ * Which question screen "Back" returns to from [step], derived from the answers already given rather than a
+ * separate history stack, since they fully determine how [step] was reached (macOS
+ * `RemovalView.previousStartupState`). null on the first screen.
+ *
+ * The answers are the session config's, whoever gave them: a session resumed part way through the startup flow
+ * has them from the config too, which a private copy in the view model never had.
+ */
+internal fun previousStartupStep(step: StartupStep, hasHorizon: Boolean, moving: Boolean): StartupStep? = when (step) {
+    StartupStep.HORIZON -> null
+    StartupStep.MOVING -> StartupStep.HORIZON
+    StartupStep.SELECT_HORIZON -> StartupStep.MOVING
+    StartupStep.SELECT_MOVING_HORIZONS -> StartupStep.MOVING
+    StartupStep.REMOVAL -> if (!hasHorizon) StartupStep.MOVING else if (moving) StartupStep.SELECT_MOVING_HORIZONS else StartupStep.SELECT_HORIZON
+}
+
+/**
+ * [current] with what the removal question decides: the clean method (when one was chosen) and whether earth
+ * alignment is allowed. Nothing else: whether there is a horizon and whether the camera moved were written
+ * into the config as they were answered, and are the config's to say, not this call's to overwrite.
+ */
+internal fun withRemovalChoices(current: Config, cleanMethod: CleanMethod?, allowEarthAlignment: Boolean): Config {
+    val b = current.toBuilder().setAllowEarthAlignment(allowEarthAlignment)
+    cleanMethod?.let { b.setCleanMethod(it) }
+    return b.build()
+}
+
+/**
+ * The initial config for opening [source] (an image sequence's folder or a video file): selective cleaning,
+ * previews on, and output written into the folder that holds the source, never left to the daemon's
+ * per-session scratch fallback (a fresh hidden temp dir on every open). Config's `basename` already embeds
+ * the sequence's own dirname, so this can't collide with a sibling sequence, and opening the same source
+ * again resolves to the same output location, which is what lets `FrameAirplaneRemover.init`'s
+ * `outputFileExistsOnDisk()` check find a previous run's output and report finished frames as complete
+ * instead of unprocessed (macOS `inputImageSequencePath`).
+ */
+internal fun initialConfigBeside(source: String): Config =
+    SessionRepository.defaultInitialConfig().toBuilder()
+        .setOutputPath(java.io.File(source).parent ?: source)
+        .build()
+
+/**
  * Root app state (macOS `ViewModel`): owns the engine, repositories, prefs, and the current screen.
  * Engine status is collected in its own coroutine; opening a source routes Initial → Loading →
  * Sequence; engine death while a session is open surfaces an error and returns to Initial.
@@ -153,6 +208,9 @@ class AppViewModel(
 
     private var currentSequence: SequenceViewModel? = null
 
+    /** What this class itself runs for the open session (the render-prompt and error collectors); cancelled when it closes. */
+    private var sessionScope: CoroutineScope? = null
+
     val engineStatus: StateFlow<EngineStatus> = engine.status
 
     private val _screen = MutableStateFlow<AppScreen>(AppScreen.Initial)
@@ -172,6 +230,32 @@ class AppViewModel(
 
     val export = com.star.desktop.data.ExportRepository { engine.client }
 
+    /**
+     * Apply [config] to the open session (`Sequence.UpdateConfig`), and tell what is showing if the clean method
+     * changed, so frames loaded earlier do not keep reporting the old one and the tool is reset if the new method
+     * has none. Throws if the daemon refuses it.
+     */
+    suspend fun updateSessionConfig(config: Config): Config {
+        val before = sessions.session.value?.config?.cleanMethod
+        val updated = sessions.updateConfig(config)
+        if (before != null && updated.cleanMethod != before) currentSequence?.cleanMethodChanged(updated.cleanMethod)
+        return updated
+    }
+
+    /**
+     * The detection-type picker beside "re-process the next N frames" (macOS RightPanel): applied to the session, and kept as the user's
+     * choice for the next one under the key the macOS app uses (`processingType`, the type's name).
+     */
+    fun setDetectionType(type: com.star.proto.DetectionType) {
+        scope.launch {
+            val current = runCatching { sessions.getConfig() }.getOrNull() ?: return@launch
+            if (current.detectionType != type) {
+                runCatching { updateSessionConfig(current.toBuilder().setDetectionType(type).build()) }.onFailure { report(it.message ?: it.toString()) }
+            }
+            prefs.setString("processingType", type.name.removePrefix("DETECTION_").lowercase())
+        }
+    }
+
     private val _showSettings = MutableStateFlow(false)
     val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
     fun openSettings() { _showSettings.value = true }
@@ -183,6 +267,9 @@ class AppViewModel(
     val renderVideoAutoStart: StateFlow<Boolean> = _renderVideoAutoStart.asStateFlow()
     fun openRenderVideo(autoStart: Boolean = false) { _renderVideoAutoStart.value = autoStart; _showRenderVideo.value = true }
     fun closeRenderVideo() { _showRenderVideo.value = false; _renderVideoAutoStart.value = false }
+
+    /** The render the prompt asked for has started: the dialog must not start another when something it watches changes. */
+    fun consumeRenderVideoAutoStart() { _renderVideoAutoStart.value = false }
 
     // ---- process → render prompt flow (macOS Pre/PostProcessingRenderPrompt) ----
     private val _showPreRenderPrompt = MutableStateFlow(false)
@@ -221,7 +308,7 @@ class AppViewModel(
         currentSequence?.let {
             it.setViewMode(com.star.proto.FrameViewMode.VIEW_PROCESSED)
             it.goToFirst()
-            it.playForward()
+            it.startPlaybackForward() // from the start, forward, and not toggled off if it was already playing
         }
     }
 
@@ -274,28 +361,39 @@ class AppViewModel(
     // ---- new-source startup prompts (macOS StartupView) ----
     private val _startupStep = MutableStateFlow<StartupStep?>(null) // null = not showing
     val startupStep: StateFlow<StartupStep?> = _startupStep.asStateFlow()
-    // Accumulated answers, applied to the session config when the user opens Advanced or starts processing.
-    private var startupHasHorizon = false
-    private var startupCameraMoving = false
+    // The answers are not kept here: each is written into the session config as it is given (macOS does the
+    // same through the view model's didSet), so the config is the one record of them, a resumed session has
+    // them from the start, and closing the prompts or opening Advanced cannot lose or overwrite them.
+    private val startupHasHorizon: Boolean get() = sessions.session.value?.config?.horizonDetectionEnabled ?: false
+    private val startupCameraMoving: Boolean get() = sessions.session.value?.config?.tripodHeadWasMoving ?: false
 
-    private fun resetStartupChoices() {
-        startupHasHorizon = false
-        startupCameraMoving = false
+    /** The latest startup answer being written, so the next one is written after it. */
+    private var startupWrite: Job? = null
+
+    /** Write one startup answer into the session config, after any still being written. */
+    private fun writeStartupAnswer(change: (Config.Builder) -> Unit): Job {
+        val previous = startupWrite
+        val job = scope.launch {
+            previous?.join()
+            val current = runCatching { sessions.getConfig() }.getOrNull() ?: return@launch
+            runCatching { sessions.updateConfig(current.toBuilder().also(change).build()) }
+        }
+        startupWrite = job
+        return job
     }
 
     /** Prompt 1 answer: does the sequence include a horizon? */
     fun startupAnswerHorizon(hasHorizon: Boolean) {
-        startupHasHorizon = hasHorizon
+        writeStartupAnswer { it.setHorizonDetectionEnabled(hasHorizon) }
         _startupStep.value = StartupStep.MOVING
     }
 
     /** Prompt 2 answer: was the camera moving (false = static on a tripod)? */
     fun startupAnswerMoving(moving: Boolean) {
-        startupCameraMoving = moving
-        _startupStep.value = when {
-            !startupHasHorizon -> StartupStep.REMOVAL
-            moving -> StartupStep.SELECT_MOVING_HORIZONS
-            else -> StartupStep.SELECT_HORIZON
+        val written = writeStartupAnswer { it.setTripodHeadWasMoving(moving) }
+        scope.launch {
+            written.join()
+            _startupStep.value = stepAfterCameraMotion(startupHasHorizon, moving)
         }
     }
 
@@ -316,7 +414,7 @@ class AppViewModel(
     fun startMovingHorizonStartupFlow(count: Int) {
         val svm = currentSequence ?: return
         scope.launch {
-            applyStartupChoices() // persist moving/horizon to config before saving per-frame references
+            startupWrite?.join() // the answers that led here are in the config before references are saved against it
             val indices = evenlySpacedFrameIndices(count, svm.frameCount)
             svm.beginStartupHorizon(indices)
             recordStartupHorizonProgress(indices, 0)
@@ -328,7 +426,7 @@ class AppViewModel(
     private fun startStaticHorizonStartupFlow() {
         val svm = currentSequence ?: return
         scope.launch {
-            applyStartupChoices()
+            startupWrite?.join()
             // A one-frame list rather than the empty one this used to pass, so an interrupted
             // static selection resumes by the same route as a moving one. See
             // SequenceViewModel.beginStartupHorizon for why nothing downstream notices.
@@ -425,32 +523,15 @@ class AppViewModel(
         prefs.setMovingHorizonCountMultiplier(movingHorizonCountMultiplier(chosen, startupFrameCount()))
     }
 
-    /**
-     * Which question screen "Back" should return to — derived from the answers already given
-     * rather than a separate history stack, since they fully determine how [step] was reached
-     * (macOS `RemovalView.previousStartupState`). Returns null on the first screen.
-     */
-    fun previousStartupStep(step: StartupStep): StartupStep? = when (step) {
-        StartupStep.HORIZON -> null
-        StartupStep.MOVING -> StartupStep.HORIZON
-        StartupStep.SELECT_HORIZON -> StartupStep.MOVING
-        StartupStep.SELECT_MOVING_HORIZONS -> StartupStep.MOVING
-        StartupStep.REMOVAL -> when {
-            !startupHasHorizon -> StartupStep.MOVING
-            startupCameraMoving -> StartupStep.SELECT_MOVING_HORIZONS
-            else -> StartupStep.SELECT_HORIZON
-        }
-    }
-
     /** "Back" on a startup prompt: return to the previous question without discarding later answers. */
     fun startupGoBack(step: StartupStep) {
-        _startupStep.value = previousStartupStep(step)
+        _startupStep.value = previousStartupStep(step, startupHasHorizon, startupCameraMoving)
     }
 
-    /** "Advanced" gear on a prompt: persist the answers so the dialog reflects them, then open settings. */
+    /** "Advanced" gear on a prompt: open the settings. The answers so far are already in the config the dialog shows. */
     fun startupOpenAdvanced() {
         scope.launch {
-            applyStartupChoices()
+            startupWrite?.join()
             _startupStep.value = null
             openSettings()
         }
@@ -459,29 +540,24 @@ class AppViewModel(
     /** Removal prompt "Start Processing": apply the chosen clean method + answers, then process. */
     fun startupStartProcessing(cleanMethod: CleanMethod, allowEarthAlignment: Boolean) {
         scope.launch {
-            applyStartupChoices(cleanMethod, allowEarthAlignment)
+            startupWrite?.join()
+            applyRemovalChoices(cleanMethod, allowEarthAlignment)
             _startupStep.value = null
             requestProcessAll()
         }
     }
 
-    /** Removal prompt "Close": dismiss the prompts without processing (keeps the default config). */
+    /** Removal prompt "Close": dismiss the prompts without processing. The answers given stay in the config. */
     fun dismissStartup() { _startupStep.value = null }
 
     /**
-     * Fold the accumulated startup answers (and optionally a clean method + the removal prompt's
-     * "Cars" toggle) into the live session config. [allowEarthAlignment] defaults to true for the
-     * paths that skip the removal prompt (e.g. jumping to Advanced settings mid-flow), matching
-     * the macOS behavior of earth alignment being on by default.
+     * Put the removal prompt's choices (a clean method, and the "Cars" toggle's earth alignment) into the live
+     * session config. [allowEarthAlignment] defaults to true, matching the macOS behavior of earth alignment being
+     * on by default.
      */
-    private suspend fun applyStartupChoices(cleanMethod: CleanMethod? = null, allowEarthAlignment: Boolean = true) {
+    private suspend fun applyRemovalChoices(cleanMethod: CleanMethod? = null, allowEarthAlignment: Boolean = true) {
         val current = runCatching { sessions.getConfig() }.getOrNull() ?: return
-        val b = current.toBuilder()
-            .setHorizonDetectionEnabled(startupHasHorizon)
-            .setTripodHeadWasMoving(startupCameraMoving)
-            .setAllowEarthAlignment(allowEarthAlignment)
-        cleanMethod?.let { b.setCleanMethod(it) }
-        runCatching { sessions.updateConfig(b.build()) }
+        runCatching { updateSessionConfig(withRemovalChoices(current, cleanMethod, allowEarthAlignment)) }
     }
 
     init {
@@ -513,18 +589,8 @@ class AppViewModel(
         }
     }
 
-    /**
-     * Output goes to the sequence directory's own parent (macOS `inputImageSequencePath`), not
-     * left to the daemon's per-session scratch-dir fallback (a fresh temp dir every open). Config's
-     * `basename` already embeds the sequence's own dirname, so this can't collide with a sibling
-     * sequence — and reopening the SAME sequence resolves to the SAME output location, which is
-     * what lets `FrameAirplaneRemover.init`'s `outputFileExistsOnDisk()` check find a previous
-     * run's output and report already-processed frames as complete instead of unprocessed.
-     */
     fun openSequence(dir: String) = launchOpen("Opening image sequence", dir, promptStartup = true) {
-        val outputPath = java.io.File(dir).parent ?: dir
-        val config = SessionRepository.defaultInitialConfig().toBuilder().setOutputPath(outputPath).build()
-        sessions.openSequence(dir, config)
+        sessions.openSequence(dir, initialConfigBeside(dir))
     }
 
     fun openConfig(path: String) = launchOpen("Resuming session", path) { sessions.openConfig(path) }
@@ -532,10 +598,17 @@ class AppViewModel(
     fun openVideo(path: String) {
         scope.launch {
             ensureConnected()
+            if (engine.client == null) {
+                showEngineDown() // as launchOpen: say why, with Restart, not "engine not connected"
+                return@launch
+            }
             _screen.value = AppScreen.Loading("Importing video", path, null)
             try {
+                closeOpenSession() // opening over an open session: cancel it, close it, then open
                 var info: SessionInfo? = null
-                sessions.openVideo(path).collect { p ->
+                // Output beside the video, as macOS puts it (the parent of the extracted frames' folder is the
+                // video's own folder), not in the daemon's hidden per-session scratch fallback.
+                sessions.openVideo(path, initialConfigBeside(path)).collect { p ->
                     when (p.kindCase) {
                         OpenProgress.KindCase.PROGRESS -> {
                             val io = p.progress
@@ -561,11 +634,45 @@ class AppViewModel(
 
     fun closeSession() {
         scope.launch {
-            currentSequence?.close()
-            currentSequence = null
-            runCatching { sessions.close() }
+            closeOpenSession()
+            lastResumePath = null // nothing is open, so a crash from here on has nothing to resume
             _screen.value = AppScreen.Initial
         }
+    }
+
+    /**
+     * End the open session completely: the UI side, then `Session.Close` on the daemon, which stops
+     * its run and waits for it, writes out what is pending, and ends its streams. Opening a new
+     * source goes through here first, so the old session is closed rather than just forgotten.
+     */
+    private suspend fun closeOpenSession() {
+        teardownSequence()
+        runCatching { sessions.close() }
+    }
+
+    /**
+     * The UI side of closing a session: stop its view model, cancel every coroutine started for it,
+     * and reset the app-level state that only made sense for it (render prompts, open dialogs, the
+     * startup answers, the version warning) so the next session starts clean.
+     */
+    private fun teardownSequence() {
+        currentSequence?.close()
+        currentSequence = null
+        sessionScope?.cancel()
+        sessionScope = null
+
+        _showPreRenderPrompt.value = false
+        _showPostRenderPrompt.value = false
+        autoRenderAfterProcessing = false
+        awaitingProcessingPrompt = false
+        _showSettings.value = false
+        _showRenderVideo.value = false
+        _renderVideoAutoStart.value = false
+        _showOutlierWindow.value = false
+        _showAlignmentWindow.value = false
+        _showInfoDialog.value = false
+        _startupStep.value = null
+        _versionWarning.value = null
     }
 
     fun dismissError() { _error.value = null }
@@ -605,8 +712,8 @@ class AppViewModel(
     /** Give up on a crashed engine: close the dead session and return to the start screen. */
     fun dismissEngineDown() {
         _engineDown.value = null
-        currentSequence?.close()
-        currentSequence = null
+        teardownSequence()
+        lastResumePath = null
         runCatching { sessions.clearLocal() }
         _screen.value = AppScreen.Initial
     }
@@ -629,6 +736,7 @@ class AppViewModel(
             }
             _screen.value = AppScreen.Loading(title, path, null)
             try {
+                closeOpenSession() // opening over an open session: cancel it, close it, then open
                 onOpened(path, block(), promptStartup = promptStartup)
             } catch (e: Throwable) {
                 fail(e.message ?: "failed to open")
@@ -637,25 +745,46 @@ class AppViewModel(
     }
 
     private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true, promptStartup: Boolean = false) {
-        if (addToRecent) {
-            prefs.addRecentFile(path)
-            _recentFiles.value = prefs.recentFiles
-        }
+        // Normally the open has already closed what was open; this is for the restart-after-crash route,
+        // where the old session died with the engine. Before anything below sets state for the new one.
+        teardownSequence()
         // The session's on-disk config.json — the resume path for crash recovery (cross-client
         // resume). Reported by the daemon rather than built from the scratch dir: a session
         // opened from a config keeps writing to the caller's own file, which is somewhere
         // else entirely, so the constructed path named a file nothing ever wrote and
         // restartEngine() gave up on a session that was perfectly resumable.
-        lastResumePath = info.configJsonPath.ifEmpty { "${info.scratchSessionDir}/config.json" }
+        val configPath = info.configJsonPath.ifEmpty { "${info.scratchSessionDir}/config.json" }
+        lastResumePath = configPath
+        if (addToRecent) {
+            // The config, whatever was opened: that is what the macOS app records, and what either client
+            // opens a recent entry as, resuming the session rather than starting a fresh one (with its
+            // startup questions, and a video decoded again) from the folder or video it came from.
+            prefs.addRecentFile(configPath)
+            _recentFiles.value = prefs.recentFiles
+        }
         _engineDown.value = null
         // Warn if the session was last written by a different engine version (req #4).
         val engineVer = (engine.status.value as? EngineStatus.Connected)?.daemonVersion
         _versionWarning.value = com.star.desktop.util.versionMismatchWarning(info.config.starVersion, engineVer)
-        currentSequence?.close()
-        val proc = ProcessingRepository(scope) { engine.client }
-        // Fire the post-processing render prompt when a prompted process-all run reaches "done".
-        scope.launch { proc.sequenceState.collect { if (it == "done") handleProcessingDone() } }
-        val svm = SequenceViewModel(scope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo)
+        val sessionScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
+        this.sessionScope = sessionScope
+        val proc = ProcessingRepository(sessionScope) { engine.client }
+        // Fire the post-processing render prompt when a prompted process-all run reaches "done"; a
+        // run the user stopped must not leave it armed for whichever run reaches "done" next.
+        sessionScope.launch {
+            proc.sequenceState.collect {
+                when (it) {
+                    "done" -> handleProcessingDone()
+                    // A stopped or failed run is not one to offer a render for.
+                    "cancelled", "error" -> {
+                        awaitingProcessingPrompt = false
+                        autoRenderAfterProcessing = false
+                    }
+                }
+            }
+        }
+        sessionScope.launch { proc.errors.collect(::report) }
+        val svm = SequenceViewModel(sessionScope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo, onError = ::report, prefs = prefs)
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)
@@ -666,15 +795,15 @@ class AppViewModel(
             "postrender" -> _showPostRenderPrompt.value = true // dev hook: screenshot the post-render prompt
             "multiselect" -> svm.openMultiSelect(SequenceViewModel.RectSelection(100f, 100f, 400f, 400f)) // dev hook
             "settings" -> openSettings() // dev hook: screenshot the Processing Settings dialog
-            "startup" -> { resetStartupChoices(); _startupStep.value = StartupStep.HORIZON } // dev hook: startup prompts
+            "startup" -> _startupStep.value = StartupStep.HORIZON // dev hook: startup prompts
             else -> Unit
         }
         autoFrame?.let { svm.setCurrentIndex(it) }
+        svm.openOutlierWindow = { _showOutlierWindow.value = true }
         currentSequence = svm
         _screen.value = AppScreen.Sequence(svm)
         // Fresh source → walk the startup prompts (skipped for config resume + dev auto-open hooks).
         if (promptStartup && autoMode == null) {
-            resetStartupChoices()
             _startupStep.value = StartupStep.HORIZON
         } else if (autoMode == null) {
             // A config resume. Normally there is nothing to prompt for — the config already
@@ -682,6 +811,12 @@ class AppViewModel(
             // session never finished, which has to come before processing rather than after.
             resumeStartupHorizonIfUnfinished(svm, info.config)
         }
+    }
+
+    /** Show an error over whatever screen is up (macOS `report(error:)`); unlike [fail], leaves the screen alone. */
+    fun report(message: String) {
+        Log.w("App") { message }
+        _error.value = message
     }
 
     private fun fail(message: String) {

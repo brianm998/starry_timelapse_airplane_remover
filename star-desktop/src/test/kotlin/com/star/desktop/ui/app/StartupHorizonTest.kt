@@ -1,7 +1,11 @@
 package com.star.desktop.ui.app
 
+import com.star.desktop.data.SessionRepository
+import com.star.proto.CleanMethod
+import com.star.proto.Config
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Verifies the moving-horizon startup frame spacing matches macOS
@@ -164,5 +168,52 @@ class StartupHorizonTest {
         assertEquals(1450, preferredMovingHorizonCount(1450, 1e6))
         assertEquals(1450, preferredMovingHorizonCount(1450, Double.MAX_VALUE))
         assertEquals(1, preferredMovingHorizonCount(1, Double.MAX_VALUE))
+    }
+
+    // the startup answers live in the session config (macOS writes each into it as it is given)
+
+    /**
+     * A session resumed part way through the startup flow has a moving camera and a horizon in its config. The
+     * removal prompt's Start used to write the view model's own copy of those answers, which a resume never
+     * filled in, so a moving sequence went on to run as a static one with no horizon.
+     */
+    @Test fun startingAfterAResumeKeepsTheHorizonAndCameraAnswers() {
+        val resumed = Config.newBuilder().setHorizonDetectionEnabled(true).setTripodHeadWasMoving(true).build()
+        val started = withRemovalChoices(resumed, CleanMethod.CLEAN_SELECTIVE, allowEarthAlignment = false)
+        assertTrue(started.horizonDetectionEnabled, "Start turned the resumed horizon off")
+        assertTrue(started.tripodHeadWasMoving, "Start made the resumed moving camera a static one")
+        assertEquals(CleanMethod.CLEAN_SELECTIVE, started.cleanMethod)
+        assertEquals(false, started.allowEarthAlignment)
+    }
+
+    @Test fun startingWithoutAChosenCleanMethodLeavesTheOneTheConfigHas() {
+        val current = Config.newBuilder().setCleanMethod(CleanMethod.CLEAN_AUTOMATIC).build()
+        assertEquals(CleanMethod.CLEAN_AUTOMATIC, withRemovalChoices(current, null, allowEarthAlignment = true).cleanMethod)
+    }
+
+    /** What macOS leaves it at when the first prompt is skipped, e.g. by Advanced: StarCore's default, on. */
+    @Test fun aNewSequenceStartsWithHorizonDetectionOn() {
+        assertTrue(SessionRepository.defaultInitialConfig().horizonDetectionEnabled)
+    }
+
+    @Test fun theStepAfterTheCameraQuestionFollowsTheAnswers() {
+        assertEquals(StartupStep.REMOVAL, stepAfterCameraMotion(hasHorizon = false, moving = true))
+        assertEquals(StartupStep.REMOVAL, stepAfterCameraMotion(hasHorizon = false, moving = false))
+        assertEquals(StartupStep.SELECT_HORIZON, stepAfterCameraMotion(hasHorizon = true, moving = false))
+        assertEquals(StartupStep.SELECT_MOVING_HORIZONS, stepAfterCameraMotion(hasHorizon = true, moving = true))
+    }
+
+    /** Back from the removal question goes where the answers say it came from, including after a resume. */
+    @Test fun backFromRemovalFollowsTheAnswersInTheConfig() {
+        assertEquals(StartupStep.MOVING, previousStartupStep(StartupStep.REMOVAL, hasHorizon = false, moving = true))
+        assertEquals(StartupStep.SELECT_HORIZON, previousStartupStep(StartupStep.REMOVAL, hasHorizon = true, moving = false))
+        assertEquals(StartupStep.SELECT_MOVING_HORIZONS, previousStartupStep(StartupStep.REMOVAL, hasHorizon = true, moving = true))
+    }
+
+    @Test fun theEarlierScreensGoBackTheSameWayWhateverTheAnswers() {
+        assertEquals(null, previousStartupStep(StartupStep.HORIZON, true, true))
+        assertEquals(StartupStep.HORIZON, previousStartupStep(StartupStep.MOVING, true, true))
+        assertEquals(StartupStep.MOVING, previousStartupStep(StartupStep.SELECT_HORIZON, true, false))
+        assertEquals(StartupStep.MOVING, previousStartupStep(StartupStep.SELECT_MOVING_HORIZONS, true, true))
     }
 }

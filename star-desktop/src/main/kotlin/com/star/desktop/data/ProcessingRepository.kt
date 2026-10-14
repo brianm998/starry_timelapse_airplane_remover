@@ -8,10 +8,14 @@ import com.star.proto.ProgressEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 
 /**
@@ -22,8 +26,9 @@ import kotlinx.coroutines.launch
  * the stream RPC arrives, so [subscribe] must run and be live *before* [start] — otherwise early
  * events are lost. [start] does not begin the subscription; it assumes one is already open.
  *
- * The daemon has a single progress slot per session shared with the `Export.*` streams, so only one
- * progress-bearing stream may run at a time — keep this subscription and serialize exports against it.
+ * The daemon keeps a set of progress subscribers per session, and `Export.RenderSequence` /
+ * `Horizon.Reprocess` are subscribers of their own for their duration, so this subscription is
+ * never torn down to make room for them. Call [stop] only when the session closes.
  */
 class ProcessingRepository(
     private val scope: CoroutineScope,
@@ -36,9 +41,22 @@ class ProcessingRepository(
     private val _outlierLoadState = MutableStateFlow<Map<Int, Int>>(emptyMap())
     val outlierLoadState: StateFlow<Map<Int, Int>> = _outlierLoadState.asStateFlow()
 
-    /** Per-frame saving state (0..3) from `frame_saving_state`. */
+    /** Per-frame saving state from `frame_saving_state`: 0 not saving, 1 in purgatory, 2 save pending, 3 saving. */
     private val _savingState = MutableStateFlow<Map<Int, Int>>(emptyMap())
     val savingState: StateFlow<Map<Int, Int>> = _savingState.asStateFlow()
+
+    /**
+     * How many frames have edits that are not written to disk yet (in purgatory, waiting, or being
+     * saved). Closing the session or quitting with this above zero is losing work unless the daemon
+     * is given the chance to finish — see the "work in progress" check.
+     */
+    private val _pendingSaves = MutableStateFlow(0)
+    val pendingSaves: StateFlow<Int> = _pendingSaves.asStateFlow()
+
+    /** A preview of a frame was written (`image_saved`): whatever a client holds of it is out of date. */
+    data class ImageSaved(val frameIndex: Int, val viewMode: com.star.proto.FrameViewMode)
+    private val _imageSaved = MutableSharedFlow<ImageSaved>(extraBufferCapacity = 256)
+    val imageSaved: SharedFlow<ImageSaved> = _imageSaved.asSharedFlow()
 
     data class Io(val current: Int, val total: Int, val outputDir: String)
     private val _ioProgress = MutableStateFlow<Io?>(null)
@@ -50,7 +68,20 @@ class ProcessingRepository(
     private val _processing = MutableStateFlow(false)
     val processing: StateFlow<Boolean> = _processing.asStateFlow()
 
+    /**
+     * A run that finished with failed operations (`sequence_state = "error"`): the failures, one per line.
+     * One-shot, not state — each is shown to the user once.
+     */
+    private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val errors: SharedFlow<String> = _errors.asSharedFlow()
+
     private var subJob: Job? = null
+
+    /**
+     * Whether a run was started since the last [cancel]. The daemon's `cancelled` event for that
+     * stop can reach us after the user has already started the next run, and is not about that run.
+     */
+    private var startedSinceCancel = false
 
     private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, "engine not connected")
 
@@ -71,6 +102,7 @@ class ProcessingRepository(
     suspend fun start(sessionId: String, startIndex: Int = 0, endIndex: Int = -1, force: Boolean = false) {
         _sequenceState.value = null
         _processing.value = true
+        startedSinceCancel = true
         try {
             c().startProcessing(sessionId, startIndex, endIndex, force)
         } catch (e: Throwable) {
@@ -79,9 +111,14 @@ class ProcessingRepository(
         }
     }
 
+    /**
+     * Stop the run. The daemon answers once what was running has stopped, which can take a while, so
+     * the UI goes idle at once rather than after the answer.
+     */
     suspend fun cancel(sessionId: String) {
-        runCatching { c().cancelProcessing(sessionId) }
+        startedSinceCancel = false
         _processing.value = false
+        runCatching { c().cancelProcessing(sessionId) }
     }
 
     /** Granular reprocess of selected frames; progress arrives over the live StreamProgress subscription. */
@@ -89,6 +126,7 @@ class ProcessingRepository(
         if (indices.isEmpty()) return
         _sequenceState.value = null
         _processing.value = true
+        startedSinceCancel = true
         try {
             c().reprocessFrames(sessionId, indices, type)
         } catch (e: Throwable) {
@@ -96,6 +134,27 @@ class ProcessingRepository(
             throw e
         }
     }
+
+    /**
+     * Start a run the daemon claims some other way than `Processing.Start` (a horizon refinement): [start] asks for it and
+     * says whether one began. Until it does, and for the length of it, this is a run like any other.
+     */
+    suspend fun startClaimedRun(start: suspend () -> Boolean) {
+        _sequenceState.value = null
+        _processing.value = true
+        startedSinceCancel = true
+        val started = try {
+            start()
+        } catch (e: Throwable) {
+            _processing.value = false
+            throw e
+        }
+        if (!started) _processing.value = false
+    }
+
+    /** A frame's horizon was recomputed by a refinement operation (`horizon_updated`). */
+    private val _horizonUpdated = MutableSharedFlow<Int>(extraBufferCapacity = 512)
+    val horizonUpdated: SharedFlow<Int> = _horizonUpdated.asSharedFlow()
 
     /** Tear down the subscription (session close). */
     fun stop() {
@@ -105,24 +164,38 @@ class ProcessingRepository(
 
     fun frameState(index: Int): FrameProcessingState? = _frameStates.value[index]
 
-    private fun fold(ev: ProgressEvent) {
+    internal fun fold(ev: ProgressEvent) {
         when (ev.kindCase) {
             ProgressEvent.KindCase.FRAME_STATE ->
                 _frameStates.update { it + (ev.frameState.frameIndex to ev.frameState.state) }
-            ProgressEvent.KindCase.FRAME_SAVING_STATE ->
-                _savingState.update { it + (ev.frameSavingState.frameIndex to ev.frameSavingState.newState) }
+            ProgressEvent.KindCase.FRAME_SAVING_STATE -> {
+                val states = _savingState.updateAndGet { it + (ev.frameSavingState.frameIndex to ev.frameSavingState.newState) }
+                _pendingSaves.value = states.count { it.value != SAVING_NOT_SAVING }
+            }
             ProgressEvent.KindCase.OUTLIERS_LOADED ->
                 _outlierLoadState.update { it + (ev.outliersLoaded.frameIndex to ev.outliersLoaded.state) }
             ProgressEvent.KindCase.IO_PROGRESS ->
                 _ioProgress.value = ev.ioProgress.let { Io(it.current, it.total, it.outputDir) }
             ProgressEvent.KindCase.SEQUENCE_STATE -> {
                 val s = ev.sequenceState.state
+                // The stop's own `cancelled`, arriving after the next run was started: it is not
+                // about that run.
+                if (s == "cancelled" && startedSinceCancel) return
                 _sequenceState.value = s
-                if (s == "done") _processing.value = false
+                if (s == "done" || s == "cancelled" || s == "error") _processing.value = false
+                if (s == "error") _errors.tryEmit(ev.sequenceState.message.ifBlank { s })
             }
+            ProgressEvent.KindCase.HORIZON_UPDATED -> _horizonUpdated.tryEmit(ev.horizonUpdated)
+            ProgressEvent.KindCase.IMAGE_SAVED ->
+                _imageSaved.tryEmit(ImageSaved(ev.imageSaved.frameIndex, ev.imageSaved.viewMode))
             ProgressEvent.KindCase.FRAME_EXISTING ->
                 Log.d("Processing") { "frame ${ev.frameExisting} already exists" }
             else -> Unit
         }
+    }
+
+    private companion object {
+        /** `FrameSavingState.notSaving` in the daemon's `frame_saving_state` events. */
+        const val SAVING_NOT_SAVING = 0
     }
 }

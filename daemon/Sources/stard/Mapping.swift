@@ -1,5 +1,6 @@
 import Foundation
 import StarCore
+import StarCppBridge
 import StarDaemonMessages
 
 // Bidirectional type mapping between StarCore types and proto types.
@@ -10,10 +11,56 @@ enum Mapping {
     static func frameViewMode(from proto: Star_V1_FrameViewMode) -> StarCore.FrameViewMode {
         switch proto {
         case .viewOriginal:    return .original
-        case .viewProcessed:   return .autoProcessed
+        // The final processed image -- what macOS shows -- which `ImageAccessor.linkFinal` points at
+        // the output of whichever clean method the frame used.  `.autoProcessed` is only written
+        // by automatic frames, so selective frames showed a debug image (the subtraction) instead.
+        case .viewProcessed:   return .final
         case .viewSubtraction: return .subtraction
         case .viewValidation:  return .validation
+        case .viewHorizon:               return .horizon
+        case .viewMergedHorizon:         return .mergedHorizon
+        case .viewUserHorizon:           return .userHorizon
+        case .viewStarAligned:           return .starAligned
+        case .viewFailedStarAligned:     return .failedStarAligned
+        case .viewEarthAligned:          return .earthAligned
+        case .viewFailedEarthAligned:    return .failedEarthAligned
+        case .viewBlobs:                 return .blobs
+        case .viewRemoveMask:            return .removeMask
+        case .viewAutoProcessed:         return .autoProcessed
+        case .viewAutoSelectiveProcessed: return .autoSelectiveProcessed
+        case .viewSelectiveProcessed:    return .selectiveProcessed
         default:               return .original
+        }
+    }
+
+    /// The view mode a client can ask for that `type` is: every image the pipeline keeps has one.
+    static func protoFrameViewMode(_ type: StarCore.FrameViewMode) -> Star_V1_FrameViewMode? {
+        switch type {
+        case .original:               return .viewOriginal
+        case .final:                  return .viewProcessed
+        case .subtraction:            return .viewSubtraction
+        case .validation:             return .viewValidation
+        case .horizon:                return .viewHorizon
+        case .mergedHorizon:          return .viewMergedHorizon
+        case .userHorizon:            return .viewUserHorizon
+        case .starAligned:            return .viewStarAligned
+        case .failedStarAligned:      return .viewFailedStarAligned
+        case .earthAligned:           return .viewEarthAligned
+        case .failedEarthAligned:     return .viewFailedEarthAligned
+        case .blobs:                  return .viewBlobs
+        case .removeMask:             return .viewRemoveMask
+        case .autoProcessed:          return .viewAutoProcessed
+        case .autoSelectiveProcessed: return .viewAutoSelectiveProcessed
+        case .selectiveProcessed:     return .viewSelectiveProcessed
+        }
+    }
+
+    /// The images [frame] has on disk now that a client can ask for; the original is always among them.
+    static func availableModes(of frame: FrameAirplaneRemover) -> [Star_V1_FrameViewMode] {
+        StarCore.FrameViewMode.allCases.compactMap { type in
+            guard let mode = protoFrameViewMode(type) else { return nil }
+            if type == .original { return mode }
+            return frame.imageAccessor.imageExists(frameIndex: frame.frameIndex, ofType: type, atSize: .original) ? mode : nil
         }
     }
 
@@ -156,6 +203,16 @@ enum Mapping {
         return out
     }
 
+    // MARK: - Line
+
+    static func protoLine(_ line: Line) -> Star_V1_Line {
+        var out = Star_V1_Line()
+        out.theta = line.theta
+        out.rho = line.rho
+        out.votes = Int32(clamping: line.votes)
+        return out
+    }
+
     // MARK: - Alignment
 
     static func protoAlignmentState(_ s: AlignmentState) -> Star_V1_AlignmentState {
@@ -195,6 +252,11 @@ enum Mapping {
         out.outputPath = c.outputPath
         out.tempOutputPath = c.tempOutputPath
         out.cleanMethod = protoCleanMethod(c.cleanMethod)
+        // The per-frame settings are read-only here: they change through Frame.SetCleanMethod and Frame.SetNeighborOverride (which do what
+        // each change calls for), so a client that sends back a config it read earlier cannot undo one.
+        out.pixelReplacementOverrides = Dictionary(uniqueKeysWithValues: c.pixelReplacementOverrides.map { (Int32($0.key), protoCleanMethod($0.value)) })
+        out.staticNeighborFrameOverrides = Dictionary(uniqueKeysWithValues: c.staticNeighborFrameOverrides.map { (Int32($0.key), Int32($0.value)) })
+        out.alignedNeighborFrameOverrides = Dictionary(uniqueKeysWithValues: c.alignedNeighborFrameOverrides.map { (Int32($0.key), Int32($0.value)) })
         out.detectionType = protoDetectionType(c.detectionType)
         out.horizonDetectionEnabled = c.horizonDetectionEnabled
         out.tripodHeadWasMoving = c.tripodHeadWasMoving
@@ -429,6 +491,11 @@ enum Mapping {
             fi.numNegativeOutliers  = Int32(neg)
             fi.numUndecidedOutliers = Int32(und)
             fi.numTrashOutliers     = Int32(await groups.getTrash().count)
+            fi.outliersLoaded       = true
+        }
+        fi.availableModes = availableModes(of: frame)
+        if let path = frame.imageAccessor.nameForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original) {
+            fi.filename = (path as NSString).lastPathComponent
         }
         return fi
     }

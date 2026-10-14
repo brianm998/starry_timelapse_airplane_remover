@@ -20,21 +20,12 @@ func ensureOutliersLoaded(_ frame: FrameAirplaneRemover) async {
 
 enum OutlierHandlers {
 
-    // Render the current decisions of [frame] to a preview PNG; returns its ImageRef (nil on failure).
-    private static func renderPreview(session: Session, frameIndex: Int, width: Int, height: Int) async -> Star_V1_ImageRef? {
-        let scratchDir = await session.scratchSessionDir
-        let previewDir = "\(scratchDir)/previews"
-        try? FileManager.default.createDirectory(atPath: previewDir, withIntermediateDirectories: true)
-        let previewPath = "\(previewDir)/frame_\(frameIndex)_rendered.png"
-        let imageSequence = await session.imageSequence
-        let filenames = await imageSequence.filenames
-        guard frameIndex < filenames.count else { return nil }
-        let loader = await imageSequence.getImage(withName: filenames[frameIndex])
-        guard let image = try? await loader.image() else { return nil }
-        image.writeTIFFEncoding(toFilename: previewPath)
-        var ref = Star_V1_ImageRef()
-        ref.path = previewPath; ref.width = Int32(width); ref.height = Int32(height); ref.format = "png"
-        return ref
+    // Write the frame's finished image from its current decisions (the macOS "Render this frame") and
+    // return the preview of what was written.  nil if it could not be written.
+    private static func renderPreview(session: Session, frame: FrameAirplaneRemover) async -> Star_V1_ImageRef? {
+        await ensureOutliersLoaded(frame)
+        guard await session.renderNow(frame) else { return nil }
+        return await PreviewFiles.ref(for: frame, mode: .final)
     }
 
     // Re-run the decision-tree classifier over one frame's outlier groups.
@@ -55,11 +46,39 @@ enum OutlierHandlers {
                 await frame.applyDecisionTreeToAllOutliers(overwrite: req.overwrite, minimumSize: minSize)
             }
             await frame.markAsChanged()
+            await session.frameEdited(frame)
             var resp = Star_V1_ApplyDecisionTreeResponse()
-            resp.frame = await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups())
-            if req.rerender, let ref = await renderPreview(session: session, frameIndex: Int(req.frameIndex), width: frame.width, height: frame.height) {
+            resp.frame = await session.frameInfo(frame, outlierGroups: await frame.getOutlierGroups())
+            if req.rerender, let ref = await renderPreview(session: session, frame: frame) {
                 resp.preview = ref
             }
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // Keep All / Remove All / Clear Undecided: set every outlier of one frame (macOS `userSelectAllOutliers` /
+    // `userSelectUndecidedOutliers`), including the trash when asked to.
+    static func setAll(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SetAllOutliersRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            await ensureOutliersLoaded(frame)
+            if req.undecidedOnly {
+                _ = await frame.userSelectUndecidedOutliers(toShouldRemove: req.shouldRemove, includingTrash: req.includingTrash)
+            } else {
+                _ = await frame.userSelectAllOutliers(toShouldRemove: req.shouldRemove, includingTrash: req.includingTrash)
+            }
+            await frame.markAsChanged()
+            await session.frameEdited(frame)
+            var resp = Star_V1_SetOutlierDecisionsResponse()
+            resp.frame = await session.frameInfo(frame, outlierGroups: await frame.getOutlierGroups())
             try await transport.respond(id: id, payload: resp.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
@@ -82,7 +101,8 @@ enum OutlierHandlers {
                 guard await frame.getOutlierGroups() != nil else { continue } // skip frames with no outliers on disk
                 await frame.applyDecisionTreeToAllOutliers(overwrite: req.overwrite, minimumSize: minSize)
                 await frame.markAsChanged()
-                resp.frames.append(await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups()))
+                await session.frameEdited(frame)
+                resp.frames.append(await session.frameInfo(frame, outlierGroups: await frame.getOutlierGroups()))
             }
             try await transport.respond(id: id, payload: resp.serializedData())
         } catch {
@@ -116,9 +136,9 @@ enum OutlierHandlers {
                         await frame.userSelectAllOutliers(toShouldRemove: req.shouldRemove, between: a, and: b, includingTrash: req.includingTrash)
                     }
                     await frame.markAsChanged()
-                    await frame.writeOutliersRemoveReasons()
-                    resp.frames.append(await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups()))
-                    if req.rerender, let ref = await renderPreview(session: session, frameIndex: i, width: frame.width, height: frame.height) {
+                    await session.frameEdited(frame)
+                    resp.frames.append(await session.frameInfo(frame, outlierGroups: await frame.getOutlierGroups()))
+                    if req.rerender, let ref = await renderPreview(session: session, frame: frame) {
                         resp.previews.append(ref)
                     }
                 }
@@ -153,9 +173,9 @@ enum OutlierHandlers {
                     await ensureOutliersLoaded(frame)
                     _ = await frame.userSelectAllOutliers(toShouldRemove: req.shouldRemove, overlapping: refGroup)
                     await frame.markAsChanged()
-                    await frame.writeOutliersRemoveReasons()
-                    resp.frames.append(await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups()))
-                    if req.rerender, let ref = await renderPreview(session: session, frameIndex: i, width: frame.width, height: frame.height) {
+                    await session.frameEdited(frame)
+                    resp.frames.append(await session.frameInfo(frame, outlierGroups: await frame.getOutlierGroups()))
+                    if req.rerender, let ref = await renderPreview(session: session, frame: frame) {
                         resp.previews.append(ref)
                     }
                 }
@@ -217,15 +237,35 @@ enum OutlierHandlers {
                 await transport.sendError(id: id, message: "unspecified area tool", code: 400); return
             }
 
+            await session.frameEdited(frame)
+
             var resp = Star_V1_ApplyOutlierAreaToolResponse()
-            resp.frame = await Mapping.frameInfo(frame: frame, outlierGroups: await frame.getOutlierGroups())
-            if req.rerender, let ref = await renderPreview(session: session, frameIndex: Int(req.frameIndex), width: frame.width, height: frame.height) {
+            resp.frame = await session.frameInfo(frame, outlierGroups: await frame.getOutlierGroups())
+            if req.rerender, let ref = await renderPreview(session: session, frame: frame) {
                 resp.preview = ref
             }
             try await transport.respond(id: id, payload: resp.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }
+    }
+
+    /// A group as the client sees it: its size, bounds, decision and (worked out now, if it had not been) its line.
+    static func protoGroup(_ group: OutlierGroup) async -> Star_V1_OutlierGroup {
+        var pg = Star_V1_OutlierGroup()
+        pg.id = UInt32(group.id)
+        pg.size = UInt64(group.size)
+        pg.bounds = Mapping.protoBoundingBox(group.bounds)
+        pg.brightness = UInt64(group.brightness)
+        let rr = await group.shouldRemove()
+        pg.shouldRemove = Mapping.protoRemoveReason(rr)
+
+        if let rr, case .fromClassifier(let score) = rr {
+            pg.classificationScore = score
+        }
+
+        if let line = await group.line() { pg.line = Mapping.protoLine(line) }
+        return pg
     }
 
     static func list(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
@@ -243,31 +283,64 @@ enum OutlierHandlers {
             }
             var list = Star_V1_OutlierGroupList()
             for group in await groups.members.values {
-                var pg = Star_V1_OutlierGroup()
-                pg.id = UInt32(group.id)
-                pg.size = UInt64(group.size)
-                pg.bounds = Mapping.protoBoundingBox(group.bounds)
-                pg.brightness = UInt64(group.brightness)
-                let rr = await group.shouldRemove()
-                pg.shouldRemove = Mapping.protoRemoveReason(rr)
-
-                if let rr, case .fromClassifier(let score) = rr {
-                    pg.classificationScore = score
-                }
-
-                if let line = await group.line() {
-                    var pl = Star_V1_Line()
-                    pl.theta = line.theta
-                    pl.rho = line.rho
-                    pl.votes = Int32(line.votes)
-                    pg.line = pl
-                }
-                list.groups.append(pg)
+                list.groups.append(await protoGroup(group))
             }
             try await transport.respond(id: id, payload: list.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }
+    }
+
+    // What the outlier window tabulates: every decision-tree feature of each requested group of a frame, and the classifier's score.
+    static func getFeatures(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_GetOutlierFeaturesRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            await ensureOutliersLoaded(frame)
+            guard let groups = await frame.getOutlierGroups() else {
+                await transport.sendError(id: id, message: "outlier groups not yet loaded"); return
+            }
+            let members = await groups.members
+            let wanted: [OutlierGroup]
+            if req.groupIds.isEmpty {
+                wanted = Array(members.values)
+            } else {
+                wanted = req.groupIds.compactMap { UInt16(exactly: $0).flatMap { members[$0] } }
+            }
+            var resp = Star_V1_OutlierFeaturesResponse()
+            resp.rows = await featureRows(for: wanted, classifier: await currentClassifier.get(for: .all))
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    /// One row per group, in group id order: its value for every `OutlierGroupFeature` (keyed by the feature's name) and the
+    /// classifier's score for it (0 without a classifier).  The groups are worked out side by side; each caches what it computes.
+    static func featureRows(for groups: [OutlierGroup], classifier: (any NamedOutlierGroupClassifier)?) async -> [Star_V1_OutlierFeatureRow] {
+        var rows = await withTaskGroup(of: Star_V1_OutlierFeatureRow.self) { tasks in
+            for group in groups {
+                tasks.addTask {
+                    var row = Star_V1_OutlierFeatureRow()
+                    row.groupID = UInt32(group.id)
+                    for feature in OutlierGroupFeature.allCases {
+                        row.features[feature.rawValue] = await group.decisionTreeValueAsync(for: feature)
+                    }
+                    if let classifier { row.classification = await classifier.classification(of: group) }
+                    return row
+                }
+            }
+            var rows: [Star_V1_OutlierFeatureRow] = []
+            for await row in tasks { rows.append(row) }
+            return rows
+        }
+        rows.sort { $0.groupID < $1.groupID }
+        return rows
     }
 
     static func setDecisions(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
@@ -294,30 +367,13 @@ enum OutlierHandlers {
             }
 
             await frame.markAsChanged()
+            await session.frameEdited(frame)
 
             var resp = Star_V1_SetOutlierDecisionsResponse()
-            resp.frame = await Mapping.frameInfo(frame: frame, outlierGroups: groups)
+            resp.frame = await session.frameInfo(frame, outlierGroups: groups)
 
-            if req.rerender {
-                let scratchDir = await session.scratchSessionDir
-                let previewDir = "\(scratchDir)/previews"
-                try FileManager.default.createDirectory(atPath: previewDir, withIntermediateDirectories: true)
-                let previewPath = "\(previewDir)/frame_\(req.frameIndex)_rendered.png"
-
-                let imageSequence = await session.imageSequence
-                let filenames = await imageSequence.filenames
-                let frameIdx = Int(req.frameIndex)
-                if frameIdx < filenames.count {
-                    let loader = await imageSequence.getImage(withName: filenames[frameIdx])
-                    let image = try await loader.image()
-                    image.writeTIFFEncoding(toFilename: previewPath)
-                    var ref = Star_V1_ImageRef()
-                    ref.path = previewPath
-                    ref.width = Int32(frame.width)
-                    ref.height = Int32(frame.height)
-                    ref.format = "png"
-                    resp.preview = ref
-                }
+            if req.rerender, let ref = await renderPreview(session: session, frame: frame) {
+                resp.preview = ref
             }
 
             try await transport.respond(id: id, payload: resp.serializedData())
@@ -326,6 +382,8 @@ enum OutlierHandlers {
         }
     }
 
+    // The macOS "Render this frame": write the finished image from the frame's current decisions, and
+    // answer with its preview.
     static func renderFrame(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_FrameRef(serializedBytes: payload)
@@ -335,26 +393,9 @@ enum OutlierHandlers {
             guard let frame = await session.frame(at: Int(req.frameIndex)) else {
                 await transport.sendError(id: id, message: "frame index out of range", code: 404); return
             }
-            let scratchDir = await session.scratchSessionDir
-            let previewDir = "\(scratchDir)/previews"
-            try FileManager.default.createDirectory(atPath: previewDir, withIntermediateDirectories: true)
-            let previewPath = "\(previewDir)/frame_\(req.frameIndex)_rendered.png"
-
-            let imageSequence = await session.imageSequence
-            let filenames = await imageSequence.filenames
-            let frameIdx = Int(req.frameIndex)
-            guard frameIdx < filenames.count else {
-                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            guard let ref = await renderPreview(session: session, frame: frame) else {
+                await transport.sendError(id: id, message: "frame \(req.frameIndex) could not be rendered"); return
             }
-            let loader = await imageSequence.getImage(withName: filenames[frameIdx])
-            let image = try await loader.image()
-            image.writeTIFFEncoding(toFilename: previewPath)
-
-            var ref = Star_V1_ImageRef()
-            ref.path = previewPath
-            ref.width = Int32(frame.width)
-            ref.height = Int32(frame.height)
-            ref.format = "png"
             try await transport.respond(id: id, payload: ref.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")

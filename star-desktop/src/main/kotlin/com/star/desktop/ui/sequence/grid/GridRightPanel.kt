@@ -40,10 +40,18 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val current by vm.currentIndex.collectAsState()
     val scale by vm.gridThumbnailScale.collectAsState()
     val showFilmstrip by vm.showFilmstrip.collectAsState()
-    val showHorizon by vm.showHorizonOnGrid.collectAsState()
+    val showHorizon by vm.showHorizonOnMainView.collectAsState()
+    val horizonVersion by vm.horizonVersion.collectAsState()
+    var overlayExists by remember(current) { mutableStateOf<Boolean?>(null) }
+    var pending by remember(current) { mutableStateOf(false) }
     val states by vm.frameStates.collectAsState()
     var info by remember(current) { mutableStateOf<FrameInfo?>(null) }
-    LaunchedEffect(current, states[current]) { info = vm.frameInfo(current) }
+    LaunchedEffect(current, states[current], horizonVersion) {
+        info = vm.frameInfo(current)
+        val overlay = vm.horizonOverlay(current, 16, 16)
+        overlayExists = overlay?.exists
+        pending = overlay?.refinementPending ?: info?.refinementPending ?: false
+    }
 
     Column(modifier.width(200.dp).fillMaxHeight().background(StarColors.sidePanel)) {
         Column(
@@ -63,28 +71,34 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     Text(localized("ui.show_filmstrip"), color = StarColors.white, fontSize = 11.sp)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Switch(checked = showHorizon, onCheckedChange = { vm.toggleHorizonOnGrid() })
+                    Switch(checked = showHorizon, onCheckedChange = vm::setShowHorizonOnMainView)
                     Text(localized("ui.show_horizon_lines"), color = StarColors.white, fontSize = 11.sp)
                 }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SectionTitle("Frame")
-                InfoRow("Index", "$current")
-                states[current]?.let { InfoRow("State", FrameState.shortString(it)) }
+                SectionTitle(localized("ui.frame"))
+                InfoRow(localized("ui.index"), "$current")
+                // The file the frame is from (macOS: the original image's name).
+                info?.filename?.takeIf { it.isNotEmpty() }?.let { InfoRow(localized("ui.file"), it) }
+                (states[current] ?: info?.state)?.let { InfoRow(localized("ui.state"), FrameState.shortString(it), StarColors.stateColor(it)) }
+                // Whether the horizon is waiting for a refinement (macOS GridRightPanel).
+                if (overlayExists == true) {
+                    InfoRow(localized("ui.horizon"), localized(if (pending) "ui.pending" else "ui.set"), if (pending) StarColors.orange else StarColors.green)
+                }
             }
 
             info?.let { fi ->
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SectionTitle("Outliers")
-                    InfoRow("Positive", "${fi.numPositiveOutliers}", if (fi.numPositiveOutliers > 0) StarColors.red else StarColors.white)
-                    InfoRow("Negative", "${fi.numNegativeOutliers}", if (fi.numNegativeOutliers > 0) StarColors.green else StarColors.white)
-                    InfoRow("Undecided", "${fi.numUndecidedOutliers}", if (fi.numUndecidedOutliers > 0) StarColors.orange else StarColors.white)
-                    InfoRow("Trash", "${fi.numTrashOutliers}", if (fi.numTrashOutliers > 0) StarColors.gray else StarColors.white)
+                    SectionTitle(localized("ui.outliers"))
+                    InfoRow(localized("ui.positive"), "${fi.numPositiveOutliers}", if (fi.numPositiveOutliers > 0) StarColors.red else StarColors.white)
+                    InfoRow(localized("ui.negative"), "${fi.numNegativeOutliers}", if (fi.numNegativeOutliers > 0) StarColors.green else StarColors.white)
+                    InfoRow(localized("ui.undecided"), "${fi.numUndecidedOutliers}", if (fi.numUndecidedOutliers > 0) StarColors.orange else StarColors.white)
+                    InfoRow(localized("ui.trash"), "${fi.numTrashOutliers}", if (fi.numTrashOutliers > 0) StarColors.gray else StarColors.white)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SectionTitle("Processing")
-                    InfoRow("Mode", cleanMethodName(fi.cleanMethod))
+                    SectionTitle(localized("ui.processing"))
+                    InfoRow(localized("ui.mode"), cleanMethodName(fi.cleanMethod))
                 }
             }
             Text(localized("ui.double_click_a_thumbnail_to_edit"), color = StarColors.textDisabled, fontSize = 10.sp)
@@ -93,11 +107,11 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     }
 }
 
-private fun cleanMethodName(m: CleanMethod): String = when (m) {
-    CleanMethod.CLEAN_AUTOMATIC_TRUE -> "Auto-Selective"
-    CleanMethod.CLEAN_AUTOMATIC -> "Automatic"
-    else -> "Selective"
-}
+private fun cleanMethodName(m: CleanMethod): String = localized(when (m) {
+    CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.auto_selective"
+    CleanMethod.CLEAN_AUTOMATIC -> "ui.automatic"
+    else -> "ui.selective"
+})
 
 @Composable
 private fun SectionTitle(text: String) =

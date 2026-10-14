@@ -1058,30 +1058,12 @@ public final class ImageSequenceViewModel {
 
     // MARK: - Horizon refinement tracking
 
-    /// Reference frame indices updated this session (via HorizonPainterView).
-    var updatedReferenceHorizonFrameIndices: Set<Int> = []
-
-    /// Non-reference frame indices that will be re-refined when the user presses
-    /// "Re-run Horizon Refinement".
-    var affectedHorizonRefinementFrameIndices: Set<Int> = []
-
-    /// Frames whose finished render "Later" already took away, and which therefore need one
-    /// again when the pending refinement finally runs.
+    /// The record of the horizon refinement this sequence is owed, and the rules for changing it.
     ///
-    /// Without this the re-run would look at the disk, find no output for them, and take
-    /// that for "never processed — nothing to re-render", leaving the frames it had just
-    /// refined with no picture at all.
-    var horizonRefinementStrippedFrameIndices: Set<Int> = []
-
-    /// What the run in progress took out of the sets above, held until it finishes.
-    ///
-    /// A run claims them: it empties them so that a reference painted while it works starts
-    /// a fresh set.  A run that is stopped has to give them back — the frames it never got
-    /// to are still marked orange, and without this the button that would pick them up is
-    /// disabled, leaving the sequence in a state only re-painting a reference gets out of.
-    private var horizonRefinementInFlight: (affected: Set<Int>,
-                                            references: Set<Int>,
-                                            stripped: Set<Int>)?
+    /// StarCore's, not this view model's, so that the daemon the Kotlin client drives keeps the same
+    /// record by the same rules; this holds the one for this window and does the parts that are
+    /// the gui's own (the orange marks, the prompt, the modal).
+    private var horizonRefinement = HorizonRefinementPlan()
 
     /// Whether there is horizon refinement work waiting — what enables the right panel's
     /// "Re-run Horizon Refinement" button, and what makes the next ordinary run pick the
@@ -1092,9 +1074,7 @@ public final class ImageSequenceViewModel {
     /// render again — and after "Later" has taken that output away, the record of having
     /// done so is the only thing left saying the frame is owed one.
     var hasPendingHorizonRefinement: Bool {
-        !affectedHorizonRefinementFrameIndices.isEmpty
-          || !horizonRefinementStrippedFrameIndices.isEmpty
-          || !framesNeedingHorizonRerender(updatedReferenceHorizonFrameIndices).isEmpty
+        horizonRefinement.hasPending(hasOutput: frameHasHorizonOutput)
     }
 
 
@@ -1105,12 +1085,8 @@ public final class ImageSequenceViewModel {
     /// changes nothing — `deleteMergeOutput` and the merge that follows land on the same
     /// output either way.
     private func returnInFlightHorizonRefinement() {
-        guard let inFlight = horizonRefinementInFlight else { return }
-        horizonRefinementInFlight = nil
-        updatedReferenceHorizonFrameIndices.formUnion(inFlight.references)
-        affectedHorizonRefinementFrameIndices.formUnion(inFlight.affected)
-        horizonRefinementStrippedFrameIndices.formUnion(inFlight.stripped)
-        for i in affectedHorizonRefinementFrameIndices where i < frames.count {
+        guard let affected = horizonRefinement.returnInFlight() else { return }
+        for i in affected where i < frames.count {
             frames[i].isPendingHorizonRefinement = true
         }
     }
@@ -1118,24 +1094,17 @@ public final class ImageSequenceViewModel {
     /// Called from HorizonPainterView after a reference horizon is saved.
     /// Recomputes the affected set and marks those frames orange.
     func recordReferenceHorizonUpdated(frameIndex: Int) {
-        updatedReferenceHorizonFrameIndices.insert(frameIndex)
-        // Union with what is already pending rather than replacing it.  The recomputed set
-        // is derived from the references still waiting, so it cannot know about a span a
-        // run over part of the sequence took half of and left the rest of — and dropping
-        // those frames would take their marks with it, leaving frames with no output that
-        // nothing says are owed one.  Reference frames are excluded either way: the frame
-        // just painted was an interpolated one until a moment ago.
-        let newAffected = computeAffectedHorizonRefinementFrameIndices(
-          including: affectedHorizonRefinementFrameIndices
+        let change = horizonRefinement.recordReferenceUpdated(
+          frameIndex: frameIndex,
+          referenceIndices: referenceHorizonFrameIndices,
+          frameCount: frames.count
         )
-        let oldAffected = affectedHorizonRefinementFrameIndices
-        affectedHorizonRefinementFrameIndices = newAffected
         // clear pending flag for frames that are no longer affected
-        for i in oldAffected.subtracting(newAffected) where i < frames.count {
+        for i in change.noLongerPending where i < frames.count {
             frames[i].isPendingHorizonRefinement = false
         }
         // set pending flag for newly affected frames
-        for i in newAffected where i < frames.count {
+        for i in change.nowPending where i < frames.count {
             frames[i].isPendingHorizonRefinement = true
         }
     }
@@ -1151,11 +1120,6 @@ public final class ImageSequenceViewModel {
     private(set) var horizonRefinementPromptFrameCount = 0
     private(set) var horizonRefinementPromptRenderCount = 0
 
-    /// Frame output whose presence means a frame has to be rendered again when the horizon
-    /// under it moves — the same set `reprocessHorizonsForUpdatedReferences` deletes.
-    private static let horizonRefinementOutputTypes: Set<FrameViewMode> =
-      [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final]
-
     /// What the horizon painter calls after saving a reference with "apply to nearby
     /// frames" on: mark the affected frames, then *ask* whether to re-run now.
     ///
@@ -1168,20 +1132,15 @@ public final class ImageSequenceViewModel {
     func promptToReprocessHorizons(forUpdatedReference frameIndex: Int) {
         recordReferenceHorizonUpdated(frameIndex: frameIndex)
 
-        let affected = affectedHorizonRefinementFrameIndices
-        let toRender = framesNeedingHorizonRerender(
-          affected.union(updatedReferenceHorizonFrameIndices)
-        )
-
         // No horizons to recompute and no output to render again — there is nothing to
         // ask about.  Run it anyway, which in this state only clears the tracking.
-        guard !affected.isEmpty || !toRender.isEmpty else {
+        guard let counts = horizonRefinement.promptCounts(hasOutput: frameHasHorizonOutput) else {
             reprocessHorizonsForUpdatedReferences()
             return
         }
 
-        horizonRefinementPromptFrameCount = affected.union(toRender).count
-        horizonRefinementPromptRenderCount = toRender.count
+        horizonRefinementPromptFrameCount = counts.frameCount
+        horizonRefinementPromptRenderCount = counts.renderCount
         showHorizonRefinementPrompt = true
     }
 
@@ -1202,40 +1161,31 @@ public final class ImageSequenceViewModel {
     /// line it was painted over — which is what that frame's horizon honestly is until the
     /// work runs, and it is drawn in pending orange either way.
     func deferHorizonRefinement() {
-        let affected = affectedHorizonRefinementFrameIndices
-        let references = updatedReferenceHorizonFrameIndices
+        let references = horizonRefinement.updatedReferences
 
         // Decided in one pass here rather than a hop per frame, for the reason spelled out
         // in `reprocessHorizonsForUpdatedReferences`: `existingImages` already knows, and
         // main-actor round trips in a loop are what made this slow.
         var frames: [FrameAirplaneRemover] = []
         var stripped = Set<Int>()
-        for i in affected.union(references).sorted() {
+        for i in horizonRefinement.deferralFrameIndices {
             guard i < self.frames.count, let frame = self.frames[i].frame else { continue }
             frames.append(frame)
             if frameHasHorizonOutput(i) {
                 stripped.insert(i)
-                self.frames[i].existingImages.subtract(Self.horizonRefinementOutputTypes)
+                self.frames[i].existingImages.subtract(HorizonRefinementPlan.outputTypes)
             }
         }
         guard !frames.isEmpty else { return }
-        horizonRefinementStrippedFrameIndices.formUnion(stripped)
+        horizonRefinement.markStripped(stripped)
 
         let strippedFrames = frames.filter { stripped.contains($0.frameIndex) }
-        Task.detached(priority: .userInitiated) { [self] in
-            // In memory and cheap, and the merged masks about to be rebuilt are computed
-            // from it — a run that read the old numbers would rebuild the old horizon.
-            for idx in references {
-                await referenceHorizonStatsCache.clearStats(for: idx)
-            }
-            await withTaskGroup(of: Void.self) { group in
-                for frame in frames {
-                    group.addTask { await frame.discardMergedHorizon() }
-                }
-                for frame in strippedFrames {
-                    group.addTask { await frame.deleteMergeOutput() }
-                }
-            }
+        Task.detached(priority: .userInitiated) { [frames] in
+            await HorizonRefinementEffects.strip(
+              references: references,
+              maskFrames: frames,
+              outputFrames: strippedFrames
+            )
             Log.i("horizon refinement deferred over \(frames.count) frames, "
                     + "\(stripped.count) of which lost their output")
         }
@@ -1250,7 +1200,7 @@ public final class ImageSequenceViewModel {
     /// Whether frame `index` has output that a changed horizon went into.
     private func frameHasHorizonOutput(_ index: Int) -> Bool {
         guard index < frames.count else { return false }
-        return !frames[index].existingImages.isDisjoint(with: Self.horizonRefinementOutputTypes)
+        return !frames[index].existingImages.isDisjoint(with: HorizonRefinementPlan.outputTypes)
     }
 
     /// Fold pending horizon refinement into a run that is about to start, so that pressing
@@ -1273,45 +1223,28 @@ public final class ImageSequenceViewModel {
     ///   Work outside it stays pending — a run over part of the sequence must not clear the
     ///   marks on frames it was never going to reach.
     private func applyPendingHorizonRefinementToRun(range: ClosedRange<Int>? = nil) async {
-        let pending = affectedHorizonRefinementFrameIndices
-          .union(updatedReferenceHorizonFrameIndices)
-          .union(horizonRefinementStrippedFrameIndices)
-        let taking = range.map { covered in pending.filter { covered.contains($0) } } ?? pending
-        guard !taking.isEmpty else { return }
+        guard let taken = horizonRefinement.take(range: range) else { return }
 
-        Log.i("processing run is taking on \(taking.count) of \(pending.count) frames "
+        Log.i("processing run is taking on \(taken.frames.count) of \(taken.pendingCount) frames "
                 + "of pending horizon refinement")
-
-        // Every reference that is waiting, not only the ones being taken on: a partial run
-        // can be redoing frames whose merged mask is computed from a reference outside its
-        // range, and reading that reference's old numbers would rebuild the old horizon.
-        // The cache refills on demand, so clearing one still pending costs nothing but the
-        // recompute it was going to need anyway.
-        let referencesToClear = updatedReferenceHorizonFrameIndices
-
-        updatedReferenceHorizonFrameIndices.subtract(taking)
-        affectedHorizonRefinementFrameIndices.subtract(taking)
-        horizonRefinementStrippedFrameIndices.subtract(taking)
 
         var maskFrames: [FrameAirplaneRemover] = []
         var outputFrames: [FrameAirplaneRemover] = []
-        for i in taking.sorted() {
+        for i in taken.frames.sorted() {
             guard i < frames.count, let frame = frames[i].frame else { continue }
             maskFrames.append(frame)
             if frameHasHorizonOutput(i) {
                 outputFrames.append(frame)
-                frames[i].existingImages.subtract(Self.horizonRefinementOutputTypes)
+                frames[i].existingImages.subtract(HorizonRefinementPlan.outputTypes)
             }
             frames[i].isPendingHorizonRefinement = false
         }
 
-        for idx in referencesToClear {
-            await referenceHorizonStatsCache.clearStats(for: idx)
-        }
-        await withTaskGroup(of: Void.self) { group in
-            for frame in maskFrames { group.addTask { await frame.discardMergedHorizon() } }
-            for frame in outputFrames { group.addTask { await frame.deleteMergeOutput() } }
-        }
+        await HorizonRefinementEffects.strip(
+          references: taken.referencesToClear,
+          maskFrames: maskFrames,
+          outputFrames: outputFrames
+        )
     }
 
     /// The body of that alert: what each answer costs, in this sequence's numbers.
@@ -1321,67 +1254,11 @@ public final class ImageSequenceViewModel {
                   horizonRefinementPromptRenderCount)
     }
 
-    /// Of `indices`, the frames a re-run would have to render again: the ones that still
-    /// have output the changed horizon went into, and the ones whose output "Later" has
-    /// already taken away on the same grounds.
-    ///
-    /// Read off `existingImages`, which is where each frame's own `imageExists` survey put
-    /// its types, so this agrees with the check `reprocessHorizonsForUpdatedReferences`
-    /// makes against the disk — and can be asked on the main actor, before that pass has
-    /// run, by the alert and by the modal's first step list.
-    private func framesNeedingHorizonRerender(_ indices: Set<Int>) -> Set<Int> {
-        indices.filter { index in
-            horizonRefinementStrippedFrameIndices.contains(index)
-              || frameHasHorizonOutput(index)
-        }
-    }
-
     /// Every frame that has a painted reference horizon, in frame order.
     private var referenceHorizonFrameIndices: [Int] {
         frames.indices
           .filter { frames[$0].existingImages.contains(.userHorizon) }
           .sorted()
-    }
-
-    private func computeAffectedHorizonRefinementFrameIndices(
-      including stillPending: Set<Int> = []
-    ) -> Set<Int> {
-        Self.affectedHorizonRefinementFrames(
-          updatedReferences: updatedReferenceHorizonFrameIndices,
-          referenceIndices: referenceHorizonFrameIndices,
-          stillPending: stillPending,
-          frameCount: frames.count
-        )
-    }
-
-    /// The interpolated frames a set of just-updated references leaves stale: everything
-    /// between each of them and the references either side, plus whatever was already
-    /// pending, minus the reference frames themselves — a reference serves its painted mask
-    /// directly and has nothing to re-refine.
-    ///
-    /// `referenceIndices` must be sorted; it is scanned for the neighbours of each updated
-    /// reference.
-    ///
-    /// `stillPending` is not derivable from the rest, which is why it is a parameter: a run
-    /// over part of the sequence takes on the frames of a span it covers and leaves the
-    /// remainder, and the references bounding that span say nothing about which half is
-    /// which.  Recomputing without it would drop those frames — and their marks — leaving
-    /// frames with no output that nothing records as being owed one.
-    static func affectedHorizonRefinementFrames(
-      updatedReferences: Set<Int>,
-      referenceIndices: [Int],
-      stillPending: Set<Int> = [],
-      frameCount: Int
-    ) -> Set<Int> {
-        var affected = stillPending
-        for updatedIdx in updatedReferences {
-            let prevRef = referenceIndices.last(where: { $0 < updatedIdx }) ?? -1
-            let nextRef = referenceIndices.first(where: { $0 > updatedIdx }) ?? frameCount
-            for i in (prevRef + 1)..<nextRef {
-                affected.insert(i)
-            }
-        }
-        return affected.subtracting(referenceIndices)
     }
 
     /// Clears the reference-stats cache for updated frames, recomputes merged
@@ -1390,19 +1267,14 @@ public final class ImageSequenceViewModel {
     /// output (star/earth aligned images), its alignment is invalidated and it
     /// is re-queued for a full reprocess using the updated horizon.
     func reprocessHorizonsForUpdatedReferences() {
-        let toProcess = affectedHorizonRefinementFrameIndices
-        let toInvalidate = updatedReferenceHorizonFrameIndices
-
-        // Frames a previous "Later" already stripped need a merge just as much as the ones
-        // that still have output, and nothing on disk says so any more.
-        let toRestore = horizonRefinementStrippedFrameIndices
-
-        updatedReferenceHorizonFrameIndices = []
-        affectedHorizonRefinementFrameIndices = []
-        horizonRefinementStrippedFrameIndices = []
-        horizonRefinementInFlight = (affected: toProcess,
-                                     references: toInvalidate,
-                                     stripped: toRestore)
+        // Claims everything pending: the sets are emptied, so a reference painted while this
+        // runs starts a fresh one, and a run that is stopped gives them back.  Frames a
+        // previous "Later" already stripped need a merge just as much as the ones that still
+        // have output, and nothing on disk says so any more.
+        let claim = horizonRefinement.claimAll()
+        let toProcess = claim.affected
+        let toInvalidate = claim.references
+        let toRestore = claim.stripped
 
         // What has to be redone is decided here, in one pass on the main actor, out of what
         // is already known: `existingImages` is the frame's own survey of what it has on
@@ -1433,7 +1305,7 @@ public final class ImageSequenceViewModel {
             if toRestore.contains(i) || frameHasHorizonOutput(i) {
                 framesToMerge.append(frame)
                 mergeIndices.append(i)
-                frames[i].existingImages.subtract(Self.horizonRefinementOutputTypes)
+                frames[i].existingImages.subtract(HorizonRefinementPlan.outputTypes)
             } else {
                 // Never processed: nothing to re-render, and the pipeline will use the new
                 // horizon when it first reaches this frame.  Clear the orange now.
@@ -1444,7 +1316,7 @@ public final class ImageSequenceViewModel {
         // frame view show orange horizon lines until its merge completes.
 
         guard !refinementFrames.isEmpty || !framesToMerge.isEmpty else {
-            horizonRefinementInFlight = nil
+            horizonRefinement.finishClaim()
             return
         }
 
@@ -1477,18 +1349,10 @@ public final class ImageSequenceViewModel {
         // main-actor task at the end read it ("sending 'mergeIndices' risks causing data
         // races"), though nothing changes it once the loop above is done.
         Task.detached(priority: .userInitiated) { [self, mergeIndices] in
-            for idx in toInvalidate {
-                await referenceHorizonStatsCache.clearStats(for: idx)
-            }
-
             // The only part that touches the disk: delete the output the old horizon went
             // into so each frame is re-composited with the new one.  Alignment output is
             // preserved.  The frames do not have to wait for each other to do it.
-            await withTaskGroup(of: Void.self) { group in
-                for frame in framesToMerge {
-                    group.addTask { await frame.deleteMergeOutput() }
-                }
-            }
+            await HorizonRefinementEffects.prepareRerun(references: toInvalidate, mergeFrames: framesToMerge)
 
             let stillRunning = await MainActor.run { () -> Bool in
                 guard self.processingGeneration == capturedGeneration else { return false }
@@ -1528,7 +1392,7 @@ public final class ImageSequenceViewModel {
                     // This run finished, so it keeps what it claimed.  Only a stopped one
                     // gives it back, and a stopped one never reaches here — the completion
                     // op is cancelled with the rest.
-                    self.horizonRefinementInFlight = nil
+                    self.horizonRefinement.finishClaim()
                     self.isProcessingFrames = false
                 }
             }
@@ -3109,23 +2973,14 @@ public final class ImageSequenceViewModel {
             if performClean {
                 for i in range {
                     if let frame = await frames[i].frame {
+                        // What each type throws away is StarCore's, shared with the daemon
+                        // behind the Kotlin client; the view has only its own state to refresh.
+                        await frame.resetForReprocessing(reprocessingType)
                         switch reprocessingType {
-                        case .everything:
-                            await frame.deleteAllProcessedImages()
-                            try? await frame.deleteOutliers()
-                            try? await self.clearProcessing(of: frame)
-                            
-                        case .none:
+                        case .everything, .alignment, .outliers:
+                            await self.refreshAfterClearingProcessing(of: frame)
+                        case .none, .allHorizons, .horizons:
                             break
-                        case .allHorizons:
-                            break
-                        case .horizons:
-                            await frame.deleteHorizonImages()
-                        case .alignment:
-                            try await self.clearProcessing(of: frame)
-                        case .outliers:
-                            try await self.clearProcessing(of: frame)
-                            try await frame.deleteOutliers()
                         }
                     }
                 }
@@ -3160,23 +3015,15 @@ public final class ImageSequenceViewModel {
     }    
 
     func clearProcessing(of frame: FrameAirplaneRemover) async throws {
-        try await Task.detached(priority: .userInitiated) { // do we need this detached task?
+        await frame.clearProcessing(deleting: self.reprocessingType)
+        await refreshAfterClearingProcessing(of: frame)
+    }
+
+    /// Bring the views up to date with a frame whose processing was just cleared.
+    func refreshAfterClearingProcessing(of frame: FrameAirplaneRemover) async {
+        await Task.detached(priority: .userInitiated) { // do we need this detached task?
             let frameToClear = frame
 
-            await frameToClear.set(state: .unprocessed)
-            //await frameToClear.updateCombineSubjects()
-
-            // this now does delete the alignment and subtraction images too
-            await frameToClear.imageAccessor.deleteAllImages(
-              frameIndex: frameToClear.frameIndex,
-              reprocessingType: self.reprocessingType
-            )
-
-            await frameToClear.setNumberOfAlignedFrames()
-            await frameToClear.setNumberOfStaticNeighborFrames()
-
-            try await frameToClear.removeNumberOfAlignedImagesForThisFrameFile()
-            
             Task { @MainActor in
                 self.frameViewMode = .original
             }
@@ -3195,23 +3042,6 @@ public final class ImageSequenceViewModel {
 
             Task { @MainActor in
                 self.frames[frame.frameIndex].existingImages = existingImages
-            }
-            
-            let binaryBlobFilename = await frameToClear.blobBinaryFilename
-            // get rid of the outlier files
-            do {
-                Log.d("trying to remove \(binaryBlobFilename)")
-                try FileManager.default.removeItem(atPath: binaryBlobFilename)
-            } catch {
-                Log.e("error removing \(binaryBlobFilename): \(error)")
-            }
-
-            let trashBinaryFilename = await frameToClear.trashBinaryFilename
-            do {
-                Log.d("trying to remove \(trashBinaryFilename)")
-                try FileManager.default.removeItem(atPath: trashBinaryFilename)
-            } catch {
-                Log.e("error removing \(trashBinaryFilename): \(error)")
             }
 
             Task { @MainActor in

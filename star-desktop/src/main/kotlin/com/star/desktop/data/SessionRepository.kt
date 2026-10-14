@@ -62,6 +62,8 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
          *  - Previews + outlier-group files must be enabled here — `stard` only writes previews
          *    during processing when `writeFramePreviewFiles` is set, and `Sequence.UpdateConfig`
          *    cannot change these fields after open.
+         *  - Horizon detection starts on, as StarCore's own default does (macOS leaves it so when the first startup
+         *    prompt is left alone, e.g. for Advanced); the "does it include a horizon?" answer turns it off.
          *  - Clean method defaults to **selective**: only `selective`/`automatic(true)` have
          *    `usesOutliers == true`, so this is required for the outlier-editing UX (the app's
          *    centerpiece) to have any outliers to show. The ProcessingSettings dialog can change it.
@@ -70,6 +72,7 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
             .setCleanMethod(CleanMethod.CLEAN_SELECTIVE)
             .setWriteFramePreviewFiles(true)
             .setWriteOutlierGroupFiles(true)
+            .setHorizonDetectionEnabled(true)
             .build()
     }
 }

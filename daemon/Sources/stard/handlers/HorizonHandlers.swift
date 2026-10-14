@@ -112,6 +112,7 @@ enum HorizonHandlers {
             } else {
                 resp.exists = false
             }
+            resp.refinementPending = await session.isRefinementPending(Int(req.frameIndex))
             try await transport.respond(id: id, payload: resp.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
@@ -223,7 +224,128 @@ enum HorizonHandlers {
         }
     }
 
-    // Reprocess with the (already-set) reference horizon; streams ProgressEvent like Processing.StreamProgress.
+    // Horizon.ReferenceUpdated: the reference of a frame was saved.  Marks the frames that interpolate from it as
+    // pending (with apply_to_nearby) and says what a re-run would touch, for the "now or later?" question.
+    static func referenceUpdated(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_HorizonReferenceUpdatedRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard await session.frame(at: Int(req.frameIndex)) != nil else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            var resp = Star_V1_HorizonReferenceUpdatedResponse()
+            if let counts = await session.horizonReferenceUpdated(frameIndex: Int(req.frameIndex), applyToNearby: req.applyToNearby) {
+                resp.affectedFrameCount = Int32(counts.frameCount)
+                resp.renderCount = Int32(counts.renderCount)
+            }
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // The tuned horizon parameters are one file for the whole sequence, but are read and written through a frame's
+    // horizon processor, which knows where the sequence's directory is; any frame will do.
+    private static func tunedParameters(_ params: HorizonTunedParameters, config: Config) -> Star_V1_TunedHorizonParametersResponse {
+        var resp = Star_V1_TunedHorizonParametersResponse()
+        resp.maxDownwardExtension = Int32(params.maxDownwardExtension)
+        resp.effectiveMaxDownwardExtension = Int32(HorizonTunedParameters.effectiveMaxDownwardExtension(
+            configured: params.maxDownwardExtension,
+            searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius))
+        return resp
+    }
+
+    // Horizon.GetTunedParameters
+    static func getTunedParameters(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SessionRef(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: 0) else {
+                await transport.sendError(id: id, message: "the sequence has no frames", code: 404); return
+            }
+            let params = await frame.loadTunedHorizonParameters()
+            let resp = tunedParameters(params, config: await session.config())
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // Horizon.SetTunedParameters: change the stepper's value, leaving the other tuned parameters as they are.  It reaches a frame's
+    // horizon the next time that frame's merged horizon is built, not the ones already on disk.
+    static func setTunedParameters(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SetTunedHorizonParametersRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: 0) else {
+                await transport.sendError(id: id, message: "the sequence has no frames", code: 404); return
+            }
+            var params = await frame.loadTunedHorizonParameters()
+            params.maxDownwardExtension = max(0, Int(req.maxDownwardExtension))
+            try await frame.saveTunedHorizonParameters(params)
+            let resp = tunedParameters(params, config: await session.config())
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // Horizon.GetRefinementStatus: whether any refinement is waiting.
+    static func refinementStatus(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SessionRef(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            let status = await session.horizonRefinementStatus()
+            var resp = Star_V1_RefinementStatusResponse()
+            resp.pending = status.pending
+            resp.pendingFrameCount = Int32(status.markedFrames)
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // Horizon.DeferRefinement: "Later".
+    static func deferRefinement(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SessionRef(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            await session.deferHorizonRefinement()
+            try await transport.respond(id: id, payload: Star_V1_DeferRefinementResponse().serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // Horizon.RunRefinement: "Now".  Answers once the work is queued.
+    static func runRefinement(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SessionRef(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            var resp = Star_V1_RunRefinementResponse()
+            resp.started = await session.runHorizonRefinement()
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // Horizon.Reprocess (deprecated): for each edited frame what Horizon.ReferenceUpdated does, then what
+    // Horizon.RunRefinement does; streams the run's ProgressEvents and ends when the run does (at once, if there
+    // is nothing to run).  It is a subscriber of its own for that long, alongside the client's long-lived
+    // Processing.StreamProgress, which hears the same events.
     static func reprocess(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_ReprocessHorizonsRequest(serializedBytes: payload)
@@ -231,21 +353,27 @@ enum HorizonHandlers {
                 await transport.sendError(id: id, message: "session not found", code: 404); return
             }
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
-            await session.setProgressContinuation(cont)
-            // Re-run the frame graph; with hasStaticReferenceHorizon set, ops read reference.tiff directly.
-            await session.reprocessWithReferenceHorizon()
-            do {
-                for await event in stream {
-                    try Task.checkCancellation()
-                    if let data = try? event.serializedData() {
-                        await transport.sendStreamItem(id: id, payload: data)
-                    }
-                }
-            } catch is CancellationError {
-                // cancelled via CANCEL envelope
+            let token = await session.addProgressSubscriber(cont)
+            for index in req.editedFrameIndices {
+                _ = await session.horizonReferenceUpdated(frameIndex: Int(index), applyToNearby: true)
             }
+            let started = await session.runHorizonRefinement()
+            if started {
+                do {
+                    for await event in stream {
+                        try Task.checkCancellation()
+                        if let data = try? event.serializedData() {
+                            await transport.sendStreamItem(id: id, payload: data)
+                        }
+                        // The run's last event; nothing more is coming for this request.
+                        if case .sequenceState(let s) = event.kind, ProcessingRun.isTerminal(s.state) { break }
+                    }
+                } catch is CancellationError {
+                    // cancelled via CANCEL envelope
+                }
+            }
+            await session.removeProgressSubscriber(token)
             await transport.sendStreamEnd(id: id)
-            await session.setProgressContinuation(nil)
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

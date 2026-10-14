@@ -22,14 +22,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.desktop.i18n.localized
 
-/** Pre-processing prompt (macOS `PreProcessingRenderPromptView`): auto-render after processing? */
+/**
+ * Pre-processing prompt (macOS `PreProcessingRenderPromptView`): auto-render after processing? Like the macOS
+ * sheet it cannot be dismissed by clicking outside it (that used to cancel starting the run without a word), and
+ * Return is "Yes".
+ */
 @Composable
 fun PreProcessingRenderPrompt(app: AppViewModel) {
-    PromptCard(onScrimClick = app::dismissPreRenderPrompt) {
+    PromptCard(onScrimClick = null, onDefaultAction = { app.confirmStartProcessing(autoRender = true, dontAskAgain = false) }) {
         Text(localized("ui.render_video_after_processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
         Text(
             localized("ui.once_frame_processing_finishes_would_you"),
@@ -51,10 +56,10 @@ fun PreProcessingRenderPrompt(app: AppViewModel) {
     }
 }
 
-/** Post-processing prompt (macOS `PostProcessingRenderPromptView`): render now / preview / cancel. */
+/** Post-processing prompt (macOS `PostProcessingRenderPromptView`): render now / preview / cancel. Return is "Yes". */
 @Composable
 fun PostProcessingRenderPrompt(app: AppViewModel) {
-    PromptCard(onScrimClick = app::dismissPostRenderPrompt) {
+    PromptCard(onScrimClick = app::dismissPostRenderPrompt, onDefaultAction = app::confirmRenderAfterProcessing) {
         Text(localized("ui.processing_complete"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
         Text(localized("ui.render_video_now"), color = StarColors.textSecondary, fontSize = 15.sp)
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -71,10 +76,43 @@ fun PostProcessingRenderPrompt(app: AppViewModel) {
     }
 }
 
+/**
+ * "Re-run horizon refinement now?" (macOS alert on `ImageSequenceView`): a reference horizon was saved and frames that
+ * interpolate from it are stale. Hosted by the sequence screen, not by the painter, which closes when it saves. "Later"
+ * is the cancel role (Esc, and the answer that starts nothing); Return is "Re-run Now".
+ */
 @Composable
-private fun PromptCard(onScrimClick: () -> Unit, content: @Composable () -> Unit) {
+fun HorizonRefinementPrompt(vm: com.star.desktop.ui.sequence.SequenceViewModel, prompt: com.star.desktop.ui.sequence.SequenceViewModel.RefinementPrompt) {
+    PromptCard(onScrimClick = null, onDefaultAction = vm::runHorizonRefinement, onEscape = vm::deferHorizonRefinement) {
+        Text(localized("ui.horizon_refinement_prompt_title"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        Text(
+            localized("ui.horizon_refinement_prompt_message", prompt.frameCount, prompt.renderCount),
+            color = StarColors.textSecondary, fontSize = 13.sp,
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+            OutlinedButton(onClick = vm::deferHorizonRefinement) { Text(localized("ui.horizon_refinement_later")) }
+            Button(
+                onClick = vm::runHorizonRefinement,
+                colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+            ) { Text(localized("ui.horizon_refinement_now")) }
+        }
+    }
+}
+
+/** [onScrimClick] null means a click outside the card does nothing; [onDefaultAction] is what Return does, [onEscape] what Esc does. */
+@Composable
+private fun PromptCard(
+    onScrimClick: (() -> Unit)?,
+    onDefaultAction: () -> Unit,
+    onEscape: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
     Box(
-        Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = onScrimClick),
+        Modifier
+            .fillMaxSize()
+            .background(StarColors.scrim)
+            .defaultAction(onDefaultAction, onEscape)
+            .clickable(enabled = onScrimClick != null, onClick = { onScrimClick?.invoke() }),
         contentAlignment = Alignment.Center,
     ) {
         Column(

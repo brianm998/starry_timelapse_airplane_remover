@@ -27,21 +27,37 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import com.star.desktop.domain.FrameNumberInput
 import com.star.desktop.ui.components.GlyphButton
+import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.i18n.localized
 
 /** Bottom transport bar: playback buttons, editable frame number, fps, filmstrip toggle. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
+fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val idx by vm.currentIndex.collectAsState()
     val playing by vm.isPlaying.collectAsState()
     val fps by vm.playbackFps.collectAsState()
     val showFilmstrip by vm.showFilmstrip.collectAsState()
+    val mode by vm.mode.collectAsState()
+    val skip by vm.fastSkipAmount.collectAsState()
+    val selected by vm.selected.collectAsState()
 
-    Row(
+    // Wraps onto a second and third row when the window is too narrow for all of it (macOS lays it out in rows).
+    androidx.compose.foundation.layout.FlowRow(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         // transport — 8 buttons when stopped; collapses to just play/pause while playing (macOS)
@@ -49,22 +65,28 @@ fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             if (playing) {
                 GlyphButton("⏸", "Pause", vm::togglePlayback, size = 40, fontSize = 24, tint = StarColors.blue)
             } else {
-                val atStart = idx <= 0
-                val atEnd = idx >= vm.frameCount - 1
+                // With several frames selected the arrows go round them, so there is no start or end to be at.
+                val atStart = idx <= 0 && selected.size <= 1
+                val atEnd = idx >= vm.frameCount - 1 && selected.size <= 1
                 val multi = vm.frameCount > 1
                 GlyphButton("⏮", "Go to first frame (b)", vm::goToFirst, enabled = !atStart)
-                GlyphButton("⏪", "Back 20 frames (z)", vm::fastPrevious, enabled = !atStart)
+                GlyphButton("⏪", "Back $skip frames (z)", vm::fastPrevious, enabled = !atStart)
                 GlyphButton("◂", "Previous frame (←)", vm::previous, enabled = !atStart, fontSize = 13)
                 GlyphButton("◀", "Play in reverse (w)", vm::playReverse, enabled = multi, size = 40, fontSize = 20)
                 GlyphButton("▶", "Play (space)", vm::playForward, enabled = multi, size = 40, fontSize = 20)
                 GlyphButton("▸", "Next frame (→)", vm::next, enabled = !atEnd, fontSize = 13)
-                GlyphButton("⏩", "Forward 20 frames (x)", vm::fastForward, enabled = !atEnd)
+                GlyphButton("⏩", "Forward $skip frames (x)", vm::fastForward, enabled = !atEnd)
                 GlyphButton("⏭", "Go to last frame (f)", vm::goToLast, enabled = !atEnd)
             }
         }
 
-        // editable frame number
-        EditableFrameNumber(idx, vm.frameCount, onSet = vm::setCurrentIndex)
+        // What a run is doing, with its Stop, in every mode; scrub and grid hide it while playing (macOS: nothing else competes then).
+        if (mode == com.star.desktop.domain.InteractionMode.EDIT || !playing) ProcessingStatus(vm, mode)
+        // The rest of the read-outs are the edit view's: what the frame is doing, its outlier counts, and what is being saved.
+        if (mode == com.star.desktop.domain.InteractionMode.EDIT) BottomStatus(vm)
+
+        // The frame number is not shown while playing (macOS), when it would only blur past.
+        if (!playing) EditableFrameNumber(idx, vm.frameCount, onSet = vm::setCurrentIndex)
 
         // fps + filmstrip toggle
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -73,46 +95,65 @@ fun BottomControls(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             Text("$fps", color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.width(24.dp))
             GlyphButton("+", "Faster", { vm.setPlaybackFps(fps + 1) }, size = 22, fontSize = 14)
             GlyphButton(if (showFilmstrip) "▥" else "▤", "Toggle filmstrip", vm::toggleFilmstrip, size = 26, fontSize = 14)
+            if (mode == com.star.desktop.domain.InteractionMode.EDIT) {
+                com.star.desktop.ui.components.HoverTip(localized("ui.show_settings")) {
+                    GlyphButton("⚙", localized("ui.show_settings"), app::openSettings, size = 26, fontSize = 16)
+                }
+            }
         }
     }
 }
 
-/** Editable "current / total" frame number (macOS `EditableFrameNumberView`). */
+/**
+ * The frame number (macOS `EditableFrameNumberView`): "frame N", from 0 like every frame number in the app, and a click turns it into
+ * a box to type another in. Return goes there if it names a frame; an entry out of range is refused, not clamped, and leaves the box
+ * open; Escape or leaving the box puts it back.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun EditableFrameNumber(index: Int, count: Int, onSet: (Int) -> Unit) {
     var editing by remember { mutableStateOf(false) }
-    var text by remember(index) { mutableStateOf((index + 1).toString()) }
+    var text by remember(index, editing) { mutableStateOf(index.toString()) }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (editing) {
+    if (editing) {
+        LaunchedEffect(Unit) { focus.requestFocus() }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(localized("ui.frame_2"), color = StarColors.white, fontSize = 13.sp)
             BasicTextField(
                 value = text,
                 onValueChange = { text = it.filter(Char::isDigit) },
                 singleLine = true,
-                textStyle = TextStyle(color = StarColors.textPrimary, fontSize = 13.sp),
+                textStyle = TextStyle(color = StarColors.white, fontSize = 13.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(StarColors.white),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    text.toIntOrNull()?.let { onSet(it - 1) }
-                    editing = false
-                }),
-                modifier = Modifier.width(40.dp).background(StarColors.sidePanel),
+                modifier = Modifier
+                    .width(48.dp)
+                    .background(StarColors.sidePanel)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .focusRequester(focus)
+                    .onFocusChanged { if (!it.isFocused) editing = false }
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (e.key) {
+                            Key.Enter, Key.NumPadEnter -> {
+                                FrameNumberInput.parse(text, count)?.let { onSet(it); editing = false }
+                                true
+                            }
+                            Key.Escape -> { editing = false; true }
+                            else -> false
+                        }
+                    },
             )
-            Text(" / $count", color = StarColors.textSecondary, fontSize = 13.sp)
-        } else {
-            Box(Modifier.padding(horizontal = 6.dp)) {
-                androidx.compose.material3.Surface(
-                    onClick = { editing = true; text = (index + 1).toString() },
-                    color = androidx.compose.ui.graphics.Color.Transparent,
-                ) {
-                    Text(
-                        buildAnnotatedString {
-                            withStyle(SpanStyle(color = StarColors.textPrimary)) { append("${index + 1}") }
-                            withStyle(SpanStyle(color = StarColors.textDisabled)) { append(" / $count") }
-                        },
-                        fontSize = 13.sp,
-                    )
-                }
-            }
+        }
+    } else {
+        HoverTip(localized("ui.n_frames_lower", count)) {
+            Text(
+                localized("ui.frame_n_lower", index),
+                color = StarColors.white,
+                fontSize = 13.sp,
+                modifier = Modifier.clickable { editing = true }.padding(horizontal = 6.dp, vertical = 2.dp),
+            )
         }
     }
 }

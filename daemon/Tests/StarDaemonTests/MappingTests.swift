@@ -88,9 +88,17 @@ final class MappingTests: XCTestCase {
 
     func testEachViewModeMapsFromItsWireValue() {
         XCTAssertEqual(Mapping.frameViewMode(from: .viewOriginal), .original)
-        XCTAssertEqual(Mapping.frameViewMode(from: .viewProcessed), .autoProcessed)
+        XCTAssertEqual(Mapping.frameViewMode(from: .viewProcessed), .final)
         XCTAssertEqual(Mapping.frameViewMode(from: .viewSubtraction), .subtraction)
         XCTAssertEqual(Mapping.frameViewMode(from: .viewValidation), .validation)
+    }
+
+    /// Processed means the final image, which exists for every clean method.  `.autoProcessed` only
+    /// exists for automatic frames, so mapping to it left a selective frame with nothing to show
+    /// but its subtraction debug image.
+    func testProcessedIsTheFinalImageNotOneCleanMethodsOutput() {
+        XCTAssertEqual(Mapping.frameViewMode(from: .viewProcessed), .final)
+        XCTAssertNotEqual(Mapping.frameViewMode(from: .viewProcessed), .autoProcessed)
     }
 
     /// A client built against a newer proto can send a mode this daemon does not know.  Falling
@@ -104,6 +112,33 @@ final class MappingTests: XCTestCase {
             // must not trap, and must produce a usable mode
             _ = Mapping.frameViewMode(from: mode)
         }
+    }
+
+    /// What an ImageSaved event can name, and what a client can ask for: every image the pipeline keeps for a frame.
+    func testEveryImageTheCoreKeepsCanBeAskedForAndAnnounced() {
+        XCTAssertEqual(Mapping.protoFrameViewMode(.original), .viewOriginal)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.final), .viewProcessed)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.subtraction), .viewSubtraction)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.validation), .viewValidation)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.starAligned), .viewStarAligned)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.horizon), .viewHorizon)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.userHorizon), .viewUserHorizon)
+    }
+
+    /// And going back out gets the same view: announcing a save and asking for the preview agree, for every image.
+    func testAnAnnouncedViewIsTheOneThatCanBeAskedFor() {
+        for type in FrameViewMode.allCases {
+            let wire = Mapping.protoFrameViewMode(type)
+            XCTAssertNotNil(wire, "\(type) has no wire value")
+            XCTAssertEqual(wire.map(Mapping.frameViewMode(from:)), type)
+        }
+    }
+
+    /// The wire values are all different, so no two images are confused on the way.
+    func testNoTwoImagesShareAWireValue() {
+        let wires = FrameViewMode.allCases.compactMap { Mapping.protoFrameViewMode($0) }
+        XCTAssertEqual(Set(wires).count, FrameViewMode.allCases.count)
+        XCTAssertEqual(Star_V1_FrameViewMode.allCases.filter { $0 != .UNRECOGNIZED(-1) }.count, FrameViewMode.allCases.count)
     }
 
     // MARK: - homography results

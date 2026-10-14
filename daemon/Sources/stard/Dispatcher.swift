@@ -67,7 +67,7 @@ extension Dispatcher {
 
         // Daemon
         register(method: "Daemon.Hello")    { id, payload, transport in await DaemonHandlers.hello(id: id, payload: payload, transport: transport, scratchRoot: scratchRoot); await t.taskCompleted(id: id) }
-        register(method: "Daemon.Shutdown") { id, payload, transport in await DaemonHandlers.shutdown(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
+        register(method: "Daemon.Shutdown") { id, payload, transport in await DaemonHandlers.shutdown(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Session
         register(method: "Session.OpenSequence") { id, payload, transport in await SessionHandlers.openSequence(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
@@ -84,6 +84,8 @@ extension Dispatcher {
         register(method: "Frame.Get")                 { id, payload, transport in await FrameHandlers.get(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Frame.GetPreview")          { id, payload, transport in await FrameHandlers.getPreview(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Frame.GetOutlierLabelImage"){ id, payload, transport in await FrameHandlers.getOutlierLabelImage(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Frame.GetOutlierTrashImage"){ id, payload, transport in await FrameHandlers.getOutlierTrashImage(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Frame.SetNeighborOverride") { id, payload, transport in await FrameHandlers.setNeighborOverride(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Frame.SetCleanMethod")      { id, payload, transport in await FrameHandlers.setCleanMethod(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Outlier
@@ -94,7 +96,13 @@ extension Dispatcher {
         register(method: "Outlier.ApplyDecisionTreeAllFrames") { id, payload, transport in await OutlierHandlers.applyDecisionTreeAllFrames(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.SetDecisionsInArea")         { id, payload, transport in await OutlierHandlers.setDecisionsInArea(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.SetDecisionsOverlapping")    { id, payload, transport in await OutlierHandlers.setDecisionsOverlapping(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.SetAll")                     { id, payload, transport in await OutlierHandlers.setAll(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.ApplyAreaTool")              { id, payload, transport in await OutlierHandlers.applyAreaTool(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.GetFeatures")                { id, payload, transport in await OutlierHandlers.getFeatures(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.GetLineCandidates")          { id, payload, transport in await LineHandlers.getCandidates(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.SetLine")                    { id, payload, transport in await LineHandlers.setLine(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Debug.GetHoughLineFinderArgs")       { id, payload, transport in await LineHandlers.getArgs(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
+        register(method: "Debug.SetHoughLineFinderArgs")       { id, payload, transport in await LineHandlers.setArg(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
 
         // Processing
         register(method: "Processing.Start")          { id, payload, transport in await ProcessingHandlers.start(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
@@ -115,6 +123,12 @@ extension Dispatcher {
         register(method: "Horizon.SetReference")   { id, payload, transport in await HorizonHandlers.setReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.GetReference")   { id, payload, transport in await HorizonHandlers.getReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.ClearReference") { id, payload, transport in await HorizonHandlers.clearReference(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.ReferenceUpdated") { id, payload, transport in await HorizonHandlers.referenceUpdated(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.GetTunedParameters") { id, payload, transport in await HorizonHandlers.getTunedParameters(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.SetTunedParameters") { id, payload, transport in await HorizonHandlers.setTunedParameters(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.GetRefinementStatus") { id, payload, transport in await HorizonHandlers.refinementStatus(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.DeferRefinement") { id, payload, transport in await HorizonHandlers.deferRefinement(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Horizon.RunRefinement")   { id, payload, transport in await HorizonHandlers.runRefinement(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.Reprocess")      { id, payload, transport in await HorizonHandlers.reprocess(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.GetOverlay")     { id, payload, transport in await HorizonHandlers.getOverlay(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Horizon.ComputeInBand")  { id, payload, transport in await HorizonHandlers.computeInBand(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

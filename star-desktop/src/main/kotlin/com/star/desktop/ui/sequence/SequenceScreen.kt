@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,7 +48,7 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
                 InteractionMode.EDIT -> Row(Modifier.fillMaxSize()) {
                     val leftShowing by vm.leftPanelShowing.collectAsState()
                     val rightShowing by vm.rightPanelShowing.collectAsState()
-                    if (leftShowing) LeftPanel(vm, onProcessAll = { app.requestProcessAll() })
+                    if (leftShowing) LeftPanel(app, vm)
                     else com.star.desktop.ui.components.CollapsedPanelRail({ vm.setLeftPanel(true) }, pointLeft = false)
                     val painting by vm.horizonPaintMode.collectAsState()
                     Box(Modifier.weight(1f).fillMaxSize()) {
@@ -57,7 +58,7 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
                             com.star.desktop.ui.sequence.edit.FrameEditView(vm)
                         }
                     }
-                    if (rightShowing) RightPanel(vm)
+                    if (rightShowing) RightPanel(app, vm)
                     else com.star.desktop.ui.components.CollapsedPanelRail({ vm.setRightPanel(true) }, pointLeft = true)
                 }
                 InteractionMode.GRID -> Row(Modifier.fillMaxSize()) {
@@ -72,13 +73,17 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
             }
         }
 
-        BottomControls(vm)
+        BottomControls(app, vm)
 
         // Bottom layout mirrors macOS ImageSequenceView: an optional filmstrip (edit/grid) above a
         // full-width scrub slider shown in every mode except grid — identical in scrub & edit.
         if (mode != InteractionMode.SCRUB && showFilmstrip) Filmstrip(vm)
         if (mode != InteractionMode.GRID) ScrubSlider(vm)
     }
+
+    // The "re-run horizon refinement now or later?" question, here because the painter that raises it closes first.
+    val refinementPrompt by vm.refinementPrompt.collectAsState()
+    refinementPrompt?.let { com.star.desktop.ui.dialogs.HorizonRefinementPrompt(vm, it) }
 
     // Multi-frame outlier sheets (overlay the whole screen when active).
     val multiChoice by vm.multiChoice.collectAsState()
@@ -90,6 +95,12 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
 @Composable
 private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMode) {
     val viewMode by vm.viewMode.collectAsState()
+    val playing by vm.isPlaying.collectAsState()
+    val current by vm.currentIndex.collectAsState()
+    val states by vm.frameStates.collectAsState()
+    // The images the frame has: a pill for one it lacks is greyed out.
+    var available by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(setOf(FrameViewMode.VIEW_ORIGINAL)) }
+    androidx.compose.runtime.LaunchedEffect(current, states[current]) { available = vm.availableViewModes(current).toSet() }
     Row(
         Modifier.fillMaxWidth().background(StarColors.sidePanel.copy(alpha = 0.5f)).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -101,6 +112,7 @@ private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMo
             selected = mode,
             label = { it.displayName },
             onSelect = { vm.setMode(it) },
+            enabled = !playing,
         )
         Box(Modifier.weight(1f))
         // View-mode toggle
@@ -109,6 +121,8 @@ private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMo
             selected = viewMode, // grid 'Show' may set SUBTRACTION/VALIDATION → no pill highlights (matches old chips)
             label = { if (it == FrameViewMode.VIEW_PROCESSED) "Processed" else "Original" },
             onSelect = { vm.setViewMode(it) },
+            enabled = !playing,
+            isEnabled = { it in available },
         )
         if (mode == InteractionMode.EDIT) {
             val painting by vm.horizonPaintMode.collectAsState()

@@ -43,15 +43,17 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
     /** Current workflow step. Assigning it triggers recomposition + redraw (it is read in the Canvas). */
     var phase by mutableStateOf(HorizonPhase.BAND_SELECTION)
 
-    // ---- brush (image px) ----
-    val minBrush: Int get() = max(4, imageWidth / 300)
-    val maxBrush: Int get() = max(minBrush + 1, imageWidth / 6)
-    var brushRadius by mutableStateOf((imageWidth / 30).coerceIn(max(4, imageWidth / 300), max(max(4, imageWidth / 300) + 1, imageWidth / 6)))
-    private val brushStep: Int get() = max(2, imageWidth / 120)
-    fun growBrush() { brushRadius = (brushRadius + brushStep).coerceAtMost(maxBrush) }
-    fun shrinkBrush() { brushRadius = (brushRadius - brushStep).coerceAtLeast(minBrush) }
+    // ---- brush (image px; the same sizes as macOS, whatever the image's size) ----
+    val minBrush: Int get() = MIN_BRUSH
+    val maxBrush: Int get() = MAX_BRUSH
+    var brushRadius by mutableStateOf(DEFAULT_BRUSH)
+    fun growBrush() { brushRadius = (brushRadius + BRUSH_STEP).coerceAtMost(maxBrush) }
+    fun shrinkBrush() { brushRadius = (brushRadius - BRUSH_STEP).coerceAtLeast(minBrush) }
 
-    /** Refinement only: false = paint sky (adds), true = paint ground (removes). */
+    /**
+     * Refinement only: false = paint sky (adds), true = paint ground (removes). Not reset by anything here: the mode a
+     * user chose stays across frames and resets; the view model keeps it for the next time the painter opens.
+     */
     var isErasing by mutableStateOf(false)
 
     // ---- per-column data (image space; -1 = unset) ----
@@ -59,7 +61,8 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
     private val bandBottom = IntArray(imageWidth) { -1 }         // bottom of the painted band
     private val knownSkyFloor = IntArray(imageWidth) { -1 }      // lowest row known to be sky
     private val knownGroundCeiling = IntArray(imageWidth) { -1 } // highest row known to be ground
-    private val horizonY = IntArray(imageWidth) { -1 }           // detected/refined horizon
+    private val horizonY = IntArray(imageWidth) { -1 }           // detected/refined horizon, as shown (a stroke nudges it before the solver answers)
+    private val solvedHorizon = IntArray(imageWidth) { -1 }      // the solver's last answer: what gets saved (macOS lastHorizonY)
 
     // ---- gesture tracking ----
     private var lastX: Int? = null
@@ -106,6 +109,20 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
     fun bandTopSnapshot(): List<Int> = bandTop.toList()
     fun bandBottomSnapshot(): List<Int> = bandBottom.toList()
     fun horizonSnapshot(): List<Int> = horizonY.toList()
+
+    /**
+     * The horizon the solver last produced, which is what to save: [horizonSnapshot] is what is *shown*, and between a
+     * stroke and the solver's answer that is the stroke's optimistic nudge (and stays so if the solver fails). macOS
+     * saves `lastHorizonY` for the same reason.
+     */
+    fun solvedHorizonSnapshot(): List<Int> = solvedHorizon.toList()
+    fun hasSolvedHorizon(): Boolean = solvedHorizon.any { it >= 0 }
+
+    /** Show the solver's last answer again, undoing a stroke's optimistic nudge (the solve for it failed). */
+    fun restoreSolvedHorizon() {
+        for (i in 0 until imageWidth) horizonY[i] = solvedHorizon[i]
+        bump()
+    }
     /** The pre-stroke horizon baseline captured at the start of the current refinement stroke. */
     fun preStrokeBaseline(): IntArray? = preStrokeHorizon
 
@@ -180,24 +197,34 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
      * Commit a refinement stroke into the known-region map (macOS `commitRefinementGesture`): a sky
      * stroke pushes [knownSkyFloor] down; a ground stroke pushes [knownGroundCeiling] up. Each retracts
      * the opposite region where they now overlap so a stroke can undo a prior opposite stroke.
+     *
+     * The stroke also widens the band under the brush. The band is a search region, not a verdict, so a
+     * stroke that reaches outside it pushes it open rather than being clipped by it: without that the
+     * painter could not repair a horizon that was wrong by more than the band's margin (the ground ceiling
+     * is pinned to the band's bottom, and the clamp after the solve pulled painted sky straight back to it).
      */
     fun commitRefinementGesture(erasing: Boolean) {
+        val lastRow = imageHeight - 1
         for (col in 0 until imageWidth) {
             if (gestureColBottom[col] == Int.MIN_VALUE) continue
             val brushTop = gestureColTop[col]
             val brushBottom = gestureColBottom[col]
             if (erasing) {
+                // Open the band above the brush first, so the retraction below is not clipped back to the old search region.
+                if (bandTop[col] >= 0) bandTop[col] = min(bandTop[col], (brushTop - 1).coerceIn(0, lastRow))
                 knownGroundCeiling[col] = if (knownGroundCeiling[col] < 0) brushTop else min(knownGroundCeiling[col], brushTop)
-                // Retract the sky floor if it reaches down into the rows just marked as ground
-                // (sf >= brushTop), so erasing fully undoes a prior sky stroke (macOS HorizonPaintState.swift:401).
+                // Retract the sky floor if it reaches down into the rows just marked as ground (sf >= brushTop),
+                // so erasing fully undoes a prior sky stroke.
                 val sf = knownSkyFloor[col]
                 if (sf >= brushTop) {
                     knownSkyFloor[col] = max(brushTop - 1, bandTop[col].coerceAtLeast(0))
                 }
             } else {
+                // Open the band below the brush first, for the same reason.
+                if (bandBottom[col] >= 0) bandBottom[col] = max(bandBottom[col], (brushBottom + 1).coerceIn(0, lastRow))
                 knownSkyFloor[col] = if (knownSkyFloor[col] < 0) brushBottom else max(knownSkyFloor[col], brushBottom)
-                // Retract the ground ceiling if it reaches up into the rows just marked as sky
-                // (gc <= brushBottom), so painting fully undoes a prior erase (macOS HorizonPaintState.swift:414).
+                // Retract the ground ceiling if it reaches up into the rows just marked as sky (gc <= brushBottom),
+                // so painting fully undoes a prior erase.
                 val gc = knownGroundCeiling[col]
                 if (gc in 0..brushBottom) {
                     val ceiling = if (bandBottom[col] >= 0) bandBottom[col] else imageHeight
@@ -230,6 +257,15 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
         if (brushLeft <= brushRight) {
             if (erasing) taperBoundary(ground, brushLeft, brushRight, expanded.first, expanded.last, taperWidth, pushUp = true)
             else taperBoundary(sky, brushLeft, brushRight, expanded.first, expanded.last, taperWidth, pushUp = false)
+        }
+        // Keep the band consistent with the seeds it has to contain. The commit widened the stored band under the
+        // brush, but the taper above pushes the locked boundary out into the margin columns as well, and the solver
+        // treats a column whose sky floor sits at or below its band bottom (or ground ceiling at or above its band
+        // top) as having no gap left to solve.
+        for (col in expanded) {
+            if (col !in 0 until imageWidth) continue
+            if (sky[col] >= 0 && bottom[col] >= 0 && sky[col] >= bottom[col]) bottom[col] = min(imageHeight - 1, sky[col] + 1)
+            if (ground[col] >= 0 && top[col] >= 0 && ground[col] <= top[col]) top[col] = max(0, ground[col] - 1)
         }
         return RefineInputs(top.toList(), bottom.toList(), sky.toList(), ground.toList())
     }
@@ -272,8 +308,12 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
      * explicit sky/ground strokes are never overridden (macOS merge + clamp in `triggerObjectSelection`).
      * Columns the solver left unresolved (-1) fall back to [baseline] (the pre-stroke horizon) rather
      * than keeping the jagged optimistic brush value.
+     *
+     * The sky floor and the ground ceiling cannot both be honoured if they ever cross, so the clamp for the
+     * stroke that just happened ([erasing]: ground, else sky) is applied last and wins: the user's latest
+     * instruction is the one that must never be silently discarded.
      */
-    fun applyRefinedHorizon(result: List<Int>, range: IntRange, baseline: IntArray?) {
+    fun applyRefinedHorizon(result: List<Int>, range: IntRange, baseline: IntArray?, erasing: Boolean) {
         for (col in range) {
             if (col !in 0 until imageWidth) continue
             val r = if (col < result.size) result[col] else -1
@@ -286,10 +326,16 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
         for (col in 0 until imageWidth) {
             if (horizonY[col] < 0) continue
             var v = horizonY[col]
-            if (knownSkyFloor[col] >= 0) v = max(v, knownSkyFloor[col])
-            if (knownGroundCeiling[col] >= 0) v = min(v, knownGroundCeiling[col] - 1)
-            horizonY[col] = max(0, v)
+            if (erasing) {
+                if (knownSkyFloor[col] >= 0) v = max(v, knownSkyFloor[col])
+                if (knownGroundCeiling[col] >= 0) v = min(v, knownGroundCeiling[col] - 1)
+            } else {
+                if (knownGroundCeiling[col] >= 0) v = min(v, knownGroundCeiling[col] - 1)
+                if (knownSkyFloor[col] >= 0) v = max(v, knownSkyFloor[col])
+            }
+            horizonY[col] = v.coerceIn(0, imageHeight - 1)
         }
+        for (i in 0 until imageWidth) solvedHorizon[i] = horizonY[i]
         bump()
     }
 
@@ -304,8 +350,8 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
             knownSkyFloor[i] = bandTop[i]
             knownGroundCeiling[i] = bandBottom[i]
         }
+        for (i in 0 until imageWidth) solvedHorizon[i] = horizonY[i]
         phase = HorizonPhase.REFINEMENT
-        isErasing = false
         preStrokeHorizon = null
         resetGesture()
         endStroke()
@@ -338,9 +384,9 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
             bandTop[i] = -1; bandBottom[i] = -1
             knownSkyFloor[i] = -1; knownGroundCeiling[i] = -1
             horizonY[i] = -1
+            solvedHorizon[i] = -1
         }
         phase = HorizonPhase.BAND_SELECTION
-        isErasing = false
         preStrokeHorizon = null
         gen++
         resetGesture()
@@ -354,21 +400,28 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
      * horizon asynchronously.
      */
     fun resetForNewFrame() {
-        val savedErasing = isErasing
-        clear()
-        isErasing = savedErasing
+        clear()   // leaves brush size and sky/ground mode alone
         phase = HorizonPhase.COMPUTING
         bump()
     }
 
-    private companion object {
-        fun fillEdgeNils(arr: List<Int>): List<Int> {
+    companion object {
+        // macOS HorizonPaintState: radius in image pixels, adjusted by 10 between 5 and 500.
+        const val DEFAULT_BRUSH = 250
+        const val MIN_BRUSH = 5
+        const val MAX_BRUSH = 500
+        const val BRUSH_STEP = 10
+
+        /** How far beyond a stroke's columns the solver is asked to re-solve (macOS fixed 20 px margin). */
+        const val REFINE_MARGIN = 20
+
+        private fun fillEdgeNils(arr: List<Int>): List<Int> {
             val out = arr.toIntArray()
             fillEdgeNilsInPlace(out)
             return out.toList()
         }
 
-        fun fillEdgeNilsInPlace(arr: IntArray) {
+        private fun fillEdgeNilsInPlace(arr: IntArray) {
             val firstSet = arr.indexOfFirst { it >= 0 }
             if (firstSet < 0) return
             for (i in 0 until firstSet) arr[i] = arr[firstSet]

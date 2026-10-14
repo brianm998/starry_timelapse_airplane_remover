@@ -203,8 +203,12 @@ object EngineSelfTest {
                         val done = CompletableDeferred<Unit>()
                         val events = scope.launch {
                             client.streamProgress(info.sessionId).collect { ev ->
-                                if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state == "done") {
-                                    done.complete(Unit)
+                                if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE) {
+                                    when (ev.sequenceState.state) {
+                                        "done" -> done.complete(Unit)
+                                        "error" -> done.completeExceptionally(
+                                            IllegalStateException("processing finished with errors: ${ev.sequenceState.message}"))
+                                    }
                                 }
                             }
                         }
@@ -217,6 +221,7 @@ object EngineSelfTest {
                                     check(running.status.value is EngineStatus.Connected) { "engine died while processing: ${failure(running)}" }
                                     delay(500)
                                 }
+                                done.await() // rethrows a run that ended in error
                             }
                         } finally {
                             events.cancel()

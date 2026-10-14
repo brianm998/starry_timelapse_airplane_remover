@@ -96,4 +96,115 @@ class LocalPreferencesTest {
             assertNull(LocalPreferences().movingHorizonCountMultiplier, "should have ignored $bad")
         }
     }
+
+    // ---- recent files: shared with the macOS app, which opens every entry as a session's config.json ----
+
+    private fun recentInFile(): Map<*, *> {
+        val parsed = com.google.gson.Gson().fromJson(prefsFile.readText(), Map::class.java)
+        return parsed["recentlyOpenedSequencelist"] as Map<*, *>
+    }
+
+    /** The file holds everything the other app recorded: this client lists 20 but must not delete the rest. */
+    @Test fun theRecentListIsNotTrimmedOnWrite() {
+        val real = (1..25).map { File(home, "session$it.json").also { f -> f.writeText("{}") }.path }
+        val prefs = LocalPreferences()
+        real.forEach { prefs.addRecentFile(it) }
+        assertEquals(25, recentInFile().size, "older entries were deleted from the shared file")
+        assertEquals(20, prefs.recentFiles.size, "this client's own list is still capped")
+    }
+
+    /** What the macOS app does on load: an entry whose file is gone can only fail to open. */
+    @Test fun recentEntriesWhoseFileIsGoneAreForgottenOnLoad() {
+        val kept = File(home, "kept.json").also { it.writeText("{}") }
+        prefsFile.writeText(
+            """{"recentlyOpenedSequencelist":{"${kept.path}":10.0,"${home.path}/gone.json":20.0},"language":"fr"}""",
+        )
+        val prefs = LocalPreferences()
+        assertEquals(listOf(kept.path), prefs.recentFiles)
+        assertTrue(!prefsFile.readText().contains("gone.json"), "the pruned entry is still in the file")
+        assertEquals("fr", LocalPreferences().language, "pruning cost another key")
+    }
+
+    /** A change the other app makes while this one is running must survive this one's next save. */
+    @Test fun aSaveDoesNotUndoWhatTheOtherAppWroteMeanwhile() {
+        val a = File(home, "a.json").also { it.writeText("{}") }
+        val b = File(home, "b.json").also { it.writeText("{}") }
+        val prefs = LocalPreferences()
+        prefs.addRecentFile(a.path)
+
+        // The macOS app opens something and turns a setting on, after this client started.
+        prefsFile.writeText(
+            """{"recentlyOpenedSequencelist":{"${a.path}":5.0,"${b.path}":9999999999.0},"showHorizonOnMainView":true}""",
+        )
+        prefs.setLanguage("de")
+
+        val text = prefsFile.readText()
+        assertTrue(text.contains("showHorizonOnMainView"), text)
+        assertTrue(recentInFile().containsKey(b.path), "the other app's recent entry was overwritten: $text")
+        assertEquals("de", LocalPreferences().language)
+    }
+
+    @Test fun startingWithNoFileWritesNoFile() {
+        LocalPreferences()
+        assertTrue(!prefsFile.exists(), "a preferences file appeared just from starting")
+    }
+}
+
+class LocalPreferencesBooleansTest {
+    private lateinit var home: File
+    private var savedHome: String? = null
+    private val prefsFile: File get() = File(home, ".star.userprefs.json")
+
+    @BeforeTest fun redirectHome() {
+        savedHome = System.getProperty("user.home")
+        home = Files.createTempDirectory("star-prefs-bool-test").toFile()
+        System.setProperty("user.home", home.absolutePath)
+    }
+
+    @AfterTest fun restoreHome() {
+        savedHome?.let { System.setProperty("user.home", it) } ?: System.clearProperty("user.home")
+        home.deleteRecursively()
+    }
+
+    /** macOS reads a missing key as "yes, show it": the instructions are on until the user says otherwise. */
+    @Test fun theHorizonPainterInstructionsAreOnUntilTurnedOff() {
+        assertTrue(LocalPreferences().showHorizonPainterInstructions)
+    }
+
+    @Test fun turningThemOffIsRememberedUnderTheMacOSKey() {
+        LocalPreferences().showHorizonPainterInstructions = false
+        assertTrue(prefsFile.readText().contains("\"showHorizonPainterInstructions\":false"), prefsFile.readText())
+        assertEquals(false, LocalPreferences().showHorizonPainterInstructions)
+    }
+
+    @Test fun turningThemBackOnWorks() {
+        val p = LocalPreferences()
+        p.showHorizonPainterInstructions = false
+        p.showHorizonPainterInstructions = true
+        assertTrue(LocalPreferences().showHorizonPainterInstructions)
+    }
+
+    /** What the macOS app wrote is read, and a key this client has no property for can still be asked for. */
+    @Test fun aBooleanTheMacOSAppWroteIsRead() {
+        prefsFile.writeText("""{"recentlyOpenedSequencelist":{},"showHorizonOnMainView":true}""")
+        val p = LocalPreferences()
+        assertEquals(true, p.bool("showHorizonOnMainView"))
+        assertEquals(null, p.bool("never set"))
+    }
+
+    @Test fun forgettingABooleanRemovesTheKeySoMacOSSeesItsDefault() {
+        val p = LocalPreferences()
+        p.setBool("showProcessingWindow", false)
+        p.setBool("showProcessingWindow", null)
+        assertTrue(!prefsFile.readText().contains("showProcessingWindow"), prefsFile.readText())
+    }
+
+    /** macOS reads a missing showHorizonOnMainView as off. */
+    @Test fun theHorizonLineIsOffUntilTurnedOnAndRemembered() {
+        assertEquals(false, LocalPreferences().showHorizonOnMainView)
+        val p = LocalPreferences()
+        p.showHorizonOnMainView = true
+        assertTrue(prefsFile.readText().contains("\"showHorizonOnMainView\":true"), prefsFile.readText())
+        assertEquals(true, LocalPreferences().showHorizonOnMainView)
+    }
 }

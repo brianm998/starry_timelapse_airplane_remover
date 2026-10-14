@@ -1,6 +1,7 @@
 package com.star.desktop.ui.sequence
 
 import androidx.compose.ui.graphics.ImageBitmap
+import com.star.desktop.i18n.localized
 import com.star.desktop.data.ExportRepository
 import com.star.desktop.data.FrameRepository
 import com.star.desktop.data.HorizonRepository
@@ -10,7 +11,10 @@ import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.MultiFrameRange
+import com.star.desktop.domain.OutlierTable
 import com.star.desktop.domain.ToolType
+import com.star.desktop.domain.toolAfterCleanMethodChange
+import com.star.desktop.domain.usesOutliers
 import com.star.desktop.domain.VideoPlayMode
 import com.star.desktop.util.Log
 import com.star.proto.FrameProcessingState
@@ -19,11 +23,14 @@ import com.star.proto.ProgressEvent
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -36,7 +43,7 @@ import kotlinx.coroutines.launch
  * progress stream. Preview loading auto-retries as processing makes a frame's preview available.
  */
 class SequenceViewModel(
-    private val scope: CoroutineScope,
+    parentScope: CoroutineScope,
     val info: SessionInfo,
     private val frames: FrameRepository,
     val processing: ProcessingRepository,
@@ -44,9 +51,29 @@ class SequenceViewModel(
     private val imageCache: ImageCache,
     private val export: ExportRepository,
     val horizon: HorizonRepository,
+    /** Shows a failed user action to the user (macOS `report(error:)`). */
+    private val onError: (String) -> Unit = {},
+    /** The user's stored preferences (the horizon line's visibility is one); null where there are none, as in tests. */
+    private val prefs: com.star.desktop.data.LocalPreferences? = null,
 ) {
     val sessionId: String = info.sessionId
     val frameCount: Int = info.frameCount
+
+    /**
+     * Everything this view model launches runs here, a child of [parentScope] that [close] cancels,
+     * so nothing it started outlives its session (the app's own scope lives as long as the app).
+     */
+    private val scope: CoroutineScope =
+        CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
+
+    /**
+     * The zoom and pan of the frame, one for the session: shared by the edit view and the horizon painter, and not
+     * reset when the frame changes (macOS keeps `currentZoomScale` on its view model too).
+     */
+    val transform = com.star.desktop.ui.sequence.edit.FrameTransform(
+        info.imageWidth, info.imageHeight,
+        margin = info.imageWidth / ARROW_LENGTH_DIVISOR, // the outlier arrows reach this far outside the frame
+    )
 
     // ---- interaction state ----
     private val _mode = MutableStateFlow(InteractionMode.SCRUB) // macOS default is scrub
@@ -72,10 +99,14 @@ class SequenceViewModel(
     val gridThumbnailScale: StateFlow<Float> = _gridThumbnailScale.asStateFlow()
     fun setGridThumbnailScale(v: Float) { _gridThumbnailScale.value = v.coerceIn(0.02f, 0.5f) }
 
-    // Draw per-cell horizon overlays in the grid (macOS showHorizonOnMainView).
-    private val _showHorizonOnGrid = MutableStateFlow(false)
-    val showHorizonOnGrid: StateFlow<Boolean> = _showHorizonOnGrid.asStateFlow()
-    fun toggleHorizonOnGrid() { _showHorizonOnGrid.value = !_showHorizonOnGrid.value }
+    // Draw the horizon line on the frame, the filmstrip and the grid (macOS showHorizonOnMainView, which is stored: the
+    // choice is the user's and outlives the session).
+    private val _showHorizonOnMainView = MutableStateFlow(prefs?.showHorizonOnMainView ?: false)
+    val showHorizonOnMainView: StateFlow<Boolean> = _showHorizonOnMainView.asStateFlow()
+    fun setShowHorizonOnMainView(show: Boolean) {
+        _showHorizonOnMainView.value = show
+        prefs?.showHorizonOnMainView = show
+    }
 
     private val _leftPanelShowing = MutableStateFlow(true)
     val leftPanelShowing: StateFlow<Boolean> = _leftPanelShowing.asStateFlow()
@@ -89,6 +120,12 @@ class SequenceViewModel(
         _leftPanelShowing.value = !hide
         _rightPanelShowing.value = !hide
     }
+
+    // The sky/ground brush mode the painter was last left in, so it is the same the next time it opens (macOS keeps
+    // it on the sequence's view model for the same reason).
+    private val _horizonPaintErasing = MutableStateFlow(false)
+    val horizonPaintErasing: StateFlow<Boolean> = _horizonPaintErasing.asStateFlow()
+    fun setHorizonPaintErasing(erasing: Boolean) { _horizonPaintErasing.value = erasing }
 
     // Edit sub-mode: when on, the center view is the horizon painter instead of the outlier overlay.
     private val _horizonPaintMode = MutableStateFlow(false)
@@ -152,6 +189,12 @@ class SequenceViewModel(
     // ---- processing state (delegated) ----
     val frameStates: StateFlow<Map<Int, FrameProcessingState>> = processing.frameStates
     val isProcessing: StateFlow<Boolean> = processing.processing
+
+    /** Whether each frame's outliers are loading (1) or in memory (2), as the daemon reports it; a frame not listed has them on disk. */
+    val outlierLoadState: StateFlow<Map<Int, Int>> = processing.outlierLoadState
+
+    /** Each frame's stage of being saved after an edit (0 not saving, 1 purgatory, 2 waiting, 3 saving): see [com.star.desktop.domain.SavingCounts]. */
+    val savingState: StateFlow<Map<Int, Int>> = processing.savingState
     val sequenceState: StateFlow<String?> = processing.sequenceState
 
     // ---- processing progress screen (macOS `ProcessingModalView`) ----
@@ -164,6 +207,9 @@ class SequenceViewModel(
     private val _showProcessingModal = MutableStateFlow(false)
     val showProcessingModal: StateFlow<Boolean> = _showProcessingModal.asStateFlow()
     fun dismissProcessingModal() { _processingModalDismissed.value = true }
+
+    /** Put the processing screen back up after it was dismissed (macOS LeftPanel's Status button); a run in progress always has a status to show. */
+    fun reopenProcessingModal() { _processingModalDismissed.value = false }
 
     // ---- current preview ----
     private val _currentPreview = MutableStateFlow<ImageBitmap?>(null)
@@ -181,6 +227,11 @@ class SequenceViewModel(
     private val _fastAdvancement = MutableStateFlow(FastAdvancementType.NORMAL)
     val fastAdvancement: StateFlow<FastAdvancementType> = _fastAdvancement.asStateFlow()
     fun setFastAdvancement(t: FastAdvancementType) { _fastAdvancement.value = t }
+
+    /** How many frames the fast buttons move by in the normal strategy (macOS `fastSkipAmount`, 20 to start with; not kept between runs). */
+    private val _fastSkipAmount = MutableStateFlow(FastAdvancementType.DEFAULT_SKIP_AMOUNT)
+    val fastSkipAmount: StateFlow<Int> = _fastSkipAmount.asStateFlow()
+    fun setFastSkipAmount(n: Int) { _fastSkipAmount.value = n.coerceIn(0, FastAdvancementType.MAX_SKIP_AMOUNT) }
     private var playbackJob: Job? = null
 
     // ---- render (Outlier.RenderFrame / Export.RenderSequence) ----
@@ -196,10 +247,21 @@ class SequenceViewModel(
 
     /** Get (creating if needed) the [FrameViewModel] for [index]. */
     fun frameVMFor(index: Int): FrameViewModel =
-        frameVMs.getOrPut(index) { FrameViewModel(scope, sessionId, index, outliers, frames) }
+        frameVMs.getOrPut(index) { FrameViewModel(scope, sessionId, index, outliers, frames, onError) }
 
     /** The frame view model for the current index. */
     fun currentFrameVM(): FrameViewModel = frameVMFor(_currentIndex.value)
+
+    /**
+     * Bumped for a frame each time a picture of it is saved. Grid and filmstrip cells load their thumbnail
+     * keyed on this, so a rewritten preview replaces the one they show.
+     */
+    private val _frameRevisions = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val frameRevisions: StateFlow<Map<Int, Int>> = _frameRevisions.asStateFlow()
+
+    private fun bumpRevision(index: Int) {
+        _frameRevisions.value = _frameRevisions.value.let { it + (index to ((it[index] ?: 0) + 1)) }
+    }
 
     init {
         // Subscribe to progress BEFORE any Processing.Start (the daemon attaches its continuation lazily).
@@ -211,19 +273,90 @@ class SequenceViewModel(
             .onEach { (idx, mode) -> loadPreview(idx, mode) }
             .launchIn(scope)
 
-        // As frames finish processing, a previously-missing preview may now exist — retry the current one.
-        processing.frameStates
-            .onEach { states ->
-                if (!_previewAvailable.value) {
-                    val idx = _currentIndex.value
-                    if (states[idx] != null) loadPreview(idx, _viewMode.value)
+        // The label map used to find the outlier under the pointer is large, and one per frame visited was kept
+        // for good. Only the frames around the current one are likely to be wanted again soon.
+        _currentIndex
+            .onEach { current ->
+                frameVMs.forEach { (i, vm) -> if (kotlin.math.abs(i - current) > LABEL_RETENTION) vm.releaseLabels() }
+            }
+            .launchIn(scope)
+
+        watchFullResolution()
+
+        // `stard` rewrites a frame's previews in place when it saves one: drop what is cached for it and, if
+        // it is the one on screen, show the new picture.
+        processing.imageSaved
+            .onEach { saved ->
+                imageCache.invalidateFrame(saved.frameIndex)
+                // Every image the pipeline keeps is announced when it is written (the aligned frames, the masks...); only the ones
+                // that can be on screen are worth redrawing it for: the one being shown, and the original and final of the thumbnails.
+                if (saved.viewMode != _viewMode.value &&
+                    saved.viewMode != FrameViewMode.VIEW_PROCESSED && saved.viewMode != FrameViewMode.VIEW_ORIGINAL
+                ) return@onEach
+                bumpRevision(saved.frameIndex)
+                if (saved.frameIndex == _currentIndex.value) {
+                    loadPreview(saved.frameIndex, _viewMode.value)
+                    fullResolutionVersion.value++   // the full-size copy is of the old picture
                 }
             }
+            .launchIn(scope)
+
+        // A frame whose processing state changed has new pictures, new outliers or new counts. The one on
+        // screen is reloaded at once (also upgrading an original shown as a stand-in for a processed
+        // frame); the others are fetched afresh when next looked at.
+        var lastStates = emptyMap<Int, FrameProcessingState>()
+        processing.frameStates
+            .onEach { states ->
+                val changed = states.filter { (i, s) -> lastStates[i] != s }.keys
+                lastStates = states
+                changed.forEach { frameDataChanged(it) }
+                if (_currentIndex.value in changed) loadPreview(_currentIndex.value, _viewMode.value)
+            }
+            .launchIn(scope)
+
+        // Outliers loading into memory (after being purged to disk) changes what the frame's counts mean.
+        var lastLoad = emptyMap<Int, Int>()
+        processing.outlierLoadState
+            .onEach { loads ->
+                val changed = loads.filter { (i, s) -> lastLoad[i] != s }.keys
+                lastLoad = loads
+                changed.forEach { frameDataChanged(it) }
+            }
+            .launchIn(scope)
+
+        // A run that ends (done, stopped, failed) may have taken the pending refinement or given it back.
+        processing.sequenceState
+            .onEach { if (it != null) { refreshRefinementStatus(); horizonChanged() } }
+            .launchIn(scope)
+
+        // Refinement operations finish by the hundred; redraw the horizons at most a few times a second while they do.
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
+        processing.horizonUpdated
+            .debounce(300)
+            .onEach { horizonChanged() }
             .launchIn(scope)
 
         combine(isProcessing, _processingModalDismissed) { processingNow, dismissed -> processingNow && !dismissed }
             .onEach { _showProcessingModal.value = it }
             .launchIn(scope)
+    }
+
+    /**
+     * What this client holds of frame [index] (groups, decisions, counts) is out of date. Marked as such, and
+     * fetched again right away if it is the frame on screen.
+     */
+    private fun frameDataChanged(index: Int) {
+        val vm = frameVMs[index] ?: return
+        vm.invalidate()
+        if (index == _currentIndex.value) vm.load(force = true)
+    }
+
+    /** The daemon changed these frames (it sends their new counts back with a bulk edit). */
+    private fun framesChanged(infos: List<com.star.proto.FrameInfo>) {
+        for (info in infos) {
+            frameVMs[info.frameIndex]?.applyInfo(info)
+            frameDataChanged(info.frameIndex)
+        }
     }
 
     // ---- actions ----
@@ -234,10 +367,55 @@ class SequenceViewModel(
      * The editing tools only apply then; plain automatic mode has nothing for them to act on.
      */
     fun currentFrameUsesOutliers(): Boolean =
-        (frameVMFor(_currentIndex.value).info.value?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE) !=
-            com.star.proto.CleanMethod.CLEAN_AUTOMATIC
+        (frameVMFor(_currentIndex.value).info.value?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE).usesOutliers
 
-    fun setTool(t: ToolType) { if (currentFrameUsesOutliers()) _tool.value = t }
+    fun setTool(t: ToolType) {
+        if (!currentFrameUsesOutliers()) return
+        _tool.value = t
+        // Taking things back out of the trash only makes sense with the trash showing (macOS selectionMode's didSet).
+        if (t == ToolType.REMOVE_FROM_TRASH) _showTrash.value = true
+    }
+
+    // ---- trash (macOS shouldShowTrash / trashOpacity) ----
+
+    /**
+     * Whether the trash is shown over the frame and taken into account by the tools: razor, the Remove/Keep boxes, Keep All,
+     * Remove All, Clear Undecided, multi-select and DT Auto Only all pass it as `includingTrash`, as macOS does.
+     */
+    private val _showTrash = MutableStateFlow(false)
+    val showTrash: StateFlow<Boolean> = _showTrash.asStateFlow()
+    fun setShowTrash(show: Boolean) { _showTrash.value = show }
+
+    /** How strongly the trash is drawn (macOS default 0.7). */
+    private val _trashOpacity = MutableStateFlow(0.7f)
+    val trashOpacity: StateFlow<Float> = _trashOpacity.asStateFlow()
+    fun setTrashOpacity(v: Float) { _trashOpacity.value = v.coerceIn(0f, 1f) }
+
+    /** How strongly the outlier groups (and the trash, the boxes, the arrows) are drawn over the frame (macOS default 1). Not kept between runs, as on macOS. */
+    private val _outlierOpacity = MutableStateFlow(1f)
+    val outlierOpacity: StateFlow<Float> = _outlierOpacity.asStateFlow()
+    fun setOutlierOpacity(v: Float) { _outlierOpacity.value = v.coerceIn(0f, 1f) }
+
+    /** How much of the frame shows (macOS default 1): below that it is dimmed with black, so the outliers stand out against it. */
+    private val _frameOpacity = MutableStateFlow(1f)
+    val frameOpacity: StateFlow<Float> = _frameOpacity.asStateFlow()
+    fun setFrameOpacity(v: Float) { _frameOpacity.value = v.coerceIn(0f, 1f) }
+
+    /** The "Multi Choice" switch (macOS `multiChoice`): while it is on, clicking a group that has a decision opens the multi-choice sheet instead of changing it. */
+    private val _multiChoiceMode = MutableStateFlow(false)
+    val multiChoiceMode: StateFlow<Boolean> = _multiChoiceMode.asStateFlow()
+    fun setMultiChoiceMode(on: Boolean) { _multiChoiceMode.value = on }
+
+    /**
+     * The session's clean method became [method] (macOS pushes the new effective method to every frame): what each
+     * frame view model holds, including its clean method, is out of date, and the tool is reset when the method
+     * has no use for one.
+     */
+    fun cleanMethodChanged(method: com.star.proto.CleanMethod) {
+        frameVMs.values.forEach { it.invalidate() }
+        frameVMFor(_currentIndex.value).load(force = true)
+        _tool.value = toolAfterCleanMethodChange(_tool.value, method)
+    }
     fun toggleFilmstrip() { _showFilmstrip.value = !_showFilmstrip.value }
 
     fun setCurrentIndex(i: Int) {
@@ -245,8 +423,12 @@ class SequenceViewModel(
         _currentIndex.value = clamped
     }
 
-    fun next() = setCurrentIndex(_currentIndex.value + 1)
-    fun previous() = setCurrentIndex(_currentIndex.value - 1)
+    fun next() = stepBy(1)
+    fun previous() = stepBy(-1)
+
+    /** [delta] frames on, or back: through the frames selected, round and round, when there are several (macOS `transition(numberOfFrames:)`). */
+    private fun stepBy(delta: Int) =
+        setCurrentIndex(com.star.desktop.domain.FrameNavigation.step(_currentIndex.value, delta, frameCount, _selected.value))
 
     /**
      * Selection (macOS GridView): shift = range from the anchor (currentIndex stays put);
@@ -269,12 +451,79 @@ class SequenceViewModel(
         }
     }
 
+    /**
+     * Show a failed user action. Cancellation is not a failure. [message] is what the user is told;
+     * it defaults to the error's own text, as macOS `report(error: "\(error)")` does.
+     */
+    private fun reportFailure(e: Throwable, message: () -> String = { e.message ?: e.toString() }) {
+        if (e is kotlinx.coroutines.CancellationException) return
+        onError(message())
+    }
+
     fun processAll() = startProcessingRun { processing.start(sessionId, 0, -1) }
-    fun processRemaining() = startProcessingRun { processing.start(sessionId, 0, -1) } // daemon resumes completed frames
-    fun processCurrent() = startProcessingRun { processing.start(sessionId, _currentIndex.value, _currentIndex.value) }
-    /** Reprocess the current frame from scratch (Processing.Start force=true). */
+
+    /** From the current frame to the end (macOS `ProcessRemainingFramesButton`); finished work is reused. */
+    fun processRemaining() = startProcessingRun { processing.start(sessionId, _currentIndex.value, -1) }
+
+    /** Process the current frame, keeping whatever is already done (macOS `.none` reprocessing). */
+    fun processCurrent() = startProcessingRun {
+        processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_NONE)
+    }
+
+    // ---- "re-process the next N frames" (macOS RightPanel) ----
+
+    /** What to throw away before the frames are processed again (macOS `reprocessingType`: nothing to start with; not kept between runs). */
+    private val _reprocessType = MutableStateFlow(com.star.proto.ReprocessingType.REPROCESS_NONE)
+    val reprocessType: StateFlow<com.star.proto.ReprocessingType> = _reprocessType.asStateFlow()
+    fun setReprocessType(t: com.star.proto.ReprocessingType) { _reprocessType.value = t }
+
+    /** How many frames from this one the button works on (macOS `numberOfFramesToProcess`). */
+    private val _framesToProcess = MutableStateFlow(1)
+    val framesToProcess: StateFlow<Int> = _framesToProcess.asStateFlow()
+    fun setFramesToProcess(n: Int) { _framesToProcess.value = n.coerceIn(1, frameCount.coerceAtLeast(1)) }
+
+    /** Process the current frame and the ones after it, clearing first what [reprocessType] says (macOS "Re-Process the next N"). */
+    fun reprocessNext() = startProcessingRun {
+        val from = _currentIndex.value
+        val indices = (from until (from + _framesToProcess.value).coerceAtMost(frameCount)).toList()
+        processing.reprocessFrames(sessionId, indices, _reprocessType.value)
+    }
+
+    /**
+     * Give the current frame its own neighbour count of [kind], or with a null [count] let the sequence's apply again (macOS
+     * `set(alignedNeighborFrames:forFrame:)`). A new aligned count throws the frame's star alignment away and processes it again, so that
+     * shows the processing screen like any run; a new static count rebuilds the merged horizon if there was one.
+     */
+    fun setNeighborOverride(kind: com.star.proto.NeighborKind, count: Int?) {
+        val index = _currentIndex.value
+        scope.launch {
+            try {
+                if (kind == com.star.proto.NeighborKind.NEIGHBOR_ALIGNED) {
+                    _processingModalDismissed.value = false
+                    processing.startClaimedRun {
+                        val answer = frames.setNeighborOverride(sessionId, index, kind, count)
+                        frameVMFor(index).applyInfo(answer.frame)
+                        answer.processingStarted
+                    }
+                } else {
+                    frameVMFor(index).applyInfo(frames.setNeighborOverride(sessionId, index, kind, count).frame)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                reportFailure(e)
+            }
+        }
+    }
+
+    /** Find the outliers of the current frame again, keeping its alignment (macOS `FindOutliersOnCurrentFrameButton`). */
+    fun findOutliersCurrent() = startProcessingRun {
+        processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_OUTLIERS)
+    }
+
+    /** Reprocess the current frame from scratch (macOS `ReProcessCurrentFrameButton`). */
     fun reprocessCurrent() = startProcessingRun {
-        processing.start(sessionId, _currentIndex.value, _currentIndex.value, force = true)
+        processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_EVERYTHING)
     }
 
     /** Re-arm the processing modal (macOS `startProcessingModal`) before launching a new run. */
@@ -284,37 +533,274 @@ class SequenceViewModel(
     }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
 
-    /** Re-run the decision-tree classifier across all frames, then refresh the current frame. */
+    // ---- full resolution (macOS showFullResolution) ----
+    //
+    // The preview is about 1600 pixels wide, however large the frame is; zoomed in far enough to see single pixels it is a blur.
+    // With this on, and the view zoomed in past fit, the frame's full-size image is loaded in its place. It is one 8-bit bitmap
+    // for the current frame only (a 42 MP frame is some 170 MB), made by the daemon on demand, and dropped when the frame, the view
+    // mode or the zoom changes.
+
+    private val _showFullResolution = MutableStateFlow(false)
+    val showFullResolution: StateFlow<Boolean> = _showFullResolution.asStateFlow()
+    fun setShowFullResolution(show: Boolean) { _showFullResolution.value = show }
+
+    private val _fullResolution = MutableStateFlow<ImageBitmap?>(null)
+    /** The current frame's full-size image while [showFullResolution] is on and the view is zoomed in; else null. */
+    val fullResolution: StateFlow<ImageBitmap?> = _fullResolution.asStateFlow()
+    private var fullResolutionJob: Job? = null
+    private val fullResolutionVersion = MutableStateFlow(0)
+
+    private fun watchFullResolution() {
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
+        combine(
+            _currentIndex, _viewMode, _showFullResolution,
+            androidx.compose.runtime.snapshotFlow { transform.userZoom > ZOOMED_IN }.distinctUntilChanged(),
+            fullResolutionVersion,
+        ) { index, mode, show, zoomed, _ -> if (show && zoomed) index to mode else null }
+            .distinctUntilChanged()
+            .onEach { _fullResolution.value = null }   // what was loaded is of another frame, mode or zoom
+            .debounce(250)                              // not for every frame of a scrub
+            .onEach { wanted -> loadFullResolution(wanted) }
+            .launchIn(scope)
+    }
+
+    private fun loadFullResolution(wanted: Pair<Int, FrameViewMode>?) {
+        fullResolutionJob?.cancel()
+        if (wanted == null) return
+        fullResolutionJob = scope.launch {
+            val ref = frames.previewPath(sessionId, wanted.first, wanted.second, com.star.proto.PreviewSize.PREVIEW_SIZE_ORIGINAL) ?: return@launch
+            val bitmap = imageCache.loadUncached(ref.path) ?: return@launch
+            if (_currentIndex.value == wanted.first && _viewMode.value == wanted.second) _fullResolution.value = bitmap
+        }
+    }
+
+    // ---- the outlier window (macOS outlierGroupTableRows / outlierGroupWindowFrame) ----
+
+    /**
+     * What the outlier window lists: [groupIds] of [frameIndex], as set by an Information click or box (macOS lists only those and
+     * keeps showing that frame when the user moves on); or, with [groupIds] null, every group of the frame being looked at that
+     * is a thing of its own on screen.
+     */
+    data class InfoRows(val frameIndex: Int, val groupIds: List<Int>?)
+
+    private val _infoRows = MutableStateFlow<InfoRows?>(null)
+    val infoRows: StateFlow<InfoRows?> = _infoRows.asStateFlow()
+
+    /** Raises the outlier window; set by the app, which owns windows. */
+    var openOutlierWindow: () -> Unit = {}
+
+    /**
+     * Show [groupIds] of the current frame in the outlier window. [select] also selects them, and only them, on the frame (an Information
+     * click: macOS "turns off other highlights"); a box leaves the selection to the rows the user picks.
+     */
+    fun showInfoFor(groupIds: List<Int>, select: Boolean = false) {
+        val frame = _currentIndex.value
+        if (select) {
+            frameVMs.values.forEach { if (it.frameIndex != frame) it.selectGroups(emptySet()) }
+            frameVMFor(frame).selectGroups(groupIds.toSet())
+        }
+        _infoRows.value = InfoRows(frame, groupIds)
+        openOutlierWindow()
+    }
+
+    /**
+     * The decision-tree features and classifier scores the outlier window tabulates for [groupIds] of a frame, by group id. Nothing for no
+     * groups (an empty request means all of them to the daemon), and nothing when they could not be had, which is shown as an error.
+     */
+    suspend fun outlierFeatures(frameIndex: Int, groupIds: List<Int>): Map<Int, com.star.proto.OutlierFeatureRow> {
+        if (groupIds.isEmpty()) return emptyMap()
+        return try {
+            outliers.features(sessionId, frameIndex, groupIds).associateBy { it.groupId }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            reportFailure(e)
+            emptyMap()
+        }
+    }
+
+    /** The lines the Hough finder proposes for one group, best fit first; nothing when they could not be had. */
+    suspend fun lineCandidates(frameIndex: Int, groupId: Int): List<com.star.proto.LineCandidate> =
+        failureAsEmpty { outliers.lineCandidates(sessionId, frameIndex, groupId) }
+
+    /** Make [candidate] the line of a group: the frame's drawing of its streak line follows. */
+    fun setOutlierLine(frameIndex: Int, groupId: Int, candidate: com.star.proto.LineCandidate) {
+        scope.launch {
+            try {
+                frameVMFor(frameIndex).groupChanged(outliers.setLine(sessionId, frameIndex, groupId, candidate))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                reportFailure(e)
+            }
+        }
+    }
+
+    /** The Hough line finder's arguments, as the daemon has them. */
+    suspend fun houghArgs(): List<com.star.proto.HoughLineFinderArg> = failureAsEmpty { outliers.houghArgs() }
+
+    /** Set one of the finder's arguments; all of them as they are then. (Empty, and an error shown, if the daemon refused it.) */
+    suspend fun setHoughArg(name: String, value: Double): List<com.star.proto.HoughLineFinderArg> =
+        failureAsEmpty { outliers.setHoughArg(name, value) }
+
+    private suspend fun <T> failureAsEmpty(block: suspend () -> List<T>): List<T> =
+        try {
+            block()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            reportFailure(e)
+            emptyList()
+        }
+
+    /** The window was closed: back to listing the frame being looked at, and nothing stays highlighted for it (macOS `onDisappear`). */
+    fun outlierWindowClosed() {
+        _infoRows.value = null
+        frameVMs.values.forEach { it.selectGroups(emptySet()) }
+    }
+
+    /** The optional columns of the outlier table that are showing, by [OutlierTable.Column.key]: remembered between runs. */
+    private val _outlierColumns = MutableStateFlow(prefs?.strings(OUTLIER_COLUMNS_KEY)?.toSet() ?: OutlierTable.defaultColumns)
+    val outlierColumns: StateFlow<Set<String>> = _outlierColumns.asStateFlow()
+
+    fun setOutlierColumn(key: String, shown: Boolean) =
+        setOutlierColumns(if (shown) _outlierColumns.value + key else _outlierColumns.value - key)
+
+    /** Select All / Clear All in the column chooser. */
+    fun setAllOutlierColumns(shown: Boolean) = setOutlierColumns(if (shown) OutlierTable.columns.map { it.key }.toSet() else emptySet())
+
+    private fun setOutlierColumns(keys: Set<String>) {
+        _outlierColumns.value = keys
+        prefs?.setStrings(OUTLIER_COLUMNS_KEY, OutlierTable.columns.map { it.key }.filter { it in keys })
+    }
+
+    // ---- horizon refinement: the work owed after a reference horizon is repainted ----
+    //
+    // The daemon keeps the record (which frames are pending, what "later" took away); this is the question put to the
+    // user and the bookkeeping the screen needs. The prompt is hosted by the sequence screen, not by the painter, which
+    // closes when it saves.
+
+    /** What the "re-run the refinement now, or later?" question quotes. */
+    data class RefinementPrompt(val frameCount: Int, val renderCount: Int)
+
+    private val _refinementPrompt = MutableStateFlow<RefinementPrompt?>(null)
+    val refinementPrompt: StateFlow<RefinementPrompt?> = _refinementPrompt.asStateFlow()
+
+    /** Whether any refinement is waiting: what enables "Re-run Horizon Refinement". */
+    private val _refinementPending = MutableStateFlow(false)
+    val refinementPending: StateFlow<Boolean> = _refinementPending.asStateFlow()
+
+    /**
+     * Bumped whenever a frame's horizon, or whether it is pending, may have changed: a reference was saved, the question was
+     * answered, a refinement operation finished. Overlays that draw a frame's horizon load it keyed on this.
+     */
+    private val _horizonVersion = MutableStateFlow(0)
+    val horizonVersion: StateFlow<Int> = _horizonVersion.asStateFlow()
+    fun horizonChanged() { _horizonVersion.value++ }
+
+    /**
+     * The painter saved frame [frameIndex]'s reference. With [applyToNearby] the daemon marks the frames that interpolate from
+     * it, and if there is anything to redo this asks the user whether to do it now.
+     */
+    fun horizonReferenceSaved(frameIndex: Int, applyToNearby: Boolean) {
+        scope.launch {
+            val answer = runCatching { horizon.referenceUpdated(sessionId, frameIndex, applyToNearby) }
+                .onFailure { reportFailure(it) }.getOrNull()
+            refreshRefinementStatus()
+            horizonChanged()
+            if (answer != null && (answer.affectedFrameCount > 0 || answer.renderCount > 0)) {
+                _refinementPrompt.value = RefinementPrompt(answer.affectedFrameCount, answer.renderCount)
+            }
+        }
+    }
+
+    /** "Later": the work stays pending, minus the renders and masks the old horizon went into. */
+    fun deferHorizonRefinement() {
+        _refinementPrompt.value = null
+        scope.launch {
+            runCatching { horizon.deferRefinement(sessionId) }.onFailure { reportFailure(it) }
+            refreshRefinementStatus()
+            horizonChanged()
+        }
+    }
+
+    /** "Now" / "Re-run Horizon Refinement": queue the pending work as a run, with the processing modal as for any run. */
+    fun runHorizonRefinement() {
+        _refinementPrompt.value = null
+        startProcessingRun {
+            runCatching { processing.startClaimedRun { horizon.runRefinement(sessionId) } }.onFailure { reportFailure(it) }
+            refreshRefinementStatus()
+            horizonChanged()
+        }
+    }
+
+    private suspend fun refreshRefinementStatus() {
+        _refinementPending.value = horizon.refinementPending(sessionId)
+    }
+
+    // ---- decision tree (macOS classifyOnlyUnclassified / minimumClassificationSize) ----
+
+    /**
+     * When on (the default), the decision tree only decides groups nobody has decided about, and leaves the
+     * user's own keeps and removes alone; off, it reclassifies everything.
+     */
+    private val _classifyOnlyUnclassified = MutableStateFlow(true)
+    val classifyOnlyUnclassified: StateFlow<Boolean> = _classifyOnlyUnclassified.asStateFlow()
+    fun setClassifyOnlyUnclassified(only: Boolean) { _classifyOnlyUnclassified.value = only }
+
+    /** Run the decision tree over the current frame's outliers, then render it (macOS "Decision Tree All", `d`; "DT Auto Only"). */
+    fun applyDecisionTreeToCurrentFrame(autoOnly: Boolean = false) {
+        if (!currentFrameUsesOutliers()) return
+        currentFrameVM().applyDecisionTree(
+            overwrite = !_classifyOnlyUnclassified.value,
+            autoOnly = autoOnly,
+            minimumSize = MINIMUM_CLASSIFICATION_SIZE,
+            includingTrash = _showTrash.value,
+        )
+    }
+
+    /** Run the decision tree across every frame, with the same settings as for one. */
     fun applyDecisionTreeAll() = scope.launch {
-        runCatching { outliers.applyDecisionTreeAllFrames(sessionId, overwrite = true) }
-            .onSuccess { frameVMFor(_currentIndex.value).load(force = true) }
+        runCatching {
+            outliers.applyDecisionTreeAllFrames(sessionId, overwrite = !_classifyOnlyUnclassified.value, minimumSize = MINIMUM_CLASSIFICATION_SIZE)
+        }
+            .onSuccess { framesChanged(it.framesList) }
+            .onFailure { reportFailure(it) { localized("ui.decision_tree_render_failed", it.message ?: it) } }
     }
 
     /** Granular reprocess (grid context menu) of the selected frames, or the current frame if none. */
-    fun reprocessSelected(type: com.star.proto.ReprocessingType) = scope.launch {
+    fun reprocessSelected(type: com.star.proto.ReprocessingType) {
         val indices = (_selected.value.takeIf { it.isNotEmpty() } ?: setOf(_currentIndex.value)).sorted()
-        runCatching { processing.reprocessFrames(sessionId, indices, type) }
+        // Like every run, this shows the processing screen again (macOS startProcessingModal).
+        startProcessingRun {
+            runCatching { processing.reprocessFrames(sessionId, indices, type) }
+                .onFailure { reportFailure(it) }
+        }
     }
 
-    /** Per-cell grid horizon overlay (kind + per-column Y), or null if none. */
-    suspend fun gridHorizonOverlay(index: Int, width: Int, height: Int) =
+    /**
+     * Save a reference horizon for [frameIndex] without anyone waiting for it: the painter closing keeps what was painted,
+     * and the painter's own coroutines are gone by then. A failure is only logged (macOS `try?`).
+     */
+    fun saveHorizonReferenceInBackground(frameIndex: Int, horizonY: List<Int>, width: Int, height: Int) {
+        if (horizonY.none { it >= 0 }) return
+        scope.launch {
+            runCatching { horizon.setReference(sessionId, frameIndex, horizonY, width, height, setStaticReference = false) }
+                .onFailure { Log.w("Horizon") { "saving the reference horizon of frame $frameIndex on close failed: ${it.message}" } }
+        }
+    }
+
+    /** A frame's horizon overlay (kind, per-column Y, whether it is pending refinement) computed at [width] columns, or null if none. */
+    suspend fun horizonOverlay(index: Int, width: Int, height: Int) =
         horizon.getOverlay(sessionId, index, width, height)
 
     /**
-     * The view modes that actually have a preview on disk for [index] (no fallback) — drives the
-     * edit-mode "Show:" picker so only modes that exist for the shown frame appear. Mirrors macOS
-     * `FrameViewModel.hasImage(type:)`: `.original` is always present, the rest appear as processing
-     * writes them.
+     * The view modes that have an image on disk for [index], from the daemon's own list: drives the left panel's "Show" list and
+     * greys out the pills of a mode the frame does not have (macOS `FrameViewModel.hasImage(type:)`). The original is always there;
+     * the rest appear as processing writes them. Asking for a preview of each to find out would generate the ones that were missing.
      */
-    suspend fun availableViewModes(index: Int): List<FrameViewMode> {
-        val candidates = listOf(
-            FrameViewMode.VIEW_ORIGINAL,
-            FrameViewMode.VIEW_PROCESSED,
-            FrameViewMode.VIEW_SUBTRACTION,
-            FrameViewMode.VIEW_VALIDATION,
-        )
-        return candidates.filter { runCatching { frames.previewPath(sessionId, index, it) }.getOrNull() != null }
-    }
+    suspend fun availableViewModes(index: Int): List<FrameViewMode> =
+        runCatching { frames.info(sessionId, index).availableModesList }.getOrNull()?.ifEmpty { null } ?: listOf(FrameViewMode.VIEW_ORIGINAL)
 
     // ---- multi-frame outlier sheets (macOS MultiChoice / MultiSelect) ----
     data class MultiChoiceTarget(val frameIndex: Int, val groupId: Int, val currentlyRemoves: Boolean)
@@ -336,21 +822,23 @@ class SequenceViewModel(
         val t = _multiChoice.value ?: return@launch
         val (s, e) = range.indices(_currentIndex.value, frameCount, n)
         runCatching { outliers.setDecisionsOverlapping(sessionId, s, e, shouldRemove, t.frameIndex, t.groupId) }
+            .onSuccess { framesChanged(it.framesList) }
+            .onFailure { reportFailure(it) }
         dismissMultiSheets()
-        frameVMFor(_currentIndex.value).load(force = true)
     }
 
     /** Apply a keep/remove to outliers in the drag rectangle across [range] (multi-select sheet). */
-    fun applyMultiSelect(shouldRemove: Boolean, overlapping: Boolean, range: MultiFrameRange, n: Int) = scope.launch {
+    fun applyMultiSelect(shouldRemove: Boolean, overlapping: Boolean, range: MultiFrameRange, n: Int, includingTrash: Boolean = _showTrash.value) = scope.launch {
         val sel = _multiSelect.value ?: return@launch
         val (s, e) = range.indices(_currentIndex.value, frameCount, n)
-        runCatching { outliers.setDecisionsInArea(sessionId, s, e, shouldRemove, sel.startX, sel.startY, sel.endX, sel.endY, overlapping) }
+        runCatching { outliers.setDecisionsInArea(sessionId, s, e, shouldRemove, sel.startX, sel.startY, sel.endX, sel.endY, overlapping, includingTrash) }
+            .onSuccess { framesChanged(it.framesList) }
+            .onFailure { reportFailure(it) }
         dismissMultiSheets()
-        frameVMFor(_currentIndex.value).load(force = true)
     }
 
     // ---- render ----
-    /** Paint the current frame with its decisions (`Outlier.RenderFrame`) and show the result. */
+    /** Write the current frame's finished image from its decisions (`Outlier.RenderFrame`) and show it again. */
     fun renderCurrentFrame() = scope.launch {
         if (_rendering.value || isProcessing.value) return@launch
         val idx = _currentIndex.value
@@ -358,29 +846,26 @@ class SequenceViewModel(
         _renderProgress.value = null // indeterminate: a single frame
         try {
             val ref = outliers.renderFrame(sessionId, idx)
-            imageCache.invalidate(ref.path) // daemon overwrites the same path — drop the stale bitmap
-            val bmp = imageCache.load(ref.path)
-            if (_currentIndex.value == idx && bmp != null) {
-                _currentPreview.value = bmp
-                _previewAvailable.value = true
-            }
+            // The daemon rewrote the frame's final image in place, so the bitmap cached for that path is
+            // stale; show the frame again in whatever view is selected (the processed view reads it).
+            imageCache.invalidate(ref.path)
+            loadPreview(idx, _viewMode.value)
         } catch (e: Throwable) {
             Log.w("Sequence") { "render current frame failed: ${e.message}" }
+            reportFailure(e) { localized("ui.render_failed", e.message ?: e) }
         } finally {
             _rendering.value = false
         }
     }
 
     /**
-     * Render every frame's final output (`Export.RenderSequence`). The daemon shares one progress slot
-     * per session with the processing stream, so we drop that subscription for the duration and restore
-     * it afterward (mirrors the Render Video dialog).
+     * Render every frame's final output (`Export.RenderSequence`). The render stream is its own
+     * subscriber on the daemon, so the long-lived progress subscription keeps running throughout.
      */
     fun renderAllFrames() = scope.launch {
         if (_rendering.value || isProcessing.value) return@launch
         _rendering.value = true
         _renderProgress.value = 0f
-        processing.stop() // free the shared progress slot
         try {
             export.renderSequence(sessionId).collect { ev ->
                 if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) {
@@ -392,10 +877,10 @@ class SequenceViewModel(
             loadPreview(_currentIndex.value, _viewMode.value)
         } catch (e: Throwable) {
             Log.w("Sequence") { "render all frames failed: ${e.message}" }
+            reportFailure(e) { localized("ui.render_failed", e.message ?: e) }
         } finally {
             _renderProgress.value = null
             _rendering.value = false
-            processing.subscribe(sessionId) // restore live progress
         }
     }
 
@@ -406,14 +891,15 @@ class SequenceViewModel(
     fun fastPrevious() = fastSkip(forward = false)
 
     /**
-     * Fast-skip per the active [FastAdvancementType]: NORMAL jumps [FAST_SKIP_AMOUNT] frames;
+     * Fast-skip per the active [FastAdvancementType]: NORMAL jumps [fastSkipAmount] frames;
      * the category modes scan frame-by-frame (via `Frame.Get` counts) to the next non-empty frame,
      * stopping at the sequence boundary (macOS `transition(until:)`).
      */
     private fun fastSkip(forward: Boolean) {
         val mode = _fastAdvancement.value
         if (mode == FastAdvancementType.NORMAL) {
-            setCurrentIndex(_currentIndex.value + if (forward) FAST_SKIP_AMOUNT else -FAST_SKIP_AMOUNT)
+            val amount = _fastSkipAmount.value
+            stepBy(if (forward) amount else -amount)
             return
         }
         scope.launch {
@@ -421,8 +907,14 @@ class SequenceViewModel(
             while (true) {
                 val next = i + if (forward) 1 else -1
                 if (next < 0 || next >= frameCount) { if (i != _currentIndex.value) setCurrentIndex(i); break }
-                val c = runCatching { frames.info(sessionId, next) }.getOrNull()
-                val skip = c != null && when (mode) {
+                var c = runCatching { frames.info(sessionId, next) }.getOrNull()
+                if (c != null && !c.outliersLoaded) {
+                    // The counts of a frame whose outliers are still on disk are not "none", they are unknown:
+                    // load them (listing does) rather than skip a frame that may have what is being looked for.
+                    outliers.list(sessionId, next)
+                    c = runCatching { frames.info(sessionId, next) }.getOrNull()
+                }
+                val skip = c != null && c.outliersLoaded && when (mode) {
                     FastAdvancementType.SKIP_EMPTIES ->
                         (c.numPositiveOutliers + c.numNegativeOutliers + c.numUndecidedOutliers) == 0
                     FastAdvancementType.TO_NEXT_POSITIVE -> c.numPositiveOutliers == 0
@@ -439,41 +931,66 @@ class SequenceViewModel(
     fun setPlaybackFps(fps: Int) { _playbackFps.value = fps.coerceIn(1, 90) }
 
     fun togglePlayback() = if (_isPlaying.value) stopPlayback() else startPlayback()
+
+    /** Play forward, or stop (macOS play button: it sets the direction to forward, then toggles). Space does this. */
     fun playForward() { _playMode.value = VideoPlayMode.FORWARD; togglePlayback() }
     fun playReverse() { _playMode.value = VideoPlayMode.REVERSE; togglePlayback() }
+
+    /** Play from where it is going forward, and do nothing if already playing: never stops it (macOS `playFinalFrames`). */
+    fun startPlaybackForward() {
+        _playMode.value = VideoPlayMode.FORWARD
+        startPlayback()
+    }
+
+    /** The mode to go back to when playback stops (macOS `previousInteractionMode`). */
+    private var modeBeforePlayback: InteractionMode? = null
 
     fun startPlayback() {
         if (_isPlaying.value || frameCount <= 1) return
         _isPlaying.value = true
-        _mode.value = InteractionMode.SCRUB // macOS forces scrub + black bg while playing
-        val step = if (_playMode.value == VideoPlayMode.REVERSE) -1 else 1
+        // Editing is not possible while playing: macOS forces scrub (and a black background), and puts the
+        // mode back when it stops.
+        modeBeforePlayback = _mode.value
+        _mode.value = InteractionMode.SCRUB
+        prefetchAhead(_currentIndex.value, playbackStep(), PLAYBACK_LOOKAHEAD + 1)
         playbackJob = scope.launch {
             while (isActive && _isPlaying.value) {
-                val frameDelay = (1000L / _playbackFps.value).coerceAtLeast(11L)
-                delay(frameDelay)
-                val next = _currentIndex.value + step
+                val started = System.nanoTime()
+                val next = _currentIndex.value + playbackStep()
                 if (next < 0 || next >= frameCount) {        // stop at the boundary; no wrap
                     setCurrentIndex(if (next < 0) 0 else frameCount - 1)
-                    _isPlaying.value = false
+                    stopPlayback()
                     break
                 }
                 setCurrentIndex(next)
-                prefetchAround(next, step)
+                prefetchAhead(next + playbackStep() * (PLAYBACK_LOOKAHEAD - 1), playbackStep(), 1)
+                // Sleep what is left of the frame, not the whole of it: loading and showing the frame took time
+                // too, and a fixed sleep on top of that plays slower than the rate asked for.
+                val spentMs = (System.nanoTime() - started) / 1_000_000
+                delay(frameDelayMs(_playbackFps.value, spentMs))
             }
         }
     }
+
+    private fun playbackStep(): Int = if (_playMode.value == VideoPlayMode.REVERSE) -1 else 1
 
     fun stopPlayback() {
         _isPlaying.value = false
         playbackJob?.cancel()
         playbackJob = null
+        // Back to what it was before playing, e.g. editing.
+        modeBeforePlayback?.let { _mode.value = it }
+        modeBeforePlayback = null
     }
 
     /** Preview path for [index] in [mode], falling back through the other view modes. Null if none exist. */
-    suspend fun previewRefPath(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL): String? {
+    suspend fun previewRefPath(
+        index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL,
+        size: com.star.proto.PreviewSize = com.star.proto.PreviewSize.PREVIEW_SIZE_PREVIEW,
+    ): String? {
         val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
         for (m in order) {
-            frames.previewPath(sessionId, index, m)?.let {
+            frames.previewPath(sessionId, index, m, size)?.let {
                 Log.d("Sequence") { "previewRefPath(frame=$index): resolved via $m -> ${it.path}" }
                 return it.path
             }
@@ -482,24 +999,30 @@ class SequenceViewModel(
         return null
     }
 
-    suspend fun loadThumb(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL): ImageBitmap? =
-        previewRefPath(index, mode)?.let { imageCache.load(it) }
+    /**
+     * A small picture of frame [index]; the daemon's thumbnail size when [thumbnail] (the filmstrip's cells are about a hundred pixels
+     * wide, and a full preview of each is many times the bytes), else the preview.
+     */
+    suspend fun loadThumb(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL, thumbnail: Boolean = false): ImageBitmap? =
+        previewRefPath(index, mode, if (thumbnail) com.star.proto.PreviewSize.PREVIEW_SIZE_THUMBNAIL else com.star.proto.PreviewSize.PREVIEW_SIZE_PREVIEW)
+            ?.let { imageCache.load(it, index) }
 
     /** Per-frame status/counts/clean-method for the grid header & right panel (`Frame.Get`). */
     suspend fun frameInfo(index: Int): com.star.proto.FrameInfo? =
         runCatching { frames.info(sessionId, index) }.getOrNull()
 
+    /** End this session's UI: stop playback and the progress subscription, and cancel every coroutine it launched. */
     fun close() {
         stopPlayback()
         processing.stop()
+        scope.cancel()
     }
 
     private suspend fun loadPreview(index: Int, mode: FrameViewMode) {
         previewJob?.cancel()
         previewJob = scope.launch {
-            // Try the requested mode, then fall back through the others — which preview types the
-            // daemon actually wrote depends on the clean method (e.g. selective writes a subtraction
-            // preview but no auto-processed/original preview), so we show whatever exists.
+            // Try the requested mode, then fall back through the others (PREVIEW_FALLBACK), so we
+            // show whatever exists: a frame that is not processed yet shows its original.
             val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
             var ref: com.star.proto.ImageRef? = null
             var resolvedMode: FrameViewMode? = null
@@ -513,7 +1036,7 @@ class SequenceViewModel(
                 _currentPreview.value = null
                 return@launch
             }
-            val bmp = imageCache.load(ref.path)
+            val bmp = imageCache.load(ref.path, index)
             Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): using $resolvedMode -> ${ref.path} (decoded=${bmp != null})" }
             if (_currentIndex.value == index) {
                 _currentPreview.value = bmp
@@ -522,24 +1045,59 @@ class SequenceViewModel(
         }
     }
 
-    private companion object {
-        const val FAST_SKIP_AMOUNT = 20 // macOS fastSkipAmount
+    companion object {
+        /** Outlier groups smaller than this (pixels) are left to the trash threshold, not classified (macOS `minimumClassificationSize`). */
+        const val MINIMUM_CLASSIFICATION_SIZE = 20
 
-        val PREVIEW_FALLBACK = listOf(
+        /** Where the outlier table's chosen columns are kept in the user preferences. */
+        private const val OUTLIER_COLUMNS_KEY = "outlierTableColumns"
+
+        /** The view counts as zoomed in once it is this much past fit. */
+        private const val ZOOMED_IN = 1.01f
+
+        /** The outlier arrows are `width / this` long (macOS `outlierArrowLength`); the view keeps room for them around the frame. */
+        const val ARROW_LENGTH_DIVISOR = 70f
+
+        /** ...and `width / this` across (macOS `outlierArrowHeight`). */
+        const val ARROW_HEIGHT_DIVISOR = 180f
+
+        /** How many frames either side of the current one keep their hit-testing label map. */
+        const val LABEL_RETENTION = 2
+
+
+        /** How many frames ahead of the one showing playback keeps loaded (macOS `videoPrefetchLookahead`). */
+        const val PLAYBACK_LOOKAHEAD = 30
+
+        /**
+         * What to show when the wanted mode has no preview yet. The original comes before the debug
+         * images: a frame that is not finished shows its own picture, never its subtraction.
+         */
+        private val PREVIEW_FALLBACK = listOf(
             FrameViewMode.VIEW_PROCESSED,
-            FrameViewMode.VIEW_SUBTRACTION,
             FrameViewMode.VIEW_ORIGINAL,
+            FrameViewMode.VIEW_SUBTRACTION,
             FrameViewMode.VIEW_VALIDATION,
         )
     }
 
-    /** Prefetch the next few frames in the play [direction] (+1 forward, -1 reverse). */
-    private fun prefetchAround(index: Int, direction: Int = 1) {
+    /**
+     * Load [count] frames' pictures into the cache, starting at [from] and moving in [direction] (+1 forward, -1
+     * reverse), in the view that is showing, so that playback finds them there instead of waiting on the disk.
+     */
+    private fun prefetchAhead(from: Int, direction: Int, count: Int) {
+        val mode = _viewMode.value
         scope.launch {
-            for (n in 1..3) {
-                val i = index + direction * n
-                if (i in 0 until frameCount) previewRefPath(i)?.let { imageCache.load(it) }
+            for (n in 0 until count) {
+                val i = from + direction * n
+                if (i in 0 until frameCount) previewRefPath(i, mode)?.let { imageCache.load(it, i) }
             }
         }
     }
 }
+
+/**
+ * How long to wait before the next frame of a playback at [fps], given that [spentMs] of the frame's time is already
+ * gone (macOS sleeps `interval - elapsed`); never negative, so a frame that was slower than its slot is followed at
+ * once by the next.
+ */
+internal fun frameDelayMs(fps: Int, spentMs: Long): Long = ((1000L / fps.coerceAtLeast(1)) - spentMs).coerceAtLeast(0L)

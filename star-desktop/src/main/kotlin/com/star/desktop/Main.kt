@@ -57,10 +57,13 @@ private fun runApp(args: Array<String>) = application {
     val screen by vm.screen.collectAsState()
     val svm = (screen as? com.star.desktop.ui.app.AppScreen.Sequence)?.vm
     if (showOutlier && svm != null) {
+        // "Outliers for frame N", for the frame the table lists (0-based, like everywhere else in the app).
+        val listed by svm.infoRows.collectAsState()
+        val looking by svm.currentIndex.collectAsState()
         Window(
             onCloseRequest = vm::closeOutlierWindow,
-            title = localized("ui.outliers"),
-            state = rememberWindowState(size = DpSize(560.dp, 480.dp)),
+            title = localized("ui.outliers_for_frame", listed?.frameIndex ?: looking),
+            state = rememberWindowState(size = DpSize(960.dp, 720.dp)),
         ) {
             com.star.desktop.ui.theme.StarTheme {
                 com.star.desktop.ui.windows.OutlierWindowView(svm)

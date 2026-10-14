@@ -5,6 +5,13 @@ import SwiftProtobuf
 import logging
 
 enum ProcessingHandlers {
+    /// The frame range a `StartProcessingRequest` asks for.  A negative `end` (the clients send
+    /// -1) means "to the end of the sequence", which is `nil`.  0 is the first frame: a request
+    /// for just frame 0 is start=end=0, and must not turn into the whole sequence.
+    static func frameRange(start: Int32, end: Int32) -> (start: Int, end: Int?) {
+        (start > 0 ? Int(start) : 0, end >= 0 ? Int(end) : nil)
+    }
+
     static func start(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_StartProcessingRequest(serializedBytes: payload)
@@ -12,8 +19,7 @@ enum ProcessingHandlers {
                 await transport.sendError(id: id, message: "session not found", code: 404)
                 return
             }
-            let startIdx = req.startIndex > 0 ? Int(req.startIndex) : 0
-            let endIdx: Int? = req.endIndex > 0 ? Int(req.endIndex) : nil
+            let (startIdx, endIdx) = frameRange(start: req.startIndex, end: req.endIndex)
             if req.force {
                 await session.forceReprocess(startIndex: startIdx, endIndex: endIdx)
             } else {
@@ -34,9 +40,11 @@ enum ProcessingHandlers {
                 return
             }
 
-            // Wire up the session's progress continuation to this stream.
+            // Subscribe this stream, then tell it where every frame already is: the events from
+            // building the frames were sent before there was anybody to hear them.
             let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
-            await session.setProgressContinuation(cont)
+            let token = await session.addProgressSubscriber(cont)
+            await session.seedFrameStates(to: cont)
 
             // Stream items to the client until the session finishes or this task is cancelled.
             do {
@@ -50,7 +58,7 @@ enum ProcessingHandlers {
                 // task was cancelled via CANCEL envelope
             }
             await transport.sendStreamEnd(id: id)
-            await session.setProgressContinuation(nil)
+            await session.removeProgressSubscriber(token)
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

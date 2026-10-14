@@ -343,16 +343,19 @@ final class DispatcherTests: XCTestCase {
           "Session.OpenSequence", "Session.OpenConfig", "Session.OpenVideo",
           "Session.Close", "Session.List",
           "Sequence.GetConfig", "Sequence.UpdateConfig",
-          "Frame.Get", "Frame.GetPreview", "Frame.GetOutlierLabelImage", "Frame.SetCleanMethod",
+          "Frame.Get", "Frame.GetPreview", "Frame.GetOutlierLabelImage", "Frame.GetOutlierTrashImage", "Frame.SetCleanMethod", "Frame.SetNeighborOverride",
           "Outlier.List", "Outlier.SetDecisions", "Outlier.RenderFrame",
           "Outlier.ApplyDecisionTree", "Outlier.ApplyDecisionTreeAllFrames",
-          "Outlier.SetDecisionsInArea", "Outlier.SetDecisionsOverlapping", "Outlier.ApplyAreaTool",
+          "Outlier.SetDecisionsInArea", "Outlier.SetDecisionsOverlapping", "Outlier.ApplyAreaTool", "Outlier.SetAll", "Outlier.GetFeatures",
+          "Outlier.GetLineCandidates", "Outlier.SetLine", "Debug.GetHoughLineFinderArgs", "Debug.SetHoughLineFinderArgs",
           "Processing.Start", "Processing.StreamProgress", "Processing.Cancel",
           "Processing.ReprocessFrames",
           "Export.RenderSequence", "Export.Video", "Export.GetVideoCapabilities",
           "Alignment.Get", "Alignment.GetSequence",
           "Horizon.SetReference", "Horizon.GetReference", "Horizon.ClearReference",
           "Horizon.Reprocess", "Horizon.GetOverlay", "Horizon.ComputeInBand", "Horizon.GetBest",
+          "Horizon.ReferenceUpdated", "Horizon.DeferRefinement", "Horizon.RunRefinement",
+          "Horizon.GetRefinementStatus", "Horizon.GetTunedParameters", "Horizon.SetTunedParameters",
         ]
         let actual = Set(try registerAllMethodNames())
 

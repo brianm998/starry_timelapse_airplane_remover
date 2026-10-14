@@ -115,6 +115,11 @@ enum SessionHandlers {
     static func close(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_CloseSessionRequest(serializedBytes: payload)
+            // Stop and drain the session before it is dropped: its run must not outlive it.  An
+            // unknown id is a close of something already closed, and harmless.
+            if let session = await sessions.get(id: req.sessionID) {
+                await session.close()
+            }
             await sessions.remove(id: req.sessionID)
             try await transport.respond(id: id, payload: Star_V1_CloseSessionResponse().serializedData())
         } catch {

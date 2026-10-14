@@ -35,23 +35,30 @@ import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.desktop.i18n.localized
 
-/** An action a sheet can apply: keep/remove, optionally to outliers *overlapping* those in the area. */
-private data class MultiAction(val label: String, val shouldRemove: Boolean, val overlapping: Boolean, val accent: Color)
+/**
+ * An action a sheet can apply: keep/remove, optionally to outliers *overlapping* those in the area. [summaryPrefix] is the catalogue
+ * entry the sentence saying what it will do to which frames is built from (`ui.overlap.paint`, `ui.area.keep_overlaps`, …).
+ */
+private data class MultiAction(
+    val label: String, val shouldRemove: Boolean, val overlapping: Boolean, val accent: Color, val summaryPrefix: String,
+)
 
 /** Multi-choice sheet (macOS `MultiChoiceSheetView`): propagate a decision to overlapping outliers. */
 @Composable
 fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoiceTarget) {
     val actions = listOf(
-        MultiAction("Remove", true, false, StarColors.red),
-        MultiAction("Keep", false, false, StarColors.green),
+        MultiAction(localized("multi_paint.remove"), true, false, StarColors.red, "ui.overlap.paint"),
+        MultiAction(localized("multi_paint.keep"), false, false, StarColors.green, "ui.overlap.clear"),
     )
     MultiFrameSheet(
         title = localized("ui.change_overlapping_outliers_in_other_frames"),
         actions = actions,
         defaultIndex = if (target.currentlyRemoves) 1 else 0,   // pre-select the opposite of the clicked group
-        actionButtonLabel = { it.label },
+        current = vm.currentIndex.value,
+        frameCount = vm.frameCount,
+        actionButtonLabel = { localized(if (it.shouldRemove) "ui.remove" else "ui.keep") },
         onCancel = vm::dismissMultiSheets,
-        onApply = { a, range, n -> vm.applyMultiChoice(a.shouldRemove, range, n) },
+        onApply = { a, range, n, _ -> vm.applyMultiChoice(a.shouldRemove, range, n) },
     )
 }
 
@@ -59,18 +66,21 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
 @Composable
 fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: SequenceViewModel.RectSelection) {
     val actions = listOf(
-        MultiAction("Remove", true, false, StarColors.red),
-        MultiAction("Keep", false, false, StarColors.green),
-        MultiAction("Remove overlapping", true, true, StarColors.red),
-        MultiAction("Keep overlapping", false, true, StarColors.green),
+        MultiAction(localized("multi_removal.remove"), true, false, StarColors.red, "ui.area.remove"),
+        MultiAction(localized("multi_removal.keep"), false, false, StarColors.green, "ui.area.keep"),
+        MultiAction(localized("multi_removal.removeOverlaps"), true, true, StarColors.red, "ui.area.remove_overlaps"),
+        MultiAction(localized("multi_removal.keepOverlaps"), false, true, StarColors.green, "ui.area.keep_overlaps"),
     )
     MultiFrameSheet(
         title = localized("ui.change_outliers_in_the_selected_area_across"),
         actions = actions,
         defaultIndex = 0,
-        actionButtonLabel = { "Modify" },
+        current = vm.currentIndex.value,
+        frameCount = vm.frameCount,
+        actionButtonLabel = { localized("ui.modify") },
         onCancel = vm::dismissMultiSheets,
-        onApply = { a, range, n -> vm.applyMultiSelect(a.shouldRemove, a.overlapping, range, n) },
+        onApply = { a, range, n, includingTrash -> vm.applyMultiSelect(a.shouldRemove, a.overlapping, range, n, includingTrash) },
+        trashInitially = vm.showTrash.value,
     )
 }
 
@@ -80,13 +90,19 @@ private fun MultiFrameSheet(
     title: String,
     actions: List<MultiAction>,
     defaultIndex: Int,
+    /** The frame being looked at, and how many there are: the sentence under the choices counts the frames each one reaches. */
+    current: Int,
+    frameCount: Int,
     actionButtonLabel: (MultiAction) -> String,
     onCancel: () -> Unit,
-    onApply: (MultiAction, MultiFrameRange, Int) -> Unit,
+    onApply: (MultiAction, MultiFrameRange, Int, Boolean) -> Unit,
+    /** null: no trash option (the multi-choice sheet acts on a chosen group); else whether it starts on, which is whether the trash is showing. */
+    trashInitially: Boolean? = null,
 ) {
     var actionIdx by remember { mutableStateOf(defaultIndex.coerceIn(0, actions.size - 1)) }
     var range by remember { mutableStateOf(MultiFrameRange.ALL) }
     var nText by remember { mutableStateOf("5") }
+    var includingTrash by remember { mutableStateOf(trashInitially ?: false) }
     val action = actions[actionIdx]
 
     Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = onCancel), contentAlignment = Alignment.Center) {
@@ -109,6 +125,10 @@ private fun MultiFrameSheet(
             MultiFrameRange.entries.forEach { r ->
                 RadioRow(r.label, selected = r == range) { range = r }
             }
+            // What the action will do, in words (macOS shows this under the choices; a count the user types has no sentence).
+            range.summary(action.summaryPrefix, current, frameCount)?.let {
+                Text(it, color = StarColors.textSecondary, fontSize = 12.sp)
+            }
             if (range.needsCount) {
                 OutlinedTextField(
                     value = nText,
@@ -118,10 +138,16 @@ private fun MultiFrameSheet(
                     modifier = Modifier.width(180.dp),
                 )
             }
+            if (trashInitially != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.Switch(checked = includingTrash, onCheckedChange = { includingTrash = it })
+                    Text(localized("ui.trash"), color = StarColors.textPrimary, fontSize = 12.sp)
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
                 Button(
-                    onClick = { onApply(action, range, nText.toIntOrNull() ?: 5) },
+                    onClick = { onApply(action, range, nText.toIntOrNull() ?: 5, includingTrash) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                 ) { Text(actionButtonLabel(action)) }
             }

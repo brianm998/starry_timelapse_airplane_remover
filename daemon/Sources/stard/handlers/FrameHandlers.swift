@@ -16,7 +16,7 @@ enum FrameHandlers {
                 await transport.sendError(id: id, message: "frame index out of range", code: 404); return
             }
             let groups = await frame.getOutlierGroups()
-            let fi = await Mapping.frameInfo(frame: frame, outlierGroups: groups)
+            let fi = await session.frameInfo(frame, outlierGroups: groups)
             try await transport.respond(id: id, payload: fi.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
@@ -36,42 +36,27 @@ enum FrameHandlers {
             let frameIdx = Int(req.frameIndex)
             let starViewMode = Mapping.frameViewMode(from: req.viewMode)
 
-            guard let previewPath = frame.imageAccessor.nameForImage(
-                frameIndex: frameIdx,
-                ofType: starViewMode,
-                atSize: .preview
-            ) else {
-                await transport.sendError(id: id, message: "no preview path for frame \(frameIdx) mode \(starViewMode)"); return
+            // Generated on demand, like the macOS GUI, which never pre-generates previews on open
+            // (it makes them via PreviewOp / ImageAccessor.makeMissingImage as views appear): a
+            // freshly opened sequence has none on disk, and without this every Frame.GetPreview
+            // would fail and the Kotlin client would show blank frames forever.  For .original this
+            // always succeeds (the source frame exists); for processed/aligned types it only
+            // succeeds once processing has written that full-resolution image.
+            let ref: Star_V1_ImageRef?
+            switch req.size {
+            case .original:
+                ref = await PreviewFiles.fullSizeRef(for: frame, mode: starViewMode,
+                                                     directory: "\(await session.scratchSessionDir)/fullres")
+            case .thumbnail:
+                ref = await PreviewFiles.ref(for: frame, mode: starViewMode, size: .thumbnail)
+            default:
+                ref = await PreviewFiles.ref(for: frame, mode: starViewMode)
             }
-
-            // Lazily generate the preview JPEG if it doesn't exist yet, by downscaling the
-            // full-resolution image of this type. This mirrors the macOS GUI, which never
-            // pre-generates previews on open — it creates them on demand via PreviewOp /
-            // ImageAccessor.makeMissingImage as views appear. Without this, a freshly opened
-            // sequence (Session.OpenSequence) has no previews on disk and every Frame.GetPreview
-            // fails, so the Kotlin client shows blank frames + "loading…" thumbnails forever.
-            // For .original this always succeeds (the source frame exists); for processed/aligned
-            // types it only succeeds once processing has written that full-res image.
-            if !FileManager.default.fileExists(atPath: previewPath) {
-                Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) preview missing at \(previewPath) — generating on demand")
-                _ = try? await frame.imageAccessor.makeMissingImage(
-                    frameIndex: frameIdx,
-                    ofType: starViewMode,
-                    andSize: .preview
-                )
+            guard let ref else {
+                Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) unavailable (not generated yet)")
+                await transport.sendError(id: id, message: "preview not yet generated: frame \(frameIdx) mode \(starViewMode)"); return
             }
-
-            guard FileManager.default.fileExists(atPath: previewPath) else {
-                Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) still unavailable at \(previewPath) (not generated yet)")
-                await transport.sendError(id: id, message: "preview not yet generated: \(previewPath)"); return
-            }
-            Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) serving \(previewPath)")
-
-            var ref = Star_V1_ImageRef()
-            ref.path = previewPath
-            ref.width = Int32(frame.width)
-            ref.height = Int32(frame.height)
-            ref.format = "jpg"
+            Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) serving \(ref.path)")
             try await transport.respond(id: id, payload: ref.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
@@ -142,6 +127,58 @@ enum FrameHandlers {
         }
     }
 
+    // Returns an 8-bit single-channel mask of the frame's trashed outlier groups (255 where a trashed pixel is, 0 elsewhere): the
+    // client draws it in yellow when the user is showing the trash.  One image rather than a view per group, since there can be
+    // thousands (macOS `FrameViewModel.computeTrashImage`).
+    static func getOutlierTrashImage(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_FrameRef(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            await ensureOutliersLoaded(frame)
+            guard await frame.getOutlierGroups() != nil else {
+                await transport.sendError(id: id, message: "outlier groups not yet loaded for frame \(req.frameIndex)"); return
+            }
+
+            let scratchDir = await session.scratchSessionDir
+            let trashDir = "\(scratchDir)/trash"
+            try FileManager.default.createDirectory(atPath: trashDir, withIntermediateDirectories: true)
+            let path = "\(trashDir)/frame_\(req.frameIndex)_trash.png"
+
+            let w = frame.width, h = frame.height
+            var buf = [UInt8](repeating: 0, count: w * h)
+            for group in await frame.outlierGroupTrashList() ?? [] {
+                let bb = group.bounds
+                let pixels = group.pixels
+                for py in max(0, bb.min.y)..<min(h, bb.max.y) {
+                    for px in max(0, bb.min.x)..<min(w, bb.max.x) {
+                        let lidx = (py - bb.min.y) * bb.width + (px - bb.min.x)
+                        guard lidx < pixels.count, pixels[lidx] > 0 else { continue }
+                        buf[py * w + px] = 255
+                    }
+                }
+            }
+            buf.withUnsafeMutableBytes { raw in
+                let mat = MatWrapper(width: w, height: h, cvType: 0 /* CV_8UC1 */, bytesPerRow: w,
+                                     data: raw.baseAddress!, takeOwnership: false)
+                mat.write(to: path)
+            }
+
+            var ref = Star_V1_ImageRef()
+            ref.path = path
+            ref.width = Int32(w)
+            ref.height = Int32(h)
+            ref.format = "png"
+            try await transport.respond(id: id, payload: ref.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     static func setCleanMethod(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_SetFrameCleanMethodRequest(serializedBytes: payload)
@@ -157,10 +194,45 @@ enum FrameHandlers {
             case .cleanAutomaticTrue: cm = .automatic(true)
             default:                  cm = .automatic(false)
             }
-            await frame.set(cleanMethod: cm)
+            await session.setCleanMethod(cm, of: frame)
             let groups = await frame.getOutlierGroups()
-            let fi = await Mapping.frameInfo(frame: frame, outlierGroups: groups)
+            let fi = await session.frameInfo(frame, outlierGroups: groups)
             try await transport.respond(id: id, payload: fi.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // A frame's own neighbour count: set, or taken away so the sequence's applies again.
+    static func setNeighborOverride(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SetNeighborOverrideRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            let kind: Session.NeighborKind
+            switch req.kind {
+            case .neighborAligned: kind = .aligned
+            case .neighborStatic:  kind = .static
+            default:
+                await transport.sendError(id: id, message: "unknown neighbour kind", code: 400); return
+            }
+            let count: Int?
+            switch req.change {
+            case .count(let n) where n >= 1:
+                count = Int(n)
+            case .clear(true):
+                count = nil
+            default:
+                await transport.sendError(id: id, message: "give a count of at least 1, or clear", code: 400); return
+            }
+            var resp = Star_V1_SetNeighborOverrideResponse()
+            resp.processingStarted = await session.setNeighborOverride(of: frame, kind: kind, count: count)
+            resp.frame = await session.frameInfo(frame, outlierGroups: await frame.getOutlierGroups())
+            try await transport.respond(id: id, payload: resp.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

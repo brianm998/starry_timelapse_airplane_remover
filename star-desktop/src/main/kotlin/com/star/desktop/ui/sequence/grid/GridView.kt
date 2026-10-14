@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameState
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.ui.sequence.SequenceViewModel
+import com.star.desktop.ui.components.drawHorizonLine
+import com.star.desktop.ui.components.horizonLineColor
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.FrameInfo
@@ -58,6 +60,8 @@ import com.star.proto.FrameViewMode
 import com.star.proto.GetHorizonOverlayResponse
 import com.star.proto.HorizonOverlayKind
 import com.star.proto.ReprocessingType
+import com.star.desktop.ui.sequence.frameCellClicks
+import com.star.desktop.ui.sequence.frameCellMenu
 
 /** Grid mode (macOS `GridView`): Lightroom-style thumbnail grid with per-cell status, sized by the scale slider. */
 @OptIn(ExperimentalFoundationApi::class)
@@ -68,12 +72,15 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val selected by vm.selected.collectAsState()
     val viewMode by vm.viewMode.collectAsState()
     val scale by vm.gridThumbnailScale.collectAsState()
-    val showHorizon by vm.showHorizonOnGrid.collectAsState()
+    val showHorizon by vm.showHorizonOnMainView.collectAsState()
+    val horizonVersion by vm.horizonVersion.collectAsState()
+    val revisions by vm.frameRevisions.collectAsState()
 
     val cellWidth = (vm.info.imageWidth * scale).coerceIn(70f, 1000f)
     val gridState = rememberLazyGridState()
-    LaunchedEffect(Unit) { gridState.scrollToItem(current.coerceAtLeast(0)) }
-    LaunchedEffect(current) { gridState.animateScrollToItem(current.coerceAtLeast(0)) }
+    // The current frame goes to the middle of the view, not the top edge (macOS scrolls to its anchor).
+    LaunchedEffect(Unit) { gridState.centerOn(current.coerceAtLeast(0), animate = false) }
+    LaunchedEffect(current) { gridState.centerOn(current.coerceAtLeast(0), animate = true) }
 
     LazyVerticalGrid(
         state = gridState,
@@ -89,9 +96,12 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 index = i,
                 isCurrent = i == current,
                 isInSelection = i != current && i in selected,
+                selectedCount = selected.size,
                 state = states[i],
                 viewMode = viewMode,
                 showHorizon = showHorizon,
+                revision = revisions[i] ?: 0,
+                horizonVersion = horizonVersion,
             )
         }
     }
@@ -104,33 +114,26 @@ private fun GridCell(
     index: Int,
     isCurrent: Boolean,
     isInSelection: Boolean,
+    selectedCount: Int,
     state: FrameProcessingState?,
     viewMode: FrameViewMode,
     showHorizon: Boolean,
+    /** Changes when a picture of this frame is saved, so the thumbnail is fetched again. */
+    revision: Int,
+    /** Changes when a horizon (or a frame's being pending refinement) may have changed, so the line is fetched again. */
+    horizonVersion: Int,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
     var overlay by remember(index) { mutableStateOf<GetHorizonOverlayResponse?>(null) }
-    LaunchedEffect(index, viewMode, state) { thumb = vm.loadThumb(index, viewMode) }
-    LaunchedEffect(index, state) { info = vm.frameInfo(index) }
-    LaunchedEffect(index, showHorizon, state) {
+    LaunchedEffect(index, viewMode, state, revision) { thumb = vm.loadThumb(index, viewMode) }
+    LaunchedEffect(index, state, horizonVersion) { info = vm.frameInfo(index) }
+    LaunchedEffect(index, showHorizon, state, horizonVersion) {
         overlay = if (showHorizon) {
             val h = (256f * vm.info.imageHeight / vm.info.imageWidth.coerceAtLeast(1)).toInt().coerceAtLeast(1)
-            vm.gridHorizonOverlay(index, 256, h)
+            vm.horizonOverlay(index, 256, h)
         } else null
     }
-    var mods by remember { mutableStateOf<PointerKeyboardModifiers?>(null) }
-
-    val reprocessItems = {
-        listOf(
-            ContextMenuItem("Process (new only)") { vm.reprocessSelected(ReprocessingType.REPROCESS_NONE) },
-            ContextMenuItem("Re-Process Alignment") { vm.reprocessSelected(ReprocessingType.REPROCESS_ALIGNMENT) },
-            ContextMenuItem("Re-Process Outliers") { vm.reprocessSelected(ReprocessingType.REPROCESS_OUTLIERS) },
-            ContextMenuItem("Re-Process Horizons") { vm.reprocessSelected(ReprocessingType.REPROCESS_HORIZONS) },
-            ContextMenuItem("Re-Process Everything") { vm.reprocessSelected(ReprocessingType.REPROCESS_EVERYTHING) },
-        )
-    }
-
     val bg = when {
         isCurrent -> StarColors.cellHighlighted
         isInSelection -> StarColors.cellSelected
@@ -143,24 +146,14 @@ private fun GridCell(
     }
     val aspect = if (vm.info.imageHeight > 0) vm.info.imageWidth.toFloat() / vm.info.imageHeight else 1.5f
 
-    ContextMenuArea(items = reprocessItems) {
+    // A menu about the selection, only on a cell that is in it, with how many frames it acts on.
+    ContextMenuArea(items = { frameCellMenu(vm, isCurrent || isInSelection, selectedCount) }) {
       Column(
         Modifier
             .clip(StarShapes.gridCell)
             .background(bg)
             .then(borderMod)
-            .onPointerEvent(PointerEventType.Press) { mods = it.keyboardModifiers }
-            .combinedClickable(
-                onClick = {
-                    val m = mods
-                    when {
-                        m?.isShiftPressed == true -> vm.select(index, range = true)
-                        m?.isCtrlPressed == true || m?.isMetaPressed == true -> vm.select(index, additive = true)
-                        else -> vm.select(index)
-                    }
-                },
-                onDoubleClick = { vm.setCurrentIndex(index); vm.select(index); vm.setMode(InteractionMode.EDIT) },
-            )
+            .frameCellClicks(vm, index, onDoubleClick = { vm.setCurrentIndex(index); vm.select(index); vm.setMode(InteractionMode.EDIT) })
             .padding(4.dp),
     ) {
         // Header: 0-based frame number · outlier dots · clean-method icon.
@@ -169,10 +162,13 @@ private fun GridCell(
             Box(Modifier.weight(1f))
             val fi = info
             if (fi != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (fi.numPositiveOutliers != 0) OutlierDot(StarColors.red)
-                    if (fi.numUndecidedOutliers != 0) OutlierDot(StarColors.orange)
-                    if (fi.numNegativeOutliers != 0) OutlierDot(StarColors.green)
+                // Only once the outliers are loaded: before that the counts are zeroes that mean nothing.
+                if (fi.outliersLoaded) {
+                    Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (fi.numPositiveOutliers != 0) OutlierDot(StarColors.red)
+                        if (fi.numUndecidedOutliers != 0) OutlierDot(StarColors.orange)
+                        if (fi.numNegativeOutliers != 0) OutlierDot(StarColors.green)
+                    }
                 }
                 Box(Modifier.padding(start = 3.dp)) { CleanMethodIcon(fi.cleanMethod, StarColors.white, 9.dp) }
             }
@@ -183,31 +179,20 @@ private fun GridCell(
             if (t != null) {
                 Image(bitmap = t, contentDescription = "Frame $index", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
-            // Per-cell horizon overlay (kind → color), scaled from the overlay's draw space.
+            // Per-cell horizon line (orange while pending, else by kind), scaled from the overlay's draw space.
             val ov = overlay
-            if (ov != null && ov.exists && ov.yPerColumnList.isNotEmpty()) {
-                val lineColor = when (ov.kind) {
-                    HorizonOverlayKind.HORIZON_OVERLAY_KIND_REFERENCE -> StarColors.green
-                    HorizonOverlayKind.HORIZON_OVERLAY_KIND_MERGED -> StarColors.blue
-                    else -> StarColors.white
-                }
+            if (ov != null && ov.exists) {
+                val lineColor = horizonLineColor(ov.kind, ov.refinementPending)
                 Canvas(Modifier.fillMaxSize()) {
-                    val ys = ov.yPerColumnList
-                    val sx = size.width / ys.size
-                    val sy = if (ov.height > 0) size.height / ov.height else 1f
-                    val path = Path()
-                    ys.forEachIndexed { i, y ->
-                        val px = i * sx
-                        val py = y * sy
-                        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
-                    }
-                    drawPath(path, color = lineColor, style = Stroke(width = 1.5.dp.toPx()))
+                    drawHorizonLine(ov, size.width, size.height, lineColor, 1.5.dp.toPx()) { it }
                 }
             }
             if (state != null) {
                 val s = FrameState.shortString(state)
                 if (s.isNotEmpty()) {
-                    Text(s, color = StarColors.green, fontSize = 10.sp, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+                    // In the state's own colour, orange while the frame waits for its horizon to be refined (macOS).
+                    val color = if (info?.refinementPending == true) StarColors.orange else StarColors.stateColor(state)
+                    Text(s, color = color, fontSize = 10.sp, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
                 }
             }
         }
@@ -219,4 +204,15 @@ private fun GridCell(
 @Composable
 private fun OutlierDot(color: Color) {
     Text("╱", color = color, fontSize = 9.sp)
+}
+
+/**
+ * Scroll so the item at [index] is in the middle of the view. It is brought into view first, since an item that is not laid out has no
+ * size to centre by; the second scroll then moves it down from the top edge by half of what is left.
+ */
+private suspend fun androidx.compose.foundation.lazy.grid.LazyGridState.centerOn(index: Int, animate: Boolean) {
+    scrollToItem(index)
+    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val offset = -((layoutInfo.viewportSize.height - item.size.height) / 2).coerceAtLeast(0)
+    if (animate) animateScrollToItem(index, offset) else scrollToItem(index, offset)
 }

@@ -238,6 +238,7 @@ final class ExportSequenceTests: ExportEndToEndTestCase {
 
         var start = Star_V1_StartProcessingRequest()
         start.sessionID = info.sessionID
+        start.endIndex = -1     // to the end of the sequence: an end_index of 0 is the first frame alone
         let _: Star_V1_StartProcessingResponse = try await daemon.call(method: "Processing.Start", request: start)
 
         // wait for every frame's image to be there, and to have stopped growing
