@@ -44,3 +44,6 @@ small_horizon_test_data
 /external_binaries/bin/
 /ffmpeg/.work/
 /ffmpeg/dist/
+
+# Out-of-repo test datasets fetched by test_data/fetch.sh (see test_data/README.md)
+/.test-data

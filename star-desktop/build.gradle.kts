@@ -525,6 +525,8 @@ tasks.register<Test>("gherkinTest") {
     // Compose UI tests render offscreen: no Xvfb on Linux.
     systemProperty("java.awt.headless", "true")
     systemProperty("star.repo.root", rootProject.projectDir.parentFile.absolutePath)
+    // The test-data cache (see test_data/fetch.sh): $STAR_TEST_DATA, else <repo>/.test-data (resolved by the runner).
+    System.getenv("STAR_TEST_DATA")?.takeIf { it.isNotEmpty() }?.let { systemProperty("star.test.data", it) }
     (findProperty("star.stard.path") as String? ?: System.getProperty("star.stard.path"))?.let { systemProperty("star.stard.path", it) }
     environment("STAR_RUN_MARKER_DIR", layout.buildDirectory.dir("run-markers").get().asFile.absolutePath)
     // Placeholder overrides (STAR_GHERKIN_<NAME>) pass through the environment as they are.

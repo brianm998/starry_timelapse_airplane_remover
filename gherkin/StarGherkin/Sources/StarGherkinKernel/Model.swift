@@ -70,3 +70,26 @@ public enum Params {
         return out
     }
 }
+
+/// `data:<name>` param values: a dataset fetched by `test_data/fetch.sh` into `<cache>/<name>`. Runners resolve, never download.
+public enum TestData {
+    public struct Missing: Error, CustomStringConvertible {
+        public let description: String
+    }
+
+    public static let prefix = "data:"
+
+    /// The directory a `data:<name>` value names, or nil when `value` is a plain path. Throws `Missing`, with the command to run,
+    /// when the directory or its `.complete` marker is absent (never skip: a skipped scenario is a vacuous green).
+    public static func resolve(_ value: String, cache: URL) throws -> URL? {
+        guard value.hasPrefix(prefix) else { return nil }
+        let name = String(value.dropFirst(prefix.count))
+        let dir = cache.appendingPathComponent(name)
+        let complete = dir.appendingPathComponent(".complete")
+        guard FileManager.default.fileExists(atPath: complete.path) else {
+            throw Missing(description: "test dataset `\(name)` is not fetched (no \(complete.path)). Run: test_data/fetch.sh \(name)"
+                          + "  (cache: \(cache.path); set STAR_TEST_DATA to share one)")
+        }
+        return dir
+    }
+}

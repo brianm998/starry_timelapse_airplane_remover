@@ -7,6 +7,8 @@ name: Gherkin
 #   desktop-linux/-windows/-macos runComposeUiTest against a real stard, offscreen (no Xvfb)
 # plus generate-check, which regenerates every generated file and fails on a diff.
 #
+# Test data is fetched from the `test-data` release (test_data/datasets.json) into .test-data and cached with actions/cache.
+#
 # Every leg ends with a "vacuous green" check: it fails the job unless the log (or the Gradle XML) shows
 # exactly one test that ran, passed and was not skipped. Exit codes alone are not proof: xcodebuild
 # -only-testing matching nothing exits 0 having run nothing.
@@ -21,6 +23,7 @@ on:
     branches: [main, develop]
     paths:
       - 'gherkin/**'
+      - 'test_data/**'
       - 'cli/**'
       - 'gui/**'
       - 'star-desktop/**'
@@ -32,6 +35,7 @@ on:
     branches: [main, develop]
     paths:
       - 'gherkin/**'
+      - 'test_data/**'
       - 'cli/**'
       - 'gui/**'
       - 'star-desktop/**'
@@ -88,6 +92,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
+      # this client needs is generated (gherkin/generated/datasets-cli.txt), never maintained by hand.
+      - name: Cache test data
+        uses: actions/cache@v4
+        with:
+          path: .test-data
+          key: testdata-cli-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-cli.txt') }}
+
+      - name: Fetch test data (a no-op on a cache hit)
+        run: test_data/fetch.sh $(cat gherkin/generated/datasets-cli.txt)
+
       - name: Install apt prerequisites
         run: |
           sudo apt-get update
@@ -126,7 +141,11 @@ jobs:
           if [ ! -f StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
       - name: Run the Gherkin features against the built star
-        run: swift test --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
+        # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
+        # is `@testable import star` and --filter still compiles every test target. One release compile.
+        # --disable-swift-testing: without it, swift test runs a second (Swift Testing) pass that starts the `star` executable
+        # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
+        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
 
       - name: Prove the scenario ran (not a vacuous green)
         run: |
@@ -141,6 +160,17 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+
+      # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
+      # this client needs is generated (gherkin/generated/datasets-cli.txt), never maintained by hand.
+      - name: Cache test data
+        uses: actions/cache@v4
+        with:
+          path: .test-data
+          key: testdata-cli-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-cli.txt') }}
+
+      - name: Fetch test data (a no-op on a cache hit)
+        run: test_data/fetch.sh $(cat gherkin/generated/datasets-cli.txt)
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -181,7 +211,11 @@ jobs:
           if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
       - name: Run the Gherkin features against the built star
-        run: swift test --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
+        # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
+        # is `@testable import star` and --filter still compiles every test target. One release compile.
+        # --disable-swift-testing: without it, swift test runs a second (Swift Testing) pass that starts the `star` executable
+        # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
+        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
 
       - name: Prove the scenario ran (not a vacuous green)
         run: |
@@ -204,6 +238,17 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+
+      # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
+      # this client needs is generated (gherkin/generated/datasets-mac-gui.txt), never maintained by hand.
+      - name: Cache test data
+        uses: actions/cache@v4
+        with:
+          path: .test-data
+          key: testdata-mac-gui-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-mac-gui.txt') }}
+
+      - name: Fetch test data (a no-op on a cache hit)
+        run: test_data/fetch.sh $(cat gherkin/generated/datasets-mac-gui.txt) gui_splash_video
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -243,23 +288,12 @@ jobs:
         run: |
           if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
-      # The Debug configuration of the GUI project looks in include|lib/debug/macos; only release is built.
-      - name: Point StarDecisionTrees debug at release
-        run: |
-          mkdir -p StarDecisionTrees/include/debug StarDecisionTrees/lib/debug
-          ln -sfn ../release/macos StarDecisionTrees/include/debug/macos
-          ln -sfn ../release/macos StarDecisionTrees/lib/debug/macos
-
-      # The GUI's Xcode project bundles gui/videos/*.mp4 (too big for git; see cli.yml for how they got there).
-      - name: Fetch large GUI assets from ci-assets release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The GUI's Xcode project bundles gui/videos/*.mp4 (too big for git). The splash video comes from the same
+      # checksum-verified manifest as the test data, fetched above.
+      - name: Put the splash video where the Xcode project expects it
         run: |
           mkdir -p gui/videos
-          gh release download ci-assets \
-              --repo "${{ github.repository }}" \
-              --pattern '*.mp4' \
-              --dir gui/videos
+          cp .test-data/gui_splash_video/*.mp4 gui/videos/
           ls -lh gui/videos
 
       - name: Fetch ffmpeg/ffprobe the GUI bundles
@@ -271,14 +305,21 @@ jobs:
       - name: Make ffmpeg/ffprobe executable
         run: chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe
 
+      # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release
+      # builds every test target even under -only-testing.
       # Never -target Star (bogus module errors) and no -destination (errors on this scheme): see gherkin/README.md.
       # Signed ad hoc ("-"): the UI-test runner has to be signed to run, but there is no identity on a hosted runner.
       - name: Run the Gherkin features in Star.app (XCUITest)
+        env:
+          # xcodebuild strips TEST_RUNNER_ and hands STAR_TEST_DATA to the UI-test runner
+          TEST_RUNNER_STAR_TEST_DATA: ${{ github.workspace }}/.test-data
         run: |
           set -o pipefail
           xcodebuild test \
             -project gui/star.xcodeproj \
             -scheme star \
+            -configuration Release \
+            ENABLE_TESTABILITY=YES \
             -only-testing:starUITests/GeneratedFeatureUITests \
             -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
@@ -307,6 +348,17 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+
+      # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
+      # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
+      - name: Cache test data
+        uses: actions/cache@v4
+        with:
+          path: .test-data
+          key: testdata-desktop-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-desktop.txt') }}
+
+      - name: Fetch test data (a no-op on a cache hit)
+        run: test_data/fetch.sh $(cat gherkin/generated/datasets-desktop.txt)
 
       - name: Install apt prerequisites
         run: |
@@ -394,6 +446,17 @@ jobs:
         shell: bash  # Git Bash; matches cli.yml's `windows` job
     steps:
       - uses: actions/checkout@v4
+
+      # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
+      # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
+      - name: Cache test data
+        uses: actions/cache@v4
+        with:
+          path: .test-data
+          key: testdata-desktop-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-desktop.txt') }}
+
+      - name: Fetch test data (a no-op on a cache hit)
+        run: test_data/fetch.sh $(cat gherkin/generated/datasets-desktop.txt)
 
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
@@ -548,6 +611,17 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+
+      # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
+      # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
+      - name: Cache test data
+        uses: actions/cache@v4
+        with:
+          path: .test-data
+          key: testdata-desktop-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-desktop.txt') }}
+
+      - name: Fetch test data (a no-op on a cache hit)
+        run: test_data/fetch.sh $(cat gherkin/generated/datasets-desktop.txt)
 
       - name: Select latest Xcode (Swift 6)
         uses: maxim-lobanov/setup-xcode@v1

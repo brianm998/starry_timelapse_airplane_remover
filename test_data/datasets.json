@@ -1,0 +1,20 @@
+{
+  "release": "test-data",
+  "repo": "brianm998/starry_timelapse_airplane_remover",
+  "datasets": {
+    "a7sii_10": {
+      "asset": "a7sii_10-76013afcefe5.tar.gz",
+      "sha256": "76013afcefe58533a1b26b676dc95b7e38718146551f7710afcfc56e7fbe8276",
+      "bytes": 46406596,
+      "description": "Sony a7S II, 19 frames 4240x2832 JPEG, static tripod, clear sky. The pilot's sequence.",
+      "provenance": "Brian Martin, own photographs."
+    },
+    "gui_splash_video": {
+      "asset": "gui_splash_video-35575f903725.tar.gz",
+      "sha256": "35575f9037253719b08500af8511b51277fcef6e8458d651b39b5fd3b54d0af9",
+      "bytes": 401935302,
+      "description": "The gui's splash video (11_30_2024-fx3-aurora-topaz-star.mp4). A build input of Star.app, not test data.",
+      "provenance": "Brian Martin, own footage."
+    }
+  }
+}

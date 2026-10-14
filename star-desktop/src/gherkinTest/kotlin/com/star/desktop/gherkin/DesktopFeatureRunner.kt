@@ -88,6 +88,21 @@ class DesktopFeatureRunner {
         throw RunnerError("cannot find the repo root: set -Dstar.repo.root")
     }
 
+    /** The test-data cache, by the fetch tool's rule: the `star.test.data` property the Gradle task forwards, else `<repo>/.test-data`. */
+    private fun dataCache(): File =
+        System.getProperty("star.test.data")?.takeIf { it.isNotEmpty() }?.let { File(it) } ?: File(repoRoot(), ".test-data")
+
+    /** `data:<name>` resolves to `<cache>/<name>` and must be fetched already (`test_data/fetch.sh <name>`); a plain path is left alone. */
+    private fun resolveSequence(given: String): File {
+        if (!given.startsWith("data:")) return File(given).let { if (it.isAbsolute) it else File(repoRoot(), given) }
+        val name = given.removePrefix("data:")
+        val dir = File(dataCache(), name)
+        if (!File(dir, ".complete").isFile) {
+            throw RunnerError("test dataset `$name` is not fetched (no ${File(dir, ".complete")}). Run: test_data/fetch.sh $name (cache: ${dataCache()}; set STAR_TEST_DATA to share one)")
+        }
+        return dir
+    }
+
     // ---- steps ----
 
     /**
@@ -97,7 +112,7 @@ class DesktopFeatureRunner {
      */
     private fun openSequence(t: ComposeUiTest) {
         val given = param("sequence")
-        val source = File(given).let { if (it.isAbsolute) it else File(repoRoot(), given) }
+        val source = resolveSequence(given)
         if (!source.isDirectory) throw RunnerError("sequence directory not found: $source")
         sequenceCopy = File(scratch, source.name)
         source.copyRecursively(sequenceCopy)
