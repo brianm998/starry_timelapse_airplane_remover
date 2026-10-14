@@ -116,6 +116,44 @@ internal fun movingHorizonCountMultiplier(chosen: Int, total: Int): Double =
     chosen.toDouble() / suggestedMovingHorizonCount(total)
 
 /**
+ * Where the startup flow goes after "was the camera moving?": straight to the removal question when the
+ * sequence has no horizon, otherwise to choosing horizons, one for a static camera and several for a moving
+ * one (macOS `MovingView`).
+ */
+internal fun stepAfterCameraMotion(hasHorizon: Boolean, moving: Boolean): StartupStep = when {
+    !hasHorizon -> StartupStep.REMOVAL
+    moving -> StartupStep.SELECT_MOVING_HORIZONS
+    else -> StartupStep.SELECT_HORIZON
+}
+
+/**
+ * Which question screen "Back" returns to from [step], derived from the answers already given rather than a
+ * separate history stack, since they fully determine how [step] was reached (macOS
+ * `RemovalView.previousStartupState`). null on the first screen.
+ *
+ * The answers are the session config's, whoever gave them: a session resumed part way through the startup flow
+ * has them from the config too, which a private copy in the view model never had.
+ */
+internal fun previousStartupStep(step: StartupStep, hasHorizon: Boolean, moving: Boolean): StartupStep? = when (step) {
+    StartupStep.HORIZON -> null
+    StartupStep.MOVING -> StartupStep.HORIZON
+    StartupStep.SELECT_HORIZON -> StartupStep.MOVING
+    StartupStep.SELECT_MOVING_HORIZONS -> StartupStep.MOVING
+    StartupStep.REMOVAL -> if (!hasHorizon) StartupStep.MOVING else if (moving) StartupStep.SELECT_MOVING_HORIZONS else StartupStep.SELECT_HORIZON
+}
+
+/**
+ * [current] with what the removal question decides: the clean method (when one was chosen) and whether earth
+ * alignment is allowed. Nothing else: whether there is a horizon and whether the camera moved were written
+ * into the config as they were answered, and are the config's to say, not this call's to overwrite.
+ */
+internal fun withRemovalChoices(current: Config, cleanMethod: CleanMethod?, allowEarthAlignment: Boolean): Config {
+    val b = current.toBuilder().setAllowEarthAlignment(allowEarthAlignment)
+    cleanMethod?.let { b.setCleanMethod(it) }
+    return b.build()
+}
+
+/**
  * The initial config for opening [source] (an image sequence's folder or a video file): selective cleaning,
  * previews on, and output written into the folder that holds the source, never left to the daemon's
  * per-session scratch fallback (a fresh hidden temp dir on every open). Config's `basename` already embeds
@@ -294,28 +332,39 @@ class AppViewModel(
     // ---- new-source startup prompts (macOS StartupView) ----
     private val _startupStep = MutableStateFlow<StartupStep?>(null) // null = not showing
     val startupStep: StateFlow<StartupStep?> = _startupStep.asStateFlow()
-    // Accumulated answers, applied to the session config when the user opens Advanced or starts processing.
-    private var startupHasHorizon = false
-    private var startupCameraMoving = false
+    // The answers are not kept here: each is written into the session config as it is given (macOS does the
+    // same through the view model's didSet), so the config is the one record of them, a resumed session has
+    // them from the start, and closing the prompts or opening Advanced cannot lose or overwrite them.
+    private val startupHasHorizon: Boolean get() = sessions.session.value?.config?.horizonDetectionEnabled ?: false
+    private val startupCameraMoving: Boolean get() = sessions.session.value?.config?.tripodHeadWasMoving ?: false
 
-    private fun resetStartupChoices() {
-        startupHasHorizon = false
-        startupCameraMoving = false
+    /** The latest startup answer being written, so the next one is written after it. */
+    private var startupWrite: Job? = null
+
+    /** Write one startup answer into the session config, after any still being written. */
+    private fun writeStartupAnswer(change: (Config.Builder) -> Unit): Job {
+        val previous = startupWrite
+        val job = scope.launch {
+            previous?.join()
+            val current = runCatching { sessions.getConfig() }.getOrNull() ?: return@launch
+            runCatching { sessions.updateConfig(current.toBuilder().also(change).build()) }
+        }
+        startupWrite = job
+        return job
     }
 
     /** Prompt 1 answer: does the sequence include a horizon? */
     fun startupAnswerHorizon(hasHorizon: Boolean) {
-        startupHasHorizon = hasHorizon
+        writeStartupAnswer { it.setHorizonDetectionEnabled(hasHorizon) }
         _startupStep.value = StartupStep.MOVING
     }
 
     /** Prompt 2 answer: was the camera moving (false = static on a tripod)? */
     fun startupAnswerMoving(moving: Boolean) {
-        startupCameraMoving = moving
-        _startupStep.value = when {
-            !startupHasHorizon -> StartupStep.REMOVAL
-            moving -> StartupStep.SELECT_MOVING_HORIZONS
-            else -> StartupStep.SELECT_HORIZON
+        val written = writeStartupAnswer { it.setTripodHeadWasMoving(moving) }
+        scope.launch {
+            written.join()
+            _startupStep.value = stepAfterCameraMotion(startupHasHorizon, moving)
         }
     }
 
@@ -336,7 +385,7 @@ class AppViewModel(
     fun startMovingHorizonStartupFlow(count: Int) {
         val svm = currentSequence ?: return
         scope.launch {
-            applyStartupChoices() // persist moving/horizon to config before saving per-frame references
+            startupWrite?.join() // the answers that led here are in the config before references are saved against it
             val indices = evenlySpacedFrameIndices(count, svm.frameCount)
             svm.beginStartupHorizon(indices)
             recordStartupHorizonProgress(indices, 0)
@@ -348,7 +397,7 @@ class AppViewModel(
     private fun startStaticHorizonStartupFlow() {
         val svm = currentSequence ?: return
         scope.launch {
-            applyStartupChoices()
+            startupWrite?.join()
             // A one-frame list rather than the empty one this used to pass, so an interrupted
             // static selection resumes by the same route as a moving one. See
             // SequenceViewModel.beginStartupHorizon for why nothing downstream notices.
@@ -445,32 +494,15 @@ class AppViewModel(
         prefs.setMovingHorizonCountMultiplier(movingHorizonCountMultiplier(chosen, startupFrameCount()))
     }
 
-    /**
-     * Which question screen "Back" should return to — derived from the answers already given
-     * rather than a separate history stack, since they fully determine how [step] was reached
-     * (macOS `RemovalView.previousStartupState`). Returns null on the first screen.
-     */
-    fun previousStartupStep(step: StartupStep): StartupStep? = when (step) {
-        StartupStep.HORIZON -> null
-        StartupStep.MOVING -> StartupStep.HORIZON
-        StartupStep.SELECT_HORIZON -> StartupStep.MOVING
-        StartupStep.SELECT_MOVING_HORIZONS -> StartupStep.MOVING
-        StartupStep.REMOVAL -> when {
-            !startupHasHorizon -> StartupStep.MOVING
-            startupCameraMoving -> StartupStep.SELECT_MOVING_HORIZONS
-            else -> StartupStep.SELECT_HORIZON
-        }
-    }
-
     /** "Back" on a startup prompt: return to the previous question without discarding later answers. */
     fun startupGoBack(step: StartupStep) {
-        _startupStep.value = previousStartupStep(step)
+        _startupStep.value = previousStartupStep(step, startupHasHorizon, startupCameraMoving)
     }
 
-    /** "Advanced" gear on a prompt: persist the answers so the dialog reflects them, then open settings. */
+    /** "Advanced" gear on a prompt: open the settings. The answers so far are already in the config the dialog shows. */
     fun startupOpenAdvanced() {
         scope.launch {
-            applyStartupChoices()
+            startupWrite?.join()
             _startupStep.value = null
             openSettings()
         }
@@ -479,29 +511,24 @@ class AppViewModel(
     /** Removal prompt "Start Processing": apply the chosen clean method + answers, then process. */
     fun startupStartProcessing(cleanMethod: CleanMethod, allowEarthAlignment: Boolean) {
         scope.launch {
-            applyStartupChoices(cleanMethod, allowEarthAlignment)
+            startupWrite?.join()
+            applyRemovalChoices(cleanMethod, allowEarthAlignment)
             _startupStep.value = null
             requestProcessAll()
         }
     }
 
-    /** Removal prompt "Close": dismiss the prompts without processing (keeps the default config). */
+    /** Removal prompt "Close": dismiss the prompts without processing. The answers given stay in the config. */
     fun dismissStartup() { _startupStep.value = null }
 
     /**
-     * Fold the accumulated startup answers (and optionally a clean method + the removal prompt's
-     * "Cars" toggle) into the live session config. [allowEarthAlignment] defaults to true for the
-     * paths that skip the removal prompt (e.g. jumping to Advanced settings mid-flow), matching
-     * the macOS behavior of earth alignment being on by default.
+     * Put the removal prompt's choices (a clean method, and the "Cars" toggle's earth alignment) into the live
+     * session config. [allowEarthAlignment] defaults to true, matching the macOS behavior of earth alignment being
+     * on by default.
      */
-    private suspend fun applyStartupChoices(cleanMethod: CleanMethod? = null, allowEarthAlignment: Boolean = true) {
+    private suspend fun applyRemovalChoices(cleanMethod: CleanMethod? = null, allowEarthAlignment: Boolean = true) {
         val current = runCatching { sessions.getConfig() }.getOrNull() ?: return
-        val b = current.toBuilder()
-            .setHorizonDetectionEnabled(startupHasHorizon)
-            .setTripodHeadWasMoving(startupCameraMoving)
-            .setAllowEarthAlignment(allowEarthAlignment)
-        cleanMethod?.let { b.setCleanMethod(it) }
-        runCatching { sessions.updateConfig(b.build()) }
+        runCatching { sessions.updateConfig(withRemovalChoices(current, cleanMethod, allowEarthAlignment)) }
     }
 
     init {
@@ -616,7 +643,6 @@ class AppViewModel(
         _showAlignmentWindow.value = false
         _showInfoDialog.value = false
         _startupStep.value = null
-        resetStartupChoices()
         _versionWarning.value = null
     }
 
@@ -740,7 +766,7 @@ class AppViewModel(
             "postrender" -> _showPostRenderPrompt.value = true // dev hook: screenshot the post-render prompt
             "multiselect" -> svm.openMultiSelect(SequenceViewModel.RectSelection(100f, 100f, 400f, 400f)) // dev hook
             "settings" -> openSettings() // dev hook: screenshot the Processing Settings dialog
-            "startup" -> { resetStartupChoices(); _startupStep.value = StartupStep.HORIZON } // dev hook: startup prompts
+            "startup" -> _startupStep.value = StartupStep.HORIZON // dev hook: startup prompts
             else -> Unit
         }
         autoFrame?.let { svm.setCurrentIndex(it) }
@@ -748,7 +774,6 @@ class AppViewModel(
         _screen.value = AppScreen.Sequence(svm)
         // Fresh source → walk the startup prompts (skipped for config resume + dev auto-open hooks).
         if (promptStartup && autoMode == null) {
-            resetStartupChoices()
             _startupStep.value = StartupStep.HORIZON
         } else if (autoMode == null) {
             // A config resume. Normally there is nothing to prompt for — the config already
