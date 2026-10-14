@@ -603,9 +603,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Hosted macOS VMs vary: one run had ~2GB free, so stard's memory gate admitted a frame every few minutes and nothing finished in 45
+      # (the same leg passes in minutes on a healthier VM). Fail fast per attempt and try once more; the retry kills any stard left behind.
       - name: Run the Gherkin features in the Compose UI
-        working-directory: star-desktop
-        run: ./gradlew gherkinTest --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 35
+          max_attempts: 2
+          retry_wait_seconds: 20
+          polling_interval_seconds: 5
+          warning_on_retry: true
+          on_retry_command: pkill -x stard || true
+          shell: bash
+          command: cd star-desktop && ./gradlew gherkinTest --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
 
       - name: Prove the scenario ran (not a vacuous green)
         working-directory: star-desktop
