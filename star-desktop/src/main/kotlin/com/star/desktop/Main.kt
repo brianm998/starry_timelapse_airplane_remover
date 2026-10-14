@@ -55,6 +55,14 @@ private fun runApp(args: Array<String>) = application {
             }
         }
     }
+    // Preferences… in a Mac's app menu (and Cmd-,) is the system's item, which asks the application to open its preferences.
+    LaunchedEffect(vm) {
+        runCatching {
+            if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.APP_PREFERENCES)) {
+                java.awt.Desktop.getDesktop().setPreferencesHandler { vm.openPreferences() }
+            }
+        }
+    }
     Window(
         onCloseRequest = vm::requestQuit,
         title = "Star",

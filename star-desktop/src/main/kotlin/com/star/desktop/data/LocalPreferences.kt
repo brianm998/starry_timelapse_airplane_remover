@@ -104,6 +104,14 @@ class LocalPreferences {
         set(value) = setBool("showHorizonOnMainView", value)
 
     /**
+     * macOS `showProcessingWindow`: whether starting a run puts the processing screen up over the window. On unless the user has turned it off
+     * (the Status button in the left panel brings it back for a run in progress either way).
+     */
+    var showProcessingWindow: Boolean
+        get() = bool("showProcessingWindow") ?: true
+        set(value) = setBool("showProcessingWindow", value)
+
+    /**
      * macOS `showAlignmentInProcessingWindow`: whether the processing screen draws its alignment charts. On unless turned off; kept here
      * and not in the screen's own state, which is rebuilt every time the screen is dismissed and brought back.
      */

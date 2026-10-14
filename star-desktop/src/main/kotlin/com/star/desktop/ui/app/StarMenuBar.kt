@@ -39,6 +39,8 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
                 chooseFile(localized("ui.resume_from_config_title"))?.let { app.openConfig(it) }
             }
             Separator()
+            // Preferences are in the app menu on a Mac (see Main.kt, which hooks the system's), and have no app menu to be in anywhere else.
+            if (!IS_MAC) Item(localized("menu.preferences"), shortcut = primaryShortcut(Key.Comma)) { app.openPreferences() }
             Item(localized("ui.close_session"), enabled = hasSession, shortcut = primaryShortcut(Key.W)) {
                 app.requestCloseSession()
             }
@@ -78,7 +80,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             Separator()
             Item(localized("ui.cancel_processing"), enabled = hasSession) { svm?.cancelProcessing() }
             Separator()
-            Item(localized("ui.processing_settings_2"), enabled = hasSession, shortcut = primaryShortcut(Key.Comma)) { app.openSettings() }
+            Item(localized("ui.processing_settings_2"), enabled = hasSession, shortcut = primaryShortcut(Key.Comma, shift = true)) { app.openSettings() }
         }
 
         Menu(localized("ui.export"), mnemonic = 'E') {

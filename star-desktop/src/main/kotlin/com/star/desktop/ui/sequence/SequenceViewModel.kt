@@ -529,7 +529,7 @@ class SequenceViewModel(
         scope.launch {
             try {
                 if (kind == com.star.proto.NeighborKind.NEIGHBOR_ALIGNED) {
-                    _processingModalDismissed.value = false
+                    armProcessingModal()
                     processing.startClaimedRun {
                         val answer = frames.setNeighborOverride(sessionId, index, kind, count)
                         frameVMFor(index).applyInfo(answer.frame)
@@ -556,9 +556,16 @@ class SequenceViewModel(
         processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_EVERYTHING)
     }
 
-    /** Re-arm the processing modal (macOS `startProcessingModal`) before launching a new run. */
+    /**
+     * Re-arm the processing modal (macOS `startProcessingModal`) before launching a new run: up over the window, unless the user's preference is
+     * not to (the Status button still brings it back).
+     */
+    private fun armProcessingModal() {
+        _processingModalDismissed.value = prefs?.showProcessingWindow == false
+    }
+
     private fun startProcessingRun(block: suspend () -> Unit) = scope.launch {
-        _processingModalDismissed.value = false
+        armProcessingModal()
         block()
     }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }

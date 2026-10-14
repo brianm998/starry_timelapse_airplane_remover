@@ -62,6 +62,8 @@ fun StarApp(vm: AppViewModel) {
             if (showSettings && screen is AppScreen.Sequence) {
                 com.star.desktop.ui.dialogs.ProcessingSettingsDialog(vm)
             }
+            val showPreferences by vm.showPreferences.collectAsState()
+            if (showPreferences) com.star.desktop.ui.dialogs.PreferencesDialog(vm)
             val showRenderVideo by vm.showRenderVideo.collectAsState()
             if (showRenderVideo && screen is AppScreen.Sequence) {
                 com.star.desktop.ui.dialogs.RenderVideoDialog(vm)

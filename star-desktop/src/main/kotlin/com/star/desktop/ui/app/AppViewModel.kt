@@ -331,6 +331,12 @@ class AppViewModel(
     val showExpertSettings: StateFlow<Boolean> = _showExpertSettings.asStateFlow()
     fun setShowExpertSettings(show: Boolean) { _showExpertSettings.value = show }
 
+    // The Preferences dialog (macOS's sheet on Cmd-,); the Processing Settings it used to open are Cmd-Shift-,.
+    private val _showPreferences = MutableStateFlow(false)
+    val showPreferences: StateFlow<Boolean> = _showPreferences.asStateFlow()
+    fun openPreferences() { _showPreferences.value = true }
+    fun closePreferences() { _showPreferences.value = false }
+
     private val _showSettings = MutableStateFlow(false)
     val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
     fun openSettings() { _showSettings.value = true }

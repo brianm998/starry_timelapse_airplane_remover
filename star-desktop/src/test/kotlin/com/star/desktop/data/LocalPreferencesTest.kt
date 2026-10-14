@@ -214,6 +214,25 @@ class LocalPreferencesBooleansTest {
         assertEquals(null, p.videoMuxer)
     }
 
+    /** The processing screen is on until the user turns it off, under the Mac app's key. */
+    @Test fun theProcessingWindowIsOnUntilTurnedOff() {
+        assertTrue(LocalPreferences().showProcessingWindow)
+        LocalPreferences().showProcessingWindow = false
+        assertTrue(prefsFile.readText().contains("\"showProcessingWindow\":false"), prefsFile.readText())
+        assertEquals(false, LocalPreferences().showProcessingWindow)
+        LocalPreferences().showProcessingWindow = true
+        assertTrue(LocalPreferences().showProcessingWindow)
+    }
+
+    /** The render prompt's "don't ask again" could not be undone; the Preferences switch is the way back. */
+    @Test fun theRenderPromptCanBeAskedAgain() {
+        val p = LocalPreferences()
+        p.setSkipRenderPrompt(true)
+        assertTrue(LocalPreferences().skipRenderPromptAfterProcessing)
+        p.setSkipRenderPrompt(false)
+        assertEquals(false, LocalPreferences().skipRenderPromptAfterProcessing)
+    }
+
     @Test fun turningThemBackOnWorks() {
         val p = LocalPreferences()
         p.showHorizonPainterInstructions = false
