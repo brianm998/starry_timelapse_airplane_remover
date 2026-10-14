@@ -201,6 +201,8 @@ class AppViewModel(
     autoOpenPath: String? = null,
     private val autoMode: String? = null, // dev hook: "edit"/"scrub"/"grid" to land in a mode after auto-open
     private val autoFrame: Int? = null,   // dev hook: start at this frame index after auto-open
+    /** Whether there is a release newer than the version running (macOS checks GitHub at launch); replaced by tests. */
+    private val releaseCheck: suspend (running: String) -> com.star.desktop.util.GitHubRelease? = { com.star.desktop.util.ReleaseCheck.check(it) },
 ) {
 
     val engine = EngineState(scope)
@@ -488,6 +490,18 @@ class AppViewModel(
     private val _versionWarning = MutableStateFlow<String?>(null)
     val versionWarning: StateFlow<String?> = _versionWarning.asStateFlow()
     fun dismissVersionWarning() { _versionWarning.value = null }
+
+    // ---- a new release (macOS NewReleaseSheetView) ----
+    private val _newRelease = MutableStateFlow<com.star.desktop.util.GitHubRelease?>(null)
+
+    /** A release newer than the one running, to tell the user about on the start screen; null when there is none or it was put off. */
+    val newRelease: StateFlow<com.star.desktop.util.GitHubRelease?> = _newRelease.asStateFlow()
+
+    /** The version of the engine, which is the version of Star running (they are one release). */
+    val runningVersion: String? get() = (engine.status.value as? EngineStatus.Connected)?.daemonVersion
+
+    /** "Upgrade Later". */
+    fun dismissNewRelease() { _newRelease.value = null }
 
     // ---- engine warnings pushed by the daemon ----
     //
@@ -790,6 +804,11 @@ class AppViewModel(
 
     init {
         scope.launch { engine.start() }
+        // Once, when the engine has said what version this is.
+        scope.launch {
+            val connected = engine.status.first { it is EngineStatus.Connected } as EngineStatus.Connected
+            _newRelease.value = releaseCheck(connected.daemonVersion)
+        }
         scope.launch {
             // Latest wins: these describe the machine's current state, so an older one being
             // replaced by a newer is right. The user can dismiss, and the next one re-raises.

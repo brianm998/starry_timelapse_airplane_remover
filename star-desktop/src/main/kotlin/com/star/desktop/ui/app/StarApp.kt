@@ -73,6 +73,13 @@ fun StarApp(vm: AppViewModel) {
                 val infoType by vm.currentInfoType.collectAsState()
                 com.star.desktop.ui.dialogs.InfoDialog(selected = infoType, onSelect = vm::setInfoType, onClose = vm::closeInfoDialog)
             }
+            // Told once, at launch, on the start screen (macOS shows its sheet from the same place).
+            val newRelease by vm.newRelease.collectAsState()
+            newRelease?.let { release ->
+                if (screen is AppScreen.Initial) {
+                    com.star.desktop.ui.dialogs.NewReleaseDialog(release, vm.runningVersion.orEmpty(), onLater = vm::dismissNewRelease, onQuit = vm::requestQuit)
+                }
+            }
             val startupStep by vm.startupStep.collectAsState()
             if (startupStep != null && screen is AppScreen.Sequence) {
                 com.star.desktop.ui.dialogs.StartupPrompts(vm, startupStep!!)
