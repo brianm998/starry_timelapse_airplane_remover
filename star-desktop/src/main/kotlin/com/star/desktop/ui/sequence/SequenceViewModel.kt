@@ -69,7 +69,10 @@ class SequenceViewModel(
      * The zoom and pan of the frame, one for the session: shared by the edit view and the horizon painter, and not
      * reset when the frame changes (macOS keeps `currentZoomScale` on its view model too).
      */
-    val transform = com.star.desktop.ui.sequence.edit.FrameTransform(info.imageWidth, info.imageHeight)
+    val transform = com.star.desktop.ui.sequence.edit.FrameTransform(
+        info.imageWidth, info.imageHeight,
+        margin = info.imageWidth / ARROW_LENGTH_DIVISOR, // the outlier arrows reach this far outside the frame
+    )
 
     // ---- interaction state ----
     private val _mode = MutableStateFlow(InteractionMode.SCRUB) // macOS default is scrub
@@ -805,6 +808,9 @@ class SequenceViewModel(
     companion object {
         /** Outlier groups smaller than this (pixels) are left to the trash threshold, not classified (macOS `minimumClassificationSize`). */
         const val MINIMUM_CLASSIFICATION_SIZE = 20
+
+        /** The outlier arrows are `width / this` long (macOS `outlierArrowLength`); the view keeps room for them around the frame. */
+        const val ARROW_LENGTH_DIVISOR = 70f
 
         /** How many frames either side of the current one keep their hit-testing label map. */
         const val LABEL_RETENTION = 2

@@ -17,6 +17,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
 import com.star.desktop.ui.components.drawHorizonLine
 import com.star.desktop.ui.components.horizonLineColor
+import com.star.desktop.domain.usesOutliers
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import androidx.compose.ui.draw.clipToBounds
@@ -58,9 +60,9 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val bmp by vm.currentPreview.collectAsState()
     val selectedTool by vm.tool.collectAsState()
     val frameInfo by fvm.info.collectAsState()
-    // The tools do nothing on a frame whose clean method doesn't review outliers.
-    val tool = if ((frameInfo?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE) ==
-        com.star.proto.CleanMethod.CLEAN_AUTOMATIC) com.star.desktop.domain.ToolType.NONE else selectedTool
+    // The tools do nothing on a frame whose clean method doesn't review outliers, and there is nothing to draw for them either.
+    val usesOutliers = (frameInfo?.cleanMethod ?: com.star.proto.CleanMethod.CLEAN_SELECTIVE).usesOutliers
+    val tool = if (!usesOutliers) com.star.desktop.domain.ToolType.NONE else selectedTool
     val groups by fvm.groups.collectAsState()
     val decisions by fvm.decisions.collectAsState()
     val selected by fvm.selected.collectAsState()
@@ -68,6 +70,17 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val labelMap by fvm.labelMap.collectAsState()
 
     val transform = vm.transform
+    // The outlier groups as tinted pixels (macOS draws each group's own pixels, not a box around it), rebuilt off the UI
+    // thread when a decision, the selection or the frame's groups change.
+    var outlierOverlay by remember(current) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(current, labelMap, groups, decisions, selected, usesOutliers) {
+        val map = labelMap
+        outlierOverlay = if (usesOutliers && map != null && groups.isNotEmpty()) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                OutlierOverlay.pixels(map, groups, decisions, selected).toImageBitmap()
+            }
+        } else null
+    }
     // The horizon line (macOS `showHorizonOnMainView`): fetched for this frame when it is shown, and again whenever the horizon
     // or the frame's being pending refinement may have changed (a reference saved, a refinement operation finished).
     val showHorizon by vm.showHorizonOnMainView.collectAsState()
@@ -144,9 +157,8 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             .pointerInput(tool, labelMap, groups) {
                 detectTapGestures(
                     onTap = { pos ->
-                        val map = labelMap ?: return@detectTapGestures
                         val img = transform.canvasToImage(pos, canvasSize)
-                        val gid = map.idAt(img.x.roundToInt(), img.y.roundToInt())
+                        val gid = fvm.groupAt(img.x.roundToInt(), img.y.roundToInt())
                         if (gid > 0) {
                             if (tool == com.star.desktop.domain.ToolType.MULTI) {
                                 val willRemove = com.star.desktop.domain.OutlierDecisions.willRemove(fvm.decisionFor(gid)) == true
@@ -164,11 +176,8 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             // Hover tracking drives arrow/line color + visibility (macOS `arrowSelected`).
             .onPointerEvent(PointerEventType.Move) { ev ->
                 val pos = ev.changes.firstOrNull()?.position ?: return@onPointerEvent
-                val map = labelMap
-                val gid = if (map != null) {
-                    val img = transform.canvasToImage(pos, canvasSize)
-                    map.idAt(img.x.roundToInt(), img.y.roundToInt())
-                } else 0
+                val img = transform.canvasToImage(pos, canvasSize)
+                val gid = fvm.groupAt(img.x.roundToInt(), img.y.roundToInt())
                 fvm.hover(if (gid > 0) gid else null)
             }
             .onPointerEvent(PointerEventType.Exit) { fvm.hover(null) },
@@ -198,10 +207,19 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             // direction arrows + guide lines (arrowColor) gated on hover/decision/selection.
             val fw = vm.info.imageWidth.toFloat()
             val fh = vm.info.imageHeight.toFloat()
-            val al = fw / 70f                                   // arrow length (long/pointing axis)
+            val al = fw / SequenceViewModel.ARROW_LENGTH_DIVISOR // arrow length (long/pointing axis)
             val ah = fw / 180f                                  // arrow height (cross axis)
             val lw = (fw / 1440f * s).coerceAtLeast(1f)         // guide-line thickness
-            for (g in groups) {
+            // The groups' own pixels, tinted by decision; small ones in the combined masks.
+            outlierOverlay?.let { ov ->
+                drawImage(
+                    image = ov,
+                    dstOffset = IntOffset(o.x.roundToInt(), o.y.roundToInt()),
+                    dstSize = IntSize((fw * s).roundToInt(), (fh * s).roundToInt()),
+                )
+            }
+            // Only what is a separate thing in the UI gets a box, guide lines and arrows; and the box only while hovered or selected.
+            for (g in if (usesOutliers) groups.filter(OutlierOverlay::isLarge) else emptyList()) {
                 val reason = decisions[g.id] ?: g.shouldRemove
                 val isSel = selected == g.id
                 val isHover = hovered == g.id
@@ -213,8 +231,10 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 val tl = transform.imageToCanvas(Offset(g.bounds.minX.toFloat(), g.bounds.minY.toFloat()), size)
                 val br = transform.imageToCanvas(Offset(g.bounds.maxX.toFloat(), g.bounds.maxY.toFloat()), size)
                 val boxSize = Size((br.x - tl.x).coerceAtLeast(1f), (br.y - tl.y).coerceAtLeast(1f))
-                drawRect(color = box.copy(alpha = 0.125f), topLeft = tl, size = boxSize)
-                drawRect(color = box.copy(alpha = if (active) 0.9f else 0.5f), topLeft = tl, size = boxSize, style = Stroke(width = if (active) 4f else 2f))
+                if (active) {
+                    drawRect(color = box.copy(alpha = 0.125f), topLeft = tl, size = boxSize)
+                    drawRect(color = box.copy(alpha = 0.9f), topLeft = tl, size = boxSize, style = Stroke(width = 4f))
+                }
 
                 val cx = g.bounds.minX + (g.bounds.maxX - g.bounds.minX + 1) / 2f
                 val cy = g.bounds.minY + (g.bounds.maxY - g.bounds.minY + 1) / 2f

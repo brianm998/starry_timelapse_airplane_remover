@@ -20,11 +20,14 @@ import kotlin.math.min
  * view of the frames and stay as they are from one frame to the next and between the edit view and the
  * horizon painter, as on macOS.
  *
+ * [margin] is room kept around the image at fit and when panning, in image pixels: the outlier arrows point in from outside
+ * the frame, and must not be clipped by the canvas (macOS fits `(width + 2 * arrow length) x (height + 2 * arrow length)`).
+ *
  * Zoom is expressed two ways. [userZoom] is relative to *fit* (1 = the whole image just fits the canvas, and
  * the view never zooms out past that); the *scale* is the actual size, with 1 meaning one image pixel per screen
  * pixel, which is what the slider and the "Max" field show (macOS `currentZoomScale` / `maxZoomScale`).
  */
-class FrameTransform(val imageWidth: Int, val imageHeight: Int) {
+class FrameTransform(val imageWidth: Int, val imageHeight: Int, val margin: Float = 0f) {
     var userZoom by mutableStateOf(1f)
         private set
     var pan by mutableStateOf(Offset.Zero)
@@ -38,10 +41,10 @@ class FrameTransform(val imageWidth: Int, val imageHeight: Int) {
     var canvas by mutableStateOf(Size.Zero)
         private set
 
-    /** Fit-to-canvas base scale (whole image visible at zoom 1). */
+    /** Fit-to-canvas base scale (the whole image, and its [margin], visible at zoom 1). */
     fun baseScale(canvas: Size): Float =
         if (imageWidth <= 0 || imageHeight <= 0 || canvas.width <= 0f || canvas.height <= 0f) 1f
-        else min(canvas.width / imageWidth, canvas.height / imageHeight)
+        else min(canvas.width / (imageWidth + 2 * margin), canvas.height / (imageHeight + 2 * margin))
 
     fun scale(canvas: Size): Float = baseScale(canvas) * userZoom
 
@@ -114,14 +117,14 @@ class FrameTransform(val imageWidth: Int, val imageHeight: Int) {
         pan = Offset.Zero
     }
 
-    /** [p] limited so that no edge of the image is pulled inside the view's own edge: the picture fills the view or is centered. */
+    /** [p] limited so that no edge of the image (with its margin) is pulled inside the view's own edge: the picture fills the view or is centered. */
     private fun clampedPan(p: Offset, canvas: Size): Offset {
         val s = scale(canvas)
         fun axis(v: Float, drawn: Float, view: Float): Float {
             val room = max(0f, (drawn - view) / 2f)
             return v.coerceIn(-room, room)
         }
-        return Offset(axis(p.x, imageWidth * s, canvas.width), axis(p.y, imageHeight * s, canvas.height))
+        return Offset(axis(p.x, (imageWidth + 2 * margin) * s, canvas.width), axis(p.y, (imageHeight + 2 * margin) * s, canvas.height))
     }
 
     companion object {

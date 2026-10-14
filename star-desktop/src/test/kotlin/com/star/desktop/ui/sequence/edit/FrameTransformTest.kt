@@ -102,6 +102,35 @@ class FrameTransformTest {
     }
 }
 
+/** Room around the frame for the outlier arrows, which point in from outside it. */
+class FrameTransformMarginTest {
+    private val canvas = Size(1000f, 800f)
+
+    @Test fun theMarginIsKeptAroundTheImageAtFit() {
+        val t = FrameTransform(4000, 2000, margin = 100f).also { it.canvasChanged(canvas) }
+        // content 4200 x 2200 into 1000 x 800: limited by the width
+        assertEquals(1000f / 4200f, t.scale(canvas), 1e-6f)
+        // the image's left edge is 100 content pixels in from the canvas edge
+        assertEquals(100f * t.scale(canvas), t.imageToCanvas(Offset.Zero, canvas).x, 0.01f)
+    }
+
+    @Test fun withoutAMarginTheImageFillsTheFit() {
+        val t = FrameTransform(4000, 2000).also { it.canvasChanged(canvas) }
+        assertEquals(0f, t.imageToCanvas(Offset.Zero, canvas).x, 0.01f)
+    }
+
+    /** Zoomed in, the image can be panned until the margin around it shows, and no further. */
+    @Test fun panningReachesTheMarginAndNoFurther() {
+        val t = FrameTransform(4000, 2000, margin = 100f).also { it.canvasChanged(canvas) }
+        t.zoomBy(100f, Offset(500f, 400f), canvas)
+        val s = t.scale(canvas)
+        t.panBy(Offset(1e7f, 0f), canvas)
+        // the content's left edge (image x = -100) is at the canvas's left edge
+        assertEquals(0f, t.imageToCanvas(Offset(-100f, 0f), canvas).x, 0.5f)
+        assertTrue(s > 0f)
+    }
+}
+
 class FormatScaleTest {
     @Test fun aWholeScaleHasNoDecimals() {
         assertEquals("1", com.star.desktop.ui.sequence.formatScale(1f))

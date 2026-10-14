@@ -113,6 +113,17 @@ class FrameViewModel(
     /** Take the counts the daemon returned with a change to this frame. */
     fun applyInfo(info: FrameInfo) { _info.value = info }
 
+    /**
+     * The group under image pixel ([x], [y]), or 0 for none. Only groups that are separate things in the UI count: a group of 40
+     * pixels or fewer is drawn in a combined mask with the other small ones and cannot be hovered or clicked (macOS).
+     */
+    fun groupAt(x: Int, y: Int): Int {
+        val id = _labelMap.value?.idAt(x, y) ?: return 0
+        if (id <= 0) return 0
+        val group = _groups.value.firstOrNull { it.id == id } ?: return 0
+        return if (com.star.desktop.ui.sequence.edit.OutlierOverlay.isLarge(group)) id else 0
+    }
+
     fun decisionFor(groupId: Int): RemoveReason = _decisions.value[groupId] ?: RemoveReason.RR_UNDECIDED
 
     fun selectGroup(groupId: Int?) { _selected.value = groupId }
