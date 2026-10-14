@@ -778,6 +778,8 @@ final public actor FrameAlignmentProcessor {
             throw "unable to loadOrCreateAlignedImage of type \(type)"
         }
 
+        let config = await configManager.config()
+
         // load or create the aligned frame
         if let alignedFrame = try await imageAccessor.load(
              frameIndex: frameIndex,
@@ -787,7 +789,12 @@ final public actor FrameAlignmentProcessor {
         {
             Log.d("frame \(frameIndex) loaded aligned frame")
 
-            let horizonMask = try await frame?.loadOrCreateMergedHorizonMask()
+            // Only with horizon detection on: FrameGraphBuilder builds no horizon ops
+            // without it, so asking here detects and merges a horizon nothing reads.
+            var horizonMask: HorizonMask? = nil
+            if config.horizonDetectionEnabled {
+                horizonMask = try await frame?.loadOrCreateMergedHorizonMask()
+            }
             var results: HomographyResultsCodable? = nil
             switch alignmentType {
             case .earth:
@@ -835,7 +842,10 @@ final public actor FrameAlignmentProcessor {
                    )
                 {
                     Log.d("frame \(frameIndex) trying to load image of type \(failedType) because we were unable to load image of type \(type)")
-                    let horizonMask = try await frame?.loadOrCreateMergedHorizonMask()
+                    var horizonMask: HorizonMask? = nil
+                    if config.horizonDetectionEnabled {
+                        horizonMask = try await frame?.loadOrCreateMergedHorizonMask()
+                    }
                     var results: HomographyResultsCodable? = nil
                     switch alignmentType {
                     case .earth:
@@ -872,8 +882,6 @@ final public actor FrameAlignmentProcessor {
         // that we used to create the final aligned frame
 
         Log.i("frame \(frameIndex) creating aligned image of type \(type)")
-
-        let config = await configManager.config()
 
         switch type {
         case .starAligned:
