@@ -189,53 +189,150 @@ public func runFFmpegWithProgress(
   outputFolder: String, 
   progress: @escaping ProgressCallback
 ) throws {
-    Log.d("starting ffmpeg run with arguments \(arguments)")
+    let run = try FFmpegRun(arguments: arguments,
+                            totalFrames: totalFrames,
+                            ffmpegPath: ffmpegPath,
+                            outputFolder: outputFolder,
+                            progress: progress)
+    run.process.waitUntilExit()
+    try run.finish()
+}
+
+/// The same run, as a task that can be cancelled: cancelling it terminates ffmpeg, which stops
+/// writing the video, and the call throws `CancellationError`.  (The plain version above blocks its
+/// thread until ffmpeg exits whatever happens to the task that called it, so a render the user
+/// gave up on ran to the end.)  Whatever ffmpeg had written by then is left where it was written.
+public func runCancellableFFmpegWithProgress(
+  arguments: [String],
+  totalFrames: Int?,
+  ffmpegPath: String = ToolPaths.ffmpeg,
+  outputFolder: String,
+  progress: @escaping ProgressCallback
+) async throws {
+    try Task.checkCancellation()
+    let run = try FFmpegRun(arguments: arguments,
+                            totalFrames: totalFrames,
+                            ffmpegPath: ffmpegPath,
+                            outputFolder: outputFolder,
+                            progress: progress)
+    await withTaskCancellationHandler {
+        await run.exit()
+    } onCancel: {
+        run.cancel()
+    }
+    if run.wasCancelled {
+        run.stopListening()
+        throw CancellationError()
+    }
+    try run.finish()
+}
+
+/// One ffmpeg process, started: the progress it prints on stderr is passed on as it arrives, and
+/// all of it is kept for the error message if it fails.
+private final class FFmpegRun: @unchecked Sendable {
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: ffmpegPath)
-    process.arguments = arguments
+    private let pipe = Pipe()
+    private let stderrCollector = StderrCollector()
+    private let lock = NSLock()
+    private var cancelled = false
 
-    let pipe = Pipe()
-    process.standardError = pipe
-    process.standardOutput = nil
+    var wasCancelled: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return cancelled
+    }
 
-    let stderrCollector = StderrCollector()
+    init(arguments: [String],
+         totalFrames: Int?,
+         ffmpegPath: String,
+         outputFolder: String,
+         progress: @escaping ProgressCallback) throws
+    {
+        Log.d("starting ffmpeg run with arguments \(arguments)")
+        process.executableURL = URL(fileURLWithPath: ffmpegPath)
+        process.arguments = arguments
+        process.standardError = pipe
+        process.standardOutput = nil
 
-    pipe.fileHandleForReading.readabilityHandler = { handle in
-        let data = handle.availableData
-        guard !data.isEmpty else { return }
+        let collector = stderrCollector
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
 
-        stderrCollector.append(data)
+            collector.append(data)
 
-        if let line = String(data: data, encoding: .utf8) {
-            // Match "frame=   123"
-            if let range = line.range(of: #"frame=\s*\d+"#, options: .regularExpression) {
-                let numberStr = line[range]
-                    .replacingOccurrences(of: "frame=", with: "")
-                    .trimmingCharacters(in: .whitespaces)
-                if let frameNum = Int(numberStr) {
-                    progress(frameNum, totalFrames ?? 0, outputFolder)
+            if let line = String(data: data, encoding: .utf8) {
+                // Match "frame=   123"
+                if let range = line.range(of: #"frame=\s*\d+"#, options: .regularExpression) {
+                    let numberStr = line[range]
+                        .replacingOccurrences(of: "frame=", with: "")
+                        .trimmingCharacters(in: .whitespaces)
+                    if let frameNum = Int(numberStr) {
+                        progress(frameNum, totalFrames ?? 0, outputFolder)
+                    }
                 }
             }
         }
+
+        try process.run()
     }
 
-    try process.run()
-    process.waitUntilExit()
-    pipe.fileHandleForReading.readabilityHandler = nil
-
-    if process.terminationStatus != 0 {
-        let stderrMessage = String(data: stderrCollector.collectedData(), encoding: .utf8) ?? "<unreadable stderr>"
-        Log.e("video render failed: \(stderrMessage)")
-        throw NSError(
-            domain: "ffmpeg",
-            code: Int(process.terminationStatus),
-            userInfo: [
-                NSLocalizedDescriptionKey: "ffmpeg exited with code \(process.terminationStatus)",
-                "stderr": stderrMessage
-            ]
-        )
+    /// Return when the process has exited.
+    func exit() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let once = ResumeOnce(continuation)
+            process.terminationHandler = { _ in once.resume() }
+            // Already gone before the handler was set: it will not be called, so do what it would have.
+            if !process.isRunning { once.resume() }
+        }
     }
-    Log.d("ending ffmpeg run")
+
+    /// Stop ffmpeg now.  It finishes the file it was writing and exits.
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        lock.unlock()
+        if process.isRunning { process.terminate() }
+    }
+
+    func stopListening() {
+        pipe.fileHandleForReading.readabilityHandler = nil
+    }
+
+    /// Throw if ffmpeg did not end well; call once it has exited.
+    func finish() throws {
+        stopListening()
+
+        if process.terminationStatus != 0 {
+            let stderrMessage = String(data: stderrCollector.collectedData(), encoding: .utf8) ?? "<unreadable stderr>"
+            Log.e("video render failed: \(stderrMessage)")
+            throw NSError(
+                domain: "ffmpeg",
+                code: Int(process.terminationStatus),
+                userInfo: [
+                    NSLocalizedDescriptionKey: "ffmpeg exited with code \(process.terminationStatus)",
+                    "stderr": stderrMessage
+                ]
+            )
+        }
+        Log.d("ending ffmpeg run")
+    }
+}
+
+/// Resumes a continuation the first time it is asked to and never again, so two things that can both
+/// say "the process is done" cannot resume it twice.
+private final class ResumeOnce: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    init(_ continuation: CheckedContinuation<Void, Never>) { self.continuation = continuation }
+
+    func resume() {
+        lock.lock()
+        let taken = continuation
+        continuation = nil
+        lock.unlock()
+        taken?.resume()
+    }
 }
 
 final class StderrCollector: @unchecked Sendable {

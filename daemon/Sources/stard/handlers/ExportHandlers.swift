@@ -215,7 +215,7 @@ enum ExportHandlers {
                     var prog = Star_V1_ProgressEvent(); prog.kind = .sequenceState(ev)
                     cont.yield(prog); cont.finish()
                 }
-                try runFFmpegWithProgress(
+                try await runCancellableFFmpegWithProgress(
                     arguments: ffmpegArgs,
                     totalFrames: totalFrames,
                     outputFolder: outputPath
@@ -230,22 +230,32 @@ enum ExportHandlers {
                 }
             }
 
-            do {
+            // The client cancelling the request cancels this task; that has to stop ffmpeg, not just stop
+            // listening to it, or the video keeps being written for a render the user gave up on.
+            await withTaskCancellationHandler {
                 for await event in stream {
-                    try Task.checkCancellation()
                     if let data = try? event.serializedData() {
                         await transport.sendStreamItem(id: id, payload: data)
                     }
                     if case .sequenceState(_) = event.kind { break }
                 }
-            } catch is CancellationError {
+            } onCancel: {
                 encodeTask.cancel()
             }
 
-            // Surface any ffmpeg error to the client.
-            if case .failure(let err) = await encodeTask.result {
+            switch await encodeTask.result {
+            case .failure(let err) where err is CancellationError:
+                // A cancelled encode leaves a partial file at the path the user chose; do not leave it there.
+                try? FileManager.default.removeItem(atPath: outputVideoPath)
+                Log.i("Export.Video: cancelled, removed the partial \(outputVideoPath)")
+                await transport.sendError(id: id, message: "cancelled", code: 499)
+                return
+            case .failure(let err):
+                // Surface any ffmpeg error to the client.
                 await transport.sendError(id: id, message: "\(err)")
                 return
+            case .success:
+                break
             }
 
             await transport.sendStreamEnd(id: id)

@@ -42,6 +42,7 @@ import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.ProgressEvent
 import com.star.proto.VideoCapabilities
 import com.star.proto.VideoEncodeSettings
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import com.star.desktop.i18n.localized
 
@@ -55,8 +56,14 @@ import com.star.desktop.i18n.localized
 fun RenderVideoDialog(app: AppViewModel) {
     val scope = rememberCoroutineScope()
     val caps by produceState<VideoCapabilities?>(null) { value = runCatching { app.export.capabilities() }.getOrNull() }
+    // Whether a render is under way, for the scrim as well as the buttons: clicking outside used to close the
+    // dialog while ffmpeg went on writing the video.
+    var rendering by remember { mutableStateOf(false) }
 
-    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = app::closeRenderVideo), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = !rendering, onClick = app::closeRenderVideo),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -74,37 +81,41 @@ fun RenderVideoDialog(app: AppViewModel) {
                 return@Column
             }
 
+            // Start from the settings the session already has (the video it was imported from, else its
+            // config), not the first entry of every list; each level is checked against what the one above allows.
+            val stored = remember(c) { storedVideoSettings(app.sessions.session.value) }
+            var choice by remember(c) { mutableStateOf(resolveVideoChoice(c, stored)) }
             val codecs = c.codecsList
-            var codec by remember(c) { mutableStateOf(codecs.firstOrNull()?.codec ?: "") }
-            val encoders = codecs.firstOrNull { it.codec == codec }?.encodersList ?: emptyList()
-            var encoder by remember(codec) { mutableStateOf(encoders.firstOrNull()?.encoder ?: "") }
-            val encCaps = encoders.firstOrNull { it.encoder == encoder }
+            val encoders = codecs.firstOrNull { it.codec == choice.codec }?.encodersList ?: emptyList()
+            val encCaps = encoders.firstOrNull { it.encoder == choice.encoder }
             val pixelFormats = encCaps?.pixelFormatsList ?: emptyList()
             val muxers = encCaps?.muxersList ?: emptyList()
-            var pixelFormat by remember(encoder) { mutableStateOf(pixelFormats.firstOrNull() ?: "") }
-            var muxer by remember(encoder) { mutableStateOf(muxers.firstOrNull() ?: "") }
             val frameRates = c.frameRatesList
-            var frameRate by remember(c) { mutableStateOf(frameRates.firstOrNull() ?: 30.0) }
 
-            Picker("Codec", codecs.map { it.codec }, codec) { codec = it }
-            Picker("Encoder", encoders.map { it.encoder }, encoder) { encoder = it }
-            Picker("Pixel format", pixelFormats, pixelFormat) { pixelFormat = it }
-            Picker("Container (muxer)", muxers, muxer) { muxer = it }
-            Picker("Frame rate", frameRates.map { it.toString() }, frameRate.toString()) { frameRate = it.toDoubleOrNull() ?: frameRate }
+            Picker("Codec", codecs.map { it.codec }, choice.codec) { choice = choice.withCodec(c, it) }
+            Picker("Encoder", encoders.map { it.encoder }, choice.encoder) { choice = choice.withEncoder(c, it) }
+            Picker("Pixel format", pixelFormats, choice.pixelFormat) { choice = choice.copy(pixelFormat = it) }
+            Picker("Container (muxer)", muxers, choice.muxer) { choice = choice.copy(muxer = it) }
+            // The rate in use is listed even when it is not one of the standard ones (29.97 from an import).
+            val rateOptions = (frameRates + choice.frameRate).distinct()
+            Picker("Frame rate", rateOptions.map { it.toString() }, choice.frameRate.toString()) {
+                choice = choice.copy(frameRate = it.toDoubleOrNull() ?: choice.frameRate)
+            }
 
             var status by remember { mutableStateOf<String?>(null) }
             var progress by remember { mutableStateOf<Float?>(null) }
-            var rendering by remember { mutableStateOf(false) }
+            var renderJob by remember { mutableStateOf<Job?>(null) }
 
             fun doRender() {
                 val sid = app.sessions.sessionId ?: return
-                if (rendering || encoder.isEmpty()) return
+                if (rendering || choice.encoder.isEmpty()) return
+                // Said once, here: the dialog is not asked to start again by the render prompt's "Yes" after this.
+                app.consumeRenderVideoAutoStart()
                 rendering = true
                 status = "Rendering…"
-                val settings = VideoEncodeSettings.newBuilder()
-                    .setFrameRate(frameRate).setCodec(codec).setEncoder(encoder)
-                    .setPixelFormat(pixelFormat).setMuxer(muxer).build()
-                scope.launch {
+                progress = null
+                val settings = choice.toSettings()
+                renderJob = scope.launch {
                     try {
                         app.export.exportVideo(sid, "", settings).collect { ev ->
                             if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) {
@@ -114,25 +125,32 @@ fun RenderVideoDialog(app: AppViewModel) {
                             }
                         }
                         status = "Done"
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        status = "Cancelled"   // the user stopped it: the daemon has stopped ffmpeg and removed the partial file
+                        throw e
                     } catch (e: Throwable) {
                         status = "Error: ${e.message}"
                     } finally {
                         rendering = false
+                        renderJob = null
                     }
                 }
             }
 
             // Auto-start when opened from the render prompt's "Yes" (once codecs + a default encoder load).
+            // consumeRenderVideoAutoStart() clears the flag as the render begins, so changing the codec afterwards
+            // does not start another.
             val autoStart by app.renderVideoAutoStart.collectAsState()
-            LaunchedEffect(autoStart, encoder) { if (autoStart && !rendering && encoder.isNotEmpty()) doRender() }
+            LaunchedEffect(autoStart, choice.encoder) { if (autoStart && !rendering && choice.encoder.isNotEmpty()) doRender() }
 
             status?.let { Text(it, color = StarColors.textSecondary, fontSize = 12.sp) }
             if (rendering) LinearProgressIndicator(progress = { progress ?: 0f }, modifier = Modifier.fillMaxWidth(), color = StarColors.accent)
 
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                OutlinedButton(onClick = app::closeRenderVideo, enabled = !rendering) { Text(localized("ui.cancel")) }
+                // While rendering this is the way to stop it: cancelling the request makes the daemon terminate ffmpeg.
+                OutlinedButton(onClick = { if (rendering) renderJob?.cancel() else app.closeRenderVideo() }) { Text(localized("ui.cancel")) }
                 Button(
-                    enabled = !rendering && encoder.isNotEmpty(),
+                    enabled = !rendering && choice.encoder.isNotEmpty(),
                     onClick = { doRender() },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                 ) { Text(localized("ui.render")) }

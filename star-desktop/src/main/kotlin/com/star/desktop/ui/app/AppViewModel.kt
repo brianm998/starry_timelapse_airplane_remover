@@ -254,6 +254,9 @@ class AppViewModel(
     fun openRenderVideo(autoStart: Boolean = false) { _renderVideoAutoStart.value = autoStart; _showRenderVideo.value = true }
     fun closeRenderVideo() { _showRenderVideo.value = false; _renderVideoAutoStart.value = false }
 
+    /** The render the prompt asked for has started: the dialog must not start another when something it watches changes. */
+    fun consumeRenderVideoAutoStart() { _renderVideoAutoStart.value = false }
+
     // ---- process → render prompt flow (macOS Pre/PostProcessingRenderPrompt) ----
     private val _showPreRenderPrompt = MutableStateFlow(false)
     val showPreRenderPrompt: StateFlow<Boolean> = _showPreRenderPrompt.asStateFlow()

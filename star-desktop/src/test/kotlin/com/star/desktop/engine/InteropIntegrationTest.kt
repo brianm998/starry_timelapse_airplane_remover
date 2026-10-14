@@ -874,6 +874,27 @@ class InteropIntegrationTest {
                 }
                 assertTrue(io.isNotEmpty(), "Render All reported no progress")
                 assertEquals(info.frameCount to info.frameCount, io.last(), "Render All did not end at N of N")
+
+                // G7: a video in a container whose name is not its file extension is named with the extension.
+                val caps = client.getVideoCapabilities()
+                val pick = caps.codecsList.flatMap { c -> c.encodersList.map { c.codec to it } }
+                    .firstOrNull { (_, e) -> "matroska" in e.muxersList && e.pixelFormatsCount > 0 }
+                if (pick == null) {
+                    println("[skip] no matroska-capable encoder in this ffmpeg; not checking the default video name")
+                } else {
+                    val settings = com.star.proto.VideoEncodeSettings.newBuilder()
+                        .setFrameRate(24.0).setCodec(pick.first).setEncoder(pick.second.encoder)
+                        .setPixelFormat(pick.second.pixelFormatsList.first()).setMuxer("matroska").build()
+                    val exported = runCatching { client.exportVideo(info.sessionId, "", settings).collect { } }
+                    if (exported.exceptionOrNull()?.message?.contains("ffmpeg") == true && exported.exceptionOrNull()?.message?.contains("exist") == true) {
+                        println("[skip] no ffmpeg beside this stard; not checking the default video name")
+                    } else {
+                        exported.getOrThrow()
+                        val videos = tmp.walkTopDown().filter { it.isFile && it.name.endsWith(".mkv") }.toList()
+                        assertTrue(videos.isNotEmpty(), "no .mkv was written: the default name did not use the container's extension")
+                        assertTrue(tmp.walkTopDown().none { it.name.endsWith(".matroska") }, "a file with the muxer's name as its extension was written")
+                    }
+                }
                 client.closeSession(info.sessionId)
             }
         } finally {

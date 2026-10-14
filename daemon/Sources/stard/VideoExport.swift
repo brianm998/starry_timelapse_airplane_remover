@@ -87,8 +87,12 @@ enum VideoExport {
     /// The video's path when the client did not choose one: next to the output sequence's
     /// directory, named after it, in the chosen container.  The macOS gui's render sheet
     /// defaults to the same name.
+    ///
+    /// The extension is the container's own file extension, which is not always its name: ffmpeg's `matroska`
+    /// muxer writes `.mkv` and `mpegts` writes `.ts`, and a file called `x.matroska` is one most players will
+    /// not open.  A container with no conventional extension is named by its ffmpeg name.
     static func defaultOutputPath(config: Config, muxer: FFmpegMuxer) -> String {
-        "\(config.outputPath)/\(config.basename).\(muxer.rawValue)"
+        "\(config.outputPath)/\(config.basename).\(muxer.defaultFileExtension ?? muxer.rawValue)"
     }
 
     /// The ffmpeg command line that encodes the frames listed in `listPath` — plus the audio

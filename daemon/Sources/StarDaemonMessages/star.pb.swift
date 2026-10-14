@@ -1018,9 +1018,10 @@ public struct Star_V1_SessionInfo: Sendable {
 
   /// Where this session's config.json actually lives — the file the daemon saves to, and the
   /// one to hand back to Session.OpenConfig to resume it. For a session opened from a
-  /// sequence or a video that is `scratch_session_dir/config.json`; for one opened from a
-  /// config it is the caller's own file, which is NOT in the scratch dir. Clients used to
-  /// build the scratch path themselves, which left a resumed session pointing at a file
+  /// sequence or a video that is `<temp output dir>/config.json`, beside the session's output
+  /// where the macOS app keeps it, so it can be recorded and opened again from either client; for
+  /// one opened from a config it is the caller's own file. Neither is in the scratch dir, which is
+  /// different on every open. Clients used to build the scratch path themselves, which named a file
   /// nothing ever wrote.
   public var configJsonPath: String = String()
 
