@@ -1,20 +1,26 @@
 package com.star.desktop.ui.dialogs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -22,52 +28,148 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.FrameStateCounts
+import com.star.desktop.domain.StepRow
+import com.star.desktop.i18n.localized
+import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
-import com.star.proto.FrameProcessingState
-import com.star.desktop.i18n.localized
+
+private val NAME_WIDTH = 180.dp
+private val COUNT_WIDTH = 140.dp
 
 /**
- * Processing progress screen (macOS `ProcessingModalView`): shows how far the run has gone, with a
- * Stop button (cancels the run) and a Dismiss button that only hides this screen — the run keeps
- * going in the background, so the user can inspect results while other frames still process.
+ * Processing progress screen (macOS `ProcessingModalView`): what each step of the run is doing, in one bar each (done, running, still
+ * queued) with "N of M complete" and what the step is on hover, how many frames are finished, how much of this Mac the run may use,
+ * a Stop (cancels the run) and a Dismiss that only hides this screen: the run keeps going, so the user can look at the frames that are done.
  */
 @Composable
-fun ProcessingModal(svm: SequenceViewModel) {
+fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     val frameStates by svm.frameStates.collectAsState()
-    val frameCount = svm.frameCount
-    val done = frameStates.values.count { it == FrameProcessingState.FPS_COMPLETE }
-    val fraction = if (frameCount > 0) done.toFloat() / frameCount else 0f
+    val report by svm.stepProgress.collectAsState()
+    val rows = StepRow.of(report)
+    val counts = FrameStateCounts(frameStates, svm.frameCount)
 
-    Box(Modifier.fillMaxSize().background(StarColors.scrim), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
         Column(
             Modifier
-                .widthIn(min = 380.dp, max = 480.dp)
+                .widthIn(min = 480.dp, max = 640.dp)
+                .padding(20.dp)
                 .clip(StarShapes.card)
-                .background(StarColors.prefsCard)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .background(StarColors.prefsCard),
         ) {
-            Text(localized("ui.processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            // The header: a spinner, what the run is doing (the status line while there is one, else how many frames are done), and the
+            // control for how much of the machine it may use, which takes effect on the run as it goes.
+            Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                CircularProgressIndicator(Modifier.size(20.dp), color = StarColors.white, strokeWidth = 2.dp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(localized("ui.processing_frames"), color = StarColors.white, fontSize = 18.sp)
+                    Text(
+                        report?.status?.takeIf { it.isNotEmpty() } ?: localized("progress.frames_complete", counts.complete, svm.frameCount),
+                        color = StarColors.textSecondary, fontSize = 12.sp,
+                    )
+                }
+                ResourceProfileControl(app)
+            }
+            HorizontalDivider(color = StarColors.cellDefault)
+
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                StepsView(rows, hasReport = report != null)
+            }
+
+            HorizontalDivider(color = StarColors.cellDefault)
+            Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                HoverTip(localized("ui.cancel_all_pending_processing_operations")) {
+                    Text(
+                        localized("ui.stop_processing"),
+                        color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Red.copy(alpha = 0.8f))
+                            .clickable { svm.cancelProcessing() }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
+                Box(Modifier.weight(1f))
+                HoverTip(localized("ui.keep_processing_and_go_back_to_the_frames")) {
+                    Button(onClick = svm::dismissProcessingModal, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
+                        Text(localized("ui.dismiss"))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One bar per processing step, stacked in the order the daemon sends them. */
+@Composable
+private fun StepsView(rows: List<StepRow>, hasReport: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(localized("ui.processing_steps"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        when {
+            // Nothing reported yet: the run is still being planned.
+            !hasReport -> Text("…", color = StarColors.textSecondary, fontSize = 12.sp)
+            // Every step turned out to have nothing left to do (a re-run over a sequence that is already finished).
+            rows.isEmpty() -> Text(localized("ui.nothing_to_do"), color = StarColors.textSecondary, fontSize = 12.sp)
+            else -> rows.forEach { StepRowView(it) }
+        }
+    }
+}
+
+@Composable
+private fun StepRowView(step: StepRow) {
+    HoverTip(step.help) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(step.name, color = if (step.hasWork) StarColors.white else StarColors.textSecondary, fontSize = 13.sp, maxLines = 2, modifier = Modifier.width(NAME_WIDTH))
+            StepBar(step, Modifier.weight(1f))
+            // A step with no operations is only on screen while the plan is still being worked out, so this says "not known yet".
             Text(
-                "$done of $frameCount frames complete",
-                color = StarColors.textSecondary, fontSize = 13.sp,
+                if (step.hasWork) localized("ui.n_of_m_complete", step.completed, step.total) else "—",
+                color = if (step.hasWork) StarColors.white else StarColors.textSecondary, fontSize = 12.sp, maxLines = 2,
+                textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(COUNT_WIDTH),
             )
-            LinearProgressIndicator(
-                progress = { fraction },
-                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                color = StarColors.accent,
-            )
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                OutlinedButton(onClick = svm::dismissProcessingModal) { Text(localized("ui.dismiss")) }
-                Button(
-                    onClick = svm::cancelProcessing,
-                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text(localized("ui.stop")) }
+        }
+    }
+}
+
+/** Done, then running, then what is still queued as the track behind them: the same three colours as the left panel's progress bar. */
+@Composable
+private fun StepBar(step: StepRow, modifier: Modifier = Modifier) {
+    Row(modifier.height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color(0.32f, 0.32f, 0.32f))) {
+        if (step.doneFraction > 0f) Box(Modifier.weight(step.doneFraction).fillMaxHeight().background(StarColors.green))
+        if (step.runningFraction > 0f) Box(Modifier.weight(step.runningFraction).fillMaxHeight().background(StarColors.yellow))
+        val rest = 1f - step.doneFraction - step.runningFraction
+        if (rest > 0f) Box(Modifier.weight(rest).fillMaxHeight())
+    }
+}
+
+/** "Use of this Mac": Full, Balanced, Light, or Custom (whose limits are in the settings). Changing it reaches a run in progress. */
+@Composable
+private fun ResourceProfileControl(app: AppViewModel) {
+    val session by app.sessions.session.collectAsState()
+    val current = session?.config?.takeIf { it.hasResourceProfile() }?.resourceProfile ?: "full"
+    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        HoverTip(localized("ui.use_of_this_mac_help")) {
+            Text(localized("ui.use_of_this_mac"), color = StarColors.textSecondary, fontSize = 11.sp)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for ((profile, key) in listOf("full" to "ui.use_full", "balanced" to "ui.use_balanced", "light" to "ui.use_light", "custom" to "ui.use_custom")) {
+                val selected = current == profile
+                Text(
+                    localized(key),
+                    color = if (selected) Color.White else StarColors.textPrimary, fontSize = 11.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(if (selected) StarColors.accent else StarColors.cellDefault)
+                        .clickable { app.setResourceProfile(profile) }
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                )
             }
         }
     }

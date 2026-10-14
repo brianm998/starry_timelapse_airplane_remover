@@ -69,6 +69,13 @@ class ProcessingRepository(
     val processing: StateFlow<Boolean> = _processing.asStateFlow()
 
     /**
+     * How far each step of the run in progress has got, as the daemon last reported it (`step_progress`); null before the first report
+     * of a run. Cleared as a run starts, so the last run's bars are not shown as this one's.
+     */
+    private val _stepProgress = MutableStateFlow<com.star.proto.StepProgress?>(null)
+    val stepProgress: StateFlow<com.star.proto.StepProgress?> = _stepProgress.asStateFlow()
+
+    /**
      * A run that finished with failed operations (`sequence_state = "error"`): the failures, one per line.
      * One-shot, not state — each is shown to the user once.
      */
@@ -101,6 +108,7 @@ class ProcessingRepository(
 
     suspend fun start(sessionId: String, startIndex: Int = 0, endIndex: Int = -1, force: Boolean = false) {
         _sequenceState.value = null
+        _stepProgress.value = null
         _processing.value = true
         startedSinceCancel = true
         try {
@@ -125,6 +133,7 @@ class ProcessingRepository(
     suspend fun reprocessFrames(sessionId: String, indices: List<Int>, type: com.star.proto.ReprocessingType) {
         if (indices.isEmpty()) return
         _sequenceState.value = null
+        _stepProgress.value = null
         _processing.value = true
         startedSinceCancel = true
         try {
@@ -141,6 +150,7 @@ class ProcessingRepository(
      */
     suspend fun startClaimedRun(start: suspend () -> Boolean) {
         _sequenceState.value = null
+        _stepProgress.value = null
         _processing.value = true
         startedSinceCancel = true
         val started = try {
@@ -186,6 +196,7 @@ class ProcessingRepository(
                 if (s == "error") _errors.tryEmit(ev.sequenceState.message.ifBlank { s })
             }
             ProgressEvent.KindCase.HORIZON_UPDATED -> _horizonUpdated.tryEmit(ev.horizonUpdated)
+            ProgressEvent.KindCase.STEP_PROGRESS -> _stepProgress.value = ev.stepProgress
             ProgressEvent.KindCase.IMAGE_SAVED ->
                 _imageSaved.tryEmit(ImageSaved(ev.imageSaved.frameIndex, ev.imageSaved.viewMode))
             ProgressEvent.KindCase.FRAME_EXISTING ->

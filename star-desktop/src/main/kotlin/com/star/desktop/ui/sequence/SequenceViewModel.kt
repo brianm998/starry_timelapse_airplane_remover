@@ -190,6 +190,9 @@ class SequenceViewModel(
     val frameStates: StateFlow<Map<Int, FrameProcessingState>> = processing.frameStates
     val isProcessing: StateFlow<Boolean> = processing.processing
 
+    /** How far each step of the run in progress has got (see [ProcessingRepository.stepProgress]). */
+    val stepProgress: StateFlow<com.star.proto.StepProgress?> = processing.stepProgress
+
     /** Whether each frame's outliers are loading (1) or in memory (2), as the daemon reports it; a frame not listed has them on disk. */
     val outlierLoadState: StateFlow<Map<Int, Int>> = processing.outlierLoadState
 

@@ -189,6 +189,7 @@ actor Session {
         runGeneration += 1
         let generation = runGeneration
         activeRun = generation
+        await beginStepReports(generation: generation, types: ProcessingSteps.types(for: await configManager.config()))
         // Before the graph is built, which surveys the disk: a horizon reference the user painted and put off
         // applying is taken on by this run, so starting one is a way through it and not a way around it.  Over
         // this run's own range only, so a reference whose span reaches past it stays pending for the frames
@@ -216,11 +217,12 @@ actor Session {
     }
 
     /// The graph's completion handler.  Ignored unless `generation` is still the current run.
-    private func runCompleted(generation: Int, errors errorList: [String], whenCurrent: (() -> Void)? = nil) {
+    private func runCompleted(generation: Int, errors errorList: [String], whenCurrent: (() -> Void)? = nil) async {
         guard activeRun == generation else {
             Log.i("stard: ignoring the completion of a stopped processing run")
             return
         }
+        await endStepReports(generation: generation)
         whenCurrent?()
         activeRun = nil
         buildTask = nil
@@ -252,6 +254,9 @@ actor Session {
         // From here nothing the old run reports counts, whatever order it arrives in.
         runGeneration += 1
         activeRun = nil
+        stepReportTask?.cancel()
+        stepReportTask = nil
+        stepReports = nil
         // A horizon refinement that is stopped gives back what it claimed, so it can be run again.
         if let affected = horizonRefinement.returnInFlight() {
             refinementMarks.formUnion(affected)
@@ -309,6 +314,54 @@ actor Session {
     }
 
     // MARK: - Horizon refinement
+
+    // MARK: - Step progress
+
+    /// What a run's step reports are measured against, and what they say about steps.
+    private struct StepReports {
+        let generation: Int
+        let types: [OperationType]
+        let baseline: StepProgressReport.Sample
+        let status: String?
+    }
+    private var stepReports: StepReports?
+    private var stepReportTask: Task<Void, Never>?
+    private var lastStepReport: Star_V1_StepProgress?
+
+    /// Report each step of the run `generation` about four times a second for as long as it changes (`ProgressEvent.step_progress`), measured
+    /// from now.  `status` is for a run that cannot be counted in operations.
+    private func beginStepReports(generation: Int, types: [OperationType], status: String? = nil) async {
+        stepReportTask?.cancel()
+        let baseline = await StepProgressReport.sample()
+        stepReports = StepReports(generation: generation, types: types, baseline: baseline, status: status)
+        lastStepReport = nil
+        stepReportTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let session = self else { return }
+                await session.reportSteps(generation: generation)
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+        }
+    }
+
+    private func reportSteps(generation: Int) async {
+        guard let context = stepReports, context.generation == generation, activeRun == generation, !closed else { return }
+        let report = StepProgressReport.make(types: context.types, now: await StepProgressReport.sample(),
+                                             baseline: context.baseline, status: context.status)
+        guard report != lastStepReport else { return }
+        lastStepReport = report
+        var prog = Star_V1_ProgressEvent()
+        prog.kind = .stepProgress(report)
+        emit(prog)
+    }
+
+    /// The run is over: one last report, so the bars end where the run did, and no more.
+    private func endStepReports(generation: Int) async {
+        await reportSteps(generation: generation)
+        stepReportTask?.cancel()
+        stepReportTask = nil
+        stepReports = nil
+    }
 
     /// Whether `frameIndex` is waiting for horizon refinement.
     func isRefinementPending(_ frameIndex: Int) -> Bool { refinementMarks.contains(frameIndex) }
@@ -495,6 +548,13 @@ actor Session {
         runGeneration += 1
         let generation = runGeneration
         activeRun = generation
+        // The steps this run takes are known now rather than guessed at: a row for each it is about to put on the queue, and a line that
+        // says what it is doing, since there is no frame graph to count (macOS passes exactly these to its modal).
+        var refinementSteps: [OperationType] = []
+        if !refinementFrames.isEmpty { refinementSteps.append(.mergedHorizon) }
+        if !framesToMerge.isEmpty { refinementSteps.append(.merge) }
+        await beginStepReports(generation: generation, types: refinementSteps,
+                               status: localized("ui.horizon_refinement_preparing", framesToMerge.count))
         let weakSelf = WeakSessionRef(self)
         let merging = framesToMerge
         let refining = refinementFrames
@@ -527,8 +587,8 @@ actor Session {
     }
 
     /// The refinement run finished: its frames are no longer pending, and it keeps what it claimed.
-    private func refinementCompleted(generation: Int, errors: [String], mergedFrames: Set<Int>) {
-        runCompleted(generation: generation, errors: errors) { [self] in
+    private func refinementCompleted(generation: Int, errors: [String], mergedFrames: Set<Int>) async {
+        await runCompleted(generation: generation, errors: errors) { [self] in
             refinementMarks.subtract(mergedFrames)
             horizonRefinement.finishClaim()
         }
@@ -673,6 +733,12 @@ actor Session {
     /// attaches after the open starts out knowing nothing about frames a resumed run already
     /// finished.  The live events that follow supersede it.
     func seedFrameStates(to cont: AsyncStream<Star_V1_ProgressEvent>.Continuation) async {
+        // Where the run in progress has got, which would otherwise not be heard until its next change.
+        if let report = lastStepReport {
+            var prog = Star_V1_ProgressEvent()
+            prog.kind = .stepProgress(report)
+            cont.yield(prog)
+        }
         for frame in frames {
             var ev = Star_V1_FrameStateEvent()
             ev.frameIndex = Int32(frame.frameIndex)

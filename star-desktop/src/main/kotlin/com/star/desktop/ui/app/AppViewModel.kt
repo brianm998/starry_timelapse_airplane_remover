@@ -256,6 +256,18 @@ class AppViewModel(
         }
     }
 
+    /**
+     * "Use of this Mac" (macOS ResourceProfileView): how much of the machine a run may take, `full`, `balanced`, `light` or `custom`. Applied to
+     * the session at once, which reaches a run in progress (the daemon moves its limits then and there).
+     */
+    fun setResourceProfile(profile: String) {
+        scope.launch {
+            val current = runCatching { sessions.getConfig() }.getOrNull() ?: return@launch
+            if (current.hasResourceProfile() && current.resourceProfile == profile) return@launch
+            runCatching { updateSessionConfig(current.toBuilder().setResourceProfile(profile).build()) }.onFailure { report(it.message ?: it.toString()) }
+        }
+    }
+
     private val _showSettings = MutableStateFlow(false)
     val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
     fun openSettings() { _showSettings.value = true }

@@ -2731,6 +2731,14 @@ public struct Star_V1_ProgressEvent: Sendable {
     set {kind = .horizonUpdated(newValue)}
   }
 
+  public var stepProgress: Star_V1_StepProgress {
+    get {
+      if case .stepProgress(let v)? = kind {return v}
+      return Star_V1_StepProgress()
+    }
+    set {kind = .stepProgress(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_Kind: Equatable, Sendable {
@@ -2744,8 +2752,54 @@ public struct Star_V1_ProgressEvent: Sendable {
     case imageSaved(Star_V1_ImageSaved)
     /// frame index: a horizon refinement operation finished for this frame
     case horizonUpdated(Int32)
+    case stepProgress(Star_V1_StepProgress)
 
   }
+
+  public init() {}
+}
+
+/// How far each step of the run in progress has got (macOS ProcessingStepsView), sent about four times a second while it changes.
+/// Counted in operations, since that is what there is to count: most steps have one per frame, but the frames whose work is already on
+/// disk have none (`already_done`), and a static camera merges every horizon in one.  Measured from when the run started.
+public struct Star_V1_StepCount: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// OperationType's case: horizon, mergedHorizon, starKeypoints, earthKeypoints, starHomography, earthHomography, outliers, merge
+  public var type: String = String()
+
+  public var queued: Int32 = 0
+
+  public var running: Int32 = 0
+
+  /// this run's
+  public var done: Int32 = 0
+
+  /// frames of this step finished before the run started, which belong at the done end of the bar
+  public var alreadyDone: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_StepProgress: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// in the order the modal stacks them
+  public var steps: [Star_V1_StepCount] = []
+
+  /// the run's plan is complete, so a step with nothing to do has been left out; until then every step is listed
+  public var graphBuilt: Bool = false
+
+  /// what the run is doing when it cannot be counted in operations (a horizon refinement); empty otherwise
+  public var status: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
@@ -6695,7 +6749,7 @@ extension Star_V1_CancelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageI
 
 extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgressEvent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_state\0\u{3}frame_saving_state\0\u{3}frame_existing\0\u{3}outliers_loaded\0\u{3}io_progress\0\u{3}sequence_state\0\u{3}video_exported\0\u{3}image_saved\0\u{3}horizon_updated\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_state\0\u{3}frame_saving_state\0\u{3}frame_existing\0\u{3}outliers_loaded\0\u{3}io_progress\0\u{3}sequence_state\0\u{3}video_exported\0\u{3}image_saved\0\u{3}horizon_updated\0\u{3}step_progress\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6810,6 +6864,19 @@ extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
           self.kind = .horizonUpdated(v)
         }
       }()
+      case 10: try {
+        var v: Star_V1_StepProgress?
+        var hadOneofValue = false
+        if let current = self.kind {
+          hadOneofValue = true
+          if case .stepProgress(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.kind = .stepProgress(v)
+        }
+      }()
       default: break
       }
     }
@@ -6857,6 +6924,10 @@ extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
       guard case .horizonUpdated(let v)? = self.kind else { preconditionFailure() }
       try visitor.visitSingularInt32Field(value: v, fieldNumber: 9)
     }()
+    case .stepProgress?: try {
+      guard case .stepProgress(let v)? = self.kind else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+    }()
     case nil: break
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -6864,6 +6935,96 @@ extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
 
   public static func ==(lhs: Star_V1_ProgressEvent, rhs: Star_V1_ProgressEvent) -> Bool {
     if lhs.kind != rhs.kind {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_StepCount: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".StepCount"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}queued\0\u{1}running\0\u{1}done\0\u{3}already_done\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.type) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.queued) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.running) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.done) }()
+      case 5: try { try decoder.decodeSingularInt32Field(value: &self.alreadyDone) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.type.isEmpty {
+      try visitor.visitSingularStringField(value: self.type, fieldNumber: 1)
+    }
+    if self.queued != 0 {
+      try visitor.visitSingularInt32Field(value: self.queued, fieldNumber: 2)
+    }
+    if self.running != 0 {
+      try visitor.visitSingularInt32Field(value: self.running, fieldNumber: 3)
+    }
+    if self.done != 0 {
+      try visitor.visitSingularInt32Field(value: self.done, fieldNumber: 4)
+    }
+    if self.alreadyDone != 0 {
+      try visitor.visitSingularInt32Field(value: self.alreadyDone, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_StepCount, rhs: Star_V1_StepCount) -> Bool {
+    if lhs.type != rhs.type {return false}
+    if lhs.queued != rhs.queued {return false}
+    if lhs.running != rhs.running {return false}
+    if lhs.done != rhs.done {return false}
+    if lhs.alreadyDone != rhs.alreadyDone {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_StepProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".StepProgress"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}steps\0\u{3}graph_built\0\u{1}status\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.steps) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.graphBuilt) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.steps.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.steps, fieldNumber: 1)
+    }
+    if self.graphBuilt != false {
+      try visitor.visitSingularBoolField(value: self.graphBuilt, fieldNumber: 2)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_StepProgress, rhs: Star_V1_StepProgress) -> Bool {
+    if lhs.steps != rhs.steps {return false}
+    if lhs.graphBuilt != rhs.graphBuilt {return false}
+    if lhs.status != rhs.status {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
