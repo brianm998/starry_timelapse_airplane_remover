@@ -72,6 +72,15 @@ build_x265() {
     # would pick the shared libstdc++.so, which then has to exist (at this version) on the
     # user's machine.  Point it at the archive instead.  (On macOS libc++ is a system library,
     # and on Windows -static does the same job.)
+    # Its private libs also name -lgcc_s (from the compiler's implicit link libraries).  The
+    # builds here use the static libgcc, so that pulls the shared one in beside it: on Windows
+    # the two define _Unwind_Resume twice and ffmpeg_g.exe does not link, and on Linux the
+    # probe that links a test program against x265 fails, so configure says "x265 not found".
+    # Same fix as build_ci.sh.
+    if [ "$T_OS" = linux ] || [ "$T_OS" = windows ]; then
+        sed -i.bak -E 's/-lgcc_s([[:space:]]|$)/\1/g' "$PREFIX/lib/pkgconfig/x265.pc"
+        rm -f "$PREFIX/lib/pkgconfig/x265.pc.bak"
+    fi
     if [ "$T_OS" = linux ]; then
         local libstdcxx
         libstdcxx=$("${CXX%% *}" -print-file-name=libstdc++.a)
