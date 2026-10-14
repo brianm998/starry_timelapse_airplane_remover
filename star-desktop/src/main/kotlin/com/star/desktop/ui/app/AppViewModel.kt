@@ -116,6 +116,20 @@ internal fun movingHorizonCountMultiplier(chosen: Int, total: Int): Double =
     chosen.toDouble() / suggestedMovingHorizonCount(total)
 
 /**
+ * The initial config for opening [source] (an image sequence's folder or a video file): selective cleaning,
+ * previews on, and output written into the folder that holds the source, never left to the daemon's
+ * per-session scratch fallback (a fresh hidden temp dir on every open). Config's `basename` already embeds
+ * the sequence's own dirname, so this can't collide with a sibling sequence, and opening the same source
+ * again resolves to the same output location, which is what lets `FrameAirplaneRemover.init`'s
+ * `outputFileExistsOnDisk()` check find a previous run's output and report finished frames as complete
+ * instead of unprocessed (macOS `inputImageSequencePath`).
+ */
+internal fun initialConfigBeside(source: String): Config =
+    SessionRepository.defaultInitialConfig().toBuilder()
+        .setOutputPath(java.io.File(source).parent ?: source)
+        .build()
+
+/**
  * Root app state (macOS `ViewModel`): owns the engine, repositories, prefs, and the current screen.
  * Engine status is collected in its own coroutine; opening a source routes Initial → Loading →
  * Sequence; engine death while a session is open surfaces an error and returns to Initial.
@@ -519,18 +533,8 @@ class AppViewModel(
         }
     }
 
-    /**
-     * Output goes to the sequence directory's own parent (macOS `inputImageSequencePath`), not
-     * left to the daemon's per-session scratch-dir fallback (a fresh temp dir every open). Config's
-     * `basename` already embeds the sequence's own dirname, so this can't collide with a sibling
-     * sequence — and reopening the SAME sequence resolves to the SAME output location, which is
-     * what lets `FrameAirplaneRemover.init`'s `outputFileExistsOnDisk()` check find a previous
-     * run's output and report already-processed frames as complete instead of unprocessed.
-     */
     fun openSequence(dir: String) = launchOpen("Opening image sequence", dir, promptStartup = true) {
-        val outputPath = java.io.File(dir).parent ?: dir
-        val config = SessionRepository.defaultInitialConfig().toBuilder().setOutputPath(outputPath).build()
-        sessions.openSequence(dir, config)
+        sessions.openSequence(dir, initialConfigBeside(dir))
     }
 
     fun openConfig(path: String) = launchOpen("Resuming session", path) { sessions.openConfig(path) }
@@ -538,11 +542,17 @@ class AppViewModel(
     fun openVideo(path: String) {
         scope.launch {
             ensureConnected()
+            if (engine.client == null) {
+                showEngineDown() // as launchOpen: say why, with Restart, not "engine not connected"
+                return@launch
+            }
             _screen.value = AppScreen.Loading("Importing video", path, null)
             try {
                 closeOpenSession() // opening over an open session: cancel it, close it, then open
                 var info: SessionInfo? = null
-                sessions.openVideo(path).collect { p ->
+                // Output beside the video, as macOS puts it (the parent of the extracted frames' folder is the
+                // video's own folder), not in the daemon's hidden per-session scratch fallback.
+                sessions.openVideo(path, initialConfigBeside(path)).collect { p ->
                     when (p.kindCase) {
                         OpenProgress.KindCase.PROGRESS -> {
                             val io = p.progress
