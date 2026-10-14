@@ -719,11 +719,34 @@ message ExportVideoRequest {
 // Drives the Render Video dialog's cascading pickers. Built from StarCore's enum relationships.
 message GetVideoCapabilitiesRequest {}
 message VideoCapabilities {
-  repeated double     frame_rates = 1;  // FrameRate.allCases rawValues
+  repeated double     frame_rates = 1;  // FrameRate.allCases rawValues (the standard ones, not Custom)
   repeated CodecCaps  codecs      = 2;
+  // The same rates with what each is for, and then Custom as a choice of its own (custom = true; its value is only where the field starts).
+  repeated FrameRateCaps frame_rate_caps = 3;
 }
-message CodecCaps   { string codec    = 1; repeated EncoderCaps encoders = 2; }
-message EncoderCaps { string encoder  = 1; repeated string pixel_formats = 2; repeated string muxers = 3; }
+// `description` is StarCore's own (English) sentence, which the Mac app's dialog shows too.
+message CodecCaps   {
+  string codec    = 1;
+  repeated EncoderCaps encoders = 2;
+  string description = 3;
+}
+message EncoderCaps {
+  string encoder  = 1;
+  repeated string pixel_formats = 2;   // names only; the same order as pixel_format_caps
+  repeated string muxers = 3;          // names only; the same order as muxer_caps
+  string description = 4;
+  repeated PixelFormatCaps pixel_format_caps = 5;
+  repeated MuxerCaps       muxer_caps        = 6;
+}
+message FrameRateCaps   { double value = 1; string description = 2; bool custom = 3; }
+message PixelFormatCaps { string name = 1; int32 components = 2; int32 bits_per_pixel = 3; string bit_depths = 4; }
+// `file_extension` is the file extension of the container, without the dot: Matroska's muxer is "matroska" and its files are ".mkv".
+message MuxerCaps       { string name = 1; string description = 2; string file_extension = 3; }
+
+// Where Export.Video would write its video for this container, before any render: the default name the Render Video dialog shows. `muxer` is a
+// container name from the capabilities, or empty for the session's own.
+message GetDefaultVideoPathRequest  { string session_id = 1; string muxer = 2; }
+message GetDefaultVideoPathResponse { string output_video_path = 1; }  // absolute
 
 // ---- Alignment (read-only diagnostics for the Alignment window) ----
 

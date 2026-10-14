@@ -44,6 +44,8 @@ import com.star.proto.FrameViewMode
 import com.star.proto.GetFramePreviewRequest
 import com.star.proto.GetHorizonOverlayRequest
 import com.star.proto.GetHorizonOverlayResponse
+import com.star.proto.GetDefaultVideoPathRequest
+import com.star.proto.GetDefaultVideoPathResponse
 import com.star.proto.GetVideoCapabilitiesRequest
 import com.star.proto.HelloRequest
 import com.star.proto.HelloResponse
@@ -407,6 +409,14 @@ class StarClient(private val conn: StdioConnection) {
 
     fun renderSequence(sessionId: String): Flow<ProgressEvent> =
         serverStream("Export.RenderSequence", sessionRef(sessionId), ProgressEvent.parser())
+
+    /** Where a video would be written for the container [muxer] (empty for the session's own), before anything is rendered. */
+    suspend fun getDefaultVideoPath(sessionId: String, muxer: String = ""): String =
+        call(
+            "Export.GetDefaultVideoPath",
+            GetDefaultVideoPathRequest.newBuilder().setSessionId(sessionId).setMuxer(muxer).build(),
+            GetDefaultVideoPathResponse.parser(),
+        ).outputVideoPath
 
     fun exportVideo(
         sessionId: String,

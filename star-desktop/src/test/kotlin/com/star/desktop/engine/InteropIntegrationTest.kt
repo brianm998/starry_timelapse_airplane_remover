@@ -560,6 +560,68 @@ class InteropIntegrationTest {
     }
 
     /**
+     * G7: the capabilities describe what they offer, the dialog is told where a video would go before there is one, and a render goes exactly there
+     * (the container's own file extension, not its muxer name) under the settings the dialog would have sent.
+     */
+    @Test
+    fun aRenderedVideoGoesWhereTheDefaultPathSaid() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] aRenderedVideoGoesWhereTheDefaultPathSaid — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-render").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            withEngine { client ->
+                val caps = client.getVideoCapabilities()
+                assertTrue(caps.codecsList.isNotEmpty(), "no codecs")
+                assertTrue(caps.frameRateCapsList.last().custom, "Custom is the last choice")
+                assertEquals(caps.frameRatesList.size + 1, caps.frameRateCapsCount)
+                val codec = caps.codecsList.first()
+                val encoder = codec.encodersList.first()
+                assertTrue(codec.description.isNotEmpty() && encoder.description.isNotEmpty(), "descriptions: ${codec.codec} / ${encoder.encoder}")
+                assertEquals(encoder.pixelFormatsList, encoder.pixelFormatCapsList.map { it.name })
+                assertEquals(encoder.muxersList, encoder.muxerCapsList.map { it.name })
+                val muxer = encoder.muxerCapsList.first()
+
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                val said = client.getDefaultVideoPath(info.sessionId, muxer.name)
+                assertTrue(said.endsWith(".${muxer.fileExtension}"), "the extension is the container's own: $said")
+                assertTrue(File(said).isAbsolute, "an absolute path, since the daemon's working directory is nobody else's: $said")
+
+                val ended = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+                val sub = CoroutineScope(SupervisorJob()).launch {
+                    runCatching {
+                        client.streamProgress(info.sessionId).collect { ev ->
+                            if (ev.kindCase == ProgressEvent.KindCase.SEQUENCE_STATE && ev.sequenceState.state in setOf("done", "error", "cancelled")) ended.trySend(ev.sequenceState.state)
+                        }
+                    }
+                }
+                delay(400)
+                client.startProcessing(info.sessionId, 0, -1)
+                assertEquals("done", withTimeoutOrNull(1_200_000) { ended.receive() })
+                sub.cancel()
+
+                val settings = com.star.proto.VideoEncodeSettings.newBuilder().setFrameRate(24.0).setCodec(codec.codec).setEncoder(encoder.encoder)
+                    .setPixelFormat(encoder.pixelFormatsList.first()).setMuxer(muxer.name).build()
+                var wrote: String? = null
+                client.exportVideo(info.sessionId, "", settings).collect { ev ->
+                    if (ev.kindCase == ProgressEvent.KindCase.VIDEO_EXPORTED) wrote = ev.videoExported.outputVideoPath
+                }
+                assertEquals(said, wrote, "the video went somewhere other than where the dialog said")
+                assertTrue(File(said).length() > 0, "no video at $said")
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
+    /**
      * F3: the daemon says whether full resolution keypoint detection suits the sequence on this machine, with the numbers behind it; and a
      * divisor the client writes is the divisor in the config afterwards (sending one is also what marks it chosen).
      */

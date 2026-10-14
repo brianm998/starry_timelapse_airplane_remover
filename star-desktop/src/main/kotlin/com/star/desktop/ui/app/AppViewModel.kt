@@ -10,12 +10,16 @@ import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.data.SessionRepository
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.engine.EngineState
+import com.star.desktop.domain.RenderState
+import com.star.desktop.domain.RenderVideo
+import com.star.desktop.domain.isRendering
 import com.star.desktop.engine.EngineStatus
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.util.Log
 import com.star.proto.CleanMethod
 import com.star.proto.Config
 import com.star.proto.OpenProgress
+import com.star.proto.ProgressEvent
 import com.star.proto.SequenceProgress
 import com.star.proto.SessionInfo
 import kotlinx.coroutines.CancellationException
@@ -327,7 +331,62 @@ class AppViewModel(
     private val _renderVideoAutoStart = MutableStateFlow(false)
     val renderVideoAutoStart: StateFlow<Boolean> = _renderVideoAutoStart.asStateFlow()
     fun openRenderVideo(autoStart: Boolean = false) { _renderVideoAutoStart.value = autoStart; _showRenderVideo.value = true }
-    fun closeRenderVideo() { _showRenderVideo.value = false; _renderVideoAutoStart.value = false }
+    fun closeRenderVideo() {
+        // The dialog is the only way to stop a render: closing it over one would leave ffmpeg writing a video nobody is looking at.
+        if (isRendering) return
+        _showRenderVideo.value = false
+        _renderVideoAutoStart.value = false
+        _renderState.value = RenderState.Choosing
+    }
+
+    // ---- the render itself (macOS RenderVideoSheetView's isRendering / renderSuccess / renderingError) ----
+    //
+    // Held here and not in the dialog so that anything that has to know whether a render is going can ask: closing the window will.
+    private val _renderState = MutableStateFlow<RenderState>(RenderState.Choosing)
+    val renderState: StateFlow<RenderState> = _renderState.asStateFlow()
+    private var renderJob: Job? = null
+
+    /** Whether a video is being rendered. */
+    val isRendering: Boolean get() = _renderState.value.isRendering
+
+    /**
+     * Render the video with [settings] into [fileName] (which only says what to call it in the dialog: the daemon names the file and says where it
+     * put it). Ends in [RenderState.Succeeded] with where it went, or [RenderState.Failed]; cancelling ([cancelRender]) goes back to choosing, with
+     * the daemon having stopped ffmpeg and removed the partial file.
+     */
+    fun startRender(settings: com.star.proto.VideoEncodeSettings, fileName: String) {
+        val sessionId = sessions.sessionId ?: return
+        if (isRendering) return
+        // Said once, here: the dialog is not asked to start again by the render prompt's "Yes" after this.
+        consumeRenderVideoAutoStart()
+        _renderState.value = RenderState.Rendering(fileName, 0, 0)
+        renderJob = scope.launch {
+            try {
+                var writtenTo: String? = null
+                export.exportVideo(sessionId, "", settings).collect { ev ->
+                    when (ev.kindCase) {
+                        ProgressEvent.KindCase.IO_PROGRESS ->
+                            _renderState.value = RenderState.Rendering(fileName, ev.ioProgress.current, ev.ioProgress.total)
+                        ProgressEvent.KindCase.VIDEO_EXPORTED -> writtenTo = ev.videoExported.outputVideoPath
+                        else -> Unit
+                    }
+                }
+                val path = writtenTo?.takeIf { it.isNotEmpty() }
+                _renderState.value = RenderState.Succeeded(path?.let { RenderVideo.fileName(it) } ?: fileName, path)
+            } catch (e: CancellationException) {
+                _renderState.value = RenderState.Choosing   // the user stopped it
+                throw e
+            } catch (e: Throwable) {
+                Log.w("App") { "render failed: ${e.message}" }
+                _renderState.value = RenderState.Failed(e.message ?: e.toString())
+            } finally {
+                renderJob = null
+            }
+        }
+    }
+
+    /** Stop the render in progress. */
+    fun cancelRender() { renderJob?.cancel() }
 
     /** The render the prompt asked for has started: the dialog must not start another when something it watches changes. */
     fun consumeRenderVideoAutoStart() { _renderVideoAutoStart.value = false }
@@ -809,6 +868,8 @@ class AppViewModel(
         _showSettings.value = false
         _showExpertSettings.value = false
         _sequenceProgress.value = null
+        renderJob?.cancel()
+        _renderState.value = RenderState.Choosing
         _showRenderVideo.value = false
         _renderVideoAutoStart.value = false
         _showOutlierWindow.value = false

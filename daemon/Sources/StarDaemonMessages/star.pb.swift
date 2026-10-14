@@ -3171,16 +3171,20 @@ public struct Star_V1_VideoCapabilities: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// FrameRate.allCases rawValues
+  /// FrameRate.allCases rawValues (the standard ones, not Custom)
   public var frameRates: [Double] = []
 
   public var codecs: [Star_V1_CodecCaps] = []
+
+  /// The same rates with what each is for, and then Custom as a choice of its own (custom = true; its value is only where the field starts).
+  public var frameRateCaps: [Star_V1_FrameRateCaps] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
+/// `description` is StarCore's own (English) sentence, which the Mac app's dialog shows too.
 public struct Star_V1_CodecCaps: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -3189,6 +3193,8 @@ public struct Star_V1_CodecCaps: Sendable {
   public var codec: String = String()
 
   public var encoders: [Star_V1_EncoderCaps] = []
+
+  public var description_p: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3202,9 +3208,96 @@ public struct Star_V1_EncoderCaps: Sendable {
 
   public var encoder: String = String()
 
+  /// names only; the same order as pixel_format_caps
   public var pixelFormats: [String] = []
 
+  /// names only; the same order as muxer_caps
   public var muxers: [String] = []
+
+  public var description_p: String = String()
+
+  public var pixelFormatCaps: [Star_V1_PixelFormatCaps] = []
+
+  public var muxerCaps: [Star_V1_MuxerCaps] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_FrameRateCaps: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var value: Double = 0
+
+  public var description_p: String = String()
+
+  public var custom: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_PixelFormatCaps: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var components: Int32 = 0
+
+  public var bitsPerPixel: Int32 = 0
+
+  public var bitDepths: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// `file_extension` is the file extension of the container, without the dot: Matroska's muxer is "matroska" and its files are ".mkv".
+public struct Star_V1_MuxerCaps: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var description_p: String = String()
+
+  public var fileExtension: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Where Export.Video would write its video for this container, before any render: the default name the Render Video dialog shows. `muxer` is a
+/// container name from the capabilities, or empty for the session's own.
+public struct Star_V1_GetDefaultVideoPathRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var muxer: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_GetDefaultVideoPathResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var outputVideoPath: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -7850,7 +7943,7 @@ extension Star_V1_GetVideoCapabilitiesRequest: SwiftProtobuf.Message, SwiftProto
 
 extension Star_V1_VideoCapabilities: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoCapabilities"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rates\0\u{1}codecs\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rates\0\u{1}codecs\0\u{3}frame_rate_caps\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7860,6 +7953,7 @@ extension Star_V1_VideoCapabilities: SwiftProtobuf.Message, SwiftProtobuf._Messa
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedDoubleField(value: &self.frameRates) }()
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.codecs) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.frameRateCaps) }()
       default: break
       }
     }
@@ -7872,12 +7966,16 @@ extension Star_V1_VideoCapabilities: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if !self.codecs.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.codecs, fieldNumber: 2)
     }
+    if !self.frameRateCaps.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.frameRateCaps, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_VideoCapabilities, rhs: Star_V1_VideoCapabilities) -> Bool {
     if lhs.frameRates != rhs.frameRates {return false}
     if lhs.codecs != rhs.codecs {return false}
+    if lhs.frameRateCaps != rhs.frameRateCaps {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7885,7 +7983,7 @@ extension Star_V1_VideoCapabilities: SwiftProtobuf.Message, SwiftProtobuf._Messa
 
 extension Star_V1_CodecCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CodecCaps"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}codec\0\u{1}encoders\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}codec\0\u{1}encoders\0\u{1}description\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7895,6 +7993,7 @@ extension Star_V1_CodecCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.codec) }()
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.encoders) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
       default: break
       }
     }
@@ -7907,12 +8006,16 @@ extension Star_V1_CodecCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if !self.encoders.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.encoders, fieldNumber: 2)
     }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_CodecCaps, rhs: Star_V1_CodecCaps) -> Bool {
     if lhs.codec != rhs.codec {return false}
     if lhs.encoders != rhs.encoders {return false}
+    if lhs.description_p != rhs.description_p {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7920,7 +8023,7 @@ extension Star_V1_CodecCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
 
 extension Star_V1_EncoderCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EncoderCaps"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}encoder\0\u{3}pixel_formats\0\u{1}muxers\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}encoder\0\u{3}pixel_formats\0\u{1}muxers\0\u{1}description\0\u{3}pixel_format_caps\0\u{3}muxer_caps\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7931,6 +8034,9 @@ extension Star_V1_EncoderCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       case 1: try { try decoder.decodeSingularStringField(value: &self.encoder) }()
       case 2: try { try decoder.decodeRepeatedStringField(value: &self.pixelFormats) }()
       case 3: try { try decoder.decodeRepeatedStringField(value: &self.muxers) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.pixelFormatCaps) }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.muxerCaps) }()
       default: break
       }
     }
@@ -7946,6 +8052,15 @@ extension Star_V1_EncoderCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     if !self.muxers.isEmpty {
       try visitor.visitRepeatedStringField(value: self.muxers, fieldNumber: 3)
     }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 4)
+    }
+    if !self.pixelFormatCaps.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.pixelFormatCaps, fieldNumber: 5)
+    }
+    if !self.muxerCaps.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.muxerCaps, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7953,6 +8068,199 @@ extension Star_V1_EncoderCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     if lhs.encoder != rhs.encoder {return false}
     if lhs.pixelFormats != rhs.pixelFormats {return false}
     if lhs.muxers != rhs.muxers {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.pixelFormatCaps != rhs.pixelFormatCaps {return false}
+    if lhs.muxerCaps != rhs.muxerCaps {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_FrameRateCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FrameRateCaps"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}value\0\u{1}description\0\u{1}custom\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularDoubleField(value: &self.value) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.custom) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.value.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.value, fieldNumber: 1)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 2)
+    }
+    if self.custom != false {
+      try visitor.visitSingularBoolField(value: self.custom, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_FrameRateCaps, rhs: Star_V1_FrameRateCaps) -> Bool {
+    if lhs.value != rhs.value {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.custom != rhs.custom {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_PixelFormatCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PixelFormatCaps"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}components\0\u{3}bits_per_pixel\0\u{3}bit_depths\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.components) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.bitsPerPixel) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.bitDepths) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if self.components != 0 {
+      try visitor.visitSingularInt32Field(value: self.components, fieldNumber: 2)
+    }
+    if self.bitsPerPixel != 0 {
+      try visitor.visitSingularInt32Field(value: self.bitsPerPixel, fieldNumber: 3)
+    }
+    if !self.bitDepths.isEmpty {
+      try visitor.visitSingularStringField(value: self.bitDepths, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_PixelFormatCaps, rhs: Star_V1_PixelFormatCaps) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.components != rhs.components {return false}
+    if lhs.bitsPerPixel != rhs.bitsPerPixel {return false}
+    if lhs.bitDepths != rhs.bitDepths {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_MuxerCaps: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MuxerCaps"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}description\0\u{3}file_extension\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.fileExtension) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 2)
+    }
+    if !self.fileExtension.isEmpty {
+      try visitor.visitSingularStringField(value: self.fileExtension, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_MuxerCaps, rhs: Star_V1_MuxerCaps) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.fileExtension != rhs.fileExtension {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_GetDefaultVideoPathRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetDefaultVideoPathRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{1}muxer\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.muxer) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if !self.muxer.isEmpty {
+      try visitor.visitSingularStringField(value: self.muxer, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_GetDefaultVideoPathRequest, rhs: Star_V1_GetDefaultVideoPathRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.muxer != rhs.muxer {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_GetDefaultVideoPathResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetDefaultVideoPathResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_video_path\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.outputVideoPath) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.outputVideoPath.isEmpty {
+      try visitor.visitSingularStringField(value: self.outputVideoPath, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_GetDefaultVideoPathResponse, rhs: Star_V1_GetDefaultVideoPathResponse) -> Bool {
+    if lhs.outputVideoPath != rhs.outputVideoPath {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

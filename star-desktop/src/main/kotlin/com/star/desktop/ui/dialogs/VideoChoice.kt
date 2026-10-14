@@ -64,4 +64,21 @@ fun storedVideoSettings(info: SessionInfo?): VideoEncodeSettings? {
     return null
 }
 
+/**
+ * What a render starts from: the video an import came from keeps its own (a 29.97 fps import is rendered at 29.97); otherwise what the user last chose
+ * in this dialog, in either app ([remembered], with a field only where they have chosen one), over what the config recorded.
+ */
+fun startingVideoSettings(info: SessionInfo?, remembered: VideoEncodeSettings?): VideoEncodeSettings? {
+    if (info != null && info.hasSourceVideoInfo() && info.sourceVideoInfo.settings.codec.isNotEmpty()) return info.sourceVideoInfo.settings
+    val configured = storedVideoSettings(info)
+    if (remembered == null) return configured
+    val b = (configured ?: VideoEncodeSettings.getDefaultInstance()).toBuilder()
+    if (remembered.codec.isNotEmpty()) b.codec = remembered.codec
+    if (remembered.encoder.isNotEmpty()) b.encoder = remembered.encoder
+    if (remembered.pixelFormat.isNotEmpty()) b.pixelFormat = remembered.pixelFormat
+    if (remembered.muxer.isNotEmpty()) b.muxer = remembered.muxer
+    if (remembered.frameRate > 0) b.frameRate = remembered.frameRate
+    return b.build()
+}
+
 private const val DEFAULT_FRAME_RATE = 24.0

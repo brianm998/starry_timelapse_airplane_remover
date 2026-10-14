@@ -1,6 +1,7 @@
 package com.star.desktop.ui.dialogs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,11 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -31,38 +36,39 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.RenderState
+import com.star.desktop.domain.RenderVideo
+import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.desktop.util.FileReveal
-import com.star.proto.ProgressEvent
 import com.star.proto.VideoCapabilities
 import com.star.proto.VideoEncodeSettings
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.star.desktop.i18n.localized
 import java.io.File
 
 /**
- * Render Video sheet (macOS `RenderVideoSheetView`): cascading pickers driven by
- * `Export.GetVideoCapabilities` (codec → encoder → pixel format / muxer, plus frame rate), then
- * `Export.Video`. Stops the live processing-progress subscription first, since the daemon shares one
- * progress slot per session.
+ * Render Video sheet (macOS `RenderVideoSheetView`): cascading pickers driven by `Export.GetVideoCapabilities` (codec → encoder → pixel format and
+ * container, plus frame rate, any rate if Custom), each with what it is, how long the video comes out, and what it will be called; then the
+ * render, with its progress and a Cancel; then where the video went, with a button that shows it in the file manager; or why it failed.
+ *
+ * Which of those it is, is the app's ([AppViewModel.renderState]), so that closing the window can ask whether a render is going. Clicking
+ * outside during a render does nothing; Cancel is the way to stop one.
  */
 @Composable
 fun RenderVideoDialog(app: AppViewModel) {
-    val scope = rememberCoroutineScope()
     val caps by produceState<VideoCapabilities?>(null) { value = runCatching { app.export.capabilities() }.getOrNull() }
-    // Whether a render is under way, for the scrim as well as the buttons: clicking outside used to close the
-    // dialog while ffmpeg went on writing the video.
-    var rendering by remember { mutableStateOf(false) }
+    val state by app.renderState.collectAsState()
+    val rendering = state is RenderState.Rendering
 
     Box(
         Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = !rendering, onClick = app::closeRenderVideo),
@@ -70,136 +76,230 @@ fun RenderVideoDialog(app: AppViewModel) {
     ) {
         Column(
             modifier = Modifier
-                .widthIn(max = 520.dp)
+                .widthIn(max = 560.dp)
                 .clip(StarShapes.card)
                 .background(StarColors.prefsCard)
                 .clickable(enabled = false) {}
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(localized("ui.render_video"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-
-            val c = caps
-            if (c == null) {
-                Text(localized("ui.loading_codecs"), color = StarColors.textSecondary, fontSize = 13.sp)
-                return@Column
-            }
-
-            // Start from the settings the session already has (the video it was imported from, else its
-            // config), not the first entry of every list; each level is checked against what the one above allows.
-            val stored = remember(c) { storedVideoSettings(app.sessions.session.value) }
-            var choice by remember(c) { mutableStateOf(resolveVideoChoice(c, stored)) }
-            val codecs = c.codecsList
-            val encoders = codecs.firstOrNull { it.codec == choice.codec }?.encodersList ?: emptyList()
-            val encCaps = encoders.firstOrNull { it.encoder == choice.encoder }
-            val pixelFormats = encCaps?.pixelFormatsList ?: emptyList()
-            val muxers = encCaps?.muxersList ?: emptyList()
-            val frameRates = c.frameRatesList
-
-            Picker("Codec", codecs.map { it.codec }, choice.codec) { choice = choice.withCodec(c, it) }
-            Picker("Encoder", encoders.map { it.encoder }, choice.encoder) { choice = choice.withEncoder(c, it) }
-            Picker("Pixel format", pixelFormats, choice.pixelFormat) { choice = choice.copy(pixelFormat = it) }
-            Picker("Container (muxer)", muxers, choice.muxer) { choice = choice.copy(muxer = it) }
-            // The rate in use is listed even when it is not one of the standard ones (29.97 from an import).
-            val rateOptions = (frameRates + choice.frameRate).distinct()
-            Picker("Frame rate", rateOptions.map { it.toString() }, choice.frameRate.toString()) {
-                choice = choice.copy(frameRate = it.toDoubleOrNull() ?: choice.frameRate)
-            }
-
-            var status by remember { mutableStateOf<String?>(null) }
-            var videoPath by remember { mutableStateOf<String?>(null) }   // where the last render went, once it has
-            var progress by remember { mutableStateOf<Float?>(null) }
-            var renderJob by remember { mutableStateOf<Job?>(null) }
-
-            fun doRender() {
-                val sid = app.sessions.sessionId ?: return
-                if (rendering || choice.encoder.isEmpty()) return
-                // Said once, here: the dialog is not asked to start again by the render prompt's "Yes" after this.
-                app.consumeRenderVideoAutoStart()
-                rendering = true
-                videoPath = null
-                status = "Rendering…"
-                progress = null
-                val settings = choice.toSettings()
-                renderJob = scope.launch {
-                    try {
-                        // No path is asked for, so the daemon names the file and says where it put it.
-                        var writtenTo: String? = null
-                        app.export.exportVideo(sid, "", settings).collect { ev ->
-                            when (ev.kindCase) {
-                                ProgressEvent.KindCase.IO_PROGRESS -> {
-                                    val io = ev.ioProgress
-                                    progress = if (io.total > 0) io.current.toFloat() / io.total else null
-                                    status = "Rendering ${io.current} / ${io.total}"
-                                }
-                                ProgressEvent.KindCase.VIDEO_EXPORTED -> writtenTo = ev.videoExported.outputVideoPath
-                                else -> Unit
-                            }
-                        }
-                        status = renderedStatus(writtenTo)
-                        videoPath = writtenTo?.takeIf { it.isNotEmpty() }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        status = "Cancelled"   // the user stopped it: the daemon has stopped ffmpeg and removed the partial file
-                        throw e
-                    } catch (e: Throwable) {
-                        status = "Error: ${e.message}"
-                    } finally {
-                        rendering = false
-                        renderJob = null
+            when (val s = state) {
+                is RenderState.Rendering -> RenderingView(s, onCancel = app::cancelRender)
+                is RenderState.Succeeded -> SucceededView(s, onDismiss = app::closeRenderVideo)
+                is RenderState.Failed -> FailedView(s, onDismiss = app::closeRenderVideo)
+                RenderState.Choosing -> {
+                    val c = caps
+                    if (c == null) {
+                        Text(localized("ui.render_video"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                        Text(localized("ui.loading_codecs"), color = StarColors.textSecondary, fontSize = 13.sp)
+                    } else {
+                        ChoiceView(app, c)
                     }
                 }
-            }
-
-            fun reveal(path: String) {
-                scope.launch {
-                    val shown = withContext(Dispatchers.IO) { FileReveal.reveal(File(path)) }
-                    if (!shown) status = "Could not open the file manager. The video is at $path"
-                }
-            }
-
-            // Auto-start when opened from the render prompt's "Yes" (once codecs + a default encoder load).
-            // consumeRenderVideoAutoStart() clears the flag as the render begins, so changing the codec afterwards
-            // does not start another.
-            val autoStart by app.renderVideoAutoStart.collectAsState()
-            LaunchedEffect(autoStart, choice.encoder) { if (autoStart && !rendering && choice.encoder.isNotEmpty()) doRender() }
-
-            status?.let { RenderStatusRow(it, videoPath, ::reveal) }
-            if (rendering) LinearProgressIndicator(progress = { progress ?: 0f }, modifier = Modifier.fillMaxWidth(), color = StarColors.accent)
-
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                // While rendering this is the way to stop it: cancelling the request makes the daemon terminate ffmpeg.
-                OutlinedButton(onClick = { if (rendering) renderJob?.cancel() else app.closeRenderVideo() }) { Text(localized("ui.cancel")) }
-                Button(
-                    enabled = !rendering && choice.encoder.isNotEmpty(),
-                    onClick = { doRender() },
-                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text(localized("ui.render")) }
             }
         }
     }
 }
 
-/**
- * What the dialog says once the video is written: where it is, as the daemon reported it. The dialog
- * asks for no path, so the daemon chooses one and this is the only place the user can see it. The
- * sentence is the catalogue's, which the Mac app's dialog uses too, so it reads in the user's language.
- * An engine that does not report the path (one older than the event) gets the plain "Done".
- */
-internal fun renderedStatus(videoPath: String?): String =
-    if (videoPath.isNullOrEmpty()) "Done" else localized("ui.successfully_rendered", videoPath)
-
-/**
- * The line under the pickers: how the render is going or how it ended, and once a video is written the
- * button that shows it in the file manager, as the Mac app's dialog has.
- */
+/** The pickers, with what each choice is, and the Cancel and Render buttons. */
 @Composable
-internal fun RenderStatusRow(status: String, videoPath: String?, onReveal: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(status, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-        if (videoPath != null) {
-            OutlinedButton(onClick = { onReveal(videoPath) }) { Text(revealLabel()) }
+private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
+    val info = app.sessions.session.value
+    val frameCount = info?.frameCount ?: 0
+
+    // Start from what the render was last set to (the video an import came from, else what the user last chose, in this app or the Mac's, else the
+    // config), not the first entry of every list; each level is checked against what the one above allows.
+    val start = remember(c) { startingVideoSettings(info, rememberedVideoSettings(app)) }
+    var choice by remember(c) { mutableStateOf(resolveVideoChoice(c, start)) }
+    /** A choice the user made: kept for the next render, as the Mac keeps it. */
+    fun choose(next: VideoChoice) {
+        choice = next
+        app.prefs.videoFrameRate = next.frameRate
+        app.prefs.videoCodec = next.codec.takeIf { it.isNotEmpty() }
+        app.prefs.videoEncoder = next.encoder.takeIf { it.isNotEmpty() }
+        app.prefs.videoPixelFormat = next.pixelFormat.takeIf { it.isNotEmpty() }
+        app.prefs.videoMuxer = next.muxer.takeIf { it.isNotEmpty() }
+    }
+
+    val codecs = c.codecsList
+    val codecCaps = codecs.firstOrNull { it.codec == choice.codec }
+    val encoders = codecCaps?.encodersList.orEmpty()
+    val encCaps = encoders.firstOrNull { it.encoder == choice.encoder }
+    val pixelFormats = encCaps?.pixelFormatsList.orEmpty()
+    val muxers = encCaps?.muxersList.orEmpty()
+    val pixelCaps = encCaps?.pixelFormatCapsList?.firstOrNull { it.name == choice.pixelFormat }
+    val muxerCaps = encCaps?.muxerCapsList?.firstOrNull { it.name == choice.muxer }
+    val rateEntry = RenderVideo.rateEntry(c, choice.frameRate)
+
+    Text(localized("ui.render_video_from_n_frames", frameCount), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+
+    // Frame rate: a standard one, or Custom with a field for any rate up to 1000.
+    val rateOptions = c.frameRateCapsList.map { (if (it.custom) "custom" else RenderVideo.rateText(it.value)) to (if (it.custom) localized("ui.custom_2") else RenderVideo.rateText(it.value)) }
+    val rateKey = if (rateEntry?.custom == true) "custom" else RenderVideo.rateText(choice.frameRate)
+    var customText by remember(c) { mutableStateOf(RenderVideo.rateText(choice.frameRate)) }
+    val customRate = RenderVideo.customRate(customText)
+    Picker(localized("ui.frame_rate"), rateOptions, rateKey) { key ->
+        if (key == "custom") {
+            // Kept at what it was, or a rate to start from; the field takes over from here.
+            val rate = customRate ?: RenderVideo.customRate(RenderVideo.rateText(choice.frameRate)) ?: 24.0
+            customText = RenderVideo.rateText(rate)
+            choose(choice.copy(frameRate = rate))
+        } else {
+            key.toDoubleOrNull()?.let { choose(choice.copy(frameRate = it)) }
         }
     }
+    if (rateEntry?.custom == true) {
+        val problem = customRate == null
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            if (problem) {
+                Text(
+                    localized("ui.enter_a_number_from_a_to_b", RenderVideo.rateText(RenderVideo.CUSTOM_MIN), RenderVideo.rateText(RenderVideo.CUSTOM_MAX)),
+                    color = StarColors.red, fontSize = 10.sp, modifier = Modifier.weight(1f),
+                )
+            }
+            BasicTextField(
+                value = customText,
+                onValueChange = { text ->
+                    customText = text.filter { it.isDigit() || it == '.' }
+                    // Applied as it is typed, so Render is never one keystroke behind what the field says.
+                    RenderVideo.customRate(customText)?.let { choose(choice.copy(frameRate = it)) }
+                },
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 12.sp, color = StarColors.textPrimary),
+                cursorBrush = SolidColor(StarColors.white),
+                modifier = Modifier
+                    .width(80.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(StarColors.sidePanel)
+                    .border(1.dp, if (problem) StarColors.red else StarColors.cellDefault, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            )
+            Text(localized("ui.frames_per_second"), color = StarColors.textSecondary, fontSize = 12.sp)
+        }
+    } else {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Text(localized("ui.frames_per_second"), color = StarColors.textSecondary, fontSize = 12.sp)
+        }
+    }
+    Text(
+        localized("ui.total_length").trim().removePrefix("-").trim() + " " + RenderVideo.formatLength(RenderVideo.lengthSeconds(frameCount, choice.frameRate)),
+        color = StarColors.textSecondary, fontSize = 12.sp,
+    )
+    rateEntry?.description?.takeIf { it.isNotEmpty() }?.let { Description(it) }
+
+    HorizontalDivider(color = StarColors.cellDefault)
+
+    Picker(localized("ui.codec"), codecs.map { it.codec to it.codec }, choice.codec) { choose(choice.withCodec(c, it)) }
+    codecCaps?.description?.takeIf { it.isNotEmpty() }?.let { Description(it) }
+
+    Picker(localized("ui.encoder"), encoders.map { it.encoder to (if (it.description.isEmpty()) it.encoder else "${it.encoder} [${it.description}]") }, choice.encoder) {
+        choose(choice.withEncoder(c, it))
+    }
+    Picker(localized("ui.pixel_format"), pixelFormats.map { it to it }, choice.pixelFormat) { choose(choice.copy(pixelFormat = it)) }
+    // What the pixel format is made of: how many components, how many bits in all, and how deep each.
+    pixelCaps?.let {
+        Description(localized("ui.n_components_per_pixel", it.components))
+        Description(localized("ui.n_bits_per_pixel", it.bitsPerPixel))
+        if (it.bitDepths.isNotEmpty()) Description(localized("ui.bit_depths", it.bitDepths))
+    }
+
+    HorizontalDivider(color = StarColors.cellDefault)
+
+    Picker(localized("ui.container"), muxers.map { it to it }, choice.muxer) { choose(choice.copy(muxer = it)) }
+    muxerCaps?.let { Description("${it.description} - (.${it.fileExtension})") }
+
+    HorizontalDivider(color = StarColors.cellDefault)
+
+    // What the video will be called, which depends on the container: asked of the daemon, which names it.
+    val fileName by produceState<String?>(null, choice.muxer) {
+        value = app.sessions.sessionId?.let { sid -> runCatching { RenderVideo.fileName(app.export.defaultVideoPath(sid, choice.muxer)) }.getOrNull() }
+    }
+    Text(fileName ?: "…", color = StarColors.textPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+
+    val canRender = choice.encoder.isNotEmpty() && (rateEntry?.custom != true || customRate != null)
+    fun doRender() {
+        if (!canRender) return
+        app.startRender(choice.toSettings(), fileName ?: "")
+    }
+    // Auto-start when opened from the render prompt's "Yes" (once codecs and a default encoder load). Starting clears the flag, so changing the
+    // codec afterwards does not start another.
+    val autoStart by app.renderVideoAutoStart.collectAsState()
+    LaunchedEffect(autoStart, choice.encoder) { if (autoStart && choice.encoder.isNotEmpty()) doRender() }
+
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+        OutlinedButton(onClick = app::closeRenderVideo) { Text(localized("ui.cancel")) }
+        Button(
+            enabled = canRender,
+            onClick = { doRender() },
+            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+        ) { Text(localized("ui.render")) }
+    }
+}
+
+/** What the render has got to: the file, the frame, a bar, and a Cancel that makes the daemon terminate ffmpeg. */
+@Composable
+private fun RenderingView(state: RenderState.Rendering, onCancel: () -> Unit) {
+    Text(localized("ui.rendering_file", state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+    Text(localized("ui.frame_n_of_m", state.current, state.total), color = StarColors.textSecondary, fontSize = 13.sp)
+    LinearProgressIndicator(progress = { state.fraction }, modifier = Modifier.fillMaxWidth(), color = StarColors.green, trackColor = StarColors.cellDefault)
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+        OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
+    }
+}
+
+/** Where the video went, and the button that shows it. */
+@Composable
+private fun SucceededView(state: RenderState.Succeeded, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var problem by remember { mutableStateOf<String?>(null) }
+    Text(renderedStatus(state.path, state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+    state.path?.let { Text(it, color = StarColors.textSecondary, fontSize = 11.sp) }
+    problem?.let { Text(it, color = StarColors.red, fontSize = 12.sp) }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+        state.path?.let { path ->
+            OutlinedButton(onClick = {
+                scope.launch {
+                    val shown = withContext(Dispatchers.IO) { FileReveal.reveal(File(path)) }
+                    if (!shown) problem = localized("ui.could_not_open_the_file_manager_the_video_is_at", path)
+                }
+            }) { Text(revealLabel()) }
+        }
+        Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.dismiss")) }
+    }
+}
+
+/** Why it failed: its own view, as on the Mac, with the message to read and copy. */
+@Composable
+private fun FailedView(state: RenderState.Failed, onDismiss: () -> Unit) {
+    androidx.compose.foundation.text.selection.SelectionContainer {
+        Text(localized("ui.rendering_error", state.message), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+        Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.dismiss")) }
+    }
+}
+
+/** What the user last chose, as the settings the dialog would start from; a field only where they have chosen one. */
+private fun rememberedVideoSettings(app: AppViewModel): VideoEncodeSettings? {
+    val p = app.prefs
+    if (p.videoFrameRate == null && p.videoCodec == null && p.videoEncoder == null && p.videoPixelFormat == null && p.videoMuxer == null) return null
+    return VideoEncodeSettings.newBuilder().also { b ->
+        p.videoFrameRate?.let { b.frameRate = it }
+        p.videoCodec?.let { b.codec = it }
+        p.videoEncoder?.let { b.encoder = it }
+        p.videoPixelFormat?.let { b.pixelFormat = it }
+        p.videoMuxer?.let { b.muxer = it }
+    }.build()
+}
+
+/**
+ * What the dialog says once the video is written: "Successfully Rendered" and the file's name. [path] is where the daemon said it put it, which
+ * names the file when the dialog did not (it asks for none); an engine that does not say gets [fallbackName].
+ */
+internal fun renderedStatus(path: String?, fallbackName: String = ""): String {
+    val name = path?.takeIf { it.isNotEmpty() }?.let { RenderVideo.fileName(it) } ?: fallbackName
+    return if (name.isEmpty()) localized("ui.done") else localized("ui.successfully_rendered", name)
 }
 
 /**
@@ -210,29 +310,35 @@ internal fun revealLabel(osName: String = System.getProperty("os.name").orEmpty(
     if (FileReveal.platform(osName) == FileReveal.Platform.MAC) localized("ui.reveal_in_finder") else localized("ui.show_in_folder")
 
 @Composable
-private fun Picker(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
+private fun Description(text: String) {
+    Text(text, color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
+}
+
+/** A picker of (value, shown) pairs: the value is what is chosen, the text is what the user reads. */
+@Composable
+private fun Picker(label: String, options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = StarColors.textSecondary, fontSize = 12.sp)
         Box {
             Box(
                 Modifier
-                    .width(260.dp)
+                    .width(300.dp)
                     .clip(StarShapes.picker)
                     .background(StarColors.cellDefault)
                     .clickable(enabled = options.isNotEmpty()) { expanded = true }
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Text(
-                    selected.ifEmpty { "—" },
+                    options.firstOrNull { it.first == selected }?.second ?: selected.ifEmpty { "—" },
                     color = StarColors.textPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                options.forEach { opt ->
+                options.forEach { (value, shown) ->
                     DropdownMenuItem(
-                        text = { Text(opt, color = if (opt == selected) StarColors.accent else StarColors.textPrimary, fontSize = 12.sp) },
-                        onClick = { onSelect(opt); expanded = false },
+                        text = { Text(shown, color = if (value == selected) StarColors.accent else StarColors.textPrimary, fontSize = 12.sp) },
+                        onClick = { onSelect(value); expanded = false },
                     )
                 }
             }

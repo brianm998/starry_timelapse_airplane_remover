@@ -350,7 +350,7 @@ final class DispatcherTests: XCTestCase {
           "Outlier.GetLineCandidates", "Outlier.SetLine", "Debug.GetHoughLineFinderArgs", "Debug.SetHoughLineFinderArgs",
           "Processing.Start", "Processing.Restart", "Processing.StreamProgress", "Processing.Cancel",
           "Processing.ReprocessFrames",
-          "Export.RenderSequence", "Export.Video", "Export.GetVideoCapabilities",
+          "Export.RenderSequence", "Export.Video", "Export.GetVideoCapabilities", "Export.GetDefaultVideoPath",
           "Alignment.Get", "Alignment.GetSequence",
           "Horizon.SetReference", "Horizon.GetReference", "Horizon.ClearReference",
           "Horizon.Reprocess", "Horizon.GetOverlay", "Horizon.ComputeInBand", "Horizon.GetBest",

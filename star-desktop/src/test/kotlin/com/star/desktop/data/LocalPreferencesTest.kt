@@ -185,6 +185,35 @@ class LocalPreferencesBooleansTest {
         assertEquals(false, LocalPreferences().showAlignmentInProcessingWindow)
     }
 
+    /** What the Render Video dialog last chose is kept under the Mac app's keys, in the shape its coding gives them, so either app opens with it. */
+    @Test fun theRenderChoicesAreKeptTheWayTheMacKeepsThem() {
+        val p = LocalPreferences()
+        assertEquals(null, p.videoFrameRate)
+        p.videoFrameRate = 29.97
+        p.videoCodec = "h264"
+        p.videoEncoder = "libx264"
+        p.videoPixelFormat = "yuv420p"
+        p.videoMuxer = "mov"
+        val text = prefsFile.readText()
+        assertTrue(text.contains("\"frameRate\":{\"fps_29_97\":{}}"), text)
+        assertTrue(text.contains("\"codec\":\"h264\"") && text.contains("\"encoder\":\"libx264\"") && text.contains("\"pixelFormat\":\"yuv420p\"") && text.contains("\"muxer\":\"mov\""), text)
+
+        val again = LocalPreferences()
+        assertEquals(29.97, again.videoFrameRate)
+        assertEquals("h264", again.videoCodec)
+        assertEquals("libx264", again.videoEncoder)
+        assertEquals("yuv420p", again.videoPixelFormat)
+        assertEquals("mov", again.videoMuxer)
+    }
+
+    @Test fun aRateTheMacWroteIsReadByThisClient() {
+        prefsFile.writeText("""{"frameRate":{"custom":{"_0":12.5}},"codec":"prores"}""")
+        val p = LocalPreferences()
+        assertEquals(12.5, p.videoFrameRate)
+        assertEquals("prores", p.videoCodec)
+        assertEquals(null, p.videoMuxer)
+    }
+
     @Test fun turningThemBackOnWorks() {
         val p = LocalPreferences()
         p.showHorizonPainterInstructions = false

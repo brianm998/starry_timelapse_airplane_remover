@@ -12,27 +12,36 @@ import kotlin.test.assertTrue
  * find the video by.
  */
 class RenderVideoDialogTest {
+    @kotlin.test.BeforeTest fun english() = com.star.desktop.i18n.Strings.setOverride("en")
+    @kotlin.test.AfterTest fun systemLanguage() = com.star.desktop.i18n.Strings.setOverride(null)
+
 
     @Test
-    fun theStatusNamesTheVideoWhenTheDaemonSaidWhereItWent() {
+    fun theStatusNamesTheFileTheDaemonSaidItWrote() {
         val path = "/Users/someone/Movies/night sky-star-v-0_11_5.mov"
 
         val status = renderedStatus(path)
 
-        assertTrue(status.contains(path), "the status does not show the path: $status")
+        assertTrue(status.contains("night sky-star-v-0_11_5.mov"), "the status does not name the file: $status")
+        assertTrue(!status.contains("/Users/someone"), "the folder is for the reveal button, not for the sentence: $status")
     }
 
     /** The sentence comes from the catalogue the Mac app's dialog uses, not from a copy made here. */
     @Test
     fun theStatusIsTheCataloguesSentenceSoItReadsInTheUsersLanguage() {
-        assertEquals(localized("ui.successfully_rendered", "/x.mov"), renderedStatus("/x.mov"))
+        assertEquals(localized("ui.successfully_rendered", "x.mov"), renderedStatus("/some/where/x.mov"))
     }
 
-    /** An engine older than the event never says where, and the dialog still has to finish. */
+    /** An engine older than the event never says where: the dialog still names the file it asked for. */
     @Test
-    fun theStatusIsJustDoneWhenTheDaemonDidNotSayWhere() {
-        assertEquals("Done", renderedStatus(null))
-        assertEquals("Done", renderedStatus(""))
+    fun theStatusNamesTheRequestedFileWhenTheDaemonDidNotSayWhere() {
+        assertEquals(localized("ui.successfully_rendered", "y.mov"), renderedStatus(null, "y.mov"))
+        assertEquals(localized("ui.successfully_rendered", "y.mov"), renderedStatus("", "y.mov"))
+    }
+
+    @Test
+    fun withNoNameAtAllItIsJustDone() {
+        assertEquals(localized("ui.done"), renderedStatus(null))
     }
 
     /** A Mac has a Finder, and the catalogue says so in every language; the others have none. */

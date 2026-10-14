@@ -99,4 +99,39 @@ class VideoChoiceTest {
         assertNull(storedVideoSettings(session(configVideo = settings(codec = ""))), "a config with no codec says nothing")
         assertNull(storedVideoSettings(null))
     }
+
+    // ---- what a render starts from
+
+    private fun remembered(codec: String = "", encoder: String = "", fps: Double = 0.0, pixelFormat: String = "", muxer: String = ""): VideoEncodeSettings =
+        VideoEncodeSettings.newBuilder().setCodec(codec).setEncoder(encoder).setFrameRate(fps).setPixelFormat(pixelFormat).setMuxer(muxer).build()
+
+    @Test fun anImportKeepsItsOwnRateWhateverWasChosenBefore() {
+        val s = startingVideoSettings(session(videoFromSource = settings("prores", fps = 29.97)), remembered(codec = "h264", fps = 60.0))
+        assertEquals("prores", s?.codec)
+        assertEquals(29.97, s?.frameRate)
+    }
+
+    @Test fun otherwiseWhatTheUserLastChoseBeatsWhatTheConfigRecorded() {
+        val s = startingVideoSettings(session(configVideo = settings("prores", fps = 24.0)), remembered(codec = "h264", fps = 30.0))
+        assertEquals("h264", s?.codec)
+        assertEquals(30.0, s?.frameRate)
+    }
+
+    /** The user chose a frame rate and never a codec: the codec is the config's, not nothing. */
+    @Test fun aFieldTheUserNeverChoseStaysWhatTheConfigHas() {
+        val s = startingVideoSettings(session(configVideo = settings("prores", fps = 24.0)), remembered(fps = 50.0))
+        assertEquals("prores", s?.codec)
+        assertEquals(50.0, s?.frameRate)
+    }
+
+    @Test fun withNothingRememberedItIsWhatWasStored() {
+        assertEquals("prores", startingVideoSettings(session(configVideo = settings("prores")), null)?.codec)
+        assertNull(startingVideoSettings(session(), null))
+    }
+
+    @Test fun whatWasChosenWithNothingStoredStillSeedsTheRender() {
+        val s = startingVideoSettings(session(), remembered(codec = "h264", muxer = "mov"))
+        assertEquals("h264", s?.codec)
+        assertEquals("mov", s?.muxer)
+    }
 }

@@ -2,6 +2,7 @@ package com.star.desktop.data
 
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.star.desktop.domain.FrameRatePref
 import com.star.desktop.util.Log
 import java.io.File
 
@@ -83,6 +84,12 @@ class LocalPreferences {
     /** Set a list of strings preference; null forgets it, returning it to its default. */
     fun setStrings(key: String, value: List<String>?) = edit { if (value == null) it.remove(key) else it[key] = value }
 
+    /** The stored value under [key] as the file holds it, for a preference whose shape is not one of the simple ones above (the frame rate's). */
+    fun raw(key: String): Any? = snapshot[key]
+
+    /** Store [value] as it is, or forget [key] for null. */
+    fun setRaw(key: String, value: Any?) = edit { if (value == null) it.remove(key) else it[key] = value }
+
     /** Set a true/false preference; null forgets it, returning it to its default. */
     fun setBool(key: String, value: Boolean?) = edit { if (value == null) it.remove(key) else it[key] = value }
 
@@ -103,6 +110,26 @@ class LocalPreferences {
     var showAlignmentInProcessingWindow: Boolean
         get() = bool("showAlignmentInProcessingWindow") ?: true
         set(value) = setBool("showAlignmentInProcessingWindow", value)
+
+    /**
+     * What the user last chose in the Render Video dialog, under the keys the macOS app uses (`frameRate`, `codec`, `encoder`, `pixelFormat`,
+     * `muxer`), so a new render starts from it in either app. Null where nothing has been chosen.
+     */
+    var videoFrameRate: Double?
+        get() = FrameRatePref.fromPref(raw("frameRate"))
+        set(value) = setRaw("frameRate", value?.let { FrameRatePref.toPref(it) })
+    var videoCodec: String?
+        get() = string("codec")?.takeIf { it.isNotEmpty() }
+        set(value) = setString("codec", value)
+    var videoEncoder: String?
+        get() = string("encoder")?.takeIf { it.isNotEmpty() }
+        set(value) = setString("encoder", value)
+    var videoPixelFormat: String?
+        get() = string("pixelFormat")?.takeIf { it.isNotEmpty() }
+        set(value) = setString("pixelFormat", value)
+    var videoMuxer: String?
+        get() = string("muxer")?.takeIf { it.isNotEmpty() }
+        set(value) = setString("muxer", value)
 
     fun setSkipRenderPrompt(value: Boolean) = edit { it["skipRenderPromptAfterProcessing"] = value }
 

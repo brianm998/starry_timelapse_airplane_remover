@@ -19,6 +19,9 @@ class ExportRepository(private val clientProvider: () -> StarClient?) {
     /** The codec→encoder→{pixel format, muxer} validity graph for the Render Video dialog. */
     suspend fun capabilities(): VideoCapabilities = c().getVideoCapabilities()
 
+    /** Where the video would go for [muxer], before it is rendered: the file name the dialog shows. */
+    suspend fun defaultVideoPath(sessionId: String, muxer: String): String = c().getDefaultVideoPath(sessionId, muxer)
+
     fun renderSequence(sessionId: String): Flow<ProgressEvent> = c().renderSequence(sessionId)
 
     fun exportVideo(sessionId: String, outputPath: String, settings: VideoEncodeSettings): Flow<ProgressEvent> =

@@ -120,6 +120,7 @@ extension Dispatcher {
         register(method: "Export.RenderSequence")       { id, payload, transport in await ExportHandlers.renderSequence(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Export.Video")                { id, payload, transport in await ExportHandlers.video(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Export.GetVideoCapabilities") { id, payload, transport in await ExportHandlers.getVideoCapabilities(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
+        register(method: "Export.GetDefaultVideoPath") { id, payload, transport in await ExportHandlers.getDefaultVideoPath(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Alignment
         register(method: "Alignment.Get")         { id, payload, transport in await AlignmentHandlers.get(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

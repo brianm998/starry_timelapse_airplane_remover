@@ -108,26 +108,81 @@ enum ExportHandlers {
     // a folder of images can be converted to.
     static func getVideoCapabilities(id: UInt64, payload: Data, transport: StdioTransport) async {
         do {
-            var caps = Star_V1_VideoCapabilities()
-            caps.frameRates = FrameRate.allCases
-                .filter { if case .custom = $0 { false } else { true } }
-                .map { $0.rawValue }
+            try await transport.respond(id: id, payload: videoCapabilities().serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
 
-            for codec in FFmpegCodec.availableVideoCodecs {
-                var cc = Star_V1_CodecCaps()
-                cc.codec = codec.rawValue
-                for enc in codec.availableEncoders {
-                    var ec = Star_V1_EncoderCaps()
-                    ec.encoder       = enc.rawValue
-                    ec.pixelFormats  = VideoExport.prioritized(
-                        enc.usablePixelFormats.map { $0.rawValue }, preferred: VideoExport.preferredPixelFormats)
-                    ec.muxers        = VideoExport.prioritized(
-                        enc.supportedMuxers.map { $0.rawValue }, preferred: VideoExport.preferredMuxers)
-                    cc.encoders.append(ec)
+    /// The capability graph with what each entry is, for the dialog's descriptions (macOS `RenderVideoSheetView`): why a frame rate, what a codec
+    /// is, what an encoder is, how many components and bits a pixel format has, and what container a muxer is and what its files are called.
+    static func videoCapabilities() -> Star_V1_VideoCapabilities {
+        var caps = Star_V1_VideoCapabilities()
+        let standard = FrameRate.allCases.filter { if case .custom = $0 { false } else { true } }
+        caps.frameRates = standard.map { $0.rawValue }
+        for rate in standard {
+            var fc = Star_V1_FrameRateCaps()
+            fc.value = rate.rawValue
+            fc.description_p = rate.description
+            caps.frameRateCaps.append(fc)
+        }
+        // Custom is a choice of its own: any rate from a field, which the daemon accepts as long as it is positive.
+        var custom = Star_V1_FrameRateCaps()
+        custom.custom = true
+        custom.value = 24
+        custom.description_p = FrameRate.custom(24).description
+        caps.frameRateCaps.append(custom)
+
+        for codec in FFmpegCodec.availableVideoCodecs {
+            var cc = Star_V1_CodecCaps()
+            cc.codec = codec.rawValue
+            cc.description_p = codec.description
+            for enc in codec.availableEncoders {
+                var ec = Star_V1_EncoderCaps()
+                ec.encoder       = enc.rawValue
+                ec.description_p = enc.description
+                let formats = VideoExport.prioritized(
+                    enc.usablePixelFormats.map { $0.rawValue }, preferred: VideoExport.preferredPixelFormats)
+                let muxers = VideoExport.prioritized(
+                    enc.supportedMuxers.map { $0.rawValue }, preferred: VideoExport.preferredMuxers)
+                ec.pixelFormats = formats
+                ec.muxers       = muxers
+                for name in formats {
+                    guard let format = FFmpegPixelFormat(rawValue: name) else { continue }
+                    var pc = Star_V1_PixelFormatCaps()
+                    pc.name = name
+                    pc.components = Int32(format.numberOfComponents)
+                    pc.bitsPerPixel = Int32(format.bitsPerPixel)
+                    pc.bitDepths = format.bitDepths
+                    ec.pixelFormatCaps.append(pc)
                 }
-                caps.codecs.append(cc)
+                for name in muxers {
+                    guard let muxer = FFmpegMuxer(rawValue: name) else { continue }
+                    var mc = Star_V1_MuxerCaps()
+                    mc.name = name
+                    mc.description_p = muxer.description
+                    mc.fileExtension = muxer.defaultFileExtension ?? muxer.rawValue
+                    ec.muxerCaps.append(mc)
+                }
+                cc.encoders.append(ec)
             }
-            try await transport.respond(id: id, payload: caps.serializedData())
+            caps.codecs.append(cc)
+        }
+        return caps
+    }
+
+    /// `Export.GetDefaultVideoPath`: where a video would be written for this container, before anything is rendered.
+    static func getDefaultVideoPath(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_GetDefaultVideoPathRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            let config = await session.configManager.config()
+            let muxer = FFmpegMuxer(rawValue: req.muxer) ?? config.muxer
+            var resp = Star_V1_GetDefaultVideoPathResponse()
+            resp.outputVideoPath = URL(fileURLWithPath: VideoExport.defaultOutputPath(config: config, muxer: muxer)).path
+            try await transport.respond(id: id, payload: resp.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }
