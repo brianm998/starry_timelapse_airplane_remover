@@ -144,6 +144,8 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                         DetectionType.DETECTION_STRONG to localized("detection_type.strong"),
                         DetectionType.DETECTION_STRONGER to localized("detection_type.stronger"),
                         DetectionType.DETECTION_EXCESSIVE to localized("detection_type.excessive"),
+                        // A config that has its own blob processor shows as this, rather than as none of the above.
+                        DetectionType.DETECTION_CUSTOM to localized("detection_type.custom"),
                     ),
                     selected = detection,
                     onSelect = { detection = it },
@@ -195,6 +197,9 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 }
             }
 
+            // Not an expert setting: GPU acceleration is one most people care about, so it is here without "Show Expert Settings" and open.
+            GpuGroup(cfg, edit, boolEdits, app.engineStatus.value.let { (it as? EngineStatus.Connected)?.daemonVersion })
+
             ToggleRow(localized(if (showExpert) "ui.hide_expert_settings" else "ui.show_expert_settings"), showExpert) { app.setShowExpertSettings(it) }
             if (showExpert) {
                 // Only to word the "needs a newer engine" note; whether a field is supported
@@ -203,26 +208,6 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 ExpertGroup(localized("ui.alignment_settings"), ALIGNMENT_FIELDS, cfg, edit, boolEdits, textEdits, frameCount, daemonVersion)
                 ExpertGroup(localized("ui.horizon_settings"), HORIZON_FIELDS, cfg, edit, boolEdits, textEdits, frameCount, daemonVersion)
                 ExpertGroup(localized("ui.memory_settings"), MEMORY_FIELDS, cfg, edit, boolEdits, textEdits, frameCount, daemonVersion)
-                SettingGroup(localized("ui.gpu_settings")) {
-                    // Three independent GPU toggles, each naming the specific step it applies
-                    // to rather than reading as "GPU for everything."
-                    Text(localized("ui.gpu_settings_scope_note"), color = StarColors.textDisabled, fontSize = 10.sp)
-                    PERFORMANCE_FIELDS.forEach { f ->
-                        if (!f.has(cfg)) { UnsupportedRow(localized(f.labelKey), daemonVersion); return@forEach }
-                        when (f) {
-                            is BoolField -> ToggleRow(
-                                localized(f.labelKey).removeSuffix(":"),
-                                if (!f.enabled(edit)) false else (boolEdits[f.label] ?: f.get(cfg)),
-                                enabled = f.enabled(edit),
-                            ) { boolEdits[f.label] = it }
-                            else -> Unit
-                        }
-                    }
-                    // Read-only hardware fact, not a setting -- shown so "on but this Mac has
-                    // no supported GPU" is never mistaken for "off", and why the toggle above
-                    // is greyed out and forced off when unsupported.
-                    if (cfg.hasGpuHardwareAvailable()) GPUHardwareStatusRow(cfg.gpuHardwareAvailable)
-                }
             }
 
             val frameMax = frameCount
@@ -585,21 +570,48 @@ private fun UnsupportedRow(label: String, daemonVersion: String?) {
     }
 }
 
-/// The GPU-hardware equivalent of `UnsupportedRow`: not a setting, so there is
-/// nothing to toggle, but the reason has nothing to do with the daemon's version
-/// either -- it is whether the daemon's own machine has a supported GPU at all.
-/// "Use GPU for Align & Merge" is forced off and disabled above whenever this reads
-/// "not supported," so this row is what tells the user why -- without it, a
-/// toggle that suddenly can't be turned on would look broken rather than moot.
+/**
+ * GPU Settings (macOS's section of the same name): three independent toggles, each for one step, and a line saying whether this machine has a GPU
+ * star can use and which. Open to begin with, and it can be folded away. A toggle on a machine without one is greyed and shown off, which the status
+ * line explains: without it a toggle that cannot be turned on would look broken rather than moot.
+ */
 @Composable
-private fun GPUHardwareStatusRow(available: Boolean) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            if (available) "GPU acceleration is supported on this machine."
-            else "No supported GPU was found on this machine. Processing uses the CPU.",
-            color = StarColors.textDisabled, fontSize = 10.sp,
-        )
+private fun GpuGroup(cfg: Config, edit: SettingsEdit, boolEdits: SnapshotStateMap<String, Boolean>, daemonVersion: String?) {
+    var expanded by remember { mutableStateOf(true) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(if (expanded) "▼" else "▶", color = StarColors.textSecondary, fontSize = 10.sp)
+            Text(localized("ui.gpu_settings"), color = StarColors.textSecondary, fontSize = 12.sp)
+        }
+        // Each toggle controls one processing step only: "GPU Settings" must not read as one switch for the whole pipeline.
+        Text(localized("ui.gpu_settings_scope_note"), color = StarColors.textDisabled, fontSize = 10.sp)
+        // Said whether or not the section is open. Absent (an older daemon) means unknown, not unsupported.
+        if (cfg.hasGpuHardwareAvailable()) GPUHardwareStatusRow(cfg.gpuHardwareAvailable, if (cfg.hasGpuDeviceName()) cfg.gpuDeviceName else null)
+        if (expanded) {
+            PERFORMANCE_FIELDS.forEach { f ->
+                if (!f.has(cfg)) { UnsupportedRow(localized(f.labelKey).removeSuffix(":"), daemonVersion); return@forEach }
+                if (f is BoolField) {
+                    ToggleRow(
+                        localized(f.labelKey).removeSuffix(":"),
+                        if (!f.enabled(edit)) false else (boolEdits[f.label] ?: f.get(cfg)),
+                        enabled = f.enabled(edit),
+                    ) { boolEdits[f.label] = it }
+                }
+            }
+        }
     }
+}
+
+/**
+ * Whether the machine the engine runs on has a GPU star can use, and which (macOS `Config.gpuAccelerationStatusText`). Not a setting, so there is
+ * nothing to toggle here.
+ */
+@Composable
+private fun GPUHardwareStatusRow(available: Boolean, device: String?) {
+    Text(
+        if (available) localized("ui.gpu_status_supported", device ?: "GPU") else localized("ui.gpu_status_unsupported"),
+        color = StarColors.textDisabled, fontSize = 10.sp,
+    )
 }
 
 /**

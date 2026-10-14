@@ -322,6 +322,7 @@ enum Mapping {
         // always shows the daemon's own machine's hardware, not a stale answer from
         // whenever the daemon happened to start.
         out.gpuHardwareAvailable = Config.isGPUHardwareAvailable
+        if let device = GPUCapability.deviceName() { out.gpuDeviceName = device }
         out.resourceProfile = c.resourceProfile.rawValue
         out.useGpuForSift = c.useGPUForSIFT
         out.useGpuForAkaze = c.useGPUForAKAZE

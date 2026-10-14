@@ -274,6 +274,9 @@ message Config {
   // the default 0.85 leaves the rest of the machine about 15%. Lower it on a machine shared with other heavy programs. Applied as given only under
   // the Custom resource profile; the other profiles bring their own. A value outside the range is clamped.
   optional double max_mat_memory_fraction                              = 59;
+  // Read-only: the name of the GPU the daemon's machine offers (Metal's device name on a Mac), for saying which one the GPU toggles would use. Absent
+  // where there is none; a client applying a Config back must not send it on.
+  optional string gpu_device_name                                      = 60;
 }
 
 enum CleanMethod {

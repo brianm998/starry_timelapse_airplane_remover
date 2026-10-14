@@ -21,4 +21,13 @@ class InitialConfigBesideTest {
         assertEquals(CleanMethod.CLEAN_SELECTIVE, config.cleanMethod)
         assertTrue(config.writeFramePreviewFiles && config.writeOutlierGroupFiles)
     }
+
+    /** A user who always wants Excessive is not asked to say so on every sequence: the type they last chose is where a new one starts. */
+    @Test fun aRememberedDetectionTypeSeedsTheNewSequence() {
+        assertEquals(com.star.proto.DetectionType.DETECTION_EXCESSIVE, initialConfigBeside("/a/b/seq", com.star.proto.DetectionType.DETECTION_EXCESSIVE).detectionType)
+    }
+
+    @Test fun withNoChoiceTheDefaultIsLeftAlone() {
+        assertEquals(com.star.proto.DetectionType.DETECTION_MILD, initialConfigBeside("/a/b/seq").detectionType)
+    }
 }

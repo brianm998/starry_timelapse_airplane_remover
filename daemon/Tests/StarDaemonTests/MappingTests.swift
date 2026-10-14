@@ -373,6 +373,23 @@ final class MappingTests: XCTestCase {
         XCTAssertTrue(untouched.useGPUForMerge, "an absent field must not overwrite the existing value")
     }
 
+    /// The device a GPU toggle would use is named whenever there is one, so the sheet can say which; absent where there is none.  Read-only like
+    /// the availability beside it.
+    func testTheGPUDeviceIsNamedWhenThereIsOne() {
+        let proto = Mapping.protoConfig(Config())
+        if let device = GPUCapability.deviceName() {
+            XCTAssertTrue(proto.hasGpuDeviceName)
+            XCTAssertEqual(proto.gpuDeviceName, device)
+            XCTAssertTrue(proto.gpuHardwareAvailable, "a machine with a named GPU has hardware the toggles can use")
+        } else {
+            XCTAssertFalse(proto.hasGpuDeviceName, "no device, no name: not an empty one")
+        }
+        var target = Config()
+        var incoming = Star_V1_Config()
+        incoming.gpuDeviceName = "something else"
+        Mapping.applyExpertConfig(&target, from: incoming)   // nothing to apply it to; must not throw or change the config
+    }
+
     func testTheStarVersionIsReportedSoTheClientCanCheckIt() {
         let proto = Mapping.protoConfig(Config())
         XCTAssertFalse(proto.starVersion.isEmpty, "the client compares this against its own")

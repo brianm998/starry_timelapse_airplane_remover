@@ -171,9 +171,10 @@ internal fun withRemovalChoices(current: Config, cleanMethod: CleanMethod?, allo
  * `outputFileExistsOnDisk()` check find a previous run's output and report finished frames as complete
  * instead of unprocessed (macOS `inputImageSequencePath`).
  */
-internal fun initialConfigBeside(source: String): Config =
+internal fun initialConfigBeside(source: String, detection: com.star.proto.DetectionType? = null): Config =
     SessionRepository.defaultInitialConfig().toBuilder()
         .setOutputPath(java.io.File(source).parent ?: source)
+        .also { b -> detection?.let { b.setDetectionType(it) } }
         .build()
 
 /**
@@ -246,8 +247,11 @@ class AppViewModel(
      */
     suspend fun updateSessionConfig(config: Config): Config {
         val before = sessions.session.value?.config?.cleanMethod
+        val beforeDetection = sessions.session.value?.config?.detectionType
         val updated = sessions.updateConfig(config)
         if (before != null && updated.cleanMethod != before) currentSequence?.cleanMethodChanged(updated.cleanMethod)
+        // The type the user picks is the one the next sequence starts from, wherever it was picked (macOS keeps it as it changes).
+        if (beforeDetection != null && updated.detectionType != beforeDetection) rememberDetectionType(updated.detectionType)
         return updated
     }
 
@@ -261,8 +265,16 @@ class AppViewModel(
             if (current.detectionType != type) {
                 runCatching { updateSessionConfig(current.toBuilder().setDetectionType(type).build()) }.onFailure { report(it.message ?: it.toString()) }
             }
-            prefs.setString("processingType", type.name.removePrefix("DETECTION_").lowercase())
+            rememberDetectionType(type)
         }
+    }
+
+    /** The detection type new sequences start from: the one the user last chose (macOS `userPreferences.processingType`), if they have. */
+    fun savedDetectionType(): com.star.proto.DetectionType? = com.star.desktop.domain.DetectionPreference.fromPref(prefs.string(com.star.desktop.domain.DetectionPreference.KEY))
+
+    /** Keep [type] as the user's choice for the next sequence, under the key the macOS app uses. */
+    fun rememberDetectionType(type: com.star.proto.DetectionType) {
+        prefs.setString(com.star.desktop.domain.DetectionPreference.KEY, com.star.desktop.domain.DetectionPreference.toPref(type))
     }
 
     /**
@@ -696,12 +708,12 @@ class AppViewModel(
         }
     }
 
-    fun openSequence(dir: String) = launchOpen(dir, video = false, promptStartup = true) { sessions.openSequenceStream(dir, initialConfigBeside(dir)) }
+    fun openSequence(dir: String) = launchOpen(dir, video = false, promptStartup = true) { sessions.openSequenceStream(dir, initialConfigBeside(dir, savedDetectionType())) }
 
     fun openConfig(path: String) = launchOpen(path, video = false) { sessions.openConfigStream(path) }
 
     /** Output goes beside the video, as macOS puts it (the parent of the extracted frames' folder is the video's own folder), not in the daemon's hidden per-session scratch fallback. */
-    fun openVideo(path: String) = launchOpen(path, video = true, promptStartup = true) { sessions.openVideo(path, initialConfigBeside(path)) }
+    fun openVideo(path: String) = launchOpen(path, video = true, promptStartup = true) { sessions.openVideo(path, initialConfigBeside(path, savedDetectionType())) }
 
     private var openJob: Job? = null
 
