@@ -162,6 +162,7 @@ actor StdioTransport {
         payload.title = warning.title
         payload.message = warning.message
         payload.suggestion = warning.suggestion ?? ""
+        payload.passingCondition = warning.describesAPassingCondition
 
         guard let data = try? payload.serializedData() else { return }
 

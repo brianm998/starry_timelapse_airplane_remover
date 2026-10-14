@@ -91,19 +91,19 @@ fun StarApp(vm: AppViewModel) {
             val closeConfirmation by vm.closeConfirmation.collectAsState()
             closeConfirmation?.let { ConfirmCloseOverlay(it, onConfirm = vm::confirmClose, onCancel = vm::cancelClose) }
 
-            val engineWarning by vm.engineWarning.collectAsState()
-            engineWarning?.let { w ->
-                // Not gated on being in a Sequence screen, unlike the version banner below: an
-                // engine that is about to be killed for memory is worth saying wherever the
-                // user happens to be.
-                EngineWarningBanner(w, onDismiss = vm::dismissEngineWarning,
-                                    modifier = Modifier.align(Alignment.TopCenter))
-            }
-
+            // The banners, one above the other in one column so that none covers another: the engine's warning (not gated on a sequence being
+            // open: an engine about to be killed for memory is worth saying wherever the user is), and the version mismatch.
+            val warnings by vm.warningState.collectAsState()
             val versionWarning by vm.versionWarning.collectAsState()
-            if (versionWarning != null && screen is AppScreen.Sequence) {
-                VersionWarningBanner(versionWarning!!, onDismiss = vm::dismissVersionWarning, modifier = Modifier.align(Alignment.TopCenter))
+            val showVersion = versionWarning != null && screen is AppScreen.Sequence
+            if (warnings.banner != null || showVersion) {
+                Column(Modifier.align(Alignment.TopCenter)) {
+                    warnings.banner?.let { EngineWarningBanner(it.warning, onDismiss = vm::dismissBanner, modifier = Modifier) }
+                    if (showVersion) VersionWarningBanner(versionWarning!!, onDismiss = vm::dismissVersionWarning, modifier = Modifier)
+                }
             }
+            // A critical warning interrupts, once per kind (see WarningRouting).
+            warnings.critical?.let { CriticalWarningDialog(it, onOk = vm::acknowledgeWarning) }
 
             val engineDown by vm.engineDown.collectAsState()
             engineDown?.let {
@@ -284,6 +284,26 @@ private fun ConfirmCloseOverlay(confirmation: com.star.desktop.domain.CloseConfi
             OutlinedButton(onClick = onConfirm, colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red)) {
                 Text(localized(confirmation.action.confirmKey))
             }
+        }
+    }
+}
+
+/**
+ * A critical warning over the window (macOS's system alert for them): the machine is about to stop this run, or a previous run was stopped. OK is the
+ * default, and does nothing but acknowledge it: starting a run that may take hours is not what a stray Return on a dialog the user did not ask for
+ * should do. A click outside does nothing.
+ */
+@Composable
+private fun CriticalWarningDialog(warning: com.star.proto.Warning, onOk: () -> Unit) {
+    PromptCard(onScrimClick = null, onDefaultAction = onOk, onEscape = null) {
+        Text(warning.title, color = StarColors.red, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 18.sp)
+        Text(warning.message, color = StarColors.textPrimary, fontSize = 13.sp)
+        if (warning.suggestion.isNotEmpty()) Text(warning.suggestion, color = StarColors.textSecondary, fontSize = 12.sp)
+        androidx.compose.foundation.layout.Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp, Alignment.End),
+        ) {
+            Button(onClick = onOk, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.ok")) }
         }
     }
 }

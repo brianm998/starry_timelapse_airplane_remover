@@ -15,6 +15,8 @@ import com.star.desktop.domain.PendingWork
 import com.star.desktop.engine.EngineState
 import com.star.desktop.domain.RenderState
 import com.star.desktop.domain.RenderVideo
+import com.star.desktop.domain.WarningRouting
+import com.star.desktop.domain.WarningState
 import com.star.desktop.domain.isRendering
 import com.star.desktop.engine.EngineStatus
 import com.star.desktop.ui.sequence.SequenceViewModel
@@ -35,6 +37,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -486,9 +489,38 @@ class AppViewModel(
     // push these they went only to its stderr, which this client drains into a sink that in a
     // packaged app goes nowhere a user can read — so a run walking into an out-of-memory kill
     // looked completely normal right up until the engine died.
-    private val _engineWarning = MutableStateFlow<com.star.proto.Warning?>(null)
-    val engineWarning: StateFlow<com.star.proto.Warning?> = _engineWarning.asStateFlow()
-    fun dismissEngineWarning() { _engineWarning.value = null }
+    //
+    // Routed as the Mac app does (see WarningRouting): a critical one interrupts once per kind; everything else is a banner, which comes down by
+    // itself after a minute when it is about a state that passes and stays until dismissed otherwise.
+    private val _warningState = MutableStateFlow(WarningState())
+    val warningState: StateFlow<WarningState> = _warningState.asStateFlow()
+    private var bannerExpiry: Job? = null
+
+    /** A warning from the engine. */
+    fun report(warning: com.star.proto.Warning) {
+        _warningState.update { WarningRouting.report(it, warning, System.currentTimeMillis()) }
+        val banner = _warningState.value.banner
+        // The newest report wins, so whatever timer was running was for one that is gone.
+        bannerExpiry?.cancel()
+        bannerExpiry = null
+        if (banner != null && banner.warning === warning) {
+            WarningRouting.lifetimeMs(warning)?.let { lifetime ->
+                bannerExpiry = scope.launch {
+                    delay(lifetime)
+                    _warningState.update { WarningRouting.expire(it, banner) }
+                }
+            }
+        }
+    }
+
+    fun dismissBanner() {
+        bannerExpiry?.cancel()
+        bannerExpiry = null
+        _warningState.update { WarningRouting.dismissBanner(it) }
+    }
+
+    /** The critical warning's OK. */
+    fun acknowledgeWarning() { _warningState.update { WarningRouting.acknowledge(it) } }
 
     // ---- new-source startup prompts (macOS StartupView) ----
     private val _startupStep = MutableStateFlow<StartupStep?>(null) // null = not showing
@@ -755,7 +787,7 @@ class AppViewModel(
         scope.launch {
             // Latest wins: these describe the machine's current state, so an older one being
             // replaced by a newer is right. The user can dismiss, and the next one re-raises.
-            engine.warnings.collect { _engineWarning.value = it }
+            engine.warnings.collect { report(it) }
         }
         scope.launch {
             engine.status.collect { st ->
@@ -927,6 +959,10 @@ class AppViewModel(
         _showPostRenderPrompt.value = false
         autoRenderAfterProcessing = false
         awaitingProcessingPrompt = false
+        // A condition acknowledged about the sequence just closed is not acknowledged about the next, and a banner about it is not still up.
+        bannerExpiry?.cancel()
+        bannerExpiry = null
+        _warningState.update { WarningRouting.reset(it) }
         _showSettings.value = false
         _showExpertSettings.value = false
         _sequenceProgress.value = null
