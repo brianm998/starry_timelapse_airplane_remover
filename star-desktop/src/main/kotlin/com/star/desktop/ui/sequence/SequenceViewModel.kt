@@ -52,6 +52,8 @@ class SequenceViewModel(
     val horizon: HorizonRepository,
     /** Shows a failed user action to the user (macOS `report(error:)`). */
     private val onError: (String) -> Unit = {},
+    /** The user's stored preferences (the horizon line's visibility is one); null where there are none, as in tests. */
+    private val prefs: com.star.desktop.data.LocalPreferences? = null,
 ) {
     val sessionId: String = info.sessionId
     val frameCount: Int = info.frameCount
@@ -93,10 +95,14 @@ class SequenceViewModel(
     val gridThumbnailScale: StateFlow<Float> = _gridThumbnailScale.asStateFlow()
     fun setGridThumbnailScale(v: Float) { _gridThumbnailScale.value = v.coerceIn(0.02f, 0.5f) }
 
-    // Draw per-cell horizon overlays in the grid (macOS showHorizonOnMainView).
-    private val _showHorizonOnGrid = MutableStateFlow(false)
-    val showHorizonOnGrid: StateFlow<Boolean> = _showHorizonOnGrid.asStateFlow()
-    fun toggleHorizonOnGrid() { _showHorizonOnGrid.value = !_showHorizonOnGrid.value }
+    // Draw the horizon line on the frame, the filmstrip and the grid (macOS showHorizonOnMainView, which is stored: the
+    // choice is the user's and outlives the session).
+    private val _showHorizonOnMainView = MutableStateFlow(prefs?.showHorizonOnMainView ?: false)
+    val showHorizonOnMainView: StateFlow<Boolean> = _showHorizonOnMainView.asStateFlow()
+    fun setShowHorizonOnMainView(show: Boolean) {
+        _showHorizonOnMainView.value = show
+        prefs?.showHorizonOnMainView = show
+    }
 
     private val _leftPanelShowing = MutableStateFlow(true)
     val leftPanelShowing: StateFlow<Boolean> = _leftPanelShowing.asStateFlow()
@@ -521,8 +527,8 @@ class SequenceViewModel(
         }
     }
 
-    /** Per-cell grid horizon overlay (kind + per-column Y), or null if none. */
-    suspend fun gridHorizonOverlay(index: Int, width: Int, height: Int) =
+    /** A frame's horizon overlay (kind, per-column Y, whether it is pending refinement) computed at [width] columns, or null if none. */
+    suspend fun horizonOverlay(index: Int, width: Int, height: Int) =
         horizon.getOverlay(sessionId, index, width, height)
 
     /**

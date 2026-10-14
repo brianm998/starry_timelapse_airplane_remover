@@ -36,6 +36,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameState
+import com.star.desktop.ui.components.drawHorizonLine
+import com.star.desktop.ui.components.horizonLineColor
 import com.star.desktop.ui.sequence.grid.CleanMethodIcon
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameInfo
@@ -85,6 +87,15 @@ private fun FilmstripCell(
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
+    var overlay by remember(index) { mutableStateOf<com.star.proto.GetHorizonOverlayResponse?>(null) }
+    val showHorizon by vm.showHorizonOnMainView.collectAsState()
+    val horizonVersion by vm.horizonVersion.collectAsState()
+    LaunchedEffect(index, showHorizon, state, horizonVersion) {
+        overlay = if (showHorizon) {
+            val h = (128f * vm.info.imageHeight / vm.info.imageWidth.coerceAtLeast(1)).toInt().coerceAtLeast(1)
+            vm.horizonOverlay(index, 128, h)
+        } else null
+    }
     // Reload when the frame's processing state changes — its preview/counts may now exist.
     LaunchedEffect(index, state) { if (thumb == null) thumb = vm.loadThumb(index) }
     LaunchedEffect(index, state) { info = vm.frameInfo(index) }
@@ -149,6 +160,12 @@ private fun FilmstripCell(
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )
+                }
+                // The horizon line (orange while the frame waits for a refinement, else by kind), over the thumbnail.
+                overlay?.takeIf { it.exists }?.let { ov ->
+                    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                        drawHorizonLine(ov, size.width, size.height, horizonLineColor(ov.kind, ov.refinementPending), 1.5.dp.toPx()) { it }
+                    }
                 }
                 // macOS `frameState.shortString` is empty for `.complete`, so only label in-progress frames.
                 if (effectiveState != null && effectiveState != FrameProcessingState.FPS_COMPLETE) {

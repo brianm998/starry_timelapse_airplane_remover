@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameState
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.ui.sequence.SequenceViewModel
+import com.star.desktop.ui.components.drawHorizonLine
+import com.star.desktop.ui.components.horizonLineColor
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.FrameInfo
@@ -68,7 +70,8 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val selected by vm.selected.collectAsState()
     val viewMode by vm.viewMode.collectAsState()
     val scale by vm.gridThumbnailScale.collectAsState()
-    val showHorizon by vm.showHorizonOnGrid.collectAsState()
+    val showHorizon by vm.showHorizonOnMainView.collectAsState()
+    val horizonVersion by vm.horizonVersion.collectAsState()
     val revisions by vm.frameRevisions.collectAsState()
 
     val cellWidth = (vm.info.imageWidth * scale).coerceIn(70f, 1000f)
@@ -94,6 +97,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 viewMode = viewMode,
                 showHorizon = showHorizon,
                 revision = revisions[i] ?: 0,
+                horizonVersion = horizonVersion,
             )
         }
     }
@@ -111,16 +115,18 @@ private fun GridCell(
     showHorizon: Boolean,
     /** Changes when a picture of this frame is saved, so the thumbnail is fetched again. */
     revision: Int,
+    /** Changes when a horizon (or a frame's being pending refinement) may have changed, so the line is fetched again. */
+    horizonVersion: Int,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
     var overlay by remember(index) { mutableStateOf<GetHorizonOverlayResponse?>(null) }
     LaunchedEffect(index, viewMode, state, revision) { thumb = vm.loadThumb(index, viewMode) }
     LaunchedEffect(index, state) { info = vm.frameInfo(index) }
-    LaunchedEffect(index, showHorizon, state) {
+    LaunchedEffect(index, showHorizon, state, horizonVersion) {
         overlay = if (showHorizon) {
             val h = (256f * vm.info.imageHeight / vm.info.imageWidth.coerceAtLeast(1)).toInt().coerceAtLeast(1)
-            vm.gridHorizonOverlay(index, 256, h)
+            vm.horizonOverlay(index, 256, h)
         } else null
     }
     var mods by remember { mutableStateOf<PointerKeyboardModifiers?>(null) }
@@ -187,25 +193,12 @@ private fun GridCell(
             if (t != null) {
                 Image(bitmap = t, contentDescription = "Frame $index", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
-            // Per-cell horizon overlay (kind → color), scaled from the overlay's draw space.
+            // Per-cell horizon line (orange while pending, else by kind), scaled from the overlay's draw space.
             val ov = overlay
-            if (ov != null && ov.exists && ov.yPerColumnList.isNotEmpty()) {
-                val lineColor = when (ov.kind) {
-                    HorizonOverlayKind.HORIZON_OVERLAY_KIND_REFERENCE -> StarColors.green
-                    HorizonOverlayKind.HORIZON_OVERLAY_KIND_MERGED -> StarColors.blue
-                    else -> StarColors.white
-                }
+            if (ov != null && ov.exists) {
+                val lineColor = horizonLineColor(ov.kind, ov.refinementPending)
                 Canvas(Modifier.fillMaxSize()) {
-                    val ys = ov.yPerColumnList
-                    val sx = size.width / ys.size
-                    val sy = if (ov.height > 0) size.height / ov.height else 1f
-                    val path = Path()
-                    ys.forEachIndexed { i, y ->
-                        val px = i * sx
-                        val py = y * sy
-                        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
-                    }
-                    drawPath(path, color = lineColor, style = Stroke(width = 1.5.dp.toPx()))
+                    drawHorizonLine(ov, size.width, size.height, lineColor, 1.5.dp.toPx()) { it }
                 }
             }
             if (state != null) {

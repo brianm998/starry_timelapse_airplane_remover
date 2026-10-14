@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -116,6 +117,19 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         selected?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
+        // Horizon painting (macOS RightPanel): open or close the painter, and show the horizon line on the frame, the
+        // filmstrip and the grid.
+        val painting by vm.horizonPaintMode.collectAsState()
+        BulkButton(
+            localized(if (painting) "ui.close_horizon_painter" else "ui.paint_horizon_reference"),
+            if (painting) StarColors.red else StarColors.blue,
+        ) { vm.toggleHorizonPaint() }
+        val showHorizon by vm.showHorizonOnMainView.collectAsState()
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            androidx.compose.material3.Switch(checked = showHorizon, onCheckedChange = vm::setShowHorizonOnMainView)
+            Spacer(Modifier.width(6.dp))
+            Text(localized("ui.show_horizon_line"), color = StarColors.white, fontSize = 11.sp)
+        }
         val refinementPending by vm.refinementPending.collectAsState()
         val busy by vm.isProcessing.collectAsState()
         BulkButton(

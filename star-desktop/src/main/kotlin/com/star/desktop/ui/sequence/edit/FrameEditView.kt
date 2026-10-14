@@ -27,11 +27,16 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
+import com.star.desktop.ui.components.drawHorizonLine
+import com.star.desktop.ui.components.horizonLineColor
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import androidx.compose.ui.draw.clipToBounds
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+/** How many columns the horizon line is fetched at: enough for a smooth line at any realistic zoom on one screen. */
+private const val HORIZON_COLUMNS = 1024
 
 /**
  * Edit-mode center view (macOS `FrameEditView` + `OutlierGroupView`): the frame image with
@@ -63,6 +68,18 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val labelMap by fvm.labelMap.collectAsState()
 
     val transform = vm.transform
+    // The horizon line (macOS `showHorizonOnMainView`): fetched for this frame when it is shown, and again whenever the horizon
+    // or the frame's being pending refinement may have changed (a reference saved, a refinement operation finished).
+    val showHorizon by vm.showHorizonOnMainView.collectAsState()
+    val horizonVersion by vm.horizonVersion.collectAsState()
+    val frameStates by vm.frameStates.collectAsState()
+    var horizonOverlay by remember(current) { mutableStateOf<com.star.proto.GetHorizonOverlayResponse?>(null) }
+    LaunchedEffect(current, showHorizon, horizonVersion, frameStates[current]) {
+        horizonOverlay = if (showHorizon) {
+            val w = HORIZON_COLUMNS
+            vm.horizonOverlay(current, w, (w.toFloat() * vm.info.imageHeight / vm.info.imageWidth.coerceAtLeast(1)).toInt().coerceAtLeast(1))
+        } else null
+    }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
     var dragging by remember { mutableStateOf(false) }
     // Rubber-band selection (image coords) while the multi tool drags.
@@ -163,6 +180,14 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     dstOffset = IntOffset(o.x.roundToInt(), o.y.roundToInt()),
                     dstSize = IntSize((vm.info.imageWidth * s).roundToInt(), (vm.info.imageHeight * s).roundToInt()),
                 )
+            }
+            // The horizon line, through the frame transform so it stays on the image at every zoom and pan; a constant
+            // screen thickness (macOS divides by the zoom for the same effect).
+            horizonOverlay?.let { ov ->
+                drawHorizonLine(
+                    ov, vm.info.imageWidth.toFloat(), vm.info.imageHeight.toFloat(),
+                    horizonLineColor(ov.kind, ov.refinementPending), strokeWidth = 3f,
+                ) { transform.imageToCanvas(it, size) }
             }
             // Outlier overlay (macOS OutlierGroupView): box fill+stroke (groupColor), plus inward
             // direction arrows + guide lines (arrowColor) gated on hover/decision/selection.

@@ -40,10 +40,18 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val current by vm.currentIndex.collectAsState()
     val scale by vm.gridThumbnailScale.collectAsState()
     val showFilmstrip by vm.showFilmstrip.collectAsState()
-    val showHorizon by vm.showHorizonOnGrid.collectAsState()
+    val showHorizon by vm.showHorizonOnMainView.collectAsState()
+    val horizonVersion by vm.horizonVersion.collectAsState()
+    var overlayExists by remember(current) { mutableStateOf<Boolean?>(null) }
+    var pending by remember(current) { mutableStateOf(false) }
     val states by vm.frameStates.collectAsState()
     var info by remember(current) { mutableStateOf<FrameInfo?>(null) }
-    LaunchedEffect(current, states[current]) { info = vm.frameInfo(current) }
+    LaunchedEffect(current, states[current], horizonVersion) {
+        info = vm.frameInfo(current)
+        val overlay = vm.horizonOverlay(current, 16, 16)
+        overlayExists = overlay?.exists
+        pending = overlay?.refinementPending ?: info?.refinementPending ?: false
+    }
 
     Column(modifier.width(200.dp).fillMaxHeight().background(StarColors.sidePanel)) {
         Column(
@@ -63,7 +71,7 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     Text(localized("ui.show_filmstrip"), color = StarColors.white, fontSize = 11.sp)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Switch(checked = showHorizon, onCheckedChange = { vm.toggleHorizonOnGrid() })
+                    Switch(checked = showHorizon, onCheckedChange = vm::setShowHorizonOnMainView)
                     Text(localized("ui.show_horizon_lines"), color = StarColors.white, fontSize = 11.sp)
                 }
             }
@@ -72,6 +80,10 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 SectionTitle("Frame")
                 InfoRow("Index", "$current")
                 states[current]?.let { InfoRow("State", FrameState.shortString(it)) }
+                // Whether the horizon is waiting for a refinement (macOS GridRightPanel).
+                if (overlayExists == true) {
+                    InfoRow(localized("ui.horizon"), localized(if (pending) "ui.pending" else "ui.set"), if (pending) StarColors.orange else StarColors.green)
+                }
             }
 
             info?.let { fi ->

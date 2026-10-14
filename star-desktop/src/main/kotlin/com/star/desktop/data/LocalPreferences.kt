@@ -79,6 +79,11 @@ class LocalPreferences {
         get() = bool("showHorizonPainterInstructions") ?: true
         set(value) = setBool("showHorizonPainterInstructions", value)
 
+    /** macOS `showHorizonOnMainView`: whether the horizon line is drawn on the frame, the filmstrip and the grid. Off until turned on. */
+    var showHorizonOnMainView: Boolean
+        get() = bool("showHorizonOnMainView") ?: false
+        set(value) = setBool("showHorizonOnMainView", value)
+
     fun setSkipRenderPrompt(value: Boolean) = edit { it["skipRenderPromptAfterProcessing"] = value }
 
     fun setLanguage(value: String?) = edit {

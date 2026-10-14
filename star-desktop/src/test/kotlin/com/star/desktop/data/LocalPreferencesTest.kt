@@ -198,4 +198,13 @@ class LocalPreferencesBooleansTest {
         p.setBool("showProcessingWindow", null)
         assertTrue(!prefsFile.readText().contains("showProcessingWindow"), prefsFile.readText())
     }
+
+    /** macOS reads a missing showHorizonOnMainView as off. */
+    @Test fun theHorizonLineIsOffUntilTurnedOnAndRemembered() {
+        assertEquals(false, LocalPreferences().showHorizonOnMainView)
+        val p = LocalPreferences()
+        p.showHorizonOnMainView = true
+        assertTrue(prefsFile.readText().contains("\"showHorizonOnMainView\":true"), prefsFile.readText())
+        assertEquals(true, LocalPreferences().showHorizonOnMainView)
+    }
 }
