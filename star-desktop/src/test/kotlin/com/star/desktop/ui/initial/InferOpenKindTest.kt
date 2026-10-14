@@ -20,3 +20,15 @@ class InferOpenKindTest {
         assertEquals(OpenKind.VIDEO, inferOpenKind("/Volumes/x/clip.MOV"))
     }
 }
+
+/** The config chooser offers `.json` files and the folders to reach them, whatever the case of the extension. */
+class ChooserFilterTest {
+    @Test fun anExtensionIsMatchedWithoutRegardToCase() {
+        assertEquals(true, hasExtension("config.json", setOf("json")))
+        assertEquals(true, hasExtension("CONFIG.JSON", setOf("json")))
+        assertEquals(false, hasExtension("config.json.bak", setOf("json")))
+        assertEquals(false, hasExtension("notes.txt", setOf("json")))
+        assertEquals(false, hasExtension("json", setOf("json")), "a name with no dot has no extension")
+        assertEquals(true, hasExtension("a.mov", setOf("json", "mov")))
+    }
+}

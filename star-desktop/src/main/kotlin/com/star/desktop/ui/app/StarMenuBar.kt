@@ -36,7 +36,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
                 chooseFile(localized("ui.open_video_title"))?.let { app.openVideo(it) }
             }
             Item(localized("ui.resume_from_config_json")) {
-                chooseFile(localized("ui.resume_from_config_title"))?.let { app.openConfig(it) }
+                chooseFile(localized("ui.resume_from_config_title"), setOf("json"))?.let { app.openConfig(it) }
             }
             Separator()
             // Preferences are in the app menu on a Mac (see Main.kt, which hooks the system's), and have no app menu to be in anywhere else.

@@ -94,7 +94,8 @@ class SequenceViewModel(
     private val _tool = MutableStateFlow(ToolType.REMOVE)
     val tool: StateFlow<ToolType> = _tool.asStateFlow()
 
-    private val _viewMode = MutableStateFlow(FrameViewMode.VIEW_PROCESSED)
+    // The original frames, as macOS opens every sequence (its `frameViewMode` default); the processed ones are a click away.
+    private val _viewMode = MutableStateFlow(FrameViewMode.VIEW_ORIGINAL)
     val viewMode: StateFlow<FrameViewMode> = _viewMode.asStateFlow()
 
     private val _showFilmstrip = MutableStateFlow(true)

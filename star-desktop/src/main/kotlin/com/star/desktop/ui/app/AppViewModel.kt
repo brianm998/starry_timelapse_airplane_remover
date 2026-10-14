@@ -1155,6 +1155,8 @@ class AppViewModel(
         sessionScope.launch { proc.errors.collect(::report) }
         val svm = SequenceViewModel(sessionScope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo, onError = ::report, prefs = prefs,
             alignmentSource = { alignmentRepo.sequence(info.sessionId, includeHomography = false, includePreviews = false) })
+        // A source opened for the first time starts in edit mode (macOS); one resumed from its config in scrub mode, where it was left.
+        svm.setMode(com.star.desktop.domain.InteractionMode.onOpening(freshSource = promptStartup))
         when (autoMode) {
             "edit" -> svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
             "grid" -> svm.setMode(com.star.desktop.domain.InteractionMode.GRID)

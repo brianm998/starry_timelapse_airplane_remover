@@ -56,9 +56,20 @@ fun chooseDirectory(): String? {
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile?.absolutePath else null
 }
 
-/** Native file chooser. Blocks on the EDT. */
-fun chooseFile(title: String): String? {
+/** Whether [name] ends in one of [extensions] (given without the dot), whatever its case. */
+internal fun hasExtension(name: String, extensions: Set<String>): Boolean =
+    extensions.any { name.endsWith(".$it", ignoreCase = true) }
+
+/**
+ * Native file chooser. Blocks on the EDT. With [extensions] only files of those kinds are offered (macOS limits Resume from config.json to
+ * `.json`); on Windows the box is also pre-filled with the pattern, which is how a native dialog there narrows what it lists.
+ */
+fun chooseFile(title: String, extensions: Set<String>? = null): String? {
     val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD)
+    if (extensions != null) {
+        dialog.setFilenameFilter { dir, name -> File(dir, name).isDirectory || hasExtension(name, extensions) }
+        if (System.getProperty("os.name").orEmpty().lowercase().contains("win")) dialog.file = extensions.joinToString(";") { "*.$it" }
+    }
     dialog.isVisible = true
     val dir = dialog.directory ?: return null
     val file = dialog.file ?: return null

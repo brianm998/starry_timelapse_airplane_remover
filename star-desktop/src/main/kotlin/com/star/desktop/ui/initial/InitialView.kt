@@ -206,7 +206,7 @@ private fun open(vm: AppViewModel, kind: OpenKind) {
     val path = when (kind) {
         OpenKind.SEQUENCE -> chooseDirectory()
         OpenKind.VIDEO -> chooseFile(localized("ui.open_video_title"))
-        OpenKind.CONFIG -> chooseFile(localized("ui.resume_from_config_title"))
+        OpenKind.CONFIG -> chooseFile(localized("ui.resume_from_config_title"), setOf("json"))
     } ?: return
     when (kind) {
         OpenKind.SEQUENCE -> vm.openSequence(path)
