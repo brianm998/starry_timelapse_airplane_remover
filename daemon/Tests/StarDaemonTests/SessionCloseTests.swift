@@ -166,4 +166,25 @@ final class SessionCloseTests: XCTestCase {
         let state = await frame.savingState()
         XCTAssertEqual(state, .notSaving, "a closed session queued a save")
     }
+
+    // MARK: - FrameInfo.outliers_loaded
+
+    /// A frame whose groups are still on disk reports 0/0/0, the same as a frame with none; the flag is
+    /// what tells a client the zeroes are not a fact yet.
+    func testFrameInfoSaysWhetherTheOutliersAreLoaded() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+
+        let unloaded = await Mapping.frameInfo(frame: frame, outlierGroups: nil)
+        XCTAssertFalse(unloaded.outliersLoaded, "unloaded outliers were reported as loaded")
+
+        let config = await session.config()
+        let groups = OutlierGroups(frameIndex: 0, config: config)
+        let loaded = await Mapping.frameInfo(frame: frame, outlierGroups: groups)
+        XCTAssertTrue(loaded.outliersLoaded, "loaded outliers (even none) were reported as unloaded")
+        XCTAssertEqual(loaded.numPositiveOutliers + loaded.numNegativeOutliers + loaded.numUndecidedOutliers, 0)
+        await session.close()
+    }
 }

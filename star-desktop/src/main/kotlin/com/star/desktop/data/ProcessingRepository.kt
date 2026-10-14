@@ -53,6 +53,11 @@ class ProcessingRepository(
     private val _pendingSaves = MutableStateFlow(0)
     val pendingSaves: StateFlow<Int> = _pendingSaves.asStateFlow()
 
+    /** A preview of a frame was written (`image_saved`): whatever a client holds of it is out of date. */
+    data class ImageSaved(val frameIndex: Int, val viewMode: com.star.proto.FrameViewMode)
+    private val _imageSaved = MutableSharedFlow<ImageSaved>(extraBufferCapacity = 256)
+    val imageSaved: SharedFlow<ImageSaved> = _imageSaved.asSharedFlow()
+
     data class Io(val current: Int, val total: Int, val outputDir: String)
     private val _ioProgress = MutableStateFlow<Io?>(null)
     val ioProgress: StateFlow<Io?> = _ioProgress.asStateFlow()
@@ -159,6 +164,8 @@ class ProcessingRepository(
                 if (s == "done" || s == "cancelled" || s == "error") _processing.value = false
                 if (s == "error") _errors.tryEmit(ev.sequenceState.message.ifBlank { s })
             }
+            ProgressEvent.KindCase.IMAGE_SAVED ->
+                _imageSaved.tryEmit(ImageSaved(ev.imageSaved.frameIndex, ev.imageSaved.viewMode))
             ProgressEvent.KindCase.FRAME_EXISTING ->
                 Log.d("Processing") { "frame ${ev.frameExisting} already exists" }
             else -> Unit

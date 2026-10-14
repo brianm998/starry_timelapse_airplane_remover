@@ -1620,6 +1620,11 @@ public struct Star_V1_FrameInfo: Sendable {
 
   public var numTrashOutliers: Int32 = 0
 
+  /// True when this frame's outlier groups are in memory, which is when the three counts above mean
+  /// anything.  A frame whose groups are still purged to disk reports 0/0/0, which is "unknown", not
+  /// "none"; Frame.Get does not load them (a grid scroll would load every frame).
+  public var outliersLoaded: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2220,6 +2225,14 @@ public struct Star_V1_ProgressEvent: Sendable {
     set {kind = .sequenceState(newValue)}
   }
 
+  public var imageSaved: Star_V1_ImageSaved {
+    get {
+      if case .imageSaved(let v)? = kind {return v}
+      return Star_V1_ImageSaved()
+    }
+    set {kind = .imageSaved(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public enum OneOf_Kind: Equatable, Sendable {
@@ -2229,6 +2242,7 @@ public struct Star_V1_ProgressEvent: Sendable {
     case outliersLoaded(Star_V1_OutliersLoaded)
     case ioProgress(Star_V1_IoProgress)
     case sequenceState(Star_V1_SequenceStateEvent)
+    case imageSaved(Star_V1_ImageSaved)
 
   }
 
@@ -2289,6 +2303,22 @@ public struct Star_V1_IoProgress: Sendable {
   public var total: Int32 = 0
 
   public var outputDir: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// A preview of this frame was written (or replaced in place): a client that cached the old picture should
+/// drop it.  Only for the view modes a client can ask for.
+public struct Star_V1_ImageSaved: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var frameIndex: Int32 = 0
+
+  public var viewMode: Star_V1_FrameViewMode = .viewOriginal
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -4105,7 +4135,7 @@ extension Star_V1_FrameRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
 
 extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FrameInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0\u{3}num_positive_outliers\0\u{3}num_negative_outliers\0\u{3}num_undecided_outliers\0\u{3}clean_method\0\u{3}num_trash_outliers\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0\u{3}num_positive_outliers\0\u{3}num_negative_outliers\0\u{3}num_undecided_outliers\0\u{3}clean_method\0\u{3}num_trash_outliers\0\u{3}outliers_loaded\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4120,6 +4150,7 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
       case 5: try { try decoder.decodeSingularInt32Field(value: &self.numUndecidedOutliers) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.cleanMethod) }()
       case 7: try { try decoder.decodeSingularInt32Field(value: &self.numTrashOutliers) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self.outliersLoaded) }()
       default: break
       }
     }
@@ -4147,6 +4178,9 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if self.numTrashOutliers != 0 {
       try visitor.visitSingularInt32Field(value: self.numTrashOutliers, fieldNumber: 7)
     }
+    if self.outliersLoaded != false {
+      try visitor.visitSingularBoolField(value: self.outliersLoaded, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -4158,6 +4192,7 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if lhs.numUndecidedOutliers != rhs.numUndecidedOutliers {return false}
     if lhs.cleanMethod != rhs.cleanMethod {return false}
     if lhs.numTrashOutliers != rhs.numTrashOutliers {return false}
+    if lhs.outliersLoaded != rhs.outliersLoaded {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -5211,7 +5246,7 @@ extension Star_V1_CancelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageI
 
 extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ProgressEvent"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_state\0\u{3}frame_saving_state\0\u{3}frame_existing\0\u{3}outliers_loaded\0\u{3}io_progress\0\u{3}sequence_state\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_state\0\u{3}frame_saving_state\0\u{3}frame_existing\0\u{3}outliers_loaded\0\u{3}io_progress\0\u{3}sequence_state\0\u{3}image_saved\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5292,6 +5327,19 @@ extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
           self.kind = .sequenceState(v)
         }
       }()
+      case 7: try {
+        var v: Star_V1_ImageSaved?
+        var hadOneofValue = false
+        if let current = self.kind {
+          hadOneofValue = true
+          if case .imageSaved(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.kind = .imageSaved(v)
+        }
+      }()
       default: break
       }
     }
@@ -5326,6 +5374,10 @@ extension Star_V1_ProgressEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     case .sequenceState?: try {
       guard case .sequenceState(let v)? = self.kind else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
+    case .imageSaved?: try {
+      guard case .imageSaved(let v)? = self.kind else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     }()
     case nil: break
     }
@@ -5484,6 +5536,41 @@ extension Star_V1_IoProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
     if lhs.current != rhs.current {return false}
     if lhs.total != rhs.total {return false}
     if lhs.outputDir != rhs.outputDir {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_ImageSaved: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ImageSaved"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{3}view_mode\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.viewMode) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.frameIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameIndex, fieldNumber: 1)
+    }
+    if self.viewMode != .viewOriginal {
+      try visitor.visitSingularEnumField(value: self.viewMode, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_ImageSaved, rhs: Star_V1_ImageSaved) -> Bool {
+    if lhs.frameIndex != rhs.frameIndex {return false}
+    if lhs.viewMode != rhs.viewMode {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

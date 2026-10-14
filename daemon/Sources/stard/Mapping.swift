@@ -20,6 +20,17 @@ enum Mapping {
         }
     }
 
+    /// The view mode a client can ask for that `type` is, or nil for the types only the macOS app shows.
+    static func protoFrameViewMode(_ type: StarCore.FrameViewMode) -> Star_V1_FrameViewMode? {
+        switch type {
+        case .original:    return .viewOriginal
+        case .final:       return .viewProcessed
+        case .subtraction: return .viewSubtraction
+        case .validation:  return .viewValidation
+        default:           return nil
+        }
+    }
+
     // MARK: - FrameProcessingState
 
     static func frameProcessingState(_ s: FrameProcessingState) -> Star_V1_FrameProcessingState {
@@ -426,6 +437,7 @@ enum Mapping {
             fi.numNegativeOutliers  = Int32(neg)
             fi.numUndecidedOutliers = Int32(und)
             fi.numTrashOutliers     = Int32(await groups.getTrash().count)
+            fi.outliersLoaded       = true
         }
         return fi
     }

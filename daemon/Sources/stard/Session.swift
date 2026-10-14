@@ -77,13 +77,17 @@ actor Session {
             frameIndexToBaseNameMap[i] = removePath(fromString: fn)
         }
 
+        let weakSelf = WeakSessionRef(self)
+        // Told whenever a preview is written, which is how a client learns that the picture it has is old.
         let imageAccessor = ImageAccessor(
             config: config,
             imageSequence: imageSequence,
             frameIndexToBaseNameMap: frameIndexToBaseNameMap
-        )
+        ) { _, frameIndex, type, size in
+            guard size == .preview else { return }
+            Task { await weakSelf.session?.onImageSaved(frameIndex: frameIndex, type: type) }
+        }
 
-        let weakSelf = WeakSessionRef(self)
         var callbacks = Callbacks()
         callbacks.frameStateChangeCallback = { frame, state in
             Task { await weakSelf.session?.onFrameStateChange(frame: frame, state: state) }
@@ -321,7 +325,11 @@ actor Session {
         let deadline = ContinuousClock.now + timeout
         guard await waitForSave(of: frame, until: deadline) else { return false }
         guard await beginSave(frame) else { return false }
-        return await waitForSave(of: frame, until: deadline)
+        guard await waitForSave(of: frame, until: deadline) else { return false }
+        // The final preview is normally announced as it is written, but only when the config has
+        // previews written; say so here regardless, since the render is what the client asked for.
+        onImageSaved(frameIndex: frame.frameIndex, type: .final)
+        return true
     }
 
     /// Save every frame whose edits are still waiting (in purgatory, or already queued or being
@@ -443,6 +451,16 @@ actor Session {
         ev.newState = new.int32Value
         var prog = Star_V1_ProgressEvent()
         prog.kind = .frameSavingState(ev)
+        emit(prog)
+    }
+
+    private func onImageSaved(frameIndex: Int, type: FrameViewMode) {
+        guard let mode = Mapping.protoFrameViewMode(type) else { return }
+        var ev = Star_V1_ImageSaved()
+        ev.frameIndex = Int32(frameIndex)
+        ev.viewMode = mode
+        var prog = Star_V1_ProgressEvent()
+        prog.kind = .imageSaved(ev)
         emit(prog)
     }
 

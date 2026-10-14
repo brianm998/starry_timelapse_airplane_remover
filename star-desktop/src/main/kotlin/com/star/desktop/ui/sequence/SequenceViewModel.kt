@@ -213,6 +213,17 @@ class SequenceViewModel(
     /** The frame view model for the current index. */
     fun currentFrameVM(): FrameViewModel = frameVMFor(_currentIndex.value)
 
+    /**
+     * Bumped for a frame each time a picture of it is saved. Grid and filmstrip cells load their thumbnail
+     * keyed on this, so a rewritten preview replaces the one they show.
+     */
+    private val _frameRevisions = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val frameRevisions: StateFlow<Map<Int, Int>> = _frameRevisions.asStateFlow()
+
+    private fun bumpRevision(index: Int) {
+        _frameRevisions.value = _frameRevisions.value.let { it + (index to ((it[index] ?: 0) + 1)) }
+    }
+
     init {
         // Subscribe to progress BEFORE any Processing.Start (the daemon attaches its continuation lazily).
         processing.subscribe(sessionId)
@@ -223,19 +234,60 @@ class SequenceViewModel(
             .onEach { (idx, mode) -> loadPreview(idx, mode) }
             .launchIn(scope)
 
-        // As frames finish processing, a previously-missing preview may now exist — retry the current one.
+        // `stard` rewrites a frame's previews in place when it saves one: drop what is cached for it and, if
+        // it is the one on screen, show the new picture.
+        processing.imageSaved
+            .onEach { saved ->
+                imageCache.invalidateFrame(saved.frameIndex)
+                bumpRevision(saved.frameIndex)
+                if (saved.frameIndex == _currentIndex.value) loadPreview(saved.frameIndex, _viewMode.value)
+            }
+            .launchIn(scope)
+
+        // A frame whose processing state changed has new pictures, new outliers or new counts. The one on
+        // screen is reloaded at once (also upgrading an original shown as a stand-in for a processed
+        // frame); the others are fetched afresh when next looked at.
+        var lastStates = emptyMap<Int, FrameProcessingState>()
         processing.frameStates
             .onEach { states ->
-                if (!_previewAvailable.value) {
-                    val idx = _currentIndex.value
-                    if (states[idx] != null) loadPreview(idx, _viewMode.value)
-                }
+                val changed = states.filter { (i, s) -> lastStates[i] != s }.keys
+                lastStates = states
+                changed.forEach { frameDataChanged(it) }
+                if (_currentIndex.value in changed) loadPreview(_currentIndex.value, _viewMode.value)
+            }
+            .launchIn(scope)
+
+        // Outliers loading into memory (after being purged to disk) changes what the frame's counts mean.
+        var lastLoad = emptyMap<Int, Int>()
+        processing.outlierLoadState
+            .onEach { loads ->
+                val changed = loads.filter { (i, s) -> lastLoad[i] != s }.keys
+                lastLoad = loads
+                changed.forEach { frameDataChanged(it) }
             }
             .launchIn(scope)
 
         combine(isProcessing, _processingModalDismissed) { processingNow, dismissed -> processingNow && !dismissed }
             .onEach { _showProcessingModal.value = it }
             .launchIn(scope)
+    }
+
+    /**
+     * What this client holds of frame [index] (groups, decisions, counts) is out of date. Marked as such, and
+     * fetched again right away if it is the frame on screen.
+     */
+    private fun frameDataChanged(index: Int) {
+        val vm = frameVMs[index] ?: return
+        vm.invalidate()
+        if (index == _currentIndex.value) vm.load(force = true)
+    }
+
+    /** The daemon changed these frames (it sends their new counts back with a bulk edit). */
+    private fun framesChanged(infos: List<com.star.proto.FrameInfo>) {
+        for (info in infos) {
+            frameVMs[info.frameIndex]?.applyInfo(info)
+            frameDataChanged(info.frameIndex)
+        }
     }
 
     // ---- actions ----
@@ -315,7 +367,7 @@ class SequenceViewModel(
     /** Re-run the decision-tree classifier across all frames, then refresh the current frame. */
     fun applyDecisionTreeAll() = scope.launch {
         runCatching { outliers.applyDecisionTreeAllFrames(sessionId, overwrite = true) }
-            .onSuccess { frameVMFor(_currentIndex.value).load(force = true) }
+            .onSuccess { framesChanged(it.framesList) }
             .onFailure { reportFailure(it) { localized("ui.decision_tree_render_failed", it.message ?: it) } }
     }
 
@@ -366,9 +418,9 @@ class SequenceViewModel(
         val t = _multiChoice.value ?: return@launch
         val (s, e) = range.indices(_currentIndex.value, frameCount, n)
         runCatching { outliers.setDecisionsOverlapping(sessionId, s, e, shouldRemove, t.frameIndex, t.groupId) }
+            .onSuccess { framesChanged(it.framesList) }
             .onFailure { reportFailure(it) }
         dismissMultiSheets()
-        frameVMFor(_currentIndex.value).load(force = true)
     }
 
     /** Apply a keep/remove to outliers in the drag rectangle across [range] (multi-select sheet). */
@@ -376,9 +428,9 @@ class SequenceViewModel(
         val sel = _multiSelect.value ?: return@launch
         val (s, e) = range.indices(_currentIndex.value, frameCount, n)
         runCatching { outliers.setDecisionsInArea(sessionId, s, e, shouldRemove, sel.startX, sel.startY, sel.endX, sel.endY, overlapping) }
+            .onSuccess { framesChanged(it.framesList) }
             .onFailure { reportFailure(it) }
         dismissMultiSheets()
-        frameVMFor(_currentIndex.value).load(force = true)
     }
 
     // ---- render ----
@@ -450,8 +502,14 @@ class SequenceViewModel(
             while (true) {
                 val next = i + if (forward) 1 else -1
                 if (next < 0 || next >= frameCount) { if (i != _currentIndex.value) setCurrentIndex(i); break }
-                val c = runCatching { frames.info(sessionId, next) }.getOrNull()
-                val skip = c != null && when (mode) {
+                var c = runCatching { frames.info(sessionId, next) }.getOrNull()
+                if (c != null && !c.outliersLoaded) {
+                    // The counts of a frame whose outliers are still on disk are not "none", they are unknown:
+                    // load them (listing does) rather than skip a frame that may have what is being looked for.
+                    outliers.list(sessionId, next)
+                    c = runCatching { frames.info(sessionId, next) }.getOrNull()
+                }
+                val skip = c != null && c.outliersLoaded && when (mode) {
                     FastAdvancementType.SKIP_EMPTIES ->
                         (c.numPositiveOutliers + c.numNegativeOutliers + c.numUndecidedOutliers) == 0
                     FastAdvancementType.TO_NEXT_POSITIVE -> c.numPositiveOutliers == 0
@@ -512,7 +570,7 @@ class SequenceViewModel(
     }
 
     suspend fun loadThumb(index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL): ImageBitmap? =
-        previewRefPath(index, mode)?.let { imageCache.load(it) }
+        previewRefPath(index, mode)?.let { imageCache.load(it, index) }
 
     /** Per-frame status/counts/clean-method for the grid header & right panel (`Frame.Get`). */
     suspend fun frameInfo(index: Int): com.star.proto.FrameInfo? =
@@ -543,7 +601,7 @@ class SequenceViewModel(
                 _currentPreview.value = null
                 return@launch
             }
-            val bmp = imageCache.load(ref.path)
+            val bmp = imageCache.load(ref.path, index)
             Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): using $resolvedMode -> ${ref.path} (decoded=${bmp != null})" }
             if (_currentIndex.value == index) {
                 _currentPreview.value = bmp
@@ -572,7 +630,7 @@ class SequenceViewModel(
         scope.launch {
             for (n in 1..3) {
                 val i = index + direction * n
-                if (i in 0 until frameCount) previewRefPath(i)?.let { imageCache.load(it) }
+                if (i in 0 until frameCount) previewRefPath(i)?.let { imageCache.load(it, i) }
             }
         }
     }

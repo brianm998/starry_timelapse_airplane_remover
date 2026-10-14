@@ -11,6 +11,7 @@ import com.star.proto.OutlierDecision
 import com.star.proto.OutlierGroup
 import com.star.proto.RemoveReason
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,12 +60,18 @@ class FrameViewModel(
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
     private var loaded = false
+    private var loadJob: Job? = null
 
-    /** Load groups + label map. Idempotent; safe to call when entering the frame. */
-    fun load(force: Boolean = false) {
-        if (loaded && !force) return
+    /**
+     * Load groups + label map; a no-op once loaded unless [force]d. A second load started while one is
+     * running replaces it. Returns the load in flight (null if there was nothing to do).
+     */
+    fun load(force: Boolean = false): Job? {
+        if (loaded && !force) return loadJob
         loaded = true
-        scope.launch {
+        loadJob?.cancel()
+        val job = scope.launch {
+            val me = coroutineContext[Job]
             _loading.value = true
             try {
                 runCatching { _info.value = frames.info(sessionId, frameIndex) }
@@ -74,10 +81,27 @@ class FrameViewModel(
                 val ref = frames.labelImage(sessionId, frameIndex)
                 _labelMap.value = ref?.let { outliers.loadLabelMap(it.path) }
             } finally {
-                _loading.value = false
+                if (loadJob === me) _loading.value = false
             }
         }
+        loadJob = job
+        return job
     }
+
+    /**
+     * What was loaded is out of date (the frame was processed, edited elsewhere, or its outliers
+     * loaded): the next [ensureLoaded] fetches it again. The caller reloads right away for a frame
+     * that is on screen.
+     */
+    fun invalidate() { loaded = false }
+
+    /** Return once the groups are loaded, loading them if need be: for callers that must not act on an empty list. */
+    suspend fun ensureLoaded() {
+        load()?.join()
+    }
+
+    /** Take the counts the daemon returned with a change to this frame. */
+    fun applyInfo(info: FrameInfo) { _info.value = info }
 
     fun decisionFor(groupId: Int): RemoveReason = _decisions.value[groupId] ?: RemoveReason.RR_UNDECIDED
 
@@ -150,10 +174,16 @@ class FrameViewModel(
 
     fun setDecision(groupId: Int, reason: RemoveReason) = apply(listOf(groupId to reason))
 
-    fun keepAll() = apply(_groups.value.map { it.id to RemoveReason.RR_USER_KEEP })
-    fun removeAll() = apply(_groups.value.map { it.id to RemoveReason.RR_USER_REMOVE })
-    fun clearUndecided() =
-        apply(_groups.value.filter { !OutlierDecisions.isDecided(decisionFor(it.id)) }.map { it.id to RemoveReason.RR_UNDECIDED })
+    // These act on the groups, which are only loaded once the frame has been looked at; from the menu or
+    // keys in scrub or grid mode they are not, so load them first rather than silently doing nothing.
+    fun keepAll() { scope.launch { ensureLoaded(); apply(_groups.value.map { it.id to RemoveReason.RR_USER_KEEP }) } }
+    fun removeAll() { scope.launch { ensureLoaded(); apply(_groups.value.map { it.id to RemoveReason.RR_USER_REMOVE }) } }
+    fun clearUndecided() {
+        scope.launch {
+            ensureLoaded()
+            apply(_groups.value.filter { !OutlierDecisions.isDecided(decisionFor(it.id)) }.map { it.id to RemoveReason.RR_UNDECIDED })
+        }
+    }
 
     private fun apply(changes: List<Pair<Int, RemoveReason>>) {
         if (changes.isEmpty()) return
@@ -163,6 +193,7 @@ class FrameViewModel(
                 OutlierDecision.newBuilder().setGroupId(it.first).setDecision(it.second).build()
             }
             runCatching { outliers.setDecisions(sessionId, frameIndex, protoDecisions, rerender = false) }
+                .onSuccess { _info.value = it.frame }
                 .onFailure {
                     // The optimistic tint above is now wrong; show what the daemon actually has.
                     reportFailure(it)

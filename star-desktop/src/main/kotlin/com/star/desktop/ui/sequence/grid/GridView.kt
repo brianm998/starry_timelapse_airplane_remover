@@ -69,6 +69,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val viewMode by vm.viewMode.collectAsState()
     val scale by vm.gridThumbnailScale.collectAsState()
     val showHorizon by vm.showHorizonOnGrid.collectAsState()
+    val revisions by vm.frameRevisions.collectAsState()
 
     val cellWidth = (vm.info.imageWidth * scale).coerceIn(70f, 1000f)
     val gridState = rememberLazyGridState()
@@ -92,6 +93,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 state = states[i],
                 viewMode = viewMode,
                 showHorizon = showHorizon,
+                revision = revisions[i] ?: 0,
             )
         }
     }
@@ -107,11 +109,13 @@ private fun GridCell(
     state: FrameProcessingState?,
     viewMode: FrameViewMode,
     showHorizon: Boolean,
+    /** Changes when a picture of this frame is saved, so the thumbnail is fetched again. */
+    revision: Int,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
     var overlay by remember(index) { mutableStateOf<GetHorizonOverlayResponse?>(null) }
-    LaunchedEffect(index, viewMode, state) { thumb = vm.loadThumb(index, viewMode) }
+    LaunchedEffect(index, viewMode, state, revision) { thumb = vm.loadThumb(index, viewMode) }
     LaunchedEffect(index, state) { info = vm.frameInfo(index) }
     LaunchedEffect(index, showHorizon, state) {
         overlay = if (showHorizon) {

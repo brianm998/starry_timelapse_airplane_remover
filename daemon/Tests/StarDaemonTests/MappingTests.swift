@@ -114,6 +114,25 @@ final class MappingTests: XCTestCase {
         }
     }
 
+    /// What an ImageSaved event can name: the four views a client can ask for, and nothing else.
+    func testOnlyTheViewsAClientCanAskForAreAnnounced() {
+        XCTAssertEqual(Mapping.protoFrameViewMode(.original), .viewOriginal)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.final), .viewProcessed)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.subtraction), .viewSubtraction)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.validation), .viewValidation)
+        XCTAssertNil(Mapping.protoFrameViewMode(.starAligned))
+        XCTAssertNil(Mapping.protoFrameViewMode(.horizon))
+    }
+
+    /// And going back out gets the same view: announcing a save and asking for the preview agree.
+    func testAnAnnouncedViewIsTheOneThatCanBeAskedFor() {
+        for type in [FrameViewMode.original, .final, .subtraction, .validation] {
+            let wire = Mapping.protoFrameViewMode(type)
+            XCTAssertNotNil(wire)
+            XCTAssertEqual(wire.map(Mapping.frameViewMode(from:)), type)
+        }
+    }
+
     // MARK: - homography results
 
     private func warp(frameIndex: Int,

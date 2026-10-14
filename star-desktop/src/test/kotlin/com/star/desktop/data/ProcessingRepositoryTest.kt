@@ -1,6 +1,8 @@
 package com.star.desktop.data
 
 import com.star.proto.FrameSavingEvent
+import com.star.proto.FrameViewMode
+import com.star.proto.ImageSaved
 import com.star.proto.ProgressEvent
 import com.star.proto.SequenceStateEvent
 import kotlinx.coroutines.CoroutineScope
@@ -76,5 +78,17 @@ class ProcessingRepositoryTest {
         assertEquals(1, r.pendingSaves.value)
         r.fold(saving(5, 0))
         assertEquals(0, r.pendingSaves.value)
+    }
+
+    @Test
+    fun aSavedImageIsPublishedForTheCacheToDrop() = runBlocking {
+        val r = repo()
+        val got = async { withTimeoutOrNull(2_000) { r.imageSaved.first() } }
+        kotlinx.coroutines.yield()
+        r.fold(
+            ProgressEvent.newBuilder()
+                .setImageSaved(ImageSaved.newBuilder().setFrameIndex(7).setViewMode(FrameViewMode.VIEW_PROCESSED)).build(),
+        )
+        assertEquals(ProcessingRepository.ImageSaved(7, FrameViewMode.VIEW_PROCESSED), got.await())
     }
 }
