@@ -40,6 +40,7 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
     val showFilmstrip by vm.showFilmstrip.collectAsState()
     val mode by vm.mode.collectAsState()
     val skip by vm.fastSkipAmount.collectAsState()
+    val selected by vm.selected.collectAsState()
 
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -51,8 +52,9 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
             if (playing) {
                 GlyphButton("⏸", "Pause", vm::togglePlayback, size = 40, fontSize = 24, tint = StarColors.blue)
             } else {
-                val atStart = idx <= 0
-                val atEnd = idx >= vm.frameCount - 1
+                // With several frames selected the arrows go round them, so there is no start or end to be at.
+                val atStart = idx <= 0 && selected.size <= 1
+                val atEnd = idx >= vm.frameCount - 1 && selected.size <= 1
                 val multi = vm.frameCount > 1
                 GlyphButton("⏮", "Go to first frame (b)", vm::goToFirst, enabled = !atStart)
                 GlyphButton("⏪", "Back $skip frames (z)", vm::fastPrevious, enabled = !atStart)

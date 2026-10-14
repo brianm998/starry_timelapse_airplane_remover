@@ -423,8 +423,12 @@ class SequenceViewModel(
         _currentIndex.value = clamped
     }
 
-    fun next() = setCurrentIndex(_currentIndex.value + 1)
-    fun previous() = setCurrentIndex(_currentIndex.value - 1)
+    fun next() = stepBy(1)
+    fun previous() = stepBy(-1)
+
+    /** [delta] frames on, or back: through the frames selected, round and round, when there are several (macOS `transition(numberOfFrames:)`). */
+    private fun stepBy(delta: Int) =
+        setCurrentIndex(com.star.desktop.domain.FrameNavigation.step(_currentIndex.value, delta, frameCount, _selected.value))
 
     /**
      * Selection (macOS GridView): shift = range from the anchor (currentIndex stays put);
@@ -863,7 +867,7 @@ class SequenceViewModel(
         val mode = _fastAdvancement.value
         if (mode == FastAdvancementType.NORMAL) {
             val amount = _fastSkipAmount.value
-            setCurrentIndex(_currentIndex.value + if (forward) amount else -amount)
+            stepBy(if (forward) amount else -amount)
             return
         }
         scope.launch {
