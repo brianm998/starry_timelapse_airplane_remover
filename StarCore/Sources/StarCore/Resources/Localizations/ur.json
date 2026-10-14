@@ -330,6 +330,8 @@
   "ui.current_frame": "موجودہ فریم",
   "ui.custom": "حسبِ ضرورت",
   "ui.custom_2": "حسبِ ضرورت",
+  "ui.debug_engine_log": "انجن لاگ: {0}",
+  "ui.debug_log_file": "لاگ فائل: {0}",
   "ui.debug_window": "ڈی بگ ونڈو",
   "ui.decision_tree_all": "فیصلہ ساز درخت: سب",
   "ui.decision_tree_all_frames": "فیصلہ ساز درخت: تمام فریم",

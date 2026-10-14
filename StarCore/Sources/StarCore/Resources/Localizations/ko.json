@@ -330,6 +330,8 @@
   "ui.current_frame": "현재 프레임",
   "ui.custom": "사용자 지정",
   "ui.custom_2": "사용자 지정",
+  "ui.debug_engine_log": "엔진 로그: {0}",
+  "ui.debug_log_file": "로그 파일: {0}",
   "ui.debug_window": "디버그 윈도우",
   "ui.decision_tree_all": "결정 트리: 전체",
   "ui.decision_tree_all_frames": "결정 트리: 모든 프레임",

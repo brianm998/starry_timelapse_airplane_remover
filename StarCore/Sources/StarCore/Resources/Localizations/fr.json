@@ -330,6 +330,8 @@
   "ui.current_frame": "Image actuelle",
   "ui.custom": "Personnalisé",
   "ui.custom_2": "personnalisé",
+  "ui.debug_engine_log": "Journal du moteur : {0}",
+  "ui.debug_log_file": "Fichier journal : {0}",
   "ui.debug_window": "Fenêtre de débogage",
   "ui.decision_tree_all": "Arbre de décision : tout",
   "ui.decision_tree_all_frames": "Arbre de décision : toutes les images",

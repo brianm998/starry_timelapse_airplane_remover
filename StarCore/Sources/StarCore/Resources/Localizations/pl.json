@@ -330,6 +330,8 @@
   "ui.current_frame": "Bieżąca klatka",
   "ui.custom": "Własne",
   "ui.custom_2": "własne",
+  "ui.debug_engine_log": "Dziennik silnika: {0}",
+  "ui.debug_log_file": "Plik dziennika: {0}",
   "ui.debug_window": "Okno diagnostyczne",
   "ui.decision_tree_all": "Drzewo decyzyjne: wszystko",
   "ui.decision_tree_all_frames": "Drzewo decyzyjne: wszystkie klatki",

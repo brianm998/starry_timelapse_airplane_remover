@@ -39,6 +39,22 @@ enum DaemonHandlers {
         }
     }
 
+    static func setLogLevel(id: UInt64, payload: Data, transport: StdioTransport, control: LogControl = .shared) async {
+        do {
+            let request = try Star_V1_SetLogLevelRequest(serializedBytes: payload)
+            let state = try await control.apply(level: request.level,
+                                                fileEnabled: request.hasFileEnabled ? request.fileEnabled : nil,
+                                                fileLevel: request.fileLevel)
+            // Also what makes a file log exist: a handler opens its file at the first line it is given.
+            Log.i("stard: log level \(state.level.rawValue)" + (state.fileLogPath.map { ", file log at \(state.fileLevel.rawValue) in \($0)" } ?? ""))
+            try await transport.respond(id: id, payload: state.response.serializedData())
+        } catch let failure as LogControl.Failure {
+            await transport.sendError(id: id, message: failure.description, code: 400)
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     static func shutdown(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         // Close every open session before answering: the answer is the client's cue that it is
         // safe to exit, and an edit still waiting for its save timer is lost if the process goes.

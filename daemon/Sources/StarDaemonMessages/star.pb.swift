@@ -969,6 +969,54 @@ public struct Star_V1_HelloResponse: Sendable {
   public init() {}
 }
 
+/// Change how much the daemon logs while it runs (macOS Debug window's "Log Level" and "Log to file at level"). `level` is what it writes to stderr,
+/// which the client keeps in its engine log and shows in its own debug window; the file is a log of the daemon's own, in `<scratch>/logs`, at
+/// `file_level`. A field left out (an empty level, an unset `file_enabled`) keeps what it was. Levels are verbose, debug, info, warn and error.
+public struct Star_V1_SetLogLevelRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var level: String = String()
+
+  public var fileEnabled: Bool {
+    get {_fileEnabled ?? false}
+    set {_fileEnabled = newValue}
+  }
+  /// Returns true if `fileEnabled` has been explicitly set.
+  public var hasFileEnabled: Bool {self._fileEnabled != nil}
+  /// Clears the value of `fileEnabled`. Subsequent reads from it will return its default value.
+  public mutating func clearFileEnabled() {self._fileEnabled = nil}
+
+  public var fileLevel: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _fileEnabled: Bool? = nil
+}
+
+public struct Star_V1_SetLogLevelResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// in force now
+  public var level: String = String()
+
+  public var fileEnabled: Bool = false
+
+  public var fileLevel: String = String()
+
+  /// the file being written, or empty when there is none
+  public var fileLogPath: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct Star_V1_ShutdownRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -4096,6 +4144,95 @@ extension Star_V1_HelloResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     if lhs.daemonVersion != rhs.daemonVersion {return false}
     if lhs.scratchDir != rhs.scratchDir {return false}
     if lhs.locale != rhs.locale {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_SetLogLevelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetLogLevelRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}level\0\u{3}file_enabled\0\u{3}file_level\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.level) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self._fileEnabled) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.fileLevel) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.level.isEmpty {
+      try visitor.visitSingularStringField(value: self.level, fieldNumber: 1)
+    }
+    try { if let v = self._fileEnabled {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 2)
+    } }()
+    if !self.fileLevel.isEmpty {
+      try visitor.visitSingularStringField(value: self.fileLevel, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_SetLogLevelRequest, rhs: Star_V1_SetLogLevelRequest) -> Bool {
+    if lhs.level != rhs.level {return false}
+    if lhs._fileEnabled != rhs._fileEnabled {return false}
+    if lhs.fileLevel != rhs.fileLevel {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_SetLogLevelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetLogLevelResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}level\0\u{3}file_enabled\0\u{3}file_level\0\u{3}file_log_path\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.level) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.fileEnabled) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.fileLevel) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.fileLogPath) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.level.isEmpty {
+      try visitor.visitSingularStringField(value: self.level, fieldNumber: 1)
+    }
+    if self.fileEnabled != false {
+      try visitor.visitSingularBoolField(value: self.fileEnabled, fieldNumber: 2)
+    }
+    if !self.fileLevel.isEmpty {
+      try visitor.visitSingularStringField(value: self.fileLevel, fieldNumber: 3)
+    }
+    if !self.fileLogPath.isEmpty {
+      try visitor.visitSingularStringField(value: self.fileLogPath, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_SetLogLevelResponse, rhs: Star_V1_SetLogLevelResponse) -> Bool {
+    if lhs.level != rhs.level {return false}
+    if lhs.fileEnabled != rhs.fileEnabled {return false}
+    if lhs.fileLevel != rhs.fileLevel {return false}
+    if lhs.fileLogPath != rhs.fileLogPath {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

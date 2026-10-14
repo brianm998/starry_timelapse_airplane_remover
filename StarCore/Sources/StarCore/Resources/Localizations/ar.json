@@ -330,6 +330,8 @@
   "ui.current_frame": "الإطار الحالي",
   "ui.custom": "مخصص",
   "ui.custom_2": "مخصص",
+  "ui.debug_engine_log": "سجل المحرّك: {0}",
+  "ui.debug_log_file": "ملف السجل: {0}",
   "ui.debug_window": "نافذة التصحيح",
   "ui.decision_tree_all": "شجرة القرار: الكل",
   "ui.decision_tree_all_frames": "شجرة القرار: كل الإطارات",

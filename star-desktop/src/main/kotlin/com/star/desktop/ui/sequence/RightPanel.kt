@@ -228,6 +228,8 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         ReprocessControls(app, vm)
+        // macOS keeps the log-to-file switch at the foot of this panel.
+        com.star.desktop.ui.windows.LogToFileControls(app.debugLog)
       }
       com.star.desktop.ui.components.PanelChevron("»", { vm.setRightPanel(false) }, Modifier.padding(6.dp))
     }

@@ -330,6 +330,8 @@
   "ui.current_frame": "Khung hiện tại",
   "ui.custom": "Tùy chỉnh",
   "ui.custom_2": "tùy chỉnh",
+  "ui.debug_engine_log": "Nhật ký công cụ xử lý: {0}",
+  "ui.debug_log_file": "Tệp nhật ký: {0}",
   "ui.debug_window": "Cửa sổ gỡ lỗi",
   "ui.decision_tree_all": "Cây quyết định: tất cả",
   "ui.decision_tree_all_frames": "Cây quyết định: mọi khung",

@@ -330,6 +330,8 @@
   "ui.current_frame": "Bingkai saat ini",
   "ui.custom": "Ubahan",
   "ui.custom_2": "ubahan",
+  "ui.debug_engine_log": "Log mesin: {0}",
+  "ui.debug_log_file": "Berkas log: {0}",
   "ui.debug_window": "Jendela awakutu",
   "ui.decision_tree_all": "Pohon keputusan: semua",
   "ui.decision_tree_all_frames": "Pohon keputusan: semua bingkai",

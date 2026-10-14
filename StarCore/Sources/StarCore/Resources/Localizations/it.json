@@ -330,6 +330,8 @@
   "ui.current_frame": "Fotogramma attuale",
   "ui.custom": "Personalizzato",
   "ui.custom_2": "personalizzato",
+  "ui.debug_engine_log": "Registro del motore: {0}",
+  "ui.debug_log_file": "File di registro: {0}",
   "ui.debug_window": "Finestra di debug",
   "ui.decision_tree_all": "Albero decisionale: tutto",
   "ui.decision_tree_all_frames": "Albero decisionale: tutti i fotogrammi",

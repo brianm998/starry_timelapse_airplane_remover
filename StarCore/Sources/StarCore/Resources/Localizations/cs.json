@@ -330,6 +330,8 @@
   "ui.current_frame": "Aktuální snímek",
   "ui.custom": "Vlastní",
   "ui.custom_2": "vlastní",
+  "ui.debug_engine_log": "Protokol modulu: {0}",
+  "ui.debug_log_file": "Soubor protokolu: {0}",
   "ui.debug_window": "Ladicí okno",
   "ui.decision_tree_all": "Rozhodovací strom: vše",
   "ui.decision_tree_all_frames": "Rozhodovací strom: všechny snímky",

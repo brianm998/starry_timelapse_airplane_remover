@@ -90,6 +90,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         Menu(localized("ui.window"), mnemonic = 'W') {
             Item(localized("ui.outlier_table"), enabled = hasSession, shortcut = windowShortcut(Key.O, IS_MAC)) { app.toggleOutlierWindow() }
             Item(localized("ui.alignment_2"), enabled = hasSession, shortcut = windowShortcut(Key.A, IS_MAC)) { app.toggleAlignmentWindow() }
+            Item(localized("ui.debug_window"), shortcut = windowShortcut(Key.D, IS_MAC)) { app.toggleDebugWindow() }
             Separator()
             // The same item closes the painter while it is open, and says so (macOS).
             val paintingHorizon = svm?.horizonPaintMode?.collectAsState()?.value == true

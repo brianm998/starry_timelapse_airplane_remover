@@ -67,6 +67,7 @@ extension Dispatcher {
 
         // Daemon
         register(method: "Daemon.Hello")    { id, payload, transport in await DaemonHandlers.hello(id: id, payload: payload, transport: transport, scratchRoot: scratchRoot); await t.taskCompleted(id: id) }
+        register(method: "Daemon.SetLogLevel") { id, payload, transport in await DaemonHandlers.setLogLevel(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
         register(method: "Daemon.Shutdown") { id, payload, transport in await DaemonHandlers.shutdown(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Session

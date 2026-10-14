@@ -330,6 +330,8 @@
   "ui.current_frame": "現在のフレーム",
   "ui.custom": "カスタム",
   "ui.custom_2": "カスタム",
+  "ui.debug_engine_log": "エンジンのログ: {0}",
+  "ui.debug_log_file": "ログファイル: {0}",
   "ui.debug_window": "デバッグウインドウ",
   "ui.decision_tree_all": "決定木: すべて",
   "ui.decision_tree_all_frames": "決定木: すべてのフレーム",

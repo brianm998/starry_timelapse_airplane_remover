@@ -330,6 +330,8 @@
   "ui.current_frame": "Aktuelles Bild",
   "ui.custom": "Benutzerdefiniert",
   "ui.custom_2": "benutzerdefiniert",
+  "ui.debug_engine_log": "Engine-Protokoll: {0}",
+  "ui.debug_log_file": "Protokolldatei: {0}",
   "ui.debug_window": "Debug-Fenster",
   "ui.decision_tree_all": "Entscheidungsbaum: alle",
   "ui.decision_tree_all_frames": "Entscheidungsbaum: alle Bilder",

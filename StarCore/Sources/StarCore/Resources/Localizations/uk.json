@@ -330,6 +330,8 @@
   "ui.current_frame": "Поточний кадр",
   "ui.custom": "Власне",
   "ui.custom_2": "власне",
+  "ui.debug_engine_log": "Журнал рушія: {0}",
+  "ui.debug_log_file": "Файл журналу: {0}",
   "ui.debug_window": "Вікно зневадження",
   "ui.decision_tree_all": "Дерево рішень: усе",
   "ui.decision_tree_all_frames": "Дерево рішень: усі кадри",

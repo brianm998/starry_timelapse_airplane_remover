@@ -330,6 +330,8 @@
   "ui.current_frame": "Текущий кадр",
   "ui.custom": "Свой",
   "ui.custom_2": "свой",
+  "ui.debug_engine_log": "Журнал движка: {0}",
+  "ui.debug_log_file": "Файл журнала: {0}",
   "ui.debug_window": "Окно отладки",
   "ui.decision_tree_all": "Дерево решений: всё",
   "ui.decision_tree_all_frames": "Дерево решений: все кадры",

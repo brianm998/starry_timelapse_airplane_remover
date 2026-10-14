@@ -479,6 +479,30 @@ class AppViewModel(
     fun toggleAlignmentWindow() { _showAlignmentWindow.value = !_showAlignmentWindow.value }
     fun closeAlignmentWindow() { _showAlignmentWindow.value = false }
 
+    private val _showDebugWindow = MutableStateFlow(false)
+    val showDebugWindow: StateFlow<Boolean> = _showDebugWindow.asStateFlow()
+    fun toggleDebugWindow() { _showDebugWindow.value = !_showDebugWindow.value }
+    fun closeDebugWindow() { _showDebugWindow.value = false }
+
+    /** The Debug window's choices: the log's level, and the files it is written to. */
+    val debugLog = DebugLogSettings(
+        scope,
+        tellEngine = { level, fileEnabled, fileLevel ->
+            try {
+                engine.client?.setLogLevel(level, fileEnabled, fileLevel)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.star.desktop.util.Log.w("App") { "could not tell the engine its log level: ${e.message}" }
+                null
+            }
+        },
+        logsDirectory = { java.io.File(engine.engineLogPath).parentFile },
+    )
+
+    /** Where the engine's log (everything it writes to stderr) is kept. */
+    val engineLogPath: String get() = engine.engineLogPath
+
     private val _showInfoDialog = MutableStateFlow(false)
     val showInfoDialog: StateFlow<Boolean> = _showInfoDialog.asStateFlow()
     fun openInfoDialog() { _showInfoDialog.value = true }
@@ -812,6 +836,8 @@ class AppViewModel(
             val connected = engine.status.first { it is EngineStatus.Connected } as EngineStatus.Connected
             _newRelease.value = releaseCheck(connected.daemonVersion)
         }
+        // A fresh engine starts at its own log level: the one chosen in the Debug window is said to it again.
+        scope.launch { engine.status.collect { if (it is EngineStatus.Connected) debugLog.reapplyToEngine() } }
         scope.launch {
             // Latest wins: these describe the machine's current state, so an older one being
             // replaced by a newer is right. The user can dismiss, and the next one re-raises.

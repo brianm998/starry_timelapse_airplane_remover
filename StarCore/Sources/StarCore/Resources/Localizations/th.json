@@ -330,6 +330,8 @@
   "ui.current_frame": "เฟรมปัจจุบัน",
   "ui.custom": "กำหนดเอง",
   "ui.custom_2": "กำหนดเอง",
+  "ui.debug_engine_log": "บันทึกของเอนจิน: {0}",
+  "ui.debug_log_file": "ไฟล์บันทึก: {0}",
   "ui.debug_window": "หน้าต่างดีบัก",
   "ui.decision_tree_all": "ต้นไม้ตัดสินใจ: ทั้งหมด",
   "ui.decision_tree_all_frames": "ต้นไม้ตัดสินใจ: ทุกเฟรม",

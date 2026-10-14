@@ -42,6 +42,8 @@ struct Stard: AsyncParsableCommand {
         // can no longer reach the protocol.
         Log.name = "stard"
         Log.add(handler: StderrLogHandler(at: logLevel), for: .console)
+        // So that Daemon.SetLogLevel knows what it started from, and puts a log file of the user's asking beside the client's engine log.
+        await LogControl.shared.adopt(level: logLevel, logsDirectory: URL(fileURLWithPath: scratchDir).appendingPathComponent("logs", isDirectory: true))
 
         // Before the abandoned-run reports below, which are user-visible prose.
         if let language { StarLocalization.shared.languageOverride = language }

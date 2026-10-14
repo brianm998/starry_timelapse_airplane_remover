@@ -330,6 +330,8 @@
   "ui.current_frame": "Current Frame",
   "ui.custom": "Custom",
   "ui.custom_2": "custom",
+  "ui.debug_engine_log": "Engine log: {0}",
+  "ui.debug_log_file": "Log file: {0}",
   "ui.debug_window": "Debug Window",
   "ui.decision_tree_all": "Decision Tree All",
   "ui.decision_tree_all_frames": "Decision Tree, All Frames",

@@ -98,6 +98,20 @@ private fun runApp(args: Array<String>) = application {
         }
     }
 
+    // The Debug window: the log, live. Open from the Window menu on any screen, since an engine that will not start is the time it is wanted.
+    val showDebug by vm.showDebugWindow.collectAsState()
+    if (showDebug) {
+        Window(
+            onCloseRequest = vm::closeDebugWindow,
+            title = localized("ui.star_debug"),
+            state = rememberWindowState(size = DpSize(1100.dp, 600.dp)),
+        ) {
+            com.star.desktop.ui.theme.StarTheme {
+                com.star.desktop.ui.windows.DebugWindowView(vm.debugLog, vm.engineLogPath)
+            }
+        }
+    }
+
     // Secondary Alignment diagnostics window.
     val showAlign by vm.showAlignmentWindow.collectAsState()
     if (showAlign && svm != null) {

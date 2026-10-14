@@ -330,6 +330,8 @@
   "ui.current_frame": "বর্তমান ফ্রেম",
   "ui.custom": "কাস্টম",
   "ui.custom_2": "কাস্টম",
+  "ui.debug_engine_log": "ইঞ্জিন লগ: {0}",
+  "ui.debug_log_file": "লগ ফাইল: {0}",
   "ui.debug_window": "ডিবাগ উইন্ডো",
   "ui.decision_tree_all": "ডিসিশন ট্রি: সব",
   "ui.decision_tree_all_frames": "ডিসিশন ট্রি: সব ফ্রেম",

@@ -330,6 +330,8 @@
   "ui.current_frame": "Huidig beeld",
   "ui.custom": "Aangepast",
   "ui.custom_2": "aangepast",
+  "ui.debug_engine_log": "Engine-logboek: {0}",
+  "ui.debug_log_file": "Logbestand: {0}",
   "ui.debug_window": "Debugvenster",
   "ui.decision_tree_all": "Beslisboom: alles",
   "ui.decision_tree_all_frames": "Beslisboom: alle beelden",

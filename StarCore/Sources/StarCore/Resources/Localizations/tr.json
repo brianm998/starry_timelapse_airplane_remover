@@ -330,6 +330,8 @@
   "ui.current_frame": "Geçerli kare",
   "ui.custom": "Özel",
   "ui.custom_2": "özel",
+  "ui.debug_engine_log": "Motor günlüğü: {0}",
+  "ui.debug_log_file": "Günlük dosyası: {0}",
   "ui.debug_window": "Hata ayıklama penceresi",
   "ui.decision_tree_all": "Karar ağacı: tümü",
   "ui.decision_tree_all_frames": "Karar ağacı: tüm kareler",

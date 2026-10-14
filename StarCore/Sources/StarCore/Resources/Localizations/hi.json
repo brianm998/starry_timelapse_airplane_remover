@@ -330,6 +330,8 @@
   "ui.current_frame": "वर्तमान फ़्रेम",
   "ui.custom": "कस्टम",
   "ui.custom_2": "कस्टम",
+  "ui.debug_engine_log": "इंजन लॉग: {0}",
+  "ui.debug_log_file": "लॉग फ़ाइल: {0}",
   "ui.debug_window": "डीबग विंडो",
   "ui.decision_tree_all": "निर्णय वृक्ष: सभी",
   "ui.decision_tree_all_frames": "निर्णय वृक्ष: सभी फ़्रेम",

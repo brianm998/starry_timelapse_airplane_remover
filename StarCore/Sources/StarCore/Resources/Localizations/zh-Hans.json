@@ -330,6 +330,8 @@
   "ui.current_frame": "当前帧",
   "ui.custom": "自定",
   "ui.custom_2": "自定",
+  "ui.debug_engine_log": "引擎日志：{0}",
+  "ui.debug_log_file": "日志文件：{0}",
   "ui.debug_window": "调试窗口",
   "ui.decision_tree_all": "决策树：全部",
   "ui.decision_tree_all_frames": "决策树：所有帧",

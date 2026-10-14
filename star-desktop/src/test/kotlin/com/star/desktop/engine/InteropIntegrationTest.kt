@@ -1662,4 +1662,34 @@ class InteropIntegrationTest {
             tmp.deleteRecursively()
         }
     }
+
+    /** H8: the engine's log level and its log file can be changed while it runs, and a level it does not know is refused with nothing changed. */
+    @Test
+    fun theEnginesLogCanBeChangedWhileItRuns() {
+        if (!runProcess || stardPath() == null) {
+            println("[skip] theEnginesLogCanBeChangedWhileItRuns — set -Dstar.it.process=true -Dstar.stard.path=<stard>")
+            return
+        }
+        withEngine { client ->
+            val debug = client.setLogLevel(level = "debug")
+            assertEquals("debug", debug.level)
+            assertTrue(!debug.fileEnabled && debug.fileLogPath.isEmpty())
+
+            val filed = client.setLogLevel(fileEnabled = true, fileLevel = "info")
+            assertEquals("debug", filed.level, "the level was not asked about, so it is as it was")
+            assertTrue(filed.fileEnabled && filed.fileLevel == "info")
+            assertTrue(filed.fileLogPath.isNotEmpty(), "a file was asked for")
+            // The engine opens it with the first line it writes, which is the one that says it was asked.
+            val written = withTimeoutOrNull(5_000) { while (!File(filed.fileLogPath).exists()) delay(50); true }
+            assertEquals(true, written, "the file is there: ${filed.fileLogPath}")
+            assertEquals("logs", File(filed.fileLogPath).parentFile.name, "beside the engine's own log")
+
+            val refused = runCatching { client.setLogLevel(level = "loud") }.exceptionOrNull()
+            assertTrue(refused is StarRpcException && refused.code == 400, "an unknown level should be refused: $refused")
+            assertEquals("debug", client.setLogLevel().level, "the refusal changed nothing")
+
+            val off = client.setLogLevel(fileEnabled = false)
+            assertTrue(!off.fileEnabled && off.fileLogPath.isEmpty())
+        }
+    }
 }

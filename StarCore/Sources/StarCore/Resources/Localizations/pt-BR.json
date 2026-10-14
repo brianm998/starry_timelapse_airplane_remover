@@ -330,6 +330,8 @@
   "ui.current_frame": "Quadro atual",
   "ui.custom": "Personalizado",
   "ui.custom_2": "personalizado",
+  "ui.debug_engine_log": "Registro do mecanismo: {0}",
+  "ui.debug_log_file": "Arquivo de registro: {0}",
   "ui.debug_window": "Janela de depuração",
   "ui.decision_tree_all": "Árvore de decisão: tudo",
   "ui.decision_tree_all_frames": "Árvore de decisão: todos os quadros",

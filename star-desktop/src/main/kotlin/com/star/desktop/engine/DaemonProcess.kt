@@ -2,6 +2,7 @@ package com.star.desktop.engine
 
 import com.star.desktop.i18n.localized
 import com.star.desktop.util.Log
+import com.star.desktop.util.LogBuffer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,7 +32,7 @@ class DaemonProcess(
     private val binaryPath: String,
     private val scratchDir: String,
     private val logLevel: String = "info",
-    private val onStderrLine: (String) -> Unit = { System.err.println("[stard] $it") },
+    private val onStderrLine: (String) -> Unit = { System.err.println("[stard] $it"); LogBuffer.addEngineLine(it) },
 ) {
     private var process: Process? = null
     private var stderrJob: Job? = null

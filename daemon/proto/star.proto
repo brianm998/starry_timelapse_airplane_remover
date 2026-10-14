@@ -34,6 +34,21 @@ message HelloRequest  { string client_version = 1; string locale = 2; }
 // one asked for: the client can request a language star has no translation for, and this is
 // how it finds out it got the fallback.
 message HelloResponse { string daemon_version = 1; string scratch_dir = 2; string locale = 3; }
+// Change how much the daemon logs while it runs (macOS Debug window's "Log Level" and "Log to file at level"). `level` is what it writes to stderr,
+// which the client keeps in its engine log and shows in its own debug window; the file is a log of the daemon's own, in `<scratch>/logs`, at
+// `file_level`. A field left out (an empty level, an unset `file_enabled`) keeps what it was. Levels are verbose, debug, info, warn and error.
+message SetLogLevelRequest {
+  string        level        = 1;
+  optional bool file_enabled = 2;
+  string        file_level   = 3;
+}
+message SetLogLevelResponse {
+  string level         = 1;   // in force now
+  bool   file_enabled  = 2;
+  string file_level    = 3;
+  string file_log_path = 4;   // the file being written, or empty when there is none
+}
+
 message ShutdownRequest {}
 message ShutdownResponse {}
 

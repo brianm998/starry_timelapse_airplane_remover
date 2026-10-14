@@ -43,6 +43,9 @@ class EngineState(
     private val scratchDir: String = DaemonProcess.defaultScratchDir(),
     private val binaryPath: String = DaemonProcess.resolveStardBinary(),
 ) {
+    /** The engine's own log: what it wrote to stderr, which this client keeps beside its scratch directory (see [DaemonProcess.logFile]). */
+    val engineLogPath: String get() = java.io.File(java.io.File(scratchDir, "logs"), "stard.log").absolutePath
+
     private val _status = MutableStateFlow<EngineStatus>(EngineStatus.Disconnected)
     val status: StateFlow<EngineStatus> = _status.asStateFlow()
 
