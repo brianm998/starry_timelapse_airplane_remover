@@ -156,7 +156,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             )
             // Discard if the frame advanced or the paint was reset while the walker ran (shared state).
             if (vm.currentIndex.value != frameIdx || state.generation() != gen) return
-            if (result != null) state.applyRefinedHorizon(result, expanded, baseline)
+            if (result != null) state.applyRefinedHorizon(result, expanded, baseline, erasing)
             else errorText = "Refinement failed — try another stroke"
         } finally {
             refining = max(0, refining - 1)

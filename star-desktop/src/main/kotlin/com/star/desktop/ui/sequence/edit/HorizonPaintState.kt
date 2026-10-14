@@ -180,24 +180,34 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
      * Commit a refinement stroke into the known-region map (macOS `commitRefinementGesture`): a sky
      * stroke pushes [knownSkyFloor] down; a ground stroke pushes [knownGroundCeiling] up. Each retracts
      * the opposite region where they now overlap so a stroke can undo a prior opposite stroke.
+     *
+     * The stroke also widens the band under the brush. The band is a search region, not a verdict, so a
+     * stroke that reaches outside it pushes it open rather than being clipped by it: without that the
+     * painter could not repair a horizon that was wrong by more than the band's margin (the ground ceiling
+     * is pinned to the band's bottom, and the clamp after the solve pulled painted sky straight back to it).
      */
     fun commitRefinementGesture(erasing: Boolean) {
+        val lastRow = imageHeight - 1
         for (col in 0 until imageWidth) {
             if (gestureColBottom[col] == Int.MIN_VALUE) continue
             val brushTop = gestureColTop[col]
             val brushBottom = gestureColBottom[col]
             if (erasing) {
+                // Open the band above the brush first, so the retraction below is not clipped back to the old search region.
+                if (bandTop[col] >= 0) bandTop[col] = min(bandTop[col], (brushTop - 1).coerceIn(0, lastRow))
                 knownGroundCeiling[col] = if (knownGroundCeiling[col] < 0) brushTop else min(knownGroundCeiling[col], brushTop)
-                // Retract the sky floor if it reaches down into the rows just marked as ground
-                // (sf >= brushTop), so erasing fully undoes a prior sky stroke (macOS HorizonPaintState.swift:401).
+                // Retract the sky floor if it reaches down into the rows just marked as ground (sf >= brushTop),
+                // so erasing fully undoes a prior sky stroke.
                 val sf = knownSkyFloor[col]
                 if (sf >= brushTop) {
                     knownSkyFloor[col] = max(brushTop - 1, bandTop[col].coerceAtLeast(0))
                 }
             } else {
+                // Open the band below the brush first, for the same reason.
+                if (bandBottom[col] >= 0) bandBottom[col] = max(bandBottom[col], (brushBottom + 1).coerceIn(0, lastRow))
                 knownSkyFloor[col] = if (knownSkyFloor[col] < 0) brushBottom else max(knownSkyFloor[col], brushBottom)
-                // Retract the ground ceiling if it reaches up into the rows just marked as sky
-                // (gc <= brushBottom), so painting fully undoes a prior erase (macOS HorizonPaintState.swift:414).
+                // Retract the ground ceiling if it reaches up into the rows just marked as sky (gc <= brushBottom),
+                // so painting fully undoes a prior erase.
                 val gc = knownGroundCeiling[col]
                 if (gc in 0..brushBottom) {
                     val ceiling = if (bandBottom[col] >= 0) bandBottom[col] else imageHeight
@@ -230,6 +240,15 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
         if (brushLeft <= brushRight) {
             if (erasing) taperBoundary(ground, brushLeft, brushRight, expanded.first, expanded.last, taperWidth, pushUp = true)
             else taperBoundary(sky, brushLeft, brushRight, expanded.first, expanded.last, taperWidth, pushUp = false)
+        }
+        // Keep the band consistent with the seeds it has to contain. The commit widened the stored band under the
+        // brush, but the taper above pushes the locked boundary out into the margin columns as well, and the solver
+        // treats a column whose sky floor sits at or below its band bottom (or ground ceiling at or above its band
+        // top) as having no gap left to solve.
+        for (col in expanded) {
+            if (col !in 0 until imageWidth) continue
+            if (sky[col] >= 0 && bottom[col] >= 0 && sky[col] >= bottom[col]) bottom[col] = min(imageHeight - 1, sky[col] + 1)
+            if (ground[col] >= 0 && top[col] >= 0 && ground[col] <= top[col]) top[col] = max(0, ground[col] - 1)
         }
         return RefineInputs(top.toList(), bottom.toList(), sky.toList(), ground.toList())
     }
@@ -272,8 +291,12 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
      * explicit sky/ground strokes are never overridden (macOS merge + clamp in `triggerObjectSelection`).
      * Columns the solver left unresolved (-1) fall back to [baseline] (the pre-stroke horizon) rather
      * than keeping the jagged optimistic brush value.
+     *
+     * The sky floor and the ground ceiling cannot both be honoured if they ever cross, so the clamp for the
+     * stroke that just happened ([erasing]: ground, else sky) is applied last and wins: the user's latest
+     * instruction is the one that must never be silently discarded.
      */
-    fun applyRefinedHorizon(result: List<Int>, range: IntRange, baseline: IntArray?) {
+    fun applyRefinedHorizon(result: List<Int>, range: IntRange, baseline: IntArray?, erasing: Boolean) {
         for (col in range) {
             if (col !in 0 until imageWidth) continue
             val r = if (col < result.size) result[col] else -1
@@ -286,9 +309,14 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
         for (col in 0 until imageWidth) {
             if (horizonY[col] < 0) continue
             var v = horizonY[col]
-            if (knownSkyFloor[col] >= 0) v = max(v, knownSkyFloor[col])
-            if (knownGroundCeiling[col] >= 0) v = min(v, knownGroundCeiling[col] - 1)
-            horizonY[col] = max(0, v)
+            if (erasing) {
+                if (knownSkyFloor[col] >= 0) v = max(v, knownSkyFloor[col])
+                if (knownGroundCeiling[col] >= 0) v = min(v, knownGroundCeiling[col] - 1)
+            } else {
+                if (knownGroundCeiling[col] >= 0) v = min(v, knownGroundCeiling[col] - 1)
+                if (knownSkyFloor[col] >= 0) v = max(v, knownSkyFloor[col])
+            }
+            horizonY[col] = v.coerceIn(0, imageHeight - 1)
         }
         bump()
     }
