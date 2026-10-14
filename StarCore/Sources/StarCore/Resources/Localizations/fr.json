@@ -285,6 +285,7 @@
   "ui.custom_2": "personnalisé",
   "ui.debug_window": "Fenêtre de débogage",
   "ui.decision_tree_all": "Arbre de décision : tout",
+  "ui.decision_tree_all_frames": "Arbre de décision : toutes les images",
   "ui.decision_tree_render_failed": "Échec du rendu de l'arbre de décision : {0}",
   "ui.decrease_max_downward_extension_by_10px": "Réduire l'extension maximale vers le bas de 10 px",
   "ui.default": "Par défaut",

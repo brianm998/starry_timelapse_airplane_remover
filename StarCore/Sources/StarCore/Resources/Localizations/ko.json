@@ -285,6 +285,7 @@
   "ui.custom_2": "사용자 지정",
   "ui.debug_window": "디버그 윈도우",
   "ui.decision_tree_all": "결정 트리: 전체",
+  "ui.decision_tree_all_frames": "결정 트리: 모든 프레임",
   "ui.decision_tree_render_failed": "결정 트리 렌더링 실패: {0}",
   "ui.decrease_max_downward_extension_by_10px": "아래쪽 최대 확장을 10px 줄이기",
   "ui.default": "기본값",

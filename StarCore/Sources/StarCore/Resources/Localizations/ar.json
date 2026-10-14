@@ -285,6 +285,7 @@
   "ui.custom_2": "مخصص",
   "ui.debug_window": "نافذة التصحيح",
   "ui.decision_tree_all": "شجرة القرار: الكل",
+  "ui.decision_tree_all_frames": "شجرة القرار: كل الإطارات",
   "ui.decision_tree_render_failed": "فشل إخراج شجرة القرار: {0}",
   "ui.decrease_max_downward_extension_by_10px": "خفّض أقصى امتداد لأسفل بمقدار 10 بكسل",
   "ui.default": "الافتراضي",

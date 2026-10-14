@@ -285,6 +285,7 @@
   "ui.custom_2": "tùy chỉnh",
   "ui.debug_window": "Cửa sổ gỡ lỗi",
   "ui.decision_tree_all": "Cây quyết định: tất cả",
+  "ui.decision_tree_all_frames": "Cây quyết định: mọi khung",
   "ui.decision_tree_render_failed": "Kết xuất cây quyết định thất bại: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Giảm mức mở rộng xuống dưới tối đa 10 px",
   "ui.default": "Mặc định",

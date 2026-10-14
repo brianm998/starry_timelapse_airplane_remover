@@ -285,6 +285,7 @@
   "ui.custom_2": "własne",
   "ui.debug_window": "Okno diagnostyczne",
   "ui.decision_tree_all": "Drzewo decyzyjne: wszystko",
+  "ui.decision_tree_all_frames": "Drzewo decyzyjne: wszystkie klatki",
   "ui.decision_tree_render_failed": "Renderowanie drzewa decyzyjnego nie powiodło się: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Zmniejsz maksymalne wydłużenie w dół o 10 px",
   "ui.default": "Domyślne",

@@ -285,6 +285,7 @@
   "ui.custom_2": "personalizado",
   "ui.debug_window": "Ventana de depuración",
   "ui.decision_tree_all": "Árbol de decisión: todo",
+  "ui.decision_tree_all_frames": "Árbol de decisión: todos los fotogramas",
   "ui.decision_tree_render_failed": "Falló el renderizado del árbol de decisión: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Reducir la extensión máxima hacia abajo en 10 px",
   "ui.default": "Predeterminado",

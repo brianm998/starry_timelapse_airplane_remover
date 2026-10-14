@@ -36,6 +36,12 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
         // TabCatcher). h (toggle horizon painter) lives on the menu bar so it isn't double-handled.
         Key.R -> { svm.renderCurrentFrame(); return true }
         Key.Tab -> { svm.toggleSidePanels(); return true }
+        // Decision Tree All on the current frame (macOS ApplyAllDecisionTreeButton's `d`).
+        Key.D -> {
+            if (svm.mode.value != InteractionMode.EDIT || !svm.currentFrameUsesOutliers()) return false
+            svm.applyDecisionTreeToCurrentFrame()
+            return true
+        }
     }
 
     val digit = DIGIT_KEYS[event.key]

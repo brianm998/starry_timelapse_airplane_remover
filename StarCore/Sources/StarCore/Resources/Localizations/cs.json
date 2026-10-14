@@ -285,6 +285,7 @@
   "ui.custom_2": "vlastní",
   "ui.debug_window": "Ladicí okno",
   "ui.decision_tree_all": "Rozhodovací strom: vše",
+  "ui.decision_tree_all_frames": "Rozhodovací strom: všechny snímky",
   "ui.decision_tree_render_failed": "Vykreslení rozhodovacího stromu selhalo: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Zmenšit maximální prodloužení dolů o 10 px",
   "ui.default": "Výchozí",

@@ -285,6 +285,7 @@
   "ui.custom_2": "personalizzato",
   "ui.debug_window": "Finestra di debug",
   "ui.decision_tree_all": "Albero decisionale: tutto",
+  "ui.decision_tree_all_frames": "Albero decisionale: tutti i fotogrammi",
   "ui.decision_tree_render_failed": "Rendering dell'albero decisionale non riuscito: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Riduci di 10 px l'estensione massima verso il basso",
   "ui.default": "Predefinito",

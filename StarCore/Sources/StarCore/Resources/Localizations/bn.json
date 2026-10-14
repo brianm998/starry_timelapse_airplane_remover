@@ -285,6 +285,7 @@
   "ui.custom_2": "কাস্টম",
   "ui.debug_window": "ডিবাগ উইন্ডো",
   "ui.decision_tree_all": "ডিসিশন ট্রি: সব",
+  "ui.decision_tree_all_frames": "ডিসিশন ট্রি: সব ফ্রেম",
   "ui.decision_tree_render_failed": "ডিসিশন ট্রি রেন্ডার ব্যর্থ হয়েছে: {0}",
   "ui.decrease_max_downward_extension_by_10px": "সর্বোচ্চ নিম্নমুখী বিস্তার ১০px কমান",
   "ui.default": "ডিফল্ট",

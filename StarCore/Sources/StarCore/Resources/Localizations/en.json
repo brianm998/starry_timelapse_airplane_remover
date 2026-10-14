@@ -285,6 +285,7 @@
   "ui.custom_2": "custom",
   "ui.debug_window": "Debug Window",
   "ui.decision_tree_all": "Decision Tree All",
+  "ui.decision_tree_all_frames": "Decision Tree, All Frames",
   "ui.decision_tree_render_failed": "Decision tree render failed: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Decrease max downward extension by 10px",
   "ui.default": "Default",

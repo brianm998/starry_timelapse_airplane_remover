@@ -285,6 +285,7 @@
   "ui.custom_2": "カスタム",
   "ui.debug_window": "デバッグウインドウ",
   "ui.decision_tree_all": "決定木: すべて",
+  "ui.decision_tree_all_frames": "決定木: すべてのフレーム",
   "ui.decision_tree_render_failed": "決定木のレンダリングに失敗しました: {0}",
   "ui.decrease_max_downward_extension_by_10px": "下方向の最大延長を 10px 減らす",
   "ui.default": "デフォルト",

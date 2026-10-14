@@ -285,6 +285,7 @@
   "ui.custom_2": "özel",
   "ui.debug_window": "Hata ayıklama penceresi",
   "ui.decision_tree_all": "Karar ağacı: tümü",
+  "ui.decision_tree_all_frames": "Karar ağacı: tüm kareler",
   "ui.decision_tree_render_failed": "Karar ağacı oluşturma başarısız: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Aşağı doğru en fazla uzamayı 10 px azalt",
   "ui.default": "Varsayılan",

@@ -285,6 +285,7 @@
   "ui.custom_2": "कस्टम",
   "ui.debug_window": "डीबग विंडो",
   "ui.decision_tree_all": "निर्णय वृक्ष: सभी",
+  "ui.decision_tree_all_frames": "निर्णय वृक्ष: सभी फ़्रेम",
   "ui.decision_tree_render_failed": "निर्णय वृक्ष रेंडर विफल: {0}",
   "ui.decrease_max_downward_extension_by_10px": "अधिकतम नीचे की ओर विस्तार 10px घटाएँ",
   "ui.default": "डिफ़ॉल्ट",

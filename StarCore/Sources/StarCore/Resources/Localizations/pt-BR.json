@@ -285,6 +285,7 @@
   "ui.custom_2": "personalizado",
   "ui.debug_window": "Janela de depuração",
   "ui.decision_tree_all": "Árvore de decisão: tudo",
+  "ui.decision_tree_all_frames": "Árvore de decisão: todos os quadros",
   "ui.decision_tree_render_failed": "Falha ao renderizar a árvore de decisão: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Reduzir a extensão máxima para baixo em 10 px",
   "ui.default": "Padrão",

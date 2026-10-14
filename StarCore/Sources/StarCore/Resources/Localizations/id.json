@@ -285,6 +285,7 @@
   "ui.custom_2": "ubahan",
   "ui.debug_window": "Jendela awakutu",
   "ui.decision_tree_all": "Pohon keputusan: semua",
+  "ui.decision_tree_all_frames": "Pohon keputusan: semua bingkai",
   "ui.decision_tree_render_failed": "Perenderan pohon keputusan gagal: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Kurangi perpanjangan maksimum ke bawah sebesar 10 px",
   "ui.default": "Bawaan",

@@ -285,6 +285,7 @@
   "ui.custom_2": "власне",
   "ui.debug_window": "Вікно зневадження",
   "ui.decision_tree_all": "Дерево рішень: усе",
+  "ui.decision_tree_all_frames": "Дерево рішень: усі кадри",
   "ui.decision_tree_render_failed": "Не вдалося відтворити дерево рішень: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Зменшити максимальне продовження вниз на 10 пкс",
   "ui.default": "Типове",

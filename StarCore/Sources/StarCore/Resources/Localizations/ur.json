@@ -285,6 +285,7 @@
   "ui.custom_2": "حسبِ ضرورت",
   "ui.debug_window": "ڈی بگ ونڈو",
   "ui.decision_tree_all": "فیصلہ ساز درخت: سب",
+  "ui.decision_tree_all_frames": "فیصلہ ساز درخت: تمام فریم",
   "ui.decision_tree_render_failed": "فیصلہ ساز درخت رینڈر نہ ہو سکا: {0}",
   "ui.decrease_max_downward_extension_by_10px": "نیچے کی طرف زیادہ سے زیادہ توسیع 10 پکسل کم کریں",
   "ui.default": "پہلے سے طے",

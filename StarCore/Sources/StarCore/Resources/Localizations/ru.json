@@ -285,6 +285,7 @@
   "ui.custom_2": "свой",
   "ui.debug_window": "Окно отладки",
   "ui.decision_tree_all": "Дерево решений: всё",
+  "ui.decision_tree_all_frames": "Дерево решений: все кадры",
   "ui.decision_tree_render_failed": "Не удалось выполнить рендеринг дерева решений: {0}",
   "ui.decrease_max_downward_extension_by_10px": "Уменьшить максимальное продление вниз на 10 пикс.",
   "ui.default": "По умолчанию",

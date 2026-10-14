@@ -285,6 +285,7 @@
   "ui.custom_2": "กำหนดเอง",
   "ui.debug_window": "หน้าต่างดีบัก",
   "ui.decision_tree_all": "ต้นไม้ตัดสินใจ: ทั้งหมด",
+  "ui.decision_tree_all_frames": "ต้นไม้ตัดสินใจ: ทุกเฟรม",
   "ui.decision_tree_render_failed": "เรนเดอร์ต้นไม้ตัดสินใจไม่สำเร็จ: {0}",
   "ui.decrease_max_downward_extension_by_10px": "ลดการขยายลงล่างสูงสุด 10 พิกเซล",
   "ui.default": "ค่าเริ่มต้น",

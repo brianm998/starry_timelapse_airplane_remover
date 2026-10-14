@@ -161,11 +161,27 @@ class FrameViewModel(
         }
     }
 
-    /** Re-run the decision-tree classifier on this frame, then refresh the decisions from the daemon. */
-    fun applyDecisionTree(overwrite: Boolean = true) {
+    /**
+     * Run the decision-tree classifier over this frame's outliers (macOS "Decision Tree All" / "DT Auto Only"),
+     * then render the frame, so the picture follows the decisions, and refresh what is shown.
+     *
+     * [overwrite] false keeps every decision already made, the user's included: the classifier only fills in
+     * groups nobody has decided about. [autoOnly] limits it to the automatically selected groups.
+     */
+    fun applyDecisionTree(
+        overwrite: Boolean,
+        autoOnly: Boolean = false,
+        minimumSize: Int = 0,
+        includingTrash: Boolean = false,
+    ) {
         scope.launch {
-            runCatching { outliers.applyDecisionTree(sessionId, frameIndex, overwrite) }
-                .onSuccess { load(force = true) }
+            runCatching {
+                outliers.applyDecisionTree(
+                    sessionId, frameIndex, overwrite,
+                    autoOnly = autoOnly, includingTrash = includingTrash, minimumSize = minimumSize, rerender = true,
+                )
+            }
+                .onSuccess { _info.value = it.frame; load(force = true) }
                 .onFailure { reportFailure(it) { localized("ui.decision_tree_render_failed", it.message ?: it) } }
         }
     }

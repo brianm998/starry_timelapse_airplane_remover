@@ -58,6 +58,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val selected by fvm.selected.collectAsState()
     val info by fvm.info.collectAsState()
     val fastAdv by vm.fastAdvancement.collectAsState()
+    val onlyUnclassified by vm.classifyOnlyUnclassified.collectAsState()
     var showToolHelp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Column(modifier.width(150.dp).fillMaxHeight().background(StarColors.sidePanel)) {
@@ -94,11 +95,22 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             Text("✓$keep", color = StarColors.green, fontSize = 11.sp)
             Text("?$undecided", color = StarColors.orange, fontSize = 11.sp)
         }
-        BulkButton("Keep All", StarColors.green) { fvm.keepAll() }
-        BulkButton("Remove All", StarColors.red) { fvm.removeAll() }
-        BulkButton("Clear Undecided", StarColors.gray) { fvm.clearUndecided() }
-        BulkButton("Apply Decision Tree", StarColors.blue) { fvm.applyDecisionTree(overwrite = true) }
-        BulkButton("Apply Tree (All Frames)", StarColors.blue) { vm.applyDecisionTreeAll() }
+        BulkButton(localized("ui.keep_all"), StarColors.green, help = localized("ui.keep_all_of_the_outlier_groups_in_the_frame")) { fvm.keepAll() }
+        BulkButton(localized("ui.remove_all"), StarColors.red, help = localized("ui.remove_all_of_the_outlier_groups_in_the")) { fvm.removeAll() }
+        BulkButton(localized("ui.clear_undecided"), StarColors.gray) { fvm.clearUndecided() }
+        BulkButton(
+            localized("ui.decision_tree_all"), StarColors.blue,
+            help = localized("ui.apply_the_outlier_group_decision_tree_to_all"), enabled = usesOutliers,
+        ) { vm.applyDecisionTreeToCurrentFrame() }
+        BulkButton(
+            localized("ui.dt_auto_only"), StarColors.blue,
+            help = localized("ui.apply_the_outlier_group_decision_tree_to_all_2"), enabled = usesOutliers,
+        ) { vm.applyDecisionTreeToCurrentFrame(autoOnly = true) }
+        BulkButton(localized("ui.decision_tree_all_frames"), StarColors.blue, enabled = usesOutliers) { vm.applyDecisionTreeAll() }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            androidx.compose.material3.Checkbox(checked = onlyUnclassified, onCheckedChange = { vm.setClassifyOnlyUnclassified(it) })
+            Text(localized("ui.only_unclassified"), color = StarColors.orange, fontSize = 11.sp)
+        }
         selected?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
@@ -144,14 +156,19 @@ private val FAST_MODES: List<Pair<FastAdvancementType, String>> = listOf(
     FastAdvancementType.TO_NEXT_UNKNOWN to "Next undecided",
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BulkButton(label: String, color: Color, onClick: () -> Unit) {
-    androidx.compose.material3.OutlinedButton(
-        onClick = onClick,
-        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = color),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) { Text(label, fontSize = 11.sp) }
+private fun BulkButton(label: String, color: Color, help: String? = null, enabled: Boolean = true, onClick: () -> Unit) {
+    val button = @Composable {
+        androidx.compose.material3.OutlinedButton(
+            onClick = onClick,
+            enabled = enabled,
+            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = color),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(label, fontSize = 11.sp) }
+    }
+    if (help != null) HoverTip(help, button) else button()
 }
 
 @OptIn(ExperimentalFoundationApi::class)

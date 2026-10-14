@@ -364,9 +364,31 @@ class SequenceViewModel(
     }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
 
-    /** Re-run the decision-tree classifier across all frames, then refresh the current frame. */
+    // ---- decision tree (macOS classifyOnlyUnclassified / minimumClassificationSize) ----
+
+    /**
+     * When on (the default), the decision tree only decides groups nobody has decided about, and leaves the
+     * user's own keeps and removes alone; off, it reclassifies everything.
+     */
+    private val _classifyOnlyUnclassified = MutableStateFlow(true)
+    val classifyOnlyUnclassified: StateFlow<Boolean> = _classifyOnlyUnclassified.asStateFlow()
+    fun setClassifyOnlyUnclassified(only: Boolean) { _classifyOnlyUnclassified.value = only }
+
+    /** Run the decision tree over the current frame's outliers, then render it (macOS "Decision Tree All", `d`; "DT Auto Only"). */
+    fun applyDecisionTreeToCurrentFrame(autoOnly: Boolean = false) {
+        if (!currentFrameUsesOutliers()) return
+        currentFrameVM().applyDecisionTree(
+            overwrite = !_classifyOnlyUnclassified.value,
+            autoOnly = autoOnly,
+            minimumSize = MINIMUM_CLASSIFICATION_SIZE,
+        )
+    }
+
+    /** Run the decision tree across every frame, with the same settings as for one. */
     fun applyDecisionTreeAll() = scope.launch {
-        runCatching { outliers.applyDecisionTreeAllFrames(sessionId, overwrite = true) }
+        runCatching {
+            outliers.applyDecisionTreeAllFrames(sessionId, overwrite = !_classifyOnlyUnclassified.value, minimumSize = MINIMUM_CLASSIFICATION_SIZE)
+        }
             .onSuccess { framesChanged(it.framesList) }
             .onFailure { reportFailure(it) { localized("ui.decision_tree_render_failed", it.message ?: it) } }
     }
@@ -610,14 +632,17 @@ class SequenceViewModel(
         }
     }
 
-    private companion object {
-        const val FAST_SKIP_AMOUNT = 20 // macOS fastSkipAmount
+    companion object {
+        /** Outlier groups smaller than this (pixels) are left to the trash threshold, not classified (macOS `minimumClassificationSize`). */
+        const val MINIMUM_CLASSIFICATION_SIZE = 20
+
+        private const val FAST_SKIP_AMOUNT = 20 // macOS fastSkipAmount
 
         /**
          * What to show when the wanted mode has no preview yet. The original comes before the debug
          * images: a frame that is not finished shows its own picture, never its subtraction.
          */
-        val PREVIEW_FALLBACK = listOf(
+        private val PREVIEW_FALLBACK = listOf(
             FrameViewMode.VIEW_PROCESSED,
             FrameViewMode.VIEW_ORIGINAL,
             FrameViewMode.VIEW_SUBTRACTION,

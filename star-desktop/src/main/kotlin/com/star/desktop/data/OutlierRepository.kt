@@ -37,13 +37,18 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
 
     suspend fun renderFrame(sessionId: String, frameIndex: Int): ImageRef = c().renderFrame(sessionId, frameIndex)
 
-    /** Re-run the decision-tree classifier on one frame's outliers (`Outlier.ApplyDecisionTree`). */
-    suspend fun applyDecisionTree(sessionId: String, frameIndex: Int, overwrite: Boolean) =
-        c().applyDecisionTree(sessionId, frameIndex, overwrite = overwrite)
+    /** Run the decision-tree classifier on one frame's outliers (`Outlier.ApplyDecisionTree`). */
+    suspend fun applyDecisionTree(
+        sessionId: String, frameIndex: Int, overwrite: Boolean,
+        autoOnly: Boolean = false, includingTrash: Boolean = false, minimumSize: Int = 0, rerender: Boolean = false,
+    ) = c().applyDecisionTree(
+        sessionId, frameIndex, overwrite,
+        autoOnly = autoOnly, includingTrash = includingTrash, minimumSize = minimumSize, rerender = rerender,
+    )
 
-    /** Re-run the classifier over every frame (`Outlier.ApplyDecisionTreeAllFrames`). */
-    suspend fun applyDecisionTreeAllFrames(sessionId: String, overwrite: Boolean) =
-        c().applyDecisionTreeAllFrames(sessionId, overwrite = overwrite)
+    /** Run the classifier over every frame (`Outlier.ApplyDecisionTreeAllFrames`). */
+    suspend fun applyDecisionTreeAllFrames(sessionId: String, overwrite: Boolean, minimumSize: Int = 0) =
+        c().applyDecisionTreeAllFrames(sessionId, overwrite = overwrite, minimumSize = minimumSize)
 
     /** Set keep/remove for outliers in a rectangular area across [startIndex,endIndex] (image px). */
     suspend fun setDecisionsInArea(

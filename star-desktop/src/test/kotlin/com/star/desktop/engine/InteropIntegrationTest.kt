@@ -857,6 +857,16 @@ class InteropIntegrationTest {
                 assertTrue(!removed.contentEquals(kept), "rendering after removing every outlier gave the same picture as keeping them all")
                 assertTrue(!removed.contentEquals(original), "the render of a frame with its outliers removed is just the original")
 
+                // A10: the decision tree, asked not to overwrite, leaves the user's own decisions alone (the client's
+                // "Only Unclassified" default); the render it asks for is the edited picture, not the original.
+                decideAll(com.star.proto.RemoveReason.RR_USER_KEEP)
+                val classified = client.applyDecisionTree(info.sessionId, frameIdx, overwrite = false, minimumSize = 20, rerender = true)
+                assertTrue(
+                    client.listOutliers(info.sessionId, frameIdx).groupsList.all { it.shouldRemove == com.star.proto.RemoveReason.RR_USER_KEEP },
+                    "the decision tree changed a decision the user made although it was asked not to overwrite",
+                )
+                assertTrue(classified.hasPreview() && File(classified.preview.path).exists(), "ApplyDecisionTree(rerender) returned no rendered preview")
+
                 // Render All: every frame is done (or skipped as already done) and the bar is told.
                 val io = mutableListOf<Pair<Int, Int>>()
                 client.renderSequence(info.sessionId).collect { ev ->

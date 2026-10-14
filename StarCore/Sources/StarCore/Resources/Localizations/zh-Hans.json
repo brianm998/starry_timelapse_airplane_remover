@@ -285,6 +285,7 @@
   "ui.custom_2": "自定",
   "ui.debug_window": "调试窗口",
   "ui.decision_tree_all": "决策树：全部",
+  "ui.decision_tree_all_frames": "决策树：所有帧",
   "ui.decision_tree_render_failed": "决策树渲染失败：{0}",
   "ui.decrease_max_downward_extension_by_10px": "将向下延伸上限减少 10 px",
   "ui.default": "默认",
