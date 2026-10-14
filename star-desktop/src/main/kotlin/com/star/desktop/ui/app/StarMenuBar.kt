@@ -44,9 +44,13 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         }
 
         Menu(localized("ui.view"), mnemonic = 'V') {
-            Item(localized("ui.edit_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
-            Item(localized("ui.scrub_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
-            Item(localized("ui.grid_mode"), enabled = hasSession, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
+            // Disabled while the horizon painter is open: Compose delivers a menu accelerator before it delivers the key
+            // to the view, so E would switch mode instead of selecting ground, and S or G during the startup painting
+            // would leave the painter without its startup flow (macOS disables S there).
+            val painting = svm?.horizonPaintMode?.collectAsState()?.value == true
+            Item(localized("ui.edit_mode"), enabled = hasSession && !painting, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
+            Item(localized("ui.scrub_mode"), enabled = hasSession && !painting, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
+            Item(localized("ui.grid_mode"), enabled = hasSession && !painting, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
             Separator()
             Item(localized("ui.toggle_filmstrip"), enabled = hasSession) { svm?.toggleFilmstrip() }
             Item(localized("ui.play_pause"), enabled = hasSession, shortcut = KeyShortcut(Key.Spacebar)) { svm?.playForward() }

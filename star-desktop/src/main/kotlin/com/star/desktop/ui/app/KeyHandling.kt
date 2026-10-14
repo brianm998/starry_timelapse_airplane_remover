@@ -20,6 +20,9 @@ import com.star.desktop.domain.ToolType
 fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
     val svm = (app.screen.value as? AppScreen.Sequence)?.vm ?: return false
+    // While the horizon painter is open its own keys (brush size, sky/ground, reset, return, escape) are the ones that
+    // count; r would otherwise render the frame under it, and the arrows move off the frame being painted.
+    if (svm.horizonPaintMode.value) return false
 
     when (event.key) {
         Key.DirectionLeft -> { svm.previous(); return true }

@@ -209,3 +209,32 @@ class HorizonPainterDetailsTest {
         assertTrue(s.isErasing, "Reset reset the mode")
     }
 }
+
+/** The painter's keyboard, as macOS binds it. */
+@OptIn(androidx.compose.ui.InternalComposeUiApi::class)
+class PainterKeyActionTest {
+    private fun down(key: androidx.compose.ui.input.key.Key) =
+        androidx.compose.ui.input.key.KeyEvent(key, androidx.compose.ui.input.key.KeyEventType.KeyDown)
+
+    @Test fun theKeysAreTheMacOSOnes() {
+        assertEquals(HorizonPainterKey.SHRINK_BRUSH, painterKeyAction(down(androidx.compose.ui.input.key.Key.LeftBracket)))
+        assertEquals(HorizonPainterKey.GROW_BRUSH, painterKeyAction(down(androidx.compose.ui.input.key.Key.RightBracket)))
+        assertEquals(HorizonPainterKey.TOGGLE_MODE, painterKeyAction(down(androidx.compose.ui.input.key.Key.Minus)))
+        assertEquals(HorizonPainterKey.SKY, painterKeyAction(down(androidx.compose.ui.input.key.Key.P)))
+        assertEquals(HorizonPainterKey.GROUND, painterKeyAction(down(androidx.compose.ui.input.key.Key.E)))
+        assertEquals(HorizonPainterKey.RESET, painterKeyAction(down(androidx.compose.ui.input.key.Key.R)))
+        assertEquals(HorizonPainterKey.CANCEL, painterKeyAction(down(androidx.compose.ui.input.key.Key.Escape)))
+        assertEquals(HorizonPainterKey.SAVE, painterKeyAction(down(androidx.compose.ui.input.key.Key.Enter)))
+    }
+
+    @Test fun otherKeysAreLeftToTheWindow() {
+        assertEquals(null, painterKeyAction(down(androidx.compose.ui.input.key.Key.Z)))
+        assertEquals(null, painterKeyAction(down(androidx.compose.ui.input.key.Key.DirectionLeft)))
+    }
+
+    /** Once per press. */
+    @Test fun theReleaseDoesNothing() {
+        assertEquals(null, painterKeyAction(androidx.compose.ui.input.key.KeyEvent(
+            androidx.compose.ui.input.key.Key.R, androidx.compose.ui.input.key.KeyEventType.KeyUp)))
+    }
+}

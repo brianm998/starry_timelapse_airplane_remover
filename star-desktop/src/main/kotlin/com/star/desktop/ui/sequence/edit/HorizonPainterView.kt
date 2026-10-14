@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -50,6 +53,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -245,7 +258,54 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     }
     val fillColor = if (state.phase == HorizonPhase.REFINEMENT) StarColors.blue.copy(alpha = 0.30f) else StarColors.yellow.copy(alpha = 0.28f)
 
-    Column(modifier.fillMaxSize().background(StarColors.appBackground)) {
+    // What the buttons do, also what Return, Esc and R do from the keyboard.
+    val doReset = { frameJob.cancelChildren(); refining = 0; state.clear() }
+    val doSave = { reprocess: Boolean ->
+        val frameIdx = current
+        scope.launch {
+            if (saveReference(frameIdx)) {
+                if (reprocess) {
+                    runCatching { app.horizonRepo.reprocess(vm.sessionId, listOf(frameIdx)).collect { } }
+                }
+                if (!startup) vm.toggleHorizonPaint()
+            }
+        }
+        Unit
+    }
+    val doContinue = {
+        val frameIdx = current
+        scope.launch {
+            if (saveReference(frameIdx)) app.startupHorizonAdvanceOrContinue()
+        }
+        Unit
+    }
+    val doCancel = {
+        cancelledExplicitly = true
+        if (startup) app.cancelStartupHorizon() else vm.toggleHorizonPaint()
+    }
+
+    // Keyboard: the brush and the mode without the pointer leaving the frame, as on macOS. The root takes the focus so the
+    // keys are heard without a click first; the menu's own accelerators for these letters are disabled while painting
+    // (Compose delivers an accelerator before it delivers the key to the view).
+    val keyFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { keyFocus.requestFocus() } }
+    val keyHandler = Modifier.onPreviewKeyEvent { event ->
+        val action = painterKeyAction(event) ?: return@onPreviewKeyEvent false
+        when (action) {
+            HorizonPainterKey.SHRINK_BRUSH -> state.shrinkBrush()
+            HorizonPainterKey.GROW_BRUSH -> state.growBrush()
+            HorizonPainterKey.TOGGLE_MODE -> if (state.phase == HorizonPhase.REFINEMENT) state.isErasing = !state.isErasing
+            HorizonPainterKey.SKY -> if (state.phase == HorizonPhase.REFINEMENT) state.isErasing = false
+            HorizonPainterKey.GROUND -> if (state.phase == HorizonPhase.REFINEMENT) state.isErasing = true
+            HorizonPainterKey.RESET -> if (state.phase == HorizonPhase.REFINEMENT || state.hasBand()) doReset()
+            HorizonPainterKey.CANCEL -> doCancel()
+            HorizonPainterKey.SAVE ->
+                if (canSaveHorizon(state.phase, state.hasSolvedHorizon(), refining, saving)) { if (startup) doContinue() else doSave(false) }
+        }
+        true
+    }
+
+    Column(modifier.fillMaxSize().background(StarColors.appBackground).focusRequester(keyFocus).focusable().then(keyHandler)) {
         Box(
             Modifier.weight(1f).fillMaxSize()
                 .clipToBounds()
@@ -357,34 +417,44 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             state = state,
             startup = startup, startupIndices = startupIndices, startupPos = startupPos,
             refining = refining, saving = saving, errorText = errorText,
-            onReset = { frameJob.cancelChildren(); refining = 0; state.clear() },
-            onSave = { reprocess ->
-                val frameIdx = current
-                scope.launch {
-                    if (saveReference(frameIdx)) {
-                        if (reprocess) {
-                            runCatching { app.horizonRepo.reprocess(vm.sessionId, listOf(frameIdx)).collect { } }
-                        }
-                        if (!startup) vm.toggleHorizonPaint()
-                    }
-                }
-            },
-            onContinue = {
-                val frameIdx = current
-                scope.launch {
-                    if (saveReference(frameIdx)) app.startupHorizonAdvanceOrContinue()
-                }
-            },
-            onCancel = {
-                cancelledExplicitly = true
-                if (startup) app.cancelStartupHorizon() else vm.toggleHorizonPaint()
-            },
+            onReset = doReset,
+            onSave = doSave,
+            onContinue = doContinue,
+            onCancel = doCancel,
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
 private const val ANT_DASH = 6f
+
+/** What a key does in the horizon painter (macOS `brushKeyboardHandlers` and `actionKeyboardHandlers`). */
+internal enum class HorizonPainterKey { SHRINK_BRUSH, GROW_BRUSH, TOGGLE_MODE, SKY, GROUND, RESET, CANCEL, SAVE }
+
+/**
+ * The painter's action for [event], or null if the key is not one of its own (it then goes on to the rest of the window).
+ * `[` / `]` size the brush, `-` flips sky and ground, `p` is sky, `e` ground, `r` starts over, Esc cancels and Return saves
+ * (the caller applies the same conditions as the button). Only on key-down, and never with Ctrl, Cmd or Alt held, which
+ * are other shortcuts' business. The bracket keys are matched by the character they type as well as by their key, since a
+ * layout that needs a modifier for them reports a different key.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+internal fun painterKeyAction(event: KeyEvent): HorizonPainterKey? {
+    if (event.type != KeyEventType.KeyDown) return null
+    if (event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return null
+    val typed = event.utf16CodePoint
+    return when {
+        event.key == Key.LeftBracket || typed == '['.code -> HorizonPainterKey.SHRINK_BRUSH
+        event.key == Key.RightBracket || typed == ']'.code -> HorizonPainterKey.GROW_BRUSH
+        event.key == Key.Minus || typed == '-'.code -> HorizonPainterKey.TOGGLE_MODE
+        event.key == Key.P -> HorizonPainterKey.SKY
+        event.key == Key.E -> HorizonPainterKey.GROUND
+        event.key == Key.R -> HorizonPainterKey.RESET
+        event.key == Key.Escape -> HorizonPainterKey.CANCEL
+        event.key == Key.Enter || event.key == Key.NumPadEnter -> HorizonPainterKey.SAVE
+        else -> null
+    }
+}
 
 /**
  * Whether closing the painter should save what is on it (macOS `onDisappear`): only outside the startup flow (which
@@ -500,8 +570,8 @@ private fun HorizonInstructionTip(prefs: com.star.desktop.data.LocalPreferences,
                 "the horizon so the selected area covers the horizon line. Once you've selected across the " +
                 "full width, Star detects the sky automatically. If it looks right, hit " +
                 (if (isMoving) "Next/Continue" else "Continue") +
-                ". Otherwise use the Sky and Ground brushes to add to or remove from the selection, and the " +
-                "− / + buttons to resize the brush.",
+                ". Otherwise use the Sky and Ground brushes to add to or remove from the selection. Use the '[' and ']' " +
+                "keys (or the − / + buttons) to shrink and enlarge the brush.",
             color = StarColors.textSecondary, fontSize = 12.sp,
         )
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
