@@ -812,6 +812,9 @@ class SequenceViewModel(
         /** The outlier arrows are `width / this` long (macOS `outlierArrowLength`); the view keeps room for them around the frame. */
         const val ARROW_LENGTH_DIVISOR = 70f
 
+        /** ...and `width / this` across (macOS `outlierArrowHeight`). */
+        const val ARROW_HEIGHT_DIVISOR = 180f
+
         /** How many frames either side of the current one keep their hit-testing label map. */
         const val LABEL_RETENTION = 2
 

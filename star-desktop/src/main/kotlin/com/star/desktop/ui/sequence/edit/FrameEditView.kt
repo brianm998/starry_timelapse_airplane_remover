@@ -158,7 +158,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 detectTapGestures(
                     onTap = { pos ->
                         val img = transform.canvasToImage(pos, canvasSize)
-                        val gid = fvm.groupAt(img.x.roundToInt(), img.y.roundToInt())
+                        val gid = fvm.hitAt(img.x, img.y, vm.info.imageWidth.toFloat(), vm.info.imageHeight.toFloat())
                         if (gid > 0) {
                             if (tool == com.star.desktop.domain.ToolType.MULTI) {
                                 val willRemove = com.star.desktop.domain.OutlierDecisions.willRemove(fvm.decisionFor(gid)) == true
@@ -177,7 +177,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             .onPointerEvent(PointerEventType.Move) { ev ->
                 val pos = ev.changes.firstOrNull()?.position ?: return@onPointerEvent
                 val img = transform.canvasToImage(pos, canvasSize)
-                val gid = fvm.groupAt(img.x.roundToInt(), img.y.roundToInt())
+                val gid = fvm.hitAt(img.x, img.y, vm.info.imageWidth.toFloat(), vm.info.imageHeight.toFloat())
                 fvm.hover(if (gid > 0) gid else null)
             }
             .onPointerEvent(PointerEventType.Exit) { fvm.hover(null) },
@@ -208,7 +208,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             val fw = vm.info.imageWidth.toFloat()
             val fh = vm.info.imageHeight.toFloat()
             val al = fw / SequenceViewModel.ARROW_LENGTH_DIVISOR // arrow length (long/pointing axis)
-            val ah = fw / 180f                                  // arrow height (cross axis)
+            val ah = fw / SequenceViewModel.ARROW_HEIGHT_DIVISOR // arrow height (cross axis)
             val lw = (fw / 1440f * s).coerceAtLeast(1f)         // guide-line thickness
             // The groups' own pixels, tinted by decision; small ones in the combined masks.
             outlierOverlay?.let { ov ->

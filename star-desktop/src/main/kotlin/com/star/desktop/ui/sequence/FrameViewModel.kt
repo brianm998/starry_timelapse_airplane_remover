@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * State for one frame's outlier editing (macOS `FrameViewModel` + `OutlierGroupViewModel`): the
@@ -114,14 +115,37 @@ class FrameViewModel(
     fun applyInfo(info: FrameInfo) { _info.value = info }
 
     /**
-     * The group under image pixel ([x], [y]), or 0 for none. Only groups that are separate things in the UI count: a group of 40
-     * pixels or fewer is drawn in a combined mask with the other small ones and cannot be hovered or clicked (macOS).
+     * The group under image pixel ([x], [y]), or 0 for none: the group whose pixel it is, else the smallest group whose bounding box
+     * contains it (macOS hits anywhere in a group's box, smaller boxes on top). Only groups that are separate things in the UI count:
+     * one of 40 pixels or fewer is drawn in a combined mask with the other small ones and cannot be hovered or clicked.
      */
     fun groupAt(x: Int, y: Int): Int {
-        val id = _labelMap.value?.idAt(x, y) ?: return 0
-        if (id <= 0) return 0
-        val group = _groups.value.firstOrNull { it.id == id } ?: return 0
-        return if (com.star.desktop.ui.sequence.edit.OutlierOverlay.isLarge(group)) id else 0
+        val large = _groups.value.filter(com.star.desktop.ui.sequence.edit.OutlierOverlay::isLarge)
+        val exact = _labelMap.value?.idAt(x, y) ?: 0
+        if (exact > 0 && large.any { it.id == exact }) return exact
+        return com.star.desktop.domain.OutlierHit.smallestBoxContaining(large, x, y)?.id ?: 0
+    }
+
+    /**
+     * The group whose edge arrow is under image point ([x], [y]), or 0: the arrows at the frame's edges are clickable and toggle the
+     * group, but only the ones showing (those of a hovered, selected, undecided or to-be-removed group).
+     */
+    fun arrowGroupAt(x: Float, y: Float, frameWidth: Float, frameHeight: Float): Int {
+        val arrowLength = frameWidth / SequenceViewModel.ARROW_LENGTH_DIVISOR
+        val arrowHeight = frameWidth / SequenceViewModel.ARROW_HEIGHT_DIVISOR
+        return com.star.desktop.domain.OutlierHit.arrowGroupAt(
+            _groups.value.filter(com.star.desktop.ui.sequence.edit.OutlierOverlay::isLarge),
+            x, y, frameWidth, frameHeight, arrowLength, arrowHeight,
+        ) { g ->
+            val willRemove = OutlierDecisions.willRemove(_decisions.value[g.id] ?: g.shouldRemove)
+            g.id == _hovered.value || g.id == _selected.value || willRemove != false
+        }?.id ?: 0
+    }
+
+    /** What a pointer at image point ([x], [y]) means: a group's pixels or box, else one of the arrows; 0 for neither. */
+    fun hitAt(x: Float, y: Float, frameWidth: Float, frameHeight: Float): Int {
+        val g = groupAt(x.roundToInt(), y.roundToInt())
+        return if (g > 0) g else arrowGroupAt(x, y, frameWidth, frameHeight)
     }
 
     fun decisionFor(groupId: Int): RemoveReason = _decisions.value[groupId] ?: RemoveReason.RR_UNDECIDED
