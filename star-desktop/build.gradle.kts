@@ -102,6 +102,10 @@ val macSignIdentity: String? = (findProperty("star.sign.identity") as String?) ?
 compose.desktop {
     application {
         mainClass = "com.star.desktop.MainKt"
+        // A ceiling on the client's own heap, which holds decoded previews and the label maps used to find the
+        // outlier under the pointer. The JVM's default is a quarter of the machine's RAM, which on a big machine
+        // lets a leak grow to tens of GB at the daemon's expense; this makes one an OutOfMemoryError instead.
+        jvmArgs += listOf("-Xmx3g")
         // jpackage is absent from some JDKs used to run Gradle (notably the JetBrains Runtime that ships
         // with Android Studio). Point the packaging step at a full JDK (21+, with jpackage) without
         // changing the JVM used for compilation: -Pstar.jpackage.jdk=/path or STAR_JPACKAGE_JDK env.

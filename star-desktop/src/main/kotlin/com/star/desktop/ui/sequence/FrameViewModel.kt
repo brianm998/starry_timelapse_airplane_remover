@@ -95,6 +95,16 @@ class FrameViewModel(
      */
     fun invalidate() { loaded = false }
 
+    /**
+     * Let go of the hit-testing label map (tens of MB per frame at full resolution) once this frame is far from
+     * the one being looked at. The next [load] fetches everything again, so this also marks it not loaded.
+     */
+    fun releaseLabels() {
+        loadJob?.cancel()
+        loaded = false
+        _labelMap.value = null
+    }
+
     /** Return once the groups are loaded, loading them if need be: for callers that must not act on an empty list. */
     suspend fun ensureLoaded() {
         load()?.join()

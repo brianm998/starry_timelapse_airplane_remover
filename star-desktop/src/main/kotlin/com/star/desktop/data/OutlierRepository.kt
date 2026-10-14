@@ -84,6 +84,9 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
     /**
      * Load the 16-bit single-channel label PNG at [path] into a `group-id per pixel` array
      * (row-major, length w*h). Used for local click hit-testing without per-click round-trips.
+     *
+     * Read a row at a time into 16-bit storage: ids are 16-bit, and a 42 MP frame is 84 MB this way, where an
+     * `IntArray` of the whole image was 170 MB, twice over while it was being filled.
      */
     suspend fun loadLabelMap(path: String): LabelMap? = withContext(Dispatchers.IO) {
         val file = File(path)
@@ -92,19 +95,24 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
             val img = ImageIO.read(file) ?: return@withContext null
             val w = img.width
             val h = img.height
-            val out = IntArray(w * h)
-            img.raster.getSamples(0, 0, w, h, 0, out) // band 0 = the 16-bit group id
-            LabelMap(w, h, out)
+            val ids = ShortArray(w * h)
+            val row = IntArray(w)
+            for (y in 0 until h) {
+                img.raster.getSamples(0, y, w, 1, 0, row) // band 0 = the 16-bit group id
+                val base = y * w
+                for (x in 0 until w) ids[base + x] = row[x].toShort()
+            }
+            LabelMap(w, h, ids)
         } catch (e: Exception) {
             Log.e("Outlier", e) { "failed to read label image $path" }
             null
         }
     }
 
-    /** group id per pixel (0 = none), row-major. */
-    data class LabelMap(val width: Int, val height: Int, val ids: IntArray) {
+    /** group id per pixel (0 = none), row-major; ids are unsigned 16-bit, stored as the same bits in a short. */
+    data class LabelMap(val width: Int, val height: Int, val ids: ShortArray) {
         fun idAt(x: Int, y: Int): Int =
-            if (x in 0 until width && y in 0 until height) ids[y * width + x] else 0
+            if (x in 0 until width && y in 0 until height) ids[y * width + x].toInt() and 0xFFFF else 0
 
         override fun equals(other: Any?) = this === other
         override fun hashCode() = System.identityHashCode(this)

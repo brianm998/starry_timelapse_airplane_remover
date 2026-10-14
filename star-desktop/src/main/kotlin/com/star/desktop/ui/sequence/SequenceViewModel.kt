@@ -234,6 +234,14 @@ class SequenceViewModel(
             .onEach { (idx, mode) -> loadPreview(idx, mode) }
             .launchIn(scope)
 
+        // The label map used to find the outlier under the pointer is large, and one per frame visited was kept
+        // for good. Only the frames around the current one are likely to be wanted again soon.
+        _currentIndex
+            .onEach { current ->
+                frameVMs.forEach { (i, vm) -> if (kotlin.math.abs(i - current) > LABEL_RETENTION) vm.releaseLabels() }
+            }
+            .launchIn(scope)
+
         // `stard` rewrites a frame's previews in place when it saves one: drop what is cached for it and, if
         // it is the one on screen, show the new picture.
         processing.imageSaved
@@ -635,6 +643,9 @@ class SequenceViewModel(
     companion object {
         /** Outlier groups smaller than this (pixels) are left to the trash threshold, not classified (macOS `minimumClassificationSize`). */
         const val MINIMUM_CLASSIFICATION_SIZE = 20
+
+        /** How many frames either side of the current one keep their hit-testing label map. */
+        const val LABEL_RETENTION = 2
 
         private const val FAST_SKIP_AMOUNT = 20 // macOS fastSkipAmount
 
