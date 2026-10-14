@@ -142,3 +142,70 @@ class ShouldSaveOnCloseTest {
         assertEquals(false, shouldSaveOnClose(false, HorizonPhase.REFINEMENT, savedAlready = false, cancelled = false, saving = true))
     }
 }
+
+/** The smaller painter behaviours that macOS has and this did not. */
+class HorizonPainterDetailsTest {
+    private val w = 400
+    private val h = 600
+
+    private fun refining(row: Int = 300): HorizonPaintState =
+        HorizonPaintState(w, h).also { it.loadExistingHorizon(List(w) { row }, margin = 50) }
+
+    /** The brush is the macOS one whatever the image: 250 px, 5 to 500, in steps of 10 (it used to scale with the width). */
+    @Test fun theBrushIsTheMacOSOne() {
+        assertEquals(250, HorizonPaintState(400, 300).brushRadius)
+        assertEquals(250, HorizonPaintState(8000, 6000).brushRadius)
+        val s = HorizonPaintState(400, 300)
+        repeat(100) { s.growBrush() }
+        assertEquals(500, s.brushRadius)
+        repeat(100) { s.shrinkBrush() }
+        assertEquals(5, s.brushRadius)
+        s.growBrush()
+        assertEquals(15, s.brushRadius)
+    }
+
+    /** A stroke nudges the shown horizon at once; what is saved is the solver's answer, which has not come yet. */
+    @Test fun whatIsSavedIsTheSolversAnswerNotTheStrokesNudge() {
+        val s = refining(300)
+        s.brushRadius = 40
+        s.beginStroke(); s.paint(200, 400); s.endStroke()      // sky stroke: the shown horizon moves down at once
+        assertTrue(s.horizonAt(200) > 300, "the stroke did not nudge the shown horizon")
+        assertEquals(300, s.solvedHorizonSnapshot()[200], "the nudge reached what would be saved")
+    }
+
+    @Test fun aFailedSolveShowsTheLastAnswerAgain() {
+        val s = refining(300)
+        s.brushRadius = 40
+        s.beginStroke(); s.paint(200, 400); s.endStroke()
+        s.restoreSolvedHorizon()
+        assertEquals(300, s.horizonAt(200))
+    }
+
+    @Test fun aSolversAnswerBecomesWhatIsSaved() {
+        val s = refining(300)
+        s.brushRadius = 40
+        s.beginStroke(); s.paint(200, 400); s.endStroke()
+        val range = s.lastGestureRange()!!
+        s.commitRefinementGesture(erasing = false)
+        s.applyRefinedHorizon(List(w) { 420 }, range, baseline = null, erasing = false)
+        assertEquals(s.horizonAt(200), s.solvedHorizonSnapshot()[200])
+    }
+
+    @Test fun nothingIsSolvedUntilARefinedHorizonExists() {
+        val s = HorizonPaintState(w, h)
+        assertEquals(false, s.hasSolvedHorizon())
+        assertEquals(true, refining().hasSolvedHorizon())
+    }
+
+    /** The sky/ground mode is the user's, and nothing about a new frame, a reset or a loaded horizon changes it. */
+    @Test fun theSkyGroundModeSurvivesEverythingElse() {
+        val s = HorizonPaintState(w, h)
+        s.isErasing = true
+        s.resetForNewFrame()
+        assertTrue(s.isErasing, "a new frame reset the mode")
+        s.loadExistingHorizon(List(w) { 300 }, margin = 50)
+        assertTrue(s.isErasing, "loading a horizon reset the mode")
+        s.clear()
+        assertTrue(s.isErasing, "Reset reset the mode")
+    }
+}

@@ -149,3 +149,53 @@ class LocalPreferencesTest {
         assertTrue(!prefsFile.exists(), "a preferences file appeared just from starting")
     }
 }
+
+class LocalPreferencesBooleansTest {
+    private lateinit var home: File
+    private var savedHome: String? = null
+    private val prefsFile: File get() = File(home, ".star.userprefs.json")
+
+    @BeforeTest fun redirectHome() {
+        savedHome = System.getProperty("user.home")
+        home = Files.createTempDirectory("star-prefs-bool-test").toFile()
+        System.setProperty("user.home", home.absolutePath)
+    }
+
+    @AfterTest fun restoreHome() {
+        savedHome?.let { System.setProperty("user.home", it) } ?: System.clearProperty("user.home")
+        home.deleteRecursively()
+    }
+
+    /** macOS reads a missing key as "yes, show it": the instructions are on until the user says otherwise. */
+    @Test fun theHorizonPainterInstructionsAreOnUntilTurnedOff() {
+        assertTrue(LocalPreferences().showHorizonPainterInstructions)
+    }
+
+    @Test fun turningThemOffIsRememberedUnderTheMacOSKey() {
+        LocalPreferences().showHorizonPainterInstructions = false
+        assertTrue(prefsFile.readText().contains("\"showHorizonPainterInstructions\":false"), prefsFile.readText())
+        assertEquals(false, LocalPreferences().showHorizonPainterInstructions)
+    }
+
+    @Test fun turningThemBackOnWorks() {
+        val p = LocalPreferences()
+        p.showHorizonPainterInstructions = false
+        p.showHorizonPainterInstructions = true
+        assertTrue(LocalPreferences().showHorizonPainterInstructions)
+    }
+
+    /** What the macOS app wrote is read, and a key this client has no property for can still be asked for. */
+    @Test fun aBooleanTheMacOSAppWroteIsRead() {
+        prefsFile.writeText("""{"recentlyOpenedSequencelist":{},"showHorizonOnMainView":true}""")
+        val p = LocalPreferences()
+        assertEquals(true, p.bool("showHorizonOnMainView"))
+        assertEquals(null, p.bool("never set"))
+    }
+
+    @Test fun forgettingABooleanRemovesTheKeySoMacOSSeesItsDefault() {
+        val p = LocalPreferences()
+        p.setBool("showProcessingWindow", false)
+        p.setBool("showProcessingWindow", null)
+        assertTrue(!prefsFile.readText().contains("showProcessingWindow"), prefsFile.readText())
+    }
+}

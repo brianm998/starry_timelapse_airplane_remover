@@ -104,6 +104,12 @@ class SequenceViewModel(
         _rightPanelShowing.value = !hide
     }
 
+    // The sky/ground brush mode the painter was last left in, so it is the same the next time it opens (macOS keeps
+    // it on the sequence's view model for the same reason).
+    private val _horizonPaintErasing = MutableStateFlow(false)
+    val horizonPaintErasing: StateFlow<Boolean> = _horizonPaintErasing.asStateFlow()
+    fun setHorizonPaintErasing(erasing: Boolean) { _horizonPaintErasing.value = erasing }
+
     // Edit sub-mode: when on, the center view is the horizon painter instead of the outlier overlay.
     private val _horizonPaintMode = MutableStateFlow(false)
     val horizonPaintMode: StateFlow<Boolean> = _horizonPaintMode.asStateFlow()

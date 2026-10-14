@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -35,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -92,10 +94,13 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
 
     // The state + transform persist across frame advances so brush size and Sky/Ground mode survive
     // (macOS resetForNewFrame). Per-frame paint data is cleared in the LaunchedEffect below.
-    val state = remember { HorizonPaintState(imgW, imgH) }
+    val state = remember { HorizonPaintState(imgW, imgH).also { it.isErasing = vm.horizonPaintErasing.value } }
+    // The sky/ground mode outlives this painter: it is remembered for the next time it opens.
+    LaunchedEffect(state) { snapshotFlow { state.isErasing }.collect { vm.setHorizonPaintErasing(it) } }
     val transform = remember { FrameTransform(imgW, imgH) }
     var canvasSize by remember { mutableStateOf(Size.Zero) }
     var hover by remember { mutableStateOf<Offset?>(null) } // canvas-space pointer for the brush ring
+    var dragging by remember { mutableStateOf(false) }      // a stroke is being painted: the ants hold still
     var refining by remember { mutableStateOf(0) }          // in-flight random-walker passes
     var errorText by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }          // a save is in flight: a second must not start (macOS isSaving)
@@ -118,7 +123,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
         onDispose {
             val index = vm.currentIndex.value
             if (shouldSaveOnClose(vm.horizonPainterStartup.value, state.phase, savedAlready, cancelledExplicitly, saving)) {
-                vm.saveHorizonReferenceInBackground(index, state.horizonSnapshot(), imgW, imgH)
+                vm.saveHorizonReferenceInBackground(index, state.solvedHorizonSnapshot(), imgW, imgH)
             }
         }
     }
@@ -159,7 +164,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
 
     // Refinement (macOS triggerObjectSelection): re-solve the random-walker over the brushed columns.
     suspend fun runRefine(frameIdx: Int, brush: IntRange, erasing: Boolean, baseline: IntArray?) {
-        val margin = max(20, imgW / 100)
+        val margin = HorizonPaintState.REFINE_MARGIN
         val expanded = max(0, brush.first - margin)..min(imgW - 1, brush.last + margin)
         val inputs = state.localBand(expanded, brush, erasing, taperWidth = max(1, margin / 2))
         val gen = state.generation()
@@ -172,8 +177,18 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
             )
             // Discard if the frame advanced or the paint was reset while the walker ran (shared state).
             if (vm.currentIndex.value != frameIdx || state.generation() != gen) return
-            if (result != null) state.applyRefinedHorizon(result, expanded, baseline, erasing)
-            else errorText = "Refinement failed — try another stroke"
+            if (result != null) {
+                state.applyRefinedHorizon(result, expanded, baseline, erasing)
+            } else {
+                // Show the horizon the solver last gave, not the stroke's optimistic nudge that it did not confirm.
+                state.restoreSolvedHorizon()
+                errorText = "Refinement failed — try another stroke"
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            state.restoreSolvedHorizon()
+            errorText = "Refinement failed — try another stroke"
         } finally {
             refining = max(0, refining - 1)
         }
@@ -186,7 +201,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
      * sequence as having a static reference horizon; outside it, an edit to one frame's horizon must not.
      */
     suspend fun saveReference(frameIdx: Int): Boolean {
-        val y = state.horizonSnapshot()
+        val y = state.solvedHorizonSnapshot()   // what the solver produced, not the interim shape a stroke is showing
         if (saving || y.none { it >= 0 }) return false
         saving = true
         errorText = null
@@ -242,6 +257,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         hover = down.position
+                        dragging = true
                         // Paint on the initial press so a single click/tap dabs paint (macOS uses
                         // DragGesture(minimumDistance: 0); detectDragGestures would swallow taps).
                         if (state.phase != HorizonPhase.COMPUTING) {
@@ -263,6 +279,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
                                 }
                             }
                         } while (event.changes.any { it.pressed })
+                        dragging = false
 
                         // Stroke ended → trigger detection / refinement.
                         when (state.phase) {
@@ -305,15 +322,29 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
                 areaPath?.let { path ->
                     drawPath(path, fillColor)
                     // Marching ants: white dashes with offset black dashes between them.
-                    drawPath(path, Color.White, style = Stroke(width = 1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(ANT_DASH, ANT_DASH), antsPhase)))
-                    drawPath(path, Color.Black, style = Stroke(width = 1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(ANT_DASH, ANT_DASH), antsPhase + ANT_DASH)))
+                    // Not reading the animated phase while dragging is what stops it redrawing every tick: the outline still
+                    // follows the brush, but the dashes do not crawl over a shape that changes with every event.
+                    val phase = if (dragging) 0f else antsPhase
+                    drawPath(path, Color.White, style = Stroke(width = 1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(ANT_DASH, ANT_DASH), phase)))
+                    drawPath(path, Color.Black, style = Stroke(width = 1.6f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(ANT_DASH, ANT_DASH), phase + ANT_DASH)))
                 }
-                hover?.let { drawBrushCursor(it, state.brushRadius * s, cursorColor(state)) }
+                hover?.let { drawBrushCursor(it, state.brushRadius * s, cursorColor(state, refining > 0)) }
+            }
+
+            // What the pointer would do, beside the brush ring (macOS draws it to the ring's upper right).
+            hover?.let { at ->
+                val ringR = state.brushRadius * transform.scale(canvasSize)
+                Text(
+                    cursorLabel(state, refining > 0),
+                    color = cursorColor(state, refining > 0),
+                    fontSize = 11.sp,
+                    modifier = Modifier.offset { IntOffset((at.x + ringR + 6f).roundToInt(), (at.y - ringR - 22f).roundToInt()) },
+                )
             }
 
             // Instruction tip overlays the top of the frame (startup only; macOS parity).
             if (startup) {
-                HorizonInstructionTip(isMoving = startupIndices.size > 1, modifier = Modifier.align(Alignment.TopCenter))
+                HorizonInstructionTip(app.prefs, isMoving = startupIndices.size > 1, modifier = Modifier.align(Alignment.TopCenter))
             }
         }
 
@@ -366,10 +397,21 @@ internal fun shouldSaveOnClose(startup: Boolean, phase: HorizonPhase, savedAlrea
 internal fun canSaveHorizon(phase: HorizonPhase, hasHorizon: Boolean, refining: Int, saving: Boolean): Boolean =
     phase == HorizonPhase.REFINEMENT && hasHorizon && refining == 0 && !saving
 
-private fun cursorColor(state: HorizonPaintState): Color = when (state.phase) {
+private fun cursorColor(state: HorizonPaintState, refining: Boolean): Color = when (state.phase) {
     HorizonPhase.BAND_SELECTION -> StarColors.yellow
     HorizonPhase.COMPUTING -> StarColors.gray
-    HorizonPhase.REFINEMENT -> if (state.isErasing) StarColors.red else StarColors.green
+    HorizonPhase.REFINEMENT -> if (refining) StarColors.gray else if (state.isErasing) StarColors.red else StarColors.green
+}
+
+/** What the brush is for right now, in words (macOS cursor label); grey and "Calculating..." while the solver runs. */
+private fun cursorLabel(state: HorizonPaintState, refining: Boolean): String = when (state.phase) {
+    HorizonPhase.BAND_SELECTION -> localized("ui.select_area_with_horizon")
+    HorizonPhase.COMPUTING -> localized("ui.calculating")
+    HorizonPhase.REFINEMENT -> when {
+        refining -> localized("ui.calculating")
+        state.isErasing -> localized("ui.select_ground")
+        else -> localized("ui.select_sky")
+    }
 }
 
 private fun DrawScope.drawBrushCursor(center: Offset, radius: Float, color: Color) {
@@ -426,9 +468,11 @@ private inline fun runsOf(width: Int, valueAt: (Int) -> Int): List<IntRange> {
 // ---- instruction tip (startup only; macOS HorizonPainterStartupInstructionsView) ----
 
 @Composable
-private fun HorizonInstructionTip(isMoving: Boolean, modifier: Modifier = Modifier) {
+private fun HorizonInstructionTip(prefs: com.star.desktop.data.LocalPreferences, isMoving: Boolean, modifier: Modifier = Modifier) {
     var dismissed by remember { mutableStateOf(false) }
-    if (dismissed) return
+    var dontShowAgain by remember { mutableStateOf(false) }
+    // The preference outlives this session; Preferences turns it back on (macOS showHorizonPainterInstructions).
+    if (dismissed || !prefs.showHorizonPainterInstructions) return
     Column(
         modifier
             .padding(top = 12.dp, start = 20.dp, end = 20.dp)
@@ -455,8 +499,14 @@ private fun HorizonInstructionTip(isMoving: Boolean, modifier: Modifier = Modifi
                 "− / + buttons to resize the brush.",
             color = StarColors.textSecondary, fontSize = 12.sp,
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            OutlinedButton(onClick = { dismissed = true }) { Text(localized("ui.got_it")) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+            androidx.compose.material3.Checkbox(checked = dontShowAgain, onCheckedChange = { dontShowAgain = it })
+            Text(localized("ui.don_t_show_again"), color = Color.White, fontSize = 12.sp)
+            Spacer(Modifier.size(16.dp))
+            OutlinedButton(onClick = {
+                if (dontShowAgain) prefs.showHorizonPainterInstructions = false
+                dismissed = true
+            }) { Text(localized("ui.got_it")) }
         }
     }
 }
@@ -482,7 +532,7 @@ private fun HorizonControlBar(
     val v = state.version
     val phase = state.phase
     val coverage = v.let { (state.bandCoverage * 100).roundToInt() }
-    val hasHorizon = v.let { state.hasHorizon() }
+    val hasHorizon = v.let { state.hasSolvedHorizon() }
     val hasMore = startupIndices.isNotEmpty() && startupPos + 1 < startupIndices.size
     val canSave = canSaveHorizon(phase, hasHorizon, refining, saving)
 
@@ -517,7 +567,8 @@ private fun HorizonControlBar(
             Text(localized("ui.paint_across_horizon", coverage), color = StarColors.yellow, fontSize = 12.sp)
         }
 
-        OutlinedButton(onClick = onReset) { Text(localized("ui.reset")) }
+        // Nothing to start over from until something is painted (macOS disables Reset in band selection until then).
+        OutlinedButton(onClick = onReset, enabled = phase == HorizonPhase.REFINEMENT || v.let { state.hasBand() }) { Text(localized("ui.reset")) }
 
         Spacer(Modifier.weight(1f))
 

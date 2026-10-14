@@ -51,6 +51,11 @@ class LocalPreferences {
     var movingHorizonCountMultiplier: Double? = null
         private set
 
+    // (declared before `init`, which fills it: a property initializer runs in declaration order, after any earlier init block)
+    /** Every key the file had as of the last read or write, so preferences this class has no property for can still be read. */
+    @Volatile
+    private var snapshot: Map<String, Any?> = emptyMap()
+
     init {
         edit { map ->
             // What the macOS app does on load: forget recents whose file is gone (an unplugged drive, a
@@ -59,6 +64,20 @@ class LocalPreferences {
             if (gone.isNotEmpty()) map[RECENT_KEY] = recentOf(map).filterKeys { it !in gone }
         }
     }
+
+    /**
+     * A true/false preference the macOS app also stores (same key, same file): null when it has never been set, which the
+     * macOS app reads as the preference's own default, so a caller says what that default is (`bool(k) ?: true`).
+     */
+    fun bool(key: String): Boolean? = snapshot[key] as? Boolean
+
+    /** Set a true/false preference; null forgets it, returning it to its default. */
+    fun setBool(key: String, value: Boolean?) = edit { if (value == null) it.remove(key) else it[key] = value }
+
+    /** macOS `showHorizonPainterInstructions`: whether the horizon painter shows its how-to over the frame when a startup flow opens it. */
+    var showHorizonPainterInstructions: Boolean
+        get() = bool("showHorizonPainterInstructions") ?: true
+        set(value) = setBool("showHorizonPainterInstructions", value)
 
     fun setSkipRenderPrompt(value: Boolean) = edit { it["skipRenderPromptAfterProcessing"] = value }
 
@@ -128,6 +147,7 @@ class LocalPreferences {
     }
 
     private fun adopt(map: Map<String, Any?>) {
+        snapshot = map.toMap()
         recent.clear()
         recentOf(map).forEach { (k, v) -> recent[k] = (v as? Double)?.toLong() ?: 0L }
         skipRenderPromptAfterProcessing = map["skipRenderPromptAfterProcessing"] as? Boolean ?: false
