@@ -11,6 +11,7 @@ import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.MultiFrameRange
+import com.star.desktop.domain.OutlierTable
 import com.star.desktop.domain.ToolType
 import com.star.desktop.domain.toolAfterCleanMethodChange
 import com.star.desktop.domain.usesOutliers
@@ -499,26 +500,71 @@ class SequenceViewModel(
         }
     }
 
-    // ---- the outlier window's rows (macOS outlierGroupTableRows) ----
+    // ---- the outlier window (macOS outlierGroupTableRows / outlierGroupWindowFrame) ----
 
     /**
-     * The groups the outlier window is showing, by id, in the current frame: set by an Information click or box (macOS lists
-     * only those groups and selects them); null shows every group of the frame.
+     * What the outlier window lists: [groupIds] of [frameIndex], as set by an Information click or box (macOS lists only those and
+     * keeps showing that frame when the user moves on); or, with [groupIds] null, every group of the frame being looked at that
+     * is a thing of its own on screen.
      */
-    private val _infoRows = MutableStateFlow<List<Int>?>(null)
-    val infoRows: StateFlow<List<Int>?> = _infoRows.asStateFlow()
+    data class InfoRows(val frameIndex: Int, val groupIds: List<Int>?)
+
+    private val _infoRows = MutableStateFlow<InfoRows?>(null)
+    val infoRows: StateFlow<InfoRows?> = _infoRows.asStateFlow()
 
     /** Raises the outlier window; set by the app, which owns windows. */
     var openOutlierWindow: () -> Unit = {}
 
-    /** Show [groupIds] of the current frame in the outlier window. */
-    fun showInfoFor(groupIds: List<Int>) {
-        _infoRows.value = groupIds
+    /**
+     * Show [groupIds] of the current frame in the outlier window. [select] also selects them, and only them, on the frame (an Information
+     * click: macOS "turns off other highlights"); a box leaves the selection to the rows the user picks.
+     */
+    fun showInfoFor(groupIds: List<Int>, select: Boolean = false) {
+        val frame = _currentIndex.value
+        if (select) {
+            frameVMs.values.forEach { if (it.frameIndex != frame) it.selectGroups(emptySet()) }
+            frameVMFor(frame).selectGroups(groupIds.toSet())
+        }
+        _infoRows.value = InfoRows(frame, groupIds)
         openOutlierWindow()
     }
 
-    /** Back to listing every group of the frame. */
-    fun clearInfoRows() { _infoRows.value = null }
+    /**
+     * The decision-tree features and classifier scores the outlier window tabulates for [groupIds] of a frame, by group id. Nothing for no
+     * groups (an empty request means all of them to the daemon), and nothing when they could not be had, which is shown as an error.
+     */
+    suspend fun outlierFeatures(frameIndex: Int, groupIds: List<Int>): Map<Int, com.star.proto.OutlierFeatureRow> {
+        if (groupIds.isEmpty()) return emptyMap()
+        return try {
+            outliers.features(sessionId, frameIndex, groupIds).associateBy { it.groupId }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            reportFailure(e)
+            emptyMap()
+        }
+    }
+
+    /** The window was closed: back to listing the frame being looked at, and nothing stays highlighted for it (macOS `onDisappear`). */
+    fun outlierWindowClosed() {
+        _infoRows.value = null
+        frameVMs.values.forEach { it.selectGroups(emptySet()) }
+    }
+
+    /** The optional columns of the outlier table that are showing, by [OutlierTable.Column.key]: remembered between runs. */
+    private val _outlierColumns = MutableStateFlow(prefs?.strings(OUTLIER_COLUMNS_KEY)?.toSet() ?: OutlierTable.defaultColumns)
+    val outlierColumns: StateFlow<Set<String>> = _outlierColumns.asStateFlow()
+
+    fun setOutlierColumn(key: String, shown: Boolean) =
+        setOutlierColumns(if (shown) _outlierColumns.value + key else _outlierColumns.value - key)
+
+    /** Select All / Clear All in the column chooser. */
+    fun setAllOutlierColumns(shown: Boolean) = setOutlierColumns(if (shown) OutlierTable.columns.map { it.key }.toSet() else emptySet())
+
+    private fun setOutlierColumns(keys: Set<String>) {
+        _outlierColumns.value = keys
+        prefs?.setStrings(OUTLIER_COLUMNS_KEY, OutlierTable.columns.map { it.key }.filter { it in keys })
+    }
 
     // ---- horizon refinement: the work owed after a reference horizon is repainted ----
     //
@@ -890,6 +936,9 @@ class SequenceViewModel(
     companion object {
         /** Outlier groups smaller than this (pixels) are left to the trash threshold, not classified (macOS `minimumClassificationSize`). */
         const val MINIMUM_CLASSIFICATION_SIZE = 20
+
+        /** Where the outlier table's chosen columns are kept in the user preferences. */
+        private const val OUTLIER_COLUMNS_KEY = "outlierTableColumns"
 
         /** The view counts as zoomed in once it is this much past fit. */
         private const val ZOOMED_IN = 1.01f

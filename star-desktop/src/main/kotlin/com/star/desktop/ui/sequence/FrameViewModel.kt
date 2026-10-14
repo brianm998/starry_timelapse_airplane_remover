@@ -45,8 +45,12 @@ class FrameViewModel(
     private val _labelMap = MutableStateFlow<OutlierRepository.LabelMap?>(null)
     val labelMap: StateFlow<OutlierRepository.LabelMap?> = _labelMap.asStateFlow()
 
-    private val _selected = MutableStateFlow<Int?>(null)
-    val selected: StateFlow<Int?> = _selected.asStateFlow()
+    /**
+     * The groups selected for the details view (macOS `isSelected`): drawn in orange on the frame, and the rows selected in the outlier
+     * window. Set by an Information click and by selecting rows in the window.
+     */
+    private val _selection = MutableStateFlow<Set<Int>>(emptySet())
+    val selection: StateFlow<Set<Int>> = _selection.asStateFlow()
 
     /** groupId currently under the pointer (macOS `arrowSelected`); single-valued, like the macOS hover. */
     private val _hovered = MutableStateFlow<Int?>(null)
@@ -138,7 +142,7 @@ class FrameViewModel(
             x, y, frameWidth, frameHeight, arrowLength, arrowHeight,
         ) { g ->
             val willRemove = OutlierDecisions.willRemove(_decisions.value[g.id] ?: g.shouldRemove)
-            g.id == _hovered.value || g.id == _selected.value || willRemove != false
+            g.id == _hovered.value || g.id in _selection.value || willRemove != false
         }?.id ?: 0
     }
 
@@ -156,7 +160,9 @@ class FrameViewModel(
 
     fun decisionFor(groupId: Int): RemoveReason = _decisions.value[groupId] ?: RemoveReason.RR_UNDECIDED
 
-    fun selectGroup(groupId: Int?) { _selected.value = groupId }
+    fun selectGroups(groupIds: Set<Int>) { _selection.value = groupIds }
+
+    fun selectGroup(groupId: Int?) { _selection.value = groupId?.let { setOf(it) } ?: emptySet() }
 
     /** Override this frame's clean method (`Frame.SetCleanMethod`); the daemon returns updated info. */
     fun setCleanMethod(method: CleanMethod) {

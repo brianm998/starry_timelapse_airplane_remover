@@ -58,7 +58,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val fvm = androidx.compose.runtime.remember(current) { vm.frameVMFor(current) }
     val groups by fvm.groups.collectAsState()
     val decisions by fvm.decisions.collectAsState()
-    val selected by fvm.selected.collectAsState()
+    val selection by fvm.selection.collectAsState()
     val info by fvm.info.collectAsState()
     val fastAdv by vm.fastAdvancement.collectAsState()
     val onlyUnclassified by vm.classifyOnlyUnclassified.collectAsState()
@@ -129,7 +129,7 @@ fun RightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             androidx.compose.material3.Checkbox(checked = onlyUnclassified, onCheckedChange = { vm.setClassifyOnlyUnclassified(it) })
             Text(localized("ui.only_unclassified"), color = StarColors.orange, fontSize = 11.sp)
         }
-        selected?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
+        selection.singleOrNull()?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         // Horizon painting (macOS RightPanel): open or close the painter, and show the horizon line on the frame, the

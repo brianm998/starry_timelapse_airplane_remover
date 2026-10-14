@@ -97,6 +97,7 @@ extension Dispatcher {
         register(method: "Outlier.SetDecisionsOverlapping")    { id, payload, transport in await OutlierHandlers.setDecisionsOverlapping(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.SetAll")                     { id, payload, transport in await OutlierHandlers.setAll(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Outlier.ApplyAreaTool")              { id, payload, transport in await OutlierHandlers.applyAreaTool(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Outlier.GetFeatures")                { id, payload, transport in await OutlierHandlers.getFeatures(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Processing
         register(method: "Processing.Start")          { id, payload, transport in await ProcessingHandlers.start(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

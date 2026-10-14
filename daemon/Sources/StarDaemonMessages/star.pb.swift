@@ -2175,6 +2175,54 @@ public struct Star_V1_ApplyOutlierAreaToolResponse: Sendable {
   fileprivate var _preview: Star_V1_ImageRef? = nil
 }
 
+/// What the outlier window tabulates (macOS OutlierGroupTableRow): for each requested group of one frame, its value for every
+/// decision-tree feature (keyed by the feature's name, `OutlierGroupFeature.rawValue`: "size", "width", "aspectRatio", …) and the
+/// "all frames" classifier's score for it (-1 … +1; 0 when no classifier is set).  `group_ids` empty means every group of the frame.
+/// Groups that are not in the frame are left out.  Rows come back in group id order.
+public struct Star_V1_GetOutlierFeaturesRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var frameIndex: Int32 = 0
+
+  public var groupIds: [UInt32] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_OutlierFeatureRow: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var groupID: UInt32 = 0
+
+  public var features: Dictionary<String,Double> = [:]
+
+  public var classification: Double = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_OutlierFeaturesResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var rows: [Star_V1_OutlierFeatureRow] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// start_index/end_index are inclusive frame indices.  A negative end_index (clients send -1) means
 /// "to the end of the sequence"; end_index 0 is the first frame, so start=end=0 processes frame 0 only.
 public struct Star_V1_StartProcessingRequest: Sendable {
@@ -5362,6 +5410,116 @@ extension Star_V1_ApplyOutlierAreaToolResponse: SwiftProtobuf.Message, SwiftProt
   public static func ==(lhs: Star_V1_ApplyOutlierAreaToolResponse, rhs: Star_V1_ApplyOutlierAreaToolResponse) -> Bool {
     if lhs._frame != rhs._frame {return false}
     if lhs._preview != rhs._preview {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_GetOutlierFeaturesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetOutlierFeaturesRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}group_ids\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
+      case 3: try { try decoder.decodeRepeatedUInt32Field(value: &self.groupIds) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if self.frameIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameIndex, fieldNumber: 2)
+    }
+    if !self.groupIds.isEmpty {
+      try visitor.visitPackedUInt32Field(value: self.groupIds, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_GetOutlierFeaturesRequest, rhs: Star_V1_GetOutlierFeaturesRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.frameIndex != rhs.frameIndex {return false}
+    if lhs.groupIds != rhs.groupIds {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_OutlierFeatureRow: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OutlierFeatureRow"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}features\0\u{1}classification\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.groupID) }()
+      case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufDouble>.self, value: &self.features) }()
+      case 3: try { try decoder.decodeSingularDoubleField(value: &self.classification) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.groupID != 0 {
+      try visitor.visitSingularUInt32Field(value: self.groupID, fieldNumber: 1)
+    }
+    if !self.features.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufDouble>.self, value: self.features, fieldNumber: 2)
+    }
+    if self.classification.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.classification, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_OutlierFeatureRow, rhs: Star_V1_OutlierFeatureRow) -> Bool {
+    if lhs.groupID != rhs.groupID {return false}
+    if lhs.features != rhs.features {return false}
+    if lhs.classification != rhs.classification {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_OutlierFeaturesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OutlierFeaturesResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}rows\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.rows) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.rows.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.rows, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_OutlierFeaturesResponse, rhs: Star_V1_OutlierFeaturesResponse) -> Bool {
+    if lhs.rows != rhs.rows {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

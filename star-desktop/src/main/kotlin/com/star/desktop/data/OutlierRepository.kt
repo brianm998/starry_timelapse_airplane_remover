@@ -28,6 +28,10 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
             emptyList()
         }
 
+    /** Each of [groupIds]' decision-tree features and classifier score in a frame (all its groups when empty); a group's size in pixels is on the group. */
+    suspend fun features(sessionId: String, frameIndex: Int, groupIds: List<Int> = emptyList()): List<com.star.proto.OutlierFeatureRow> =
+        c().getOutlierFeatures(sessionId, frameIndex, groupIds).rowsList
+
     suspend fun setDecisions(
         sessionId: String,
         frameIndex: Int,

@@ -57,6 +57,8 @@ import com.star.proto.OpenSequenceRequest
 import com.star.proto.OpenVideoRequest
 import com.star.proto.OutlierDecision
 import com.star.proto.OutlierGroupList
+import com.star.proto.GetOutlierFeaturesRequest
+import com.star.proto.OutlierFeaturesResponse
 import com.star.proto.Point
 import com.star.proto.PreviewSize
 import com.star.proto.ProgressEvent
@@ -211,6 +213,14 @@ class StarClient(private val conn: StdioConnection) {
             SetOutlierDecisionsRequest.newBuilder()
                 .setSessionId(sessionId).setFrameIndex(frameIndex).addAllDecisions(decisions).setRerender(rerender).build(),
             SetOutlierDecisionsResponse.parser(),
+        )
+
+    /** Every decision-tree feature, and the classifier's score, of the given groups of a frame (all its groups when [groupIds] is empty). */
+    suspend fun getOutlierFeatures(sessionId: String, frameIndex: Int, groupIds: List<Int> = emptyList()): OutlierFeaturesResponse =
+        call(
+            "Outlier.GetFeatures",
+            GetOutlierFeaturesRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).addAllGroupIds(groupIds).build(),
+            OutlierFeaturesResponse.parser(),
         )
 
     suspend fun renderFrame(sessionId: String, frameIndex: Int): ImageRef =

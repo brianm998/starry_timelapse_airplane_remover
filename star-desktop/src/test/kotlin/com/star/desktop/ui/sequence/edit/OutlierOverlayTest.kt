@@ -27,7 +27,7 @@ class OutlierOverlayTest {
     private val small = group(2, 8, 8, 8, 8, size = 1)
 
     @Test fun onlyGroupPixelsAreColouredAndTheRestIsTransparent() {
-        val px = OutlierOverlay.pixels(labels(), listOf(big, small), emptyMap(), selected = null)
+        val px = OutlierOverlay.pixels(labels(), listOf(big, small), emptyMap(), selected = emptySet())
         assertEquals(10, px.width)
         assertEquals(10, px.height)
         assertNotEquals(0, px.argb[0], "a pixel of group 1 is transparent")
@@ -36,7 +36,7 @@ class OutlierOverlayTest {
     }
 
     @Test fun aLargeGroupIsRedWhenRemovedGreenWhenKeptAndBlueWhenUndecided() {
-        fun at0(reason: RemoveReason) = OutlierOverlay.pixels(labels(), listOf(big), mapOf(1 to reason), null).argb[0]
+        fun at0(reason: RemoveReason) = OutlierOverlay.pixels(labels(), listOf(big), mapOf(1 to reason), emptySet()).argb[0]
         val remove = at0(RemoveReason.RR_USER_REMOVE)
         val keep = at0(RemoveReason.RR_USER_KEEP)
         val undecided = at0(RemoveReason.RR_UNDECIDED)
@@ -47,13 +47,13 @@ class OutlierOverlayTest {
     }
 
     @Test fun theSelectedGroupIsOrange() {
-        val sel = OutlierOverlay.pixels(labels(), listOf(big), mapOf(1 to RemoveReason.RR_USER_KEEP), selected = 1).argb[0]
+        val sel = OutlierOverlay.pixels(labels(), listOf(big), mapOf(1 to RemoveReason.RR_USER_KEEP), selected = setOf(1)).argb[0]
         assertTrue((sel shr 16 and 0xFF) > 200 && (sel shr 8 and 0xFF) in 100..200 && (sel and 0xFF) < 50, sel.toString(16))
     }
 
     /** Groups of 40 pixels or fewer are two combined masks: red if they will be painted out, otherwise green, undecided included. */
     @Test fun aSmallGroupIsRedOrGreenNeverBlue() {
-        fun small(reason: RemoveReason) = OutlierOverlay.pixels(labels(), listOf(small), mapOf(2 to reason), null).argb[8 * 10 + 8]
+        fun small(reason: RemoveReason) = OutlierOverlay.pixels(labels(), listOf(small), mapOf(2 to reason), emptySet()).argb[8 * 10 + 8]
         val red = small(RemoveReason.RR_CLASSIFIER_REMOVE)
         val green = small(RemoveReason.RR_UNDECIDED)
         assertEquals(small(RemoveReason.RR_USER_KEEP), green)
@@ -74,7 +74,7 @@ class OutlierOverlayTest {
         val ids = ShortArray(w * h)
         for (y in 10..20) for (x in 4000..4100) ids[y * w + x] = 7
         val g = group(7, 4000, 10, 4100, 20, size = 1111)
-        val px = OutlierOverlay.pixels(OutlierRepository.LabelMap(w, h, ids), listOf(g), emptyMap(), null)
+        val px = OutlierOverlay.pixels(OutlierRepository.LabelMap(w, h, ids), listOf(g), emptyMap(), emptySet())
         assertEquals(OutlierOverlay.MAX_WIDTH, px.width)
         assertTrue(px.argb.any { it != 0 }, "the group disappeared in the scaling")
     }

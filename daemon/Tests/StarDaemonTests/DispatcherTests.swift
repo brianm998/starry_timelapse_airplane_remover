@@ -346,7 +346,7 @@ final class DispatcherTests: XCTestCase {
           "Frame.Get", "Frame.GetPreview", "Frame.GetOutlierLabelImage", "Frame.GetOutlierTrashImage", "Frame.SetCleanMethod",
           "Outlier.List", "Outlier.SetDecisions", "Outlier.RenderFrame",
           "Outlier.ApplyDecisionTree", "Outlier.ApplyDecisionTreeAllFrames",
-          "Outlier.SetDecisionsInArea", "Outlier.SetDecisionsOverlapping", "Outlier.ApplyAreaTool", "Outlier.SetAll",
+          "Outlier.SetDecisionsInArea", "Outlier.SetDecisionsOverlapping", "Outlier.ApplyAreaTool", "Outlier.SetAll", "Outlier.GetFeatures",
           "Processing.Start", "Processing.StreamProgress", "Processing.Cancel",
           "Processing.ReprocessFrames",
           "Export.RenderSequence", "Export.Video", "Export.GetVideoCapabilities",

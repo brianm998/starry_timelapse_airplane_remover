@@ -71,6 +71,12 @@ class LocalPreferences {
      */
     fun bool(key: String): Boolean? = snapshot[key] as? Boolean
 
+    /** A list of strings preference (this client's own, such as the outlier table's columns); null when it has never been set. */
+    fun strings(key: String): List<String>? = (snapshot[key] as? List<*>)?.filterIsInstance<String>()
+
+    /** Set a list of strings preference; null forgets it, returning it to its default. */
+    fun setStrings(key: String, value: List<String>?) = edit { if (value == null) it.remove(key) else it[key] = value }
+
     /** Set a true/false preference; null forgets it, returning it to its default. */
     fun setBool(key: String, value: Boolean?) = edit { if (value == null) it.remove(key) else it[key] = value }
 

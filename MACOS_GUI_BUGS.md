@@ -83,3 +83,11 @@ All paths are relative to the repo root.
 - **What's wrong:** frames `currentIndex ... count - 1` are `count - currentIndex` frames, not one more. The sentence
   ("… in N frames from frame X to the end") is wrong by one. (`.allBefore` is right: `currentIndex + 1`.)
 - **Fix:** drop the `+ 1`.
+
+## 9. The outlier window's "classification score" column toggle is labelled "NeighborLineDistanceScore"
+
+- **Where:** `gui/star/OutlierWindowView.swift` (the last `Toggle` in `openTableControls`:
+  `Toggle(localized("ui.neighborlinedistancescore"), isOn: $outlierWindowViewModel.showClassificationScore)`).
+- **What's wrong:** copy-paste of the line above it, so the chooser lists "NeighborLineDistanceScore" twice and the classifier's
+  score column has no toggle of its own to find.
+- **Fix:** give it a label of its own (the Kotlin client added `ui.classification_score`).

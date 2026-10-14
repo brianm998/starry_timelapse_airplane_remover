@@ -95,7 +95,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val tool = if (!usesOutliers) com.star.desktop.domain.ToolType.NONE else selectedTool
     val groups by fvm.groups.collectAsState()
     val decisions by fvm.decisions.collectAsState()
-    val selected by fvm.selected.collectAsState()
+    val selection by fvm.selection.collectAsState()
     val hovered by fvm.hovered.collectAsState()
     val labelMap by fvm.labelMap.collectAsState()
     val outlierOpacity by vm.outlierOpacity.collectAsState()
@@ -120,11 +120,11 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     // The outlier groups as tinted pixels (macOS draws each group's own pixels, not a box around it), rebuilt off the UI
     // thread when a decision, the selection or the frame's groups change.
     var outlierOverlay by remember(current) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(current, labelMap, groups, decisions, selected, usesOutliers) {
+    LaunchedEffect(current, labelMap, groups, decisions, selection, usesOutliers) {
         val map = labelMap
         outlierOverlay = if (usesOutliers && map != null && groups.isNotEmpty()) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                OutlierOverlay.pixels(map, groups, decisions, selected).toImageBitmap()
+                OutlierOverlay.pixels(map, groups, decisions, selection).toImageBitmap()
             }
         } else null
     }
@@ -232,7 +232,9 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                                 val willRemove = com.star.desktop.domain.OutlierDecisions.willRemove(fvm.decisionFor(gid)) == true
                                 vm.openMultiChoice(current, gid, willRemove)
                             }
-                            ClickRules.GroupClick.APPLY_TOOL -> fvm.applyTool(gid, tool)
+                            // An Information click lists that group alone in the outlier window, selected (macOS handleDetailsMode).
+                            ClickRules.GroupClick.APPLY_TOOL ->
+                                if (tool == com.star.desktop.domain.ToolType.INFORMATION) vm.showInfoFor(listOf(gid), select = true) else fvm.applyTool(gid, tool)
                         }
                     } else if (ClickRules.completesDoubleClick(
                             lastEmptyClick, up.uptimeMillis, pos.x, pos.y,
@@ -314,7 +316,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 // Only what is a separate thing in the UI gets a box, guide lines and arrows; and the box only while hovered or selected.
                 for (g in if (usesOutliers) groups.filter(OutlierOverlay::isLarge) else emptyList()) {
                     val reason = decisions[g.id] ?: g.shouldRemove
-                    val isSel = selected == g.id
+                    val isSel = g.id in selection
                     val isHover = hovered == g.id
                     val active = isSel || isHover
                     val willRemove = com.star.desktop.domain.OutlierDecisions.willRemove(reason)

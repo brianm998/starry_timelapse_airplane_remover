@@ -56,7 +56,7 @@ object OutlierOverlay {
         labels: OutlierRepository.LabelMap,
         groups: List<OutlierGroup>,
         decisions: Map<Int, RemoveReason>,
-        selected: Int?,
+        selected: Set<Int>,
     ): Pixels {
         val scale = minOf(1.0, MAX_WIDTH.toDouble() / labels.width)
         val ow = maxOf(1, (labels.width * scale).toInt())
@@ -65,7 +65,7 @@ object OutlierOverlay {
         // Small groups first, so a large group that overlaps one is not hidden by it.
         for (group in groups.sortedBy { isLarge(it) }) {
             val reason = decisions[group.id] ?: group.shouldRemove
-            val argb = colorOf(group, reason, selected == group.id)
+            val argb = colorOf(group, reason, group.id in selected)
             val b = group.bounds
             val y0 = b.minY.coerceAtLeast(0)
             val y1 = b.maxY.coerceAtMost(labels.height - 1)

@@ -356,6 +356,48 @@ class InteropIntegrationTest {
     }
 
     /**
+     * D8: `Outlier.GetFeatures` gives the outlier window every decision-tree feature of the groups asked for (all of the frame's when
+     * none are named), by the names `OutlierGroupFeature` has, with the classifier's score.
+     */
+    @Test
+    fun outlierFeaturesForTheWindow() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] outlierFeaturesForTheWindow — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        withEngine { client ->
+            val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).build()
+            val info = client.openSequence(File(seq).absolutePath, cfg)
+            processToCompletion(client, info.sessionId)
+
+            val frameIdx = (0 until info.frameCount).firstOrNull { client.listOutliers(info.sessionId, it).groupsCount > 0 }
+            if (frameIdx == null) {
+                println("[skip] outlierFeaturesForTheWindow — no frame has outlier groups after processing")
+                client.closeSession(info.sessionId); return@withEngine
+            }
+            val groups = client.listOutliers(info.sessionId, frameIdx).groupsList
+
+            val all = client.getOutlierFeatures(info.sessionId, frameIdx).rowsList
+            assertEquals(groups.map { it.id }.sorted(), all.map { it.groupId }, "naming no groups should give a row for every group, in id order")
+            val expectedFeatures = com.star.desktop.domain.OutlierTable.columns
+                .filter { it.source == com.star.desktop.domain.OutlierTable.Source.FEATURE }.map { it.feature }
+            for (row in all) {
+                assertTrue(row.featuresMap.keys.containsAll(expectedFeatures), "group ${row.groupId} lacks some of the table's features")
+                assertTrue(row.classification in -1.0..1.0, "classifier score ${row.classification} is outside -1..1")
+            }
+
+            val one = groups.first()
+            val named = client.getOutlierFeatures(info.sessionId, frameIdx, listOf(one.id, 65_000)).rowsList
+            assertEquals(listOf(one.id), named.map { it.groupId }, "a group that is not in the frame should be left out")
+            assertEquals(all.first { it.groupId == one.id }.featuresMap, named[0].featuresMap, "the same group should give the same values")
+
+            client.closeSession(info.sessionId)
+        }
+    }
+
+    /**
      * A6: the daemon keeps a set of progress subscribers, so a second stream (Export.RenderSequence,
      * Horizon.Reprocess) neither takes over nor kills the client's long-lived StreamProgress, and both of
      * those streams now end by themselves. The long-lived stream must hear the `done` of the run after them.

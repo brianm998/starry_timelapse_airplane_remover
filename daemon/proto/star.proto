@@ -469,6 +469,22 @@ message ApplyOutlierAreaToolRequest {
 }
 message ApplyOutlierAreaToolResponse { FrameInfo frame = 1; ImageRef preview = 2; }
 
+// What the outlier window tabulates (macOS OutlierGroupTableRow): for each requested group of one frame, its value for every
+// decision-tree feature (keyed by the feature's name, `OutlierGroupFeature.rawValue`: "size", "width", "aspectRatio", …) and the
+// "all frames" classifier's score for it (-1 … +1; 0 when no classifier is set).  `group_ids` empty means every group of the frame.
+// Groups that are not in the frame are left out.  Rows come back in group id order.
+message GetOutlierFeaturesRequest {
+  string          session_id  = 1;
+  int32           frame_index = 2;
+  repeated uint32 group_ids   = 3;
+}
+message OutlierFeatureRow {
+  uint32              group_id       = 1;
+  map<string, double> features       = 2;
+  double              classification = 3;
+}
+message OutlierFeaturesResponse { repeated OutlierFeatureRow rows = 1; }
+
 // ---- Processing / Export ----
 
 // start_index/end_index are inclusive frame indices.  A negative end_index (clients send -1) means

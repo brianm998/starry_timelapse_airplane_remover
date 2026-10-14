@@ -292,6 +292,58 @@ enum OutlierHandlers {
         }
     }
 
+    // What the outlier window tabulates: every decision-tree feature of each requested group of a frame, and the classifier's score.
+    static func getFeatures(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_GetOutlierFeaturesRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            await ensureOutliersLoaded(frame)
+            guard let groups = await frame.getOutlierGroups() else {
+                await transport.sendError(id: id, message: "outlier groups not yet loaded"); return
+            }
+            let members = await groups.members
+            let wanted: [OutlierGroup]
+            if req.groupIds.isEmpty {
+                wanted = Array(members.values)
+            } else {
+                wanted = req.groupIds.compactMap { UInt16(exactly: $0).flatMap { members[$0] } }
+            }
+            var resp = Star_V1_OutlierFeaturesResponse()
+            resp.rows = await featureRows(for: wanted, classifier: await currentClassifier.get(for: .all))
+            try await transport.respond(id: id, payload: resp.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    /// One row per group, in group id order: its value for every `OutlierGroupFeature` (keyed by the feature's name) and the
+    /// classifier's score for it (0 without a classifier).  The groups are worked out side by side; each caches what it computes.
+    static func featureRows(for groups: [OutlierGroup], classifier: (any NamedOutlierGroupClassifier)?) async -> [Star_V1_OutlierFeatureRow] {
+        var rows = await withTaskGroup(of: Star_V1_OutlierFeatureRow.self) { tasks in
+            for group in groups {
+                tasks.addTask {
+                    var row = Star_V1_OutlierFeatureRow()
+                    row.groupID = UInt32(group.id)
+                    for feature in OutlierGroupFeature.allCases {
+                        row.features[feature.rawValue] = await group.decisionTreeValueAsync(for: feature)
+                    }
+                    if let classifier { row.classification = await classifier.classification(of: group) }
+                    return row
+                }
+            }
+            var rows: [Star_V1_OutlierFeatureRow] = []
+            for await row in tasks { rows.append(row) }
+            return rows
+        }
+        rows.sort { $0.groupID < $1.groupID }
+        return rows
+    }
+
     static func setDecisions(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_SetOutlierDecisionsRequest(serializedBytes: payload)
