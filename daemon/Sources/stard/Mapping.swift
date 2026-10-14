@@ -5,6 +5,10 @@ import StarDaemonMessages
 
 // Bidirectional type mapping between StarCore types and proto types.
 enum Mapping {
+    /// What `max_mat_memory_fraction` is clamped to (the macOS settings row's own limits).
+    static let memoryBudgetFractionRange: ClosedRange<Double> = 0.1 ... 0.95
+
+
     // MARK: - FrameViewMode
 
     static func frameViewMode(from proto: Star_V1_FrameViewMode) -> StarCore.FrameViewMode {
@@ -271,6 +275,7 @@ enum Mapping {
         out.writeFramePreviewFiles = c.writeFramePreviewFiles
         out.starVersion = c.starVersion
         out.reprocessOnSettingsChange = c.reprocessOnSettingsChange
+        out.maxMatMemoryFraction = c.maxMatMemoryFraction
         var ves = Star_V1_VideoEncodeSettings()
         ves.frameRate   = c.frameRate.rawValue
         ves.codec       = c.codec.rawValue
@@ -381,6 +386,10 @@ enum Mapping {
         if p.hasMaxConcurrentKeypointOps { c.maxConcurrentKeypointOps = Int(p.maxConcurrentKeypointOps) }
         if p.hasMergeStreamingThresholdMb { c.mergeStreamingThresholdMB = Int(p.mergeStreamingThresholdMb) }
         if p.hasReprocessOnSettingsChange { c.reprocessOnSettingsChange = p.reprocessOnSettingsChange }
+        // A budget of 0 would admit nothing and one past 1 more than the machine has; a client with no min on its text box can send either.
+        if p.hasMaxMatMemoryFraction, p.maxMatMemoryFraction.isFinite {
+            c.maxMatMemoryFraction = min(max(p.maxMatMemoryFraction, Mapping.memoryBudgetFractionRange.lowerBound), Mapping.memoryBudgetFractionRange.upperBound)
+        }
         if p.hasUseGpuAcceleration { c.useGPUForMerge = p.useGpuAcceleration }
         // Unknown names are ignored rather than rejected: a newer client may know profiles
         // this daemon does not, and keeping the config's own is the safe answer.

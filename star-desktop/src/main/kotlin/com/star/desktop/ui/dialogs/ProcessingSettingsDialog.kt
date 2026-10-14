@@ -224,7 +224,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                     when (f) {
                         is BoolField -> boolEdits[f.label]?.let { f.set(b, it) }
                         is IntField -> textEdits[f.label]?.toIntOrNull()?.let { f.set(b, it.coerceIn(f.min, f.max)) }
-                        is DoubleField -> textEdits[f.label]?.toDoubleOrNull()?.let { f.set(b, it) }
+                        is DoubleField -> textEdits[f.label]?.toDoubleOrNull()?.let { f.set(b, it.coerceIn(f.min, f.max)) }
                     }
                 }
                 b.build()
@@ -333,7 +333,15 @@ internal sealed interface ExpertField {
     val has: (Config) -> Boolean
 }
 internal class IntField(override val label: String, val get: (Config) -> Int, val set: (Config.Builder, Int) -> Config.Builder, val min: Int, val max: Int, override val has: (Config) -> Boolean) : ExpertField
-internal class DoubleField(override val label: String, val get: (Config) -> Double, val set: (Config.Builder, Double) -> Config.Builder, override val has: (Config) -> Boolean) : ExpertField
+internal class DoubleField(
+    override val label: String,
+    val get: (Config) -> Double,
+    val set: (Config.Builder, Double) -> Config.Builder,
+    override val has: (Config) -> Boolean,
+    /** Inclusive bounds on what the field accepts; a value outside them is not applied. Unbounded unless the setting has a range that means something. */
+    val min: Double = Double.NEGATIVE_INFINITY,
+    val max: Double = Double.POSITIVE_INFINITY,
+) : ExpertField
 internal class BoolField(override val label: String, val get: (Config) -> Boolean, val set: (Config.Builder, Boolean) -> Config.Builder, override val has: (Config) -> Boolean) : ExpertField
 
 internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
@@ -394,6 +402,9 @@ internal val MEMORY_FIELDS: List<ExpertField> = listOf(
     IntField("Max keypoint ops", { it.maxConcurrentKeypointOps }, { b, v -> b.setMaxConcurrentKeypointOps(v) }, 0, 256, { it.hasMaxConcurrentKeypointOps() }),
     // 0 = never stream, keep every source frame resident.
     IntField("Merge streaming MB", { it.mergeStreamingThresholdMb }, { b, v -> b.setMergeStreamingThresholdMb(v) }, 0, 65536, { it.hasMergeStreamingThresholdMb() }),
+    // The fraction of this machine's memory star may reserve for work in flight: 0.1 to 0.95, inclusive (the daemon clamps to the same). The default
+    // 0.85 leaves the rest of the machine about 15%. Applied as given only under the Custom use of this Mac.
+    DoubleField("Memory budget", { it.maxMatMemoryFraction }, { b, v -> b.setMaxMatMemoryFraction(v) }, { it.hasMaxMatMemoryFraction() }, min = 0.1, max = 0.95),
 )
 
 // On by default in StarCore's own Config, so a daemon this dialog talks to always sends

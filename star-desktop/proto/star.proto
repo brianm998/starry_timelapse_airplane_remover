@@ -270,6 +270,10 @@ message Config {
   // or keeps it and applies the new settings only to the frames still to do. StarCore Config.reprocessOnSettingsChange; the answer to the
   // "reprocess already processed frames?" question (see Sequence.PreviewConfigChange).
   optional bool   reprocess_on_settings_change                         = 58;
+  // The fraction of this machine's physical memory star may reserve for operations in flight (StarCore Config.maxMatMemoryFraction), 0.1 to 0.95;
+  // the default 0.85 leaves the rest of the machine about 15%. Lower it on a machine shared with other heavy programs. Applied as given only under
+  // the Custom resource profile; the other profiles bring their own. A value outside the range is clamped.
+  optional double max_mat_memory_fraction                              = 59;
 }
 
 enum CleanMethod {

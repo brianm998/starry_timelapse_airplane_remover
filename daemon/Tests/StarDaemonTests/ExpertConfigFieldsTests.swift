@@ -103,6 +103,40 @@ final class ExpertConfigFieldsTests: XCTestCase {
         XCTAssertFalse(back.hasMergeStreamingThresholdMb)
     }
 
+    // MARK: - the memory budget
+
+    func testTheMemoryBudgetRoundTripsAndIsClampedToItsRange() {
+        var config = Config()
+        XCTAssertEqual(config.maxMatMemoryFraction, 0.85, accuracy: 1e-12, "the default leaves about 15% headroom")
+        XCTAssertEqual(Mapping.protoConfig(config).maxMatMemoryFraction, 0.85, accuracy: 1e-12)
+
+        var p = Star_V1_Config()
+        p.maxMatMemoryFraction = 0.6
+        Mapping.applyExpertConfig(&config, from: p)
+        XCTAssertEqual(config.maxMatMemoryFraction, 0.6, accuracy: 1e-12)
+
+        for (sent, kept) in [(0.0, 0.1), (-3.0, 0.1), (0.05, 0.1), (1.0, 0.95), (40.0, 0.95), (0.1, 0.1), (0.95, 0.95)] {
+            p.maxMatMemoryFraction = sent
+            Mapping.applyExpertConfig(&config, from: p)
+            XCTAssertEqual(config.maxMatMemoryFraction, kept, accuracy: 1e-12, "sent \(sent)")
+        }
+    }
+
+    func testANonNumberIsNotAPercentage() {
+        var config = Config()
+        var p = Star_V1_Config()
+        p.maxMatMemoryFraction = .nan
+        Mapping.applyExpertConfig(&config, from: p)
+        XCTAssertEqual(config.maxMatMemoryFraction, 0.85, accuracy: 1e-12, "NaN leaves the budget alone")
+    }
+
+    func testAnAbsentMemoryBudgetLeavesTheConfigAlone() {
+        var config = Config()
+        config.maxMatMemoryFraction = 0.5
+        Mapping.applyExpertConfig(&config, from: Star_V1_Config())
+        XCTAssertEqual(config.maxMatMemoryFraction, 0.5, accuracy: 1e-12)
+    }
+
     // MARK: - who chose the divisor
 
     /// `set(imageInfo:)` picks a divisor for a client that did not (`resolveAutomaticKeypointDivisor`), and must not pick one over the

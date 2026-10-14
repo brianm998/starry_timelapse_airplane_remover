@@ -117,6 +117,23 @@ class ExpertFieldWiringTest {
         }
     }
 
+    @Test
+    fun doubleFieldRangesAreSane() {
+        for (f in allFields.filterIsInstance<DoubleField>()) {
+            assertTrue(f.min <= f.max, "${f.label}: min ${f.min} exceeds max ${f.max}")
+            assertTrue(DOUBLE_PROBE in f.min..f.max, "${f.label}: the probe ${DOUBLE_PROBE} is outside ${f.min}..${f.max}")
+        }
+    }
+
+    /** The memory budget has the macOS row's limits, both inclusive: 0.1 (10%) to 0.95 (95%), and the daemon clamps to the same. */
+    @Test
+    fun theMemoryBudgetIsBoundedBothSides() {
+        val f = MEMORY_FIELDS.single { it.label == "Memory budget" } as DoubleField
+        assertEquals(0.1, f.min)
+        assertEquals(0.95, f.max)
+        assertEquals(0.85, f.get(Config.newBuilder().setMaxMatMemoryFraction(0.85).build()))
+    }
+
     // ---- helpers ----
 
     /** A config with exactly one field written, through that field's own setter. */
