@@ -647,6 +647,19 @@ message SequenceProgress {
   bool   is_complete     = 6;   // every frame has its output written, so a run would have nothing to merge
 }
 
+// Whether this machine can keep its cores busy detecting keypoints on the open sequence at full resolution, and what to suggest when it
+// cannot (StarCore's Config.keypointDivisorAdvice, behind the "Speed vs. Sharpness" choice on the last startup prompt).
+message KeypointDivisorAdvice {
+  bool   available                   = 1;   // false until the sequence's frame size is known: say nothing, do not recommend anything
+  bool   reduce_recommended          = 2;   // memory, not the core count, limits full resolution concurrency
+  double recommended_divisor         = 3;   // 1.5 when reduce_recommended, else 1
+  int64  threshold_pixels            = 4;   // the largest frame this machine can detect on at full resolution without throttling
+  int64  image_pixels                = 5;   // this sequence's frame
+  int32  full_resolution_concurrency = 6;   // how many keypoint ops run at once at full resolution...
+  int32  frame_concurrency           = 7;   // ...against how many the pipeline would run if memory were free
+  uint64 physical_memory_bytes       = 8;   // this machine's, for saying so out loud
+}
+
 message FrameStateEvent    { int32 frame_index = 1; FrameProcessingState state = 2; }
 message FrameSavingEvent   { int32 frame_index = 1; int32 old_state = 2; int32 new_state = 3; }
 message OutliersLoaded     { int32 frame_index = 1; int32 state = 2; }

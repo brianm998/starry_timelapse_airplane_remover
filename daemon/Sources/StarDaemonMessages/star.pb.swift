@@ -2832,6 +2832,42 @@ public struct Star_V1_SequenceProgress: Sendable {
   public init() {}
 }
 
+/// Whether this machine can keep its cores busy detecting keypoints on the open sequence at full resolution, and what to suggest when it
+/// cannot (StarCore's Config.keypointDivisorAdvice, behind the "Speed vs. Sharpness" choice on the last startup prompt).
+public struct Star_V1_KeypointDivisorAdvice: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// false until the sequence's frame size is known: say nothing, do not recommend anything
+  public var available: Bool = false
+
+  /// memory, not the core count, limits full resolution concurrency
+  public var reduceRecommended: Bool = false
+
+  /// 1.5 when reduce_recommended, else 1
+  public var recommendedDivisor: Double = 0
+
+  /// the largest frame this machine can detect on at full resolution without throttling
+  public var thresholdPixels: Int64 = 0
+
+  /// this sequence's frame
+  public var imagePixels: Int64 = 0
+
+  /// how many keypoint ops run at once at full resolution...
+  public var fullResolutionConcurrency: Int32 = 0
+
+  /// ...against how many the pipeline would run if memory were free
+  public var frameConcurrency: Int32 = 0
+
+  /// this machine's, for saying so out loud
+  public var physicalMemoryBytes: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct Star_V1_FrameStateEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -7108,6 +7144,71 @@ extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if lhs.steps != rhs.steps {return false}
     if lhs.isUntouched != rhs.isUntouched {return false}
     if lhs.isComplete != rhs.isComplete {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_KeypointDivisorAdvice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".KeypointDivisorAdvice"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}available\0\u{3}reduce_recommended\0\u{3}recommended_divisor\0\u{3}threshold_pixels\0\u{3}image_pixels\0\u{3}full_resolution_concurrency\0\u{3}frame_concurrency\0\u{3}physical_memory_bytes\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.available) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.reduceRecommended) }()
+      case 3: try { try decoder.decodeSingularDoubleField(value: &self.recommendedDivisor) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.thresholdPixels) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.imagePixels) }()
+      case 6: try { try decoder.decodeSingularInt32Field(value: &self.fullResolutionConcurrency) }()
+      case 7: try { try decoder.decodeSingularInt32Field(value: &self.frameConcurrency) }()
+      case 8: try { try decoder.decodeSingularUInt64Field(value: &self.physicalMemoryBytes) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.available != false {
+      try visitor.visitSingularBoolField(value: self.available, fieldNumber: 1)
+    }
+    if self.reduceRecommended != false {
+      try visitor.visitSingularBoolField(value: self.reduceRecommended, fieldNumber: 2)
+    }
+    if self.recommendedDivisor.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.recommendedDivisor, fieldNumber: 3)
+    }
+    if self.thresholdPixels != 0 {
+      try visitor.visitSingularInt64Field(value: self.thresholdPixels, fieldNumber: 4)
+    }
+    if self.imagePixels != 0 {
+      try visitor.visitSingularInt64Field(value: self.imagePixels, fieldNumber: 5)
+    }
+    if self.fullResolutionConcurrency != 0 {
+      try visitor.visitSingularInt32Field(value: self.fullResolutionConcurrency, fieldNumber: 6)
+    }
+    if self.frameConcurrency != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameConcurrency, fieldNumber: 7)
+    }
+    if self.physicalMemoryBytes != 0 {
+      try visitor.visitSingularUInt64Field(value: self.physicalMemoryBytes, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_KeypointDivisorAdvice, rhs: Star_V1_KeypointDivisorAdvice) -> Bool {
+    if lhs.available != rhs.available {return false}
+    if lhs.reduceRecommended != rhs.reduceRecommended {return false}
+    if lhs.recommendedDivisor != rhs.recommendedDivisor {return false}
+    if lhs.thresholdPixels != rhs.thresholdPixels {return false}
+    if lhs.imagePixels != rhs.imagePixels {return false}
+    if lhs.fullResolutionConcurrency != rhs.fullResolutionConcurrency {return false}
+    if lhs.frameConcurrency != rhs.frameConcurrency {return false}
+    if lhs.physicalMemoryBytes != rhs.physicalMemoryBytes {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

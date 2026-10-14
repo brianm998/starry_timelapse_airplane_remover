@@ -47,4 +47,18 @@ enum SequenceHandlers {
             await transport.sendError(id: id, message: "\(error)")
         }
     }
+
+    /// Whether full resolution keypoint detection suits the sequence on this machine (the "Speed vs. Sharpness" advice).
+    static func getKeypointAdvice(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SessionRef(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found: \(req.sessionID)", code: 404)
+                return
+            }
+            try await transport.respond(id: id, payload: session.keypointAdvice().serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
 }

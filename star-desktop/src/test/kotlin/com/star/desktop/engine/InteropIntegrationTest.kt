@@ -357,6 +357,44 @@ class InteropIntegrationTest {
     }
 
     /**
+     * F3: the daemon says whether full resolution keypoint detection suits the sequence on this machine, with the numbers behind it; and a
+     * divisor the client writes is the divisor in the config afterwards (sending one is also what marks it chosen).
+     */
+    @Test
+    fun keypointAdviceAndTheChosenDivisor() {
+        val seq = seqPath ?: run {
+            println("[skip] keypointAdviceAndTheChosenDivisor — set -Dstar.it.seq=<sequence dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-divisor").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                val advice = client.getKeypointAdvice(info.sessionId)
+                assertTrue(advice.available, "the sequence is open, so its frame size is known: $advice")
+                assertEquals(info.imageWidth.toLong() * info.imageHeight, advice.imagePixels)
+                assertTrue(advice.thresholdPixels > 0 && advice.frameConcurrency > 0 && advice.physicalMemoryBytes > 0, "$advice")
+                assertTrue(advice.fullResolutionConcurrency in 1..advice.frameConcurrency, "$advice")
+                // The recommendation and the verdict agree: a reduction is advised exactly when the frame is past the threshold.
+                assertEquals(advice.imagePixels > advice.thresholdPixels, advice.reduceRecommended, "$advice")
+                assertEquals(if (advice.reduceRecommended) 1.5 else 1.0, advice.recommendedDivisor)
+
+                val before = client.getConfig(info.sessionId)
+                val updated = client.updateConfig(info.sessionId, before.toBuilder().setAlignmentKeypointDetectionDivisor(2.0).build())
+                assertEquals(2.0, updated.alignmentKeypointDetectionDivisor)
+                assertEquals(2.0, client.getConfig(info.sessionId).alignmentKeypointDetectionDivisor)
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
+    /**
      * F1: while a run goes the daemon reports how far each step has got, and the last report has every step it lists finished.
      * F2: the survey of what is on disk says "untouched" before the run and "complete" after it.
      */

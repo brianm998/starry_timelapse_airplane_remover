@@ -395,6 +395,24 @@ class AppViewModel(
         return job
     }
 
+    /**
+     * Whether this machine can detect on the open sequence at full resolution (the "Speed vs. Sharpness" advice on the removal prompt), or
+     * null when the daemon could not say. Asked fresh each time: it depends on settings that move it, such as use of this Mac.
+     */
+    suspend fun keypointAdvice(): com.star.proto.KeypointDivisorAdvice? =
+        runCatching { sessions.getKeypointAdvice() }
+            .onFailure { Log.w("App") { "could not get the keypoint divisor advice: ${it.message}" } }
+            .getOrNull()
+
+    /**
+     * The "Speed vs. Sharpness" value, written into the session config as it is typed or picked (macOS does the same through the view
+     * model's didSet): Start Processing is right beside the field, and a value held back until "commit" would be lost to the click on it.
+     * Sending it is also what marks it chosen, so the daemon's automatic default does not pick another over it.
+     */
+    fun setKeypointDivisor(divisor: Double) {
+        writeStartupAnswer { it.setAlignmentKeypointDetectionDivisor(divisor) }
+    }
+
     /** Prompt 1 answer: does the sequence include a horizon? */
     fun startupAnswerHorizon(hasHorizon: Boolean) {
         writeStartupAnswer { it.setHorizonDetectionEnabled(hasHorizon) }
@@ -850,6 +868,7 @@ class AppViewModel(
             "multiselect" -> svm.openMultiSelect(SequenceViewModel.RectSelection(100f, 100f, 400f, 400f)) // dev hook
             "settings" -> openSettings() // dev hook: screenshot the Processing Settings dialog
             "startup" -> _startupStep.value = StartupStep.HORIZON // dev hook: startup prompts
+            "removal" -> _startupStep.value = StartupStep.REMOVAL // dev hook: the last startup prompt
             "progress" -> showSequenceProgress(svm) // dev hook: screenshot the reopened-sequence panel
             else -> Unit
         }

@@ -14,6 +14,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Checkbox
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import com.star.desktop.domain.KeypointDivisor
+import com.star.desktop.ui.components.HoverTip
+import com.star.proto.KeypointDivisorAdvice
+import kotlin.math.abs
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -172,9 +184,97 @@ private fun RemovalPrompt(app: AppViewModel) {
     }
     HorizontalDivider(color = StarColors.cellDefault)
     Body(removalDescription(cleanMethod))
+    HorizontalDivider(color = StarColors.cellDefault)
+    KeypointDivisorSection(app)
+    HorizontalDivider(color = StarColors.cellDefault)
     AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
         SecondaryButton("Close") { app.dismissStartup() }
         PrimaryButton("Start Processing") { app.startupStartProcessing(cleanMethod, allowEarthAlignment = cars) }
+    }
+}
+
+/**
+ * "Speed vs. Sharpness" (macOS `KeypointDivisorStartupView`): how much smaller than the frame the alignment step looks for stars, which on a
+ * large sequence decides whether the run goes at a sensible speed or crawls. Collapsed to its title when this machine copes with the
+ * sequence at full resolution, open when it does not or when a value was already set. The choice is written as it is made (see
+ * [AppViewModel.setKeypointDivisor]), so what is typed counts without being committed.
+ */
+@Composable
+private fun KeypointDivisorSection(app: AppViewModel) {
+    val session by app.sessions.session.collectAsState()
+    val divisor = session?.config?.alignmentKeypointDetectionDivisor?.takeIf { it > 0.0 } ?: 1.0
+    var advice by remember { mutableStateOf<KeypointDivisorAdvice?>(null) }
+    var expanded by remember { mutableStateOf(false) }
+    var customText by remember { mutableStateOf(KeypointDivisor.format(divisor)) }
+    var customFocused by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val answer = app.keypointAdvice()
+        advice = answer
+        expanded = KeypointDivisor.initiallyExpanded(answer, app.sessions.session.value?.config?.alignmentKeypointDetectionDivisor ?: 1.0)
+    }
+    // Follow the value when a preset moved it, but never while the field is being typed into: that would rewrite the text under the cursor.
+    LaunchedEffect(divisor) { if (!customFocused) customText = KeypointDivisor.format(divisor) }
+
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        HoverTip(localized(if (expanded) "ui.hide_speed_settings" else "ui.show_speed_settings")) {
+            Row(
+                Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(if (expanded) "▼" else "▶", color = StarColors.textSecondary, fontSize = 13.sp)
+                Text(localized("ui.speed_vs_sharpness"), color = StarColors.textPrimary, fontSize = 18.sp)
+                if (!expanded) {
+                    Text(localized("ui.current_choice_suffix", KeypointDivisor.currentChoiceName(divisor)), color = StarColors.textSecondary, fontSize = 15.sp)
+                }
+            }
+        }
+        if (expanded) {
+            Body(KeypointDivisor.explanation(advice))
+            for (preset in KeypointDivisor.presets) {
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Checkbox(
+                            checked = KeypointDivisor.matches(divisor, preset.divisor),
+                            // Exclusive: checking one selects it, and unchecking the checked one does nothing.
+                            onCheckedChange = { if (it) app.setKeypointDivisor(preset.divisor) },
+                        )
+                        Text(localized(preset.nameKey), color = StarColors.textPrimary, fontSize = 15.sp)
+                        Text(KeypointDivisor.format(preset.divisor), color = StarColors.textDisabled, fontSize = 15.sp)
+                        if (KeypointDivisor.isRecommended(advice, preset.divisor)) {
+                            Text(
+                                localized("ui.recommended"), color = Color.White, fontSize = 11.sp,
+                                modifier = Modifier.clip(RoundedCornerShape(50)).background(StarColors.accent.copy(alpha = 0.7f)).padding(horizontal = 6.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
+                    Text(localized(preset.blurbKey), color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 42.dp))
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(localized("ui.or_use"), color = StarColors.textSecondary, fontSize = 15.sp)
+                BasicTextField(
+                    value = customText,
+                    onValueChange = { text ->
+                        customText = text
+                        // Applied on every keystroke: every prefix of a number being typed is itself a number.
+                        KeypointDivisor.parse(text)?.let { if (abs(it - divisor) >= 0.0001) app.setKeypointDivisor(it) }
+                    },
+                    singleLine = true,
+                    textStyle = TextStyle(color = StarColors.white, fontSize = 13.sp),
+                    cursorBrush = SolidColor(StarColors.white),
+                    modifier = Modifier
+                        .width(70.dp)
+                        .background(StarColors.sidePanel)
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                        .onFocusChanged { customFocused = it.isFocused },
+                )
+                Text(localized("ui.any_number_from_1_to_8_1_is_full_size_2_is"), color = StarColors.textDisabled, fontSize = 11.sp)
+            }
+            if (KeypointDivisor.isTooHigh(divisor)) {
+                Text(localized("ui.keypoint_too_high", KeypointDivisor.format(divisor)), color = StarColors.yellow, fontSize = 13.sp)
+            }
+        }
     }
 }
 

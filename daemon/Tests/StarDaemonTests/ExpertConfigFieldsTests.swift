@@ -103,6 +103,30 @@ final class ExpertConfigFieldsTests: XCTestCase {
         XCTAssertFalse(back.hasMergeStreamingThresholdMb)
     }
 
+    // MARK: - who chose the divisor
+
+    /// `set(imageInfo:)` picks a divisor for a client that did not (`resolveAutomaticKeypointDivisor`), and must not pick one over the
+    /// top of a client that did.  The daemon cannot tell the two apart except by the field being present, so presence has to be what
+    /// marks it chosen, and a message that never mentions it has to leave the decision open.
+    func testSendingADivisorMarksItChosen() {
+        var p = Star_V1_Config()
+        p.alignmentKeypointDetectionDivisor = 1.0     // an explicit "full resolution" is a choice too
+
+        var c = Config()
+        XCTAssertFalse(c.keypointDivisorWasChosen)
+        Mapping.applyExpertConfig(&c, from: p)
+
+        XCTAssertTrue(c.keypointDivisorWasChosen)
+        XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.0)
+    }
+
+    func testNotSendingADivisorLeavesTheChoiceToTheAutomaticDefault() {
+        var c = Config()
+        Mapping.applyExpertConfig(&c, from: Star_V1_Config())
+        XCTAssertFalse(c.keypointDivisorWasChosen,
+                       "a client that never mentioned the divisor gets the automatic default, not a settled full resolution")
+    }
+
     // MARK: - the unfinished horizon selection
 
     /// The pair that records a hand-painted horizon selection the user did not finish. Not

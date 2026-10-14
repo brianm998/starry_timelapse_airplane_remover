@@ -146,6 +146,23 @@ actor Session {
     // Current config snapshot.
     func config() async -> Config { await configManager.config() }
 
+    /// `Sequence.GetKeypointAdvice`: whether full resolution keypoint detection suits this sequence on this machine.  Asked fresh each time, since
+    /// it depends on the settings that move it (use of this Mac, concurrency).
+    func keypointAdvice() async -> Star_V1_KeypointDivisorAdvice {
+        let memory = ProcessInfo.processInfo.physicalMemory
+        var out = Star_V1_KeypointDivisorAdvice()
+        out.physicalMemoryBytes = memory
+        guard let advice = await configManager.config().keypointDivisorAdvice(physicalMemory: memory) else { return out }
+        out.available = true
+        out.reduceRecommended = advice.reduceRecommended
+        out.recommendedDivisor = advice.recommendedDivisor
+        out.thresholdPixels = Int64(advice.thresholdPixels)
+        out.imagePixels = Int64(advice.imagePixels)
+        out.fullResolutionConcurrency = Int32(advice.fullResolutionConcurrency)
+        out.frameConcurrency = Int32(advice.frameConcurrency)
+        return out
+    }
+
     /// How far a previous run got on this sequence, as the files it left say (`Sequence.GetProgressSurvey`).  A few `stat`s per frame, so
     /// it is cheap to ask on the way into a reopened sequence; takes what is on disk at face value.
     func surveyProgress() async -> SequenceProgress {
