@@ -31,13 +31,22 @@ object ToolCursors {
 
     /** Cursor while hovering a group (macOS OutlierGroupView.currentCursor): reflects the click action. */
     fun groupPointing(tool: ToolType, willRemove: Boolean?): PointerIcon {
-        val base = when (tool) {
-            ToolType.NONE -> return PointerIcon.Default
-            ToolType.TRASH -> "delete_trash"
-            ToolType.INFORMATION -> "info"
-            else -> if (willRemove == true) "keep" else "remove"
-        }
+        val base = groupCursorBase(tool, willRemove) ?: return PointerIcon.Default
         return byBase(base, "pointing", POINTING_HOT_X, POINTING_HOT_Y)
+    }
+
+    /**
+     * The cursor's asset base for hovering a group, or null for the system arrow. It shows what a click does: Remove always removes
+     * and Keep always keeps (this client's tools set a decision rather than toggle it, which is what their help text says), so the
+     * cursor is the tool's own; the tools that toggle show the opposite of the group's present decision.
+     */
+    internal fun groupCursorBase(tool: ToolType, willRemove: Boolean?): String? = when (tool) {
+        ToolType.NONE -> null
+        ToolType.TRASH -> "delete_trash"
+        ToolType.INFORMATION -> "info"
+        ToolType.REMOVE -> "remove"
+        ToolType.KEEP -> "keep"
+        else -> if (willRemove == true) "keep" else "remove"
     }
 
     private fun byBase(base: String, variant: String, hotXFrac: Float, hotYFrac: Float): PointerIcon {
