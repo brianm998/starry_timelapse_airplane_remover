@@ -866,6 +866,19 @@ class InteropIntegrationTest {
                 assertTrue(!removed.contentEquals(kept), "rendering after removing every outlier gave the same picture as keeping them all")
                 assertTrue(!removed.contentEquals(original), "the render of a frame with its outliers removed is just the original")
 
+                // D1: a Keep / Remove box over the whole frame sets every group inside it (the box tools of the edit view).
+                fun point(x: Int, y: Int) = com.star.proto.Point.newBuilder().setX(x.toDouble()).setY(y.toDouble()).build()
+                client.setOutlierDecisionsInArea(info.sessionId, frameIdx, frameIdx, shouldRemove = true, point(0, 0), point(info.imageWidth, info.imageHeight))
+                assertTrue(
+                    client.listOutliers(info.sessionId, frameIdx).groupsList.all { it.shouldRemove == com.star.proto.RemoveReason.RR_USER_REMOVE },
+                    "a Remove box over the whole frame left a group undecided or kept",
+                )
+                client.setOutlierDecisionsInArea(info.sessionId, frameIdx, frameIdx, shouldRemove = false, point(0, 0), point(info.imageWidth, info.imageHeight))
+                assertTrue(
+                    client.listOutliers(info.sessionId, frameIdx).groupsList.all { it.shouldRemove == com.star.proto.RemoveReason.RR_USER_KEEP },
+                    "a Keep box over the whole frame left a group undecided or removed",
+                )
+
                 // A10: the decision tree, asked not to overwrite, leaves the user's own decisions alone (the client's
                 // "Only Unclassified" default); the render it asks for is the edited picture, not the original.
                 decideAll(com.star.proto.RemoveReason.RR_USER_KEEP)

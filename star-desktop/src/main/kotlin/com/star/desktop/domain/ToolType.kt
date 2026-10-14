@@ -39,10 +39,13 @@ enum class ToolType(private val nameKey: String, val iconBaseName: String, val c
 
     /**
      * Whether this tool acts on a dragged rectangle (rubber-band) rather than a single group click.
-     * MULTI opens the multi-select sheet; RAZOR/SHOVEL/TRASH/REMOVE_FROM_TRASH apply via `Outlier.ApplyAreaTool`.
+     * MULTI opens the multi-select sheet; RAZOR/SHOVEL/TRASH/REMOVE_FROM_TRASH apply via `Outlier.ApplyAreaTool`;
+     * REMOVE/KEEP set every group inside the box (`Outlier.SetDecisionsInArea`); INFORMATION lists them in the outlier window.
+     * (Only NONE drags to pan, and any tool pans with the scroll wheel or a middle- or Alt-drag.)
      */
     val isAreaDrag: Boolean
-        get() = this == MULTI || this == RAZOR || this == SHOVEL || this == TRASH || this == REMOVE_FROM_TRASH
+        get() = this == MULTI || this == RAZOR || this == SHOVEL || this == TRASH || this == REMOVE_FROM_TRASH ||
+            this == REMOVE || this == KEEP || this == INFORMATION
 
     companion object {
         /** Tools bound to shortcuts 1–8, in order. */

@@ -115,10 +115,15 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                             onDragEnd = {
                                 val s = selStartImg; val e = selEndImg
                                 if (s != null && e != null) {
-                                    if (tool == com.star.desktop.domain.ToolType.MULTI) {
-                                        vm.openMultiSelect(SequenceViewModel.RectSelection(s.x, s.y, e.x, e.y))
-                                    } else {
-                                        fvm.applyAreaTool(tool, s.x, s.y, e.x, e.y)
+                                    when (tool) {
+                                        com.star.desktop.domain.ToolType.MULTI ->
+                                            vm.openMultiSelect(SequenceViewModel.RectSelection(s.x, s.y, e.x, e.y))
+                                        // Remove / Keep set every group wholly inside the box; Information lists them.
+                                        com.star.desktop.domain.ToolType.REMOVE -> fvm.setDecisionsInBox(true, s.x, s.y, e.x, e.y)
+                                        com.star.desktop.domain.ToolType.KEEP -> fvm.setDecisionsInBox(false, s.x, s.y, e.x, e.y)
+                                        com.star.desktop.domain.ToolType.INFORMATION ->
+                                            vm.showInfoFor(fvm.groupsInBox(s.x, s.y, e.x, e.y).map { it.id })
+                                        else -> fvm.applyAreaTool(tool, s.x, s.y, e.x, e.y)
                                     }
                                 }
                                 selStartImg = null; selEndImg = null; dragging = false

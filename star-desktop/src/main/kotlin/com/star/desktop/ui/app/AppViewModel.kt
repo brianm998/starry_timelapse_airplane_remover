@@ -785,6 +785,7 @@ class AppViewModel(
             else -> Unit
         }
         autoFrame?.let { svm.setCurrentIndex(it) }
+        svm.openOutlierWindow = { _showOutlierWindow.value = true }
         currentSequence = svm
         _screen.value = AppScreen.Sequence(svm)
         // Fresh source → walk the startup prompts (skipped for config resume + dev auto-open hooks).

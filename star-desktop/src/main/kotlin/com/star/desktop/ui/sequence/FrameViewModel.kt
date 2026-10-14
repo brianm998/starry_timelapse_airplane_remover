@@ -172,6 +172,25 @@ class FrameViewModel(
     }
 
     /**
+     * Remove / Keep dragged over a box (macOS `userSelectAllOutliers(between:)`): every group whose whole bounding box is inside
+     * it is set, and the frame is read again. The daemon queues the frame to be saved like any other edit.
+     */
+    fun setDecisionsInBox(shouldRemove: Boolean, startX: Float, startY: Float, endX: Float, endY: Float, includingTrash: Boolean = false) {
+        scope.launch {
+            runCatching {
+                outliers.setDecisionsInArea(sessionId, frameIndex, frameIndex, shouldRemove, startX, startY, endX, endY, includingTrash = includingTrash)
+            }
+                .onSuccess { r -> r.framesList.firstOrNull()?.let(::applyInfo) }
+                .onFailure { reportFailure(it) }
+            load(force = true)
+        }
+    }
+
+    /** The groups an Information drag over a box lists: those wholly inside it, largest first. */
+    fun groupsInBox(startX: Float, startY: Float, endX: Float, endY: Float): List<OutlierGroup> =
+        com.star.desktop.domain.groupsInsideBox(_groups.value, startX, startY, endX, endY)
+
+    /**
      * Run the decision-tree classifier over this frame's outliers (macOS "Decision Tree All" / "DT Auto Only"),
      * then render the frame, so the picture follows the decisions, and refresh what is shown.
      *

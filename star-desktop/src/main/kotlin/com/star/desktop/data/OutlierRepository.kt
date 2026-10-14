@@ -53,12 +53,12 @@ class OutlierRepository(private val clientProvider: () -> StarClient?) {
     /** Set keep/remove for outliers in a rectangular area across [startIndex,endIndex] (image px). */
     suspend fun setDecisionsInArea(
         sessionId: String, startIndex: Int, endIndex: Int, shouldRemove: Boolean,
-        startX: Float, startY: Float, endX: Float, endY: Float, overlapping: Boolean = false,
+        startX: Float, startY: Float, endX: Float, endY: Float, overlapping: Boolean = false, includingTrash: Boolean = false,
     ) = c().setOutlierDecisionsInArea(
         sessionId, startIndex, endIndex, shouldRemove,
         com.star.proto.Point.newBuilder().setX(startX.toDouble()).setY(startY.toDouble()).build(),
         com.star.proto.Point.newBuilder().setX(endX.toDouble()).setY(endY.toDouble()).build(),
-        overlapping = overlapping,
+        includingTrash = includingTrash, overlapping = overlapping,
     )
 
     /** Set keep/remove for outliers overlapping a reference group across [startIndex,endIndex]. */

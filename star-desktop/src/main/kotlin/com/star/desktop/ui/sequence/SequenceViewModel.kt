@@ -415,6 +415,27 @@ class SequenceViewModel(
     }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
 
+    // ---- the outlier window's rows (macOS outlierGroupTableRows) ----
+
+    /**
+     * The groups the outlier window is showing, by id, in the current frame: set by an Information click or box (macOS lists
+     * only those groups and selects them); null shows every group of the frame.
+     */
+    private val _infoRows = MutableStateFlow<List<Int>?>(null)
+    val infoRows: StateFlow<List<Int>?> = _infoRows.asStateFlow()
+
+    /** Raises the outlier window; set by the app, which owns windows. */
+    var openOutlierWindow: () -> Unit = {}
+
+    /** Show [groupIds] of the current frame in the outlier window. */
+    fun showInfoFor(groupIds: List<Int>) {
+        _infoRows.value = groupIds
+        openOutlierWindow()
+    }
+
+    /** Back to listing every group of the frame. */
+    fun clearInfoRows() { _infoRows.value = null }
+
     // ---- horizon refinement: the work owed after a reference horizon is repainted ----
     //
     // The daemon keeps the record (which frames are pending, what "later" took away); this is the question put to the
