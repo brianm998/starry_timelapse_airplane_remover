@@ -195,6 +195,6 @@ class DesktopFeatureRunner {
         const val CLIENT = "desktop"
         const val OPEN_TIMEOUT_MS = 10L * 60_000
         const val UI_TIMEOUT_MS = 90_000L
-        const val PROCESS_TIMEOUT_MS = 45L * 60_000
+        const val PROCESS_TIMEOUT_MS = 25L * 60_000
     }
 }
