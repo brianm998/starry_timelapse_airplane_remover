@@ -27,6 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -170,6 +174,11 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         Text(localized("ui.clean_method"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         val activeMethod = info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE
+        // Whether the method is this frame's own or the sequence's (macOS Custom / Default).
+        Text(
+            localized(if (info?.cleanMethodOverridden == true) "ui.custom" else "ui.default"),
+            color = StarColors.white, fontSize = 11.sp,
+        )
         val cmLabels = CLEAN_METHODS.toMap()
         com.star.desktop.ui.components.VerticalStarPicker(
             options = CLEAN_METHODS.map { it.first },
@@ -178,6 +187,25 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
             onSelect = { fvm.setCleanMethod(it) },
             modifier = Modifier.fillMaxWidth(),
         )
+        // How many neighbours this frame is star aligned against, and (for a fixed camera) merged with for the horizon: the sequence's number
+        // until the frame is given its own.
+        val session by app.sessions.session.collectAsState()
+        info?.let { i ->
+            NeighborCountEditor(
+                prefixKey = "ui.slider.align_with", suffixKey = "ui.slider.neighbor_frames",
+                count = i.alignedNeighborCount, overridden = i.alignedNeighborOverridden, max = vm.frameCount, frame = current,
+                onCommit = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_ALIGNED, it) },
+                onReset = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_ALIGNED, null) },
+            )
+            if (session?.config?.tripodHeadWasMoving != true) {
+                NeighborCountEditor(
+                    prefixKey = "ui.slider.static_merge", suffixKey = "ui.slider.neighbors",
+                    count = i.staticNeighborCount, overridden = i.staticNeighborOverridden, max = vm.frameCount, frame = current,
+                    onCommit = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_STATIC, it) },
+                    onReset = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_STATIC, null) },
+                )
+            }
+        }
 
         androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
         // How the fast buttons (z / x) move, and what they do in the strategy chosen (macOS "Fast Advancement Type").
@@ -288,6 +316,56 @@ private val DETECTION_TYPES = listOf(
     com.star.proto.DetectionType.DETECTION_MILD, com.star.proto.DetectionType.DETECTION_STRONG,
     com.star.proto.DetectionType.DETECTION_STRONGER, com.star.proto.DetectionType.DETECTION_EXCESSIVE, com.star.proto.DetectionType.DETECTION_CUSTOM,
 )
+
+/**
+ * A number of neighbour frames for the frame being looked at (macOS `AlignedNeighborFrameOverrideView` / `StaticNeighborFrameOverrideView`):
+ * "[prefix] N [suffix]", in yellow once it is the frame's own, with a Reset that gives the sequence's number back. Return, or leaving the
+ * field, sets it if it is a whole number from 1 to [max]; anything else puts the number back.
+ */
+@Composable
+private fun NeighborCountEditor(
+    prefixKey: String, suffixKey: String, count: Int, overridden: Boolean, max: Int, frame: Int,
+    onCommit: (Int) -> Unit, onReset: () -> Unit,
+) {
+    var text by androidx.compose.runtime.remember(frame, count) { androidx.compose.runtime.mutableStateOf(count.toString()) }
+    fun commit() {
+        val n = text.toIntOrNull()
+        if (n == null || n !in 1..max.coerceAtLeast(1)) { text = count.toString(); return }
+        if (n != count) onCommit(n)
+    }
+    val color = if (overridden) StarColors.yellow else StarColors.white
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (overridden) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = onReset,
+                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = StarColors.orange),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) { Text(localized("ui.reset"), fontSize = 10.sp) }
+        }
+        Text(localized(prefixKey), color = color, fontSize = 11.sp)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = text,
+                onValueChange = { text = it.filter(Char::isDigit) },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = color, fontSize = 11.sp),
+                cursorBrush = SolidColor(color),
+                modifier = Modifier
+                    .width(44.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(StarColors.cellDefault)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .onPreviewKeyEvent { e ->
+                        if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                            (e.key == androidx.compose.ui.input.key.Key.Enter || e.key == androidx.compose.ui.input.key.Key.NumPadEnter)
+                        ) { commit(); true } else false
+                    }
+                    .onFocusChanged { if (!it.isFocused) commit() },
+            )
+            Text(localized(suffixKey), color = color, fontSize = 11.sp)
+        }
+    }
+}
 
 /** Per-frame clean methods (proto `CleanMethod`) with display labels matching the macOS picker. */
 private val CLEAN_METHODS: List<Pair<CleanMethod, String>> = listOf(

@@ -37,6 +37,10 @@ class FrameRepository(private val clientProvider: () -> StarClient?) {
     suspend fun setCleanMethod(sessionId: String, frameIndex: Int, cleanMethod: CleanMethod): FrameInfo =
         c().setFrameCleanMethod(sessionId, frameIndex, cleanMethod)
 
+    /** A frame's own neighbour count of [kind], set or (null) taken away; whether a run began is in the answer. */
+    suspend fun setNeighborOverride(sessionId: String, frameIndex: Int, kind: com.star.proto.NeighborKind, count: Int?) =
+        c().setNeighborOverride(sessionId, frameIndex, kind, count)
+
     private inline fun <T> notReadyToNull(block: () -> T): T? =
         try {
             block()

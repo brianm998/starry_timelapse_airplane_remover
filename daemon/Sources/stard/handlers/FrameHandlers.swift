@@ -194,13 +194,45 @@ enum FrameHandlers {
             case .cleanAutomaticTrue: cm = .automatic(true)
             default:                  cm = .automatic(false)
             }
-            await frame.set(cleanMethod: cm)
-            // The finished image depends on the method, so it has to be written again.
-            await frame.markAsChanged()
-            await session.frameEdited(frame)
+            await session.setCleanMethod(cm, of: frame)
             let groups = await frame.getOutlierGroups()
             let fi = await session.frameInfo(frame, outlierGroups: groups)
             try await transport.respond(id: id, payload: fi.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    // A frame's own neighbour count: set, or taken away so the sequence's applies again.
+    static func setNeighborOverride(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_SetNeighborOverrideRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            let kind: Session.NeighborKind
+            switch req.kind {
+            case .neighborAligned: kind = .aligned
+            case .neighborStatic:  kind = .static
+            default:
+                await transport.sendError(id: id, message: "unknown neighbour kind", code: 400); return
+            }
+            let count: Int?
+            switch req.change {
+            case .count(let n) where n >= 1:
+                count = Int(n)
+            case .clear(true):
+                count = nil
+            default:
+                await transport.sendError(id: id, message: "give a count of at least 1, or clear", code: 400); return
+            }
+            var resp = Star_V1_SetNeighborOverrideResponse()
+            resp.processingStarted = await session.setNeighborOverride(of: frame, kind: kind, count: count)
+            resp.frame = await session.frameInfo(frame, outlierGroups: await frame.getOutlierGroups())
+            try await transport.respond(id: id, payload: resp.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

@@ -252,6 +252,11 @@ enum Mapping {
         out.outputPath = c.outputPath
         out.tempOutputPath = c.tempOutputPath
         out.cleanMethod = protoCleanMethod(c.cleanMethod)
+        // The per-frame settings are read-only here: they change through Frame.SetCleanMethod and Frame.SetNeighborOverride (which do what
+        // each change calls for), so a client that sends back a config it read earlier cannot undo one.
+        out.pixelReplacementOverrides = Dictionary(uniqueKeysWithValues: c.pixelReplacementOverrides.map { (Int32($0.key), protoCleanMethod($0.value)) })
+        out.staticNeighborFrameOverrides = Dictionary(uniqueKeysWithValues: c.staticNeighborFrameOverrides.map { (Int32($0.key), Int32($0.value)) })
+        out.alignedNeighborFrameOverrides = Dictionary(uniqueKeysWithValues: c.alignedNeighborFrameOverrides.map { (Int32($0.key), Int32($0.value)) })
         out.detectionType = protoDetectionType(c.detectionType)
         out.horizonDetectionEnabled = c.horizonDetectionEnabled
         out.tripodHeadWasMoving = c.tripodHeadWasMoving

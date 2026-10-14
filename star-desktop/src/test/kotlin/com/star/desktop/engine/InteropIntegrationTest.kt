@@ -356,6 +356,60 @@ class InteropIntegrationTest {
     }
 
     /**
+     * E4: a frame's own clean method and neighbour counts are the frame's alone, say so in its info, and are still there when the session
+     * is opened again from its config in another daemon.
+     */
+    @Test
+    fun perFrameSettingsSurviveReopen() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] perFrameSettingsSurviveReopen — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-perframe").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            val configJson = withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                val untouched = client.getFrame(info.sessionId, 1)
+                assertTrue(!untouched.cleanMethodOverridden && !untouched.staticNeighborOverridden && !untouched.alignedNeighborOverridden)
+
+                val set = client.setFrameCleanMethod(info.sessionId, 1, CleanMethod.CLEAN_AUTOMATIC)
+                assertTrue(set.cleanMethodOverridden)
+                assertEquals(CleanMethod.CLEAN_AUTOMATIC, set.cleanMethod)
+
+                val staticSet = client.setNeighborOverride(info.sessionId, 1, com.star.proto.NeighborKind.NEIGHBOR_STATIC, 3)
+                assertEquals(3, staticSet.frame.staticNeighborCount)
+                assertTrue(staticSet.frame.staticNeighborOverridden)
+                assertTrue(!staticSet.processingStarted)
+                val cleared = client.setNeighborOverride(info.sessionId, 1, com.star.proto.NeighborKind.NEIGHBOR_STATIC, null)
+                assertTrue(!cleared.frame.staticNeighborOverridden)
+                client.setNeighborOverride(info.sessionId, 1, com.star.proto.NeighborKind.NEIGHBOR_STATIC, 4)
+
+                assertTrue(runCatching { client.setNeighborOverride(info.sessionId, 1, com.star.proto.NeighborKind.NEIGHBOR_STATIC, 0) }.isFailure, "0 neighbours should be refused")
+                client.closeSession(info.sessionId)
+                info.configJsonPath
+            }
+            withEngine { client ->
+                val info = client.openConfig(configJson)
+                val frame = client.getFrame(info.sessionId, 1)
+                assertTrue(frame.cleanMethodOverridden, "the frame's own clean method was lost on reopen")
+                assertEquals(CleanMethod.CLEAN_AUTOMATIC, frame.cleanMethod)
+                assertEquals(4, frame.staticNeighborCount)
+                assertTrue(frame.staticNeighborOverridden)
+                val other = client.getFrame(info.sessionId, 0)
+                assertTrue(!other.cleanMethodOverridden, "another frame must keep the sequence's method")
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
+    /**
      * D8: `Outlier.GetFeatures` gives the outlier window every decision-tree feature of the groups asked for (all of the frame's when
      * none are named), by the names `OutlierGroupFeature` has, with the classifier's score.
      */

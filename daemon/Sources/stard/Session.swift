@@ -322,8 +322,59 @@ actor Session {
     func frameInfo(_ frame: FrameAirplaneRemover, outlierGroups: OutlierGroups?) async -> Star_V1_FrameInfo {
         var info = await Mapping.frameInfo(frame: frame, outlierGroups: outlierGroups)
         info.refinementPending = refinementMarks.contains(frame.frameIndex)
+        let config = await configManager.config()
+        let index = frame.frameIndex
+        info.cleanMethodOverridden = config.pixelReplacementOverrides[index] != nil
+        info.alignedNeighborCount = Int32(config.numberAlignedNeighborFrames(for: index))
+        info.alignedNeighborOverridden = config.alignedNeighborFrameOverrides[index] != nil
+        info.staticNeighborCount = Int32(config.numberStaticNeighborFrames(for: index))
+        info.staticNeighborOverridden = config.staticNeighborFrameOverrides[index] != nil
         return info
     }
+
+    // MARK: - Per-frame settings
+
+    /// Make `method` the clean method of `frame` alone (macOS `set(cleanMethod:forFrame:)`): in the frame, and as an override in the
+    /// config, which is what a reopened session reads it back from.  The finished image depends on the method, so it is written again.
+    func setCleanMethod(_ method: CleanMethod, of frame: FrameAirplaneRemover) async {
+        await frame.set(cleanMethod: method)
+        var config = await configManager.config()
+        config.pixelReplacementOverrides[frame.frameIndex] = method
+        await configManager.update(config)
+        await configManager.flush()
+        await frame.markAsChanged()
+        await frameEdited(frame)
+    }
+
+    /// Give `frame` its own neighbour count of `kind`, or with a nil `count` take its own away; and do what the change calls for
+    /// (macOS `set(alignedNeighborFrames:forFrame:)` and the others).  A new aligned count invalidates the frame's star alignment, and if
+    /// it had one the frame is processed again: true when that is under way.  A new static count builds the merged horizon again if
+    /// there was one.
+    func setNeighborOverride(of frame: FrameAirplaneRemover, kind: NeighborKind, count: Int?) async -> Bool {
+        var config = await configManager.config()
+        let index = frame.frameIndex
+        switch kind {
+        case .aligned: config.alignedNeighborFrameOverrides[index] = count
+        case .static:  config.staticNeighborFrameOverrides[index] = count
+        }
+        await configManager.update(config)
+        await configManager.flush()
+
+        switch kind {
+        case .aligned:
+            await frame.setNumberOfAlignedFrames()
+            let invalidated = (try? await frame.invalidateStarAlignmentIfExists()) ?? false
+            guard invalidated, !closed else { return false }
+            await startProcessing(startIndex: index, endIndex: index)
+            return activeRun != nil
+        case .static:
+            await frame.setNumberOfStaticNeighborFrames()
+            try? await frame.recomputeMergedHorizonIfExists()
+            return false
+        }
+    }
+
+    enum NeighborKind { case aligned, `static` }
 
     /// Whether a frame has output the horizon went into, and so has to be rendered again when it moves.
     private func hasHorizonOutput(_ index: Int) -> Bool {

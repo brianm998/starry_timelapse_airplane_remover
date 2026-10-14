@@ -251,6 +251,44 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
+public enum Star_V1_NeighborKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+
+  /// how many neighbours the frame is star aligned against
+  case neighborAligned // = 0
+
+  /// how many it is merged with for the horizon (a fixed camera)
+  case neighborStatic // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .neighborAligned
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .neighborAligned
+    case 1: self = .neighborStatic
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .neighborAligned: return 0
+    case .neighborStatic: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Star_V1_NeighborKind] = [
+    .neighborAligned,
+    .neighborStatic,
+  ]
+
+}
+
 public enum Star_V1_FrameProcessingState: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case fpsUnprocessed // = 0
@@ -1737,6 +1775,19 @@ public struct Star_V1_FrameInfo: Sendable {
   /// The file name of this frame's original image (without its directory): what the grid's frame panel shows.  Empty if there is none.
   public var filename: String = String()
 
+  /// This frame's own settings, which the sequence's defaults give way to once they are set for it (macOS's Custom / Default):
+  /// the clean method, and the number of neighbour frames it is star aligned against and merged with (static neighbours) --
+  /// the count in effect for this frame, and whether it is the frame's own.
+  public var cleanMethodOverridden: Bool = false
+
+  public var alignedNeighborCount: Int32 = 0
+
+  public var alignedNeighborOverridden: Bool = false
+
+  public var staticNeighborCount: Int32 = 0
+
+  public var staticNeighborOverridden: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1777,6 +1828,75 @@ public struct Star_V1_ImageRef: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+}
+
+/// Set this frame's own neighbour count, or take it away so the sequence's applies again (`clear`), and do what that changes: a new
+/// aligned count throws away the frame's star alignment and processes the frame again (`processing_started`), a new static count
+/// builds its merged horizon again if there was one.  The new count must be at least 1.  Answered with the frame as it is now.
+public struct Star_V1_SetNeighborOverrideRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var frameIndex: Int32 = 0
+
+  public var kind: Star_V1_NeighborKind = .neighborAligned
+
+  public var change: Star_V1_SetNeighborOverrideRequest.OneOf_Change? = nil
+
+  public var count: Int32 {
+    get {
+      if case .count(let v)? = change {return v}
+      return 0
+    }
+    set {change = .count(newValue)}
+  }
+
+  public var clear: Bool {
+    get {
+      if case .clear(let v)? = change {return v}
+      return false
+    }
+    set {change = .clear(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public enum OneOf_Change: Equatable, Sendable {
+    case count(Int32)
+    case clear(Bool)
+
+  }
+
+  public init() {}
+}
+
+public struct Star_V1_SetNeighborOverrideResponse: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var frame: Star_V1_FrameInfo {
+    get {_storage._frame ?? Star_V1_FrameInfo()}
+    set {_uniqueStorage()._frame = newValue}
+  }
+  /// Returns true if `frame` has been explicitly set.
+  public var hasFrame: Bool {_storage._frame != nil}
+  /// Clears the value of `frame`. Subsequent reads from it will return its default value.
+  public mutating func clearFrame() {_uniqueStorage()._frame = nil}
+
+  public var processingStarted: Bool {
+    get {_storage._processingStarted}
+    set {_uniqueStorage()._processingStarted = newValue}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public struct Star_V1_SetFrameCleanMethodRequest: Sendable {
@@ -1914,35 +2034,34 @@ public struct Star_V1_OutlierDecision: Sendable {
   public init() {}
 }
 
-public struct Star_V1_SetOutlierDecisionsResponse: Sendable {
+public struct Star_V1_SetOutlierDecisionsResponse: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var frame: Star_V1_FrameInfo {
-    get {_frame ?? Star_V1_FrameInfo()}
-    set {_frame = newValue}
+    get {_storage._frame ?? Star_V1_FrameInfo()}
+    set {_uniqueStorage()._frame = newValue}
   }
   /// Returns true if `frame` has been explicitly set.
-  public var hasFrame: Bool {self._frame != nil}
+  public var hasFrame: Bool {_storage._frame != nil}
   /// Clears the value of `frame`. Subsequent reads from it will return its default value.
-  public mutating func clearFrame() {self._frame = nil}
+  public mutating func clearFrame() {_uniqueStorage()._frame = nil}
 
   public var preview: Star_V1_ImageRef {
-    get {_preview ?? Star_V1_ImageRef()}
-    set {_preview = newValue}
+    get {_storage._preview ?? Star_V1_ImageRef()}
+    set {_uniqueStorage()._preview = newValue}
   }
   /// Returns true if `preview` has been explicitly set.
-  public var hasPreview: Bool {self._preview != nil}
+  public var hasPreview: Bool {_storage._preview != nil}
   /// Clears the value of `preview`. Subsequent reads from it will return its default value.
-  public mutating func clearPreview() {self._preview = nil}
+  public mutating func clearPreview() {_uniqueStorage()._preview = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _frame: Star_V1_FrameInfo? = nil
-  fileprivate var _preview: Star_V1_ImageRef? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// Re-run the StarCore decision-tree classifier over a frame's outlier groups.
@@ -1974,35 +2093,34 @@ public struct Star_V1_ApplyDecisionTreeRequest: Sendable {
   public init() {}
 }
 
-public struct Star_V1_ApplyDecisionTreeResponse: Sendable {
+public struct Star_V1_ApplyDecisionTreeResponse: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var frame: Star_V1_FrameInfo {
-    get {_frame ?? Star_V1_FrameInfo()}
-    set {_frame = newValue}
+    get {_storage._frame ?? Star_V1_FrameInfo()}
+    set {_uniqueStorage()._frame = newValue}
   }
   /// Returns true if `frame` has been explicitly set.
-  public var hasFrame: Bool {self._frame != nil}
+  public var hasFrame: Bool {_storage._frame != nil}
   /// Clears the value of `frame`. Subsequent reads from it will return its default value.
-  public mutating func clearFrame() {self._frame = nil}
+  public mutating func clearFrame() {_uniqueStorage()._frame = nil}
 
   public var preview: Star_V1_ImageRef {
-    get {_preview ?? Star_V1_ImageRef()}
-    set {_preview = newValue}
+    get {_storage._preview ?? Star_V1_ImageRef()}
+    set {_uniqueStorage()._preview = newValue}
   }
   /// Returns true if `preview` has been explicitly set.
-  public var hasPreview: Bool {self._preview != nil}
+  public var hasPreview: Bool {_storage._preview != nil}
   /// Clears the value of `preview`. Subsequent reads from it will return its default value.
-  public mutating func clearPreview() {self._preview = nil}
+  public mutating func clearPreview() {_uniqueStorage()._preview = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _frame: Star_V1_FrameInfo? = nil
-  fileprivate var _preview: Star_V1_ImageRef? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// Set every outlier of one frame at once (Keep All / Remove All / Clear Undecided): `should_remove` is the decision to set,
@@ -2211,35 +2329,34 @@ public struct Star_V1_ApplyOutlierAreaToolRequest: Sendable {
   fileprivate var _endLocation: Star_V1_Point? = nil
 }
 
-public struct Star_V1_ApplyOutlierAreaToolResponse: Sendable {
+public struct Star_V1_ApplyOutlierAreaToolResponse: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var frame: Star_V1_FrameInfo {
-    get {_frame ?? Star_V1_FrameInfo()}
-    set {_frame = newValue}
+    get {_storage._frame ?? Star_V1_FrameInfo()}
+    set {_uniqueStorage()._frame = newValue}
   }
   /// Returns true if `frame` has been explicitly set.
-  public var hasFrame: Bool {self._frame != nil}
+  public var hasFrame: Bool {_storage._frame != nil}
   /// Clears the value of `frame`. Subsequent reads from it will return its default value.
-  public mutating func clearFrame() {self._frame = nil}
+  public mutating func clearFrame() {_uniqueStorage()._frame = nil}
 
   public var preview: Star_V1_ImageRef {
-    get {_preview ?? Star_V1_ImageRef()}
-    set {_preview = newValue}
+    get {_storage._preview ?? Star_V1_ImageRef()}
+    set {_uniqueStorage()._preview = newValue}
   }
   /// Returns true if `preview` has been explicitly set.
-  public var hasPreview: Bool {self._preview != nil}
+  public var hasPreview: Bool {_storage._preview != nil}
   /// Clears the value of `preview`. Subsequent reads from it will return its default value.
-  public mutating func clearPreview() {self._preview = nil}
+  public mutating func clearPreview() {_uniqueStorage()._preview = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _frame: Star_V1_FrameInfo? = nil
-  fileprivate var _preview: Star_V1_ImageRef? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// What the outlier window tabulates (macOS OutlierGroupTableRow): for each requested group of one frame, its value for every
@@ -3392,6 +3509,10 @@ extension Star_V1_PreviewSize: SwiftProtobuf._ProtoNameProviding {
 
 extension Star_V1_FrameViewMode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0\u{1}VIEW_HORIZON\0\u{1}VIEW_MERGED_HORIZON\0\u{1}VIEW_USER_HORIZON\0\u{1}VIEW_STAR_ALIGNED\0\u{1}VIEW_FAILED_STAR_ALIGNED\0\u{1}VIEW_EARTH_ALIGNED\0\u{1}VIEW_FAILED_EARTH_ALIGNED\0\u{1}VIEW_BLOBS\0\u{1}VIEW_REMOVE_MASK\0\u{1}VIEW_AUTO_PROCESSED\0\u{1}VIEW_AUTO_SELECTIVE_PROCESSED\0\u{1}VIEW_SELECTIVE_PROCESSED\0")
+}
+
+extension Star_V1_NeighborKind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0NEIGHBOR_ALIGNED\0\u{1}NEIGHBOR_STATIC\0")
 }
 
 extension Star_V1_FrameProcessingState: SwiftProtobuf._ProtoNameProviding {
@@ -4620,7 +4741,7 @@ extension Star_V1_FrameRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
 
 extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FrameInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0\u{3}num_positive_outliers\0\u{3}num_negative_outliers\0\u{3}num_undecided_outliers\0\u{3}clean_method\0\u{3}num_trash_outliers\0\u{3}outliers_loaded\0\u{3}refinement_pending\0\u{3}available_modes\0\u{1}filename\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_index\0\u{1}state\0\u{3}num_positive_outliers\0\u{3}num_negative_outliers\0\u{3}num_undecided_outliers\0\u{3}clean_method\0\u{3}num_trash_outliers\0\u{3}outliers_loaded\0\u{3}refinement_pending\0\u{3}available_modes\0\u{1}filename\0\u{3}clean_method_overridden\0\u{3}aligned_neighbor_count\0\u{3}aligned_neighbor_overridden\0\u{3}static_neighbor_count\0\u{3}static_neighbor_overridden\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4639,6 +4760,11 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
       case 9: try { try decoder.decodeSingularBoolField(value: &self.refinementPending) }()
       case 10: try { try decoder.decodeRepeatedEnumField(value: &self.availableModes) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self.filename) }()
+      case 12: try { try decoder.decodeSingularBoolField(value: &self.cleanMethodOverridden) }()
+      case 13: try { try decoder.decodeSingularInt32Field(value: &self.alignedNeighborCount) }()
+      case 14: try { try decoder.decodeSingularBoolField(value: &self.alignedNeighborOverridden) }()
+      case 15: try { try decoder.decodeSingularInt32Field(value: &self.staticNeighborCount) }()
+      case 16: try { try decoder.decodeSingularBoolField(value: &self.staticNeighborOverridden) }()
       default: break
       }
     }
@@ -4678,6 +4804,21 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if !self.filename.isEmpty {
       try visitor.visitSingularStringField(value: self.filename, fieldNumber: 11)
     }
+    if self.cleanMethodOverridden != false {
+      try visitor.visitSingularBoolField(value: self.cleanMethodOverridden, fieldNumber: 12)
+    }
+    if self.alignedNeighborCount != 0 {
+      try visitor.visitSingularInt32Field(value: self.alignedNeighborCount, fieldNumber: 13)
+    }
+    if self.alignedNeighborOverridden != false {
+      try visitor.visitSingularBoolField(value: self.alignedNeighborOverridden, fieldNumber: 14)
+    }
+    if self.staticNeighborCount != 0 {
+      try visitor.visitSingularInt32Field(value: self.staticNeighborCount, fieldNumber: 15)
+    }
+    if self.staticNeighborOverridden != false {
+      try visitor.visitSingularBoolField(value: self.staticNeighborOverridden, fieldNumber: 16)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -4693,6 +4834,11 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
     if lhs.refinementPending != rhs.refinementPending {return false}
     if lhs.availableModes != rhs.availableModes {return false}
     if lhs.filename != rhs.filename {return false}
+    if lhs.cleanMethodOverridden != rhs.cleanMethodOverridden {return false}
+    if lhs.alignedNeighborCount != rhs.alignedNeighborCount {return false}
+    if lhs.alignedNeighborOverridden != rhs.alignedNeighborOverridden {return false}
+    if lhs.staticNeighborCount != rhs.staticNeighborCount {return false}
+    if lhs.staticNeighborOverridden != rhs.staticNeighborOverridden {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -4783,6 +4929,155 @@ extension Star_V1_ImageRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
     if lhs.width != rhs.width {return false}
     if lhs.height != rhs.height {return false}
     if lhs.format != rhs.format {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_SetNeighborOverrideRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetNeighborOverrideRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{1}kind\0\u{1}count\0\u{1}clear\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 4: try {
+        var v: Int32?
+        try decoder.decodeSingularInt32Field(value: &v)
+        if let v = v {
+          if self.change != nil {try decoder.handleConflictingOneOf()}
+          self.change = .count(v)
+        }
+      }()
+      case 5: try {
+        var v: Bool?
+        try decoder.decodeSingularBoolField(value: &v)
+        if let v = v {
+          if self.change != nil {try decoder.handleConflictingOneOf()}
+          self.change = .clear(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if self.frameIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameIndex, fieldNumber: 2)
+    }
+    if self.kind != .neighborAligned {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 3)
+    }
+    switch self.change {
+    case .count?: try {
+      guard case .count(let v)? = self.change else { preconditionFailure() }
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 4)
+    }()
+    case .clear?: try {
+      guard case .clear(let v)? = self.change else { preconditionFailure() }
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 5)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_SetNeighborOverrideRequest, rhs: Star_V1_SetNeighborOverrideRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.frameIndex != rhs.frameIndex {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.change != rhs.change {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_SetNeighborOverrideResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetNeighborOverrideResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frame\0\u{3}processing_started\0")
+
+  fileprivate class _StorageClass {
+    var _frame: Star_V1_FrameInfo? = nil
+    var _processingStarted: Bool = false
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _frame = source._frame
+      _processingStarted = source._processingStarted
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._frame) }()
+        case 2: try { try decoder.decodeSingularBoolField(value: &_storage._processingStarted) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._frame {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if _storage._processingStarted != false {
+        try visitor.visitSingularBoolField(value: _storage._processingStarted, fieldNumber: 2)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_SetNeighborOverrideResponse, rhs: Star_V1_SetNeighborOverrideResponse) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._frame != rhs_storage._frame {return false}
+        if _storage._processingStarted != rhs_storage._processingStarted {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -5091,36 +5386,74 @@ extension Star_V1_SetOutlierDecisionsResponse: SwiftProtobuf.Message, SwiftProto
   public static let protoMessageName: String = _protobuf_package + ".SetOutlierDecisionsResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frame\0\u{1}preview\0")
 
+  fileprivate class _StorageClass {
+    var _frame: Star_V1_FrameInfo? = nil
+    var _preview: Star_V1_ImageRef? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _frame = source._frame
+      _preview = source._preview
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._frame) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._preview) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._frame) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._preview) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._frame {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._preview {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._frame {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._preview {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_SetOutlierDecisionsResponse, rhs: Star_V1_SetOutlierDecisionsResponse) -> Bool {
-    if lhs._frame != rhs._frame {return false}
-    if lhs._preview != rhs._preview {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._frame != rhs_storage._frame {return false}
+        if _storage._preview != rhs_storage._preview {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -5190,36 +5523,74 @@ extension Star_V1_ApplyDecisionTreeResponse: SwiftProtobuf.Message, SwiftProtobu
   public static let protoMessageName: String = _protobuf_package + ".ApplyDecisionTreeResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frame\0\u{1}preview\0")
 
+  fileprivate class _StorageClass {
+    var _frame: Star_V1_FrameInfo? = nil
+    var _preview: Star_V1_ImageRef? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _frame = source._frame
+      _preview = source._preview
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._frame) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._preview) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._frame) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._preview) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._frame {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._preview {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._frame {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._preview {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_ApplyDecisionTreeResponse, rhs: Star_V1_ApplyDecisionTreeResponse) -> Bool {
-    if lhs._frame != rhs._frame {return false}
-    if lhs._preview != rhs._preview {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._frame != rhs_storage._frame {return false}
+        if _storage._preview != rhs_storage._preview {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -5622,36 +5993,74 @@ extension Star_V1_ApplyOutlierAreaToolResponse: SwiftProtobuf.Message, SwiftProt
   public static let protoMessageName: String = _protobuf_package + ".ApplyOutlierAreaToolResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}frame\0\u{1}preview\0")
 
+  fileprivate class _StorageClass {
+    var _frame: Star_V1_FrameInfo? = nil
+    var _preview: Star_V1_ImageRef? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _frame = source._frame
+      _preview = source._preview
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._frame) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._preview) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._frame) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._preview) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._frame {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._preview {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._frame {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      try { if let v = _storage._preview {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Star_V1_ApplyOutlierAreaToolResponse, rhs: Star_V1_ApplyOutlierAreaToolResponse) -> Bool {
-    if lhs._frame != rhs._frame {return false}
-    if lhs._preview != rhs._preview {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._frame != rhs_storage._frame {return false}
+        if _storage._preview != rhs_storage._preview {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

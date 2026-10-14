@@ -343,7 +343,7 @@ final class DispatcherTests: XCTestCase {
           "Session.OpenSequence", "Session.OpenConfig", "Session.OpenVideo",
           "Session.Close", "Session.List",
           "Sequence.GetConfig", "Sequence.UpdateConfig",
-          "Frame.Get", "Frame.GetPreview", "Frame.GetOutlierLabelImage", "Frame.GetOutlierTrashImage", "Frame.SetCleanMethod",
+          "Frame.Get", "Frame.GetPreview", "Frame.GetOutlierLabelImage", "Frame.GetOutlierTrashImage", "Frame.SetCleanMethod", "Frame.SetNeighborOverride",
           "Outlier.List", "Outlier.SetDecisions", "Outlier.RenderFrame",
           "Outlier.ApplyDecisionTree", "Outlier.ApplyDecisionTreeAllFrames",
           "Outlier.SetDecisionsInArea", "Outlier.SetDecisionsOverlapping", "Outlier.ApplyAreaTool", "Outlier.SetAll", "Outlier.GetFeatures",

@@ -75,7 +75,10 @@ import com.star.proto.ReprocessFramesResponse
 import com.star.proto.ReprocessingType
 import com.star.proto.SessionInfo
 import com.star.proto.SessionRef
+import com.star.proto.NeighborKind
 import com.star.proto.SetFrameCleanMethodRequest
+import com.star.proto.SetNeighborOverrideRequest
+import com.star.proto.SetNeighborOverrideResponse
 import com.star.proto.SetOutlierDecisionsInAreaRequest
 import com.star.proto.SetOutlierDecisionsOverlappingRequest
 import com.star.proto.SetOutlierDecisionsRequest
@@ -179,6 +182,15 @@ class StarClient(private val conn: StdioConnection) {
             "Frame.GetPreview",
             GetFramePreviewRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setViewMode(viewMode).setSize(size).build(),
             ImageRef.parser(),
+        )
+
+    /** Give a frame its own neighbour count of [kind], or with a null [count] take its own away (`Frame.SetNeighborOverride`). */
+    suspend fun setNeighborOverride(sessionId: String, frameIndex: Int, kind: NeighborKind, count: Int?): SetNeighborOverrideResponse =
+        call(
+            "Frame.SetNeighborOverride",
+            SetNeighborOverrideRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setKind(kind)
+                .also { if (count != null) it.setCount(count) else it.setClear(true) }.build(),
+            SetNeighborOverrideResponse.parser(),
         )
 
     suspend fun getOutlierLabelImage(sessionId: String, frameIndex: Int): ImageRef =

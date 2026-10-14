@@ -489,6 +489,33 @@ class SequenceViewModel(
         processing.reprocessFrames(sessionId, indices, _reprocessType.value)
     }
 
+    /**
+     * Give the current frame its own neighbour count of [kind], or with a null [count] let the sequence's apply again (macOS
+     * `set(alignedNeighborFrames:forFrame:)`). A new aligned count throws the frame's star alignment away and processes it again, so that
+     * shows the processing screen like any run; a new static count rebuilds the merged horizon if there was one.
+     */
+    fun setNeighborOverride(kind: com.star.proto.NeighborKind, count: Int?) {
+        val index = _currentIndex.value
+        scope.launch {
+            try {
+                if (kind == com.star.proto.NeighborKind.NEIGHBOR_ALIGNED) {
+                    _processingModalDismissed.value = false
+                    processing.startClaimedRun {
+                        val answer = frames.setNeighborOverride(sessionId, index, kind, count)
+                        frameVMFor(index).applyInfo(answer.frame)
+                        answer.processingStarted
+                    }
+                } else {
+                    frameVMFor(index).applyInfo(frames.setNeighborOverride(sessionId, index, kind, count).frame)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                reportFailure(e)
+            }
+        }
+    }
+
     /** Find the outliers of the current frame again, keeping its alignment (macOS `FindOutliersOnCurrentFrameButton`). */
     fun findOutliersCurrent() = startProcessingRun {
         processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_OUTLIERS)

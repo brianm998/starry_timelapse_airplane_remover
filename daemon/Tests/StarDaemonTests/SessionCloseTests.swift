@@ -202,4 +202,104 @@ final class SessionCloseTests: XCTestCase {
         XCTAssertEqual(info.filename, "frame0.tif", "the grid's frame panel names the file")
         await session.close()
     }
+
+    // MARK: - Per-frame settings (E4)
+
+    /// A frame's own clean method is an override in the config, so it is still there when the session is opened again; and the frame's
+    /// info says it is the frame's own.
+    func testACleanMethodSetForAFrameIsKeptInTheConfig() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+
+        let before = await session.frameInfo(frame, outlierGroups: nil)
+        XCTAssertFalse(before.cleanMethodOverridden)
+
+        await session.setCleanMethod(.selective, of: frame)
+
+        let config = await session.config()
+        XCTAssertEqual(config.pixelReplacementOverrides[0], .selective)
+        let after = await session.frameInfo(frame, outlierGroups: nil)
+        XCTAssertTrue(after.cleanMethodOverridden)
+        // ...and on disk, which is what a reopened session reads
+        let path = await session.configJsonPath
+        let onDisk = try JSONDecoder().decode(Config.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+        XCTAssertEqual(onDisk.pixelReplacementOverrides[0], .selective)
+        await session.close()
+    }
+
+    func testAStaticNeighbourCountIsSetAndTakenAway() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+        let global = await session.config().numberStaticNeighborFrames
+
+        let before = await session.frameInfo(frame, outlierGroups: nil)
+        XCTAssertEqual(before.staticNeighborCount, Int32(global))
+        XCTAssertFalse(before.staticNeighborOverridden)
+
+        let started = await session.setNeighborOverride(of: frame, kind: .static, count: 5)
+        XCTAssertFalse(started, "a static count does not start a run")
+        let set = await session.frameInfo(frame, outlierGroups: nil)
+        XCTAssertEqual(set.staticNeighborCount, 5)
+        XCTAssertTrue(set.staticNeighborOverridden)
+        let stored = await session.config()
+        XCTAssertEqual(stored.staticNeighborFrameOverrides[0], 5)
+
+        _ = await session.setNeighborOverride(of: frame, kind: .static, count: nil)
+        let cleared = await session.frameInfo(frame, outlierGroups: nil)
+        XCTAssertEqual(cleared.staticNeighborCount, Int32(global))
+        XCTAssertFalse(cleared.staticNeighborOverridden)
+        await session.close()
+    }
+
+    /// A new aligned count throws the frame's alignment away (whether or not it had one: StarCore says it did) and processes the frame
+    /// again, as macOS does.
+    func testAnAlignedNeighbourCountProcessesTheFrameAgain() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+
+        let started = await session.setNeighborOverride(of: frame, kind: .aligned, count: 3)
+        XCTAssertTrue(started)
+        let info = await session.frameInfo(frame, outlierGroups: nil)
+        XCTAssertEqual(info.alignedNeighborCount, 3)
+        XCTAssertTrue(info.alignedNeighborOverridden)
+        await session.close()
+    }
+
+    func testTheOverridesReachTheClientInTheConfig() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+        await session.setCleanMethod(.automatic(true), of: frame)
+        _ = await session.setNeighborOverride(of: frame, kind: .static, count: 7)
+        _ = await session.setNeighborOverride(of: frame, kind: .aligned, count: 2)
+
+        let proto = Mapping.protoConfig(await session.config())
+        XCTAssertEqual(proto.pixelReplacementOverrides[0], .cleanAutomaticTrue)
+        XCTAssertEqual(proto.staticNeighborFrameOverrides[0], 7)
+        XCTAssertEqual(proto.alignedNeighborFrameOverrides[0], 2)
+        await session.close()
+    }
+
+    /// A client that sends back a config it read before the override was set must not undo the override.
+    func testUpdatingTheConfigLeavesTheFramesOwnSettingsAlone() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+        let stale = Mapping.protoConfig(await session.config())   // read before the override
+
+        _ = await session.setNeighborOverride(of: frame, kind: .static, count: 9)
+        _ = await session.updateConfig(from: stale)
+
+        let config = await session.config()
+        XCTAssertEqual(config.staticNeighborFrameOverrides[0], 9)
+        await session.close()
+    }
 }
