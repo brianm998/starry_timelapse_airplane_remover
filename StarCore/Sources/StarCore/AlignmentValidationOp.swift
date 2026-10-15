@@ -68,6 +68,19 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         }
         Log.d("found \(homographies.count) neighbor homography groups")
 
+        if homographies.isEmpty {
+            // Nothing passed the strict test.  Aborting here strands every frame at
+            // "star alignment complete" (issue #5: a cloudy 25MP sequence where every
+            // frame had at least one suspect neighbor warp), so use the least doubtful
+            // sets instead and say so.
+            let fallback = await bestEffortHomographies()
+            if !fallback.isEmpty {
+                Log.w("no frame's neighbor homographies all passed the alignment checks; " +
+                      "using the \(fallback.count) least doubtful of \(frames.count) instead")
+                homographies = fallback
+            }
+        }
+
         guard let median = medianHomography(among: homographies) else {
             Log.e("ERROR, canceling no homographies found")
             let message = "no usable star alignment was found between these frames, " +
@@ -124,6 +137,19 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             }
         }
         Log.d("done validating static star alignment")
+    }
+
+    /// Neighbor homography sets to fall back on when none passes `alignmentLooksOk`:
+    /// every set with a matrix for each neighbor and at least one warp the checks trust,
+    /// narrowed to those with the fewest suspect warps.
+    private func bestEffortHomographies() async -> [HomographyResultsCodable] {
+        var candidates: [HomographyResultsCodable] = []
+        for frame in frames {
+            if let homography = await frame.getNeighborStarHomography() {
+                candidates.append(homography)
+            }
+        }
+        return leastDoubtfulHomographies(among: candidates)
     }
 
     /// The consecutive capture gaps whose measured duration is not one nominal step:
@@ -1478,6 +1504,23 @@ func retargetNeighborHomography(
 ///
 /// Ties on count are broken exactly as before: sort by composite deviation and take the
 /// middle element.
+/// The sets in `candidates` with the fewest suspect warps, ignoring any that has an
+/// unsolved neighbor or no warp the checks trust.  Empty when none qualifies.
+func leastDoubtfulHomographies(
+  among candidates: [HomographyResultsCodable]
+) -> [HomographyResultsCodable] {
+    let scored: [(set: HomographyResultsCodable, suspect: Int)] = candidates.compactMap { set in
+        guard !set.neighborHomography.isEmpty,
+              set.neighborHomography.allSatisfy({ $0.homography != nil })
+        else { return nil }
+        let partition = set.partitionWarps()
+        guard !partition.good.isEmpty else { return nil }
+        return (set, partition.suspect.count)
+    }
+    guard let fewest = scored.map(\.suspect).min() else { return [] }
+    return scored.filter { $0.suspect == fewest }.map(\.set)
+}
+
 func medianHomography(
   among homographies: [HomographyResultsCodable]
 ) -> HomographyResultsCodable? {
