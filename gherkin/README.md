@@ -189,3 +189,9 @@ test time. Satellites sweep SNR 3–100, airplanes are twin lines with strobe do
 
 Not possible yet: the steps in the plan (`setCleanMethod`, `airplanesRemoved`, …) are not in `steps.json`. Once added, a
 `Then` step should run `star-removal-verify` as a subprocess and surface its summary, report and crop paths.
+
+### Measuring (Phase 4)
+
+`.github/workflows/removal-measure.yml` (manual) measures every dataset x clean method on ubuntu-24.04 and macos-15 and publishes a table plus
+artifacts; `gherkin/measure-removal.sh <os> <out>` does the same locally (`MEASURE_FILTER=<substring>` runs a subset,
+`STAR_TEST_DATA` points at the dataset cache). Thresholds in `removal-thresholds.json` must come from those tables.

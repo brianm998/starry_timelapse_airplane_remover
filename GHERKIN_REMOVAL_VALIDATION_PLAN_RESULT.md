@@ -118,6 +118,29 @@ reported but left out of the unchanged-outside total, and the verifier fails onc
 remove the entry (unit tested; 19 tests pass). Still open for Brian: label that trail (full-frame (2434,1162) to (3765,1293)),
 which would also clear the entry.
 
+## Phase 4 measurement workflow (written 2026-10-15, never run on CI)
+
+Brian uploaded both archives; `gh release view` shows sizes and sha256 equal to `datasets.json`. (A real download could not be
+tested from my sandbox: it rejects GitHub's certificate, so run `test_data/fetch.sh a7sii_10 a7sii_10_crop16` once.)
+
+`.github/workflows/removal-measure.yml` (manual `workflow_dispatch` only; a measurement, not a gate) has a job on `ubuntu-24.04`
+and one on `macos-15`. Each fetches the datasets, builds `star` and `removal_tools` in release, runs the verifier's unit
+tests, then `gherkin/measure-removal.sh` runs `a7sii_10` (JPEG) and `a7sii_10_crop16` (16-bit) with `selective`,
+`automatic:false` and `automatic:true` through `star-removal-verify --report-only --stars` (plus `--unchanged-outside` for
+selective on the crop set; on macOS also a CPU-forced repeat with `--no-use-gpu*`). `gherkin/measure-removal-summary.py`
+turns the reports into a markdown table (worst-stretch ratio quantiles, star-flux ratio, lost-star fraction, unchanged-outside
+area, removed-vs-kept input-contrast quantiles) in the job summary; reports, crops and logs are uploaded as artifacts. Star runs
+with `-l info` so the GPU decision line ("GPU acceleration … is on (device)" or the CPU fallback) lands in `gpu.txt`.
+
+Smoke-tested locally on macOS only (one run, `a7sii_10` `automatic:false`, via `MEASURE_FILTER` and `STAR_TEST_DATA`): the script,
+verifier and summary run end to end; star flux median 0.964 (earlier measurement 0.961); GPU line captured. The YAML parses; it has
+not been run by Actions, so expect to fix a step on the first run.
+
+**Windows is not measured.** There is no `star` cli build for Windows in this repo (only `stard`, in the desktop leg), so the
+cli-based suite cannot run there. The plan scopes the removal suite to the cli on Linux and macOS. Windows uses the CPU path like
+Linux, so Linux numbers should represent it, but that is unproven. Phase 5 should still build `removal_tools` on the Windows
+leg (cheap compile check) if that leg can run the verifier at all.
+
 ## Not done (leftover)
 
 - **`--temp` decision diagnostics** are not implemented. The option is accepted and prints a note.
