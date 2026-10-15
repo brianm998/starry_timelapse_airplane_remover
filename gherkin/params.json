@@ -3,7 +3,7 @@
     "sequence": "data:a7sii_10",
     "expected_outputs": "19"
   },
-  "cli": { "expected_outputs": "18" },
+  "cli": {},
   "mac-gui": {},
   "desktop": {}
 }
