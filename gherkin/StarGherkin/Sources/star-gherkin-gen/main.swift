@@ -180,6 +180,33 @@ func parseFeature(at url: URL, root: URL, gherkin: (path: String, formatArgs: [S
 
 func line(of node: [String: Any]) -> Int { (node["location"] as? [String: Any])?["line"] as? Int ?? 0 }
 
+// MARK: - Test data manifest
+
+let dataPrefix = "data:"
+
+/// Names in `test_data/datasets.json`, which is the single source of truth for out-of-repo datasets.
+func loadDatasetNames(_ url: URL) throws -> Set<String> {
+    guard let data = try? Data(contentsOf: url) else { throw GenError("test_data/datasets.json: cannot read it") }
+    guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any], let ds = obj["datasets"] as? [String: Any] else {
+        throw GenError("test_data/datasets.json must be {\"release\": …, \"datasets\": {name: {…}}}")
+    }
+    return Set(ds.keys)
+}
+
+/// Fails, with params.json:line, on a `data:<name>` value the manifest does not have.
+func checkDataParams(_ params: [String: [String: String]], manifest: Set<String>, paramsURL: URL) throws {
+    let lines = ((try? String(contentsOf: paramsURL, encoding: .utf8)) ?? "").components(separatedBy: "\n")
+    for (section, values) in params.sorted(by: { $0.key < $1.key }) {
+        for (key, value) in values.sorted(by: { $0.key < $1.key }) where value.hasPrefix(dataPrefix) {
+            let name = String(value.dropFirst(dataPrefix.count))
+            guard manifest.contains(name) else {
+                let n = lines.firstIndex { $0.contains("\"\(key)\"") && $0.contains(value) }.map { $0 + 1 } ?? 0
+                throw GenError("gherkin/params.json:\(n): \(section).\(key) is `\(value)` but test_data/datasets.json has no dataset `\(name)` (has: \(manifest.sorted().joined(separator: ", ")))")
+            }
+        }
+    }
+}
+
 // MARK: - Validation
 
 let clientTags: [(tag: String, key: String)] = [("@cli", "cli"), ("@mac-gui", "mac-gui"), ("@desktop", "desktop")]
@@ -250,6 +277,22 @@ func dictLiteral(_ d: [String: String], quote: (String) -> String, indent: Strin
 func keywordCase(_ k: String) -> String { k.lowercased() }
 
 struct Output { let path: String; let content: String }
+
+/// The `data:<name>` datasets a client's features need: every placeholder of every step of every feature tagged for the
+/// client, resolved the way a runner does (client override, then default). Sorted, so the file is stable.
+func datasetNames(for client: (tag: String, key: String), features: [ParsedFeature], params: [String: [String: String]]) -> [String] {
+    var names = Set<String>()
+    for f in features where f.tags.contains(client.tag) {
+        for s in f.steps {
+            for p in placeholders(in: s.text) {
+                if let v = params[client.key]?[p] ?? params["default"]?[p], v.hasPrefix(dataPrefix) {
+                    names.insert(String(v.dropFirst(dataPrefix.count)))
+                }
+            }
+        }
+    }
+    return names.sorted()
+}
 
 func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String: String]], hash: String) -> (outputs: [Output], cleanDirs: [String]) {
     let h = header(hash)
@@ -392,7 +435,14 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
 
     """))
 
+    // ── dataset lists: CI fetches exactly these ──
+    for c in clientTags {
+        let names = datasetNames(for: c, features: features, params: params)
+        outs.append(Output(path: "gherkin/generated/datasets-\(c.key).txt", content: names.map { $0 + "\n" }.joined()))
+    }
+
     return (outs, [
+        "gherkin/generated",
         "gherkin/StarGherkin/Sources/StarGherkinKernel/Generated",
         ktPkg,
         "cli/Tests/GherkinTests/GeneratedFeatureTests.swift",
@@ -446,9 +496,12 @@ func generate() throws {
         throw GenError("gherkin/params.json: unknown client override `\(key)` (expected cli, mac-gui or desktop)")
     }
 
+    let datasetsURL = root.appendingPathComponent("test_data/datasets.json")
+    try checkDataParams(params, manifest: try loadDatasetNames(datasetsURL), paramsURL: paramsURL)
+
     // hash of every input file, sorted by path, concatenated
     var inputs = featureFiles.map { featuresDir.appendingPathComponent($0) }
-    inputs += [stepsURL, paramsURL]
+    inputs += [stepsURL, paramsURL, datasetsURL]
     inputs.sort { $0.path < $1.path }
     var all: [UInt8] = []
     for u in inputs { all += [UInt8](try Data(contentsOf: u)) }

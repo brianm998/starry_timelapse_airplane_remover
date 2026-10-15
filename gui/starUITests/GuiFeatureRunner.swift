@@ -99,13 +99,21 @@ final class GuiFeatureRunner {
         }
     }
 
+    /// The test-data cache, by the fetch tool's rule. Under xcodebuild it arrives as `TEST_RUNNER_STAR_TEST_DATA` (prefix stripped);
+    /// otherwise `<repoRoot>/.test-data`.
+    private func dataCache() -> URL {
+        if let c = ProcessInfo.processInfo.environment["STAR_TEST_DATA"], !c.isEmpty { return URL(fileURLWithPath: c) }
+        return Self.repoRoot.appendingPathComponent(".test-data")
+    }
+
     // MARK: steps
 
     /// Copies the sequence into a fresh temp dir (star derives its temp and output paths from the input
     /// directory's name), then launches the app on the copy and waits for the sequence screen.
     private func openSequence() throws {
         let given = try param("sequence")
-        let source = given.hasPrefix("/") ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given)
+        let source = try TestData.resolve(given, cache: dataCache())
+            ?? (given.hasPrefix("/") ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given))
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: source.path, isDirectory: &isDir), isDir.boolValue else {
             throw RunnerError("sequence directory not found: \(source.path)")

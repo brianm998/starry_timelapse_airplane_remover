@@ -66,13 +66,20 @@ final class CliFeatureRunner {
     static let repoRoot: URL = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
+    /// The test-data cache, by the fetch tool's rule: `STAR_TEST_DATA`, else `<repoRoot>/.test-data`.
+    private func dataCache() -> URL {
+        if let c = ProcessInfo.processInfo.environment["STAR_TEST_DATA"], !c.isEmpty { return URL(fileURLWithPath: c) }
+        return Self.repoRoot.appendingPathComponent(".test-data")
+    }
+
     // MARK: steps
 
     /// Copies the sequence into a fresh temp dir: star derives its temp and output paths from the
     /// input directory's name, so processing a directory in place would pick up the last run's state.
     private func openSequence() throws {
         let given = try param("sequence")
-        let source = given.hasPrefix("/") ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given)
+        let source = try TestData.resolve(given, cache: dataCache())
+            ?? (given.hasPrefix("/") ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given))
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: source.path, isDirectory: &isDir), isDir.boolValue else {
             throw RunnerError("sequence directory not found: \(source.path)")
