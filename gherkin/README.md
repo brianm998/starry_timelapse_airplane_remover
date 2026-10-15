@@ -33,6 +33,9 @@ Generated (committed, never edit; each starts with `// @generated` and a `source
 * `gui/starUITests/GeneratedFeatureUITests.swift`
 * `star-desktop/src/gherkinTest/kotlin/com/star/desktop/gherkin/generated/{StepAction,Features,GeneratedFeatureTests}.kt`
 
+* `gherkin/generated/datasets-{cli,mac-gui,desktop}.txt`: the `data:` datasets each client's features need; CI
+  runs `test_data/fetch.sh $(cat …)` on exactly that list.
+
 Hand-written runners: `cli/Tests/GherkinTests/CliFeatureRunner.swift`,
 `gui/starUITests/GuiFeatureRunner.swift`,
 `star-desktop/src/gherkinTest/kotlin/com/star/desktop/gherkin/{Model,DesktopFeatureRunner}.kt`.
@@ -75,7 +78,10 @@ run, so a deleted feature leaves no orphan test behind.
 
 A `{name}` resolves, in order, from env var `STAR_GHERKIN_<UPPER_NAME>`, the client's override in
 `params.json`, then `default`. Under xcodebuild set `TEST_RUNNER_STAR_GHERKIN_<NAME>` (the prefix is
-stripped). Relative paths resolve against the repo root. A sequence is always **copied to a fresh temp
+stripped). Relative paths resolve against the repo root. A value of the form `data:<name>` is a dataset from
+`test_data/datasets.json`, fetched into the test-data cache by `test_data/fetch.sh <name>` (see
+`test_data/README.md`: cache directory, `STAR_TEST_DATA`, how to add one). The runners only resolve it and fail
+with the fetch command if it is absent. A sequence is always **copied to a fresh temp
 directory** first: star derives its temp and output paths from the input directory's name, so processing a
 directory in place would pick up the last run's state.
 
@@ -83,12 +89,15 @@ directory in place would pick up the last run's state.
 
 Each runner fails (never skips) on missing setup, and refuses a feature with no steps.
 
-* **cli** (needs `opencv` and `StarDecisionTrees` built, as for any cli build):
+Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<client>.txt)`.
+
+* **cli** (needs `opencv` and `StarDecisionTrees` built, as for any cli build). Like CI, one release compile:
   ```bash
-  cd cli && swift build --build-tests && swift test --skip-build --filter GherkinTests
+  swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests
   ```
-  Uses the `star` beside the test bundle (a debug build: ~3 minutes for the 19-frame sequence); set
-  `STAR_CLI_PATH` to a release binary to go faster. Never use `cli/star.xcodeproj`: it cannot link.
+  (`-enable-testing` because the cli's other test target is `@testable import star`; `--disable-swift-testing` because the second Swift Testing pass starts `star`'s own `@main`, which rejects `-c release` and exits 1.) It runs the `star` beside the
+  test bundle; a debug `swift test` works too but takes ~20 minutes on the 19-frame sequence. `STAR_CLI_PATH`
+  overrides the binary. Never use `cli/star.xcodeproj`: it cannot link.
 * **desktop** (needs a `stard`: `cd daemon && swift build -c release`):
   ```bash
   cd star-desktop && ./gradlew gherkinTest -Pstar.stard.path=$PWD/../daemon/.build/release/stard
@@ -97,10 +106,10 @@ Each runner fails (never skips) on missing setup, and refuses a feature with no 
 * **mac gui** (needs `gui/videos/*.mp4`, ffmpeg in `external_binaries/bin`, and opencv/StarDecisionTrees):
   ```bash
   sudo automationmodetool enable-automationmode-without-authentication   # once per machine; hosted runners have it
-  xcodebuild test -project gui/star.xcodeproj -scheme star -only-testing:starUITests/GeneratedFeatureUITests \
+  xcodebuild test -project gui/star.xcodeproj -scheme star -configuration Release ENABLE_TESTABILITY=YES -only-testing:starUITests/GeneratedFeatureUITests \
     CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
   ```
-  Use `-scheme star`, never `-target Star`, and no `-destination`. Without automation mode `xcodebuild
+  `-configuration Release` is what CI passes (the scheme's default stays Debug for development). Use `-scheme star`, never `-target Star`, and no `-destination`. Without automation mode `xcodebuild
   test` hangs at "Timed out while enabling automation mode".
 
 ## The seams the tests rely on
