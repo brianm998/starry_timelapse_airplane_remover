@@ -56,6 +56,7 @@ public struct Summary: Codable, Sendable {
     public var failed = 0
     public var labelErrors = 0
     public var knownFailures = 0
+    public var faintSkipped = 0
     public var unmeasurableObjects = 0
     public var reportOnly = true
     public var ok = true
@@ -140,6 +141,16 @@ public enum Verifier {
                     continue
                 }
                 let ratios = m.stretches.compactMap(\.ratio)
+                if exp == .removed, let floor = thresholds.min_required_contrast?.value {
+                    let c = Stats.median(m.stretches.filter(\.measurable).map { Float($0.inputContrast) })
+                    if Double(c) < floor {
+                        rep.status = "faint"
+                        rep.detail = String(format: "input contrast %.4f is below min_required_contrast %.4f: reported, not required", Double(c), floor)
+                        report.summary.faintSkipped += 1
+                        report.objects.append(rep)
+                        continue
+                    }
+                }
                 var passed: Bool?
                 switch exp {
                 case .removed: if let t = removedMax { passed = ratios.allSatisfy { $0 <= t } }

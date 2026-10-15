@@ -203,6 +203,19 @@ final class VerifierTests: XCTestCase {
         XCTAssertFalse(regress.summary.ok)
     }
 
+    func testFaintObjectsAreReportedNotRequired() throws {
+        let (_, kept, labels) = setup()    // the trail has contrast 0.3 and is left in place
+        var o = VerifyOptions(); o.expect = [.airplane: .removed]; o.reportOnly = false
+        var t = thresholds(); t.min_required_contrast = Threshold(value: 0.5, measured: "synthetic test")
+        let (r, _) = try Verifier.verify(frames: [kept], labels: labels, options: o, thresholds: t, baseline: nil)
+        XCTAssertTrue(r.summary.ok)
+        XCTAssertEqual(r.objects[0].status, "faint")
+        XCTAssertEqual(r.summary.faintSkipped, 1)
+        t.min_required_contrast = Threshold(value: 0.1, measured: "synthetic test")
+        let (r2, _) = try Verifier.verify(frames: [kept], labels: labels, options: o, thresholds: t, baseline: nil)
+        XCTAssertFalse(r2.summary.ok)
+    }
+
     func testUnchangedOutsideRefusals() {
         let (removed, _, labels) = setup()
         var o = VerifyOptions(); o.unchangedOutside = true; o.reportOnly = true

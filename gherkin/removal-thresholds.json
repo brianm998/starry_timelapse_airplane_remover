@@ -5,5 +5,6 @@
   "stars_median_max": { "value": null, "measured": "unmeasured" },
   "stars_lost_max": { "value": null, "measured": "unmeasured" },
   "unchanged_outside_max_area": { "value": null, "measured": "unmeasured" },
-  "differential_outside_max": { "value": null, "measured": "unmeasured" }
+  "differential_outside_max": { "value": null, "measured": "unmeasured" },
+  "min_required_contrast": { "value": null, "measured": "unmeasured: real a7sii_10 selective run 2026-10-15 removed streaks with median input contrast 0.14 (p25 0.09) and left those at 0.05 (p75 0.09); the distributions overlap, so Phase 4 must pick or change the metric" }
 }

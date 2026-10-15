@@ -79,11 +79,37 @@ default on this Mac. Wall times: 59 s, 74 s and 82 s respectively.
 - Consequence: on real data `selective` fails most labelled faint streaks, so a baseline would hold about 177 entries. Whether
   those are "known failures" or mislabelled/should not be required is Brian's call before any baseline is written.
 
+## Datasets built (2026-10-15, after merging develop with the speed/test-data work)
+
+Archives are in `.test-data/upload/` (git-ignored) and the manifest `test_data/datasets.json` is edited. **Not uploaded: Brian
+must run `gh release upload test-data <asset> --repo brianm998/starry_timelapse_airplane_remover` for both before pushing,
+or every leg that uses `data:a7sii_10` fails to fetch.**
+- `a7sii_10-2b6cb64824f4.tar.gz` (46,412,100 B): the original 19 JPEGs plus `labels.json` (Brian's 240 objects). The manifest's
+  `a7sii_10` entry now points at it; the old unlabelled asset stays on the release. Star ignores the extra `labels.json`
+  (it only reads supported image types).
+- `a7sii_10_crop16-349ca66e8f0f.tar.gz` (132,881,491 B): 16-bit LZW TIFFs, every frame cropped to x=1500 y=600 w=2300 h=1450
+  (all sky, no ground, contains the bright airplane and a satellite streak in frame 92), plus `labels.json` shifted into crop
+  coordinates and clipped at the crop edge: 122 objects, 31 clipped, 118 of the 240 lie wholly outside. Pieces under 8 px
+  were dropped. `complete` was carried over from Brian's full-frame label set. Copies of both label files are in
+  `test_data/labels/`.
+
+First run on the crop (`selective`, release cli, this Mac): 122 objects, 5 label errors (50% or less measurable), 11 removed,
+106 not removed (faint ones, as on the full frame). `--unchanged-outside`: 10 of 19 frames have changed pixels outside the
+labels, total area 44,022 px. **One frame dominates:** frame 90 changed 28,655 px in 56 components, the largest a band at
+crop x 934–2265, y 550–700 (full-frame y about 1150–1300). Viewing it, Star repainted a wide stretch of dense Milky Way with
+smeared diagonal streaks, and no trail is visible in the input there. Either an unlabelled very faint trail or a false
+positive that damages the frame. Brian should look at `LRT_00090` in that band. The verifier does what it is meant to do here;
+I did not change Star. This is also why `complete` on the crop set is only as good as the full-frame labelling.
+
+Not verified: the run took 30 minutes of wall clock on the crop (the full-size run took 82 s), with the machine at load average
+~200 from other work, so the slowdown is not attributed. The new `min_required_contrast` threshold (faint objects are reported,
+not required; `faint` status; unit tested) is in the verifier but its value is unmeasured and the removed/kept contrast
+distributions overlap (see `removal-thresholds.json`).
+
 ## Not done (leftover)
 
 - **`--temp` decision diagnostics** are not implemented. The option is accepted and prints a note.
-- **Phase 2 data.** There are no `labels.draft.json` drafts, no `a7sii_10` / `a7sii_10_crop16` archives or manifest edits, and
-  nothing was uploaded. Brian must confirm labels and upload. Nothing was marked confirmed.
+- **Upload** of the two archives (Brian). No `labels.draft.json` generator was written: Brian labelled from scratch.
 - **Phase 3 realism comparison.** The generator exists, but the synthetic-versus-real detection-rate check was not run. The
   base was not proven clean with Star in selective mode, so `--base-is-clean` was never used.
 - **Phase 4.** No measurements on `ubuntu-24.04` or `macos-15`, no Metal vs CPU note, and no threshold or baseline values.

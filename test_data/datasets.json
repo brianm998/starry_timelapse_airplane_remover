@@ -3,11 +3,18 @@
   "repo": "brianm998/starry_timelapse_airplane_remover",
   "datasets": {
     "a7sii_10": {
-      "asset": "a7sii_10-76013afcefe5.tar.gz",
-      "sha256": "76013afcefe58533a1b26b676dc95b7e38718146551f7710afcfc56e7fbe8276",
-      "bytes": 46406596,
-      "description": "Sony a7S II, 19 frames 4240x2832 JPEG, static tripod, clear sky. The pilot's sequence.",
-      "provenance": "Brian Martin, own photographs."
+      "asset": "a7sii_10-2b6cb64824f4.tar.gz",
+      "sha256": "2b6cb64824f4a0934823b52dcd2f9c62433c772bdb6d7c211f884f4a5e9a3e57",
+      "bytes": 46412100,
+      "description": "Sony a7S II, 19 frames 4240x2832 JPEG, static tripod, clear sky. The pilot's sequence, plus labels.json: 240 airplane/satellite streaks, all confirmed by hand, complete (the earlier a7sii_10-76013afcefe5 archive had the same frames without labels).",
+      "provenance": "Brian Martin, own photographs; labels by Brian Martin 2026-10-15."
+    },
+    "a7sii_10_crop16": {
+      "asset": "a7sii_10_crop16-349ca66e8f0f.tar.gz",
+      "sha256": "349ca66e8f0ff6c1f37ee616b7739ada8950f464ce2657c7c369e00b9db6b2f9",
+      "bytes": 132881491,
+      "description": "a7sii_10 as 16-bit LZW TIFF, every frame cropped to x=1500 y=600 w=2300 h=1450 of the original (all sky, no ground), plus labels.json: the a7sii_10 labels shifted into crop coordinates and clipped at the crop edge (122 objects, 31 of them clipped). Lossless input for the unchanged-outside check.",
+      "provenance": "Derived from a7sii_10 (Brian Martin, own photographs) with magick -crop 2300x1450+1500+600 -depth 16 -compress lzw."
     },
     "gui_splash_video": {
       "asset": "gui_splash_video-35575f903725.tar.gz",

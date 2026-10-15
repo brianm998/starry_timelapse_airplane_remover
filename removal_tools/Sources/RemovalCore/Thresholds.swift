@@ -15,6 +15,9 @@ public struct Thresholds: Codable, Sendable {
     public var stars_lost_max: Threshold?
     public var unchanged_outside_max_area: Threshold?
     public var differential_outside_max: Threshold?
+    /// Objects whose median measurable input contrast (0...1 brightness units) is below this are
+    /// reported as `faint` and not required to be removed (selective mode leaves faint streaks alone).
+    public var min_required_contrast: Threshold?
 
     public init() {}
 
