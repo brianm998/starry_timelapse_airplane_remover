@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Mode",
-  "ui.mode_desc_auto_selective": "Star akan berjalan dalam mode otomatis dan mengganti semua piksel yang rusak. Setelah itu ia memproses setiap bingkai lebih lanjut agar pengguna bisa memilih piksel yang dihapus dan mengembalikannya ke keadaan semula. Kamu harus masuk ke setiap bingkai dan memilih sinyal mana yang ingin dipertahankan; saat ini Star belum bisa membedakan pesawat, satelit, dan meteor",
+  "ui.mode_desc_auto_selective": "Star akan berjalan dalam mode otomatis dan mengganti semua piksel yang rusak. Setelah itu ia mengklasifikasikan sinyal terang di setiap bingkai dan mengembalikan piksel asli dari sinyal yang diputuskan untuk dipertahankan, seperti meteor, sementara pesawat dan satelit tetap dihapus. Star belum bisa membedakan pesawat, satelit, dan meteor dengan andal, jadi periksa setiap bingkai dan ubah sinyal yang salah diklasifikasikan.",
   "ui.mode_desc_automatic": "Star akan berjalan dalam mode otomatis dan mengganti semua piksel yang rusak. Bila semuanya lancar, Star tidak butuh perhatian pengguna per bingkai.",
   "ui.mode_desc_selective": "Star akan berjalan dalam mode selektif: ia menganalisis setiap bingkai untuk melihat apa yang tampak seperti sinyal rusak, lalu mencoba menggolongkannya secara otomatis. Hasil awalnya mungkin butuh sedikit perhatian per bingkai.",
   "ui.modify": "Ubah",

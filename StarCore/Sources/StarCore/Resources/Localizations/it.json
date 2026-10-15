@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Modalità",
-  "ui.mode_desc_auto_selective": "Star funzionerà in modalità automatica, sostituendo tutti i pixel difettosi. Poi elaborerà ulteriormente ogni fotogramma per permettere agli utenti di selezionare i pixel rimossi e riportarli allo stato originale. Dovrai entrare in ogni fotogramma e selezionare i segnali che vuoi conservare; Star al momento non sa distinguere aerei, satelliti e meteore",
+  "ui.mode_desc_auto_selective": "Star funzionerà in modalità automatica, sostituendo tutti i pixel difettosi. Poi classificherà i segnali luminosi di ogni fotogramma e ripristinerà i pixel originali di quelli che decide di conservare, come le meteore, mentre aerei e satelliti resteranno rimossi. Star non sa ancora distinguere in modo affidabile aerei, satelliti e meteore, quindi controlla ogni fotogramma e correggi qualsiasi segnale su cui ha sbagliato.",
   "ui.mode_desc_automatic": "Star funzionerà in modalità automatica, sostituendo tutti i pixel difettosi. Se tutto va bene, Star non richiederà alcun intervento dell'utente fotogramma per fotogramma.",
   "ui.mode_desc_selective": "Star funzionerà in modalità selettiva: analizzerà ogni fotogramma per capire che cosa sembri un segnale difettoso e poi proverà a categorizzarlo automaticamente. I primi risultati potrebbero richiedere un po' di attenzione fotogramma per fotogramma.",
   "ui.modify": "Modifica",

@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Tryb",
-  "ui.mode_desc_auto_selective": "star będzie działać w trybie automatycznym i zastąpi wszystkie wadliwe piksele. Następnie przetworzy każdą klatkę dalej, aby użytkownik mógł zaznaczyć usunięte piksele i przywrócić im pierwotny stan. Trzeba będzie wejść w każdą klatkę i wybrać sygnały, które chcesz zachować; star nie potrafi na razie odróżnić samolotów, satelitów i meteorów",
+  "ui.mode_desc_auto_selective": "star będzie działać w trybie automatycznym i zastąpi wszystkie wadliwe piksele. Następnie sklasyfikuje jasne sygnały w każdej klatce i przywróci oryginalne piksele tych, które postanowi zachować, na przykład meteorów, a samoloty i satelity pozostaną usunięte. star nie potrafi jeszcze niezawodnie odróżnić samolotów, satelitów i meteorów, więc przejrzyj każdą klatkę i zmień każdy sygnał, przy którym się pomylił.",
   "ui.mode_desc_automatic": "star będzie działać w trybie automatycznym i zastąpi wszystkie wadliwe piksele. Jeśli wszystko pójdzie dobrze, star nie będzie wymagać uwagi użytkownika przy poszczególnych klatkach.",
   "ui.mode_desc_selective": "star będzie działać w trybie wybiórczym: przeanalizuje każdą klatkę, by wychwycić to, co wygląda na wadliwe sygnały, a potem spróbuje je automatycznie zaklasyfikować. Pierwsze wyniki mogą wymagać nieco uwagi klatka po klatce.",
   "ui.modify": "Zmień",

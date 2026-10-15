@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Režim",
-  "ui.mode_desc_auto_selective": "star poběží v automatickém režimu a nahradí všechny vadné pixely. Poté každý snímek dále zpracuje, aby uživatel mohl odstraněné pixely vybrat a vrátit je do původního stavu. Budete muset projít každý snímek a vybrat signály, které chcete zachovat; star zatím nedokáže rozlišit letadla, družice a meteory",
+  "ui.mode_desc_auto_selective": "star poběží v automatickém režimu a nahradí všechny vadné pixely. Poté roztřídí jasné signály v každém snímku a u těch, které se rozhodne zachovat, například meteorů, vrátí původní pixely, zatímco letadla a družice zůstanou odstraněné. star zatím nedokáže spolehlivě rozlišit letadla, družice a meteory, proto projděte každý snímek a opravte signály, u kterých se spletl.",
   "ui.mode_desc_automatic": "star poběží v automatickém režimu a nahradí všechny vadné pixely. Pokud vše půjde dobře, star nebude u jednotlivých snímků potřebovat pozornost uživatele.",
   "ui.mode_desc_selective": "star poběží ve výběrovém režimu: prozkoumá každý snímek, aby zjistil, co vypadá jako vadné signály, a pak se je pokusí automaticky zařadit. První výsledky mohou vyžadovat trochu pozornosti snímek po snímku.",
   "ui.modify": "Upravit",

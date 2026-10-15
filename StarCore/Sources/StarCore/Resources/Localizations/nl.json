@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Modus",
-  "ui.mode_desc_auto_selective": "Star draait in automatische modus en vervangt alle slechte pixels. Daarna verwerkt het elk beeld verder zodat gebruikers verwijderde pixels kunnen selecteren en in hun oorspronkelijke staat kunnen terugzetten. Je moet elk beeld langs om de signalen te kiezen die je wilt houden; Star kan vliegtuigen, satellieten en meteoren nu nog niet uit elkaar houden",
+  "ui.mode_desc_auto_selective": "Star draait in automatische modus en vervangt alle slechte pixels. Daarna deelt het de heldere signalen in elk beeld in en zet het de oorspronkelijke pixels terug van de signalen die het wil houden, zoals meteoren, terwijl vliegtuigen en satellieten verwijderd blijven. Star kan vliegtuigen, satellieten en meteoren nog niet betrouwbaar uit elkaar houden, dus loop elk beeld na en pas elk signaal aan dat verkeerd is ingedeeld.",
   "ui.mode_desc_automatic": "Star draait in automatische modus en vervangt alle slechte pixels. Als alles goed gaat, vraagt Star per beeld geen aandacht van de gebruiker.",
   "ui.mode_desc_selective": "Star draait in selectieve modus: het analyseert elk beeld om te zien wat op slechte signalen lijkt en probeert die daarna automatisch in te delen. De eerste resultaten vragen misschien wat aandacht per beeld.",
   "ui.modify": "Wijzig",

@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Kip",
-  "ui.mode_desc_auto_selective": "Star otomatik kipte çalışacak ve tüm bozuk pikselleri değiştirecek. Ardından her kareyi biraz daha işleyip kullanıcıların kaldırılan pikselleri seçip özgün durumuna döndürmesine olanak tanıyacak. Korumak istediğiniz sinyalleri her karede kendiniz seçmeniz gerekecek; Star şu an uçak, uydu ve meteoru birbirinden ayırt edemiyor",
+  "ui.mode_desc_auto_selective": "Star otomatik kipte çalışacak ve tüm bozuk pikselleri değiştirecek. Ardından her karedeki parlak sinyalleri sınıflandıracak ve korumaya karar verdiklerinin, örneğin meteorların, özgün piksellerini geri getirecek; uçaklar ve uydular ise kaldırılmış olarak kalacak. Star henüz uçak, uydu ve meteoru güvenilir biçimde ayırt edemiyor; bu yüzden her kareyi kontrol edip yanlış değerlendirdiği sinyalleri değiştirin.",
   "ui.mode_desc_automatic": "Star otomatik kipte çalışacak ve tüm bozuk pikselleri değiştirecek. Her şey yolunda giderse Star'ın kare başına kullanıcı ilgisine ihtiyacı olmayacak.",
   "ui.mode_desc_selective": "Star seçmeli kipte çalışacak; her kareyi inceleyip bozuk sinyale benzeyenleri bulacak ve ardından bunları otomatik olarak sınıflandırmaya çalışacak. İlk sonuçlar kare kare biraz ilgi gerektirebilir.",
   "ui.modify": "Değiştir",

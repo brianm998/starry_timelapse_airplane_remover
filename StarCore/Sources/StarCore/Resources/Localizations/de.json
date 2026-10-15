@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Modus",
-  "ui.mode_desc_auto_selective": "Star läuft im Automatikmodus und ersetzt alle fehlerhaften Pixel. Anschließend verarbeitet es jedes Bild weiter, damit Nutzer entfernte Pixel auswählen und in den Originalzustand zurückversetzen können. Sie müssen jedes Bild durchgehen und alle Signale auswählen, die Sie behalten möchten; Star kann derzeit nicht zwischen Flugzeugen, Satelliten und Meteoren unterscheiden",
+  "ui.mode_desc_auto_selective": "Star läuft im Automatikmodus und ersetzt alle fehlerhaften Pixel. Anschließend ordnet es die hellen Signale in jedem Bild ein und stellt bei denen, die es behalten will, etwa Meteoren, die Originalpixel wieder her, während Flugzeuge und Satelliten entfernt bleiben. Star kann Flugzeuge, Satelliten und Meteore noch nicht zuverlässig unterscheiden; prüfen Sie daher jedes Bild und ändern Sie jedes Signal, das falsch eingeordnet wurde.",
   "ui.mode_desc_automatic": "Star läuft im Automatikmodus und ersetzt alle fehlerhaften Pixel. Wenn alles gut geht, erfordert Star pro Bild keinerlei Aufmerksamkeit.",
   "ui.mode_desc_selective": "Star läuft im selektiven Modus und analysiert jedes Bild darauf, was nach fehlerhaften Signalen aussieht, um diese dann automatisch einzuordnen. Die ersten Ergebnisse brauchen unter Umständen etwas Aufmerksamkeit von Bild zu Bild.",
   "ui.modify": "Ändern",

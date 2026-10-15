@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Mode",
-  "ui.mode_desc_auto_selective": "Star will run in auto mode, replacing all bad pixels.  It will then do further processing on every frame to then allow users to select removed pixels to return to their original state.  You will have to go into each frame and select any signals you want to keep, Star cannot currently tell the difference between airplanes satellites and meteors",
+  "ui.mode_desc_auto_selective": "Star will run in auto mode, replacing all bad pixels. It will then classify the bright signals in every frame and restore the original pixels of the ones it decides to keep, such as meteors, while airplanes and satellites stay removed. Star cannot yet reliably tell airplanes, satellites and meteors apart, so check each frame and change any signal it got wrong.",
   "ui.mode_desc_automatic": "Star will run in automatic mode, replacing all bad pixels.  If everything goes well Star will not require any user attention per frame.",
   "ui.mode_desc_selective": "Star will run in selective mode, where it will analyze each frame to see what looks like bad signals, and then attempt to automatically categorize them.  The initial results may need some frame by frame attention.",
   "ui.modify": "Modify",

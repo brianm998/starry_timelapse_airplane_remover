@@ -1132,14 +1132,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // Mark - Removal
 
-    // this is the inverse of removeAirplanes, it replaces them in the auto image
+    // this is the inverse of removeAirplanes, used by .automatic(true): the auto image
+    // has every outlier removed already, and this puts the original pixels back over the
+    // groups decided keep (meteors and the like), leaving the ones decided remove removed.
+    // Restoring the remove groups instead put every airplane back.
+    //
+    // `image` and `data` must be the 16-bit auto image; the original may be any depth.
     internal func replaceAirplanes(
       image: PixelatedImage,
       toData data: inout ImageBuffer<UInt16>,
       originalImage: PixelatedImage
     ) async throws {
 
-        let (shouldRemove, alphaLevels, alphaYAxis) = try await computeRemovalMask()
+        // readPixel only reads 16-bit images; an 8-bit original (any JPEG sequence) trapped here
+        let originalImage = originalImage.ensure16Bits
+
+        let (shouldRemove, alphaLevels, alphaYAxis) = try await computeRemovalMask(selecting: .keep)
 
         if shouldRemove {
             self.set(state: .assemblingProcessedFrame)
@@ -1275,7 +1283,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    internal func computeRemovalMask() async throws -> (Bool, [Double], [UInt8]) {
+    /// Which decided outlier groups `computeRemovalMask` covers.  Undecided groups are in neither.
+    internal enum RemovalMaskSelection {
+        case remove   // groups decided remove: painted over with neighbour pixels (selective)
+        case keep     // groups decided keep: restored from the original (.automatic(true))
+
+        func covers(_ reason: RemoveReason) -> Bool {
+            switch self {
+            case .remove: reason.willRemove
+            case .keep: !reason.willRemove
+            }
+        }
+    }
+
+    internal func computeRemovalMask(
+      selecting selection: RemovalMaskSelection = .remove
+    ) async throws -> (Bool, [Double], [UInt8]) {
         self.set(state: .creatingRemovalMask)
 
         // remove every outlier in the list with pixels from the adjecent frames
@@ -1311,7 +1334,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         for (_, group) in await outlierGroups.getMembers() {
             if let reason = await group.shouldRemove(),
-               reason.willRemove
+               selection.covers(reason)
             {
                 shouldRemove = true
                 //Log.d("frame \(frameIndex) removing over group \(group) for reason \(reason)")
@@ -1831,12 +1854,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             
             Log.i("frame \(self.frameIndex) finishing")
 
-            let format = autoProcessedImage.ensure16Bits.imageData
+            // held in a local so the converted image (and the buffer `outputData` points into)
+            // outlives the copy below; the auto image of an 8-bit sequence is itself 8-bit
+            let autoImage16 = autoProcessedImage.ensure16Bits
+            let format = autoImage16.imageData
 
             switch format {
             case .thirtyTwoBit(_):
                 fatalError("frame \(self.frameIndex) cannot load 32 bit image here now")
-                
+
             case .eightBit(_):
                 Log.e("8 bit not supported here now")
             case .sixteenBit(let outputData):
@@ -1845,18 +1871,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // copy the outputData to a new Buffer
                 var newImageBuffer = ImageBuffer<UInt16>(
                   pointer: outputData,
-                  width: autoProcessedImage.width,
-                  height: autoProcessedImage.height,
-                  components: autoProcessedImage.componentsPerPixel
+                  width: autoImage16.width,
+                  height: autoImage16.height,
+                  components: autoImage16.componentsPerPixel
                 )
-                
+
                 try await self.replaceAirplanes(
-                  image: autoProcessedImage,
+                  image: autoImage16,
                   toData: &newImageBuffer,
                   originalImage: originalImage
                 )
 
-                if let processedImage = newImageBuffer.image {
+                if var processedImage = newImageBuffer.image {
+                    if config.imageBitsPerComponent == 8 {
+                        // as finishSelective does: an 8-bit sequence is written back out at 8 bits
+                        processedImage = processedImage.ensure8Bits
+                    }
                     // write frame out as processed versions
                     do {
                         Log.d("frame \(self.frameIndex) processed file")

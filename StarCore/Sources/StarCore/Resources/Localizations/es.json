@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Modo",
-  "ui.mode_desc_auto_selective": "Star se ejecutará en modo automático, sustituyendo todos los píxeles defectuosos. Después hará un procesamiento adicional en cada fotograma para permitir que el usuario seleccione los píxeles eliminados y los devuelva a su estado original. Tendrás que entrar en cada fotograma y seleccionar las señales que quieras conservar; Star no puede distinguir todavía entre aviones, satélites y meteoros",
+  "ui.mode_desc_auto_selective": "Star se ejecutará en modo automático, sustituyendo todos los píxeles defectuosos. Después clasificará las señales brillantes de cada fotograma y restaurará los píxeles originales de las que decida conservar, como los meteoros, mientras que los aviones y los satélites seguirán eliminados. Star todavía no distingue con fiabilidad entre aviones, satélites y meteoros, así que revisa cada fotograma y cambia cualquier señal en la que se haya equivocado.",
   "ui.mode_desc_automatic": "Star se ejecutará en modo automático, sustituyendo todos los píxeles defectuosos. Si todo va bien, Star no requerirá ninguna atención del usuario en cada fotograma.",
   "ui.mode_desc_selective": "Star se ejecutará en modo selectivo, analizando cada fotograma para ver qué parece una señal defectuosa e intentando después clasificarlas automáticamente. Los resultados iniciales pueden requerir algo de atención fotograma a fotograma.",
   "ui.modify": "Modificar",

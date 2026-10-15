@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Modo",
-  "ui.mode_desc_auto_selective": "O Star será executado em modo automático, substituindo todos os pixels ruins. Depois fará um processamento adicional em cada quadro para permitir que o usuário selecione os pixels removidos e os devolva ao estado original. Você terá de entrar em cada quadro e selecionar os sinais que quiser manter; o Star ainda não sabe distinguir aviões, satélites e meteoros",
+  "ui.mode_desc_auto_selective": "O Star será executado em modo automático, substituindo todos os pixels ruins. Depois classificará os sinais brilhantes de cada quadro e restaurará os pixels originais daqueles que decidir manter, como os meteoros, enquanto aviões e satélites continuarão removidos. O Star ainda não distingue com segurança aviões, satélites e meteoros, então confira cada quadro e altere qualquer sinal em que ele tenha errado.",
   "ui.mode_desc_automatic": "O Star será executado em modo automático, substituindo todos os pixels ruins. Se tudo correr bem, o Star não exigirá nenhuma atenção do usuário quadro a quadro.",
   "ui.mode_desc_selective": "O Star será executado em modo seletivo: analisará cada quadro para ver o que parece um sinal ruim e depois tentará classificá-los automaticamente. Os resultados iniciais podem exigir alguma atenção quadro a quadro.",
   "ui.modify": "Modificar",

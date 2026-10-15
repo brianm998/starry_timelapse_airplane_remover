@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Chế độ",
-  "ui.mode_desc_auto_selective": "Star sẽ chạy ở chế độ tự động và thay thế mọi điểm ảnh hỏng. Sau đó nó xử lý thêm từng khung để người dùng có thể chọn các điểm ảnh đã bị loại và đưa chúng về trạng thái ban đầu. Bạn sẽ phải vào từng khung và chọn những tín hiệu muốn giữ; hiện Star chưa phân biệt được máy bay, vệ tinh và sao băng",
+  "ui.mode_desc_auto_selective": "Star sẽ chạy ở chế độ tự động và thay thế mọi điểm ảnh hỏng. Sau đó nó phân loại các tín hiệu sáng trong từng khung và khôi phục điểm ảnh gốc của những tín hiệu nó quyết định giữ, chẳng hạn sao băng, còn máy bay và vệ tinh vẫn bị loại bỏ. Star chưa phân biệt được máy bay, vệ tinh và sao băng một cách đáng tin cậy, vì vậy hãy kiểm tra từng khung và đổi lại những tín hiệu mà nó đánh giá sai.",
   "ui.mode_desc_automatic": "Star sẽ chạy ở chế độ tự động và thay thế mọi điểm ảnh hỏng. Nếu mọi thứ suôn sẻ, Star sẽ không cần người dùng can thiệp ở từng khung.",
   "ui.mode_desc_selective": "Star sẽ chạy ở chế độ chọn lọc: nó phân tích từng khung để xem đâu có vẻ là tín hiệu hỏng, rồi thử tự động phân loại chúng. Kết quả ban đầu có thể cần được xem lại đôi chút theo từng khung.",
   "ui.modify": "Sửa",

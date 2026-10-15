@@ -563,7 +563,7 @@
   "ui.minx": "MinX",
   "ui.miny": "MinY",
   "ui.mode": "Mode",
-  "ui.mode_desc_auto_selective": "Star fonctionnera en mode automatique et remplacera tous les mauvais pixels. Il traitera ensuite chaque image plus avant pour permettre aux utilisateurs de sélectionner les pixels supprimés et de les rétablir dans leur état d'origine. Vous devrez parcourir chaque image et sélectionner les signaux que vous souhaitez conserver ; Star ne sait pas encore distinguer les avions, les satellites et les météores",
+  "ui.mode_desc_auto_selective": "Star fonctionnera en mode automatique et remplacera tous les mauvais pixels. Il classera ensuite les signaux lumineux de chaque image et rétablira les pixels d'origine de ceux qu'il décide de conserver, comme les météores, tandis que les avions et les satellites resteront supprimés. Star ne sait pas encore distinguer de façon fiable les avions, les satellites et les météores ; vérifiez donc chaque image et corrigez tout signal mal classé.",
   "ui.mode_desc_automatic": "Star fonctionnera en mode automatique et remplacera tous les mauvais pixels. Si tout se passe bien, Star ne demandera aucune attention image par image.",
   "ui.mode_desc_selective": "Star fonctionnera en mode sélectif : il analysera chaque image pour repérer ce qui ressemble à de mauvais signaux, puis tentera de les catégoriser automatiquement. Les premiers résultats peuvent demander un peu d'attention image par image.",
   "ui.modify": "Modifier",
