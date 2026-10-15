@@ -47,9 +47,28 @@ public struct BaselineEntry: Codable, Sendable, Hashable {
     public var date: String?
 }
 
+/// A frame whose `--unchanged-outside` area is a known problem (see BUGS.md). Its area is reported
+/// but left out of the total; if it drops to within the threshold the entry must be removed.
+public struct CollateralBaselineEntry: Codable, Sendable, Hashable {
+    public var dataset: String
+    public var frame: String
+    public var cleanMethod: String
+    public var area: Int?
+    public var bug: String?
+    public var date: String?
+}
+
 public struct Baseline: Codable, Sendable {
     public var entries: [BaselineEntry]
-    public init(entries: [BaselineEntry] = []) { self.entries = entries }
+    public var collateral: [CollateralBaselineEntry]
+    public init(entries: [BaselineEntry] = [], collateral: [CollateralBaselineEntry] = []) {
+        self.entries = entries; self.collateral = collateral
+    }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        entries = try c.decodeIfPresent([BaselineEntry].self, forKey: .entries) ?? []
+        collateral = try c.decodeIfPresent([CollateralBaselineEntry].self, forKey: .collateral) ?? []
+    }
     public static func load(from url: URL) throws -> Baseline {
         try JSONDecoder().decode(Baseline.self, from: Data(contentsOf: url))
     }

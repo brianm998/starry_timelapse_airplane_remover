@@ -69,6 +69,9 @@ public struct Report: Codable, Sendable {
     public var starsStatus: String?
     public var collateral: [String: [ChangedComponent]] = [:]
     public var collateralArea = 0
+    /// Frames listed in the baseline's `collateral` section: area per frame, not counted in `collateralArea`.
+    public var collateralKnown: [String: Int] = [:]
+    public var collateralFixed: [String] = []
     public var collateralStatus: String?
     public var differential: [String: DifferentialFrame] = [:]
     public var messages: [String] = []
@@ -201,7 +204,12 @@ public enum Verifier {
                 let fp = Collateral.footprint(width: inB.width, height: inB.height, objects: objects, margin: 10)
                 let comps = Collateral.changedComponents(input: f.input, output: f.output, footprint: fp)
                 report.collateral[f.name] = comps
-                report.collateralArea += comps.reduce(0) { $0 + $1.area }
+                let area = comps.reduce(0) { $0 + $1.area }
+                if let baseline, baseline.collateral.contains(where: { $0.dataset == options.dataset && $0.frame == f.name && $0.cleanMethod == options.cleanMethod }) {
+                    report.collateralKnown[f.name] = area
+                } else {
+                    report.collateralArea += area
+                }
                 for (i, c) in comps.prefix(8).enumerated() {
                     let m = 12
                     let name = "\(LabelSet.baseName(f.name))_changed\(i).png"
@@ -229,6 +237,12 @@ public enum Verifier {
         }
         if options.unchangedOutside, let t = thresholds.unchanged_outside_max_area?.value {
             report.collateralStatus = Double(report.collateralArea) <= t ? "pass" : "fail"
+            // a baselined frame that is now within the limit has been fixed (or labelled): the entry must go
+            for (frame, area) in report.collateralKnown.sorted(by: { $0.key < $1.key }) where Double(area) <= t {
+                report.collateralFixed.append(frame)
+                report.messages.append("\(frame): unchanged-outside area \(area) is now within the limit: remove it from removal-baseline.json")
+                report.collateralStatus = "fail"
+            }
         }
 
         var ok = report.summary.failed == 0 && report.summary.labelErrors == 0

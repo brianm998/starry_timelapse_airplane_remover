@@ -106,6 +106,18 @@ Not verified: the run took 30 minutes of wall clock on the crop (the full-size r
 not required; `faint` status; unit tested) is in the verifier but its value is unmeasured and the removed/kept contrast
 distributions overlap (see `removal-thresholds.json`).
 
+## Frame 90 recorded as a known issue (2026-10-15)
+
+Brian chose "record it as a known issue". Further analysis of the report overturned my first guess ("no trail visible, probably
+a false positive"): 97% of frame 90's changed area (27,752 of 28,655 px) lies on one straight line,
+y = 0.0987·x + 469.8 in crop coordinates, residual under 2 px, over ~1,340 px. So Star removed a real, faint, unlabelled
+linear object, and the repaint leaves smeared streaks in the Milky Way. It is written up as **BUG-001 in `BUGS.md`** (new
+file; multi-bug format with a template and add/delete rules). The baseline gained a `collateral` section
+(`gherkin/removal-baseline.json`, one entry for `a7sii_10_crop16` / `LRT_00090.tif` / `selective`): such a frame's area is
+reported but left out of the unchanged-outside total, and the verifier fails once it is within the limit, telling you to
+remove the entry (unit tested; 19 tests pass). Still open for Brian: label that trail (full-frame (2434,1162) to (3765,1293)),
+which would also clear the entry.
+
 ## Not done (leftover)
 
 - **`--temp` decision diagnostics** are not implemented. The option is accepted and prints a note.

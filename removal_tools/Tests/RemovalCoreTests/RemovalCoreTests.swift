@@ -216,6 +216,27 @@ final class VerifierTests: XCTestCase {
         XCTAssertFalse(r2.summary.ok)
     }
 
+    func testBaselinedCollateralFrameIsReportedNotCounted() throws {
+        // output differs from input in a blob far from the label, on frame f.tif
+        let (_, clean, labels) = setup()      // output identical to input
+        var changed = clean
+        for y in 200..<210 { for x in 300..<310 { changed.output.data[y * 400 + x] += 0.3 } }
+        var o = VerifyOptions(); o.unchangedOutside = true; o.reportOnly = false
+        o.cleanMethod = "selective"; o.inputIsLossless = true; o.dataset = "ds"
+        var t = Thresholds(); t.unchanged_outside_max_area = Threshold(value: 10, measured: "synthetic test")
+        let (r0, _) = try Verifier.verify(frames: [changed], labels: labels, options: o, thresholds: t, baseline: nil)
+        XCTAssertFalse(r0.summary.ok)
+        let base = Baseline(collateral: [CollateralBaselineEntry(dataset: "ds", frame: "f.tif", cleanMethod: "selective", area: 100, bug: "BUG-001", date: nil)])
+        let (r1, _) = try Verifier.verify(frames: [changed], labels: labels, options: o, thresholds: t, baseline: base)
+        XCTAssertTrue(r1.summary.ok)
+        XCTAssertEqual(r1.collateralKnown["f.tif"], 100)
+        XCTAssertEqual(r1.collateralArea, 0)
+        // once the frame is clean the stale entry fails the run
+        let (r2, _) = try Verifier.verify(frames: [clean], labels: labels, options: o, thresholds: t, baseline: base)
+        XCTAssertFalse(r2.summary.ok)
+        XCTAssertEqual(r2.collateralFixed, ["f.tif"])
+    }
+
     func testUnchangedOutsideRefusals() {
         let (removed, _, labels) = setup()
         var o = VerifyOptions(); o.unchangedOutside = true; o.reportOnly = true
