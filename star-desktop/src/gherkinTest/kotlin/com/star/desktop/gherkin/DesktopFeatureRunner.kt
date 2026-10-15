@@ -116,6 +116,17 @@ class DesktopFeatureRunner {
             if (System.nanoTime() > deadline) throw RunnerError("timed out after ${OPEN_TIMEOUT_MS / 1000}s waiting for the sequence to open (screen: ${model.screen.value})")
             Thread.sleep(50)
         }
+        // Optional, for a runner too small for the default: detect keypoints at 1/<divisor> size. Written into the session config
+        // as the startup question does, and waited for, so the settings dialog opened later proposes a config that has it.
+        System.getenv("STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR")?.toDoubleOrNull()?.let { divisor ->
+            model.setKeypointDivisor(divisor)
+            val wrote = System.nanoTime() + UI_TIMEOUT_MS * 1_000_000
+            while (model.sessions.session.value?.config?.alignmentKeypointDetectionDivisor != divisor) {
+                if (System.nanoTime() > wrote) throw RunnerError("the keypoint divisor $divisor was not written to the session config")
+                Thread.sleep(50)
+            }
+            println("keypoint divisor set to $divisor")
+        }
         t.setContent { StarApp(model) }
         waitFor(t, "the sequence screen", UI_TIMEOUT_MS) {
             model.error.value?.let { throw RunnerError("the app reported an error while opening: $it") }
@@ -195,6 +206,6 @@ class DesktopFeatureRunner {
         const val CLIENT = "desktop"
         const val OPEN_TIMEOUT_MS = 10L * 60_000
         const val UI_TIMEOUT_MS = 90_000L
-        const val PROCESS_TIMEOUT_MS = 45L * 60_000
+        const val PROCESS_TIMEOUT_MS = 25L * 60_000
     }
 }
