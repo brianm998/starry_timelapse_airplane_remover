@@ -1,0 +1,95 @@
+# Gherkin removal validation: result
+
+`GHERKIN_REMOVAL_VALIDATION_PLAN.md` has been removed. Only the parts that need no real labelled data, CI runs or
+Brian's decisions were built. Nothing is committed.
+
+## What was built
+
+**`removal_tools/`** (standalone SwiftPM package, swift-tools-version 6.0):
+- `RemovalCore`: pure Swift with no OpenCV, so its tests build anywhere. It holds the trail-contrast check (50 px stretches,
+  on-line vs background bands, 5σ measurability, >20% unmeasurable = label error), the star-flux distribution check, the
+  `--unchanged-outside` connected-component report, differential mode, the thresholds model, the baseline ratchet
+  (known failure / regression / fixed-must-be-removed), the PNG crop writer, and the seeded trail generator.
+- `RemovalIO`: decodes and encodes through StarCore's `PixelatedImage` and `MatWrapper`.
+- `star-removal-verify`: all the options in the plan except `--temp` diagnostics (below). It exits 0, 1 or 2 as specified.
+  `--report-only` is supported.
+- `star-trail-inject`: seeded and deterministic. It writes `base/` (byte copy), `injected/` (16-bit TIFF) and `labels.json`
+  (confirmed). It builds satellites (SNR sweep, FWHM 1.5–3, some collinear continuations into the next frame), airplanes
+  (twin lines, strobe dots, red/green/white tint, some running off the edge) and meteors (tapered).
+- 17 XCTests (`swift test` in `removal_tools/`) pass: known line ratios, partial removal, the worst stretch, faint trails,
+  star flux scale and lost stars, an unlabelled blob reported as one component with the right area, the refusal rules for
+  `--unchanged-outside`, the baseline ratchet, and label errors.
+
+**`tools/label-trails/index.html`**: the labelling page (no build, no network). Zoom, pan, polyline points, class, width,
+note and confirmed per object; drafts are drawn orange; it loads and exports `labels.json`, and draws a `sky` polygon.
+It was not exercised in a browser.
+
+**`gherkin/removal-thresholds.json`**: every value is `null` with a `measured` note. **`gherkin/removal-baseline.json`**:
+empty. **`gherkin/README.md`**: a new section covering labels, the verifier, thresholds, the baseline and synthetic data.
+
+## Checked by hand
+
+I built a 3-frame 2000×1400 16-bit TIFF base from `test_a7sii_10` and injected 17 objects. With the output set to the base
+(trails gone), the measurable objects came out at worst ratio 0.01–0.09. With the output set to the injected frames, they
+came out at exactly 1.000. The stars check gave a ratio of 1.000 on identical frames (about 6000 peaks per frame).
+
+**Finding for Phase 4:** the 5σ measurability rule on a median of on-line pixels classes synthetic satellites at SNR 3, 5 and
+10 as unmeasurable (label error) and the tapered meteors as partly so. Only SNR 30 and 100 satellites and the airplanes
+(SNR 40) are measured. If the SNR sweep is meant to reach the low end, the metric, the width or the SNR definition needs
+changing. Do not just loosen the 5σ rule.
+
+## Phase 1 validation against frame 92 (done)
+
+All 19 `test_a7sii_10` frames converted to 16-bit LZW TIFF, a one-object hand-drawn label
+(`(548,312.2)→(999,412.1)`, width 8, confirmed only in a scratch copy; the committed form would stay a draft). Release cli,
+fresh input copy per run, verifier `--expect airplane=removed`:
+
+| run | worst stretch ratio | best | known value |
+|---|---|---|---|
+| `automatic:false` | 0.008 | −0.021 | −0.009 (worst 0.040) |
+| `selective` | −0.024 | −0.065 | (not previously measured) |
+| fixed `automatic:true` | 0.129 | −0.021 | 0.006 (worst 0.130) |
+| old `automatic:true` (`1b2cb327^`) | 1.057 | 1.031 | 1.03 |
+
+The fixed `automatic:true` worst stretch (0.129) matches the 0.130 in the plan, and the old build gives 1.03 to 1.06. The
+worst/best columns are per-stretch extremes, so they are not directly comparable to the plan's averaged figures
+(−0.009, 0.006); the scale and the separation between removed and not removed (0.13 vs 1.03) hold. Metal was in use by
+default on this Mac. Wall times: 59 s, 74 s and 82 s respectively.
+
+## Real labels received (2026-10-15)
+
+`test_data/labels/a7sii_10.labels.json` (copied from Brian's export; source for the future archive): 240 objects, all
+`confirmed`, `complete: true`, all class `airplane`, all width 8. Observations:
+- Every object has the default class. Faint streaks that are satellites are probably still `airplane`. Needs a pass.
+- One short object (11–33 px) appears in nearly every frame and drifts steadily from (940,2229) to (730,2325): a slow moving
+  point, not a trail. Two more short ones: `00086-14`, `00095-3`.
+- Metric change made because of this data: the original single wide on-line median left 227 of 240 objects "unmeasurable"
+  (a thin faint streak is averaged away by an 8 px band). The on-line value is now the peak of 1 px lateral bins (bin chosen
+  on the input, output read at the same bin; tolerates clicks a few px off) and measurability is 5σ of a median over that
+  bin's pixels. 226 of 240 are now measurable; 14 are label errors. The frame-92 numbers above were taken with the *old*
+  metric and have not been re-run with the new one.
+- Measured on the 16-bit TIFF conversion of the sequence (release cli, this Mac), worst-stretch ratio per object:
+  - `selective`: bimodal. 49 objects ≈ 0 (removed), 177 ≈ 1.0 (not removed). Removed ones are the bright streaks (median
+    input contrast 0.14 vs 0.05 for the untouched ones). Only 1 object is partially removed.
+  - `automatic:false`: median 0.08, p95 0.35, max 0.62 (a noise floor of about ±0.2 on the worst of several stretches).
+  - `automatic:true`: 158 of 226 near 0–0.2, 33 near 1.0 (restored as keep), a tail between.
+- `--unchanged-outside` on `selective` (labels are complete and input is lossless): 0 changed pixels outside the labelled
+  trails in 4 of the 19 frames, 39–1073 px (3–52 small components) in the other 15, out of 12 MP per frame. The labels
+  account for nearly everything Star removed. Crops were not reviewed.
+- Consequence: on real data `selective` fails most labelled faint streaks, so a baseline would hold about 177 entries. Whether
+  those are "known failures" or mislabelled/should not be required is Brian's call before any baseline is written.
+
+## Not done (leftover)
+
+- **`--temp` decision diagnostics** are not implemented. The option is accepted and prints a note.
+- **Phase 2 data.** There are no `labels.draft.json` drafts, no `a7sii_10` / `a7sii_10_crop16` archives or manifest edits, and
+  nothing was uploaded. Brian must confirm labels and upload. Nothing was marked confirmed.
+- **Phase 3 realism comparison.** The generator exists, but the synthetic-versus-real detection-rate check was not run. The
+  base was not proven clean with Star in selective mode, so `--base-is-clean` was never used.
+- **Phase 4.** No measurements on `ubuntu-24.04` or `macos-15`, no Metal vs CPU note, and no threshold or baseline values.
+- **Phase 5.** None of the following exists: the six `steps.json` entries, runner changes, the five features, CI wiring and
+  artifact upload, vacuous-green guards, and the throwaway "deliberately break removal" proof. The speed/test-data branch
+  `claude/gherkin-speed-test-data-8b2cf1` was not merged into this base either.
+- Project memory `removal-validation-oracle` was not updated, since there are no thresholds yet.
+- `removal_tools/Package.resolved` is untracked and was not reviewed for committing. Linux and Windows builds of
+  `removal_tools` were not tried.

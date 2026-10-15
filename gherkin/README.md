@@ -119,3 +119,64 @@ Each runner fails (never skips) on missing setup, and refuses a feature with no 
 `xcodebuild -only-testing:` matching nothing exits 0 having run nothing, so each CI leg also checks the
 log: `Executed 1 test, with 0 failures` for xcodebuild, `testOpenAndProcessFeature` passed for swift test,
 and `tests="1"` / `skipped="0"` in `build/test-results/gherkinTest/*.xml` for Gradle.
+
+## Checking airplane and satellite removal
+
+Features that must prove trails are actually gone use `removal_tools/` (a standalone SwiftPM package: `RemovalCore`,
+the pure-Swift measurements, plus the `star-removal-verify` and `star-trail-inject` executables). **Status: the verifier
+and generator exist and are unit-tested, but no feature calls them yet and every threshold is unmeasured**; see
+`GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md`.
+
+### Labels (`labels.json`)
+
+Shipped inside each dataset archive. One polyline per trail, per frame, in full-resolution input pixels:
+`{ "id", "class": airplane|satellite|meteor|other, "points": [[x,y],…], "width", "confirmed", "note" }`, plus an optional
+`sky` polygon and `complete` (true = every trail in every frame is labelled). **Only `confirmed: true` objects are
+checked, and only a person sets that.** Never mark an object confirmed from Star's own output.
+
+* `tools/label-trails/index.html` is the labelling page: open it in a browser, pick a frame directory (browsers other than
+  Safari can't show TIFF, so use same-named JPEG/PNG previews), click polyline points, set class/width/note, tick confirmed,
+  export. It can load an existing `labels.json`; drafts are drawn orange, confirmed green.
+* Labels must be drawn independently of Star. `OutlierGroupPaintData.json` is not ground truth.
+
+### The verifier
+
+```
+star-removal-verify --input <dir> --output <dir> --labels labels.json \
+    --expect "airplane=removed,satellite=removed" [--stars] [--unchanged-outside] [--base-output <dir>] \
+    --thresholds gherkin/removal-thresholds.json [--baseline gherkin/removal-baseline.json --dataset <name> --clean-method <m>] \
+    --report report.json --crops <dir> [--report-only]
+```
+
+Exit 0 = pass, 1 = failure, 2 = bad input (bad label, missing frame, wrong mode for `--unchanged-outside`).
+
+* **Trail check:** per 50 px stretch, contrast = median(on-line, ≤ width/2) − median(two background bands, width/2+8 …
+  width/2+26), reported as output/input. A stretch whose input contrast is under 5σ of its background is unmeasurable;
+  over 20% unmeasurable length is a *label error*, neither pass nor fail.
+* **Stars (`--stars`):** peaks > 10σ over a 32 px block-median background, flux = 7×7 sum − 49 × the 17×17 median; the
+  median ratio and the fraction below 0.5 are judged as a distribution, inside `sky`, ≥ 40 px from any labelled object.
+* **Unchanged outside (`--unchanged-outside`):** selective + lossless input + `complete` labels only (refused otherwise).
+  Every connected component of changed pixels outside the footprint is reported, with a crop.
+* **Differential (`--base-output`):** for synthetic datasets, compares with Star's output on the un-injected base.
+* Whole-frame golden images and PSNR/SSIM cannot be the check: the default mode recomputes every pixel and Metal vs CPU
+  differ.
+
+### Thresholds and the baseline
+
+`gherkin/removal-thresholds.json`: each entry is `{ "value", "measured" }`; `value: null` means unmeasured, and the
+verifier refuses to enforce until it is set (use `--report-only`). Never guess one; set it from measured distributions.
+
+`gherkin/removal-baseline.json` ratchets known failures on **real** data, one entry per (dataset, frame, object, clean
+method): still failing = pass and say so; failing but not listed = regression (fail); listed but now passing = **fail**
+("remove it from removal-baseline.json"). Synthetic datasets get no baseline entries.
+
+### Synthetic datasets
+
+`star-trail-inject --base <clean 16-bit sequence> --out <dir> [--spec spec.json]` writes `base/`, `injected/` and a
+`labels.json` (`confirmed: true`, exact by construction). Seeded and deterministic; run once to build a dataset, never at
+test time. Satellites sweep SNR 3–100, airplanes are twin lines with strobe dots, meteors are measured only.
+
+### Adding a removal feature
+
+Not possible yet: the steps in the plan (`setCleanMethod`, `airplanesRemoved`, …) are not in `steps.json`. Once added, a
+`Then` step should run `star-removal-verify` as a subprocess and surface its summary, report and crop paths.
