@@ -18,6 +18,8 @@ public struct Thresholds: Codable, Sendable {
     /// Objects whose median measurable input contrast (0...1 brightness units) is below this are
     /// reported as `faint` and not required to be removed (selective mode leaves faint streaks alone).
     public var min_required_contrast: Threshold?
+    /// Aggregate mode only: the fraction of measurable objects that must pass.
+    public var removed_fraction_min: Threshold?
 
     public init() {}
 
@@ -26,7 +28,8 @@ public struct Thresholds: Codable, Sendable {
     }
 
     /// Thresholds a given set of checks needs but doesn't have a value for.
-    public func missing(forRemoved removed: Bool, kept: Bool, stars: Bool, unchanged: Bool, differential: Bool) -> [String] {
+    public func missing(forRemoved removed: Bool, kept: Bool, stars: Bool, unchanged: Bool, differential: Bool,
+                        aggregate: Bool = false) -> [String] {
         var m: [String] = []
         func need(_ name: String, _ t: Threshold?) { if t?.value == nil { m.append(name) } }
         if removed || differential { need("removed_max", removed_max) }
@@ -34,6 +37,7 @@ public struct Thresholds: Codable, Sendable {
         if stars { need("stars_median_min", stars_median_min); need("stars_median_max", stars_median_max); need("stars_lost_max", stars_lost_max) }
         if unchanged { need("unchanged_outside_max_area", unchanged_outside_max_area) }
         if differential { need("differential_outside_max", differential_outside_max) }
+        if aggregate { need("removed_fraction_min", removed_fraction_min) }
         return m
     }
 }

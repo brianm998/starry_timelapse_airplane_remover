@@ -17,6 +17,10 @@ struct StarRemovalVerify: ParsableCommand {
     @Flag(help: "Check the stars as a flux-ratio distribution.") var stars = false
     @Flag(help: "Report everything that changed outside the labelled trails (selective + lossless input + complete labels only).")
     var unchangedOutside = false
+    @Flag(help: "Judge the fraction of measurable objects that pass (removed_fraction_min) instead of every object.")
+    var aggregate = false
+    @Flag(help: "Objects too faint to measure are skipped and reported instead of failing as label errors (hand-labelled real data).")
+    var skipUnmeasurable = false
     @Option(help: "Star's output on the un-injected base: differential mode for synthetic datasets.") var baseOutput: String?
     @Option(help: "The star_temp directory of a `-w --keep-temp-files` run (diagnostics only).") var temp: String?
     @Option(help: "gherkin/removal-thresholds.json") var thresholds: String?
@@ -40,6 +44,8 @@ struct StarRemovalVerify: ParsableCommand {
         opts.unchangedOutside = unchangedOutside
         opts.differential = baseOutput != nil
         opts.reportOnly = reportOnly
+        opts.aggregate = aggregate
+        opts.skipUnmeasurable = skipUnmeasurable
         opts.dataset = dataset
         opts.cleanMethod = cleanMethod
 
@@ -95,7 +101,7 @@ struct StarRemovalVerify: ParsableCommand {
         for o in r.objects {
             let m = o.measurement
             print("\(o.frame) \(o.id) [\(o.class.rawValue)=\(o.expectation)] \(o.status)"
-                  + " worst=\(f(m?.worstRatio)) best=\(f(m?.bestRatio))"
+                  + " median=\(f(m?.medianRatio)) worst=\(f(m?.worstRatio)) best=\(f(m?.bestRatio))"
                   + " removed=\(f(m?.fractionRemoved)) measurable=\(f(m?.measurableFraction))"
                   + (o.detail.map { " — \($0)" } ?? ""))
         }
@@ -110,6 +116,6 @@ struct StarRemovalVerify: ParsableCommand {
         }
         for m in r.messages { print("note: \(m)") }
         let s = r.summary
-        print("summary: objects=\(s.objects) passed=\(s.passed) failed=\(s.failed) labelErrors=\(s.labelErrors) knownFailures=\(s.knownFailures) reportOnly=\(s.reportOnly) ok=\(s.ok)")
+        print("summary: objects=\(s.objects) passed=\(s.passed) failed=\(s.failed) labelErrors=\(s.labelErrors) knownFailures=\(s.knownFailures) unmeasurableSkipped=\(s.unmeasurableSkipped) passFraction=\(f(s.passFraction)) reportOnly=\(s.reportOnly) ok=\(s.ok)")
     }
 }

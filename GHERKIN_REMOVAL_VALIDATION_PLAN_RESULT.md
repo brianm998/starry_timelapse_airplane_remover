@@ -141,10 +141,34 @@ cli-based suite cannot run there. The plan scopes the removal suite to the cli o
 Linux, so Linux numbers should represent it, but that is unproven. Phase 5 should still build `removal_tools` on the Windows
 leg (cheap compile check) if that leg can run the verifier at all.
 
+## Phase 4 results (CI runs 38798344452 macos-15 and 38801175389 ubuntu-24.04, 2026-10-15) and what they changed
+
+Full tables are in the job summaries and the `removal-measurements-*` artifacts. Headline findings:
+- **`a7sii_10` (full-frame JPEG, 240 labels, 226 measurable) is stable across macOS (Metal-paravirtual GPU path) and Linux (CPU):**
+  `automatic:false` removes 226/226 on both (median stretch ratio max 0.312); `automatic:true` 188 vs 189; `selective` 47/47.
+  Star flux ratio medians 0.933 to 0.994 (automatic), 1.002 to 1.004 (selective), lost fraction at most 0.014, identical on both OS.
+- **Metric change:** the pass rule is now the per-object **median** stretch ratio, not the worst stretch, because worst-stretch
+  distributions of removed and kept objects overlap (0.46 to 0.48 vs 0.52 to 0.58) and the median ones do not
+  (removed at most 0.48, kept at least 0.81). New verifier options `--aggregate` (judge the fraction removed;
+  `removed_fraction_min`) and `--skip-unmeasurable` (faint hand labels are skipped, not label errors). 21 unit tests pass.
+- **Thresholds set with evidence** in `gherkin/removal-thresholds.json`: `removed_max` 0.6, `kept_min` 0.7, `stars_median_min` 0.9,
+  `stars_median_max` 1.05, `stars_lost_max` 0.04, `removed_fraction_min` 0.7. Still null: `unchanged_outside_max_area`,
+  `differential_outside_max`, `min_required_contrast` (brightness does not predict selective removal: 12 of 19 streaks at contrast >= 0.3 removed).
+- **The hosted macos-15 runner reports a GPU ("Apple Paravirtual device") and uses it**, so macOS CI does exercise the GPU path.
+  CPU-forced and GPU runs on the same runner differ on the crop set (collateral 14,419 vs 45,771; 3 objects flip).
+- **The crop dataset `a7sii_10_crop16` is a poor fixture**: stars lose 30 to 70% flux under `automatic:false` (BUG-002), `selective` and
+  `automatic:true` take 25 to 35 min per run (BUG-003), and `selective` is non-deterministic: the same machine twice gave 44,022 then
+  80,826 changed px, with frame 90 going 28,655 to 903 (BUG-001, which replaces my earlier "frame 90 is damaged" read; the frame-90 baseline
+  entry was removed because it does not reproduce). Per-object verdicts also differ between OS for 7 objects under `automatic:true` (BUG-004).
+- **Replacement: `a7sii_10_16bit`** (full-frame 16-bit LZW TIFF, same labels, 411,344,795 B). Locally `selective` run twice gives 19/19 identical
+  frames, 6,723 changed px in total: reproducible. Built into `.test-data/upload/` and the manifest; **not uploaded**. The measurement
+  workflow now fetches `a7sii_10` and `a7sii_10_16bit` and also runs `a7sii_10_16bit selective` twice plus a macOS CPU-forced repeat, to measure
+  same-platform repeatability and set `unchanged_outside_max_area`. The crop is still in the manifest and reachable with `MEASURE_CROP=1`.
+
 ## Not done (leftover)
 
 - **`--temp` decision diagnostics** are not implemented. The option is accepted and prints a note.
-- **Upload** of the two archives (Brian). No `labels.draft.json` generator was written: Brian labelled from scratch.
+- **Upload** of `a7sii_10_16bit-51480f4c981f.tar.gz` (Brian; the two earlier archives are uploaded). No `labels.draft.json` generator was written: Brian labelled from scratch.
 - **Phase 3 realism comparison.** The generator exists, but the synthetic-versus-real detection-rate check was not run. The
   base was not proven clean with Star in selective mode, so `--base-is-clean` was never used.
 - **Phase 4.** No measurements on `ubuntu-24.04` or `macos-15`, no Metal vs CPU note, and no threshold or baseline values.

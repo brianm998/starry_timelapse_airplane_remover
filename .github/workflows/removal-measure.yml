@@ -31,7 +31,7 @@ jobs:
           key: testdata-removal-${{ hashFiles('test_data/datasets.json') }}
 
       - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh a7sii_10 a7sii_10_crop16
+        run: test_data/fetch.sh a7sii_10 a7sii_10_16bit
 
       - name: Install apt prerequisites
         run: |
@@ -116,7 +116,7 @@ jobs:
           key: testdata-removal-${{ hashFiles('test_data/datasets.json') }}
 
       - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh a7sii_10 a7sii_10_crop16
+        run: test_data/fetch.sh a7sii_10 a7sii_10_16bit
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1

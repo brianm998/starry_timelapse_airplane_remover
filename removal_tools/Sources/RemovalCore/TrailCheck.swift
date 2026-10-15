@@ -14,6 +14,9 @@ public struct TrailMeasurement: Codable, Sendable {
     public var stretches: [StretchResult]
     public var length: Double
     public var worstRatio: Double?
+    /// Median over the measurable stretches. The pass rule uses this, not the worst stretch: on real data the
+    /// worst-stretch distributions of removed and kept objects overlap (0.46-0.48 vs 0.52-0.58), the median ones do not.
+    public var medianRatio: Double?
     public var bestRatio: Double?
     /// Fraction of the length whose ratio is <= 0.5 (i.e. mostly gone).
     public var fractionRemoved: Double
@@ -75,7 +78,7 @@ public enum TrailCheck {
         let ratios = measurable.compactMap(\.ratio)
         return TrailMeasurement(
             stretches: stretches, length: total,
-            worstRatio: ratios.max(), bestRatio: ratios.min(),
+            worstRatio: ratios.max(), medianRatio: ratios.isEmpty ? nil : Double(Stats.median(ratios.map { Float($0) })), bestRatio: ratios.min(),
             fractionRemoved: measurableLen > 0 ? removedLen / measurableLen : 0,
             measurableFraction: total > 0 ? measurableLen / total : 0)
     }

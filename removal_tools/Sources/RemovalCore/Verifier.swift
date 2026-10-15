@@ -15,6 +15,12 @@ public struct VerifyOptions: Sendable {
     public var stars = false
     public var unchangedOutside = false
     public var differential = false
+    /// Judge the fraction of measurable objects that pass (thresholds.removed_fraction_min) instead of every object. For
+    /// classifier-dependent modes whose per-object verdicts differ between platforms while the totals do not.
+    public var aggregate = false
+    /// Objects too faint to measure are reported and skipped instead of failing as label errors. For hand-labelled real
+    /// data that deliberately includes faint streaks; synthetic datasets keep the strict default.
+    public var skipUnmeasurable = false
     public var reportOnly = true
     public var dataset = ""
     public var cleanMethod = ""
@@ -55,6 +61,9 @@ public struct Summary: Codable, Sendable {
     public var passed = 0
     public var failed = 0
     public var labelErrors = 0
+    public var unmeasurableSkipped = 0
+    /// passed / (passed + failed), the aggregate-mode statistic.
+    public var passFraction: Double?
     public var knownFailures = 0
     public var faintSkipped = 0
     public var unmeasurableObjects = 0
@@ -108,7 +117,7 @@ public enum Verifier {
 
         let missing = thresholds.missing(
             forRemoved: options.expect.values.contains(.removed), kept: options.expect.values.contains(.kept),
-            stars: options.stars, unchanged: options.unchangedOutside, differential: options.differential)
+            stars: options.stars, unchanged: options.unchangedOutside, differential: options.differential, aggregate: options.aggregate)
         if !missing.isEmpty && !options.reportOnly {
             throw VerifyError.badInput("thresholds not set (they come from Phase 4 measurements; use --report-only until then): \(missing.joined(separator: ", "))")
         }
@@ -135,6 +144,13 @@ public enum Verifier {
                 let m = TrailCheck.measure(input: inB, output: baseB.map { outB.minus($0) } ?? outB, object: o)
                 rep.measurement = m
                 report.summary.objects += 1
+                if m.measurableFraction < 0.8 && options.skipUnmeasurable {
+                    rep.status = "unmeasurable"
+                    rep.detail = String(format: "only %.0f%% of the length is measurable in the input: skipped", m.measurableFraction * 100)
+                    report.summary.unmeasurableSkipped += 1
+                    report.objects.append(rep)
+                    continue
+                }
                 if m.measurableFraction < 0.8 {
                     rep.status = "labelError"
                     rep.detail = String(format: "only %.0f%% of the length is measurable in the input: bad label", m.measurableFraction * 100)
@@ -144,6 +160,7 @@ public enum Verifier {
                     continue
                 }
                 let ratios = m.stretches.compactMap(\.ratio)
+                let median = m.medianRatio ?? .nan
                 if exp == .removed, let floor = thresholds.min_required_contrast?.value {
                     let c = Stats.median(m.stretches.filter(\.measurable).map { Float($0.inputContrast) })
                     if Double(c) < floor {
@@ -156,8 +173,8 @@ public enum Verifier {
                 }
                 var passed: Bool?
                 switch exp {
-                case .removed: if let t = removedMax { passed = ratios.allSatisfy { $0 <= t } }
-                case .kept: if let t = keptMin { passed = ratios.allSatisfy { $0 >= t } }
+                case .removed: if let t = removedMax { passed = median <= t }
+                case .kept: if let t = keptMin { passed = median >= t }
                 }
                 if let passed {
                     var status = passed ? "pass" : "fail"
@@ -245,7 +262,12 @@ public enum Verifier {
             }
         }
 
+        let judged = report.summary.passed + report.summary.failed
+        if judged > 0 { report.summary.passFraction = Double(report.summary.passed) / Double(judged) }
         var ok = report.summary.failed == 0 && report.summary.labelErrors == 0
+        if options.aggregate, let t = thresholds.removed_fraction_min?.value {
+            ok = (report.summary.passFraction ?? 0) >= t && report.summary.labelErrors == 0
+        }
         if report.starsStatus == "fail" || report.collateralStatus == "fail" { ok = false }
         if report.differential.values.contains(where: { $0.status == "fail" }) { ok = false }
         report.summary.ok = ok

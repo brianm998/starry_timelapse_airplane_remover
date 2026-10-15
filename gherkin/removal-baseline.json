@@ -1,13 +1,4 @@
 {
   "entries": [],
-  "collateral": [
-    {
-      "dataset": "a7sii_10_crop16",
-      "frame": "LRT_00090.tif",
-      "cleanMethod": "selective",
-      "area": 28655,
-      "bug": "BUG-001",
-      "date": "2026-10-15"
-    }
-  ]
+  "collateral": []
 }

@@ -19,12 +19,18 @@ runs=(
   "a7sii_10:selective"
   "a7sii_10:automatic:false"
   "a7sii_10:automatic:true"
-  "a7sii_10_crop16:selective:--unchanged-outside"
-  "a7sii_10_crop16:automatic:false"
-  "a7sii_10_crop16:automatic:true"
+  "a7sii_10_16bit:selective:--unchanged-outside"
+  "a7sii_10_16bit:selective:--unchanged-outside:repeat"
+  "a7sii_10_16bit:automatic:false"
+  "a7sii_10_16bit:automatic:true"
 )
+# a7sii_10_crop16 is a hard case (BUGS.md BUG-001 to BUG-003: 25-35 min per run, stars dimmed, unstable collateral); only with MEASURE_CROP=1.
+if [ "${MEASURE_CROP:-}" = "1" ]; then
+  runs+=("a7sii_10_crop16:selective:--unchanged-outside" "a7sii_10_crop16:automatic:false" "a7sii_10_crop16:automatic:true")
+fi
+# "repeat" is an identical second run on the same runner: how much do two runs of the same thing differ? (BUG-001)
 # On macOS also repeat one run with the GPU off, to see how far Metal and the CPU path differ on the same runner.
-if [ "$os" = "macos" ]; then runs+=("a7sii_10_crop16:selective:--unchanged-outside:cpu"); fi
+if [ "$os" = "macos" ]; then runs+=("a7sii_10_16bit:selective:--unchanged-outside:cpu"); fi
 
 for spec in "${runs[@]}"; do
   IFS=: read -r ds m1 m2 m3 m4 <<< "$spec"

@@ -237,6 +237,42 @@ final class VerifierTests: XCTestCase {
         XCTAssertEqual(r2.collateralFixed, ["f.tif"])
     }
 
+    func testPassRuleUsesTheMedianStretchNotTheWorst() throws {
+        // 6 stretches; only one is left in place (ratio ~1), the other five are gone
+        var input = flatPlane(400, 250, noise: 0.001)
+        paintLine(&input, from: Point(x: 40, y: 100), to: Point(x: 340, y: 150), width: 8, amplitude: 0.4)
+        var output = flatPlane(400, 250, noise: 0.001, seed: 9)
+        paintLine(&output, from: Point(x: 150, y: 118.333), to: Point(x: 190, y: 125), width: 8, amplitude: 0.4)
+        let labels = LabelSet(frames: ["f.tif": [LabelObject(id: "o", class: .airplane, points: [[40, 100], [340, 150]], width: 8, confirmed: true)]])
+        var o = VerifyOptions(); o.expect = [.airplane: .removed]; o.reportOnly = false
+        let (r, _) = try Verifier.verify(frames: [FrameInputs(name: "f.tif", input: raster(input), output: raster(output))],
+                                         labels: labels, options: o, thresholds: thresholds(), baseline: nil)
+        XCTAssertGreaterThan(r.objects[0].measurement?.worstRatio ?? 0, 0.8)
+        XCTAssertLessThan(r.objects[0].measurement?.medianRatio ?? 1, 0.2)
+        XCTAssertEqual(r.objects[0].status, "pass")
+    }
+
+    func testAggregateModeJudgesTheFractionAndUnmeasurableCanBeSkipped() throws {
+        let (removed, kept, _) = setup()
+        // two objects on the same frame: one real trail, one on empty sky (unmeasurable)
+        let good = LabelObject(id: "good", class: .airplane, points: [[40, 100], [340, 150]], width: 8, confirmed: true)
+        let ghost = LabelObject(id: "ghost", class: .airplane, points: [[10, 200], [300, 220]], width: 8, confirmed: true)
+        let labels = LabelSet(frames: ["f.tif": [good, ghost]])
+        var o = VerifyOptions(); o.expect = [.airplane: .removed]; o.reportOnly = false; o.aggregate = true; o.skipUnmeasurable = true
+        var t = thresholds(); t.removed_fraction_min = Threshold(value: 0.7, measured: "synthetic test")
+        let (r1, _) = try Verifier.verify(frames: [removed], labels: labels, options: o, thresholds: t, baseline: nil)
+        XCTAssertTrue(r1.summary.ok)
+        XCTAssertEqual(r1.summary.unmeasurableSkipped, 1)
+        XCTAssertEqual(r1.summary.passFraction, 1)
+        let (r2, _) = try Verifier.verify(frames: [kept], labels: labels, options: o, thresholds: t, baseline: nil)
+        XCTAssertFalse(r2.summary.ok)
+        XCTAssertEqual(r2.summary.passFraction, 0)
+        // without --skip-unmeasurable the ghost is a label error
+        o.skipUnmeasurable = false
+        let (r3, _) = try Verifier.verify(frames: [removed], labels: labels, options: o, thresholds: t, baseline: nil)
+        XCTAssertFalse(r3.summary.ok)
+    }
+
     func testUnchangedOutsideRefusals() {
         let (removed, _, labels) = setup()
         var o = VerifyOptions(); o.unchangedOutside = true; o.reportOnly = true

@@ -1,10 +1,38 @@
 {
-  "removed_max": { "value": null, "measured": "unmeasured: set in Phase 4 from the passing/failing distributions" },
-  "kept_min": { "value": null, "measured": "unmeasured" },
-  "stars_median_min": { "value": null, "measured": "unmeasured (prior single measurement: median 0.961, p5 0.667, p95 1.278, 1.9% < 0.5 on a7sii_10 automatic, 2026-10-14)" },
-  "stars_median_max": { "value": null, "measured": "unmeasured" },
-  "stars_lost_max": { "value": null, "measured": "unmeasured" },
-  "unchanged_outside_max_area": { "value": null, "measured": "unmeasured" },
-  "differential_outside_max": { "value": null, "measured": "unmeasured" },
-  "min_required_contrast": { "value": null, "measured": "unmeasured: real a7sii_10 selective run 2026-10-15 removed streaks with median input contrast 0.14 (p25 0.09) and left those at 0.05 (p75 0.09); the distributions overlap, so Phase 4 must pick or change the metric" }
+  "removed_max": {
+    "value": 0.6,
+    "measured": "measured 2026-10-15 on a7sii_10 (240 hand labels, 226 measurable), release cli, macos-15 (Apple Paravirtual GPU path) run 38798344452 and ubuntu-24.04 (CPU) run 38801175389; per-object MEDIAN stretch ratio: removed objects max 0.312 (automatic:false, identical on both OS), 0.478/0.466 (automatic:true), 0.065 (selective); objects left in place min 0.812 (automatic:true), 0.911 (selective). 0.6 sits in the 0.48-0.81 gap. The worst-stretch distributions overlap (removed max 0.48, kept min 0.52 for automatic:false) and are not used."
+  },
+  "kept_min": {
+    "value": 0.7,
+    "measured": "measured 2026-10-15 on a7sii_10 (240 hand labels, 226 measurable), release cli, macos-15 (Apple Paravirtual GPU path) run 38798344452 and ubuntu-24.04 (CPU) run 38801175389; per-object MEDIAN stretch ratio: same gap as removed_max (removed max 0.478, left-in-place min 0.812). No planned feature uses it yet."
+  },
+  "stars_median_min": {
+    "value": 0.9,
+    "measured": "per-frame star flux ratio medians on a7sii_10 (about 28,000 peaks per frame), both OS: 0.933-0.994 for automatic:false/true, 1.002-1.004 for selective, 2026-10-15. Margin to 0.9 is 0.033; NOT valid for a7sii_10_crop16 (0.28-0.74, see BUGS.md BUG-002)."
+  },
+  "stars_median_max": {
+    "value": 1.05,
+    "measured": "same data: highest per-frame median 1.004."
+  },
+  "stars_lost_max": {
+    "value": 0.04,
+    "measured": "same data: highest per-frame fraction of peaks below 0.5 is 0.014 (automatic), 0.001 (selective)."
+  },
+  "unchanged_outside_max_area": {
+    "value": null,
+    "measured": "unmeasurable so far: the only lossless dataset (a7sii_10_crop16, selective) gave 14,419 / 44,022 / 45,771 / 62,543 changed px on four runs (CPU mac, local Vega, macOS GPU, Linux CPU) with the bulk in different frames each time; see BUGS.md BUG-001 and BUG-004. Needs a full-frame lossless dataset."
+  },
+  "differential_outside_max": {
+    "value": null,
+    "measured": "unmeasured: no synthetic dataset has been run through Star yet"
+  },
+  "min_required_contrast": {
+    "value": null,
+    "measured": "not usable: brightness does not predict selective removal. Objects with input contrast >= 0.30: 12 of 19 removed, >= 0.15: 22 of 47, >= 0.05: 44 of 133 (both OS, 2026-10-15)."
+  },
+  "removed_fraction_min": {
+    "value": 0.7,
+    "measured": "aggregate mode for automatic:true on a7sii_10: fraction of measurable objects with median ratio <= removed_max is 188/226 = 0.832 (macos) and 189/226 = 0.836 (linux); individual verdicts differ for 7 objects between the OS while the totals are within one (188 vs 189). The margin on the regression side is not measured: the pre-1b2cb327 build was only measured on one object (frame 92, ratio 1.03)."
+  }
 }

@@ -16,6 +16,13 @@
       "description": "a7sii_10 as 16-bit LZW TIFF, every frame cropped to x=1500 y=600 w=2300 h=1450 of the original (all sky, no ground), plus labels.json: the a7sii_10 labels shifted into crop coordinates and clipped at the crop edge (122 objects, 31 of them clipped). Lossless input for the unchanged-outside check.",
       "provenance": "Derived from a7sii_10 (Brian Martin, own photographs) with magick -crop 2300x1450+1500+600 -depth 16 -compress lzw."
     },
+    "a7sii_10_16bit": {
+      "asset": "a7sii_10_16bit-51480f4c981f.tar.gz",
+      "sha256": "51480f4c981f0eec8630e71756bec184df91b8d1708b955ed3109bffa5c692e5",
+      "bytes": 411344795,
+      "description": "a7sii_10 converted to 16-bit LZW TIFF at full size (4240x2832, magick -depth 16 -compress lzw), plus labels.json: the a7sii_10 labels unchanged (240 objects) with .tif keys. Lossless input for the unchanged-outside check, without the crop's problems (BUGS.md BUG-001 to BUG-003).",
+      "provenance": "Derived from a7sii_10 (Brian Martin, own photographs); labels by Brian Martin 2026-10-15."
+    },
     "gui_splash_video": {
       "asset": "gui_splash_video-35575f903725.tar.gz",
       "sha256": "35575f9037253719b08500af8511b51277fcef6e8458d651b39b5fd3b54d0af9",
