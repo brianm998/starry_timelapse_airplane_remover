@@ -616,9 +616,10 @@ jobs:
           # The killed run's marker would make the next stard report a crashed run and cover the UI with an alert.
           on_retry_command: pkill -x stard || true; rm -rf star-desktop/build/run-markers
           shell: bash
-          # ~2GB free on a 7GB VM: detect keypoints at 1/1.8 size (about a third of the memory per frame; 2 is too coarse for this small sequence: no star alignment) so a frame fits stard's narrowed budget.
-          # The cli, gui and other desktop legs run the default.
-          command: cd star-desktop && STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.8 ./gradlew gherkinTest --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
+          # A 7GB VM with ~2-3GB free: at full resolution one frame's keypoint reservation (2.2GB) exceeds stard's narrowed memory budget, so
+          # frames wait minutes each. stard itself defaults to 1.5 on such a machine; pin it so a roomier moment on the VM cannot pick 1.
+          # Not coarser: 1.8 and 2 find no usable star alignment on this runner. The cli, gui and other desktop legs run the default.
+          command: cd star-desktop && STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
 
       - name: Prove the scenario ran (not a vacuous green)
         working-directory: star-desktop
