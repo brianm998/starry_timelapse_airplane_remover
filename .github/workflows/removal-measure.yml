@@ -102,6 +102,8 @@ jobs:
 
   measure-macos:
     name: removal measurements (macos-15)
+    # TEMPORARY with the push trigger above: put "[skip macos]" in a commit message to rerun only the Linux job.
+    if: ${{ !contains(github.event.head_commit.message, '[skip macos]') }}
     runs-on: macos-15
     timeout-minutes: 300
     steps:

@@ -266,6 +266,7 @@ final class PNGTests: XCTestCase {
     func testSignatureAndChunks() {
         let d = PNG.encode(rgb: [UInt8](repeating: 128, count: 4 * 3 * 3), width: 4, height: 3)
         XCTAssertEqual(Array(d.prefix(8)), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
-        XCTAssertNotNil(String(data: d, encoding: .isoLatin1)?.range(of: "IEND"))
+        // the file ends with the IEND chunk: length 0, "IEND", and its fixed CRC
+        XCTAssertEqual(Array(d.suffix(12)), [0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82])
     }
 }
