@@ -10,6 +10,11 @@ name: Removal measurements
 
 on:
   workflow_dispatch:
+  # TEMPORARY: a manual workflow only appears in the Actions tab once its file is on the default branch (develop).
+  # Until this is merged, a push to this branch that changes THIS file runs it. Delete this block when merging.
+  push:
+    branches: [claude/gherkin-removal-validation-40e353]
+    paths: ['.github/workflows/removal-measure.yml']
 
 jobs:
   measure-linux:
