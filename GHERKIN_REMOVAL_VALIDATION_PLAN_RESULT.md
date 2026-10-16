@@ -214,6 +214,12 @@ and judging the desktop run with the selective mode (pins only). The mac GUI's d
 - **desktop (ubuntu-24.04): `removeAirplanes` failed** (48 of 226 removed, the selective profile): the desktop client's default clean method is selective, not automatic:false, so the GUI runner's hardcoded method was wrong. Fixed in 1ea45863 (the desktop is judged with the selective pins-only check; the mac GUI's default really is automatic:false). The fix and the pin change are not yet on CI.
 - Still pending on that run when this was written: desktop (windows-2022), desktop (macos-15), mac gui.
 
+### Second CI run (6a164468)
+
+`cli (macos-15)` passed all five (the SIGSEGV of the first run did not recur: BUG-005 is intermittent). `desktop (ubuntu-24.04)` ran the selective pins-only check with the clean-method fix and left 5 of the 42 pins in place, all faint
+(input contrast 0.025 to 0.071; every pin at >= 0.075 was removed). The GUI session's diagnosis: the desktop session ran at detection type MILD while the pins were measured at STRONG (the cli default), and it set STRONG in the desktop runner
+(177e93f9). Unproven until CI runs it. I had trimmed the pins by brightness instead (36 left) and reverted that so the STRONG fix is tested on its own; that brightness cutoff is the fallback if the desktop still misses the faint pins.
+
 ## Not done (leftover)
 
 
