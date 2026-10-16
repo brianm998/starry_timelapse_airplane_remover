@@ -150,6 +150,14 @@ class DesktopFeatureRunner {
             }
             println("keypoint divisor set to $divisor")
         }
+        // The session opens with no detection type set, which the proto reads as DETECTION_MILD, while Star's own default (the cli, and the
+        // GUI's Config()) is STRONG. The removal pins were measured at STRONG, so run at STRONG; written into the session config and waited for.
+        model.setDetectionType(com.star.proto.DetectionType.DETECTION_STRONG)
+        val setDetection = System.nanoTime() + UI_TIMEOUT_MS * 1_000_000
+        while (model.sessions.session.value?.config?.detectionType != com.star.proto.DetectionType.DETECTION_STRONG) {
+            if (System.nanoTime() > setDetection) throw RunnerError("the detection type was not written to the session config")
+            Thread.sleep(50)
+        }
         t.setContent { StarApp(model) }
         waitFor(t, "the sequence screen", UI_TIMEOUT_MS) {
             model.error.value?.let { throw RunnerError("the app reported an error while opening: $it") }

@@ -207,7 +207,7 @@ overrides it). The runner finds the verifier at `removal_tools/.build/release/st
 The cli's default (no `-c`) is `automatic:false`, judged per object. The mac GUI's default flow (startup questions all left on,
 `StartupView.cleanMethod`) is also `automatic:false`. The desktop client's auto-open path keeps `initialConfigBeside`'s `CLEAN_SELECTIVE`
 (`InitialConfigBesideTest`), so `DesktopFeatureRunner.kt` passes `--clean-method selective --pins-only --pins gherkin/removal-pins.json` and
-requires `pinsChecked` to equal the pin count, as the cli runner does for selective (selective leaves most faint labelled streaks alone by
+sets the session's detection type to STRONG (an unset one is MILD, Star's own default is STRONG, and the pins were measured at STRONG) and requires `pinsChecked` to equal the pin count, as the cli runner does for selective (selective leaves most faint labelled streaks alone by
 design: BUG-004). The GUI method maps hold no clean-method steps, so a feature that asks for one fails naming what is implemented. Each GUI leg of `gherkin.yml` builds `removal_tools` in release first; reports land in `removal-reports/gui-removeAirplanes/`
 and `removal-reports/desktop-removeAirplanes/` and are uploaded as artifacts.
 
