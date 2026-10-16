@@ -286,28 +286,21 @@ final class GuiFeatureRunner {
         }
     }
 
-    /// Auto selective leaves every frame waiting for its outliers to be reviewed (run over, not all complete): the user finishes by
-    /// rendering all frames, which writes the finals without moving the complete count. The cli has no review, so it writes them itself.
-    /// The run is watched on the disk (its outlier data, then the finals): XCUITest queries are answered by a busy app's main thread.
+    /// Auto selective in the GUI writes the final frames by itself, as the cli does (the frames stay in the review state, so the
+    /// progress line never reads N/N complete; the desktop client does need Render All Frames). The run is watched on the disk, its
+    /// outlier data and then the finals: XCUITest queries are answered by a busy app's main thread and time out.
     private func finishAutoSelective(expected: Int) throws {
         func tempDir() -> URL? {
             (try? FileManager.default.contentsOfDirectory(atPath: scratch.path))?.first { $0.hasPrefix("star_temp_") }
                 .map { scratch.appendingPathComponent($0) }
         }
-        try waitFor("every frame's outlier data", timeout: 45 * 60, interval: 10) {
-            guard let t = tempDir() else { return false }
+        try waitFor("every frame's outlier data and final image", timeout: 45 * 60, interval: 10) {
+            guard let t = tempDir(), let out = try? outputFrames() else { return false }
             return ((try? frameFiles(in: t.appendingPathComponent("auto-selective-processed")).count) ?? 0) >= expected
-        }
-        // The button is there but dead until the run is over: click it once it can be.
-        let render = element("render.all.frames")
-        try waitFor("Render All Frames to be enabled", timeout: 10 * 60, interval: 10) { render.exists && render.isEnabled }
-        render.click()
-        try waitFor("the final frames", timeout: 30 * 60, interval: 10) {
-            guard let out = try? outputFrames() else { return false }
-            return ((try? frameFiles(in: out).count) ?? 0) >= expected
+              && ((try? frameFiles(in: out).count) ?? 0) >= expected
         }
         // let the last frame's write land
-        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 5)
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 10)
         completeFrames = expected
     }
 
