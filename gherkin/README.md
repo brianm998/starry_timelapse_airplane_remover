@@ -185,11 +185,11 @@ method): still failing = pass and say so; failing but not listed = regression (f
 `labels.json` (`confirmed: true`, exact by construction). Seeded and deterministic; run once to build a dataset, never at
 test time. Satellites sweep SNR 3–100, airplanes are twin lines with strobe dots, meteors are measured only.
 
-### Removal features (cli only so far)
+### Removal features (`removeAirplanes` on all three clients, the rest cli only)
 
 | feature | method | dataset | what it proves |
 |---|---|---|---|
-| `removeAirplanes` | `automatic:false` (the default) | `{sequence}` = `a7sii_10` (JPEG) | every measurable labelled airplane is removed (median stretch ratio <= `removed_max`), stars preserved |
+| `removeAirplanes` (`@cli @mac-gui @desktop`) | `automatic:false` (the default) | `{sequence}` = `a7sii_10` (JPEG) | every measurable labelled airplane is removed (median stretch ratio <= `removed_max`), stars preserved |
 | `autoPreservationKeepsAirplanesOutJpeg` / `...Bit16` | `automatic:true` | `a7sii_10` / `{sequence16}` = `a7sii_10_16bit` | at least `removed_fraction_min` of the measurable airplanes are removed **and** the 43 pinned objects (`gherkin/removal-pins.json`) are; regression test for `1b2cb327` |
 | `selectiveRemovesOnlyTrails` | `selective` | `a7sii_10_16bit` | the pinned objects are removed, nothing outside the labelled trails changed (<= `unchanged_outside_max_area`), stars preserved |
 
@@ -199,6 +199,13 @@ preserved`, `nothing outside the labelled trails changed`. Each `Then` runs `sta
 summary plus the report and crop paths, and refuses to pass if the report did not check every labelled object of the class (or every
 pin, or every frame). Reports and crops go to `removal-reports/<feature>/` (git-ignored; CI uploads it with `if: always()`; `STAR_REMOVAL_REPORTS`
 overrides it). The runner finds the verifier at `removal_tools/.build/release/star-removal-verify` (`STAR_REMOVAL_VERIFY` overrides).
+
+`removeAirplanes` also runs on the GUIs: `GuiFeatureRunner.swift` (XCUITest; the runner is not sandboxed, `star.entitlements` is empty) and
+`DesktopFeatureRunner.kt` launch `star-removal-verify` as a subprocess with the same flags and the same vacuous-green guards as the cli runner
+(object count equals the confirmed labels, stars covered every output frame, something measurable). The GUIs only ever run the default clean method,
+so `the clean method is automatic:false` is a no-op there and `automatic:true` / `selective` are not in their method maps (a feature using them fails
+naming what is implemented). Each GUI leg of `gherkin.yml` builds `removal_tools` in release first; reports land in `removal-reports/gui-removeAirplanes/`
+and `removal-reports/desktop-removeAirplanes/` and are uploaded as artifacts.
 
 Why pins: per-object verdicts differ between platforms and the fraction removed cannot tell the pre-`1b2cb327` build (0.78) from the
 fixed one (0.83), so the objects every healthy run removes are pinned (derived from Star's own output, not ground truth). Why the pass

@@ -190,12 +190,25 @@ CI: `gherkin.yml` cli legs build `removal_tools`, run all five tests, the guard 
 report JSON to exist, and upload `removal-reports` with `if: always()`. **Not run on CI yet**; the first push will show whether the removal steps behave
 on hosted runners (Linux and macOS times are expected at roughly 10 to 15 minutes more per leg, about 9 minutes locally for the five).
 
+## GUI clients (`@mac-gui`, `@desktop`), 2026-10-16
+
+`removeAirplanes` is now tagged `@cli @mac-gui @desktop`. `GuiFeatureRunner.swift` and `DesktopFeatureRunner.kt` implement `cleanMethodAutomaticFalse`
+(no-op: the GUIs only run the default), `airplanesRemoved`, `satellitesRemoved` and `starsPreserved`, with the cli runner's verifier flags
+(`--skip-unmeasurable`, `gherkin/removal-thresholds.json`, `--clean-method automatic:false`) and guards (objects == confirmed labels, > 0 measurable, star
+frames == output frames). XCUITest can launch a subprocess: the UI-test runner is not sandboxed (empty entitlements file, no sandbox build setting), so no
+separate CI step was needed. `gherkin.yml`: every GUI leg builds `removal_tools`, the guards now expect two tests (`Executed 2 tests` / `tests="2"`), name
+`testRemoveAirplanesFeature` / `removeAirplanesFeature`, require the report JSON, and upload `removal-reports-mac-gui` / `-desktop-<os>`.
+
+What was verified: generated files regenerated; the Kotlin `gherkinTest` source set compiles (`./gradlew compileGherkinTestKotlin`); see below for the Xcode build.
+What was **not** run: neither GUI scenario has executed (no XCUITest run, no Compose run, no stard run with this feature), nothing on GitHub Actions, and the
+verifier has not been built on Windows. Expect the GUI legs to take roughly 5 to 10 minutes longer each (verifier build and the verify pass).
+
 ## Not done (leftover)
 
-- **GUI clients (`@mac-gui`, `@desktop`)**: `removeAirplanes` is `@cli` only. The plan wanted it on the GUIs too; that needs `airplanesRemoved` / `starsPreserved` in `GuiFeatureRunner` (XCUITest; check it can launch the verifier subprocess) and `DesktopFeatureRunner.kt`. The generated Kotlin/Swift for the new steps was regenerated but not compiled or run.
+
 - **Synthetic datasets**: `star-trail-inject` exists and was smoke-tested, but no synthetic dataset has been built, proven clean with Star, uploaded or measured, so there is no `processWithBase` step and no `syntheticSatellites` / `syntheticAirplanes` feature, no differential threshold, and the plan's realism comparison (synthetic vs real detection rate) was not done. There is also no satellite feature (no object is labelled `satellite`).
 - **`--temp` decision diagnostics** are not implemented (the option is accepted and prints a note). The cli runner does not pass `-w --keep-temp-files`.
-- **Windows**: no `star` cli there; the verifier's build on Windows was not tried or wired into the desktop-windows leg.
+- **Windows**: no `star` cli there. The desktop-windows leg now runs `swift build -c release` in `removal_tools` (StarCore builds there as part of stard, but `removal_tools` itself has never been built on Windows) and `removeAirplanes` runs there through the Kotlin runner. **Not run.** If that build fails, that leg fails at the new step.
 - **BUGS.md** BUG-001 to BUG-004 are open and unassigned: `selective` is non-deterministic on the cropped set, stars are dimmed on it, it takes 25-35 minutes, and per-object verdicts differ between platforms. `a7sii_10_crop16` stays in the manifest but nothing uses it.
 - `removal_tools/Package.resolved` is committed as generated and was not reviewed. The `removal-measure.yml` workflow still has a temporary `push` trigger and a `[skip macos]` switch to delete when it is merged.
 - The pins and thresholds come from one day of runs (one CI run per OS plus local runs): re-measure if a platform or a Star change moves them.

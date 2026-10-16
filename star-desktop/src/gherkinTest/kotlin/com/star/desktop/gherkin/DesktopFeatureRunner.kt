@@ -12,6 +12,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.star.desktop.gherkin.generated.StepAction
 import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
@@ -43,6 +45,12 @@ class DesktopFeatureRunner {
         StepAction.OPEN_SEQUENCE to ::openSequence,
         StepAction.PROCESS_EVERY_FRAME to ::processEveryFrame,
         StepAction.OUTPUT_FRAMES_WRITTEN to ::outputFramesWritten,
+        // The desktop client only ever runs Star's default clean method (automatic:false), so this step has nothing to set.
+        // automatic:true and selective are deliberately absent: a feature that asks for them fails naming what is implemented.
+        StepAction.CLEAN_METHOD_AUTOMATIC_FALSE to { _ -> },
+        StepAction.AIRPLANES_REMOVED to { _ -> trailsRemoved("airplane") },
+        StepAction.SATELLITES_REMOVED to { _ -> trailsRemoved("satellite") },
+        StepAction.STARS_PRESERVED to { _ -> starsPreserved() },
     )
 
     fun run(feature: Feature) {
@@ -185,13 +193,92 @@ class DesktopFeatureRunner {
         val want = param("expected_outputs").toIntOrNull() ?: throw RunnerError("{expected_outputs} is not a number")
         val model = vm ?: throw RunnerError("\"I open the sequence\" has not run")
         if (completeFrames < 0) throw RunnerError("\"I process every frame\" has not run")
-        // The session's output goes to <outputPath>/<sequence name>-star-v-<version>, beside the copy we made.
+        val outDir = outputDirectory(model)
+        val files = outDir.listFiles { f -> f.isFile && !f.name.startsWith(".") }.orEmpty().map { it.name }.sorted()
+        assertEquals(want, files.size, "frames written to $outDir: $files")
+        assertEquals(want, completeFrames, "the progress line's complete count")
+    }
+
+    /** The session's output goes to <outputPath>/<sequence name>-star-v-<version>, beside the copy we made. */
+    private fun outputDirectory(model: AppViewModel): File {
         val config = model.sessions.session.value?.config ?: throw RunnerError("no open session")
         val outDirs = File(config.outputPath).listFiles { f -> f.isDirectory && f.name.startsWith("${sequenceCopy.name}-star-v-") }.orEmpty()
         if (outDirs.size != 1) throw RunnerError("expected one output directory under ${config.outputPath}, found ${outDirs.map { it.name }}")
-        val files = outDirs[0].listFiles { f -> f.isFile && !f.name.startsWith(".") }.orEmpty().map { it.name }.sorted()
-        assertEquals(want, files.size, "frames written to ${outDirs[0]}: $files")
-        assertEquals(want, completeFrames, "the progress line's complete count")
+        return outDirs[0]
+    }
+
+    // ---- removal checks (star-removal-verify) ----
+    // Same verifier, flags and vacuous-green guards as cli/Tests/GherkinTests/CliFeatureRunner.swift, run as a subprocess.
+
+    private fun verifierBinary(): File {
+        val exe = if (System.getProperty("os.name").startsWith("Windows")) "star-removal-verify.exe" else "star-removal-verify"
+        val f = System.getenv("STAR_REMOVAL_VERIFY")?.takeIf { it.isNotEmpty() }?.let { File(it) }
+            ?: File(repoRoot(), "removal_tools/.build/release/$exe")
+        if (!f.isFile) throw RunnerError("no star-removal-verify at $f: run `swift build -c release --package-path removal_tools`, or set STAR_REMOVAL_VERIFY")
+        return f
+    }
+
+    /** Not the scratch directory (deleted when the scenario ends): CI uploads this as an artifact. */
+    private fun reportsDirectory(): File {
+        val base = System.getenv("STAR_REMOVAL_REPORTS")?.takeIf { it.isNotEmpty() }?.let { File(it) } ?: File(repoRoot(), "removal-reports")
+        return File(base, "desktop-removeAirplanes")
+    }
+
+    private fun labelsJson(): JsonObject {
+        val labels = File(sequenceCopy, "labels.json")
+        if (!labels.isFile) throw RunnerError("no labels.json in the sequence: $labels")
+        return JsonParser.parseString(labels.readText()).asJsonObject
+    }
+
+    /** Runs the verifier with the only clean method this client has, automatic:false. A failing exit status fails the step with its summary. */
+    private fun runVerifier(extra: List<String>, reportName: String): JsonObject {
+        val model = vm ?: throw RunnerError("\"I open the sequence\" has not run")
+        if (completeFrames < 0) throw RunnerError("\"I process every frame\" has not run")
+        val reports = reportsDirectory().apply { mkdirs() }
+        val report = File(reports, "$reportName.json")
+        val crops = File(reports, "$reportName-crops")
+        val args = listOf(
+            verifierBinary().absolutePath,
+            "--input", sequenceCopy.absolutePath, "--output", outputDirectory(model).absolutePath,
+            "--labels", File(sequenceCopy, "labels.json").absolutePath,
+            "--thresholds", File(repoRoot(), "gherkin/removal-thresholds.json").absolutePath,
+            "--clean-method", "automatic:false", "--dataset", sequenceCopy.name,
+            "--skip-unmeasurable", "--report", report.absolutePath, "--crops", crops.absolutePath,
+        ) + extra
+        val p = ProcessBuilder(args).redirectErrorStream(true).start()
+        val text = p.inputStream.bufferedReader().readText()
+        val status = p.waitFor()
+        println(text.lines().takeLast(12).joinToString("\n"))
+        if (status != 0) {
+            throw RunnerError("star-removal-verify exited $status\n" + text.lines().takeLast(30).joinToString("\n") +
+                "\nreport: $report\ncrops: $crops")
+        }
+        return JsonParser.parseString(report.readText()).asJsonObject
+    }
+
+    private fun trailsRemoved(trailClass: String) {
+        val expected = labelsJson().getAsJsonObject("frames").entrySet().sumOf { (_, objs) ->
+            objs.asJsonArray.count {
+                val o = it.asJsonObject
+                o.get("class")?.asString == trailClass && o.get("confirmed")?.asBoolean == true
+            }
+        }
+        val report = runVerifier(listOf("--expect", "$trailClass=removed"), "${trailClass}s-removed")
+        // not vacuous: the verifier must have looked at every confirmed object of this class
+        val summary = report.getAsJsonObject("summary")
+        val objects = summary?.get("objects")?.asInt ?: -1
+        if (expected <= 0) throw RunnerError("labels.json has no confirmed $trailClass objects: the step would check nothing")
+        if (objects != expected) throw RunnerError("the verifier checked $objects $trailClass objects, labels.json has $expected confirmed: refusing to pass")
+        val measured = (summary.get("passed")?.asInt ?: 0) + (summary.get("failed")?.asInt ?: 0)
+        if (measured <= 0) throw RunnerError("no $trailClass object was measurable: refusing to pass")
+    }
+
+    private fun starsPreserved() {
+        val model = vm ?: throw RunnerError("\"I open the sequence\" has not run")
+        val report = runVerifier(listOf("--stars"), "stars")
+        val frames = outputDirectory(model).listFiles { f -> f.isFile && !f.name.startsWith(".") }.orEmpty().size
+        val stars = report.getAsJsonObject("stars")?.size() ?: 0
+        if (frames <= 0 || stars != frames) throw RunnerError("the star check covered $stars frames, Star wrote $frames: refusing to pass")
     }
 
     // ---- waiting ----

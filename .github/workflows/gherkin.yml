@@ -5,6 +5,8 @@ name: Gherkin
 #   mac-gui                       XCUITest against Star.app (hosted macOS runners ship with UI automation
 #                                 mode enabled: no `automationmodetool` step here)
 #   desktop-linux/-windows/-macos runComposeUiTest against a real stard, offscreen (no Xvfb)
+# removeAirplanes (@cli @mac-gui @desktop) also runs removal_tools' `star-removal-verify` as a subprocess on every client leg, so
+# every leg builds removal_tools in release first (the Windows desktop leg too: unverified there until its first run).
 # plus generate-check, which regenerates every generated file and fails on a diff.
 #
 # Test data is fetched from the `test-data` release (test_data/datasets.json) into .test-data and cached with actions/cache.
@@ -324,6 +326,11 @@ jobs:
         run: |
           if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
+      - name: Build the removal verifier (release)
+        # Run as a subprocess by the removeAirplanes Then steps (star-removal-verify).
+        working-directory: removal_tools
+        run: swift build -c release
+
       # The GUI's Xcode project bundles gui/videos/*.mp4 (too big for git). The splash video comes from the same
       # checksum-verified manifest as the test data, fetched above.
       - name: Put the splash video where the Xcode project expects it
@@ -363,10 +370,22 @@ jobs:
 
       - name: Prove the scenario ran (not a vacuous green)
         run: |
-          grep -E "Executed 1 test, with 0 failures" gherkin-gui.log
-          # every "Executed N tests" line must be the one-test line: nothing else ran, nothing was skipped
-          ! grep -E "Executed [0-9]+ tests?" gherkin-gui.log | grep -v "Executed 1 test, with 0 failures"
+          grep -E "Executed 2 tests, with 0 failures" gherkin-gui.log
+          # every "Executed N tests" line must be the two-test line: nothing else ran, nothing was skipped
+          ! grep -E "Executed [0-9]+ tests?" gherkin-gui.log | grep -v "Executed 2 tests, with 0 failures"
           grep -E "Test [Cc]ase '.*testOpenAndProcessFeature.*' passed" gherkin-gui.log
+          grep -E "Test [Cc]ase '.*testRemoveAirplanesFeature.*' passed" gherkin-gui.log
+          # the removal step ran the verifier and left its reports (the runner also refuses to pass on a zero count)
+          ls removal-reports/gui-removeAirplanes/*.json
+
+      - name: Upload the removal reports and crops
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-reports-mac-gui
+          path: removal-reports
+          if-no-files-found: warn
+          retention-days: 30
 
       # The screenshots in here are the only evidence of a GUI failure.
       - name: Upload the xcresult
@@ -437,6 +456,11 @@ jobs:
         working-directory: daemon
         run: swift build -c release -Xswiftc -static-stdlib
 
+      - name: Build the removal verifier (release)
+        # Run as a subprocess by the removeAirplanes Then steps (star-removal-verify).
+        working-directory: removal_tools
+        run: swift build -c release
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -458,9 +482,12 @@ jobs:
         working-directory: star-desktop
         run: |
           ls build/test-results/gherkinTest/*.xml
-          grep -E 'tests="1"' build/test-results/gherkinTest/*.xml
+          grep -E 'tests="2"' build/test-results/gherkinTest/*.xml
           grep -E 'skipped="0"' build/test-results/gherkinTest/*.xml
           grep -E 'failures="0"' build/test-results/gherkinTest/*.xml
+          grep -E 'testcase name="removeAirplanesFeature' build/test-results/gherkinTest/*.xml
+          # the removal step ran the verifier and left its reports (the runner also refuses to pass on a zero count)
+          ls ../removal-reports/desktop-removeAirplanes/*.json
 
       - name: Upload test reports
         if: always()
@@ -469,6 +496,15 @@ jobs:
           name: gherkin-desktop-linux-reports
           path: star-desktop/build/reports/tests/gherkinTest
           if-no-files-found: warn
+
+      - name: Upload the removal reports and crops
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-reports-desktop-linux
+          path: removal-reports
+          if-no-files-found: warn
+          retention-days: 30
 
   # ─── desktop, Windows ────────────────────────────────────────────────────────
   # The slowest leg: stard is built from scratch on Windows (cache permitting). Same toolchain pinning as
@@ -607,6 +643,11 @@ jobs:
         # Do not set CL=/D... globally, it breaks OpenCV's CMake compiler probe (see release_windows.sh).
         run: swift build -c release
 
+      - name: Build the removal verifier (release)
+        # Run as a subprocess by the removeAirplanes Then steps (star-removal-verify).
+        working-directory: removal_tools
+        run: swift build -c release
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -628,9 +669,12 @@ jobs:
         working-directory: star-desktop
         run: |
           ls build/test-results/gherkinTest/*.xml
-          grep -E 'tests="1"' build/test-results/gherkinTest/*.xml
+          grep -E 'tests="2"' build/test-results/gherkinTest/*.xml
           grep -E 'skipped="0"' build/test-results/gherkinTest/*.xml
           grep -E 'failures="0"' build/test-results/gherkinTest/*.xml
+          grep -E 'testcase name="removeAirplanesFeature' build/test-results/gherkinTest/*.xml
+          # the removal step ran the verifier and left its reports (the runner also refuses to pass on a zero count)
+          ls ../removal-reports/desktop-removeAirplanes/*.json
 
       - name: Upload test reports
         if: always()
@@ -639,6 +683,15 @@ jobs:
           name: gherkin-desktop-windows-reports
           path: star-desktop/build/reports/tests/gherkinTest
           if-no-files-found: warn
+
+      - name: Upload the removal reports and crops
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-reports-desktop-windows
+          path: removal-reports
+          if-no-files-found: warn
+          retention-days: 30
 
   # ─── desktop, macOS ──────────────────────────────────────────────────────────
   desktop-macos:
@@ -701,6 +754,11 @@ jobs:
         working-directory: daemon
         run: swift build -c release
 
+      - name: Build the removal verifier (release)
+        # Run as a subprocess by the removeAirplanes Then steps (star-removal-verify).
+        working-directory: removal_tools
+        run: swift build -c release
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -735,9 +793,12 @@ jobs:
         working-directory: star-desktop
         run: |
           ls build/test-results/gherkinTest/*.xml
-          grep -E 'tests="1"' build/test-results/gherkinTest/*.xml
+          grep -E 'tests="2"' build/test-results/gherkinTest/*.xml
           grep -E 'skipped="0"' build/test-results/gherkinTest/*.xml
           grep -E 'failures="0"' build/test-results/gherkinTest/*.xml
+          grep -E 'testcase name="removeAirplanesFeature' build/test-results/gherkinTest/*.xml
+          # the removal step ran the verifier and left its reports (the runner also refuses to pass on a zero count)
+          ls ../removal-reports/desktop-removeAirplanes/*.json
 
       - name: Upload test reports
         if: always()
@@ -746,3 +807,12 @@ jobs:
           name: gherkin-desktop-macos-reports
           path: star-desktop/build/reports/tests/gherkinTest
           if-no-files-found: warn
+
+      - name: Upload the removal reports and crops
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-reports-desktop-macos
+          path: removal-reports
+          if-no-files-found: warn
+          retention-days: 30

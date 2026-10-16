@@ -1,4 +1,4 @@
-@removeAirplanes @cli
+@removeAirplanes @cli @mac-gui @desktop
 Feature: remove airplanes
 
   Scenario: The default clean method removes the labelled airplanes and keeps the stars
