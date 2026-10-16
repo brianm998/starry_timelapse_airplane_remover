@@ -15,6 +15,34 @@
       "bytes": 401935302,
       "description": "The gui's splash video (11_30_2024-fx3-aurora-topaz-star.mp4). A build input of Star.app, not test data.",
       "provenance": "Brian Martin, own footage."
+    },
+    "a7sii_10_tiff16": {
+      "asset": "a7sii_10_tiff16-d26419dbf633.tar.gz",
+      "sha256": "d26419dbf633d95c6b2fb44129b2392448744818ce6ec443ca31fb027831742b",
+      "bytes": 411338773,
+      "description": "The a7sii_10 frames as 19 LZW-compressed 16-bit TIFFs (4240x2832), converted from the JPEGs with ImageMagick. The content has only 8-bit precision: it tests the 16-bit TIFF format path.",
+      "provenance": "Brian Martin, own photographs."
+    },
+    "a7sii_10_sky_tiff16": {
+      "asset": "a7sii_10_sky_tiff16-02e70bc0184f.tar.gz",
+      "sha256": "02e70bc0184f4daea7baf123f6252b9c403c15db612e6f76b7a1c39b1c39e44c",
+      "bytes": 307688171,
+      "description": "The a7sii_10 frames cropped to the sky (full width, top 1800 rows, no ground in any frame; the horizon peaks near row 2020), 16-bit LZW TIFF.",
+      "provenance": "Brian Martin, own photographs."
+    },
+    "a7sii_10_h264": {
+      "asset": "a7sii_10_h264-c566ea432c46.tar.gz",
+      "sha256": "c566ea432c46346b39887b8b99936c94c32e0d44e85c15def689b89cd7867ef6",
+      "bytes": 33310608,
+      "description": "a7sii_10.mp4: the 19 a7sii_10 JPEGs as 4240x2832 H.264 (libx264, crf 12, yuv420p, 30 fps), 19 frames per ffprobe.",
+      "provenance": "Brian Martin, own photographs."
+    },
+    "moving_a7iv_1_aurora_tiff16": {
+      "asset": "PENDING-not-yet-built-or-uploaded",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bytes": 0,
+      "description": "PENDING: a 15-20 frame panning window of the a7 IV aurora sequence, 16-bit TIFF, ~12 MP. Frames to be confirmed by Brian; archive not built.",
+      "provenance": "Brian Martin, own photographs."
     }
   }
 }

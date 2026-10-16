@@ -1067,5 +1067,13 @@
   "ui.jpeg_quality": "गुणवत्ता: {0}%",
   "ui.video_import_disk_usage": "{2} × {3} के {1} फ़्रेम के लिए लगभग {0} डिस्क स्थान चाहिए",
   "ui.video_import_disk_unknown": "यह वीडियो अपनी अवधि नहीं बताता, इसलिए आवश्यक डिस्क स्थान का अनुमान नहीं लगाया जा सकता।",
-  "ui.video_import_start": "आयात करें"
+  "ui.video_import_start": "आयात करें",
+  "cli.help.frame_format": "इनपुट वीडियो होने पर फ़्रेम फ़ॉर्मेट: tiff16 (डिफ़ॉल्ट), tiff8, या jpeg[:गुणवत्ता], गुणवत्ता 1-100।",
+  "cli.help.render_video": "सफल रन के बाद आउटपुट फ़्रेम को वीडियो में रेंडर करता है, आयात किए गए वीडियो की सेटिंग के साथ, या छवि अनुक्रम के लिए डिफ़ॉल्ट (30 fps, ProRes, .mov) के साथ।",
+  "cli.help.video_path": "रेंडर किया गया वीडियो कहाँ लिखना है (--render-video के साथ)। डिफ़ॉल्ट: अनुक्रम के नाम वाला आउटपुट पथ।",
+  "cli.errors.video_path_needs_render_video": "--video-path के लिए --render-video आवश्यक है।",
+  "cli.errors.frame_format_needs_video": "--frame-format केवल तब लागू होता है जब इनपुट वीडियो फ़ाइल हो।",
+  "cli.errors.ffmpeg_not_found": "वीडियो पढ़ने के लिए ffmpeg और ffprobe चाहिए, लेकिन नहीं मिले। इन जगहों में खोजा गया: ${0}, star के पास, बिल्ड ट्री का external_binaries/bin, फिर PATH।",
+  "cli.decoding_video_progress": "वीडियो डिकोड हो रहा है: फ़्रेम {0}/{1}",
+  "cli.rendered_video": "वीडियो रेंडर हुआ: {0}"
 }

@@ -1067,5 +1067,13 @@
   "ui.jpeg_quality": "Kualitas: {0}%",
   "ui.video_import_disk_usage": "Dibutuhkan sekitar {0} ruang disk untuk {1} bingkai berukuran {2} × {3}",
   "ui.video_import_disk_unknown": "Video ini tidak menyebutkan durasinya, sehingga ruang disk yang dibutuhkan tidak dapat diperkirakan.",
-  "ui.video_import_start": "Impor"
+  "ui.video_import_start": "Impor",
+  "cli.help.frame_format": "Format bingkai saat masukan berupa video: tiff16 (bawaan), tiff8, atau jpeg[:kualitas], kualitas 1-100.",
+  "cli.help.render_video": "Setelah proses berhasil, merender bingkai keluaran menjadi video dengan pengaturan video yang diimpor, atau bawaan (30 fps, ProRes, .mov) untuk urutan gambar.",
+  "cli.help.video_path": "Tempat menulis video hasil render (dengan --render-video). Bawaannya jalur keluaran, dinamai sesuai urutan.",
+  "cli.errors.video_path_needs_render_video": "--video-path memerlukan --render-video.",
+  "cli.errors.frame_format_needs_video": "--frame-format hanya berlaku bila masukan berupa berkas video.",
+  "cli.errors.ffmpeg_not_found": "ffmpeg dan ffprobe diperlukan untuk membaca video tetapi tidak ditemukan. Dicari di: ${0}, di samping star, external_binaries/bin pohon build, lalu PATH.",
+  "cli.decoding_video_progress": "Mendekode video: bingkai {0} dari {1}",
+  "cli.rendered_video": "Video dirender: {0}"
 }

@@ -1067,5 +1067,13 @@
   "ui.jpeg_quality": "Qualidade: {0}%",
   "ui.video_import_disk_usage": "São necessários cerca de {0} de espaço em disco para {1} quadros de {2} × {3}",
   "ui.video_import_disk_unknown": "Este vídeo não informa sua duração, portanto não é possível estimar o espaço em disco necessário.",
-  "ui.video_import_start": "Importar"
+  "ui.video_import_start": "Importar",
+  "cli.help.frame_format": "Formato dos quadros quando a entrada é um vídeo: tiff16 (padrão), tiff8 ou jpeg[:qualidade], com qualidade de 1 a 100.",
+  "cli.help.render_video": "Após uma execução bem-sucedida, renderiza os quadros de saída em um vídeo com as configurações do vídeo importado, ou os padrões (30 fps, ProRes, .mov) para uma sequência de imagens.",
+  "cli.help.video_path": "Onde gravar o vídeo renderizado (com --render-video). Padrão: o caminho de saída, com o nome da sequência.",
+  "cli.errors.video_path_needs_render_video": "--video-path exige --render-video.",
+  "cli.errors.frame_format_needs_video": "--frame-format só se aplica quando a entrada é um arquivo de vídeo.",
+  "cli.errors.ffmpeg_not_found": "ffmpeg e ffprobe são necessários para ler um vídeo, mas não foram encontrados. Procurados em: ${0}, ao lado do star, external_binaries/bin de uma árvore de build e depois PATH.",
+  "cli.decoding_video_progress": "Decodificando vídeo: quadro {0} de {1}",
+  "cli.rendered_video": "Vídeo renderizado: {0}"
 }

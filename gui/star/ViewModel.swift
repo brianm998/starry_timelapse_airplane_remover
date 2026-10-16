@@ -125,6 +125,19 @@ public final class ViewModel {
         }
     }
 
+    /// The video to open at launch, when run by the UI tests; nil in every other launch.
+    static var uiTestOpenVideoPath: String? {
+        UserDefaults.standard.string(forKey: "StarUITestOpenVideo").flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// Test seam: `-StarUITestOpenVideo <file>` does what picking the file in "Load Video"'s open panel does
+    /// (`InitialView.startupWithVideoToProcess`): raises the import sheet, which asks how the frames are written.
+    func openVideoFromUITestArgument() {
+        guard let path = Self.uiTestOpenVideoPath, imageSequence == nil, !isLoadingImageSequence else { return }
+        Log.i("UI test: opening video \(path)")
+        pendingVideoImport = PendingVideoImport(path: path)
+    }
+
 //    @Environment(\.openWindow) private var openWindow
     
     func report(error: String) {

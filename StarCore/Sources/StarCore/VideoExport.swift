@@ -1,5 +1,4 @@
 import Foundation
-import StarCore
 
 // What `Export.Video` hands to ffmpeg, kept apart from the handler so the file naming and the
 // command line can be tested without running an encode.
@@ -13,21 +12,21 @@ import StarCore
 // pattern type, which the macOS gui uses, is not built into the Windows ffmpeg.  The frames
 // therefore reach ffmpeg as a concat list of exactly the files the session expects, in frame
 // order.
-enum VideoExport {
+public enum VideoExport {
 
     /// The final frames of a session, split by whether processing has written them.
-    struct FinalFrames {
+    public struct FinalFrames {
         /// Full paths of the frames on disk, in frame order.
-        let files: [String]
+        public let files: [String]
         /// File names the session expects in the output directory but did not find there.
-        let missing: [String]
+        public let missing: [String]
     }
 
     /// Looks for each of the session's frames in `outputDir`.
     ///
     /// `sourceFilenames` are the sequence's file names or paths, in frame order; only the last
     /// path component of each is used, because that is the name the output frame carries.
-    static func finalFrames(
+    public static func finalFrames(
         outputDir: String,
         sourceFilenames: [String],
         fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
@@ -58,7 +57,7 @@ enum VideoExport {
     ///
     /// The list is a line to a directive, so a name with a line break in it cannot be written: it
     /// is refused, not written as two lines that mean something else.
-    static func concatList(files: [String], frameRate: FrameRate) throws -> String {
+    public static func concatList(files: [String], frameRate: FrameRate) throws -> String {
         let rate = frameRate.rawString
         let duration = String(format: "%.9f", 1.0 / frameRate.rawValue)
         var list = "ffconcat version 1.0\n"
@@ -70,15 +69,15 @@ enum VideoExport {
     }
 
     /// A name that cannot be written in a list, because the list is one directive to a line.
-    struct UnlistableName: Error, CustomStringConvertible {
-        let path: String
-        var description: String { "the frame file name \(path.debugDescription) contains a line break" }
+    public struct UnlistableName: Error, CustomStringConvertible {
+        public let path: String
+        public var description: String { "the frame file name \(path.debugDescription) contains a line break" }
     }
 
     /// `path` as a single-quoted concat-list token.  Inside the quotes ffmpeg reads every
     /// character literally — backslashes in a Windows path included — except the quote itself,
     /// which is closed, escaped and reopened.
-    static func quoted(_ path: String) -> String {
+    public static func quoted(_ path: String) -> String {
         "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
@@ -87,19 +86,19 @@ enum VideoExport {
     /// each list, and the capability graph is generated alphabetically, so an unordered list
     /// opens on `a64` (the Commodore 64 muxer, which cannot hold h264 at all) and on whichever
     /// pixel format sorts first, which ffmpeg then cannot write a header for.
-    static func prioritized(_ values: [String], preferred: [String]) -> [String] {
+    public static func prioritized(_ values: [String], preferred: [String]) -> [String] {
         preferred.filter(values.contains) + values.filter { !preferred.contains($0) }
     }
 
-    static let preferredMuxers = ["mp4", "mov", "matroska", "webm", "avi"]
-    static let preferredPixelFormats = ["yuv420p", "yuv420p10le", "yuv422p", "yuv444p"]
+    public static let preferredMuxers = ["mp4", "mov", "matroska", "webm", "avi"]
+    public static let preferredPixelFormats = ["yuv420p", "yuv420p10le", "yuv422p", "yuv444p"]
 
     /// The video's path when the client did not choose one: next to the output sequence's
     /// directory, named after it, in the chosen container.  The macOS gui's render sheet
     /// defaults to the same name.  The extension is the container's own, not its muxer name:
     /// Matroska's muxer is called `matroska` and its files are `.mkv`, and a file named
     /// `.matroska` opens in nothing.
-    static func defaultOutputPath(config: Config, muxer: FFmpegMuxer) -> String {
+    public static func defaultOutputPath(config: Config, muxer: FFmpegMuxer) -> String {
         "\(config.outputPath)/\(config.basename).\(muxer.defaultFileExtension ?? muxer.rawValue)"
     }
 
@@ -109,7 +108,7 @@ enum VideoExport {
     /// `-r` follows the inputs, so it is the output frame rate: with the list's per-frame
     /// durations it gives exactly one output frame per image in constant-frame-rate
     /// containers, and sets the stream's rate in the others.
-    static func arguments(
+    public static func arguments(
         listPath: String,
         audio: AudioPlan,
         videoInfo: VideoInfo,

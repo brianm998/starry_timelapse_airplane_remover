@@ -1067,5 +1067,13 @@
   "ui.jpeg_quality": "Kvalita: {0} %",
   "ui.video_import_disk_usage": "Je potřeba asi {0} místa na disku pro {1} snímků o velikosti {2} × {3}",
   "ui.video_import_disk_unknown": "Toto video neuvádí svou délku, takže potřebné místo na disku nelze odhadnout.",
-  "ui.video_import_start": "Importovat"
+  "ui.video_import_start": "Importovat",
+  "cli.help.frame_format": "Formát snímků, když je vstupem video: tiff16 (výchozí), tiff8 nebo jpeg[:kvalita], kvalita 1-100.",
+  "cli.help.render_video": "Po úspěšném průběhu vykreslí výstupní snímky do videa s nastavením importovaného videa, nebo výchozím (30 fps, ProRes, .mov) pro sekvenci obrázků.",
+  "cli.help.video_path": "Kam zapsat vykreslené video (s --render-video). Výchozí je výstupní cesta pojmenovaná podle sekvence.",
+  "cli.errors.video_path_needs_render_video": "--video-path vyžaduje --render-video.",
+  "cli.errors.frame_format_needs_video": "--frame-format platí jen tehdy, když je vstupem videosoubor.",
+  "cli.errors.ffmpeg_not_found": "Ke čtení videa jsou potřeba ffmpeg a ffprobe, ale nebyly nalezeny. Hledáno v: ${0}, vedle star, external_binaries/bin stromu sestavení, poté PATH.",
+  "cli.decoding_video_progress": "Dekódování videa: snímek {0} z {1}",
+  "cli.rendered_video": "Video vykresleno: {0}"
 }

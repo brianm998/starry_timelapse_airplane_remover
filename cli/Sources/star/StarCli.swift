@@ -277,6 +277,15 @@ struct StarCli: AsyncParsableCommand {
           help: ArgumentHelp(localized("cli.help.use_gpu_for_akaze")))
     var useGPUForAKAZE: Bool?
 
+    @Option(name: [.customLong("frame-format")], help: ArgumentHelp(localized("cli.help.frame_format")))
+    var frameFormat: FrameDecodeFormat?
+
+    @Flag(name: [.customLong("render-video")], help: ArgumentHelp(localized("cli.help.render_video")))
+    var renderVideo: Bool = false
+
+    @Option(name: [.customLong("video-path")], help: ArgumentHelp(localized("cli.help.video_path")))
+    var videoPath: String?
+
     @Argument(help: ArgumentHelp(localized("cli.help.image_sequence_dirname")))
     var imageSequenceDirname: String?
 
@@ -323,6 +332,12 @@ struct StarCli: AsyncParsableCommand {
     }
 
     func validate() throws {
+        if videoPath != nil, !renderVideo {
+            throw ValidationError(localized("cli.errors.video_path_needs_render_video"))
+        }
+        if let input = imageSequenceDirname, frameFormat != nil, !isVideoFile(path: input) {
+            throw ValidationError(localized("cli.errors.frame_format_needs_video"))
+        }
         // A negative last frame selects nothing at all.  FrameGraphBuilder reports that
         // and exits cleanly, but by then it has loaded the whole sequence, so say it
         // here as the usage error it is.
@@ -392,6 +407,26 @@ struct StarCli: AsyncParsableCommand {
             
             var inputImageSequencePath: String = ""
             var inputImageSequenceName: String = ""
+
+            // A video is decoded to one image per frame next to itself (the same place and names the gui and
+            // desktop use), and that directory is then processed like any other sequence.
+            var decodedVideoInfo: VideoInfo?
+            if !inputImageSequenceDirname.hasSuffix("config.json"), isVideoFile(path: inputImageSequenceDirname) {
+                guard ToolPaths.isAvailable else {
+                    throw ValidationError(localized("cli.errors.ffmpeg_not_found", ToolPaths.directoryOverrideVariable))
+                }
+                let lastReported = DecileTracker()
+                let (dir, info) = try await decodeVideo(
+                  named: inputImageSequenceDirname,
+                  format: frameFormat ?? .tiff16
+                ) { current, total, _ in
+                    guard total > 0, lastReported.advance(to: current * 10 / total) else { return }
+                    FileHandle.standardError.write(Data(localized("cli.decoding_video_progress", current, total).appending("\n").utf8))
+                }
+                inputImageSequenceDirname = dir
+                decodedVideoInfo = info
+            }
+
             if inputImageSequenceDirname.hasSuffix("config.json") {
                 // here we are reading a previously saved config
                 inputImageSequencePath = inputImageSequenceDirname
@@ -467,6 +502,7 @@ struct StarCli: AsyncParsableCommand {
                 )
 
                 configOverrides.apply(to: &config)
+                if let decodedVideoInfo { config.set(videoInfo: decodedVideoInfo) }
 
                 // ConfigManager holds a copy of this struct, so all mutations
                 // to config must happen before it is constructed here
@@ -696,6 +732,21 @@ struct StarCli: AsyncParsableCommand {
                 // to: the temp dir is what `star <temp>/config.json` resumes from, and
                 // removing it after a partial failure destroys the one thing that would let
                 // the user finish the frames that did not make it.
+                // Not rendered for a run with any failed frame: the video would silently skip them.
+                if renderVideo, frameErrors.isEmpty {
+                    do {
+                        let written = try await renderOutputVideo(
+                          config: config,
+                          sourceFilenames: await processor.imageSequence.filenames,
+                          videoPath: videoPath)
+                        Log.i("rendered video \(written)")
+                        print(localized("cli.rendered_video", written))
+                    } catch {
+                        Log.e("\(error)")
+                        thrownFailure = error
+                    }
+                }
+
                 if !self.keepTempFiles, frameErrors.isEmpty {
                     // rm temp unless told not to, but leave the saved config behind:
                     // it is the only thing under there that a later
@@ -795,6 +846,8 @@ extension ResourceProfile: @retroactive ExpressibleByArgument { }
 
 extension DetectionType: @retroactive ExpressibleByArgument { }
 
+extension FrameDecodeFormat: @retroactive ExpressibleByArgument { }
+
 extension CleanMethod: ExpressibleByArgument {
     public init?(argument: String) {
         let lowercased = argument.lowercased()
@@ -890,5 +943,18 @@ func removeTempFiles(at path: String, sparing sparedPath: String) throws {
 
     if !sparedAnything {
         try fileManager.removeItem(at: tempURL)
+    }
+}
+
+/// Lets a progress callback report once per tenth of the way through, from whichever thread it is called on.
+final class DecileTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var last = -1
+    /// True the first time `decile` is passed.
+    func advance(to decile: Int) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard decile > last else { return false }
+        last = decile
+        return true
     }
 }

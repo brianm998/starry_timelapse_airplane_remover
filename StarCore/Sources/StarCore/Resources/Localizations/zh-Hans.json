@@ -1067,5 +1067,13 @@
   "ui.jpeg_quality": "质量：{0}%",
   "ui.video_import_disk_usage": "{1} 帧 {2} × {3} 的图像大约需要 {0} 磁盘空间",
   "ui.video_import_disk_unknown": "此视频未注明时长，因此无法估算所需的磁盘空间。",
-  "ui.video_import_start": "导入"
+  "ui.video_import_start": "导入",
+  "cli.help.frame_format": "输入为视频时的帧格式:tiff16(默认)、tiff8 或 jpeg[:质量],质量为 1-100。",
+  "cli.help.render_video": "运行成功后,将输出帧渲染为视频,使用导入视频的设置;图像序列则使用默认值(30 fps、ProRes、.mov)。",
+  "cli.help.video_path": "渲染视频的写入位置(与 --render-video 配合使用)。默认为以序列命名的输出路径。",
+  "cli.errors.video_path_needs_render_video": "--video-path 需要同时使用 --render-video。",
+  "cli.errors.frame_format_needs_video": "--frame-format 仅在输入为视频文件时适用。",
+  "cli.errors.ffmpeg_not_found": "读取视频需要 ffmpeg 和 ffprobe,但未找到。已搜索:${0}、star 所在目录、构建目录的 external_binaries/bin,然后是 PATH。",
+  "cli.decoding_video_progress": "正在解码视频:第 {0} 帧,共 {1} 帧",
+  "cli.rendered_video": "视频已渲染:{0}"
 }
