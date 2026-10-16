@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,7 +72,7 @@ fun VideoImportDialog(
             Text(localized("ui.video_frame_format"), color = StarColors.textSecondary, fontSize = 12.sp)
             FrameFormatChoice.entries.forEach { choice ->
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).clickable { format = choice },
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).testTag("videoimport.format.${choice.name.lowercase()}").clickable { format = choice },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RadioButton(selected = format == choice, onClick = { format = choice })
@@ -109,6 +110,7 @@ fun VideoImportDialog(
                 Button(
                     onClick = { onImport(format, q) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    modifier = Modifier.testTag("videoimport.import"),
                 ) { Text(localized("ui.video_import_start")) }
             }
         }

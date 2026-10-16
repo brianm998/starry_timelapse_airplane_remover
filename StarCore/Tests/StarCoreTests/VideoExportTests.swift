@@ -1,6 +1,5 @@
 import XCTest
-import StarCore
-@testable import stard
+@testable import StarCore
 
 /// `Export.Video` used to point ffmpeg at `<outputPath>/image_%04d.tiff`.  Nothing writes a file
 /// there: processing puts each final frame in `<outputPath>/<sequence>-star-v-<version>/` under

@@ -1067,5 +1067,13 @@
   "ui.jpeg_quality": "Qualität: {0} %",
   "ui.video_import_disk_usage": "Es werden etwa {0} Speicherplatz für {1} Einzelbilder mit {2} × {3} benötigt",
   "ui.video_import_disk_unknown": "Dieses Video gibt seine Länge nicht an, daher lässt sich der benötigte Speicherplatz nicht abschätzen.",
-  "ui.video_import_start": "Importieren"
+  "ui.video_import_start": "Importieren",
+  "cli.help.frame_format": "Bildformat, wenn die Eingabe ein Video ist: tiff16 (Standard), tiff8 oder jpeg[:Qualität], Qualität 1-100.",
+  "cli.help.render_video": "Rendert die Ausgabebilder nach erfolgreichem Lauf zu einem Video, mit den Einstellungen des importierten Videos oder den Standardwerten (30 fps, ProRes, .mov) bei einer Bildsequenz.",
+  "cli.help.video_path": "Wohin das gerenderte Video geschrieben wird (mit --render-video). Standard ist der Ausgabepfad, benannt nach der Sequenz.",
+  "cli.errors.video_path_needs_render_video": "--video-path erfordert --render-video.",
+  "cli.errors.frame_format_needs_video": "--frame-format gilt nur, wenn die Eingabe eine Videodatei ist.",
+  "cli.errors.ffmpeg_not_found": "ffmpeg und ffprobe werden zum Lesen eines Videos benötigt, wurden aber nicht gefunden. Gesucht in: ${0}, neben star, external_binaries/bin eines Build-Baums, dann PATH.",
+  "cli.decoding_video_progress": "Video wird dekodiert: Bild {0} von {1}",
+  "cli.rendered_video": "Video gerendert: {0}"
 }

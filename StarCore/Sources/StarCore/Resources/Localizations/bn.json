@@ -1067,5 +1067,13 @@
   "ui.jpeg_quality": "মান: {0}%",
   "ui.video_import_disk_usage": "{2} × {3} আকারের {1}টি ফ্রেমের জন্য প্রায় {0} ডিস্ক জায়গা লাগবে",
   "ui.video_import_disk_unknown": "এই ভিডিওতে এর দৈর্ঘ্য উল্লেখ নেই, তাই প্রয়োজনীয় ডিস্ক জায়গার আনুমানিক হিসাব করা যাচ্ছে না।",
-  "ui.video_import_start": "আমদানি করুন"
+  "ui.video_import_start": "আমদানি করুন",
+  "cli.help.frame_format": "ইনপুট ভিডিও হলে ফ্রেমের ফরম্যাট: tiff16 (ডিফল্ট), tiff8, বা jpeg[:মান], মান ১-১০০।",
+  "cli.help.render_video": "সফল রানের পর আউটপুট ফ্রেমগুলো ভিডিওতে রেন্ডার করে, আমদানি করা ভিডিওর সেটিংস দিয়ে, বা ছবির ক্রমের জন্য ডিফল্ট (30 fps, ProRes, .mov) দিয়ে।",
+  "cli.help.video_path": "রেন্ডার করা ভিডিও কোথায় লেখা হবে (--render-video সহ)। ডিফল্ট: ক্রমের নামে আউটপুট পাথ।",
+  "cli.errors.video_path_needs_render_video": "--video-path এর জন্য --render-video প্রয়োজন।",
+  "cli.errors.frame_format_needs_video": "--frame-format শুধু তখনই প্রযোজ্য যখন ইনপুট একটি ভিডিও ফাইল।",
+  "cli.errors.ffmpeg_not_found": "ভিডিও পড়তে ffmpeg ও ffprobe দরকার, কিন্তু পাওয়া যায়নি। খোঁজা হয়েছে: ${0}, star এর পাশে, বিল্ড ট্রির external_binaries/bin, তারপর PATH।",
+  "cli.decoding_video_progress": "ভিডিও ডিকোড হচ্ছে: ফ্রেম {0}/{1}",
+  "cli.rendered_video": "ভিডিও রেন্ডার হয়েছে: {0}"
 }

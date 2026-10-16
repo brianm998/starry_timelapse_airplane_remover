@@ -194,9 +194,11 @@ func loadDatasetNames(_ url: URL) throws -> Set<String> {
 }
 
 /// Fails, with params.json:line, on a `data:<name>` value the manifest does not have.
-func checkDataParams(_ params: [String: [String: String]], manifest: Set<String>, paramsURL: URL) throws {
+func checkDataParams(_ params: [String: [String: String]], featureParams: [String: [String: String]], manifest: Set<String>, paramsURL: URL) throws {
     let lines = ((try? String(contentsOf: paramsURL, encoding: .utf8)) ?? "").components(separatedBy: "\n")
-    for (section, values) in params.sorted(by: { $0.key < $1.key }) {
+    var sections = params
+    for (f, v) in featureParams { sections["features.\(f)"] = v }
+    for (section, values) in sections.sorted(by: { $0.key < $1.key }) {
         for (key, value) in values.sorted(by: { $0.key < $1.key }) where value.hasPrefix(dataPrefix) {
             let name = String(value.dropFirst(dataPrefix.count))
             guard manifest.contains(name) else {
@@ -228,7 +230,37 @@ func placeholders(in text: String) -> [String] {
     return result
 }
 
-func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String]) throws {
+/// Setting steps: exactly one of each group, all before the step that opens or imports the sequence. Runners collect them and
+/// apply them when the sequence opens, which is when the GUIs ask.
+let settingGroups: [(name: String, cases: Set<String>)] = [
+    ("horizon", ["horizonYes", "horizonNo"]),
+    ("camera", ["cameraStatic", "cameraMoving"]),
+    ("clean method", ["cleanAuto", "cleanSelective", "cleanAutoSelective"]),
+]
+let openCases: Set<String> = ["openSequence", "importVideo"]
+
+func validateSettings(_ f: ParsedFeature, steps: [StepDef]) throws {
+    let defs = Dictionary(uniqueKeysWithValues: steps.map { ($0.text, $0.caseName) })
+    let cases = f.steps.map { defs[$0.text] ?? "" }
+    guard let openIdx = cases.firstIndex(where: { openCases.contains($0) }) else {
+        throw GenError("\(f.file): no step opens the sequence (`I open the sequence …` or `I import the video …`)")
+    }
+    if cases.filter({ openCases.contains($0) }).count != 1 {
+        throw GenError("\(f.file):\(f.steps[openIdx].line): exactly one open or import step is required")
+    }
+    for g in settingGroups {
+        let hits = cases.indices.filter { g.cases.contains(cases[$0]) }
+        guard hits.count == 1 else {
+            throw GenError("\(f.file):\(hits.dropFirst().first.map { f.steps[$0].line } ?? f.steps[openIdx].line): exactly one \(g.name) step is required (found \(hits.count))")
+        }
+        if hits[0] > openIdx {
+            throw GenError("\(f.file):\(f.steps[hits[0]].line): the \(g.name) step must come before the open or import step")
+        }
+    }
+}
+
+func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], featureParams: [String: String]) throws {
+    try validateSettings(f, steps: steps)
     if !isLowerCamel(f.basename) { throw GenError("\(f.file): basename `\(f.basename)` must be lowerCamelCase") }
     if !f.tags.contains("@\(f.basename)") { throw GenError("\(f.file): missing its own tag @\(f.basename)") }
     if f.steps.isEmpty { throw GenError("\(f.file): the scenario has no steps") }
@@ -239,8 +271,8 @@ func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String]) 
         guard steps.contains(where: { $0.text == s.text }) else {
             throw GenError("\(f.file):\(s.line): step text has no exact match in steps.json: \"\(s.text)\"")
         }
-        for p in placeholders(in: s.text) where defaults[p] == nil {
-            throw GenError("\(f.file):\(s.line): {\(p)} has no default in params.json")
+        for p in placeholders(in: s.text) where featureParams[p] == nil && defaults[p] == nil {
+            throw GenError("\(f.file):\(s.line): {\(p)} has no value for feature \(f.basename) and no default in params.json")
         }
     }
 }
@@ -280,12 +312,13 @@ struct Output { let path: String; let content: String }
 
 /// The `data:<name>` datasets a client's features need: every placeholder of every step of every feature tagged for the
 /// client, resolved the way a runner does (client override, then default). Sorted, so the file is stable.
-func datasetNames(for client: (tag: String, key: String), features: [ParsedFeature], params: [String: [String: String]]) -> [String] {
+func datasetNames(for client: (tag: String, key: String), features: [ParsedFeature], params: [String: [String: String]],
+                  featureParams: [String: [String: String]]) -> [String] {
     var names = Set<String>()
     for f in features where f.tags.contains(client.tag) {
         for s in f.steps {
             for p in placeholders(in: s.text) {
-                if let v = params[client.key]?[p] ?? params["default"]?[p], v.hasPrefix(dataPrefix) {
+                if let v = featureParams[f.basename]?[p] ?? params[client.key]?[p] ?? params["default"]?[p], v.hasPrefix(dataPrefix) {
                     names.insert(String(v.dropFirst(dataPrefix.count)))
                 }
             }
@@ -294,7 +327,7 @@ func datasetNames(for client: (tag: String, key: String), features: [ParsedFeatu
     return names.sorted()
 }
 
-func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String: String]], hash: String) -> (outputs: [Output], cleanDirs: [String]) {
+func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String: String]], featureParams: [String: [String: String]], hash: String) -> (outputs: [Output], cleanDirs: [String]) {
     let h = header(hash)
     var outs: [Output] = []
     let defaults = params["default"] ?? [:]
@@ -316,6 +349,7 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
         let stepsLit = f.steps.map { "            Step(.\(keywordCase($0.keyword)), .\(caseFor($0)))" }.joined(separator: ",\n")
         swiftFeatures += """
             public static let \(f.basename) = Feature(
+                id: \(swiftString(f.basename)),
                 name: \(swiftString(f.name)),
                 tags: [\(f.tags.map(swiftString).joined(separator: ", "))],
                 scenario: \(swiftString(f.scenario)),
@@ -329,6 +363,9 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
         let body = dictLiteral(params[k] ?? [:], quote: swiftString, indent: "            ")
         return body.isEmpty ? "        \(swiftString(k)): [:]" : "        \(swiftString(k)): [\n\(body),\n        ]"
     }.joined(separator: ",\n")
+    let swiftFeatureParams = featureParams.keys.sorted().map { k in
+        "        \(swiftString(k)): [\n\(dictLiteral(featureParams[k]!, quote: swiftString, indent: "            ")),\n        ]"
+    }.joined(separator: ",\n")
     outs.append(Output(path: "gherkin/StarGherkin/Sources/StarGherkinKernel/Generated/Features.generated.swift", content: """
     \(h)
     public enum Features {
@@ -341,6 +378,9 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
         ]
         public static let overrides: [String: [String: String]] = [
     \(swiftOverrides),
+        ]
+        public static let features: [String: [String: String]] = [
+    \(swiftFeatureParams),
         ]
     }
 
@@ -384,6 +424,7 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
         let stepsLit = f.steps.map { "            Step(StepKeyword.\($0.keyword.uppercased()), StepAction.\(camelToUpperSnake(caseFor($0))))" }.joined(separator: ",\n")
         ktFeatures += """
             val \(f.basename) = Feature(
+                id = \(kotlinString(f.basename)),
                 name = \(kotlinString(f.name)),
                 tags = listOf(\(f.tags.map(kotlinString).joined(separator: ", "))),
                 scenario = \(kotlinString(f.scenario)),
@@ -396,6 +437,9 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
     let ktOverrides = clientKeys.map { k in
         let body = dictLiteral(params[k] ?? [:], quote: kotlinString, indent: "            ").replacingOccurrences(of: ": ", with: " to ")
         return body.isEmpty ? "        \(kotlinString(k)) to mapOf()" : "        \(kotlinString(k)) to mapOf(\n\(body),\n        )"
+    }.joined(separator: ",\n")
+    let ktFeatureParams = featureParams.keys.sorted().map { k in
+        "        \(kotlinString(k)) to mapOf(\n\(dictLiteral(featureParams[k]!, quote: kotlinString, indent: "            ").replacingOccurrences(of: ": ", with: " to ")),\n        )"
     }.joined(separator: ",\n")
     outs.append(Output(path: "\(ktPkg)/Features.kt", content: """
     \(h)
@@ -415,6 +459,9 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
         )
         val overrides: Map<String, Map<String, String>> = mapOf(
     \(ktOverrides),
+        )
+        val features: Map<String, Map<String, String>> = mapOf(
+    \(ktFeatureParams),
         )
     }
 
@@ -437,8 +484,16 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
 
     // ── dataset lists: CI fetches exactly these ──
     for c in clientTags {
-        let names = datasetNames(for: c, features: features, params: params)
+        let names = datasetNames(for: c, features: features, params: params, featureParams: featureParams)
         outs.append(Output(path: "gherkin/generated/datasets-\(c.key).txt", content: names.map { $0 + "\n" }.joined()))
+        // CI builds its (client, OS, feature) matrix from this.
+        let ids = features.filter { $0.tags.contains(c.tag) }.map { "\"\($0.basename)\"" }.joined(separator: ", ")
+        outs.append(Output(path: "gherkin/generated/features-\(c.key).json", content: "[\(ids)]\n"))
+        // …and fetches only what its feature needs: { "<feature>": ["<dataset>", …] }
+        let perFeature = features.filter { $0.tags.contains(c.tag) }.map { f in
+            "  \"\(f.basename)\": [\(datasetNames(for: c, features: [f], params: params, featureParams: featureParams).map { "\"\($0)\"" }.joined(separator: ", "))]"
+        }.joined(separator: ",\n")
+        outs.append(Output(path: "gherkin/generated/feature-datasets-\(c.key).json", content: "{\n\(perFeature)\n}\n"))
     }
 
     return (outs, [
@@ -488,16 +543,19 @@ func generate() throws {
     }
 
     // params.json: { "default": {...}, "cli": {...}, "mac-gui": {...}, "desktop": {...} }
-    guard let params = try JSONSerialization.jsonObject(with: Data(contentsOf: paramsURL)) as? [String: [String: String]],
-          let defaults = params["default"] else {
-        throw GenError("gherkin/params.json must be {\"default\": {...}, \"cli\": {...}, \"mac-gui\": {...}, \"desktop\": {...}} with string values")
+    guard var rawParams = try JSONSerialization.jsonObject(with: Data(contentsOf: paramsURL)) as? [String: Any] else {
+        throw GenError("gherkin/params.json must be a JSON object")
+    }
+    let featureParams = (rawParams.removeValue(forKey: "features") as? [String: [String: String]]) ?? [:]
+    guard let params = rawParams as? [String: [String: String]], let defaults = params["default"] else {
+        throw GenError("gherkin/params.json must be {\"default\": {...}, \"cli\": {...}, \"mac-gui\": {...}, \"desktop\": {...}, \"features\": {name: {...}}} with string values")
     }
     for key in params.keys where key != "default" && !clientTags.contains(where: { $0.key == key }) {
         throw GenError("gherkin/params.json: unknown client override `\(key)` (expected cli, mac-gui or desktop)")
     }
 
     let datasetsURL = root.appendingPathComponent("test_data/datasets.json")
-    try checkDataParams(params, manifest: try loadDatasetNames(datasetsURL), paramsURL: paramsURL)
+    try checkDataParams(params, featureParams: featureParams, manifest: try loadDatasetNames(datasetsURL), paramsURL: paramsURL)
 
     // hash of every input file, sorted by path, concatenated
     var inputs = featureFiles.map { featuresDir.appendingPathComponent($0) }
@@ -509,9 +567,12 @@ func generate() throws {
 
     let gherkin = try findGherkin()
     let features = try featureFiles.map { try parseFeature(at: featuresDir.appendingPathComponent($0), root: root, gherkin: gherkin) }
-    for f in features { try validate(f, steps: steps, defaults: defaults) }
+    for name in featureParams.keys where !features.contains(where: { $0.basename == name }) {
+        throw GenError("gherkin/params.json: features.\(name) has no matching feature file")
+    }
+    for f in features { try validate(f, steps: steps, defaults: defaults, featureParams: featureParams[f.basename] ?? [:]) }
 
-    let (outputs, clean) = emit(features: features, steps: steps, params: params, hash: hash)
+    let (outputs, clean) = emit(features: features, steps: steps, params: params, featureParams: featureParams, hash: hash)
     for c in clean { try? fm.removeItem(at: root.appendingPathComponent(c)) }
     for o in outputs {
         let url = root.appendingPathComponent(o.path)
