@@ -121,11 +121,13 @@ final class GuiFeatureRunner {
     }
 
     /// Polls `condition` until it holds. Real-time waits only, never a fixed sleep.
-    private func waitFor(_ what: String, timeout: TimeInterval, detail: () -> String = { "" }, _ condition: () -> Bool) throws {
+    /// `interval`: a busy app (the horizon overlays, previews) can take longer than XCUITest's snapshot timeout to answer, which fails the
+    /// test outright, so the long waits poll slowly.
+    private func waitFor(_ what: String, timeout: TimeInterval, interval: TimeInterval = 1, detail: () -> String = { "" }, _ condition: () -> Bool) throws {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() {
             if Date() > deadline { throw RunnerError("timed out after \(Int(timeout))s waiting for \(what) \(detail())") }
-            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "poll")], timeout: 1)
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "poll")], timeout: interval)
         }
     }
 
@@ -244,7 +246,7 @@ final class GuiFeatureRunner {
 
         let progress = element("processing.progress")
         var last = "(none)"
-        try waitFor("processing to finish", timeout: 45 * 60, detail: { "(last progress: \(last))" }) {
+        try waitFor("processing to finish", timeout: 45 * 60, interval: 10, detail: { "(last progress: \(last))" }) {
             guard progress.exists else { return false }
             let state = progress.label
             if state != last { print("progress: \(state)") }
@@ -267,7 +269,7 @@ final class GuiFeatureRunner {
     private func renderOutputVideoStep() throws {
         guard rendersVideo else { throw RunnerError("the render prompt was answered No") }
         let done = element("render.done"), failed = element("render.error")
-        try waitFor("the video render to finish", timeout: 10 * 60) {
+        try waitFor("the video render to finish", timeout: 10 * 60, interval: 5, detail: { "\n\(self.app.debugDescription)" }) {
             if failed.exists { return true }
             return done.exists
         }
@@ -279,10 +281,12 @@ final class GuiFeatureRunner {
         guard let dir = ProcessInfo.processInfo.environment["STAR_GHERKIN_ARTIFACTS"], !dir.isEmpty else { return }
         let fm = FileManager.default
         let dest = URL(fileURLWithPath: dir).appendingPathComponent(feature.id)
-        try? fm.createDirectory(at: dest, withIntermediateDirectories: true)
+        // The UI-test runner is sandboxed: it can only write inside its own container, so a directory outside it is skipped, not failed.
+        // (CI uploads the container's tmp directory instead; see the workflow.)
+        do { try fm.createDirectory(at: dest, withIntermediateDirectories: true) } catch { print("artifacts: cannot write \(dest.path): \(error)"); return }
         for name in (try? fm.contentsOfDirectory(atPath: scratch.path)) ?? [] {
             if name.hasPrefix("report-") { try? fm.copyItem(at: scratch.appendingPathComponent(name), to: dest.appendingPathComponent(name)) }
-            if name.hasPrefix("star_temp_") {
+            if name.hasPrefix("star_temp_"), fm.fileExists(atPath: scratch.appendingPathComponent(name).appendingPathComponent("config.json").path) {
                 try? fm.copyItem(at: scratch.appendingPathComponent(name).appendingPathComponent("config.json"), to: dest.appendingPathComponent("config.json"))
             }
         }
