@@ -45,9 +45,9 @@ class DesktopFeatureRunner {
         StepAction.OPEN_SEQUENCE to ::openSequence,
         StepAction.PROCESS_EVERY_FRAME to ::processEveryFrame,
         StepAction.OUTPUT_FRAMES_WRITTEN to ::outputFramesWritten,
-        // The desktop client only ever runs Star's default clean method (automatic:false), so this step has nothing to set.
-        // automatic:true and selective are deliberately absent: a feature that asks for them fails naming what is implemented.
-        StepAction.CLEAN_METHOD_AUTOMATIC_FALSE to { _ -> },
+        // No clean-method steps: the auto-open path skips the startup questions and the session keeps initialConfigBeside's default,
+        // CLEAN_SELECTIVE (InitialConfigBesideTest), which is what runVerifier judges. A feature that asks for another method fails
+        // naming what is implemented.
         StepAction.AIRPLANES_REMOVED to { _ -> trailsRemoved("airplane") },
         StepAction.SATELLITES_REMOVED to { _ -> trailsRemoved("satellite") },
         StepAction.STARS_PRESERVED to { _ -> starsPreserved() },
@@ -230,7 +230,7 @@ class DesktopFeatureRunner {
         return JsonParser.parseString(labels.readText()).asJsonObject
     }
 
-    /** Runs the verifier with the only clean method this client has, automatic:false. A failing exit status fails the step with its summary. */
+    /** Runs the verifier for the method this client ran, selective. A failing exit status fails the step with its summary. */
     private fun runVerifier(extra: List<String>, reportName: String): JsonObject {
         val model = vm ?: throw RunnerError("\"I open the sequence\" has not run")
         if (completeFrames < 0) throw RunnerError("\"I process every frame\" has not run")
@@ -242,7 +242,7 @@ class DesktopFeatureRunner {
             "--input", sequenceCopy.absolutePath, "--output", outputDirectory(model).absolutePath,
             "--labels", File(sequenceCopy, "labels.json").absolutePath,
             "--thresholds", File(repoRoot(), "gherkin/removal-thresholds.json").absolutePath,
-            "--clean-method", "automatic:false", "--dataset", sequenceCopy.name,
+            "--clean-method", "selective", "--dataset", sequenceCopy.name,
             "--skip-unmeasurable", "--report", report.absolutePath, "--crops", crops.absolutePath,
         ) + extra
         val p = ProcessBuilder(args).redirectErrorStream(true).start()
@@ -263,12 +263,18 @@ class DesktopFeatureRunner {
                 o.get("class")?.asString == trailClass && o.get("confirmed")?.asBoolean == true
             }
         }
-        val report = runVerifier(listOf("--expect", "$trailClass=removed"), "${trailClass}s-removed")
+        // selective leaves most faint labelled streaks alone by design (BUGS.md BUG-004), so it is judged on the pinned objects only,
+        // exactly as the cli runner does for selective.
+        val pinsFile = File(repoRoot(), "gherkin/removal-pins.json")
+        val pinned = JsonParser.parseString(pinsFile.readText()).asJsonObject.getAsJsonArray("pins").size()
+        val report = runVerifier(listOf("--expect", "$trailClass=removed", "--pins-only", "--pins", pinsFile.absolutePath), "${trailClass}s-removed")
         // not vacuous: the verifier must have looked at every confirmed object of this class
         val summary = report.getAsJsonObject("summary")
         val objects = summary?.get("objects")?.asInt ?: -1
         if (expected <= 0) throw RunnerError("labels.json has no confirmed $trailClass objects: the step would check nothing")
         if (objects != expected) throw RunnerError("the verifier checked $objects $trailClass objects, labels.json has $expected confirmed: refusing to pass")
+        val checked = summary.get("pinsChecked")?.asInt ?: -1
+        if (checked != pinned) throw RunnerError("the verifier checked $checked pinned objects, removal-pins.json has $pinned: refusing to pass")
         val measured = (summary.get("passed")?.asInt ?: 0) + (summary.get("failed")?.asInt ?: 0)
         if (measured <= 0) throw RunnerError("no $trailClass object was measurable: refusing to pass")
     }

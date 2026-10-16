@@ -192,9 +192,8 @@ on hosted runners (Linux and macOS times are expected at roughly 10 to 15 minute
 
 ## GUI clients (`@mac-gui`, `@desktop`), 2026-10-16
 
-`removeAirplanes` is now tagged `@cli @mac-gui @desktop`. `GuiFeatureRunner.swift` and `DesktopFeatureRunner.kt` implement `cleanMethodAutomaticFalse`
-(no-op: the GUIs only run the default), `airplanesRemoved`, `satellitesRemoved` and `starsPreserved`, with the cli runner's verifier flags
-(`--skip-unmeasurable`, `gherkin/removal-thresholds.json`, `--clean-method automatic:false`) and guards (objects == confirmed labels, > 0 measurable, star
+`removeAirplanes` is now tagged `@cli @mac-gui @desktop`. `GuiFeatureRunner.swift` and `DesktopFeatureRunner.kt` implement `airplanesRemoved`, `satellitesRemoved` and `starsPreserved`, with the cli runner's verifier flags
+(`--skip-unmeasurable`, `gherkin/removal-thresholds.json`; `--clean-method automatic:false` on the mac GUI, `selective --pins-only` on the desktop client) and guards (objects == confirmed labels, > 0 measurable, star
 frames == output frames). XCUITest can launch a subprocess: the UI-test runner is not sandboxed (empty entitlements file, no sandbox build setting), so no
 separate CI step was needed. `gherkin.yml`: every GUI leg builds `removal_tools`, the guards now expect two tests (`Executed 2 tests` / `tests="2"`), name
 `testRemoveAirplanesFeature` / `removeAirplanesFeature`, require the report JSON, and upload `removal-reports-mac-gui` / `-desktop-<os>`.
@@ -202,6 +201,10 @@ separate CI step was needed. `gherkin.yml`: every GUI leg builds `removal_tools`
 What was verified: generated files regenerated; the Kotlin `gherkinTest` source set compiles (`./gradlew compileGherkinTestKotlin`); see below for the Xcode build.
 What was **not** run: neither GUI scenario has executed (no XCUITest run, no Compose run, no stard run with this feature), nothing on GitHub Actions, and the
 verifier has not been built on Windows. Expect the GUI legs to take roughly 5 to 10 minutes longer each (verifier build and the verify pass).
+
+CI correction (run 38832664368): the first version hardcoded `automatic:false` for the desktop client, whose default is `CLEAN_SELECTIVE`, and failed with
+48 of 226 removed (the selective profile). Fixed by dropping `the clean method is automatic:false` from `removeAirplanes.feature` (each client runs its default)
+and judging the desktop run with the selective mode (pins only). The mac GUI's default was checked in `StartupView.swift` and is `automatic:false`.
 
 ## Not done (leftover)
 

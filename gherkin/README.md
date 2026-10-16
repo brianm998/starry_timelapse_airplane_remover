@@ -202,9 +202,13 @@ overrides it). The runner finds the verifier at `removal_tools/.build/release/st
 
 `removeAirplanes` also runs on the GUIs: `GuiFeatureRunner.swift` (XCUITest; the runner is not sandboxed, `star.entitlements` is empty) and
 `DesktopFeatureRunner.kt` launch `star-removal-verify` as a subprocess with the same flags and the same vacuous-green guards as the cli runner
-(object count equals the confirmed labels, stars covered every output frame, something measurable). The GUIs only ever run the default clean method,
-so `the clean method is automatic:false` is a no-op there and `automatic:true` / `selective` are not in their method maps (a feature using them fails
-naming what is implemented). Each GUI leg of `gherkin.yml` builds `removal_tools` in release first; reports land in `removal-reports/gui-removeAirplanes/`
+(object count equals the confirmed labels, stars covered every output frame, something measurable).
+`removeAirplanes.feature` has no clean-method step: each client runs its own default and judges it with the matching verifier mode.
+The cli's default (no `-c`) is `automatic:false`, judged per object. The mac GUI's default flow (startup questions all left on,
+`StartupView.cleanMethod`) is also `automatic:false`. The desktop client's auto-open path keeps `initialConfigBeside`'s `CLEAN_SELECTIVE`
+(`InitialConfigBesideTest`), so `DesktopFeatureRunner.kt` passes `--clean-method selective --pins-only --pins gherkin/removal-pins.json` and
+requires `pinsChecked` to equal the pin count, as the cli runner does for selective (selective leaves most faint labelled streaks alone by
+design: BUG-004). The GUI method maps hold no clean-method steps, so a feature that asks for one fails naming what is implemented. Each GUI leg of `gherkin.yml` builds `removal_tools` in release first; reports land in `removal-reports/gui-removeAirplanes/`
 and `removal-reports/desktop-removeAirplanes/` and are uploaded as artifacts.
 
 Why pins: per-object verdicts differ between platforms and the fraction removed cannot tell the pre-`1b2cb327` build (0.78) from the

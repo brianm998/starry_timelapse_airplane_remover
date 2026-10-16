@@ -34,9 +34,9 @@ final class GuiFeatureRunner {
         .openSequence: { try $0.openSequence() },
         .processEveryFrame: { try $0.processEveryFrame() },
         .outputFramesWritten: { try $0.outputFramesWritten() },
-        // The GUI only ever runs Star's default clean method (automatic:false), so this step asserts nothing to set.
-        // automatic:true and selective are deliberately absent: a feature that asks for them fails naming what is implemented.
-        .cleanMethodAutomaticFalse: { _ in },
+        // No clean-method steps: the startup questions' defaults (airplanes, satellites and meteors all removed) make the app run
+        // automatic:false (StartupView.cleanMethod), which is what runVerifier passes. A feature that asks for another method fails
+        // naming what is implemented.
         .airplanesRemoved: { try $0.trailsRemoved(trailClass: "airplane") },
         .satellitesRemoved: { try $0.trailsRemoved(trailClass: "satellite") },
         .starsPreserved: { try $0.starsPreserved() },
@@ -218,7 +218,7 @@ final class GuiFeatureRunner {
         return labels
     }
 
-    /// Runs the verifier with the GUI's only clean method, automatic:false. A failing exit status fails the step with its summary.
+    /// Runs the verifier with the method this client's default flow runs, automatic:false (see methodMap). A failing exit status fails the step with its summary.
     private func runVerifier(_ extra: [String], reportName: String) throws -> [String: Any] {
         guard let input = sequenceCopy else { throw RunnerError("\"I open the sequence\" has not run") }
         guard completeFrames != nil else { throw RunnerError("\"I process every frame\" has not run") }
