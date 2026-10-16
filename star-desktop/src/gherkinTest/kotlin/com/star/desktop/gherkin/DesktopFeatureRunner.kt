@@ -373,7 +373,10 @@ class DesktopFeatureRunner {
     private fun noProblems(t: ComposeUiTest) {
         val model = vm ?: throw RunnerError("nothing has been opened")
         val w = model.warningState.value
-        assertTrue(w.banner == null && w.critical == null, "star reported warnings: banner=${w.banner}, critical=${w.critical}")
+        // A warning about a state that passes by itself (memory is low and star is waiting for it to free up) says something about the
+        // machine, not about the run: a 7GB hosted runner raises it on every TIFF feature. Anything else is a problem.
+        val banner = w.banner?.takeUnless { com.star.desktop.domain.WarningRouting.passes(it.warning) }
+        assertTrue(banner == null && w.critical == null, "star reported warnings: banner=${w.banner}, critical=${w.critical}")
     }
 
     /** Copies the validator's reports and the run's config.json to `$STAR_GHERKIN_ARTIFACTS/<feature>` for CI to upload. */
