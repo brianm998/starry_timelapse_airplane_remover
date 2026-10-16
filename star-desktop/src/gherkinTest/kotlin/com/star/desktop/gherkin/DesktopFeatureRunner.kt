@@ -125,6 +125,8 @@ class DesktopFeatureRunner {
         sequenceCopy = File(scratch, source.name)
         source.copyRecursively(sequenceCopy)
 
+        // Seed the remembered detection type before the view model reads its preferences (user.home is the scratch home, see run()).
+        File(System.getProperty("user.home"), ".star.userprefs.json").writeText("""{"processingType":"strong"}""")
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         scope = appScope
         val model = AppViewModel(appScope, autoOpenPath = sequenceCopy.absolutePath, autoMode = "edit", autoFrame = null, releaseCheck = { null })
@@ -150,14 +152,12 @@ class DesktopFeatureRunner {
             }
             println("keypoint divisor set to $divisor")
         }
-        // The session opens with no detection type set, which the proto reads as DETECTION_MILD, while Star's own default (the cli, and the
-        // GUI's Config()) is STRONG. The removal pins were measured at STRONG, so run at STRONG; written into the session config and waited for.
-        model.setDetectionType(com.star.proto.DetectionType.DETECTION_STRONG)
-        val setDetection = System.nanoTime() + UI_TIMEOUT_MS * 1_000_000
-        while (model.sessions.session.value?.config?.detectionType != com.star.proto.DetectionType.DETECTION_STRONG) {
-            if (System.nanoTime() > setDetection) throw RunnerError("the detection type was not written to the session config")
-            Thread.sleep(50)
-        }
+        // The session opens at the user's remembered detection type, and with none remembered the proto's zero value, DETECTION_MILD,
+        // while Star's own default (the cli, the GUI's Config()) is STRONG. The removal pins were measured at STRONG, so the type is part
+        // of the initial config (seeded above through the preference the real client reads) and only checked here, never patched in
+        // afterwards: patching raced the daemon (a slow VM left it unwritten) and swallowed a failed getConfig.
+        val detection = model.sessions.session.value?.config?.detectionType
+        if (detection != com.star.proto.DetectionType.DETECTION_STRONG) throw RunnerError("the session opened at detection type $detection, not DETECTION_STRONG")
         t.setContent { StarApp(model) }
         waitFor(t, "the sequence screen", UI_TIMEOUT_MS) {
             model.error.value?.let { throw RunnerError("the app reported an error while opening: $it") }
