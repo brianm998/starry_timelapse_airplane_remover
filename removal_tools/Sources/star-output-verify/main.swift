@@ -228,6 +228,7 @@ struct Mode: ParsableCommand {
     @Option var inputDir: String
     @Option var outputDir: String
     @Option(help: "The run's kept temp directory; auto selective needs its outlier data.") var tempDir: String?
+    @Option(help: "The run's config.json; its tempOutputPath names the temp directory when --temp-dir is not given.") var config: String?
     @Option(help: "thresholds.json") var thresholds: String?
     @OptionGroup var common: CommonOptions
 
@@ -264,7 +265,10 @@ struct Mode: ParsableCommand {
             if framesChanged < th.selective.minFramesChanged { r.problem("only \(framesChanged) frames changed, need at least \(th.selective.minFramesChanged): selective removed nothing") }
         }
         if mode == "autoSelective" {
-            guard let tempDir else { throw Failure("--temp-dir is required for autoSelective") }
+            var temp = tempDir
+            if temp == nil, let config, let data = FileManager.default.contents(atPath: config),
+               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] { temp = json["tempOutputPath"] as? String }
+            guard let tempDir = temp else { throw Failure("--temp-dir or --config is required for autoSelective") }
             let dir = "\(tempDir)/auto-selective-processed"
             let n = (try? FileManager.default.contentsOfDirectory(atPath: dir).filter { !$0.hasPrefix(".") }.count) ?? 0
             r.note("\(dir): \(n) files")

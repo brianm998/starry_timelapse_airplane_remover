@@ -26,6 +26,7 @@ final class GuiFeatureRunner {
     private var inputFrames: URL?              // the frames Star processes (the decoded ones, for a video)
     private var completeFrames: Int?
     private var rendersVideo = false
+    private var finishedReview = false
 
     // The setting steps, applied as the startup prompts when the sequence opens (the generator makes them precede the open step).
     private var horizon: Bool?
@@ -252,6 +253,12 @@ final class GuiFeatureRunner {
             guard parts.count == 3, let complete = Int(parts[0]), let total = Int(parts[1]) else { return false }
             let done = total > 0 && complete == total && parts[2] == "idle"
             if done { completeFrames = complete }
+            // Auto selective leaves every frame waiting for its outliers to be reviewed (run over, not all complete): the user
+            // finishes by rendering all frames. The cli has no review, so it writes the finals itself.
+            if total > 0, complete != total, parts[2] == "idle", clean == "autoSelective", !finishedReview {
+                finishedReview = true
+                element("render.all.frames").click()
+            }
             return done
         }
     }
@@ -352,7 +359,7 @@ final class GuiFeatureRunner {
         guard let input = inputFrames else { throw RunnerError("nothing has been opened") }
         var args = ["mode", "--mode", mode, "--input-dir", input.path, "--output-dir", try outputFrames().path,
                     "--thresholds", Self.repoRoot.appendingPathComponent("removal_tools/thresholds.json").path]
-        if mode == "autoSelective" { args += ["--temp-dir", try configJSON().deletingLastPathComponent().path] }
+        if mode == "autoSelective" { args += ["--config", try configJSON().path] }
         if ProcessInfo.processInfo.environment["STAR_GHERKIN_REPORT_ONLY"] != nil { args.append("--report-only") }
         try verify(args)
     }

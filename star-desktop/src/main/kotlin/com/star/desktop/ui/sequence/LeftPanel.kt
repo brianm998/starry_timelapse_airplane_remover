@@ -125,7 +125,7 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
         OutlinedButton(onClick = { vm.renderCurrentFrame() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(localized("ui.render_current_frame"))
         }
-        OutlinedButton(onClick = { vm.renderAllFrames() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { vm.renderAllFrames() }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("render.all.frames")) {
             Text(localized("ui.render_all_frames"))
         }
         if (rendering) {
