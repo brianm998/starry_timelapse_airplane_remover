@@ -1,5 +1,5 @@
 {
- "description": "Objects that must be removed under automatic:true. Derived from Star's own output, so this is a regression pin and not ground truth: the labelled a7sii_10 objects that BOTH selective and automatic:true removed (median stretch ratio < 0.5) on macos-15 and ubuntu-24.04 (JPEG), and that were also removed by the fixed build in three further local runs (16-bit twice, JPEG once), 2026-10-15. Four objects (00082-1, 00086-2, 00082-14, 00091-5) that were removed in some runs and not in others were dropped: they are not stable (00091-5 came back on the 16-bit sets on windows-2022 CPU, 2026-10-16, run 38832664368). Kept pins have a median ratio of at most 0.065 in every selective and fixed automatic:true run (7 selective runs, 5 automatic:true runs, macos/linux/local, JPEG and 16-bit); the pre-1b2cb327 build leaves 43 of the then 43 pins in place (the 42 kept pins were not re-measured against the pre-fix build). The pre-1b2cb327 build (which restores the objects decided remove) leaves 44 of the 44 in place (median ratio about 1.0), while the aggregate removed fraction cannot tell the two builds apart (0.78 vs 0.83). Frame names are base names, so they match the JPEG and the 16-bit TIFF datasets alike. Pins with an input contrast below 0.075 (median over the measurable stretches, 0-1 brightness) were dropped on 2026-10-16: the desktop client (stard, selective) left 5 of the 6 faintest in place (LRT_00081/00081-5 at 0.05, LRT_00082/00082-17 at 0.062, LRT_00082/00082-3 at 0.025, LRT_00083/00083-2 at 0.032, LRT_00089/00089-2 at 0.033, LRT_00096/00096-2 at 0.071), while every pin at 0.075 or above was removed.",
+ "description": "Objects that must be removed under automatic:true. Derived from Star's own output, so this is a regression pin and not ground truth: the labelled a7sii_10 objects that BOTH selective and automatic:true removed (median stretch ratio < 0.5) on macos-15 and ubuntu-24.04 (JPEG), and that were also removed by the fixed build in three further local runs (16-bit twice, JPEG once), 2026-10-15. Four objects (00082-1, 00086-2, 00082-14, 00091-5) that were removed in some runs and not in others were dropped: they are not stable (00091-5 came back on the 16-bit sets on windows-2022 CPU, 2026-10-16, run 38832664368). Kept pins have a median ratio of at most 0.065 in every selective and fixed automatic:true run (7 selective runs, 5 automatic:true runs, macos/linux/local, JPEG and 16-bit); the pre-1b2cb327 build leaves 43 of the then 43 pins in place (the 42 kept pins were not re-measured against the pre-fix build). The pre-1b2cb327 build (which restores the objects decided remove) leaves 44 of the 44 in place (median ratio about 1.0), while the aggregate removed fraction cannot tell the two builds apart (0.78 vs 0.83). Frame names are base names, so they match the JPEG and the 16-bit TIFF datasets alike.",
  "pins": [
   {
    "frame": "LRT_00081",
@@ -15,6 +15,10 @@
   },
   {
    "frame": "LRT_00081",
+   "id": "00081-5"
+  },
+  {
+   "frame": "LRT_00081",
    "id": "00081-9"
   },
   {
@@ -27,7 +31,15 @@
   },
   {
    "frame": "LRT_00082",
+   "id": "00082-17"
+  },
+  {
+   "frame": "LRT_00082",
    "id": "00082-21"
+  },
+  {
+   "frame": "LRT_00082",
+   "id": "00082-3"
   },
   {
    "frame": "LRT_00083",
@@ -40,6 +52,10 @@
   {
    "frame": "LRT_00083",
    "id": "00083-17"
+  },
+  {
+   "frame": "LRT_00083",
+   "id": "00083-2"
   },
   {
    "frame": "LRT_00083",
@@ -80,6 +96,10 @@
   {
    "frame": "LRT_00089",
    "id": "00089-1"
+  },
+  {
+   "frame": "LRT_00089",
+   "id": "00089-2"
   },
   {
    "frame": "LRT_00089",
@@ -136,6 +156,10 @@
   {
    "frame": "LRT_00096",
    "id": "00096-1"
+  },
+  {
+   "frame": "LRT_00096",
+   "id": "00096-2"
   },
   {
    "frame": "LRT_00097",
