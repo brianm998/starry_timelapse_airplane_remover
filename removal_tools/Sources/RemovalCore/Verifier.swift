@@ -23,6 +23,9 @@ public struct VerifyOptions: Sendable {
     public var skipUnmeasurable = false
     /// "<frame base name>|<object id>" of objects that must be removed whatever the aggregate fraction says.
     public var pins: Set<String> = []
+    /// Judge only the pinned objects: per-object and fraction failures are reported but do not fail the run. For `selective`, which
+    /// leaves most faint labelled streaks alone by design.
+    public var pinsOnly = false
     public var reportOnly = true
     public var dataset = ""
     public var cleanMethod = ""
@@ -280,6 +283,7 @@ public enum Verifier {
         if options.aggregate, let t = thresholds.removed_fraction_min?.value {
             ok = (report.summary.passFraction ?? 0) >= t && report.summary.labelErrors == 0
         }
+        if options.pinsOnly && !options.expect.isEmpty { ok = report.summary.labelErrors == 0 && report.summary.pinsChecked > 0 }
         if report.summary.pinsFailed > 0 { ok = false }
         if report.starsStatus == "fail" || report.collateralStatus == "fail" { ok = false }
         if report.differential.values.contains(where: { $0.status == "fail" }) { ok = false }

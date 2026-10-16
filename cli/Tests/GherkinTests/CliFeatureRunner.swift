@@ -40,6 +40,7 @@ final class CliFeatureRunner {
             .airplanesRemoved: { try $0.trailsRemoved(trailClass: "airplane") },
             .satellitesRemoved: { try $0.trailsRemoved(trailClass: "satellite") },
             .starsPreserved: { try $0.starsPreserved() },
+            .nothingElseChanged: { try $0.nothingElseChanged() },
         ]
     }
 
@@ -182,11 +183,6 @@ final class CliFeatureRunner {
                     "--thresholds", Self.repoRoot.appendingPathComponent("gherkin/removal-thresholds.json").path,
                     "--clean-method", method, "--dataset", input.lastPathComponent,
                     "--skip-unmeasurable", "--report", report.path, "--crops", crops.path]
-        if method == "automatic:true" {
-            // per-object verdicts differ between platforms; the fraction does not (BUGS.md BUG-004). The fraction cannot
-            // see the 1b2cb327 bug (0.78 broken vs 0.83 fixed), so the objects both modes agree on are pinned as well.
-            args += ["--aggregate", "--pins", Self.repoRoot.appendingPathComponent("gherkin/removal-pins.json").path]
-        }
         args += extra
 
         let p = Process()
@@ -228,7 +224,17 @@ final class CliFeatureRunner {
 
     private func trailsRemoved(trailClass: String) throws {
         let expected = try confirmedObjectCount(trailClass: trailClass)
-        let report = try runVerifier(["--expect", "\(trailClass)=removed"], reportName: "\(trailClass)s-removed")
+        // Per-object verdicts differ between platforms, and selective leaves most faint labelled streaks alone by design
+        // (BUGS.md BUG-004, and the measurements in the result notes). automatic:true is judged by the fraction removed plus
+        // pinned objects; the fraction cannot see the 1b2cb327 bug (0.78 broken vs 0.83 fixed), the pins can (43 of 43 come back).
+        let pins = ["--pins", Self.repoRoot.appendingPathComponent("gherkin/removal-pins.json").path]
+        var extra = ["--expect", "\(trailClass)=removed"]
+        switch cleanMethod {
+        case "selective": extra += ["--pins-only"] + pins
+        case "automatic:true": extra += ["--aggregate"] + pins
+        default: break
+        }
+        let report = try runVerifier(extra, reportName: "\(trailClass)s-removed")
         // not vacuous: the verifier must have looked at every confirmed object of this class
         let summary = report["summary"] as? [String: Any]
         let objects = (summary?["objects"] as? Int) ?? -1
@@ -236,13 +242,23 @@ final class CliFeatureRunner {
         guard objects == expected else {
             throw RunnerError("the verifier checked \(objects) \(trailClass) objects, labels.json has \(expected) confirmed: refusing to pass")
         }
-        if cleanMethod == "automatic:true" {
+        if cleanMethod == "automatic:true" || cleanMethod == "selective" {
             let pinned = try pinCount()
             let checked = (summary?["pinsChecked"] as? Int) ?? -1
             guard checked == pinned else { throw RunnerError("the verifier checked \(checked) pinned objects, removal-pins.json has \(pinned): refusing to pass") }
         }
         let measured = (summary?["passed"] as? Int ?? 0) + (summary?["failed"] as? Int ?? 0)
         guard measured > 0 else { throw RunnerError("no \(trailClass) object was measurable: refusing to pass") }
+    }
+
+    private func nothingElseChanged() throws {
+        guard cleanMethod == "selective" else { throw RunnerError("\"nothing outside the labelled trails changed\" is only valid with the selective clean method") }
+        guard let out = outputDir else { throw RunnerError("\"I process every frame\" has not run") }
+        let report = try runVerifier(["--unchanged-outside"], reportName: "unchanged-outside")
+        let frames = ((try? FileManager.default.contentsOfDirectory(atPath: try framesDirectory(out).path)) ?? []).filter { !$0.hasPrefix(".") }.count
+        let covered = (report["collateral"] as? [String: Any])?.count ?? 0
+        guard covered == frames, frames > 0 else { throw RunnerError("the unchanged-outside check covered \(covered) frames, Star wrote \(frames): refusing to pass") }
+        guard (report["collateralStatus"] as? String) == "pass" else { throw RunnerError("the unchanged-outside check did not pass (status \(String(describing: report["collateralStatus"])))") }
     }
 
     private func starsPreserved() throws {

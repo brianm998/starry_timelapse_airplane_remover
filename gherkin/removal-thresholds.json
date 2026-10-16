@@ -20,8 +20,8 @@
     "measured": "same data: highest per-frame fraction of peaks below 0.5 is 0.014 (automatic), 0.001 (selective)."
   },
   "unchanged_outside_max_area": {
-    "value": null,
-    "measured": "unmeasurable so far: the only lossless dataset (a7sii_10_crop16, selective) gave 14,419 / 44,022 / 45,771 / 62,543 changed px on four runs (CPU mac, local Vega, macOS GPU, Linux CPU) with the bulk in different frames each time; see BUGS.md BUG-001 and BUG-004. Needs a full-frame lossless dataset."
+    "value": 25000,
+    "measured": "a7sii_10_16bit, selective, release cli, 2026-10-15: total changed px outside the labelled trails over 19 frames (228 million px) is deterministic per platform (identical frame by frame on repeat runs, macos GPU 10,989 twice, linux CPU 15,172 twice) and varies between platforms: 6,723 local Vega GPU, 8,264 macos-15 CPU, 10,989 macos-15 GPU (Paravirtual), 15,172 ubuntu-24.04 CPU; at most 7,774 in one frame (linux frame 96). 25,000 is 1.65x the worst platform. A broken selection or paint step changes orders of magnitude more. NOT valid for a7sii_10_crop16 (BUG-001)."
   },
   "differential_outside_max": {
     "value": null,

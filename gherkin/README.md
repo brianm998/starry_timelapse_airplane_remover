@@ -132,9 +132,9 @@ and `tests="1"` / `skipped="0"` in `build/test-results/gherkinTest/*.xml` for Gr
 ## Checking airplane and satellite removal
 
 Features that must prove trails are actually gone use `removal_tools/` (a standalone SwiftPM package: `RemovalCore`,
-the pure-Swift measurements, plus the `star-removal-verify` and `star-trail-inject` executables). **Status: the verifier
-and generator exist and are unit-tested, but no feature calls them yet and every threshold is unmeasured**; see
-`GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md`.
+the pure-Swift measurements, plus the `star-removal-verify` and `star-trail-inject` executables). **Status: five
+cli features use the verifier (below); the thresholds are measured except the synthetic-data ones; the GUI clients and the synthetic
+features do not use it yet**; see `GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md`.
 
 ### Labels (`labels.json`)
 
@@ -185,10 +185,29 @@ method): still failing = pass and say so; failing but not listed = regression (f
 `labels.json` (`confirmed: true`, exact by construction). Seeded and deterministic; run once to build a dataset, never at
 test time. Satellites sweep SNR 3–100, airplanes are twin lines with strobe dots, meteors are measured only.
 
-### Adding a removal feature
+### Removal features (cli only so far)
 
-Not possible yet: the steps in the plan (`setCleanMethod`, `airplanesRemoved`, …) are not in `steps.json`. Once added, a
-`Then` step should run `star-removal-verify` as a subprocess and surface its summary, report and crop paths.
+| feature | method | dataset | what it proves |
+|---|---|---|---|
+| `removeAirplanes` | `automatic:false` (the default) | `{sequence}` = `a7sii_10` (JPEG) | every measurable labelled airplane is removed (median stretch ratio <= `removed_max`), stars preserved |
+| `autoPreservationKeepsAirplanesOutJpeg` / `...Bit16` | `automatic:true` | `a7sii_10` / `{sequence16}` = `a7sii_10_16bit` | at least `removed_fraction_min` of the measurable airplanes are removed **and** the 43 pinned objects (`gherkin/removal-pins.json`) are; regression test for `1b2cb327` |
+| `selectiveRemovesOnlyTrails` | `selective` | `a7sii_10_16bit` | the pinned objects are removed, nothing outside the labelled trails changed (<= `unchanged_outside_max_area`), stars preserved |
+
+Steps: `I open the 16-bit sequence {sequence16}`, `the clean method is automatic:false|automatic:true|selective` (literal, because a
+`{placeholder}` has one value per client, not one per feature), `the labelled airplanes|satellites are removed`, `the stars are
+preserved`, `nothing outside the labelled trails changed`. Each `Then` runs `star-removal-verify` as a subprocess, fails with its
+summary plus the report and crop paths, and refuses to pass if the report did not check every labelled object of the class (or every
+pin, or every frame). Reports and crops go to `removal-reports/<feature>/` (git-ignored; CI uploads it with `if: always()`; `STAR_REMOVAL_REPORTS`
+overrides it). The runner finds the verifier at `removal_tools/.build/release/star-removal-verify` (`STAR_REMOVAL_VERIFY` overrides).
+
+Why pins: per-object verdicts differ between platforms and the fraction removed cannot tell the pre-`1b2cb327` build (0.78) from the
+fixed one (0.83), so the objects every healthy run removes are pinned (derived from Star's own output, not ground truth). Why the pass
+rule is the median stretch ratio, why `selective` is not judged per object, and every threshold's evidence: `gherkin/removal-thresholds.json`
+and `BUGS.md`. Local run: `swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests`
+after `swift build -c release --package-path removal_tools` and `test_data/fetch.sh a7sii_10 a7sii_10_16bit`.
+
+To add one: put the dataset (with `labels.json`) in `test_data/datasets.json`, add a `{placeholder}` and `data:` default to `params.json`, an `openSequence…`
+step if it is a new placeholder, write the `.feature`, `gherkin/generate.sh`, and add its generated test name to the guard loop in `gherkin.yml`.
 
 ### Measuring (Phase 4)
 

@@ -1,5 +1,5 @@
 {
- "description": "Objects that must be removed under automatic:true. Derived from Star's own output, so this is a regression pin and not ground truth: the labelled a7sii_10 objects that BOTH selective and automatic:true removed (median stretch ratio < 0.5) on macos-15 and ubuntu-24.04 (JPEG), and that were also removed by the fixed build in three further local runs (16-bit twice, JPEG once), 2026-10-15. Two objects that CI removed (00082-1, 00086-2) came back in a local run and were dropped: they are not stable. Kept pins have a median ratio of at most 0.054 in every fixed-build run. The pre-1b2cb327 build (which restores the objects decided remove) leaves 44 of the 44 in place (median ratio about 1.0), while the aggregate removed fraction cannot tell the two builds apart (0.78 vs 0.83). Frame names are base names, so they match the JPEG and the 16-bit TIFF datasets alike.",
+ "description": "Objects that must be removed under automatic:true. Derived from Star's own output, so this is a regression pin and not ground truth: the labelled a7sii_10 objects that BOTH selective and automatic:true removed (median stretch ratio < 0.5) on macos-15 and ubuntu-24.04 (JPEG), and that were also removed by the fixed build in three further local runs (16-bit twice, JPEG once), 2026-10-15. Three objects (00082-1, 00086-2, 00082-14) that were removed in some runs and not in others were dropped: they are not stable. Kept pins have a median ratio of at most 0.065 in every selective and fixed automatic:true run (7 selective runs, 5 automatic:true runs, macos/linux/local, JPEG and 16-bit); the pre-1b2cb327 build leaves 43 of the 43 in place. The pre-1b2cb327 build (which restores the objects decided remove) leaves 44 of the 44 in place (median ratio about 1.0), while the aggregate removed fraction cannot tell the two builds apart (0.78 vs 0.83). Frame names are base names, so they match the JPEG and the 16-bit TIFF datasets alike.",
  "pins": [
   {
    "frame": "LRT_00081",
@@ -28,10 +28,6 @@
   {
    "frame": "LRT_00082",
    "id": "00082-11"
-  },
-  {
-   "frame": "LRT_00082",
-   "id": "00082-14"
   },
   {
    "frame": "LRT_00082",

@@ -285,6 +285,21 @@ final class VerifierTests: XCTestCase {
         XCTAssertEqual(r2.summary.pinsFailed, 1)
     }
 
+    func testPinsOnlyIgnoresOtherObjectsButNeedsAPin() throws {
+        let (removed, kept, _) = setup()
+        let other = LabelObject(id: "other", class: .airplane, points: [[10, 220], [300, 240]], width: 8, confirmed: true)
+        let good = LabelObject(id: "o1", class: .airplane, points: [[40, 100], [340, 150]], width: 8, confirmed: true)
+        let labels = LabelSet(frames: ["f.tif": [good, other]])
+        var o = VerifyOptions(); o.expect = [.airplane: .removed]; o.reportOnly = false; o.pinsOnly = true; o.skipUnmeasurable = true; o.pins = ["f|o1"]
+        let (r1, _) = try Verifier.verify(frames: [removed], labels: labels, options: o, thresholds: thresholds(), baseline: nil)
+        XCTAssertTrue(r1.summary.ok)
+        let (r2, _) = try Verifier.verify(frames: [kept], labels: labels, options: o, thresholds: thresholds(), baseline: nil)
+        XCTAssertFalse(r2.summary.ok)
+        o.pins = ["f|nothing"]   // a pin that matches no object: nothing was checked, so it must not pass
+        let (r3, _) = try Verifier.verify(frames: [removed], labels: labels, options: o, thresholds: thresholds(), baseline: nil)
+        XCTAssertFalse(r3.summary.ok)
+    }
+
     func testUnchangedOutsideRefusals() {
         let (removed, _, labels) = setup()
         var o = VerifyOptions(); o.unchangedOutside = true; o.reportOnly = true

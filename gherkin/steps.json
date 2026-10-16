@@ -8,5 +8,6 @@
   { "case": "cleanMethodSelective",      "text": "the clean method is selective" },
   { "case": "airplanesRemoved",     "text": "the labelled airplanes are removed" },
   { "case": "satellitesRemoved",    "text": "the labelled satellites are removed" },
-  { "case": "starsPreserved",       "text": "the stars are preserved" }
+  { "case": "starsPreserved",       "text": "the stars are preserved" },
+  { "case": "nothingElseChanged",   "text": "nothing outside the labelled trails changed" }
 ]

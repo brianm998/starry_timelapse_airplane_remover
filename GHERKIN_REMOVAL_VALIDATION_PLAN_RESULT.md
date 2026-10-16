@@ -165,16 +165,37 @@ Full tables are in the job summaries and the `removal-measurements-*` artifacts.
   workflow now fetches `a7sii_10` and `a7sii_10_16bit` and also runs `a7sii_10_16bit selective` twice plus a macOS CPU-forced repeat, to measure
   same-platform repeatability and set `unchanged_outside_max_area`. The crop is still in the manifest and reachable with `MEASURE_CROP=1`.
 
+## Phase 5 (cli) done locally, not yet run on CI
+
+Commit `558e2831` and the work after it. New steps in `gherkin/steps.json`: `openSequence16` (`I open the 16-bit sequence {sequence16}`),
+`the clean method is automatic:false|automatic:true|selective`, `the labelled airplanes are removed`, `the labelled satellites are removed`,
+`the stars are preserved`, `nothing outside the labelled trails changed`. **Deviation from the plan's step table:** the clean method and the
+dataset are separate literal steps / placeholders, because a `{placeholder}` has one value per client and the features need different ones.
+`processWithBase` is not added (no synthetic dataset yet). Features (all `@cli`, all pass locally, 5 of 5 together, release cli on this Mac):
+
+- `removeAirplanes`: `automatic:false` on `a7sii_10`: 226 of 226 measurable airplanes removed, stars preserved.
+- `autoPreservationKeepsAirplanesOutJpeg` / `...Bit16`: `automatic:true`: fraction removed 0.83 (>= 0.7) and 43 pinned objects removed.
+- `selectiveRemovesOnlyTrails`: `selective` on `a7sii_10_16bit`: pinned objects removed, 6,723 changed px outside the labels (<= 25,000), stars preserved.
+
+Verifier additions: `--aggregate`, `--skip-unmeasurable`, `--pins` / `--pins-only` (pinned objects: `gherkin/removal-pins.json`, 43 objects, derived from
+Star's own output and kept only if removed in all 7 selective and 5 automatic:true runs I have), median pass rule; 23 unit tests pass.
+Why pins: the removed fraction cannot tell the pre-`1b2cb327` build (0.78) from the fixed one (0.83).
+
+**"Deliberately broken removal turns the right feature red", proven locally** (throwaway builds, not a commit):
+- pre-`1b2cb327` build, `autoPreservationKeepsAirplanesOutBit16`: red, 45 of 46 pins came back (before 3 unstable pins were dropped); that feature's fraction check alone passed.
+- `selective` with the selection inverted (`!reason.willRemove` in `computeRemovalMask`): `selectiveRemovesOnlyTrails` red, 43 of 43 pins failed, with the per-object lines and crops.
+- The pre-fix build passes `selectiveRemovesOnlyTrails`, correctly: the bug is only in `automatic:true`.
+
+CI: `gherkin.yml` cli legs build `removal_tools`, run all five tests, the guard greps each test name and `Executed 5 tests, with 0 failures`, require the
+report JSON to exist, and upload `removal-reports` with `if: always()`. **Not run on CI yet**; the first push will show whether the removal steps behave
+on hosted runners (Linux and macOS times are expected at roughly 10 to 15 minutes more per leg, about 9 minutes locally for the five).
+
 ## Not done (leftover)
 
-- **`--temp` decision diagnostics** are not implemented. The option is accepted and prints a note.
-- **Upload** of `a7sii_10_16bit-51480f4c981f.tar.gz` (Brian; the two earlier archives are uploaded). No `labels.draft.json` generator was written: Brian labelled from scratch.
-- **Phase 3 realism comparison.** The generator exists, but the synthetic-versus-real detection-rate check was not run. The
-  base was not proven clean with Star in selective mode, so `--base-is-clean` was never used.
-- **Phase 4.** No measurements on `ubuntu-24.04` or `macos-15`, no Metal vs CPU note, and no threshold or baseline values.
-- **Phase 5.** None of the following exists: the six `steps.json` entries, runner changes, the five features, CI wiring and
-  artifact upload, vacuous-green guards, and the throwaway "deliberately break removal" proof. The speed/test-data branch
-  `claude/gherkin-speed-test-data-8b2cf1` was not merged into this base either.
-- Project memory `removal-validation-oracle` was not updated, since there are no thresholds yet.
-- `removal_tools/Package.resolved` is untracked and was not reviewed for committing. Linux and Windows builds of
-  `removal_tools` were not tried.
+- **GUI clients (`@mac-gui`, `@desktop`)**: `removeAirplanes` is `@cli` only. The plan wanted it on the GUIs too; that needs `airplanesRemoved` / `starsPreserved` in `GuiFeatureRunner` (XCUITest; check it can launch the verifier subprocess) and `DesktopFeatureRunner.kt`. The generated Kotlin/Swift for the new steps was regenerated but not compiled or run.
+- **Synthetic datasets**: `star-trail-inject` exists and was smoke-tested, but no synthetic dataset has been built, proven clean with Star, uploaded or measured, so there is no `processWithBase` step and no `syntheticSatellites` / `syntheticAirplanes` feature, no differential threshold, and the plan's realism comparison (synthetic vs real detection rate) was not done. There is also no satellite feature (no object is labelled `satellite`).
+- **`--temp` decision diagnostics** are not implemented (the option is accepted and prints a note). The cli runner does not pass `-w --keep-temp-files`.
+- **Windows**: no `star` cli there; the verifier's build on Windows was not tried or wired into the desktop-windows leg.
+- **BUGS.md** BUG-001 to BUG-004 are open and unassigned: `selective` is non-deterministic on the cropped set, stars are dimmed on it, it takes 25-35 minutes, and per-object verdicts differ between platforms. `a7sii_10_crop16` stays in the manifest but nothing uses it.
+- `removal_tools/Package.resolved` is committed as generated and was not reviewed. The `removal-measure.yml` workflow still has a temporary `push` trigger and a `[skip macos]` switch to delete when it is merged.
+- The pins and thresholds come from one day of runs (one CI run per OS plus local runs): re-measure if a platform or a Star change moves them.

@@ -21,6 +21,8 @@ struct StarRemovalVerify: ParsableCommand {
     var aggregate = false
     @Flag(help: "Objects too faint to measure are skipped and reported instead of failing as label errors (hand-labelled real data).")
     var skipUnmeasurable = false
+    @Flag(help: "Judge only the pinned objects (--pins); other objects are reported, not required.")
+    var pinsOnly = false
     @Option(help: "JSON file of pinned objects ({\"pins\":[{\"frame\":\"LRT_00080\",\"id\":\"00080-3\"}]}) that must be removed even in --aggregate mode.")
     var pins: String?
     @Option(help: "Star's output on the un-injected base: differential mode for synthetic datasets.") var baseOutput: String?
@@ -48,6 +50,7 @@ struct StarRemovalVerify: ParsableCommand {
         opts.reportOnly = reportOnly
         opts.aggregate = aggregate
         opts.skipUnmeasurable = skipUnmeasurable
+        opts.pinsOnly = pinsOnly
         if let pins {
             struct Pin: Decodable { let frame: String; let id: String }
             struct Pins: Decodable { let pins: [Pin] }

@@ -155,11 +155,11 @@ jobs:
 
       - name: Prove the scenarios ran (not a vacuous green)
         run: |
-          for t in testOpenAndProcessFeature testRemoveAirplanesFeature testAutoPreservationKeepsAirplanesOutJpegFeature testAutoPreservationKeepsAirplanesOutBit16Feature; do
+          for t in testOpenAndProcessFeature testRemoveAirplanesFeature testAutoPreservationKeepsAirplanesOutJpegFeature testAutoPreservationKeepsAirplanesOutBit16Feature testSelectiveRemovesOnlyTrailsFeature; do
             grep -E "$t.*passed" gherkin-cli.log
             ! grep -E "$t.*skipped" gherkin-cli.log
           done
-          grep -E "Executed 4 tests, with 0 failures" gherkin-cli.log
+          grep -E "Executed 5 tests, with 0 failures" gherkin-cli.log
           # every removal report must have checked something (the runner also refuses to pass on a zero count)
           ls removal-reports/*/*.json
 
@@ -242,11 +242,11 @@ jobs:
 
       - name: Prove the scenarios ran (not a vacuous green)
         run: |
-          for t in testOpenAndProcessFeature testRemoveAirplanesFeature testAutoPreservationKeepsAirplanesOutJpegFeature testAutoPreservationKeepsAirplanesOutBit16Feature; do
+          for t in testOpenAndProcessFeature testRemoveAirplanesFeature testAutoPreservationKeepsAirplanesOutJpegFeature testAutoPreservationKeepsAirplanesOutBit16Feature testSelectiveRemovesOnlyTrailsFeature; do
             grep -E "$t.*passed" gherkin-cli.log
             ! grep -E "$t.*skipped" gherkin-cli.log
           done
-          grep -E "Executed 4 tests, with 0 failures" gherkin-cli.log
+          grep -E "Executed 5 tests, with 0 failures" gherkin-cli.log
           # every removal report must have checked something (the runner also refuses to pass on a zero count)
           ls removal-reports/*/*.json
 
