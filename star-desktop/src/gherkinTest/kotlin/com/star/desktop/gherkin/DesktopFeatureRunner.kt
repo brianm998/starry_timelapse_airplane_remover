@@ -415,7 +415,7 @@ class DesktopFeatureRunner {
         const val CLIENT = "desktop"
         const val OPEN_TIMEOUT_MS = 10L * 60_000
         const val UI_TIMEOUT_MS = 90_000L
-        const val PROCESS_TIMEOUT_MS = 25L * 60_000
+        const val PROCESS_TIMEOUT_MS = 50L * 60_000   // auto selective on a 4-core runner took over 25 minutes
         const val RENDER_TIMEOUT_MS = 10L * 60_000
         val VIDEO_EXTS = setOf("mov", "mp4", "m4v", "avi", "mkv", "mpg", "mpeg")
     }

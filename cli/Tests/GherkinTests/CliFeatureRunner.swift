@@ -200,23 +200,23 @@ final class CliFeatureRunner {
         try? logHandle.close()
 
         runLog = (try? String(contentsOf: log, encoding: .utf8)) ?? ""
-        print(runLog.split(separator: "\n").suffix(15).joined(separator: "\n"))
+        print(runLog.split(whereSeparator: \.isNewline).suffix(15).joined(separator: "\n"))
         guard p.terminationStatus == 0 else {
-            throw RunnerError("star exited \(p.terminationStatus); last output:\n" + runLog.split(separator: "\n").suffix(40).joined(separator: "\n"))
+            throw RunnerError("star exited \(p.terminationStatus); last output:\n" + runLog.split(whereSeparator: \.isNewline).suffix(40).joined(separator: "\n"))
         }
         outputDir = out
         // star_temp_<sequence name> beside the input: the run's config.json lives there.
         let parent = input.deletingLastPathComponent()
         tempDir = try FileManager.default.contentsOfDirectory(atPath: parent.path)
             .first { $0.hasPrefix("star_temp_") }.map { parent.appendingPathComponent($0) }
-        renderedVideo = runLog.split(separator: "\n").first { $0.hasPrefix("Rendered video: ") }
+        renderedVideo = runLog.split(whereSeparator: \.isNewline).first { $0.hasPrefix("Rendered video: ") }
             .map { String($0.dropFirst("Rendered video: ".count)) }
     }
 
     private func renderOutputVideoStep() throws {
         // `--render-video` ran with the processing (see run()); this checks it happened.
         guard let video = renderedVideo, FileManager.default.fileExists(atPath: video) else {
-            throw RunnerError("star did not report a rendered video; last output:\n" + runLog.split(separator: "\n").suffix(20).joined(separator: "\n"))
+            throw RunnerError("star did not report a rendered video; last output:\n" + runLog.split(whereSeparator: \.isNewline).suffix(20).joined(separator: "\n"))
         }
     }
 
@@ -249,7 +249,7 @@ final class CliFeatureRunner {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
         let text = String(decoding: data, as: UTF8.self)
-        let lines = text.split(separator: "\n")
+        let lines = text.split(whereSeparator: \.isNewline)
         print(lines.count > 40 ? (lines.prefix(10) + ["…"] + lines.suffix(10)).joined(separator: "\n") : text)
         guard p.terminationStatus == 0 else { throw RunnerError("star-output-verify \(args[0]) failed:\n\(text)") }
     }
@@ -299,7 +299,7 @@ final class CliFeatureRunner {
     /// Exit 0 was already required by `processEveryFrame`.  The warnings star shows its user are the lines beginning with
     /// the warning sign and two spaces; detector chatter logged at `warn` level (`⚠️ WARN`) is not one of them.
     private func noProblems() throws {
-        let warnings = runLog.split(separator: "\n").filter { $0.hasPrefix("⚠️  ") }
+        let warnings = runLog.split(whereSeparator: \.isNewline).filter { $0.hasPrefix("⚠️  ") }
         XCTAssertTrue(warnings.isEmpty, "star reported \(warnings.count) warning(s):\n" + warnings.prefix(10).joined(separator: "\n"))
     }
 
