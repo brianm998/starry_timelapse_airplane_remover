@@ -311,6 +311,17 @@ struct StarCli: AsyncParsableCommand {
         )
     }
 
+    /// `/…` everywhere; on Windows also a drive path (`C:/…`, `C:\\…`), which is what Foundation hands back for an absolute path
+    /// there and would otherwise get the current directory prepended.
+    static func isAbsolutePath(_ path: String) -> Bool {
+        if path.hasPrefix("/") { return true }
+        #if os(Windows)
+        let chars = Array(path)
+        if chars.count >= 3, chars[0].isLetter, chars[1] == ":", chars[2] == "/" || chars[2] == "\\" { return true }
+        #endif
+        return false
+    }
+
     func validate() throws {
         // A negative last frame selects nothing at all.  FrameGraphBuilder reports that
         // and exits cleanly, but by then it has loaded the whole sequence, so say it
@@ -417,7 +428,7 @@ struct StarCli: AsyncParsableCommand {
                     _ = inputImageSequenceDirname.removeLast()
                 }
 
-                if !inputImageSequenceDirname.hasPrefix("/") {
+                if !Self.isAbsolutePath(inputImageSequenceDirname) {
                     let fullPath =
                       FileManager.default.currentDirectoryPath + "/" + 
                       inputImageSequenceDirname

@@ -83,6 +83,17 @@ final class CliFeatureRunner {
         return Self.repoRoot.appendingPathComponent(".test-data")
     }
 
+    /// POSIX `/…`, or on Windows a drive letter (`C:\…`, `C:/…`) or a UNC / rooted path (`\\…`).
+    static func isAbsolutePath(_ path: String) -> Bool {
+        if path.hasPrefix("/") { return true }
+        #if os(Windows)
+        if path.hasPrefix("\\") { return true }
+        let chars = Array(path)
+        if chars.count >= 3, chars[0].isLetter, chars[1] == ":", chars[2] == "\\" || chars[2] == "/" { return true }
+        #endif
+        return false
+    }
+
     // MARK: steps
 
     /// Copies the sequence into a fresh temp dir: star derives its temp and output paths from the
@@ -92,7 +103,7 @@ final class CliFeatureRunner {
     private func openSequence(placeholder: String) throws {
         let given = try param(placeholder)
         let source = try TestData.resolve(given, cache: dataCache())
-            ?? (given.hasPrefix("/") ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given))
+            ?? (Self.isAbsolutePath(given) ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given))
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: source.path, isDirectory: &isDir), isDir.boolValue else {
             throw RunnerError("sequence directory not found: \(source.path)")
@@ -271,7 +282,7 @@ final class CliFeatureRunner {
 
     // MARK: the binary
 
-    /// `STAR_CLI_PATH`, else the `star` beside the test bundle (SwiftPM builds both into one products directory).
+    /// `STAR_CLI_PATH`, else the `star` (`star.exe` on Windows) beside the test bundle (SwiftPM builds both into one products directory).
     private func starBinary() throws -> URL {
         if let p = ProcessInfo.processInfo.environment["STAR_CLI_PATH"], !p.isEmpty {
             guard FileManager.default.isExecutableFile(atPath: p) else { throw RunnerError("STAR_CLI_PATH is not an executable: \(p)") }
@@ -283,9 +294,19 @@ final class CliFeatureRunner {
         }
         let products = bundle.bundleURL.deletingLastPathComponent()
         #else
-        let products = Bundle.main.bundleURL
+        // Linux: the test runner is `<products>/starPackageTests.xctest`, an executable file, so its bundleURL can be the file
+        // itself or the directory holding it depending on the platform: take the directory either way.
+        var products = Bundle.main.bundleURL
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: products.path, isDirectory: &isDir), !isDir.boolValue {
+            products = products.deletingLastPathComponent()
+        }
         #endif
+        #if os(Windows)
+        let star = products.appendingPathComponent("star.exe")
+        #else
         let star = products.appendingPathComponent("star")
+        #endif
         guard FileManager.default.isExecutableFile(atPath: star.path) else {
             throw RunnerError("no star binary at \(star.path): run `swift build` first, or set STAR_CLI_PATH")
         }
