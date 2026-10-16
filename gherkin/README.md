@@ -200,7 +200,7 @@ summary plus the report and crop paths, and refuses to pass if the report did no
 pin, or every frame). Reports and crops go to `removal-reports/<feature>/` (git-ignored; CI uploads it with `if: always()`; `STAR_REMOVAL_REPORTS`
 overrides it). The runner finds the verifier at `removal_tools/.build/release/star-removal-verify` (`STAR_REMOVAL_VERIFY` overrides).
 
-`removeAirplanes` also runs on the GUIs: `GuiFeatureRunner.swift` (XCUITest; the runner is not sandboxed, `star.entitlements` is empty) and
+`removeAirplanes` also runs on the GUIs: `GuiFeatureRunner.swift` (XCUITest; the runner is sandboxed, which can launch the verifier and read the output but not write into the repo) and
 `DesktopFeatureRunner.kt` launch `star-removal-verify` as a subprocess with the same flags and the same vacuous-green guards as the cli runner
 (object count equals the confirmed labels, stars covered every output frame, something measurable).
 `removeAirplanes.feature` has no clean-method step: each client runs its own default and judges it with the matching verifier mode.
@@ -208,8 +208,7 @@ The cli's default (no `-c`) is `automatic:false`, judged per object. The mac GUI
 `StartupView.cleanMethod`) is also `automatic:false`. The desktop client's auto-open path keeps `initialConfigBeside`'s `CLEAN_SELECTIVE`
 (`InitialConfigBesideTest`), so `DesktopFeatureRunner.kt` passes `--clean-method selective --pins-only --pins gherkin/removal-pins.json` and
 sets the session's detection type to STRONG (an unset one is MILD, Star's own default is STRONG, and the pins were measured at STRONG) and requires `pinsChecked` to equal the pin count, as the cli runner does for selective (selective leaves most faint labelled streaks alone by
-design: BUG-004). The GUI method maps hold no clean-method steps, so a feature that asks for one fails naming what is implemented. Each GUI leg of `gherkin.yml` builds `removal_tools` in release first; reports land in `removal-reports/gui-removeAirplanes/`
-and `removal-reports/desktop-removeAirplanes/` and are uploaded as artifacts.
+design: BUG-004). The GUI method maps hold no clean-method steps, so a feature that asks for one fails naming what is implemented. Each GUI leg of `gherkin.yml` builds `removal_tools` in release first; the desktop reports land in `removal-reports/desktop-removeAirplanes/` (uploaded as artifacts), the mac GUI's are attachments in the uploaded xcresult (its sandboxed runner cannot write into the repo, found on CI) and its summary is in the log.
 
 Why pins: per-object verdicts differ between platforms and the fraction removed cannot tell the pre-`1b2cb327` build (0.78) from the
 fixed one (0.83), so the objects every healthy run removes are pinned (derived from Star's own output, not ground truth). Why the pass

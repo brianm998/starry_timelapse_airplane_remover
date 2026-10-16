@@ -194,9 +194,9 @@ on hosted runners (Linux and macOS times are expected at roughly 10 to 15 minute
 
 `removeAirplanes` is now tagged `@cli @mac-gui @desktop`. `GuiFeatureRunner.swift` and `DesktopFeatureRunner.kt` implement `airplanesRemoved`, `satellitesRemoved` and `starsPreserved`, with the cli runner's verifier flags
 (`--skip-unmeasurable`, `gherkin/removal-thresholds.json`; `--clean-method automatic:false` on the mac GUI, `selective --pins-only` on the desktop client) and guards (objects == confirmed labels, > 0 measurable, star
-frames == output frames). XCUITest can launch a subprocess: the UI-test runner is not sandboxed (empty entitlements file, no sandbox build setting), so no
+frames == output frames). XCUITest can launch a subprocess, but I was wrong that its runner is unsandboxed: CI showed it cannot write into the repo ("Operation not permitted" creating `removal-reports`), so the mac GUI's reports go to a temp directory and are attached to the xcresult. No
 separate CI step was needed. `gherkin.yml`: every GUI leg builds `removal_tools`, the guards now expect two tests (`Executed 2 tests` / `tests="2"`), name
-`testRemoveAirplanesFeature` / `removeAirplanesFeature`, require the report JSON, and upload `removal-reports-mac-gui` / `-desktop-<os>`.
+`testRemoveAirplanesFeature` / `removeAirplanesFeature`, require the report JSON (the mac GUI: its summary line in the log) and upload `removal-reports-desktop-<os>`.
 
 What was verified: generated files regenerated; the Kotlin `gherkinTest` source set compiles (`./gradlew compileGherkinTestKotlin`); see below for the Xcode build.
 What was **not** run: neither GUI scenario has executed (no XCUITest run, no Compose run, no stard run with this feature), nothing on GitHub Actions, and the

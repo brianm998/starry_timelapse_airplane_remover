@@ -556,19 +556,11 @@ jobs:
           ! grep -E "Executed [0-9]+ tests?" gherkin-gui.log | grep -v "Executed 2 tests, with 0 failures"
           grep -E "Test [Cc]ase '.*testOpenAndProcessFeature.*' passed" gherkin-gui.log
           grep -E "Test [Cc]ase '.*testRemoveAirplanesFeature.*' passed" gherkin-gui.log
-          # the removal step ran the verifier and left its reports (the runner also refuses to pass on a zero count)
-          ls removal-reports/gui-removeAirplanes/*.json
+          # the removal step ran the verifier (the runner also refuses to pass on a zero count); the sandboxed runner cannot write
+          # reports into the repo, so they are attachments in the xcresult uploaded below
+          grep -E "summary: objects=[1-9][0-9]*" gherkin-gui.log
 
-      - name: Upload the removal reports and crops
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: removal-reports-mac-gui
-          path: removal-reports
-          if-no-files-found: warn
-          retention-days: 30
-
-      # The screenshots in here are the only evidence of a GUI failure.
+      # The screenshots in here are the only evidence of a GUI failure, and the removal reports are attached to the removeAirplanes test.
       - name: Upload the xcresult
         if: always()
         uses: actions/upload-artifact@v4

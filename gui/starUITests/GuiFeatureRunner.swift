@@ -187,9 +187,7 @@ final class GuiFeatureRunner {
     }
 
     // MARK: removal checks (star-removal-verify)
-    // Same verifier, flags and vacuous-green guards as cli/Tests/GherkinTests/CliFeatureRunner.swift. The UI-test runner is not
-    // sandboxed (star.entitlements is empty and the target has no sandbox setting), so it can launch the verifier as a subprocess and
-    // read the output directory directly.
+    // Same verifier, flags and vacuous-green guards as cli/Tests/GherkinTests/CliFeatureRunner.swift, run as a subprocess.
 
     private func frameCount(_ dir: URL) -> Int {
         ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).filter { !$0.hasPrefix(".") }.count
@@ -204,11 +202,10 @@ final class GuiFeatureRunner {
         return URL(fileURLWithPath: path)
     }
 
-    /// Where reports and crops go. Not the scratch directory (deleted when the scenario ends): CI uploads this as an artifact.
+    /// Where reports and crops go: inside the scratch directory. The UI-test runner is sandboxed (CI: "Operation not permitted" creating
+    /// <repo>/removal-reports), so it cannot write into the repository; the reports are attached to the test result instead (see runVerifier).
     private func reportsDirectory() -> URL {
-        let base = ProcessInfo.processInfo.environment["STAR_REMOVAL_REPORTS"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
-            ?? Self.repoRoot.appendingPathComponent("removal-reports")
-        return base.appendingPathComponent("gui-removeAirplanes")
+        scratch.appendingPathComponent("removal-reports")
     }
 
     private func labelsFile() throws -> URL {
@@ -248,6 +245,11 @@ final class GuiFeatureRunner {
                               + text.split(separator: "\n").suffix(30).joined(separator: "\n")
                               + "\nreport: \(report.path)\ncrops: \(crops.path)")
         }
+        // The scratch directory is deleted when the scenario ends: keep the report in the xcresult, which CI uploads.
+        let attachment = XCTAttachment(contentsOfFile: report)
+        attachment.name = "\(reportName).json"
+        attachment.lifetime = .keepAlways
+        testCase.add(attachment)
         guard let json = try JSONSerialization.jsonObject(with: Data(contentsOf: report)) as? [String: Any] else {
             throw RunnerError("unreadable report \(report.path)")
         }
