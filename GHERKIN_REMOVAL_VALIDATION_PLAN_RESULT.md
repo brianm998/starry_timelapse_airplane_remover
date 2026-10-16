@@ -174,7 +174,7 @@ dataset are separate literal steps / placeholders, because a `{placeholder}` has
 `processWithBase` is not added (no synthetic dataset yet). Features (all `@cli`, all pass locally, 5 of 5 together, release cli on this Mac):
 
 - `removeAirplanes`: `automatic:false` on `a7sii_10`: 226 of 226 measurable airplanes removed, stars preserved.
-- `autoPreservationKeepsAirplanesOutJpeg` / `...Bit16`: `automatic:true`: fraction removed 0.83 (>= 0.7) and 42 pinned objects removed.
+- `autoPreservationKeepsAirplanesOutJpeg` / `...Bit16`: `automatic:true`: fraction removed 0.83 (>= 0.7) and 36 pinned objects removed.
 - `selectiveRemovesOnlyTrails`: `selective` on `a7sii_10_16bit`: pinned objects removed, 6,723 changed px outside the labels (<= 25,000), stars preserved.
 
 Verifier additions: `--aggregate`, `--skip-unmeasurable`, `--pins` / `--pins-only` (pinned objects: `gherkin/removal-pins.json`, 43 objects, derived from
@@ -210,9 +210,16 @@ and judging the desktop run with the selective mode (pins only). The mac GUI's d
 
 - **cli (ubuntu-24.04): all five features passed.**
 - **cli (macos-15): four passed** (removeAirplanes 226/226, automatic:true fractions 0.823 and 0.832 with 43/43 pins, open-and-process), **one failed because `star` crashed**: `selectiveRemovesOnlyTrails`, SIGSEGV 47 s in during horizon merging. Intermittent (same binary, dataset and runner type passed in three earlier runs). Recorded as BUGS.md BUG-005. Not a defect of the check.
-- **cli (windows-2022): `removal_tools` builds and the verifier runs on Windows.** removeAirplanes passed (226/226), the JPEG automatic:true feature passed, the open-and-process feature passed; the two 16-bit features failed on one pinned object, `00091-5` (median ratio 1.0, not removed on Windows CPU). Fix: that pin was dropped (42 pins now). Thresholds otherwise hold on Windows: stars passed, fractions 0.836.
+- **cli (windows-2022): `removal_tools` builds and the verifier runs on Windows.** removeAirplanes passed (226/226), the JPEG automatic:true feature passed, the open-and-process feature passed; the two 16-bit features failed on one pinned object, `00091-5` (median ratio 1.0, not removed on Windows CPU). Fix: that pin was dropped (36 pins now after the desktop run, see below). Thresholds otherwise hold on Windows: stars passed, fractions 0.836.
 - **desktop (ubuntu-24.04): `removeAirplanes` failed** (48 of 226 removed, the selective profile): the desktop client's default clean method is selective, not automatic:false, so the GUI runner's hardcoded method was wrong. Fixed in 1ea45863 (the desktop is judged with the selective pins-only check; the mac GUI's default really is automatic:false). The fix and the pin change are not yet on CI.
 - Still pending on that run when this was written: desktop (windows-2022), desktop (macos-15), mac gui.
+
+### Second CI run (6a164468): the desktop client does not remove the faintest pins
+
+With the clean-method fix in, `desktop (ubuntu-24.04)` ran the selective pins-only check on the desktop's output (42 pins) and 5 pins were not removed:
+all faint (input contrast 0.025 to 0.071). Every pin at 0.075 or above was removed. The pins were derived from cli runs; the desktop client's selective decisions on faint
+streaks differ a little (a different pipeline entry, not investigated). Pins below 0.075 contrast were dropped (36 left). This is a single run, so the cutoff is a
+judgement from one sample; the faint tail is exactly where clients differ.
 
 ## Not done (leftover)
 

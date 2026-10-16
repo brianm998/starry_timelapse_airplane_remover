@@ -190,7 +190,7 @@ test time. Satellites sweep SNR 3–100, airplanes are twin lines with strobe do
 | feature | method | dataset | what it proves |
 |---|---|---|---|
 | `removeAirplanes` (`@cli @mac-gui @desktop`) | `automatic:false` (the default) | `{sequence}` = `a7sii_10` (JPEG) | every measurable labelled airplane is removed (median stretch ratio <= `removed_max`), stars preserved |
-| `autoPreservationKeepsAirplanesOutJpeg` / `...Bit16` | `automatic:true` | `a7sii_10` / `{sequence16}` = `a7sii_10_16bit` | at least `removed_fraction_min` of the measurable airplanes are removed **and** the 42 pinned objects (`gherkin/removal-pins.json`) are; regression test for `1b2cb327` |
+| `autoPreservationKeepsAirplanesOutJpeg` / `...Bit16` | `automatic:true` | `a7sii_10` / `{sequence16}` = `a7sii_10_16bit` | at least `removed_fraction_min` of the measurable airplanes are removed **and** the 36 pinned objects (`gherkin/removal-pins.json`) are; regression test for `1b2cb327` |
 | `selectiveRemovesOnlyTrails` | `selective` | `a7sii_10_16bit` | the pinned objects are removed, nothing outside the labelled trails changed (<= `unchanged_outside_max_area`), stars preserved |
 
 Steps: `I open the 16-bit sequence {sequence16}`, `the clean method is automatic:false|automatic:true|selective` (literal, because a
