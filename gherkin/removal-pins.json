@@ -1,5 +1,5 @@
 {
- "description": "Objects that must be removed under automatic:true. Derived from Star's own output, so this is a regression pin and not ground truth: the labelled a7sii_10 objects that BOTH selective and automatic:true removed (median stretch ratio < 0.5) on macos-15 and ubuntu-24.04 (JPEG), and that were also removed by the fixed build in three further local runs (16-bit twice, JPEG once), 2026-10-15. Three objects (00082-1, 00086-2, 00082-14) that were removed in some runs and not in others were dropped: they are not stable. Kept pins have a median ratio of at most 0.065 in every selective and fixed automatic:true run (7 selective runs, 5 automatic:true runs, macos/linux/local, JPEG and 16-bit); the pre-1b2cb327 build leaves 43 of the 43 in place. The pre-1b2cb327 build (which restores the objects decided remove) leaves 44 of the 44 in place (median ratio about 1.0), while the aggregate removed fraction cannot tell the two builds apart (0.78 vs 0.83). Frame names are base names, so they match the JPEG and the 16-bit TIFF datasets alike.",
+ "description": "Objects that must be removed under automatic:true. Derived from Star's own output, so this is a regression pin and not ground truth: the labelled a7sii_10 objects that BOTH selective and automatic:true removed (median stretch ratio < 0.5) on macos-15 and ubuntu-24.04 (JPEG), and that were also removed by the fixed build in three further local runs (16-bit twice, JPEG once), 2026-10-15. Four objects (00082-1, 00086-2, 00082-14, 00091-5) that were removed in some runs and not in others were dropped: they are not stable (00091-5 came back on the 16-bit sets on windows-2022 CPU, 2026-10-16, run 38832664368). Kept pins have a median ratio of at most 0.065 in every selective and fixed automatic:true run (7 selective runs, 5 automatic:true runs, macos/linux/local, JPEG and 16-bit); the pre-1b2cb327 build leaves 43 of the then 43 pins in place (the 42 kept pins were not re-measured against the pre-fix build). The pre-1b2cb327 build (which restores the objects decided remove) leaves 44 of the 44 in place (median ratio about 1.0), while the aggregate removed fraction cannot tell the two builds apart (0.78 vs 0.83). Frame names are base names, so they match the JPEG and the 16-bit TIFF datasets alike.",
  "pins": [
   {
    "frame": "LRT_00081",
@@ -116,10 +116,6 @@
   {
    "frame": "LRT_00091",
    "id": "00091-1"
-  },
-  {
-   "frame": "LRT_00091",
-   "id": "00091-5"
   },
   {
    "frame": "LRT_00092",
