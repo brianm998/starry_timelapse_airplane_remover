@@ -315,15 +315,37 @@ jobs:
           echo "STAR_CLI_PATH=$(cygpath -w "$BIN/star.exe")" >> "$GITHUB_ENV"
           echo "STAR_TEST_DATA=$(cygpath -w "$GITHUB_WORKSPACE/.test-data")" >> "$GITHUB_ENV"
 
+      - name: Build the removal verifier (release)
+        # star-removal-verify is run as a subprocess by the removal features' Then steps. SwiftPM's Windows build dir is
+        # .build/<triple>/release, so the runner is told where the .exe is.
+        run: |
+          swift build -c release --package-path removal_tools
+          BIN="$(swift build -c release --package-path removal_tools --show-bin-path)"
+          ls "$BIN"/star-removal-verify.exe
+          echo "STAR_REMOVAL_VERIFY=$(cygpath -w "$BIN/star-removal-verify.exe")" >> "$GITHUB_ENV"
+          echo "STAR_REMOVAL_REPORTS=$(cygpath -w "$GITHUB_WORKSPACE/removal-reports")" >> "$GITHUB_ENV"
+
       - name: Run the Gherkin features against the built star
         # Flags as in cli-linux (release, -enable-testing for the other test target, --disable-swift-testing).
         run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
 
-      - name: Prove the scenario ran (not a vacuous green)
+      - name: Prove the scenarios ran (not a vacuous green)
         run: |
-          grep -E "testOpenAndProcessFeature.*passed" gherkin-cli.log
-          grep -E "Executed 1 test, with 0 failures" gherkin-cli.log
-          ! grep -E "testOpenAndProcessFeature.*skipped" gherkin-cli.log
+          for t in testOpenAndProcessFeature testRemoveAirplanesFeature testAutoPreservationKeepsAirplanesOutJpegFeature testAutoPreservationKeepsAirplanesOutBit16Feature testSelectiveRemovesOnlyTrailsFeature; do
+            grep -E "$t.*passed" gherkin-cli.log
+            ! grep -E "$t.*skipped" gherkin-cli.log
+          done
+          grep -E "Executed 5 tests, with 0 failures" gherkin-cli.log
+          ls removal-reports/*/*.json
+
+      - name: Upload the removal reports and crops
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-reports-windows
+          path: removal-reports
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload the log
         if: always()

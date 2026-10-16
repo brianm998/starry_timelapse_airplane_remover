@@ -165,8 +165,14 @@ final class CliFeatureRunner {
     }
 
     private func verifierBinary() throws -> URL {
+        #if os(Windows)
+        let exe = "star-removal-verify.exe"
+        #else
+        let exe = "star-removal-verify"
+        #endif
+        // On Windows SwiftPM builds into .build/<triple>/release, so CI sets STAR_REMOVAL_VERIFY; this default is for local runs.
         let path = ProcessInfo.processInfo.environment["STAR_REMOVAL_VERIFY"].flatMap { $0.isEmpty ? nil : $0 }
-            ?? Self.repoRoot.appendingPathComponent("removal_tools/.build/release/star-removal-verify").path
+            ?? Self.repoRoot.appendingPathComponent("removal_tools/.build/release/\(exe)").path
         guard FileManager.default.isExecutableFile(atPath: path) else {
             throw RunnerError("no star-removal-verify at \(path): run `swift build -c release --package-path removal_tools`, or set STAR_REMOVAL_VERIFY")
         }
