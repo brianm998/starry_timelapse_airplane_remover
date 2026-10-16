@@ -213,6 +213,57 @@ Open. Needs a same-platform repeat to separate platform from run-to-run non-dete
 
 ---
 
+## BUG-005: `star -c selective` crashed with SIGSEGV on a hosted macos-15 runner while merging horizons (intermittent)
+
+Found 2026-10-16 in the first CI run of the removal features on PR 14 (Gherkin run 38832664368, job `cli (macos-15)`).
+
+### What was observed
+
+`testSelectiveRemovesOnlyTrailsFeature` (selective on `a7sii_10_16bit`, release cli, no other flags except `-l info -c selective`) failed with
+`star exited 11` after 47 s. The log ends with:
+
+```
+FrameHorizonProcessor.swift@268: frame 0 making merged horizon
+FrameAirplaneRemover.swift@101: frame 0 transitioning to state mergingHorizon
+FrameHorizonProcessor.swift@352: frame 0 making merged horizon 19 neighboringHorizons
+FrameHorizonProcessor.swift@470: frame 0 saved median horizon as global reference .../star_temp_a7sii_10_16bit/mergedHorizon...
+*** star has crashed ***
+signal: SIGSEGV (invalid memory access)
+```
+All 19 frames had reached `horizonDetected` first. The other four features in the same job (same binary, same runner, `automatic:false` on a7sii_10,
+`automatic:true` on a7sii_10 and a7sii_10_16bit, the plain open-and-process) passed, and this same selective configuration on this dataset ran
+cleanly in three other runs on macos-15 (measurement run 38823906748: selective, selective repeat, selective CPU-forced) and on ubuntu-24.04 and
+locally. So it is not deterministic.
+
+### Measured
+
+Only the log above. No crash report or `star_temp` directory was captured (the runner deletes it). Hosted macos-15 VMs have little RAM
+(see the memory-gate comments in `.github/workflows/gherkin.yml` for the desktop leg) and expose a paravirtual GPU.
+
+### What it means (hypotheses, not yet separated)
+
+A race or use-after-free in the merged-horizon step (several frames' horizon tasks run concurrently); a memory-pressure failure on the 7 GB VM
+(SIGSEGV from an unchecked allocation); or the paravirtual-GPU path. Nothing here distinguishes them.
+
+### How to reproduce
+
+Re-run the `cli (macos-15)` job of the Gherkin workflow a few times and see whether it recurs. Locally: `star -l info -c selective <fresh copy of a7sii_10_16bit> <out>` in
+a loop; set the diagnostic log (`-f debug`) so the crash details are kept (the message says they are reported on the next run).
+
+### Where to look
+
+`StarCore/Sources/StarCore/FrameHorizonProcessor.swift` lines ~268 to ~470 (merged horizon and the global reference), `RunMarker.swift` (crash markers).
+
+### Referenced from
+
+None. It makes `selectiveRemovesOnlyTrails` flaky on macos-15 until understood.
+
+### Status
+
+Open. Seen once.
+
+---
+
 ## Template
 
 ```markdown
