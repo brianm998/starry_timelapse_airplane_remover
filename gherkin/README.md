@@ -5,7 +5,7 @@ Actions (`.github/workflows/gherkin.yml`):
 
 | Client | Tag | Driver | Runs |
 |---|---|---|---|
-| `star` cli | `@cli` | XCTest running the built `star` binary as a subprocess (`cli/Tests/GherkinTests`) | ubuntu-24.04, macos-15 |
+| `star` cli | `@cli` | XCTest running the built `star` binary as a subprocess (`cli/Tests/GherkinTests`) | ubuntu-24.04, windows-2022, macos-15 |
 | macOS gui (`Star.app`) | `@mac-gui` | XCUITest (`gui/starUITests`) | macos-15 |
 | Kotlin/Compose desktop | `@desktop` | `runComposeUiTest` against a real `stard` (`star-desktop/src/gherkinTest`) | ubuntu-24.04, windows-2022, macos-15 |
 
