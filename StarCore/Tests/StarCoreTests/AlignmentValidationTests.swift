@@ -104,6 +104,54 @@ final class AlignmentValidationTests: XCTestCase {
                        "frame 17's measured shape, the one that used to be inherited")
     }
 
+    // MARK: - fallback when nothing passes alignmentLooksOk
+
+    /// `base` with the neighbor at `offset` given a translation 12px off the line the
+    /// others sit on, which the residual check flags as suspect.
+    private func corrupting(_ offsets: [Int], in base: HomographyResultsCodable) -> HomographyResultsCodable {
+        HomographyResultsCodable(
+          for: base.frameIndex,
+          with: base.neighborHomography.map { entry in
+              guard offsets.contains(entry.frameIndex - base.frameIndex),
+                    var m = entry.homography else { return entry }
+              m[2] += 12
+              return AlignmentWarpInfoCodable(homography: m,
+                                              deviation: entry.deviation,
+                                              alignmentState: entry.alignmentState,
+                                              frameIndex: entry.frameIndex)
+          }
+        )
+    }
+
+    func testLeastDoubtfulKeepsOnlyTheSetsWithTheFewestSuspectWarps() {
+        let sequence = wholeSequence()
+        var candidates = sequence
+        candidates[8] = corrupting([1], in: sequence[8])        // 1 suspect
+        candidates[9] = corrupting([1, 2], in: sequence[9])     // 2 suspect
+        for i in candidates.indices where i != 8 && i != 9 {
+            candidates[i] = corrupting([-1, 1, 2], in: sequence[i])
+        }
+        XCTAssertFalse(candidates.contains { $0.alignmentLooksOk },
+                       "fixture should defeat the strict test")
+        let kept = leastDoubtfulHomographies(among: candidates)
+        XCTAssertEqual(kept.map(\.frameIndex), [8])
+    }
+
+    func testLeastDoubtfulIgnoresSetsWithAnUnsolvedNeighbor() {
+        let sequence = wholeSequence()
+        let unsolved = HomographyResultsCodable(
+          for: 9,
+          with: sequence[9].neighborHomography.enumerated().map { i, entry in
+              i == 0
+                ? AlignmentWarpInfoCodable(homography: nil, deviation: 0,
+                                           alignmentState: entry.alignmentState,
+                                           frameIndex: entry.frameIndex)
+                : entry
+          })
+        XCTAssertTrue(leastDoubtfulHomographies(among: [unsolved]).isEmpty)
+        XCTAssertTrue(leastDoubtfulHomographies(among: []).isEmpty)
+    }
+
     // MARK: - median selection
 
     func testMedianIsNeverPickedFromATruncatedFrame() {
