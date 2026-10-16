@@ -27,6 +27,7 @@ final class GuiFeatureRunner {
     private var completeFrames: Int?
     private var rendersVideo = false
     private var finishedReview = false
+    private var settledOnce = false
 
     // The setting steps, applied as the startup prompts when the sequence opens (the generator makes them precede the open step).
     private var horizon: Bool?
@@ -78,7 +79,13 @@ final class GuiFeatureRunner {
                 throw RunnerError("no method for step \"\(step.description)\". Implemented steps:\n"
                                   + Self.methodMap.keys.map { "  \($0.rawValue)" }.sorted().joined(separator: "\n"))
             }
-            try XCTContext.runActivity(named: step.description) { _ in try method(self) }
+            try XCTContext.runActivity(named: step.description) { _ in
+                do { try method(self) } catch {
+                    // said here as well: the cleanup that follows can raise issues of its own and bury this one
+                    print("STEP FAILED: \(step.description): \(error)")
+                    throw error
+                }
+            }
         }
     }
 
@@ -153,6 +160,11 @@ final class GuiFeatureRunner {
         let markers = scratch.appendingPathComponent("run-markers")
         try FileManager.default.createDirectory(at: markers, withIntermediateDirectories: true)
         app.launchEnvironment["STAR_RUN_MARKER_DIR"] = markers.path
+        // The app keeps its preferences in $HOME/.star.userprefs.json. A test must neither read nor write the real one: a "don't ask me
+        // again" answered on this machine once skipped the render prompt and with it the video the feature asked for.
+        let home = scratch.appendingPathComponent("home")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        app.launchEnvironment["HOME"] = home.path
         app.launchArguments += arguments
         app.launch()
     }
@@ -244,9 +256,24 @@ final class GuiFeatureRunner {
         let prompt = rendersVideo ? "prompt.pre.yes" : "prompt.pre.no"
         if element(prompt).waitForExistence(timeout: 30) { element(prompt).click() }
 
+        // XCUITest queries are answered by the app's own main thread, which is the thread the horizon overlays and previews keep busy:
+        // measured, the runner's polling was about half of it, and a query that waits too long fails the test. So the long waits watch the
+        // disk, and the UI is asked once the disk says the run is over. Auto selective has no such file to watch (its frames wait for
+        // review), so it asks the UI, slowly.
+        let expected = try frameFiles(in: inputFrames).count
+        if clean == "autoSelective" { try finishAutoSelective(expected: expected); return }
+
         let progress = element("processing.progress")
         var last = "(none)"
-        try waitFor("processing to finish", timeout: 45 * 60, interval: 10, detail: { "(last progress: \(last))" }) {
+        try waitFor("processing to finish", timeout: 45 * 60, interval: 5, detail: { "(last progress: \(last))" }) {
+            guard let out = try? outputFrames(), ((try? frameFiles(in: out).count) ?? 0) >= expected else { return false }
+            // With a render afterwards the render sheet covers the window the moment the run ends, and the progress line is no longer in
+            // reach: the frames all being on disk (and still so a poll later) is the end of processing.
+            if rendersVideo {
+                defer { settledOnce = true }
+                if settledOnce { completeFrames = expected }
+                return settledOnce
+            }
             guard progress.exists else { return false }
             let state = progress.label
             if state != last { print("progress: \(state)") }
@@ -255,38 +282,86 @@ final class GuiFeatureRunner {
             guard parts.count == 3, let complete = Int(parts[0]), let total = Int(parts[1]) else { return false }
             let done = total > 0 && complete == total && parts[2] == "idle"
             if done { completeFrames = complete }
-            // Auto selective leaves every frame waiting for its outliers to be reviewed (run over, not all complete): the user
-            // finishes by rendering all frames. The cli has no review, so it writes the finals itself.
-            if total > 0, complete != total, parts[2] == "idle", clean == "autoSelective", !finishedReview {
-                finishedReview = true
-                element("render.all.frames").click()
-            }
             return done
         }
     }
 
+    /// Auto selective leaves every frame waiting for its outliers to be reviewed (run over, not all complete): the user finishes by
+    /// rendering all frames, which writes the finals without moving the complete count. The cli has no review, so it writes them itself.
+    /// The run is watched on the disk (its outlier data, then the finals): XCUITest queries are answered by a busy app's main thread.
+    private func finishAutoSelective(expected: Int) throws {
+        func tempDir() -> URL? {
+            (try? FileManager.default.contentsOfDirectory(atPath: scratch.path))?.first { $0.hasPrefix("star_temp_") }
+                .map { scratch.appendingPathComponent($0) }
+        }
+        try waitFor("every frame's outlier data", timeout: 45 * 60, interval: 10) {
+            guard let t = tempDir() else { return false }
+            return ((try? frameFiles(in: t.appendingPathComponent("auto-selective-processed")).count) ?? 0) >= expected
+        }
+        // The button is there but dead until the run is over: click it once it can be.
+        let render = element("render.all.frames")
+        try waitFor("Render All Frames to be enabled", timeout: 10 * 60, interval: 10) { render.exists && render.isEnabled }
+        render.click()
+        try waitFor("the final frames", timeout: 30 * 60, interval: 10) {
+            guard let out = try? outputFrames() else { return false }
+            return ((try? frameFiles(in: out).count) ?? 0) >= expected
+        }
+        // let the last frame's write land
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 5)
+        completeFrames = expected
+    }
+
+    private func frameFiles(in dir: URL?) throws -> [String] {
+        guard let dir else { return [] }
+        return try FileManager.default.contentsOfDirectory(atPath: dir.path).filter {
+            !$0.hasPrefix(".") && ["tif", "tiff", "jpg", "jpeg", "png"].contains(($0 as NSString).pathExtension.lowercased())
+        }
+    }
+
+    /// The video's path, once the render has written it: `<outputPath>/<name>.<container>`, beside the output frames.
+    private func renderedVideoFile() throws -> URL? {
+        let base = try outputFrames().lastPathComponent
+        return try FileManager.default.contentsOfDirectory(atPath: scratch.path)
+            .first { $0.hasPrefix(base) && ["mov", "mp4", "mkv", "avi"].contains(($0 as NSString).pathExtension.lowercased()) }
+            .map { scratch.appendingPathComponent($0) }
+    }
+
     /// Processing answered Yes to the render prompt, so the render sheet opens and starts by itself with the default settings.
+    /// Watched on the disk, like processing: the video exists and has stopped growing.
     private func renderOutputVideoStep() throws {
         guard rendersVideo else { throw RunnerError("the render prompt was answered No") }
-        let done = element("render.done"), failed = element("render.error")
-        try waitFor("the video render to finish", timeout: 10 * 60, interval: 5, detail: { "\n\(self.app.debugDescription)" }) {
-            if failed.exists { return true }
-            return done.exists
+        var lastSize = -1
+        do {
+            try waitFor("the video render to finish", timeout: 10 * 60, interval: 5) {
+                guard let video = try? renderedVideoFile(),
+                      let size = (try? FileManager.default.attributesOfItem(atPath: video.path))?[.size] as? Int, size > 0 else { return false }
+                defer { lastSize = size }
+                return size == lastSize
+            }
+        } catch {
+            // The screenshot is the only evidence of what the sheet was showing.
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.lifetime = .keepAlways
+            testCase.add(shot)
+            throw error
         }
-        if failed.exists { throw RunnerError("rendering the video failed: \(failed.label)") }
     }
 
     /// Copies the validator's reports and the run's config.json to `$STAR_GHERKIN_ARTIFACTS/<feature>` for CI to upload.
     private func saveArtifacts(of feature: Feature) {
-        guard let dir = ProcessInfo.processInfo.environment["STAR_GHERKIN_ARTIFACTS"], !dir.isEmpty else { return }
+        // Default: the runner's own container tmp (`~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gherkin-artifacts`), the only
+        // place a sandboxed runner can write; CI uploads that directory.
+        let dir = ProcessInfo.processInfo.environment["STAR_GHERKIN_ARTIFACTS"].flatMap { $0.isEmpty ? nil : $0 }
+            ?? (NSTemporaryDirectory() as NSString).appendingPathComponent("gherkin-artifacts")
         let fm = FileManager.default
         let dest = URL(fileURLWithPath: dir).appendingPathComponent(feature.id)
         // The UI-test runner is sandboxed: it can only write inside its own container, so a directory outside it is skipped, not failed.
         // (CI uploads the container's tmp directory instead; see the workflow.)
         do { try fm.createDirectory(at: dest, withIntermediateDirectories: true) } catch { print("artifacts: cannot write \(dest.path): \(error)"); return }
         for name in (try? fm.contentsOfDirectory(atPath: scratch.path)) ?? [] {
-            if name.hasPrefix("report-") { try? fm.copyItem(at: scratch.appendingPathComponent(name), to: dest.appendingPathComponent(name)) }
+            if name.hasPrefix("report-") { if fm.fileExists(atPath: dest.appendingPathComponent(name).path) { try? fm.removeItem(at: dest.appendingPathComponent(name)) }; try? fm.copyItem(at: scratch.appendingPathComponent(name), to: dest.appendingPathComponent(name)) }
             if name.hasPrefix("star_temp_"), fm.fileExists(atPath: scratch.appendingPathComponent(name).appendingPathComponent("config.json").path) {
+                if fm.fileExists(atPath: dest.appendingPathComponent("config.json").path) { try? fm.removeItem(at: dest.appendingPathComponent("config.json")) }
                 try? fm.copyItem(at: scratch.appendingPathComponent(name).appendingPathComponent("config.json"), to: dest.appendingPathComponent("config.json"))
             }
         }
@@ -326,7 +401,12 @@ final class GuiFeatureRunner {
     private func outputFrames() throws -> URL {
         guard let input = inputFrames else { throw RunnerError("nothing has been opened") }
         let siblings = try FileManager.default.contentsOfDirectory(atPath: scratch.path)
-        let outDirs = siblings.filter { $0.hasPrefix("\(input.lastPathComponent)-star-v-") }
+        // directories only: the rendered video is a sibling with the same prefix
+        let outDirs = siblings.filter {
+            var isDir: ObjCBool = false
+            return $0.hasPrefix("\(input.lastPathComponent)-star-v-")
+              && FileManager.default.fileExists(atPath: scratch.appendingPathComponent($0).path, isDirectory: &isDir) && isDir.boolValue
+        }
         guard outDirs.count == 1 else { throw RunnerError("expected one output directory in \(scratch.path), found \(siblings)") }
         return scratch.appendingPathComponent(outDirs[0])
     }

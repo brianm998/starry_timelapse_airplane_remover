@@ -646,7 +646,6 @@ jobs:
           # xcodebuild strips TEST_RUNNER_ and hands STAR_TEST_DATA to the UI-test runner
           TEST_RUNNER_STAR_TEST_DATA: ${{ github.workspace }}/.test-data
           TEST_RUNNER_STAR_FFMPEG_DIR: ${{ github.workspace }}/external_binaries/bin
-          TEST_RUNNER_STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
         run: |
           set -o pipefail
           xcodebuild test \
@@ -682,7 +681,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gherkin-gui-${{ matrix.feature }}-artifacts
-          path: ${{ runner.temp }}/gherkin-artifacts
+          # the sandboxed UI-test runner writes into its own container
+          path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gherkin-artifacts
           if-no-files-found: warn
 
   desktop-linux:
