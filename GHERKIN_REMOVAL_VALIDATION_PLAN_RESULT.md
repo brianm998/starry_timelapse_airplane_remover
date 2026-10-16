@@ -220,6 +220,10 @@ and judging the desktop run with the selective mode (pins only). The mac GUI's d
 (input contrast 0.025 to 0.071; every pin at >= 0.075 was removed). The GUI session's diagnosis: the desktop session ran at detection type MILD while the pins were measured at STRONG (the cli default), and it set STRONG in the desktop runner
 (177e93f9). Unproven until CI runs it. I had trimmed the pins by brightness instead (36 left) and reverted that so the STRONG fix is tested on its own; that brightness cutoff is the fallback if the desktop still misses the faint pins.
 
+### Third and fourth CI runs (43939fe6, 8cb892c8)
+
+On 43939fe6 the desktop STRONG fix worked on all three desktop legs (so MILD vs STRONG was the real cause, not brightness), and every leg was green except `mac gui`: the sandboxed XCUITest runner could not create `removal-reports/` in the repo (Cocoa error 513). On 8cb892c8 (reports and crops written to the sandbox temp dir and attached to the xcresult) **`mac gui` passed: the verifier launches from inside the sandboxed UI test and `removeAirplanes` removed 226 of 226 measurable airplanes there.** Also green on 8cb892c8: cli on Linux, macOS and Windows, desktop on Linux and Windows. **`desktop (macos-15)` failed** on a "detection type not written to the session config" check that races a starved daemon (2.7 GB free, keypoint-slot timeouts); it had passed on 43939fe6. The GUI session reworked it (bd7dc48b: seed STRONG through the remembered-preference file, only verify it), unpushed and unproven when this was written.
+
 ## Not done (leftover)
 
 
