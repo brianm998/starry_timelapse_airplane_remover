@@ -30,6 +30,7 @@ on:
       - 'daemon/**'
       - 'StarCore/**'
       - 'StarCpp/**'
+      - 'removal_tools/**'
       - '.github/workflows/gherkin.yml'
   pull_request:
     branches: [main, develop]
@@ -42,6 +43,7 @@ on:
       - 'daemon/**'
       - 'StarCore/**'
       - 'StarCpp/**'
+      - 'removal_tools/**'
       - '.github/workflows/gherkin.yml'
   workflow_dispatch:
 
@@ -140,6 +142,10 @@ jobs:
         run: |
           if [ ! -f StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
+      - name: Build the removal verifier (release)
+        # Used by the removal features' Then steps (star-removal-verify, run as a subprocess).
+        run: swift build -c release --package-path removal_tools
+
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
         # is `@testable import star` and --filter still compiles every test target. One release compile.
@@ -147,11 +153,24 @@ jobs:
         # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
         run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
 
-      - name: Prove the scenario ran (not a vacuous green)
+      - name: Prove the scenarios ran (not a vacuous green)
         run: |
-          grep -E "testOpenAndProcessFeature.*passed" gherkin-cli.log
-          grep -E "Executed 1 test, with 0 failures" gherkin-cli.log
-          ! grep -E "testOpenAndProcessFeature.*skipped" gherkin-cli.log
+          for t in testOpenAndProcessFeature testRemoveAirplanesFeature testAutoPreservationKeepsAirplanesOutJpegFeature testAutoPreservationKeepsAirplanesOutBit16Feature; do
+            grep -E "$t.*passed" gherkin-cli.log
+            ! grep -E "$t.*skipped" gherkin-cli.log
+          done
+          grep -E "Executed 4 tests, with 0 failures" gherkin-cli.log
+          # every removal report must have checked something (the runner also refuses to pass on a zero count)
+          ls removal-reports/*/*.json
+
+      - name: Upload the removal reports and crops
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-reports-linux
+          path: removal-reports
+          if-no-files-found: warn
+          retention-days: 30
 
   # ─── cli, macOS ──────────────────────────────────────────────────────────────
   cli-macos:
@@ -210,6 +229,10 @@ jobs:
         run: |
           if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
+      - name: Build the removal verifier (release)
+        # Used by the removal features' Then steps (star-removal-verify, run as a subprocess).
+        run: swift build -c release --package-path removal_tools
+
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
         # is `@testable import star` and --filter still compiles every test target. One release compile.
@@ -217,11 +240,24 @@ jobs:
         # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
         run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
 
-      - name: Prove the scenario ran (not a vacuous green)
+      - name: Prove the scenarios ran (not a vacuous green)
         run: |
-          grep -E "testOpenAndProcessFeature.*passed" gherkin-cli.log
-          grep -E "Executed 1 test, with 0 failures" gherkin-cli.log
-          ! grep -E "testOpenAndProcessFeature.*skipped" gherkin-cli.log
+          for t in testOpenAndProcessFeature testRemoveAirplanesFeature testAutoPreservationKeepsAirplanesOutJpegFeature testAutoPreservationKeepsAirplanesOutBit16Feature; do
+            grep -E "$t.*passed" gherkin-cli.log
+            ! grep -E "$t.*skipped" gherkin-cli.log
+          done
+          grep -E "Executed 4 tests, with 0 failures" gherkin-cli.log
+          # every removal report must have checked something (the runner also refuses to pass on a zero count)
+          ls removal-reports/*/*.json
+
+      - name: Upload the removal reports and crops
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-reports-macos
+          path: removal-reports
+          if-no-files-found: warn
+          retention-days: 30
 
   # ─── macOS gui ───────────────────────────────────────────────────────────────
   # ffmpeg/ffprobe are bundled into Star.app by the Xcode project, so the build needs them (cli.yml's

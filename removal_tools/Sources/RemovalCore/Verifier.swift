@@ -21,6 +21,8 @@ public struct VerifyOptions: Sendable {
     /// Objects too faint to measure are reported and skipped instead of failing as label errors. For hand-labelled real
     /// data that deliberately includes faint streaks; synthetic datasets keep the strict default.
     public var skipUnmeasurable = false
+    /// "<frame base name>|<object id>" of objects that must be removed whatever the aggregate fraction says.
+    public var pins: Set<String> = []
     public var reportOnly = true
     public var dataset = ""
     public var cleanMethod = ""
@@ -62,6 +64,9 @@ public struct Summary: Codable, Sendable {
     public var failed = 0
     public var labelErrors = 0
     public var unmeasurableSkipped = 0
+    /// Pinned objects that were checked / that were not removed.
+    public var pinsChecked = 0
+    public var pinsFailed = 0
     /// passed / (passed + failed), the aggregate-mode statistic.
     public var passFraction: Double?
     public var knownFailures = 0
@@ -176,6 +181,13 @@ public enum Verifier {
                 case .removed: if let t = removedMax { passed = median <= t }
                 case .kept: if let t = keptMin { passed = median >= t }
                 }
+                if exp == .removed, options.pins.contains("\(LabelSet.baseName(f.name))|\(o.id)"), let t = removedMax {
+                    report.summary.pinsChecked += 1
+                    if median > t {
+                        report.summary.pinsFailed += 1
+                        rep.detail = (rep.detail.map { $0 + "; " } ?? "") + String(format: "pinned object not removed (median ratio %.3f > %.3f)", median, t)
+                    }
+                }
                 if let passed {
                     var status = passed ? "pass" : "fail"
                     if let baseline, !options.differential {
@@ -268,6 +280,7 @@ public enum Verifier {
         if options.aggregate, let t = thresholds.removed_fraction_min?.value {
             ok = (report.summary.passFraction ?? 0) >= t && report.summary.labelErrors == 0
         }
+        if report.summary.pinsFailed > 0 { ok = false }
         if report.starsStatus == "fail" || report.collateralStatus == "fail" { ok = false }
         if report.differential.values.contains(where: { $0.status == "fail" }) { ok = false }
         report.summary.ok = ok

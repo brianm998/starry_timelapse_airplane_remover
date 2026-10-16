@@ -1,7 +1,8 @@
 {
   "default": {
     "sequence": "data:a7sii_10",
-    "expected_outputs": "19"
+    "expected_outputs": "19",
+    "sequence16": "data:a7sii_10_16bit"
   },
   "cli": {},
   "mac-gui": {},

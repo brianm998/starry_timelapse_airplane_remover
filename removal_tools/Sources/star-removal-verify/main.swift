@@ -21,6 +21,8 @@ struct StarRemovalVerify: ParsableCommand {
     var aggregate = false
     @Flag(help: "Objects too faint to measure are skipped and reported instead of failing as label errors (hand-labelled real data).")
     var skipUnmeasurable = false
+    @Option(help: "JSON file of pinned objects ({\"pins\":[{\"frame\":\"LRT_00080\",\"id\":\"00080-3\"}]}) that must be removed even in --aggregate mode.")
+    var pins: String?
     @Option(help: "Star's output on the un-injected base: differential mode for synthetic datasets.") var baseOutput: String?
     @Option(help: "The star_temp directory of a `-w --keep-temp-files` run (diagnostics only).") var temp: String?
     @Option(help: "gherkin/removal-thresholds.json") var thresholds: String?
@@ -46,6 +48,12 @@ struct StarRemovalVerify: ParsableCommand {
         opts.reportOnly = reportOnly
         opts.aggregate = aggregate
         opts.skipUnmeasurable = skipUnmeasurable
+        if let pins {
+            struct Pin: Decodable { let frame: String; let id: String }
+            struct Pins: Decodable { let pins: [Pin] }
+            let list = try JSONDecoder().decode(Pins.self, from: Data(contentsOf: URL(fileURLWithPath: pins)))
+            opts.pins = Set(list.pins.map { "\($0.frame)|\($0.id)" })
+        }
         opts.dataset = dataset
         opts.cleanMethod = cleanMethod
 
@@ -116,6 +124,6 @@ struct StarRemovalVerify: ParsableCommand {
         }
         for m in r.messages { print("note: \(m)") }
         let s = r.summary
-        print("summary: objects=\(s.objects) passed=\(s.passed) failed=\(s.failed) labelErrors=\(s.labelErrors) knownFailures=\(s.knownFailures) unmeasurableSkipped=\(s.unmeasurableSkipped) passFraction=\(f(s.passFraction)) reportOnly=\(s.reportOnly) ok=\(s.ok)")
+        print("summary: objects=\(s.objects) passed=\(s.passed) failed=\(s.failed) labelErrors=\(s.labelErrors) knownFailures=\(s.knownFailures) unmeasurableSkipped=\(s.unmeasurableSkipped) passFraction=\(f(s.passFraction)) pinsChecked=\(s.pinsChecked) pinsFailed=\(s.pinsFailed) reportOnly=\(s.reportOnly) ok=\(s.ok)")
     }
 }

@@ -273,6 +273,18 @@ final class VerifierTests: XCTestCase {
         XCTAssertFalse(r3.summary.ok)
     }
 
+    func testPinnedObjectMustBeRemovedEvenInAggregateMode() throws {
+        let (removed, kept, labels) = setup()
+        var o = VerifyOptions(); o.expect = [.airplane: .removed]; o.reportOnly = false; o.aggregate = true; o.pins = ["f|o1"]
+        var t = thresholds(); t.removed_fraction_min = Threshold(value: 0.0, measured: "synthetic test")   // the fraction cannot fail
+        let (r1, _) = try Verifier.verify(frames: [removed], labels: labels, options: o, thresholds: t, baseline: nil)
+        XCTAssertTrue(r1.summary.ok)
+        XCTAssertEqual(r1.summary.pinsChecked, 1)
+        let (r2, _) = try Verifier.verify(frames: [kept], labels: labels, options: o, thresholds: t, baseline: nil)
+        XCTAssertFalse(r2.summary.ok)
+        XCTAssertEqual(r2.summary.pinsFailed, 1)
+    }
+
     func testUnchangedOutsideRefusals() {
         let (removed, _, labels) = setup()
         var o = VerifyOptions(); o.unchangedOutside = true; o.reportOnly = true
