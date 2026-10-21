@@ -18,9 +18,49 @@
 PREFLIGHT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFLIGHT_PROBLEMS=()
 
+# The scripts that source this run under `set -e`, so a check whose own probe fails (a tool that
+# is missing, or too old for a flag) ends the script on the spot, saying nothing: that is how a
+# lipo with no `-archs` stopped gui/local_release.sh dead in preflight_ffmpeg.  Until
+# preflight_finish, say so on the way out instead.
+trap 'preflight_crashed $? "${FUNCNAME[0]:-}" "$BASH_COMMAND"' EXIT
+
 # preflight_fail <what is missing> <how to fix it>
 preflight_fail() {
     PREFLIGHT_PROBLEMS+=("$1"$'\n'"       fix: $2")
+}
+
+# The numbered list of what the checks found, for preflight_finish and preflight_crashed.
+preflight_list_problems() {
+    local i=1 problem
+    for problem in "${PREFLIGHT_PROBLEMS[@]}"; do
+        echo
+        echo "  $i. $problem"
+        i=$((i + 1))
+    done
+}
+
+# The EXIT trap above: $1 is the exit status, $2 the check that was running, $3 the command in it
+# that failed.  Anything past 128 is a signal (Ctrl-C), which needs no explaining.
+preflight_crashed() {
+    local status=$1 check=$2 command=$3
+    [ "$status" -eq 0 ] && return 0
+    [ "$status" -gt 128 ] && return 0
+    {
+        echo
+        echo "==> $(basename "$0"): the prerequisite checks broke (exit status $status), so nothing was built"
+        echo
+        echo "  ${check:-a check} stopped at:  $command"
+        echo
+        echo "  That is a problem in preflight.sh or in a tool it runs, not a missing prerequisite."
+        echo "  Run that command by hand to see why it fails (its error output may have been discarded)."
+        if [ "${#PREFLIGHT_PROBLEMS[@]}" -gt 0 ]; then
+            echo
+            echo "  What the checks found before it broke:"
+            preflight_list_problems
+        fi
+        echo
+    } >&2
+    return 0
 }
 
 # Eigen is a header-only dependency of StarCpp that no build step fetches; it
@@ -86,6 +126,18 @@ preflight_gui_videos() {
     return 0
 }
 
+# The architectures of the two Macs we run on that Mach-O file $1 has a slice for, space separated.
+# This asks `lipo -verify_arch` once per architecture rather than `lipo -archs` once: -archs is
+# newer than the lipo that MacPorts installs in /opt/local/bin, which is ahead of /usr/bin on PATH
+# on some machines, and a lipo that rejects the flag takes the whole script down with it.
+preflight_archs() {
+    local arch have=""
+    for arch in x86_64 arm64; do
+        lipo "$1" -verify_arch "$arch" > /dev/null 2>&1 && have="$have $arch"
+    done
+    echo $have
+}
+
 # The gui and the desktop app carry ffmpeg and ffprobe, which are built by ffmpeg/build.sh and
 # are not in git.  They used to be: one x86_64-only copy, which fails on every Apple silicon Mac
 # without Rosetta ("Bad CPU type in executable") and was the reason video import and export
@@ -113,7 +165,7 @@ preflight_ffmpeg() {
             preflight_fail "external_binaries/bin/$tool is missing (it is built, not committed)" "$fix"
             continue
         fi
-        archs="$(lipo -archs "$bin/$tool" 2>/dev/null)"
+        archs="$(preflight_archs "$bin/$tool")"
         for arch in $wanted; do
             case " $archs " in
                 *" $arch "*) ;;
@@ -145,17 +197,13 @@ preflight_ffmpeg_tools() {
 # Report everything the checks found and stop the calling script, or return
 # quietly if all was well.
 preflight_finish() {
+    trap - EXIT
     [ "${#PREFLIGHT_PROBLEMS[@]}" -eq 0 ] && return 0
 
-    local n=${#PREFLIGHT_PROBLEMS[@]} i=1 problem
     {
         echo
-        echo "==> $(basename "$0"): $n missing prerequisite(s), stopping before anything is built"
-        for problem in "${PREFLIGHT_PROBLEMS[@]}"; do
-            echo
-            echo "  $i. $problem"
-            i=$((i + 1))
-        done
+        echo "==> $(basename "$0"): ${#PREFLIGHT_PROBLEMS[@]} missing prerequisite(s), stopping before anything is built"
+        preflight_list_problems
         echo
     } >&2
     exit 1
