@@ -28,7 +28,6 @@ let platformLinkerSettings: [LinkerSetting] = [
 // instead (GPUOps_C.h), matching the "no ObjC++ in StarCpp" rule.
 let bridgeSwiftLinkerSettings: [LinkerSetting] = [
     .linkedFramework("Metal"),
-    .linkedFramework("MetalPerformanceShaders"),
 ]
 // Eigen is installed via Homebrew on macOS (arm: /opt/homebrew, intel: /usr/local)
 let starcppCXXSettings: [CXXSetting] = [

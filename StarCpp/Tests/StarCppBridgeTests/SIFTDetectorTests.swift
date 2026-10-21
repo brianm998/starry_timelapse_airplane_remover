@@ -174,6 +174,18 @@ final class SIFTDetectorTests: XCTestCase {
         }
     }
 
+    /// The port against real cv::SIFT on the kind of image the sky detector is
+    /// actually handed — see `makeNightSky`. The disks above are too large and
+    /// too hard-edged to exercise the small scales stars live at, which is where
+    /// a pyramid error shows; this is where it would.
+    func testReferencePortAgreesWithRealSIFTOnARealisticNightSky() throws {
+        let img = makeNightSky(width: 640, height: 480, stars: 700)
+
+        let real = try XCTUnwrap(ImageAligner.debugSiftOpenCV(img, mask: nil, nfeatures: 2000))
+        let mine = try XCTUnwrap(ImageAligner.debugSiftReference(img, mask: nil, nfeatures: 2000))
+        assertSameKeypoints(mine, as: real, what: "the reference port")
+    }
+
     // MARK: - GPU pyramid, when available
 
     /// The GPU-pyramid backend runs the identical ported algorithm on a
@@ -182,15 +194,12 @@ final class SIFTDetectorTests: XCTestCase {
     /// changes (covered above). Skipped, not failed, with no GPU handler
     /// registered — matching this file's other GPU-dependent tests.
     ///
-    /// The bar here is measured, not assumed, and is genuinely lower than the
-    /// reference-vs-real-SIFT bar above: `MPSImageGaussianBlur` documents
-    /// itself (MPSImageConvolution.h) as "mathematically... an approximate
-    /// gaussian... suitable for ~10 bits of precision or less," and SIFT's
-    /// sub-pixel extremum refinement asks for more precision than that.
-    /// Measured on this synthetic field: ~83% keypoint agreement with the
-    /// real-cv::GaussianBlur reference pyramid (see `buildSiftPyramid`'s doc
-    /// comment in GPUOps.swift). 70% leaves margin below that measurement
-    /// without the test being a rubber stamp.
+    /// The GPU pyramid blurs with cv::GaussianBlur's own coefficients and borders
+    /// (see `buildSiftPyramid` in GPUOps.swift), so it is held to the same bar as
+    /// the reference port, not a lower one. It used to be held to 70% here,
+    /// against a measured ~83% that was put down to `MPSImageGaussianBlur` being
+    /// documented as approximate. That approximation was the bug: on real moonlit
+    /// frames it cost 41% of the keypoints.
     func testGPUPyramidAgreesWithTheReferencePyramid() throws {
         try XCTSkipUnless(GPUCapability.isAvailable(), "no supported GPU on this machine")
         GPUOps.registerIfAvailable()
@@ -206,11 +215,86 @@ final class SIFTDetectorTests: XCTestCase {
         let (matched, onlyRef, onlyGPU, maxDelta) = matchPositions(
           reference.keypointPositions(), gpu.keypointPositions(), tolerance: 1.5)
 
-        XCTAssertGreaterThanOrEqual(matched, Int(Double(reference.keypointCount) * 0.70),
+        XCTAssertGreaterThanOrEqual(matched, Int(Double(reference.keypointCount) * 0.98),
                                     "only \(matched) of \(reference.keypointCount) reference keypoints "
                                     + "matched the GPU pyramid's output (unmatched: \(onlyRef) "
                                     + "reference-only, \(onlyGPU) GPU-only)")
-        XCTAssertLessThanOrEqual(maxDelta, 2.0)
+        XCTAssertLessThanOrEqual(maxDelta, 0.5)
+    }
+
+    /// The GPU port against real cv::SIFT on a realistic sky — the comparison the
+    /// sky detector's correctness actually rests on. The old MPS pyramid fails this
+    /// by a wide margin: it widened every blur by a one-pixel box, which moved the
+    /// stars' scale-space extrema and lost keypoints outright.
+    func testGPUPortAgreesWithRealSIFTOnARealisticNightSky() throws {
+        try XCTSkipUnless(GPUCapability.isAvailable(), "no supported GPU on this machine")
+        GPUOps.registerIfAvailable()
+        try XCTSkipUnless(gpu_ops_sift_pyramid_available(), "no GPU SIFT pyramid handler registered")
+
+        let img = makeNightSky(width: 640, height: 480, stars: 700)
+
+        let real = try XCTUnwrap(ImageAligner.debugSiftOpenCV(img, mask: nil, nfeatures: 2000))
+        let gpu = try XCTUnwrap(ImageAligner.debugSiftGPU(img, mask: nil, nfeatures: 2000))
+        assertSameKeypoints(gpu, as: real, what: "the GPU port")
+    }
+
+    // MARK: - realistic sky
+
+    /// A night sky the way `ia_find_features` hands it to the sky detector: point
+    /// sources with a Gaussian profile a pixel or two wide, most of them faint, on
+    /// a smooth gradient (the stretched glow of a moonlit or light-polluted sky)
+    /// with sensor noise, quantised to 8 bits.
+    private func makeNightSky(width: Int, height: Int, stars: Int, seed: UInt64 = 7) -> MatWrapper {
+        var rng = SplitMix64(seed: seed)
+        var sky = [Double](repeating: 0, count: width * height)
+        for y in 0..<height {
+            for x in 0..<width {
+                sky[y * width + x] = 40 + 120 * Double(y) / Double(height) + 15 * Double(x) / Double(width)
+            }
+        }
+        for _ in 0..<stars {
+            let cx = rng.nextUnit() * Double(width)
+            let cy = rng.nextUnit() * Double(height)
+            let sigma = 0.7 + 0.8 * rng.nextUnit()
+            // brightness falls off steeply, as star counts do: mostly faint, a few bright
+            let peak = 6 + 200 * pow(rng.nextUnit(), 4)
+            let reach = Int((4 * sigma).rounded(.up))
+            for y in max(0, Int(cy) - reach)...min(height - 1, Int(cy) + reach) {
+                for x in max(0, Int(cx) - reach)...min(width - 1, Int(cx) + reach) {
+                    let dx = Double(x) + 0.5 - cx, dy = Double(y) + 0.5 - cy
+                    sky[y * width + x] += peak * exp(-(dx * dx + dy * dy) / (2 * sigma * sigma))
+                }
+            }
+        }
+
+        let data = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height)
+        for i in 0..<(width * height) {
+            // Box-Muller, sigma 2
+            let noise = 2 * (-2 * log(max(rng.nextUnit(), 1e-12))).squareRoot()
+              * cos(2 * Double.pi * rng.nextUnit())
+            data[i] = UInt8(clamping: Int((sky[i] + noise).rounded()))
+        }
+        return MatWrapper(width: width, height: height,
+                          cvType: MatWrapper.cvType(forBitsPerComponent: 8, componentsPerPixel: 1),
+                          bytesPerRow: width, data: UnsafeMutableRawPointer(data),
+                          takeOwnership: true)
+    }
+
+    /// `found` has to be the same keypoint set as `real`: the same count to within
+    /// 2%, and 98% of `real`'s keypoints with one of `found`'s within half a pixel.
+    private func assertSameKeypoints(_ found: OCVFeatureSet, as real: OCVFeatureSet,
+                                     what: String) {
+        XCTAssertGreaterThan(real.keypointCount, 300, "the sky has to yield enough keypoints to compare")
+        XCTAssertEqual(Double(found.keypointCount), Double(real.keypointCount),
+                       accuracy: Double(real.keypointCount) * 0.02,
+                       "\(what) found \(found.keypointCount) keypoints where cv::SIFT found "
+                       + "\(real.keypointCount)")
+        let (matched, onlyReal, onlyFound, _) = matchPositions(
+          real.keypointPositions(), found.keypointPositions(), tolerance: 0.5)
+        XCTAssertGreaterThanOrEqual(matched, Int(Double(real.keypointCount) * 0.98),
+                                    "only \(matched) of \(real.keypointCount) cv::SIFT keypoints had "
+                                    + "a match from \(what) (unmatched: \(onlyReal) cv::SIFT-only, "
+                                    + "\(onlyFound) \(what)-only)")
     }
 }
 
@@ -227,4 +311,6 @@ private struct SplitMix64 {
         return z ^ (z >> 31)
     }
     mutating func nextUInt32() -> UInt32 { UInt32(truncatingIfNeeded: nextUInt64()) }
+    /// Uniform in [0, 1).
+    mutating func nextUnit() -> Double { Double(nextUInt64() >> 11) / Double(1 << 53) }
 }
