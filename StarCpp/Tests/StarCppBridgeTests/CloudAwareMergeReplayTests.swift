@@ -40,6 +40,21 @@ import StarCpp
 /// Build in release for any timing or any real number of frames: a debug build runs the
 /// C++ unoptimised, and a 12MP frame takes minutes.  `swift test -c release
 /// -Xswiftc -enable-testing --filter CloudAwareMergeReplayTests` from `StarCpp/`.
+/// Strong, thread safe cache of decoded frames, for the replay's loader.
+private final class DecodeCache: @unchecked Sendable {
+    private var frames: [String: MatWrapper] = [:]
+    private let lock = NSLock()
+    func load(_ name: String) -> MatWrapper? {
+        lock.lock()
+        if let hit = frames[name] { lock.unlock(); return hit }
+        lock.unlock()
+        guard let mat = MatWrapper.load(fromFilename: name) else { return nil }
+        lock.lock(); frames[name] = mat; lock.unlock()
+        return mat
+    }
+    func drop() { lock.lock(); frames.removeAll(); lock.unlock() }
+}
+
 final class CloudAwareMergeReplayTests: XCTestCase {
 
     private struct StoredNeighbour: Decodable {
@@ -90,8 +105,12 @@ final class CloudAwareMergeReplayTests: XCTestCase {
         try FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
 
         // Without this every filename source loads as nothing and the merge silently runs
-        // on the base frame alone.
-        ImageCache.setLoader { MatWrapper.load(fromFilename: $0) }
+        // on the base frame alone.  What it loads is kept for the rest of the run, as a
+        // pipeline keeps the decodes it has pinned for a merge op: a merge reads each
+        // neighbour more than once, and timing the second decode of a 12MP TIFF instead of
+        // the merge would be measuring the wrong thing.
+        let decoded = DecodeCache()
+        ImageCache.setLoader { decoded.load($0) }
         // The "-gpu" modes need the Metal handlers, which StarCore registers at startup.
         if modes.contains(where: { $0.hasSuffix("-gpu") }) {
             XCTAssertTrue(GPUOps.registerIfAvailable(), "no GPU to run the -gpu modes on")
@@ -100,6 +119,7 @@ final class CloudAwareMergeReplayTests: XCTestCase {
         func name(_ fileIndex: Int) -> String { String(format: "LRT_%05d.tif", fileIndex) }
 
         for fileIndex in frames {
+            decoded.drop()
             // File names are 1-based; the stored rows are keyed by the 0-based frame index.
             let baseIndex = fileIndex - 1
             let row = try storedRow(db: db, frameIndex: baseIndex)
@@ -116,6 +136,10 @@ final class CloudAwareMergeReplayTests: XCTestCase {
                                      "cannot load frame \(fileIndex)")
             let sky = masks.flatMap { MatWrapper.load(fromFilename: "\($0)/\(name(fileIndex))") }
             if masks != nil { XCTAssertNotNil(sky, "no mask for frame \(fileIndex)") }
+
+            // decode everything this frame needs before any mode is timed
+            _ = decoded.load("\(source)/\(name(fileIndex))")
+            for info in infos { _ = decoded.load(info.filename) }
 
             for mode in modes {
                 let cloudAware = mode.hasPrefix("on")

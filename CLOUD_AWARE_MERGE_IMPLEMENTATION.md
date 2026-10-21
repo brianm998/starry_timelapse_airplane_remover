@@ -32,6 +32,84 @@ Work in a new worktree branched from `develop`.
 
 ---
 
+## 0.1 Implementer's notes (2026-10-21, from building it against the real data)
+
+Where the implementation departs from this guide, and where the guide turned out to be
+wrong. The sections below are left as written; read this first.
+
+**Wrong or incomplete in the guide**
+
+- **The reference run's star merge came from the GPU kernel.** `config.json` of
+  `star_temp_LRT_10_17_2026-fx3-1` says `useGPUForMerge: false`, but replaying frame 30
+  with `useGPU: true` is *byte-identical* to `auto-processed/LRT_00030.tif` in the crop
+  (`magick compare -metric AE` = 0), and `useGPU: false` differs on 2.6% of its pixels
+  (a spread of ±1..3 on single channels, the signature of the GPU kernel's exact-integer
+  statistics against the CPU's double Welford). So the baseline "today" for fx3-1 is the
+  GPU merge, §6.3's `useGPU: false` is wrong, and the stage has to work after the GPU merge
+  (it does; there it derives its own coverage plane).
+- **eM is not near zero on a clear frame, so §2.2's gate cannot skip one.** Measured over
+  the whole frame, the star merge's error sits at about 0.23 of the per-pixel noise with a
+  floor of 0.3, and exceeds the floor on 1.5%, 8%, 16% and 4% of the sky of frames 1100,
+  700, 600 and 800 (the "0.3% on clear crops" the guide quotes is the crops, rows 800-1800,
+  away from the edges and the horizon). Restricting to the region where `eM > floor` then
+  covers most of the frame. See the early-out below.
+- **Frames 600 and 800 are not clear.** Both have real cloud near the horizon (a dark bank at
+  the right of 600, a small cloud at 800), and the stage's weight is above zero exactly
+  there (rows 1886-2188). §7 A2's "byte-identical for rows < 2189" holds on 700 and 1100,
+  and in the reference crop on all four, but cannot hold on frames with cloud in those rows.
+- **The star merge is contaminated along the horizon, which §2.8 does not account for.**
+  Neighbour ground is lifted above the base horizon by up to 33-47px and the error filters
+  reach 92px beyond that. Production already knows this and replaces those pixels with the
+  earth image (`StarAlignedHorizonMask`). Without excluding them the stage runs on every
+  frame, clear or not, to repair a band the composite throws away.
+
+**Additions to the algorithm (all in `ImageAligner.cpp`, "Cloud-aware merge")**
+
+- *Trusted sky.* The weight is only allowed above zero where the star merge can be trusted:
+  the sky mask intersected with itself warped by each neighbour's homography (production's
+  recipe, NEAREST, border white), then eroded by 96px so that eM's own reach never touches
+  the smeared ground. Done at 1/4 resolution (a 193x193 erosion at full size cost more than
+  the rest of the setup). Clouds within ~100px of the horizon are left as today.
+- *No-cloud early-out.* After the grid median, if fewer than 6 tiles of trusted sky have a
+  cloud velocity of at least 3 low-res px/frame (12 full-res px/frame) the stage returns the
+  star merge. On four clear frames that count was 2-15 of 211 trusted tiles, on cloud frames
+  204-210. A sparse one-neighbour pre-filter runs first so a clear frame pays for a fraction
+  of one velocity search. The correlation peaks themselves do *not* separate the cases (a
+  clear frame's best non-zero shift is the wing of the excluded star peak, peak 0.5-0.99).
+- *Region from an upper bound.* The weight is `clamp((rel-0.2)/0.3) * g` with
+  `g = clamp((eM-floor)/floor)`. Blurring `g` alone bounds the weight from above everywhere,
+  and the weight snaps to 0 under 0.01, so wherever the bound is under 0.01 the output is
+  provably the star merge. The full-resolution work runs on the bounding box of the bound's
+  support plus 160px (the weight's whole dependency cone is 140px), and the bound is also
+  what the snap is applied through, so the region changes nothing (§8 test 8).
+- *Exact blurs.* Every full-resolution blur is an integer box filter on values quantised to
+  1/256 (1/65536 for weights), not `cv::blur`. A float running sum depends on where the
+  window starts in its last bits, so a crop and the whole frame would disagree and "the
+  region changes nothing, byte for byte" would be false to within a rounding that flips whole
+  output values. Integer sums are exact in any order.
+- *Motion is measured on the whole frame*, not on the region: the nearest-measured fill rule
+  makes a tile's value depend on which other tiles were measured.
+- *Parabola refinement only around a true local maximum.* The unmasked neighbours can include
+  the excluded zero-shift peak, which otherwise extrapolates by several pixels.
+- *Star coverage is derived lazily* on the GPU path (eight full-frame warps), only for a
+  frame that gets as far as the weight.
+- A prediction that puts the search window off the frame leaves the tile unmeasured and it is
+  filled from the nearest measured tile (§2.3), not "fall back to the prediction" (§4).
+
+**Tools**
+
+- `StarCpp/Tests/StarCppBridgeTests/CloudAwareMergeReplayTests.swift` is the replay harness
+  of §6.3, skipped unless `STAR_CLOUD_REPLAY=1`; its doc comment lists the environment
+  variables and modes (`off`, `on`, `off-gpu`, `on-gpu`, `on-full`, `on-stream`). Build it
+  in release (`swift test -c release -Xswiftc -enable-testing`): debug runs the C++
+  unoptimised and a 12MP frame takes minutes. It keeps decoded frames for the run, as a
+  pipeline keeps the decodes it pins, so timings are not the cost of decoding twice.
+- With `cloudDebugDir` the stage writes `cloud-alpha-<n>.tif`, `cloud-velocity-<n>.txt`,
+  `cloud-error-<n>.tif` (eM, 16-bit) and `cloud-stats-<n>.txt` (outcome, noise, floor, region,
+  evidence counts, wall and CPU time per phase).
+
+---
+
 ## 1. Background
 
 ### 1.1 What automatic mode does

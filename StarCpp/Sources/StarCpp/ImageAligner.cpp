@@ -31,6 +31,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
+#include <ctime>
 #include <cmath>
 #include <limits>
 
@@ -2119,6 +2120,27 @@ constexpr int kWeightHalo = 48;           // 3*16
 // that no filter ever reads the region's own border.
 constexpr int kRegionMargin = 160;
 
+// Whether there is any cloud to follow at all, from the velocity field the motion search
+// has already produced.  Not part of the guide's algorithm, and added because its gate
+// cannot do this: the star merge's error (eM) sits at about 0.23 of the noise on a clear
+// frame, against a floor of 0.3, so it exceeds the floor over 2-16% of a clear frame's sky
+// at full frame scale, and everything after the gate would run on every frame.  The
+// velocity field separates the two cleanly: after the grid median a clear frame has a
+// handful of isolated tiles that moved (3 to 18 of 273 on four clear frames, from the
+// stars' own correlation wings and what is left of the horizon), a frame with cloud has
+// most of them (221 of 273).  Where the search found cloud moving at least
+// kMovingSpeed low-res px a frame in fewer than kMinMovingTiles tiles of trusted sky,
+// the stage stops and the output is the star merge.  A cloud that small is a loss of
+// nothing much: it is a few tiles of banding the stage would have repaired.
+constexpr float kMovingSpeed = 3.f;       // low-res px per frame: 12 at full size
+// ...and a tile only counts when its best shift correlates this well in the searches the
+// velocity came from.  Without it, noise alone makes a clear frame's velocities large and
+// random (21 of 28 tiles on a synthetic one), where cloud correlates at 0.6 and above
+// (478 of 546 searches on frame 30).
+constexpr float kMovingPeak = 0.5f;
+constexpr int kMinMovingTiles = 6;
+constexpr double kTrustedTileShare = 0.95;
+
 // Test hook, see ia_debug_set_cloud_region_restriction.
 std::atomic<bool> gRestrictToRegion{true};
 
@@ -2256,6 +2278,53 @@ static inline float weightBound(float eM, float floorValue) {
     return g < 0.f ? 0.f : (g > 1.f ? 1.f : g);
 }
 
+// The part of the sky the star merge can be trusted in, where the weight may be above zero.
+//
+// The star warps move the neighbours' ground along with their stars, so wherever a warp
+// lands ground above the base frame's own horizon the merge carries smeared terrain.
+// Production knows this and takes those pixels from the earth image instead (see
+// StarAlignedHorizonMask.swift, whose recipe this is: the sky mask intersected with
+// itself warped by each homography, NEAREST, border white).  The merge's error there is
+// the ground, not a cloud, and left in it would turn the stage on along the whole
+// horizon of every frame, clear or not, for an effect the composite then throws away.
+//
+// The error (eM) is also a wide filter: its value at a pixel depends on the merge as
+// far as kTrustRadius away.  So a pixel is trusted only when no untrusted pixel lies
+// within that reach, which keeps the smeared ground out of the error as well as out of
+// the weight.  Clouds that close to the horizon are left as the star merge makes them.
+// Returns an empty Mat when there is no sky mask: the whole frame is sky then.
+constexpr int kTrustRadius = kGateHalo;
+
+static cv::Mat trustedSky(const cv::Mat &sky, const std::vector<cv::Mat> &homographies) {
+    if (sky.empty()) return cv::Mat();
+    // At the motion resolution: a full resolution erosion by 96px is a 193x193 kernel over
+    // 12 million pixels, which cost more than the rest of the setup put together, and a
+    // boundary good to 4px is as good as a mask for this needs.  A low-res pixel is sky
+    // only where all sixteen full resolution ones are, so any error is on the safe side.
+    const int h4 = sky.rows / kFactor, w4 = sky.cols / kFactor;
+    cv::Mat low;
+    cv::resize(sky(cv::Rect(0, 0, w4 * kFactor, h4 * kFactor)), low, cv::Size(w4, h4), 0, 0,
+               cv::INTER_AREA);
+    cv::threshold(low, low, 254, 255, cv::THRESH_BINARY);
+    cv::Mat envelope = low.clone();
+    for (const cv::Mat &Hm : homographies) {
+        // D H D^-1, as the motion layers use
+        cv::Mat Hl = Hm.clone();
+        double *h = Hl.ptr<double>();
+        h[2] /= kFactor; h[5] /= kFactor; h[6] *= kFactor; h[7] *= kFactor;
+        cv::Mat warped(h4, w4, CV_8U, cv::Scalar(255));
+        cv::warpPerspective(low, warped, Hl, low.size(), cv::INTER_NEAREST, cv::BORDER_TRANSPARENT);
+        cv::bitwise_and(envelope, warped, envelope);
+    }
+    const int radius = (kTrustRadius + kFactor - 1) / kFactor + 1;
+    cv::Mat eroded;
+    cv::erode(envelope, eroded,
+              cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * radius + 1, 2 * radius + 1)));
+    cv::Mat trusted;
+    cv::resize(eroded, trusted, sky.size(), 0, 0, cv::INTER_NEAREST);
+    return trusted;
+}
+
 struct Gate {
     cv::Mat eM;            // CV_32F: how badly the star merge explains the base
     float floorValue = 0;  // noise floor, image units
@@ -2271,13 +2340,15 @@ static double median(std::vector<float> &v) {
     return (double)v[mid];
 }
 
-// Steps A of the guide, plus the upper bound that turns it into a region.  `sky` may be
-// empty (everything is sky).  Returns false, leaving `gate.any` false, when nothing in
-// the frame can be touched.
+// Steps A of the guide, plus the upper bound that turns it into a region.  `sky` (empty
+// when everything is sky) is where the noise is measured; `trusted` (empty likewise) is
+// where the star merge can be trusted and so where the weight may be above zero, see
+// trustedSky.  Leaves `gate.any` false when nothing in the frame can be touched.
 static void computeGate(const cv::Mat &base, const cv::Mat &merged, const cv::Mat &sky,
-                        Gate &gate) {
+                        const cv::Mat &trusted, Gate &gate) {
     const int H = base.rows, W = base.cols;
     const bool haveSky = !sky.empty();
+    const bool haveTrusted = !trusted.empty();
     gate.eM = cv::Mat(H, W, CV_32F);
 
     // Noise samples: horizontal luma differences of the base, over every row-stride'th
@@ -2314,10 +2385,10 @@ static void computeGate(const cv::Mat &base, const cv::Mat &merged, const cv::Ma
         for (int y = y0; y < y1; ++y) {
             const float *src = lb.ptr<float>(y - ey0);
             std::memcpy(gate.eM.ptr<float>(y), src, sizeof(float) * (size_t)W);
-            if (!haveSky) {
+            if (!haveTrusted) {
                 for (int x = 0; x < W; ++x) maxSkyEM = std::max(maxSkyEM, src[x]);
             } else {
-                const uint8_t *s = sky.ptr<uint8_t>(y);
+                const uint8_t *s = trusted.ptr<uint8_t>(y);
                 for (int x = 0; x < W; ++x) if (s[x]) maxSkyEM = std::max(maxSkyEM, src[x]);
             }
         }
@@ -2343,7 +2414,7 @@ static void computeGate(const cv::Mat &base, const cv::Mat &merged, const cv::Ma
         for (int y = ey0; y < ey1; ++y) {
             const float *e = gate.eM.ptr<float>(y);
             float *d = g.ptr<float>(y - ey0);
-            const uint8_t *s = haveSky ? sky.ptr<uint8_t>(y) : nullptr;
+            const uint8_t *s = haveTrusted ? trusted.ptr<uint8_t>(y) : nullptr;
             for (int x = 0; x < W; ++x)
                 d[x] = (!s || s[x]) ? weightBound(e[x], gate.floorValue) : 0.f;
         }
@@ -2398,11 +2469,13 @@ struct Grid {
     int ny = 0, nx = 0;
     std::vector<float> v[2];
     std::vector<uint8_t> ok;
+    std::vector<float> peak;     // the correlation at the chosen shift, where measured
     void init(int ny_, int nx_) {
         ny = ny_; nx = nx_;
         v[0].assign((size_t)ny * nx, 0.f);
         v[1].assign((size_t)ny * nx, 0.f);
         ok.assign((size_t)ny * nx, 0);
+        peak.assign((size_t)ny * nx, 0.f);
     }
     size_t at(int i, int j) const { return (size_t)i * nx + j; }
 };
@@ -2443,7 +2516,7 @@ static inline float parabola(float m, float z, float p) {
 // displaced window lies in frame and in the warp's coverage.  False when no such shift
 // exists.
 static bool searchTile(const cv::Mat &baseBp, const LowLayer &nb, int ty0, int tx0,
-                       int py, int px, int radius, float &outDy, float &outDx) {
+                       int py, int px, int radius, float &outDy, float &outDx, float &outPeak) {
     const int H = baseBp.rows, W = baseBp.cols;
     const int r0 = std::max(0, ty0 + py - radius), r1 = std::min(H, ty0 + py + radius + kTile);
     const int c0 = std::max(0, tx0 + px - radius), c1 = std::min(W, tx0 + px + radius + kTile);
@@ -2480,24 +2553,27 @@ static bool searchTile(const cv::Mat &baseBp, const LowLayer &nb, int ty0, int t
         sx = parabola(result.at<float>(bi, bj - 1), result.at<float>(bi, bj), result.at<float>(bi, bj + 1));
     outDy = (float)(r0 + bi - ty0) + sy;
     outDx = (float)(c0 + bj - tx0) + sx;
+    outPeak = best;
     return true;
 }
 
 // Every tile of one neighbour.  `pred` (nullable) holds the predicted absolute shift per
 // tile, already rounded.  A tile with no sky in it is left unmeasured.
 static Grid measureGrid(const cv::Mat &baseBp, const LowLayer &nb, const TileGrid &tg,
-                        const Grid *pred, int radius) {
+                        const Grid *pred, int radius, int stride = 1) {
     Grid g;
     g.init(tg.ny, tg.nx);
     cv::parallel_for_(cv::Range(0, tg.ny * tg.nx), [&](const cv::Range &rg) {
         for (int t = rg.start; t < rg.end; ++t) {
             if (!tg.sky[(size_t)t]) continue;
             const int i = t / tg.nx, j = t % tg.nx;
+            if (i % stride != 0 || j % stride != 0) continue;
             const int py = pred ? (int)pred->v[0][(size_t)t] : 0;
             const int px = pred ? (int)pred->v[1][(size_t)t] : 0;
-            float dy = 0.f, dx = 0.f;
-            if (searchTile(baseBp, nb, i * kStep, j * kStep, py, px, radius, dy, dx)) {
+            float dy = 0.f, dx = 0.f, pk = 0.f;
+            if (searchTile(baseBp, nb, i * kStep, j * kStep, py, px, radius, dy, dx, pk)) {
                 g.v[0][(size_t)t] = dy; g.v[1][(size_t)t] = dx; g.ok[(size_t)t] = 1;
+                g.peak[(size_t)t] = pk;
             }
         }
     });
@@ -2582,6 +2658,30 @@ static FieldAxis makeAxis(int start, int count, int tiles) {
 } // namespace cloudaware
 } // namespace
 
+// Wall and CPU time per phase of one run of the stage, for the debug directory.  CPU time
+// is the process's, so it is only a clean figure when nothing else is running.
+struct PhaseClock {
+    std::chrono::steady_clock::time_point wall0 = std::chrono::steady_clock::now();
+    std::clock_t cpu0 = std::clock();
+    std::chrono::steady_clock::time_point wallLast = wall0;
+    std::clock_t cpuLast = cpu0;
+    std::string report;
+    void mark(const char *phase) {
+        const auto w = std::chrono::steady_clock::now();
+        const std::clock_t c = std::clock();
+        char line[160];
+        std::snprintf(line, sizeof line, "phase %-10s wall %6.3f cpu %7.3f\n", phase,
+                      std::chrono::duration<double>(w - wallLast).count(),
+                      (double)(c - cpuLast) / CLOCKS_PER_SEC);
+        report += line;
+        wallLast = w; cpuLast = c;
+    }
+    double wall() const {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - wall0).count();
+    }
+    double cpu() const { return (double)(std::clock() - cpu0) / CLOCKS_PER_SEC; }
+};
+
 // Debug output the guide asks for: the blend weight, and the velocity grid.
 static void cloudWriteDebug(const char *dir, int frameIndex, const cv::Mat &alphaFull8,
                             const cloudaware::Grid &velocity) {
@@ -2609,6 +2709,27 @@ static void cloudWriteDebug(const char *dir, int frameIndex, const cv::Mat &alph
     }
 }
 
+// What the stage decided, for the debug directory: the same numbers the log carries, in
+// a file that is still there after the run.
+static void cloudWriteStats(const char *dir, int frameIndex, const char *outcome,
+                            double sigma, double floorValue, const cv::Rect &region,
+                            int frameW, int frameH, double weightShare,
+                            const PhaseClock &clock, const std::string &evidence) {
+    if (!dir || !*dir) return;
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    char name[512];
+    std::snprintf(name, sizeof name, "%s/cloud-stats-%d.txt", dir, frameIndex);
+    if (std::FILE *f = std::fopen(name, "w")) {
+        std::fprintf(f, "outcome %s\nsigma %.2f\nfloor %.2f\nregion %d %d %d %d of %d x %d\n"
+                        "weight_above_zero_share_of_region %.4f\n%s%stotal wall %.3f cpu %.3f\n",
+                     outcome, sigma, floorValue, region.x, region.y, region.width, region.height,
+                     frameW, frameH, weightShare, evidence.c_str(), clock.report.c_str(),
+                     clock.wall(), clock.cpu());
+        std::fclose(f);
+    }
+}
+
 // Refines `merged` (the star aligned merge of `base` and its neighbours) in place.
 // Returns true when it changed any pixel.  Never throws: this stage is an optional
 // improvement, and a frame that cannot have it keeps the star merge.
@@ -2624,10 +2745,8 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
                              const char *debugDir) {
     using namespace cloudaware;
     try {
-        const auto t0 = std::chrono::steady_clock::now();
-        auto seconds = [&] {
-            return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        };
+        PhaseClock clock;
+        auto seconds = [&] { return clock.wall(); };
 
         const int H = base.rows, W = base.cols;
         if (merged.empty() || merged.rows != H || merged.cols != W || merged.type() != base.type()
@@ -2655,20 +2774,6 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             sky = m != 0;
         }
 
-        // --- gate ---
-        Gate gate;
-        computeGate(base, merged, sky, gate);
-        if (!gate.any) {
-            Log_d("cloud-aware merge: frame %d nothing to do (sigma %.1f, floor %.1f) %.2fs",
-                  baseFrameIndex, gate.sigma, (double)gate.floorValue, seconds());
-            return false;
-        }
-        cv::Rect region = gate.activeBox;
-        region.x -= kRegionMargin; region.y -= kRegionMargin;
-        region.width += 2 * kRegionMargin; region.height += 2 * kRegionMargin;
-        region &= cv::Rect(0, 0, W, H);
-        if (!gRestrictToRegion.load()) region = cv::Rect(0, 0, W, H);
-
         // --- neighbours ---
         std::vector<Neighbour> nbs;
         for (int i = 0; i < neighborCount; ++i) {
@@ -2686,6 +2791,12 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             nbs.push_back(std::move(n));
         }
         if (nbs.empty()) return false;
+
+        // The part of the sky the star merge can be trusted in, see trustedSky.
+        std::vector<cv::Mat> warps;
+        for (const auto &n : nbs) warps.push_back(n.H);
+        const cv::Mat trusted = trustedSky(sky, warps);
+        clock.mark("setup");
 
         // --- low-res star aligned layers ---
         const cv::Mat baseLow = lumaDownsample(base);
@@ -2736,20 +2847,9 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             nbs = std::move(keepN); low = std::move(keepL);
         }
         if (nbs.empty()) return false;
+        clock.mark("lowres");
 
         const cv::Mat probeFull(H, W, CV_8U, cv::Scalar(255));
-
-        // The star merge's coverage plane, when the caller has none: the batched GPU
-        // merge returns before building one.  Derived the same way, and over the same
-        // neighbours, since a neighbour that failed to load is absent from both stacks.
-        if (starMisses.empty()) {
-            starMisses = cv::Mat::zeros(H, W, CV_8U);
-            for (const auto &n : nbs) {
-                cv::Mat covered = warpCoverage(probeFull, n.H, false);
-                cv::bitwise_not(covered, covered);
-                cv::add(starMisses, cv::Scalar(1), starMisses, covered);
-            }
-        }
 
         // --- motion ---
         const TileGrid tg = makeTileGrid(h4, w4, H, W, sky);
@@ -2757,8 +2857,64 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             for (const auto &l : low) if (l.offset == offset) return &l;
             return nullptr;
         };
+        // A tile is evidence of cloud when it lies in trusted sky; see kMovingSpeed.
+        auto trustedTile = [&](int i, int j) {
+            if (trusted.empty()) return true;
+            const cv::Rect rc(j * kStep * kFactor, i * kStep * kFactor, kTile * kFactor, kTile * kFactor);
+            const int inside = cv::countNonZero(trusted(rc & cv::Rect(0, 0, W, H)));
+            return (double)inside >= kTrustedTileShare * (double)rc.area();
+        };
+
+        // Pre-filter, one neighbour and every other tile in each direction: a clear frame
+        // costs the full velocity search twice over and this finds out for a fraction of
+        // one.  It only ever stops a frame whose sparse tiles show no cloud motion after a
+        // grid median, which is what a clear frame looks like; anything else goes on to
+        // the full search, which makes the real decision.
+        {
+            const LowLayer *one = layerAt(2) ? layerAt(2) : layerAt(-2) ? layerAt(-2)
+                                : layerAt(1) ? layerAt(1) : layerAt(-1);
+            if (!one) {
+                Log_d("cloud-aware merge: frame %d has no neighbour at +-1 or +-2", baseFrameIndex);
+                return false;
+            }
+            const float displacement = std::abs(one->offset) * kMovingSpeed;   // low-res px
+            Grid g = measureGrid(baseBp, *one, tg, nullptr, kVelocityRadius, 2);
+            int moving = 0;
+            for (int i = 0; i < tg.ny; i += 2) for (int j = 0; j < tg.nx; j += 2) {
+                if (!g.ok[g.at(i, j)] || !trustedTile(i, j)) continue;
+                // median of the measured sparse neighbours' magnitudes, itself included;
+                // a neighbour that did not correlate counts as not having moved
+                float mags[9]; int n = 0;
+                for (int di = -2; di <= 2; di += 2) for (int dj = -2; dj <= 2; dj += 2) {
+                    const int ii = i + di, jj = j + dj;
+                    if (ii < 0 || jj < 0 || ii >= tg.ny || jj >= tg.nx || !g.ok[g.at(ii, jj)]) continue;
+                    const size_t u = g.at(ii, jj);
+                    mags[n++] = g.peak[u] >= kMovingPeak ? std::hypot(g.v[0][u], g.v[1][u]) : 0.f;
+                }
+                std::nth_element(mags, mags + n / 2, mags + n);
+                if (mags[n / 2] >= displacement) ++moving;
+            }
+            clock.mark("prefilter");
+            if (moving < 2) {
+                Log_d("cloud-aware merge: frame %d pre-filter found no cloud motion %.2fs", baseFrameIndex, seconds());
+                char text[96];
+                std::snprintf(text, sizeof text, "prefilter_moving_sparse_tiles %d (need 2)\n", moving);
+                cloudWriteStats(debugDir, baseFrameIndex, "no cloud motion (pre-filter)", 0, 0,
+                                cv::Rect(), W, H, 0, clock, text);
+                return false;
+            }
+        }
+        // How strongly the velocity searches found anything: the correlation of the best
+        // shift in each measured tile, counted at a few levels.
+        float peakMax = 0.f; int peakTiles = 0, peak30 = 0, peak40 = 0, peak50 = 0, peak60 = 0;
         auto measureFilled = [&](const LowLayer &l) {
             Grid g = measureGrid(baseBp, l, tg, nullptr, kVelocityRadius);
+            for (size_t t = 0; t < g.ok.size(); ++t) {
+                if (!g.ok[t]) continue;
+                const float pk = g.peak[t];
+                ++peakTiles; peakMax = std::max(peakMax, pk);
+                peak30 += pk >= 0.3f; peak40 += pk >= 0.4f; peak50 += pk >= 0.5f; peak60 += pk >= 0.6f;
+            }
             fillUnmeasured(g, nullptr);
             return g;
         };
@@ -2769,6 +2925,11 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             for (int c = 0; c < 2; ++c)
                 for (size_t t = 0; t < velocity.v[c].size(); ++t)
                     velocity.v[c][t] = ((plus ? plus->v[c][t] : 0.f) - (minus ? minus->v[c][t] : 0.f)) / divisor;
+            // how well the searches behind each tile's velocity correlated: the weaker of the two
+            for (size_t t = 0; t < velocity.peak.size(); ++t) {
+                const float a = plus ? plus->peak[t] : 1.f, b = minus ? minus->peak[t] : 1.f;
+                velocity.peak[t] = std::min(a, b);
+            }
         };
         const LowLayer *p2 = layerAt(2), *m2 = layerAt(-2), *p1 = layerAt(1), *m1 = layerAt(-1);
         if (p2 && m2)      { Grid a = measureFilled(*p2), b = measureFilled(*m2); combine(&a, &b, 4.f); }
@@ -2782,6 +2943,48 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             return false;
         }
         medianGrid(velocity);
+        clock.mark("velocity");
+        char evidenceText[256];
+        std::snprintf(evidenceText, sizeof evidenceText,
+                      "velocity_peaks tiles %d max %.3f ge0.3 %d ge0.4 %d ge0.5 %d ge0.6 %d\n",
+                      peakTiles, (double)peakMax, peak30, peak40, peak50, peak60);
+        // How much of the trusted sky has cloud moving in it.
+        int movingTiles = 0, evidenceTilesCount = 0;
+        for (int i = 0; i < tg.ny; ++i) for (int j = 0; j < tg.nx; ++j) {
+            if (!trustedTile(i, j)) continue;
+            ++evidenceTilesCount;
+            const size_t t = velocity.at(i, j);
+            if (std::hypot(velocity.v[0][t], velocity.v[1][t]) >= kMovingSpeed &&
+                velocity.peak[t] >= kMovingPeak) ++movingTiles;
+        }
+        char movingText[128];
+        std::snprintf(movingText, sizeof movingText, "moving_tiles %d of %d trusted tiles (need %d)\n",
+                      movingTiles, evidenceTilesCount, kMinMovingTiles);
+        const std::string evidence = std::string(evidenceText) + movingText;
+        if (movingTiles < kMinMovingTiles) {
+            Log_d("cloud-aware merge: frame %d no cloud motion (%d moving tiles of %d) %.2fs",
+                  baseFrameIndex, movingTiles, evidenceTilesCount, seconds());
+            cloudWriteStats(debugDir, baseFrameIndex, "no cloud motion", 0, 0, cv::Rect(), W, H,
+                            0, clock, evidence);
+            return false;
+        }
+
+        // --- gate ---
+        Gate gate;
+        computeGate(base, merged, sky, trusted, gate);
+        clock.mark("gate");
+        if (!gate.any) {
+            Log_d("cloud-aware merge: frame %d nothing to do (sigma %.1f, floor %.1f) %.2fs",
+                  baseFrameIndex, gate.sigma, (double)gate.floorValue, seconds());
+            cloudWriteStats(debugDir, baseFrameIndex, "nothing to do", gate.sigma,
+                            (double)gate.floorValue, cv::Rect(), W, H, 0, clock, evidence);
+            return false;
+        }
+        cv::Rect region = gate.activeBox;
+        region.x -= kRegionMargin; region.y -= kRegionMargin;
+        region.width += 2 * kRegionMargin; region.height += 2 * kRegionMargin;
+        region &= cv::Rect(0, 0, W, H);
+        if (!gRestrictToRegion.load()) region = cv::Rect(0, 0, W, H);
 
         std::vector<Grid> fields(low.size());
         for (size_t k = 0; k < low.size(); ++k) {
@@ -2795,7 +2998,7 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             medianGrid(g);
             fields[k] = std::move(g);
         }
-        const double tMotion = seconds();
+        clock.mark("fields");
 
         // --- the cloud aligned stack, over the region ---
         const cv::Mat baseR = base(region);
@@ -2890,7 +3093,21 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             Rc = merged2->mat;
             mat_wrapper_release(merged2);
         }
-        const double tStack = seconds();
+        clock.mark("stack");
+
+        // The star merge's coverage plane, when the caller has none: the batched GPU
+        // merge returns before building one.  Derived the same way, and over the same
+        // neighbours, since a neighbour that failed to load is absent from both stacks.
+        // Here, and not up with the setup, because it is eight full frame warps and only
+        // a frame that gets this far needs it.
+        if (starMisses.empty()) {
+            starMisses = cv::Mat::zeros(H, W, CV_8U);
+            for (const auto &n : nbs) {
+                cv::Mat covered = warpCoverage(probeFull, n.H, false);
+                cv::bitwise_not(covered, covered);
+                cv::add(starMisses, cv::Scalar(1), starMisses, covered);
+            }
+        }
 
         // --- the weight, over the region ---
         cv::Mat lpB = lumaPlane(base, region);
@@ -2908,7 +3125,7 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
                 for (int y = rg.start; y < rg.end; ++y) {
                     const float *eC = lpB.ptr<float>(y);
                     const float *eM = gate.eM.ptr<float>(region.y + y) + region.x;
-                    const uint8_t *s = sky.empty() ? nullptr : sky.ptr<uint8_t>(region.y + y) + region.x;
+                    const uint8_t *s = trusted.empty() ? nullptr : trusted.ptr<uint8_t>(region.y + y) + region.x;
                     const uint8_t *ms = starMisses.ptr<uint8_t>(region.y + y) + region.x;
                     const uint8_t *mc = missesC.ptr<uint8_t>(y);
                     float *a = alpha.ptr<float>(y);
@@ -2928,6 +3145,7 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
         }
         lpB.release();
         cloudBoxBlur(alpha, kAlphaRadius, kWeightScale);
+        clock.mark("weight");
 
         // Snap, and keep to the pixels the bound allows: outside `active` the weight is
         // under 0.01 in the full frame computation, and here it could be wrong near the
@@ -2995,6 +3213,7 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             });
         }
 
+        clock.mark("compose");
         if (debugDir && *debugDir) {
             cv::Mat a8 = cv::Mat::zeros(H, W, CV_8U);
             for (int y = 0; y < region.height; ++y) {
@@ -3004,13 +3223,23 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             }
             Grid vel = velocity;
             cloudWriteDebug(debugDir, baseFrameIndex, a8, vel);
+            // how badly the star merge explained the base, in image units, for looking at
+            cv::Mat err16;
+            gate.eM.convertTo(err16, CV_16U);
+            char name[512];
+            std::snprintf(name, sizeof name, "%s/cloud-error-%d.tif", debugDir, baseFrameIndex);
+            cv::imwrite(name, err16);
+            cloudWriteStats(debugDir, baseFrameIndex, "stage ran", gate.sigma,
+                            (double)gate.floorValue, region, W, H,
+                            (double)changedPixels / ((double)region.width * region.height),
+                            clock, evidence);
         }
 
         Log_d("cloud-aware merge: frame %d region %dx%d of %dx%d, weight above 0 on %.1f%% of it, "
-              "sigma %.1f floor %.1f; motion %.2fs, stack %.2fs, total %.2fs",
+              "sigma %.1f floor %.1f; %.2fs wall, %.2fs cpu",
               baseFrameIndex, region.width, region.height, W, H,
               100.0 * (double)changedPixels / ((double)region.width * region.height),
-              gate.sigma, (double)gate.floorValue, tMotion, tStack - tMotion, seconds());
+              gate.sigma, (double)gate.floorValue, clock.wall(), clock.cpu());
         return changedPixels > 0;
     } catch (const cv::Exception &e) {
         Log_w("cloud-aware merge: frame %d kept the star merge, OpenCV: %s", baseFrameIndex, e.what());
