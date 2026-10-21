@@ -464,6 +464,7 @@ enum Mapping {
         out.muxer        = vi.muxer.rawValue
         out.frameRate    = vi.frameRate.rawValue
         out.encoder      = vi.encoder?.rawValue ?? ""
+        out.outputHeight = Int32(vi.resolution.height)
         return out
     }
 
@@ -489,7 +490,8 @@ enum Mapping {
             encoder: encoder ?? codec.encoder(for: pixFmt),
             pixelFormat: pixFmt,
             muxer: muxer,
-            hasAudio: hasAudio
+            hasAudio: hasAudio,
+            resolution: OutputResolution(height: Int(proto.outputHeight))
         )
     }
 

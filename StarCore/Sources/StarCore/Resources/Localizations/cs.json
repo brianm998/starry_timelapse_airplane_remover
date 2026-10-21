@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Výpočet horizontu…",
   "ui.connection_closed": "Spojení bylo uzavřeno",
   "ui.container": "Kontejner",
+  "ui.resolution": "Rozlišení",
+  "ui.resolution_original": "Původní",
   "ui.continue": "Pokračovat",
   "ui.copy_to_clipboard": "Kopírovat do schránky",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Správce souborů se nepodařilo otevřít. Video je v {0}",

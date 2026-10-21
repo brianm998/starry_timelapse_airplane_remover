@@ -68,6 +68,7 @@ struct RenderVideoSheetView: View {
     @State private var encoder: FFmpegEncoder
     @State private var pixelFormat: FFmpegPixelFormat
     @State private var muxer: FFmpegMuxer
+    @State private var resolution: OutputResolution = .original
 
     @State private var isRendering = false
     @State private var renderingError: Error? = nil
@@ -104,7 +105,8 @@ struct RenderVideoSheetView: View {
                               frameRate: frameRate,
                               encoder: encoder,
                               pixelFormat: pixelFormat,
-                              muxer: muxer)
+                              muxer: muxer,
+                              resolution: resolution)
         { currentFrame, totalFrames, _ in
             let progress = Double(currentFrame)/Double(totalFrames)
             Task { @MainActor in
@@ -244,6 +246,14 @@ struct RenderVideoSheetView: View {
                   .lineLimit(nil)
                   .fixedSize(horizontal: false, vertical: true)
                 
+                Picker(localized("ui.resolution"), selection: $resolution) {
+                    ForEach(OutputResolution.allCases, id: \.self) { resolution in
+                        Text(resolution == .original
+                             ? localized("ui.resolution_original")
+                             : resolution.name)
+                    }
+                }
+
                 Divider()
                 
                 Picker(localized("ui.codec"), selection: $codec) {

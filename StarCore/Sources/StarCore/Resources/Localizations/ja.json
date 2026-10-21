@@ -321,6 +321,8 @@
   "ui.computing_horizon": "地平線を計算中…",
   "ui.connection_closed": "接続が閉じられました",
   "ui.container": "コンテナ",
+  "ui.resolution": "解像度",
+  "ui.resolution_original": "オリジナル",
   "ui.continue": "続ける",
   "ui.copy_to_clipboard": "クリップボードにコピー",
   "ui.could_not_open_the_file_manager_the_video_is_at": "ファイルマネージャを開けませんでした。ビデオは {0} にあります",

@@ -1331,6 +1331,9 @@ public struct Star_V1_VideoEncodeSettings: Sendable {
   /// FFmpegMuxer.rawValue — also the output container extension
   public var muxer: String = String()
 
+  /// scale the video to this height in pixels, width following the aspect ratio; 0 = as the frames are
+  public var outputHeight: Int32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -4966,7 +4969,7 @@ extension Star_V1_OpenProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
 
 extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoEncodeSettings"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rate\0\u{1}codec\0\u{1}encoder\0\u{3}pixel_format\0\u{1}muxer\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rate\0\u{1}codec\0\u{1}encoder\0\u{3}pixel_format\0\u{1}muxer\0\u{3}output_height\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4979,6 +4982,7 @@ extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._Mes
       case 3: try { try decoder.decodeSingularStringField(value: &self.encoder) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.pixelFormat) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.muxer) }()
+      case 6: try { try decoder.decodeSingularInt32Field(value: &self.outputHeight) }()
       default: break
       }
     }
@@ -5000,6 +5004,9 @@ extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if !self.muxer.isEmpty {
       try visitor.visitSingularStringField(value: self.muxer, fieldNumber: 5)
     }
+    if self.outputHeight != 0 {
+      try visitor.visitSingularInt32Field(value: self.outputHeight, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -5009,6 +5016,7 @@ extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if lhs.encoder != rhs.encoder {return false}
     if lhs.pixelFormat != rhs.pixelFormat {return false}
     if lhs.muxer != rhs.muxer {return false}
+    if lhs.outputHeight != rhs.outputHeight {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

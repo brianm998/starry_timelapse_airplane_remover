@@ -144,6 +144,7 @@ message VideoEncodeSettings {
   string encoder      = 3;  // FFmpegEncoder.rawValue
   string pixel_format = 4;  // FFmpegPixelFormat.rawValue
   string muxer        = 5;  // FFmpegMuxer.rawValue — also the output container extension
+  int32  output_height = 6; // scale the video to this height in pixels, width following the aspect ratio; 0 = as the frames are
 }
 
 // Mirrors StarCore.VideoInfo.
