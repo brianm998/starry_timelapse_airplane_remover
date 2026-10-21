@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Horizont wird berechnet …",
   "ui.connection_closed": "Verbindung geschlossen",
   "ui.container": "Container",
+  "ui.resolution": "Auflösung",
+  "ui.resolution_original": "Original",
   "ui.continue": "Fortfahren",
   "ui.copy_to_clipboard": "In die Zwischenablage kopieren",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Der Dateimanager konnte nicht geöffnet werden. Das Video liegt unter {0}",

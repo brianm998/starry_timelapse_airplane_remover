@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Calcolo dell'orizzonte…",
   "ui.connection_closed": "Connessione chiusa",
   "ui.container": "Contenitore",
+  "ui.resolution": "Risoluzione",
+  "ui.resolution_original": "Originale",
   "ui.continue": "Continua",
   "ui.copy_to_clipboard": "Copia negli appunti",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Impossibile aprire il gestore dei file. Il video si trova in {0}",

@@ -183,6 +183,28 @@ final class VideoExportTests: XCTestCase {
         XCTAssertGreaterThan(rate, lastInput, "before an -i, -r would be read as an input option")
     }
 
+    func testAResolutionScalesToItsHeightAndNeverEnlarges() throws {
+        let info = VideoInfo(frameRate: .fps_24, codec: .prores, encoder: .prores,
+                             pixelFormat: .yuv444p10le, muxer: .mov, hasAudio: false, resolution: .p1080)
+        let args = VideoExport.arguments(listPath: "/l", audio: noAudio, videoInfo: info, outputVideoPath: "/o/out.mov")
+        let vf = try XCTUnwrap(args.firstIndex(of: "-vf"))
+        XCTAssertEqual(args[vf + 1], "scale=-2:'min(1080,ih)'")
+        XCTAssertGreaterThan(vf, try XCTUnwrap(args.lastIndex(of: "-i")))
+    }
+
+    func testTheOriginalResolutionAddsNoFilter() {
+        let args = VideoExport.arguments(
+          listPath: "/l", audio: noAudio, videoInfo: videoInfo(), outputVideoPath: "/o/out.mov")
+        XCTAssertFalse(args.contains("-vf"))
+    }
+
+    func testTheRequestedHeightSurvivesTheFallbackToTheOpenedVideosSettings() {
+        var request = Star_V1_VideoEncodeSettings()   // no codec: the fallback path
+        request.outputHeight = 720
+        let info = ExportHandlers.videoInfo(for: request, opened: videoInfo(), config: config())
+        XCTAssertEqual(info.resolution, .p720)
+    }
+
     func testAudioIsAddedAsASecondInputAndCopied() {
         let args = VideoExport.arguments(
           listPath: "/l", audio: copiedAudio, videoInfo: videoInfo(hasAudio: true), outputVideoPath: "/o/out.mov")

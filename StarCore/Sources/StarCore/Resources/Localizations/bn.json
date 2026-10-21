@@ -321,6 +321,8 @@
   "ui.computing_horizon": "দিগন্ত হিসাব করা হচ্ছে…",
   "ui.connection_closed": "সংযোগ বন্ধ হয়েছে",
   "ui.container": "কন্টেইনার",
+  "ui.resolution": "রেজোলিউশন",
+  "ui.resolution_original": "মূল",
   "ui.continue": "চালিয়ে যান",
   "ui.copy_to_clipboard": "ক্লিপবোর্ডে কপি করুন",
   "ui.could_not_open_the_file_manager_the_video_is_at": "ফাইল ম্যানেজার খোলা যায়নি। ভিডিওটি আছে {0}-এ",

@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Horizon berekenen…",
   "ui.connection_closed": "Verbinding gesloten",
   "ui.container": "Container",
+  "ui.resolution": "Resolutie",
+  "ui.resolution_original": "Origineel",
   "ui.continue": "Doorgaan",
   "ui.copy_to_clipboard": "Kopieer naar klembord",
   "ui.could_not_open_the_file_manager_the_video_is_at": "De bestandsbeheerder kon niet worden geopend. De video staat in {0}",

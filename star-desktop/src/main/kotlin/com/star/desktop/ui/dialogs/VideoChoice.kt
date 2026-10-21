@@ -15,19 +15,21 @@ data class VideoChoice(
     val pixelFormat: String,
     val muxer: String,
     val frameRate: Double,
+    /** Height in pixels the video is scaled to, 0 for as the frames are. */
+    val outputHeight: Int = 0,
 ) {
     /** The codec [codec], with the rest re-validated under it: each kept if the new codec still offers it, else the first it does. */
     fun withCodec(caps: VideoCapabilities, codec: String): VideoChoice =
         resolveVideoChoice(caps, VideoEncodeSettings.newBuilder()
-            .setCodec(codec).setEncoder(encoder).setPixelFormat(pixelFormat).setMuxer(muxer).setFrameRate(frameRate).build())
+            .setCodec(codec).setEncoder(encoder).setPixelFormat(pixelFormat).setMuxer(muxer).setFrameRate(frameRate).setOutputHeight(outputHeight).build())
 
     /** The encoder [encoder] of this codec, with its pixel format and container kept if it offers them. */
     fun withEncoder(caps: VideoCapabilities, encoder: String): VideoChoice =
         resolveVideoChoice(caps, VideoEncodeSettings.newBuilder()
-            .setCodec(codec).setEncoder(encoder).setPixelFormat(pixelFormat).setMuxer(muxer).setFrameRate(frameRate).build())
+            .setCodec(codec).setEncoder(encoder).setPixelFormat(pixelFormat).setMuxer(muxer).setFrameRate(frameRate).setOutputHeight(outputHeight).build())
 
     fun toSettings(): VideoEncodeSettings = VideoEncodeSettings.newBuilder()
-        .setFrameRate(frameRate).setCodec(codec).setEncoder(encoder).setPixelFormat(pixelFormat).setMuxer(muxer).build()
+        .setFrameRate(frameRate).setCodec(codec).setEncoder(encoder).setPixelFormat(pixelFormat).setMuxer(muxer).setOutputHeight(outputHeight).build()
 }
 
 /**
@@ -49,6 +51,7 @@ fun resolveVideoChoice(caps: VideoCapabilities, wanted: VideoEncodeSettings?): V
         pixelFormat = pixelFormats.firstOrNull { it == wanted?.pixelFormat } ?: pixelFormats.firstOrNull().orEmpty(),
         muxer = muxers.firstOrNull { it == wanted?.muxer } ?: muxers.firstOrNull().orEmpty(),
         frameRate = wanted?.frameRate?.takeIf { it > 0 } ?: caps.frameRatesList.firstOrNull() ?: DEFAULT_FRAME_RATE,
+        outputHeight = wanted?.outputHeight ?: 0,
     )
 }
 

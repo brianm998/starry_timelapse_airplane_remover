@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Computing horizon…",
   "ui.connection_closed": "Connection closed",
   "ui.container": "Container",
+  "ui.resolution": "Resolution",
+  "ui.resolution_original": "Original",
   "ui.continue": "Continue",
   "ui.copy_to_clipboard": "Copy to Clipboard",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Could not open the file manager. The video is at {0}",

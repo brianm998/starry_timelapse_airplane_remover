@@ -321,6 +321,8 @@
   "ui.computing_horizon": "क्षितिज की गणना हो रही है…",
   "ui.connection_closed": "कनेक्शन बंद हो गया",
   "ui.container": "कंटेनर",
+  "ui.resolution": "रेज़ोल्यूशन",
+  "ui.resolution_original": "मूल",
   "ui.continue": "जारी रखें",
   "ui.copy_to_clipboard": "क्लिपबोर्ड पर कॉपी करें",
   "ui.could_not_open_the_file_manager_the_video_is_at": "फ़ाइल मैनेजर नहीं खुल सका। वीडियो {0} में है",

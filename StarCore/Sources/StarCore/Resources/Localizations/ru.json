@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Вычисление горизонта…",
   "ui.connection_closed": "Соединение закрыто",
   "ui.container": "Контейнер",
+  "ui.resolution": "Разрешение",
+  "ui.resolution_original": "Исходное",
   "ui.continue": "Продолжить",
   "ui.copy_to_clipboard": "Скопировать в буфер обмена",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Не удалось открыть файловый менеджер. Видео находится здесь: {0}",

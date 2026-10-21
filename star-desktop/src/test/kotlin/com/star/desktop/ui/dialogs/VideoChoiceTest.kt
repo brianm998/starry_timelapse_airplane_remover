@@ -134,4 +134,13 @@ class VideoChoiceTest {
         assertEquals("h264", s?.codec)
         assertEquals("mov", s?.muxer)
     }
+
+    /** The scale height goes to the daemon, and survives re-resolving the choice under a new codec. */
+    @Test fun theOutputHeightIsSentAndSurvivesACodecChange() {
+        val choice = resolveVideoChoice(caps, null).copy(outputHeight = 1080)
+        assertEquals(1080, choice.toSettings().outputHeight)
+        assertEquals(1080, choice.withCodec(caps, "prores").outputHeight)
+        assertEquals(1080, choice.withEncoder(caps, "h264_videotoolbox").outputHeight)
+        assertEquals(0, resolveVideoChoice(caps, null).toSettings().outputHeight, "0 means as the frames are")
+    }
 }

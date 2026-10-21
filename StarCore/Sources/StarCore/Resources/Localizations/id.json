@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Menghitung horizon…",
   "ui.connection_closed": "Koneksi ditutup",
   "ui.container": "Wadah",
+  "ui.resolution": "Resolusi",
+  "ui.resolution_original": "Asli",
   "ui.continue": "Lanjutkan",
   "ui.copy_to_clipboard": "Salin ke papan klip",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Tidak dapat membuka pengelola berkas. Video ada di {0}",

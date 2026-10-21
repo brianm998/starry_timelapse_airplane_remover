@@ -120,6 +120,9 @@ public enum VideoExport {
         args += audio.inputArguments
         args += [
             "-r", videoInfo.frameRate.rawString,
+        ]
+        args += videoInfo.resolution.ffmpegArguments
+        args += [
             "-c:v", encoderName,
             "-pix_fmt", videoInfo.pixelFormat.rawValue,
         ]

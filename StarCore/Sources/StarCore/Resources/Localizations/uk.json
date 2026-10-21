@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Обчислення горизонту…",
   "ui.connection_closed": "З'єднання закрито",
   "ui.container": "Контейнер",
+  "ui.resolution": "Роздільна здатність",
+  "ui.resolution_original": "Оригінальна",
   "ui.continue": "Продовжити",
   "ui.copy_to_clipboard": "Скопіювати в буфер обміну",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Не вдалося відкрити файловий менеджер. Відео розташоване тут: {0}",
