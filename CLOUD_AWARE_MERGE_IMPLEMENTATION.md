@@ -96,18 +96,41 @@ wrong. The sections below are left as written; read this first.
 - A prediction that puts the search window off the frame leaves the tile unmeasured and it is
   filled from the nearest measured tile (§2.3), not "fall back to the prediction" (§4).
 
+**Tuning the cloud share (noise floor ×6 → ×8).** Through the C++ the stage counted more of a frame as cloud
+than the numpy prototype did: the share of the A3 crop with weight above 0.5 was +0.099 on #45, +0.119
+on #60 and +0.184 on #72 against the prototype's, all faint-cloud frames where today's output already matches the
+exposed frame well. Eight settings over twelve frames (28, 30, 45, 60, 6, 7, 53, 72, 91, 20, 36, 85), same
+replay, scored against the references:
+
+| floor multiple (of 0.05σ) | relative ramp | #45 | #60 | #72 | #85 | mean \|share diff\| | CLOUDCORR mean / min |
+|---|---|---|---|---|---|---|---|
+| 6 (the guide) | 0.2-0.5 | +0.099 | +0.119 | +0.184 | +0.057 | 0.064 | 0.960 / 0.934 |
+| 7 | 0.2-0.5 | +0.088 | +0.080 | +0.121 | +0.011 | 0.047 | 0.960 / 0.934 |
+| **8 (implemented)** | 0.2-0.5 | **+0.076** | **+0.037** | **+0.057** | **-0.039** | **0.036** | **0.959 / 0.933** |
+| 9 | 0.2-0.5 | +0.059 | -0.016 | -0.001 | -0.090 | 0.033 | 0.959 / 0.930 |
+| 10 | 0.2-0.5 | +0.044 | -0.071 | -0.056 | -0.136 | 0.047 | 0.958 / 0.926 |
+| 6 | 0.3-0.6 | +0.049 | +0.090 | +0.141 | +0.020 | 0.049 | 0.952 / 0.914 |
+| 8 | 0.3-0.6 | +0.030 | +0.017 | +0.028 | -0.063 | 0.039 | 0.951 / 0.914 |
+| 7 | 0.25-0.55 | +0.067 | +0.069 | +0.106 | -0.002 | 0.041 | 0.956 / 0.932 |
+
+The floor is the lever; the relative ramp costs fidelity (frame 7 falls to 0.914) for a smaller change. 7 leaves
+#72 outside tolerance, 9 puts #85 at -0.090 and 10 at -0.136, so 8. Over all 90 frames at 8: share difference mean
++0.005 (it was biased high), range -0.069 to +0.133, three frames outside ±0.10 (#47 +0.133, #59 +0.127, #54 +0.112; none
+is one A4 names), per-frame CLOUDCORR change at most -0.003 (frame 60) against ×6, and no frame lost more than 0.005.
+A clear frame is not affected: its floor only matters after the early-out, which has already returned.
+
 **Results (fx3-1, the final code; "CLI" = end to end through `star`, "replay" = the harness)**
 
 | # | Result |
 |---|---|
 | A1 | Flag off changes nothing: all 19 frames of `test_data/test_a7sii_10` are byte-identical (AE 0) to a CLI built from plain `develop`. StarCpp 209 tests, StarCore 1369 (0 failures), cli 66, daemon and gui build. The three failures that remain also fail on plain `develop`: `OpenCVQoSTests.testLowQoSUsesFewerWorkersThanNormalQoS` (the vendored OpenCV lacks the QoS patch), `ConfigOverridesTests.testEveryOverrideIsWiredToAFlag` (`--use`'s `resourceProfile` is not in its flag list) and `GherkinTests.testOpenAndProcessFeature` (temp dir cleanup). |
 | A2 | Frames 600, 700, 800, 1100 with the flag on are byte-identical to flag off over the **whole frame** (AE 0), because the stage stops at its pre-filter on all four. (Before the early-out existed, 600 and 800 had weight up to 0.24 in rows 1886-2188, where they have real cloud.) |
-| A3 | Frames 6-95 on the A3 crop, CLI output: CLOUDCORR **min 0.934, mean 0.965** (reference 0.949, today 0.599). Worst: #53 0.934, #72 0.935, #7 0.947. Replay gives the same numbers. |
-| A4 | Cloud share (weight > 0.5): #28 0.746 (reference 0.764), #30 0.851 (0.783), #45 0.441 (0.342, +0.099), **#60 0.619 (0.500, +0.119: outside ±0.10)**. Mine is a few points larger throughout. The extra area is where today's output already correlates 0.93-0.96 with the exposed frame and the stage keeps it at 0.965-0.974, so it is harmless, but it is not what the reference does. Reported, not tuned. |
+| A3 | Frames 6-95 on the A3 crop (replay, final code with the floor at ×8): CLOUDCORR **min 0.933, mean 0.965** (reference 0.949, today 0.599). Worst: #72 0.933, #53 0.934, #7 0.948. At ×6 it was min 0.934, mean 0.965; the CLI end-to-end output of the final binary gives min 0.932, mean 0.964. |
+| A4 | Cloud share (weight > 0.5), floor at ×8: #28 0.744 (reference 0.764, -0.020), #30 0.847 (0.783, +0.064), #45 0.418 (0.342, +0.076), #60 0.537 (0.500, +0.037): all inside ±0.10. At ×6 #45 was +0.099 and #60 +0.119 (outside). Over all 90 frames three that A4 does not name are still outside: #47 +0.133, #59 +0.127, #54 +0.112. |
 | A5 | #28 trail: **+0.26σ** (original +2.69σ, today +0.18σ, reference +0.24σ). |
 | A6 | Stars kept in cloud, CLI: #30 median 0.99, 96% kept at >= 80%; #60 median 0.96, 96% kept. Replay: 1.01 / 0.98 and 1.00 / 0.98 (the reference's numbers). |
-| A7 | Triptych of frames 6-95 rendered (`triptych.mp4`, 90 frames). Stills at frames 12, 30 and 60 show today's stepped, repeated cloud edges gone and the exposed frame's structure kept, stars intact inside the cloud, the thin streak at frame 60 removed. Flicker, measured as the frame-to-frame jump of the brightness offset from the original: std 0.98 against today's 1.33, max 3.6 against 6.2. Not watched as motion. |
-| A8 | Whole-run CPU, `star -c automatic`, default GPU, 18 concurrent frames, user+sys: frames 600-700 flag off 5008 / 6055 / 5999 CPU-s, flag on 6110 / 5983 on the final binary (+0.9%, -0.3%; a first on-run with an earlier binary read +11.6%, which is inside this machine's ±10% run-to-run noise). The stage itself measures 0.57 CPU-s per clear frame in the replay (stops at the pre-filter on all 101 frames of 600-700). Frames 1-100 (cloud): 4615 -> 6987 CPU-s (+51%, +24 CPU-s a frame; replay measures the stage at 25-35), wall 402 -> 468 s. Peak op memory, 12 frames of fx3-1 at concurrency 1 with `--log-op-memory`: unchanged to within 11MB (+892MB both). |
+| A7 | Triptych of frames 6-95 rendered (`triptych.mp4`, 90 frames). Stills at frames 12, 30 and 60 show today's stepped, repeated cloud edges gone and the exposed frame's structure kept, stars intact inside the cloud, the thin streak at frame 60 removed. Flicker, measured as the frame-to-frame jump of the brightness offset from the original: std 0.97 against today's 1.33, max 3.6 against 6.2. Not watched as motion. |
+| A8 | Whole-run CPU, `star -c automatic`, default GPU, 18 concurrent frames, user+sys: frames 600-700 flag off 5008 / 6055 / 5999 CPU-s, flag on 6110 / 5983 on the final binary (+0.9%, -0.3%; a first on-run with an earlier binary read +11.6%, which is inside this machine's ±10% run-to-run noise). The stage itself measures 0.57 CPU-s per clear frame in the replay (stops at the pre-filter on all 101 frames of 600-700). Frames 1-100 (cloud), three flag-off/on pairs: 4615 -> 6987 (+51%, earlier code), 5650 -> 8885 (+57%) and 5072 -> 8064 CPU-s (+59%) with the final binary, i.e. +24 to +32 CPU-s a frame (the replay measures the stage itself at 25-35), wall +16%, +30% and +22%. Peak op memory, 12 frames of fx3-1 at concurrency 1 with `--log-op-memory`: unchanged to within 11MB (+892MB both). |
 | A9 | `StarCpp`, `StarCore`, `cli`, `daemon` build and test as above; gui `xcodebuild -scheme star` succeeds. |
 | §6.5 | Horizon, frames 6-20, final composite flag on against off: no pixel differs closer than 67px above the horizon, the weight is zero on every ground pixel, and an amplified difference image shows no seam or ghost ridge along the horizon. |
 
@@ -368,7 +391,7 @@ All of Step B runs at 1/4 resolution (`f = 4`).
 | α median / low-pass | median 5×5, box3 r=6 | full res |
 | α error blur | box3 r=24 | |
 | rel ramp LO / HI | 0.2 / 0.5 | |
-| noise floor | max(6 · 0.05 · σ_pix, 1.0) | ×6 was the smallest multiplier that zeroed α on the clear frame (×3 left patches up to 0.44); σ_pix over sky pixels |
+| noise floor | max(8 · 0.05 · σ_pix, 1.0) | **×8 as implemented, not ×6** (see 0.1, "Tuning the cloud share"). ×6 was the smallest multiplier that zeroed α on the clear frame (×3 left patches up to 0.44); σ_pix over sky pixels |
 | α smoothing | box3 r=16 | |
 | star top-hat / cloud opening | 7×7 square | |
 | α zero/one snap | 0.01 / 0.99 | |
@@ -840,7 +863,7 @@ In StarCore:
   gradient the motion of a cloud spreads to the clear tiles around it, and noise alone gives the
   weight small patches (0.05-0.15) there. Real clear sky never did that on fx3-1 (weight above 0 on
   0.01-0.2% of the region on the frames that ran the stage), but it is the stage's failure mode.
-- **Cost on cloud frames is large**: +24 CPU-s a frame (+51% of the run) at 12MP, 18 concurrent frames.
+- **Cost on cloud frames is large**: +24 to +32 CPU-s a frame (+51% to +59% of the run) at 12MP, 18 concurrent frames.
 - **Colour speckle where α = 0.** The kernel's per-channel selection still produces it
   wherever the stack is incoherent but no cloud motion is found. Choosing one source per
   pixel by luma rank would fix it everywhere, but it changes clear-sky colour noise and is

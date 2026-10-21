@@ -2097,11 +2097,20 @@ constexpr int kExcludeRadiusSq = 4;       // absolute shift, low-res px squared
 // Relative test: how much of the star merge's error the cloud merge removes.
 constexpr double kRelLow = 0.2;
 constexpr double kRelHigh = 0.5;
-// Noise floor, as a multiple of the robust per-pixel noise.  6 is the smallest multiple
-// that zeroed the weight on a clear frame; 3 left patches up to 0.44.  The minimum guards
-// noiseless input (synthetic frames, 8-bit frames with clipped black), where the
-// estimate can be zero.
-constexpr double kFloorSigmaFactor = 6.0 * 0.05;
+// Noise floor, as a multiple of the robust per-pixel noise: 8 of the 0.05 that is left of
+// a pixel's noise after the low-pass.  The guide's 6 is the smallest multiple that zeroed
+// the weight on a clear frame (3 left patches up to 0.44), and it is what the numpy
+// prototype used, but through this code it counted more of a frame as cloud than the
+// prototype did: the share of the A3 crop with weight above 0.5 was 7-18 points larger on
+// the faint-cloud frames (+0.099 on #45, +0.119 on #60, +0.184 on #72 against the
+// prototype's), where today's output already matches the exposed frame well.  8 brings
+// every one of twelve frames from 6 to 91 within +-0.08 of the prototype's share, and
+// costs at most 0.003 of cloud correlation anywhere; 7 and 9 sit either side (frame 72
+// still +0.12 at 7, frame 85 at -0.09 at 9, -0.14 at 10).  The weight's other ramp (0.2
+// to 0.5 of the relative test) was tried and costs more fidelity for less share.  The
+// minimum guards noiseless input (synthetic frames, 8-bit frames with clipped black),
+// where the estimate can be zero.
+constexpr double kFloorSigmaFactor = 8.0 * 0.05;
 constexpr double kFloorMinimum = 1.0;
 constexpr float kAlphaSnapLow = 0.01f;
 constexpr float kAlphaSnapHigh = 0.99f;

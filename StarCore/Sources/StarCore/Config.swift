@@ -1345,8 +1345,9 @@ public struct Config: Codable, Sendable {
     /// Cost: the stage looks for moving cloud first and stops at once when there is none,
     /// so a clear frame pays about 0.6 CPU-seconds (a 12MP frame's whole run costs ~50) and
     /// its output is the star merge byte for byte. A frame with cloud runs the whole stage,
-    /// about 25-35 CPU-seconds at 12MP: +51% of the run's CPU over fx3-1 frames 1-100, and
-    /// about 16% more wall clock on 18 concurrent frames. Peak memory per merge op did not
+    /// about 25-35 CPU-seconds at 12MP: +51%, +57% and +59% of the run's CPU over fx3-1
+    /// frames 1-100 in three runs (identical runs differ by ~10% on that machine), and 16-30%
+    /// more wall clock on 18 concurrent frames. Peak memory per merge op did not
     /// move at 12MP (see `residentBuildExtraMultiplier`). Off by default because it is new
     /// and the user has not yet watched it on their own footage; not exposed in the gui,
     /// daemon or desktop settings.
