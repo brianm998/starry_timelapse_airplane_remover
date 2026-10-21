@@ -10,9 +10,6 @@ import logging
 #if canImport(Metal)
 import Metal
 #endif
-#if canImport(MetalPerformanceShaders)
-import MetalPerformanceShaders
-#endif
 
 public enum GPUOps {
 
@@ -275,7 +272,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
     let alignedMergeU8: MTLComputePipelineState
     let alignedMergeU16: MTLComputePipelineState
     let downsampleNearest2xF32: MTLComputePipelineState
-    let downsampleArea2xF32: MTLComputePipelineState
+    let upsampleLinear2xF32: MTLComputePipelineState
+    let gaussianRowF32: MTLComputePipelineState
+    let gaussianColumnF32: MTLComputePipelineState
+    let resizeAreaF32: MTLComputePipelineState
     let scharrXF32: MTLComputePipelineState
     let scharrYF32: MTLComputePipelineState
     let pmG2F32: MTLComputePipelineState
@@ -303,7 +303,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
             self.alignedMergeU8 = try pipeline("aligned_merge_u8")
             self.alignedMergeU16 = try pipeline("aligned_merge_u16")
             self.downsampleNearest2xF32 = try pipeline("downsample_nearest_2x_f32")
-            self.downsampleArea2xF32 = try pipeline("downsample_area_2x_f32")
+            self.upsampleLinear2xF32 = try pipeline("upsample_linear_2x_f32")
+            self.gaussianRowF32 = try pipeline("gaussian_row_f32")
+            self.gaussianColumnF32 = try pipeline("gaussian_column_f32")
+            self.resizeAreaF32 = try pipeline("resize_area_f32")
             self.scharrXF32 = try pipeline("scharr_x_f32")
             self.scharrYF32 = try pipeline("scharr_y_f32")
             self.pmG2F32 = try pipeline("pm_g2_f32")
@@ -840,12 +843,29 @@ private final class MetalGPUBackend: @unchecked Sendable {
     // MARK: - SIFT Gaussian pyramid
 
     /// Builds the Gaussian scale-space pyramid `siftDetectAndComputeGPU`
-    /// (SIFTDetector.cpp) needs, via `MPSImageGaussianBlur` for every blur and
-    /// `MPSImageBilinearScale`/a tiny custom kernel for the two resizes — see
-    /// GPUOps_C.h's `GPUSiftPyramidFunc` for the exact contract this implements.
-    /// All work for one pyramid goes on one command buffer, committed once at
-    /// the end; every intermediate texture is kept alive until then, since
-    /// every one of them is also an output.
+    /// (SIFTDetector.cpp) needs, with small custom kernels for every step: the
+    /// 2x upsample (`upsample_linear_2x_f32`), each blur (`gaussian_row_f32` then
+    /// `gaussian_column_f32`, OpenCV's own coefficients) and each octave's halving
+    /// (`downsample_nearest_2x_f32`) — see GPUOps_C.h's `GPUSiftPyramidFunc` for
+    /// the exact contract this implements. All work for one pyramid goes on one
+    /// command buffer, committed once at the end; every output texture is kept
+    /// alive until then, and one scratch texture per octave carries the row pass
+    /// into the column pass (hazard tracking orders the reuse).
+    ///
+    /// Not `MPSImageGaussianBlur`, which this used to be, because it is not the
+    /// blur SIFT asks for. Fitted against cv::GaussianBlur on a real 4000x2667
+    /// detection input, every MPS pass blurred wider than requested — sigma 1.249,
+    /// 1.226, 1.545, 1.947, 2.453, 3.090 behaved like 1.284, 1.266, 1.575, 1.967,
+    /// 2.473, 3.110, which is a Gaussian convolved with a one-pixel box (variance
+    /// + 1/12 each pass) — and it pads with zeros where OpenCV reflects, so the
+    /// first three columns came back up to 26 levels dark. The extra variance
+    /// accumulates up each octave and moves the small scales stars live at:
+    /// on a moonlit 24MP sky the finest octave's extrema per scale layer went from
+    /// 1383/271/77 (cv::SIFT and the reference pyramid agree) to 736/123/171, and
+    /// the detector returned 1050 keypoints where cv::SIFT returns 1792. SIFT's
+    /// scale test compares DoG layers that differ by a few percent at a star, so
+    /// a blur that is "approximate... ~10 bits of precision", as MPS documents
+    /// its own, is not one it can use.
     ///
     /// `.storageModeManaged`, not `.shared`: measured directly on this Vega —
     /// a `.shared` texture a compute kernel writes to reads back as all zeros
@@ -857,16 +877,6 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// `.shared` *buffer* behaves as documented here. Revisit if this ever
     /// needs to run on Apple Silicon, where `.managed` does not exist and
     /// `.shared` textures are the only (and correct) choice.
-    ///
-    /// `MPSImageGaussianBlur` itself is documented (MPSImageConvolution.h) as
-    /// "mathematically... an approximate gaussian... suitable for all common
-    /// image processing needs demanding ~10 bits of precision or less" — SIFT's
-    /// sub-pixel extremum refinement is exactly the kind of higher-precision
-    /// consumer that warning is aimed at, and it shows: measured keypoint
-    /// agreement against the real-cv::GaussianBlur reference pyramid is
-    /// ~83%, well short of the reference pyramid's own ~85%+ agreement with
-    /// real cv::SIFT (see SIFTDetectorTests.swift). That gap is the
-    /// documented approximation, not a bug in this function.
     func buildSiftPyramid(base: MatWrapperRef, doubleImageSize: Bool, sigma: Double,
                           nOctaves: Int, nOctaveLayers: Int,
                           outPyramid: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
@@ -900,13 +910,15 @@ private final class MetalGPUBackend: @unchecked Sendable {
         var current = inputTexture
         var curWidth = baseCols, curHeight = baseRows
         if doubleImageSize {
-            guard let doubled = makeFloatTexture(width: baseCols * 2, height: baseRows * 2) else {
-                return false
-            }
-            let scaler = MPSImageBilinearScale(device: device)
-            var transform = MPSScaleTransform(scaleX: 2.0, scaleY: 2.0, translateX: 0, translateY: 0)
-            withUnsafePointer(to: &transform) { scaler.scaleTransform = $0 }
-            scaler.encode(commandBuffer: cmdBuf, sourceTexture: current, destinationTexture: doubled)
+            guard let doubled = makeFloatTexture(width: baseCols * 2, height: baseRows * 2),
+                  let encoder = cmdBuf.makeComputeCommandEncoder()
+            else { return false }
+            encoder.setComputePipelineState(upsampleLinear2xF32)
+            encoder.setTexture(current, index: 0)
+            encoder.setTexture(doubled, index: 1)
+            dispatch(encoder: encoder, pipeline: upsampleLinear2xF32,
+                     width: baseCols * 2, height: baseRows * 2)
+            encoder.endEncoding()
             current = doubled
             curWidth *= 2
             curHeight *= 2
@@ -920,9 +932,18 @@ private final class MetalGPUBackend: @unchecked Sendable {
             : sigma * sigma - initSigma * initSigma
         let sigDiff = Foundation.sqrt(max(sigDiffSq, 0.01))
 
-        guard let firstLayer = makeFloatTexture(width: curWidth, height: curHeight) else { return false }
-        MPSImageGaussianBlur(device: device, sigma: Float(sigDiff))
-            .encode(commandBuffer: cmdBuf, sourceTexture: current, destinationTexture: firstLayer)
+        // One row-pass scratch texture per octave, shared by that octave's blurs.
+        var scratch = [MTLTexture?](repeating: nil, count: nOctaves)
+        func scratchTexture(octave: Int, width: Int, height: Int) -> MTLTexture? {
+            if scratch[octave] == nil { scratch[octave] = makeFloatTexture(width: width, height: height) }
+            return scratch[octave]
+        }
+
+        guard let firstLayer = makeFloatTexture(width: curWidth, height: curHeight),
+              let firstScratch = scratchTexture(octave: 0, width: curWidth, height: curHeight),
+              encodeGaussianBlur(cmdBuf, source: current, scratch: firstScratch,
+                                 destination: firstLayer, sigma: sigDiff)
+        else { return false }
 
         // buildGaussianPyramid's own incremental sigma schedule: sigma_total^2 =
         // sigma_i^2 + sigma_{i-1}^2, so blur i only ever adds the sigma blur
@@ -964,10 +985,11 @@ private final class MetalGPUBackend: @unchecked Sendable {
                     textures[idx] = dst
                 } else {
                     guard let src = textures[idx - 1],
-                          let dst = makeFloatTexture(width: src.width, height: src.height)
+                          let dst = makeFloatTexture(width: src.width, height: src.height),
+                          let tmp = scratchTexture(octave: o, width: src.width, height: src.height),
+                          encodeGaussianBlur(cmdBuf, source: src, scratch: tmp,
+                                             destination: dst, sigma: sig[i])
                     else { return false }
-                    MPSImageGaussianBlur(device: device, sigma: Float(sig[i]))
-                        .encode(commandBuffer: cmdBuf, sourceTexture: src, destinationTexture: dst)
                     textures[idx] = dst
                 }
             }
@@ -995,30 +1017,120 @@ private final class MetalGPUBackend: @unchecked Sendable {
         return true
     }
 
+    /// cv::GaussianBlur(src, dst, Size(size, size), sigma, sigma, border) on a
+    /// CV_32F image, as two passes through `scratch`: rows, then columns. `size`
+    /// nil is `Size()`, OpenCV choosing it from sigma; the border is
+    /// BORDER_REFLECT_101 (the default) unless `replicateBorder`.
+    private func encodeGaussianBlur(_ cmdBuf: MTLCommandBuffer, source: MTLTexture,
+                                    scratch: MTLTexture, destination: MTLTexture,
+                                    sigma: Double, size: Int? = nil,
+                                    replicateBorder: Bool = false) -> Bool {
+        let weights = MetalGPUBackend.openCVGaussianKernel(sigma: sigma, size: size)
+        var radius = Int32(weights.count / 2)
+        var replicate: Int32 = replicateBorder ? 1 : 0
+        for (pipeline, input, output) in [(gaussianRowF32, source, scratch),
+                                          (gaussianColumnF32, scratch, destination)] {
+            guard let encoder = cmdBuf.makeComputeCommandEncoder() else { return false }
+            encoder.setComputePipelineState(pipeline)
+            encoder.setTexture(input, index: 0)
+            encoder.setTexture(output, index: 1)
+            weights.withUnsafeBytes { encoder.setBytes($0.baseAddress!, length: $0.count, index: 0) }
+            encoder.setBytes(&radius, length: MemoryLayout<Int32>.size, index: 1)
+            encoder.setBytes(&replicate, length: MemoryLayout<Int32>.size, index: 2)
+            dispatch(encoder: encoder, pipeline: pipeline,
+                     width: destination.width, height: destination.height)
+            encoder.endEncoding()
+        }
+        return true
+    }
+
+    /// The coefficients cv::GaussianBlur convolves a CV_32F image with for `sigma`
+    /// and an odd kernel `size`: cv::getGaussianKernel's `exp(-x² / 2σ²)` normalised
+    /// to sum to one, computed in double and handed over as float. `size` nil is
+    /// GaussianBlur's own rule for float depths, `cvRound(sigma * 4 * 2 + 1) | 1`.
+    static func openCVGaussianKernel(sigma: Double, size explicitSize: Int? = nil) -> [Float] {
+        let size = explicitSize ?? (Int((sigma * 4 * 2 + 1).rounded(.toNearestOrEven)) | 1)
+        let half = size / 2
+        let scale = -0.5 / (sigma * sigma)
+        let raw = (0..<size).map { i -> Double in
+            let x = Double(i - half)
+            return Foundation.exp(scale * x * x)
+        }
+        let sum = raw.reduce(0, +)
+        return raw.map { Float($0 / sum) }
+    }
+
+    /// computeResizeAreaTab (OpenCV's resize.cpp) for one axis of an INTER_AREA
+    /// downscale from `source` to `destination` samples, for `resize_area_f32`:
+    /// per destination index four (source index, weight) slots in the order OpenCV
+    /// sums them, unused ones -1. Built in double as OpenCV builds it — the
+    /// 1e-3 cut-offs on the partial cells are compared at that precision, which a
+    /// float on the GPU could not reproduce. Nil when a destination index would
+    /// need more than four taps, which a downscale by at most ~2 never does.
+    static func areaResizeTable(source: Int, destination: Int) -> (index: [Int32], weight: [Float])? {
+        guard source > 0, destination > 0, destination <= source else { return nil }
+        let scale = 1.0 / (Double(destination) / Double(source))
+        var index = [Int32](repeating: -1, count: destination * 4)
+        var weight = [Float](repeating: 0, count: destination * 4)
+        for d in 0..<destination {
+            let fs1 = Double(d) * scale
+            let fs2 = fs1 + scale
+            let cellWidth = min(scale, Double(source) - fs1)
+            var s1 = Int(fs1.rounded(.up))
+            let s2 = min(Int(fs2.rounded(.down)), source - 1)
+            s1 = min(s1, s2)
+
+            var taps: [(Int, Float)] = []
+            if Double(s1) - fs1 > 1e-3 {
+                taps.append((s1 - 1, Float((Double(s1) - fs1) / cellWidth)))
+            }
+            for s in s1..<s2 {
+                taps.append((s, Float(1.0 / cellWidth)))
+            }
+            if fs2 - Double(s2) > 1e-3 {
+                taps.append((s2, Float(min(min(fs2 - Double(s2), 1.0), cellWidth) / cellWidth)))
+            }
+            guard taps.count <= 4 else { return nil }
+            for (slot, tap) in taps.enumerated() {
+                index[d * 4 + slot] = Int32(tap.0)
+                weight[d * 4 + slot] = tap.1
+            }
+        }
+        return (index, weight)
+    }
+
     // MARK: - AKAZE nonlinear diffusion pyramid
 
     /// Builds the nonlinear diffusion scale-space pyramid
     /// `akazeDetectAndComputeGPU` (AKAZEDetector.cpp) needs — see
-    /// `GPUAkazePyramidFunc` in GPUOps_C.h for the exact contract. Every
-    /// level's Gaussian blur uses `MPSImageGaussianBlur` (as `buildSiftPyramid`
-    /// does), the 2x octave halving is `cv::INTER_AREA`'s exact box-filter
-    /// average (a custom kernel — MPS has no box-average filter), the Scharr
-    /// derivatives and Perona-Malik G2 diffusivity are small custom kernels,
-    /// and the FED explicit-diffusion steps are a direct port of
-    /// `nldStepScalar` (AKAZEDetector.cpp) onto textures, including its literal
-    /// four-corner special case.
+    /// `GPUAkazePyramidFunc` in GPUOps_C.h for the exact contract. Each step
+    /// reproduces `buildPyramidReference` (AKAZEDetector.cpp): its two blurs are
+    /// `encodeGaussianBlur` with the reference's own kernel sizes (9 taps for
+    /// `soffset`, 5 for sigma 1) and BORDER_REPLICATE, each new octave is
+    /// cv::resize's INTER_AREA through its own weight tables (`resize_area_f32`),
+    /// the Scharr derivatives read reflect-101 as cv::Scharr's BORDER_DEFAULT
+    /// does, the Perona-Malik G2 diffusivity is a small custom kernel, and the
+    /// FED explicit-diffusion steps are a direct port of `nldStepScalar` onto
+    /// textures, including its literal four-corner special case.
+    ///
+    /// It used to approximate the first three — `MPSImageGaussianBlur` for both
+    /// blurs (a wider, zero-padded, untruncated Gaussian; see `buildSiftPyramid`),
+    /// a plain 2x2 average for the octave step, and a clamped Scharr — and kept
+    /// 79-88% of cv::AKAZE's 2000 keypoints on real ground (two moving sequences,
+    /// four frames), where it now keeps all 2000 at the same positions to 5e-4px
+    /// with 1996-2000 identical descriptors. The 2x2 average was the subtle one: a
+    /// level is (int)(size / 2^octave) of the original, so an odd dimension makes
+    /// the step 2.0006 rather than 2 and the samples drift a whole source pixel
+    /// towards the bottom of the frame, which is where the ground is. Measured
+    /// against phase correlation, the old keypoints fitted ground warps no worse
+    /// than these (worst third 2.63 vs 2.58px over 16 pairs): the similarity fit's
+    /// hundreds of inliers absorbed the difference. What this buys is a GPU path
+    /// that finds what the CPU path finds, as Linux, Windows and GPU-less Macs do.
     ///
     /// Like `buildSiftPyramid`, every texture is `.storageModeManaged` with an
     /// explicit blit-encoder `synchronize` before the final readback — see that
     /// function's doc comment for the measured reason (a `.shared` texture a
     /// compute kernel writes reads back as zero on this Vega).
-    ///
-    /// The Scharr kernel here uses clamp-to-edge rather than `cv::Scharr`'s
-    /// actual `BORDER_DEFAULT` (reflect-101): a one-pixel-wide simplification
-    /// that only affects the diffusivity input, itself already an approximate,
-    /// behaviorally-validated stand-in for OpenCV's own boundary handling —
-    /// not worth a second boundary-mode kernel variant for a single row/column
-    /// of pixels deep inside the border `Find_Scale_Space_Extrema` excludes.
     func buildAkazePyramid(img: MatWrapperRef, soffset: Float,
                           levels: UnsafePointer<GPUAkazeLevelInfo>, levelCount: Int,
                           stepCounts: UnsafePointer<Int32>, tsteps: UnsafePointer<Float>?,
@@ -1055,12 +1167,28 @@ private final class MetalGPUBackend: @unchecked Sendable {
         var ltTextures = [MTLTexture?](repeating: nil, count: levelCount)
         var lsmoothTextures = [MTLTexture?](repeating: nil, count: levelCount)
 
+        // The blurs' row-pass scratch, one per level size, shared by that size's
+        // blurs (hazard tracking orders the reuse).
+        var scratchBySize: [Int: MTLTexture] = [:]
+        func scratchTexture(width: Int, height: Int) -> MTLTexture? {
+            let key = width * 1_000_000 + height
+            if scratchBySize[key] == nil { scratchBySize[key] = makeFloatTexture(width: width, height: height) }
+            return scratchBySize[key]
+        }
+
         // Level 0: a single blur by `soffset`, used as both Lt and Lsmooth —
         // matching create_nonlinear_scale_space's own
-        // `evolution[0].Lsmooth.copyTo(evolution[0].Lt)`.
-        guard let level0 = makeFloatTexture(width: imgCols, height: imgRows) else { return false }
-        MPSImageGaussianBlur(device: device, sigma: soffset)
-            .encode(commandBuffer: cmdBuf, sourceTexture: inputTexture, destinationTexture: level0)
+        // `evolution[0].Lsmooth.copyTo(evolution[0].Lt)`. The kernel size is
+        // buildPyramidReference's, `cvCeil(2(1 + (soffset - 0.8) / 0.3)) | 1`,
+        // in float as it computes it — 9 for the default 1.6 — and the border
+        // BORDER_REPLICATE, as every AKAZE blur is.
+        let level0Size = Int((2 * (1 + (soffset - 0.8) / 0.3)).rounded(.up)) | 1
+        guard let level0 = makeFloatTexture(width: imgCols, height: imgRows),
+              let level0Scratch = scratchTexture(width: imgCols, height: imgRows),
+              encodeGaussianBlur(cmdBuf, source: inputTexture, scratch: level0Scratch,
+                                 destination: level0, sigma: Double(soffset),
+                                 size: level0Size, replicateBorder: true)
+        else { return false }
         ltTextures[0] = level0
         lsmoothTextures[0] = level0
 
@@ -1079,12 +1207,31 @@ private final class MetalGPUBackend: @unchecked Sendable {
             guard let prevLt = ltTextures[i - 1] else { return false }
             let levelLt: MTLTexture
             if info.newOctave != 0 {
-                guard let halved = makeFloatTexture(width: width, height: height) else { return false }
+                guard let halved = makeFloatTexture(width: width, height: height),
+                      let xTable = MetalGPUBackend.areaResizeTable(source: prevLt.width,
+                                                                   destination: width),
+                      let yTable = MetalGPUBackend.areaResizeTable(source: prevLt.height,
+                                                                   destination: height)
+                else { return false }
+                var buffers: [MTLBuffer] = []
+                for table in [xTable, yTable] {
+                    guard let index = table.index.withUnsafeBytes({
+                              device.makeBuffer(bytes: $0.baseAddress!, length: $0.count,
+                                                options: .storageModeShared) }),
+                          let weight = table.weight.withUnsafeBytes({
+                              device.makeBuffer(bytes: $0.baseAddress!, length: $0.count,
+                                                options: .storageModeShared) })
+                    else { return false }
+                    buffers += [index, weight]
+                }
                 guard let encoder = cmdBuf.makeComputeCommandEncoder() else { return false }
-                encoder.setComputePipelineState(downsampleArea2xF32)
+                encoder.setComputePipelineState(resizeAreaF32)
                 encoder.setTexture(prevLt, index: 0)
                 encoder.setTexture(halved, index: 1)
-                dispatch(encoder: encoder, pipeline: downsampleArea2xF32, width: width, height: height)
+                for (slot, buffer) in buffers.enumerated() {
+                    encoder.setBuffer(buffer, offset: 0, index: slot)
+                }
+                dispatch(encoder: encoder, pipeline: resizeAreaF32, width: width, height: height)
                 encoder.endEncoding()
                 levelLt = halved
                 kcontrast *= 0.75
@@ -1100,12 +1247,16 @@ private final class MetalGPUBackend: @unchecked Sendable {
                 levelLt = copy
             }
 
-            // Lsmooth: the fixed 5x5-equivalent, sigma=1 blur of the
-            // pre-diffusion Lt, used for this level's derivatives now and by
-            // Compute_Determinant_Hessian_Response later.
-            guard let smooth = makeFloatTexture(width: width, height: height) else { return false }
-            MPSImageGaussianBlur(device: device, sigma: 1.0)
-                .encode(commandBuffer: cmdBuf, sourceTexture: levelLt, destinationTexture: smooth)
+            // Lsmooth: the fixed 5x5, sigma=1 blur of the pre-diffusion Lt, used
+            // for this level's derivatives now and by
+            // Compute_Determinant_Hessian_Response later. Five taps, not a full
+            // Gaussian: truncated at 2 sigma it is narrower than its sigma says.
+            guard let smooth = makeFloatTexture(width: width, height: height),
+                  let smoothScratch = scratchTexture(width: width, height: height),
+                  encodeGaussianBlur(cmdBuf, source: levelLt, scratch: smoothScratch,
+                                     destination: smooth, sigma: 1.0, size: 5,
+                                     replicateBorder: true)
+            else { return false }
 
             guard let lx = makeFloatTexture(width: width, height: height),
                   let ly = makeFloatTexture(width: width, height: height),
@@ -1648,29 +1799,123 @@ private final class MetalGPUBackend: @unchecked Sendable {
         dst.write(float4(value, 0.0, 0.0, 0.0), gid);
     }
 
-    // Exact 2x box-average downsample, matching cv::resize(..., INTER_AREA)
-    // for an exact integer scale factor -- AKAZEDetector.cpp's own octave
-    // halving (create_nonlinear_scale_space's `if (e.octave > ...)` branch).
-    kernel void downsample_area_2x_f32(texture2d<float, access::read> src [[texture(0)]],
+    // cv::resize(src, dst, 2x, INTER_LINEAR) for float: each destination pixel
+    // maps to (d + 0.5) / 2 - 0.5 in the source, and a sample that falls off
+    // either end takes the edge pixel with no blend -- resize's own coefficient
+    // rule, not a texture sampler's. Horizontal interpolation first, then
+    // vertical, in the order HResizeLinear/VResizeLinear apply them.
+    inline void linear_2x_tap(int d, int len, thread int &s0, thread int &s1, thread float &f) {
+        float fx = (float(d) + 0.5f) * 0.5f - 0.5f;
+        int s = int(floor(fx));
+        f = fx - float(s);
+        if (s < 0) { s = 0; f = 0.0f; }
+        if (s >= len - 1) { s = len - 1; f = 0.0f; }
+        s0 = s;
+        s1 = min(s + 1, len - 1);
+    }
+
+    kernel void upsample_linear_2x_f32(texture2d<float, access::read> src [[texture(0)]],
                                        texture2d<float, access::write> dst [[texture(1)]],
                                        uint2 gid [[thread_position_in_grid]])
     {
         if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
-        uint2 s = gid * 2;
-        float v00 = src.read(uint2(s.x,     s.y)).r;
-        float v10 = src.read(uint2(s.x + 1, s.y)).r;
-        float v01 = src.read(uint2(s.x,     s.y + 1)).r;
-        float v11 = src.read(uint2(s.x + 1, s.y + 1)).r;
-        dst.write(float4(0.25f * (v00 + v10 + v01 + v11), 0.0, 0.0, 0.0), gid);
+        int x0, x1, y0, y1;
+        float fx, fy;
+        linear_2x_tap(int(gid.x), int(src.get_width()), x0, x1, fx);
+        linear_2x_tap(int(gid.y), int(src.get_height()), y0, y1, fy);
+        float r0 = src.read(uint2(x0, y0)).r * (1.0f - fx) + src.read(uint2(x1, y0)).r * fx;
+        float r1 = src.read(uint2(x0, y1)).r * (1.0f - fx) + src.read(uint2(x1, y1)).r * fx;
+        dst.write(float4(r0 * (1.0f - fy) + r1 * fy, 0.0, 0.0, 0.0), gid);
     }
 
-    // A clamp-to-edge helper for the 3x3 kernels below -- see buildAkazePyramid's
-    // doc comment on why clamp stands in for cv::Scharr's actual BORDER_DEFAULT
-    // (reflect-101) here.
-    inline float read_clamped(texture2d<float, access::read> tex, int x, int y) {
-        int w = int(tex.get_width()), h = int(tex.get_height());
-        x = clamp(x, 0, w - 1);
-        y = clamp(y, 0, h - 1);
+    // cv::BORDER_REFLECT_101 (BORDER_DEFAULT), borderInterpolate's own loop: the
+    // repeat matters at the pyramid's last octaves, which are narrower than the
+    // kernel is wide.
+    inline int reflect_101(int p, int len) {
+        if (len == 1) return 0;
+        while (p < 0 || p >= len) p = p < 0 ? -p : 2 * len - p - 2;
+        return p;
+    }
+
+    // cv::BORDER_REPLICATE when `replicate` is set (AKAZE's blurs), otherwise
+    // BORDER_REFLECT_101 (cv::GaussianBlur's default, SIFT's).
+    inline int blur_border(int p, int len, int replicate) {
+        return replicate != 0 ? clamp(p, 0, len - 1) : reflect_101(p, len);
+    }
+
+    // One pass of cv::GaussianBlur's separable filter: `weights` holds the 2r+1
+    // coefficients cv::getGaussianKernel gives (see `openCVGaussianKernel`), and
+    // the row pass runs first, as sepFilter2D does.
+    kernel void gaussian_row_f32(texture2d<float, access::read> src [[texture(0)]],
+                                 texture2d<float, access::write> dst [[texture(1)]],
+                                 constant float *weights [[buffer(0)]],
+                                 constant int &radius [[buffer(1)]],
+                                 constant int &replicate [[buffer(2)]],
+                                 uint2 gid [[thread_position_in_grid]])
+    {
+        int w = int(src.get_width()), h = int(src.get_height());
+        if (int(gid.x) >= w || int(gid.y) >= h) return;
+        float sum = 0.0f;
+        for (int k = -radius; k <= radius; k++) {
+            int x = blur_border(int(gid.x) + k, w, replicate);
+            sum += weights[k + radius] * src.read(uint2(x, gid.y)).r;
+        }
+        dst.write(float4(sum, 0.0, 0.0, 0.0), gid);
+    }
+
+    kernel void gaussian_column_f32(texture2d<float, access::read> src [[texture(0)]],
+                                    texture2d<float, access::write> dst [[texture(1)]],
+                                    constant float *weights [[buffer(0)]],
+                                    constant int &radius [[buffer(1)]],
+                                    constant int &replicate [[buffer(2)]],
+                                    uint2 gid [[thread_position_in_grid]])
+    {
+        int w = int(src.get_width()), h = int(src.get_height());
+        if (int(gid.x) >= w || int(gid.y) >= h) return;
+        float sum = 0.0f;
+        for (int k = -radius; k <= radius; k++) {
+            int y = blur_border(int(gid.y) + k, h, replicate);
+            sum += weights[k + radius] * src.read(uint2(gid.x, y)).r;
+        }
+        dst.write(float4(sum, 0.0, 0.0, 0.0), gid);
+    }
+
+    // cv::resize(..., INTER_AREA) for a downscale -- AKAZEDetector.cpp's own octave
+    // halving (create_nonlinear_scale_space's `if (e.octave > ...)` branch) --
+    // through computeResizeAreaTab's own tables, built on the CPU in double (see
+    // `areaResizeTable`). A level is (int)(size / 2^octave) of the *original*, so
+    // an odd dimension makes the scale 2.0006 rather than 2 and the taps drift a
+    // whole source pixel across the frame; a plain 2x2 average cannot follow it.
+    // Each destination pixel sums up to four source columns in each of up to four
+    // source rows, columns first and then rows, as ResizeArea_Invoker does.
+    kernel void resize_area_f32(texture2d<float, access::read> src [[texture(0)]],
+                                texture2d<float, access::write> dst [[texture(1)]],
+                                device const int *xIndex [[buffer(0)]],
+                                device const float *xWeight [[buffer(1)]],
+                                device const int *yIndex [[buffer(2)]],
+                                device const float *yWeight [[buffer(3)]],
+                                uint2 gid [[thread_position_in_grid]])
+    {
+        if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
+        float sum = 0.0f;
+        for (uint j = 0; j < 4; j++) {
+            int sy = yIndex[gid.y * 4 + j];
+            if (sy < 0) break;
+            float row = 0.0f;
+            for (uint i = 0; i < 4; i++) {
+                int sx = xIndex[gid.x * 4 + i];
+                if (sx < 0) break;
+                row += src.read(uint2(sx, sy)).r * xWeight[gid.x * 4 + i];
+            }
+            sum += yWeight[gid.y * 4 + j] * row;
+        }
+        dst.write(float4(sum, 0.0, 0.0, 0.0), gid);
+    }
+
+    // cv::Scharr's BORDER_DEFAULT (reflect-101) read for the 3x3 kernels below.
+    inline float read_reflect_101(texture2d<float, access::read> tex, int x, int y) {
+        x = reflect_101(x, int(tex.get_width()));
+        y = reflect_101(y, int(tex.get_height()));
         return tex.read(uint2(uint(x), uint(y))).r;
     }
 
@@ -1682,9 +1927,9 @@ private final class MetalGPUBackend: @unchecked Sendable {
     {
         if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
         int x = int(gid.x), y = int(gid.y);
-        float v = -3.0f * read_clamped(src, x - 1, y - 1) + 3.0f * read_clamped(src, x + 1, y - 1)
-                - 10.0f * read_clamped(src, x - 1, y    ) + 10.0f * read_clamped(src, x + 1, y    )
-                 - 3.0f * read_clamped(src, x - 1, y + 1) + 3.0f * read_clamped(src, x + 1, y + 1);
+        float v = -3.0f * read_reflect_101(src, x - 1, y - 1) + 3.0f * read_reflect_101(src, x + 1, y - 1)
+                - 10.0f * read_reflect_101(src, x - 1, y    ) + 10.0f * read_reflect_101(src, x + 1, y    )
+                 - 3.0f * read_reflect_101(src, x - 1, y + 1) + 3.0f * read_reflect_101(src, x + 1, y + 1);
         dst.write(float4(v, 0.0, 0.0, 0.0), gid);
     }
 
@@ -1695,10 +1940,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
     {
         if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
         int x = int(gid.x), y = int(gid.y);
-        float v = -3.0f * read_clamped(src, x - 1, y - 1) - 10.0f * read_clamped(src, x, y - 1)
-                 - 3.0f * read_clamped(src, x + 1, y - 1)
-                 + 3.0f * read_clamped(src, x - 1, y + 1) + 10.0f * read_clamped(src, x, y + 1)
-                 + 3.0f * read_clamped(src, x + 1, y + 1);
+        float v = -3.0f * read_reflect_101(src, x - 1, y - 1) - 10.0f * read_reflect_101(src, x, y - 1)
+                 - 3.0f * read_reflect_101(src, x + 1, y - 1)
+                 + 3.0f * read_reflect_101(src, x - 1, y + 1) + 10.0f * read_reflect_101(src, x, y + 1)
+                 + 3.0f * read_reflect_101(src, x + 1, y + 1);
         dst.write(float4(v, 0.0, 0.0, 0.0), gid);
     }
 
