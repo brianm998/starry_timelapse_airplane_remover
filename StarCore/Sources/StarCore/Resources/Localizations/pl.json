@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Obliczanie horyzontu…",
   "ui.connection_closed": "Połączenie zamknięte",
   "ui.container": "Kontener",
+  "ui.resolution": "Rozdzielczość",
+  "ui.resolution_original": "Oryginalna",
   "ui.continue": "Kontynuuj",
   "ui.copy_to_clipboard": "Kopiuj do schowka",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Nie można otworzyć menedżera plików. Wideo znajduje się w {0}",

@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Đang tính đường chân trời…",
   "ui.connection_closed": "Kết nối đã đóng",
   "ui.container": "Vùng chứa",
+  "ui.resolution": "Độ phân giải",
+  "ui.resolution_original": "Gốc",
   "ui.continue": "Tiếp tục",
   "ui.copy_to_clipboard": "Chép vào bảng nhớ tạm",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Không mở được trình quản lý tệp. Video nằm ở {0}",

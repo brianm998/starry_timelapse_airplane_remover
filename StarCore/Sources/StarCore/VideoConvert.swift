@@ -16,15 +16,19 @@ public struct VideoInfo: Sendable {
     public let pixelFormat: FFmpegPixelFormat
     public let muxer: FFmpegMuxer
     public let hasAudio: Bool
+    /// What a render scales to; the source video's own info never sets it.
+    public let resolution: OutputResolution
 
     public init(frameRate: FrameRate, codec: FFmpegCodec, encoder: FFmpegEncoder?,
-                pixelFormat: FFmpegPixelFormat, muxer: FFmpegMuxer, hasAudio: Bool) {
+                pixelFormat: FFmpegPixelFormat, muxer: FFmpegMuxer, hasAudio: Bool,
+                resolution: OutputResolution = .original) {
         self.frameRate = frameRate
         self.codec = codec
         self.encoder = encoder
         self.pixelFormat = pixelFormat
         self.muxer = muxer
         self.hasAudio = hasAudio
+        self.resolution = resolution
     }
 }
 

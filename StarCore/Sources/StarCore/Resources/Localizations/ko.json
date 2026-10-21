@@ -321,6 +321,8 @@
   "ui.computing_horizon": "지평선 계산 중…",
   "ui.connection_closed": "연결이 닫혔습니다",
   "ui.container": "컨테이너",
+  "ui.resolution": "해상도",
+  "ui.resolution_original": "원본",
   "ui.continue": "계속",
   "ui.copy_to_clipboard": "클립보드에 복사",
   "ui.could_not_open_the_file_manager_the_video_is_at": "파일 관리자를 열 수 없습니다. 동영상은 {0}에 있습니다",

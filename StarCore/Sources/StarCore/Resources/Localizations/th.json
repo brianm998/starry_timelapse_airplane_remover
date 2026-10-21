@@ -321,6 +321,8 @@
   "ui.computing_horizon": "กำลังคำนวณเส้นขอบฟ้า…",
   "ui.connection_closed": "การเชื่อมต่อถูกปิด",
   "ui.container": "คอนเทนเนอร์",
+  "ui.resolution": "ความละเอียด",
+  "ui.resolution_original": "ต้นฉบับ",
   "ui.continue": "ดำเนินการต่อ",
   "ui.copy_to_clipboard": "คัดลอกไปยังคลิปบอร์ด",
   "ui.could_not_open_the_file_manager_the_video_is_at": "เปิดตัวจัดการไฟล์ไม่ได้ วิดีโออยู่ที่ {0}",

@@ -210,6 +210,12 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
 
     HorizontalDivider(color = StarColors.cellDefault)
 
+    // Resolution: scaled to a height (the width follows the aspect ratio), or as the frames are.
+    val resolutionOptions = RenderVideo.RESOLUTIONS.map { it.toString() to RenderVideo.resolutionText(it) }
+    Picker(localized("ui.resolution"), resolutionOptions, choice.outputHeight.toString()) { choice = choice.copy(outputHeight = it.toInt()) }
+
+    HorizontalDivider(color = StarColors.cellDefault)
+
     Picker(localized("ui.container"), muxers.map { it to it }, choice.muxer) { choose(choice.copy(muxer = it)) }
     muxerCaps?.let { Description("${it.description} - (.${it.fileExtension})") }
 

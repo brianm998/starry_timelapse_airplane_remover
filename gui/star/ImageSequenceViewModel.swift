@@ -3387,6 +3387,7 @@ public final class ImageSequenceViewModel {
                      encoder: FFmpegEncoder,
                      pixelFormat: FFmpegPixelFormat,
                      muxer: FFmpegMuxer,
+                     resolution: OutputResolution = .original,
                      progress: @escaping ProgressCallback,
                      completion: @escaping @Sendable () -> Void,
                      errorCallback: @escaping @Sendable (Error) -> Void)
@@ -3422,6 +3423,7 @@ public final class ImageSequenceViewModel {
                     "\(outputPath)/\(basename)/*.\(realConfig.fileExtension)",        // input images
                 ]
                 arguments += audio.inputArguments
+                arguments += resolution.ffmpegArguments // scale, if asked to
                 arguments += [
                     "-c:v", encoder.rawValue,         // encoder
                     "-pix_fmt", pixelFormat.rawValue, // pixel format

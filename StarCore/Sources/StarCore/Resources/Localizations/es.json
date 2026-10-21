@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Calculando el horizonte…",
   "ui.connection_closed": "Conexión cerrada",
   "ui.container": "Contenedor",
+  "ui.resolution": "Resolución",
+  "ui.resolution_original": "Original",
   "ui.continue": "Continuar",
   "ui.copy_to_clipboard": "Copiar al portapapeles",
   "ui.could_not_open_the_file_manager_the_video_is_at": "No se pudo abrir el administrador de archivos. El vídeo está en {0}",
