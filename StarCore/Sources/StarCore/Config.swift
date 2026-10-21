@@ -1309,7 +1309,39 @@ public struct Config: Codable, Sendable {
     // threshold used for throwing out bad pixels before replacing with them
     // good vs
     public var pixelThreshold: Double = 1.2
-    
+
+    /// Keep fast-moving clouds intact in the star aligned merge. Off by default.
+    ///
+    /// The merge warps the neighbouring frames onto the base with their *star*
+    /// homographies and takes, per pixel and per channel, a sigma-clipped median of the
+    /// nine. A cloud drifts against the stars (20-80px a frame on the dusk sequence this
+    /// was measured on), so the window holds each cloud at nine places and every pixel
+    /// takes its cloud from a different moment: banded copies of the cloud's edges that
+    /// creep from frame to frame, and colour speckle where R, G and B come from
+    /// different frames. Automatic mode's sky is that merge, and selective mode's
+    /// subtraction reference is too, so this reaches both.
+    ///
+    /// On, a second stage follows the merge. It measures how the cloud moves relative to
+    /// the stars (tile cross-correlation of star-free low-pass luma), merges the
+    /// neighbours again aligned to the cloud, and blends that merge in wherever it
+    /// explains the frame better than the star merge, with the stars put back from the
+    /// star merge. Trails stay single-frame outliers in the cloud-aligned stack, so they
+    /// are still removed. Where there is no moving cloud the result is the star merge
+    /// byte for byte.
+    ///
+    /// Applies to the star aligned merge only, and only in the sky: the ground comes from
+    /// the earth merge and the stage is kept off it by the horizon mask.
+    ///
+    /// Cost: extra CPU and memory on frames that have cloud, see
+    /// `residentBuildExtraMultiplier`. Off by default because it is new and the user has
+    /// not yet watched it on their own footage.
+    ///
+    /// Changing it discards the alignment stage's cached results (`ArtifactInputs`
+    /// records it only while it is on), including that stage's homographies, which are
+    /// recomputed from the cached keypoints. Splitting a separate merge stage so the
+    /// homographies could be kept is not done.
+    public var cloudAwareMerge: Bool = false
+
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
         self.codec = videoInfo.codec
@@ -1443,6 +1475,7 @@ public struct Config: Codable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         
         self.pixelThreshold = try c.decodeIfPresent(Double.self, forKey: .pixelThreshold) ?? self.pixelThreshold
+        self.cloudAwareMerge = try c.decodeIfPresent(Bool.self, forKey: .cloudAwareMerge) ?? self.cloudAwareMerge
         self.tempOutputPath = try c.decodeIfPresent(String.self, forKey: .tempOutputPath) ?? self.tempOutputPath
         self.outputPath = try c.decodeIfPresent(String.self, forKey: .outputPath) ?? self.outputPath
         self.cleanMethod = try c.decodeIfPresent(CleanMethod.self, forKey: .cleanMethod) ?? self.cleanMethod

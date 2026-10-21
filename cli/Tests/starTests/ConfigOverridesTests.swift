@@ -295,6 +295,28 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertFalse(disabledAgain.useGPUForAKAZE, "and the --no- form is the way back")
     }
 
+    /// `--cloud-aware-merge` is off by default, so unlike `--use-gpu` the plain form is
+    /// the one that changes something and the `--no-` form is the way back.
+    func testCloudAwareMergeHasThreeStatesAndNeedsAllOfThem() throws {
+        var enabled = Config()
+        XCTAssertFalse(enabled.cloudAwareMerge, "off by default")
+        try StarCli.parse(["--cloud-aware-merge", "/some/seq"]).configOverrides.apply(to: &enabled)
+        XCTAssertTrue(enabled.cloudAwareMerge, "--cloud-aware-merge turns it on")
+
+        var unmentioned = Config()
+        unmentioned.cloudAwareMerge = true
+        try StarCli.parse(["/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &unmentioned)
+        XCTAssertTrue(unmentioned.cloudAwareMerge,
+                      "a resume that repeats no flags keeps what the config holds")
+
+        var disabledAgain = Config()
+        disabledAgain.cloudAwareMerge = true
+        try StarCli.parse(["--no-cloud-aware-merge", "/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &disabledAgain)
+        XCTAssertFalse(disabledAgain.cloudAwareMerge, "and the --no- form is the way back")
+    }
+
     /// `-s` only does anything because `Processor` hands the config field to every frame.
     /// Checking `run()`/`process()` for real needs an image sequence on disk and then
     /// processes it, so this is the syntactic property instead — the same approach the

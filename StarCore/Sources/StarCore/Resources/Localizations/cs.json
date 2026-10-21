@@ -15,6 +15,7 @@
   "cli.errors.resume_header": "star: dočasný adresář byl zachován — pokračujte příkazem:",
   "cli.frame_state_change": "snímek {0} přechází do stavu {1}",
   "cli.help.clean_method": "Režim čištění použitý pro tuto sekvenci obrázků.\nVýchozí je automatic pro novou sekvenci, a při navázání se použije hodnota uložená\nv konfiguraci.",
+  "cli.help.cloud_aware_merge": "Zachová rychle se pohybující mraky neporušené při slučování zarovnaném podle hvězd.\nMraky se vůči hvězdám posouvají, takže slučování sousedních snímků zarovnaných podle hvězd bere\nkaždý pixel mraku z jiného okamžiku a zanechává pruhované, opakované kopie\nokrajů mraků.  Když je to zapnuto, druhé slučování zarovnané podle pohybu mraků se přimíchá\nvšude, kde snímek vysvětluje lépe, s navrácenými hvězdami, takže mraky zachovají\nsvůj tvar, zatímco stopy letadel a družic se stále odstraňují.  Bezmračná obloha\nzůstává beze změny.\nStojí navíc CPU a paměť u snímků, které obsahují mraky.  Ve výchozím nastavení vypnuto.\nJeho změna zahodí uložené výsledky zarovnání, které se pak přepočítají.\n--no-cloud-aware-merge jej vypne.  Uloženo v konfiguraci jako každý jiný příznak\nzde, takže obnovení, které jej neopakuje, zachová stejnou volbu.",
   "cli.help.detection_type": "Typy detekce",
   "cli.help.file_log_level": "Pokud je zadáno, star bude zapisovat protokol do souboru na této úrovni.",
   "cli.help.final_output_dirname": "Cílové umístění výstupních souborů\nvýchozí <název-adresáře-sekvence>-star-verze, pokud není nastaveno",

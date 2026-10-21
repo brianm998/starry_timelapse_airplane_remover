@@ -321,6 +321,16 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         if !config.tripodHeadWasMoving {
             inputs.removeValue(forKey: "allowEarthAlignment")
         }
+        // The cloud-aware merge changes the star aligned image this stage writes, so it
+        // is an input to it, but it is recorded only while it is on.  A record that lacks
+        // a key counts as changed, so adding the key unconditionally would make every
+        // existing temp dir throw away its alignment, outliers and output on the first
+        // run after upgrading, with the flag off.  Recorded only when on, a flag-off
+        // record is the one it always was, turning it on invalidates, and turning it off
+        // again invalidates too, since the record differs from the one that had it.
+        if config.cloudAwareMerge {
+            inputs["cloudAwareMerge"] = str(config.cloudAwareMerge)
+        }
         return inputs
     }
 

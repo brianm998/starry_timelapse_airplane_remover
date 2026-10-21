@@ -69,6 +69,12 @@ struct ConfigOverrides {
     /// `--use-gpu-for-akaze` / `--no-use-gpu-for-akaze`. Same shape and same
     /// reason as `useGPUForSift` above, for `Config.useGPUForAKAZE`.
     var useGPUForAKAZE: Bool?
+    /// `--cloud-aware-merge` / `--no-cloud-aware-merge`, maps to
+    /// `Config.cloudAwareMerge`. Tri-state like `useGPUForMerge`, so a resume that
+    /// does not repeat the flag keeps what the saved config holds and `--no-` is the
+    /// way back. Off by default, and deliberately not in the gui, daemon or desktop
+    /// settings UIs yet: it gets reviewed on real sequences through the cli first.
+    var cloudAwareMerge: Bool?
     /// `--no-horizon`, inverted: the flag turns horizon detection off.
     var horizonDetectionEnabled: Bool?
     var tripodHeadWasMoving: Bool?
@@ -103,6 +109,7 @@ struct ConfigOverrides {
         if let useGPUForMerge { config.useGPUForMerge = useGPUForMerge }
         if let useGPUForSift { config.useGPUForSIFT = useGPUForSift }
         if let useGPUForAKAZE { config.useGPUForAKAZE = useGPUForAKAZE }
+        if let cloudAwareMerge { config.cloudAwareMerge = cloudAwareMerge }
         if let horizonDetectionEnabled {
             config.horizonDetectionEnabled = horizonDetectionEnabled
         }

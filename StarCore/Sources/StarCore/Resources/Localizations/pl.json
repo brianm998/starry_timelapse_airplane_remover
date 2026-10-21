@@ -15,6 +15,7 @@
   "cli.errors.resume_header": "star: katalog tymczasowy został zachowany — wznów poleceniem:",
   "cli.frame_state_change": "klatka {0} zmienia stan na {1}",
   "cli.help.clean_method": "Tryb czyszczenia używany dla tej sekwencji obrazów.\nDomyślnie automatic dla nowej sekwencji, a przy wznawianiu wartość zapisana\nw konfiguracji.",
+  "cli.help.cloud_aware_merge": "Zachowuje szybko poruszające się chmury nienaruszone w scalaniu wyrównanym do gwiazd.\nChmury przesuwają się względem gwiazd, więc scalanie sąsiednich klatek wyrównanych do gwiazd bierze\nkażdy piksel chmury z innej chwili i zostawia prążkowane, powtórzone kopie\nkrawędzi chmur.  Po włączeniu drugie scalanie, wyrównane do ruchu chmur, jest domieszane\nwszędzie tam, gdzie lepiej wyjaśnia klatkę, z przywróconymi gwiazdami, dzięki czemu chmury zachowują\nswój kształt, a smugi samolotów i satelitów nadal są usuwane.  Czyste niebo\npozostaje bez zmian.\nWymaga dodatkowego CPU i pamięci przy klatkach z chmurami.  Domyślnie wyłączone.\nZmiana odrzuca zapisane w pamięci podręcznej wyniki wyrównania, które są wtedy liczone ponownie.\n--no-cloud-aware-merge wyłącza tę opcję.  Zapisywane w konfiguracji jak każda inna flaga tutaj,\nwięc wznowienie, które jej nie powtarza, zachowuje ten sam wybór.",
   "cli.help.detection_type": "Rodzaje wykrywania",
   "cli.help.file_log_level": "Jeśli podano, star zapisze dziennik do pliku na tym poziomie.",
   "cli.help.final_output_dirname": "Docelowe miejsce plików wynikowych\ndomyślnie <nazwa-katalogu-sekwencji>-star-wersja, jeśli nie ustawiono",

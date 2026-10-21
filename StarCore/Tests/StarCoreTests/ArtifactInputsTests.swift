@@ -263,6 +263,8 @@ final class ArtifactInputsTests: XCTestCase {
             ("pixelThreshold",             { $0.pixelThreshold = 2.5 }),
             ("numberAlignedNeighborFrames", { $0.numberAlignedNeighborFrames = 12 }),
             ("horizonDetectionEnabled",    { $0.horizonDetectionEnabled = false }),
+            // It changes the star aligned image this stage writes.
+            ("cloudAwareMerge",            { $0.cloudAwareMerge = true }),
         ]
         for (name, mutate) in mutations {
             var after = base
@@ -275,6 +277,40 @@ final class ArtifactInputsTests: XCTestCase {
                           "and the output with it, since the finished frame is composited " +
                           "from the aligned neighbours")
         }
+    }
+
+    /// The cloud-aware merge is recorded only while it is on, so that a record written
+    /// before the setting existed — which is what every existing temp dir holds — is the
+    /// record a flag-off run still computes.  Recording it unconditionally would make an
+    /// absent key count as a change and discard every sequence's alignment, outliers and
+    /// output on the first run after upgrading.
+    func testCloudAwareMergeIsRecordedOnlyWhileItIsOn() {
+        let alignment = ArtifactStage.alignment.rawValue
+
+        let off = ArtifactInputs.current(from: config())
+        XCTAssertNil(off.stages[alignment]?["cloudAwareMerge"],
+                     "a flag-off record must not mention the setting")
+
+        var onConfig = config()
+        onConfig.cloudAwareMerge = true
+        let on = ArtifactInputs.current(from: onConfig)
+        XCTAssertEqual(on.stages[alignment]?["cloudAwareMerge"], "true")
+
+        // Everything else the record holds is what a flag-off run records: the setting
+        // is the only thing that distinguishes the two, and only in the alignment stage.
+        var stages = on.stages
+        stages[alignment]?.removeValue(forKey: "cloudAwareMerge")
+        XCTAssertEqual(ArtifactInputs(version: on.version, stages: stages), off)
+
+        // On to off invalidates as well, since the record that had the key differs.
+        let turnedOff = off.staleStages(comparedTo: on)
+        XCTAssertTrue(turnedOff.contains(.alignment), "got \(turnedOff)")
+        XCTAssertTrue(turnedOff.contains(.output), "got \(turnedOff)")
+
+        // And nothing upstream of alignment is touched either way.
+        let turnedOn = on.staleStages(comparedTo: off)
+        XCTAssertFalse(turnedOn.contains(.keypoints), "got \(turnedOn)")
+        XCTAssertFalse(turnedOn.contains(.horizon), "got \(turnedOn)")
     }
 
     /// A fixed camera has no ground to align — the earth branch median merges the static
