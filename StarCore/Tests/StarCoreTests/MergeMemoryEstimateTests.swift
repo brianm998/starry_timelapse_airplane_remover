@@ -32,6 +32,48 @@ final class MergeMemoryEstimateTests: XCTestCase {
         return c
     }
 
+    // MARK: - The cloud-aware merge
+
+    /// The stage holds a layer per neighbour and the merge of them on top of the base and
+    /// the star merge, one frame more than the star build, and only while that build is
+    /// resident: a streaming build spills its sources, and so does the stage.
+    func testCloudAwareMergeChargesOneFrameMoreWhileTheBuildIsResident() {
+        var c = config(megapixels: 12)
+        XCTAssertFalse(c.mergeStreams(sourceCount: 9), "the premise: the aligned build is resident at 12MP")
+
+        // A fixed camera median merges 16 static neighbours, whose 15 extra frames are the
+        // larger term when that merge runs, so the stage is already covered.
+        func estimates() -> (merge: Int, outlier: Int) {
+            (c.effectiveMergeMemoryMultiplier(alignedNeighbours: 8, staticNeighbours: 16),
+             c.effectiveOutlierMemoryMultiplier(alignedNeighbours: 8, staticNeighbours: 16))
+        }
+        c.tripodHeadWasMoving = false
+        let fixedOff = estimates()
+        c.cloudAwareMerge = true
+        XCTAssertEqual(estimates().merge, fixedOff.merge)
+        XCTAssertEqual(estimates().outlier, fixedOff.outlier)
+
+        // A moving camera has no static build, so the aligned one is the largest and the
+        // stage's extra frame shows.  Outlier ops build the star aligned image too, and
+        // pay the same.
+        c.tripodHeadWasMoving = true
+        c.cloudAwareMerge = false
+        let movingOff = estimates()
+        c.cloudAwareMerge = true
+        XCTAssertEqual(estimates().merge, movingOff.merge + 1)
+        XCTAssertEqual(estimates().outlier, movingOff.outlier + 1)
+    }
+
+    /// A streaming build spills the stage's layers as well, so there is nothing to add.
+    func testCloudAwareMergeAddsNothingWhenTheBuildStreams() {
+        var c = config(megapixels: 200)
+        c.tripodHeadWasMoving = true
+        XCTAssertTrue(c.mergeStreams(sourceCount: 9), "the premise: the aligned build streams at 200MP")
+        let off = c.effectiveMergeMemoryMultiplier(alignedNeighbours: 8, staticNeighbours: 16)
+        c.cloudAwareMerge = true
+        XCTAssertEqual(c.effectiveMergeMemoryMultiplier(alignedNeighbours: 8, staticNeighbours: 16), off)
+    }
+
     // MARK: - Which side of the threshold the default lands on
 
     func testDefaultKeepsBothMergesResidentAt42MP() {

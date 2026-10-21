@@ -62,6 +62,7 @@ final class ConfigOverridesTests: XCTestCase {
       "--no-use-gpu",
       "--use-gpu-for-sift",
       "--use-gpu-for-akaze",
+      "--cloud-aware-merge",
       "--no-horizon",
       "--moving-camera",
       "--keypoint-divisor", "1.5",
@@ -90,6 +91,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.useGPUForMerge, false, "--no-use-gpu turns it off")
         XCTAssertEqual(c.useGPUForSIFT, true, "--use-gpu-for-sift turns it on")
         XCTAssertEqual(c.useGPUForAKAZE, true, "--use-gpu-for-akaze turns it on")
+        XCTAssertEqual(c.cloudAwareMerge, true, "--cloud-aware-merge turns it on")
         XCTAssertEqual(c.horizonDetectionEnabled, false, "--no-horizon turns it off")
         XCTAssertEqual(c.tripodHeadWasMoving, true)
         XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.5)
@@ -293,6 +295,28 @@ final class ConfigOverridesTests: XCTestCase {
         try StarCli.parse(["--no-use-gpu-for-akaze", "/some/star_temp_seq/config.json"])
             .configOverrides.apply(to: &disabledAgain)
         XCTAssertFalse(disabledAgain.useGPUForAKAZE, "and the --no- form is the way back")
+    }
+
+    /// `--cloud-aware-merge` is off by default, so unlike `--use-gpu` the plain form is
+    /// the one that changes something and the `--no-` form is the way back.
+    func testCloudAwareMergeHasThreeStatesAndNeedsAllOfThem() throws {
+        var enabled = Config()
+        XCTAssertFalse(enabled.cloudAwareMerge, "off by default")
+        try StarCli.parse(["--cloud-aware-merge", "/some/seq"]).configOverrides.apply(to: &enabled)
+        XCTAssertTrue(enabled.cloudAwareMerge, "--cloud-aware-merge turns it on")
+
+        var unmentioned = Config()
+        unmentioned.cloudAwareMerge = true
+        try StarCli.parse(["/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &unmentioned)
+        XCTAssertTrue(unmentioned.cloudAwareMerge,
+                      "a resume that repeats no flags keeps what the config holds")
+
+        var disabledAgain = Config()
+        disabledAgain.cloudAwareMerge = true
+        try StarCli.parse(["--no-cloud-aware-merge", "/some/star_temp_seq/config.json"])
+            .configOverrides.apply(to: &disabledAgain)
+        XCTAssertFalse(disabledAgain.cloudAwareMerge, "and the --no- form is the way back")
     }
 
     /// `-s` only does anything because `Processor` hands the config field to every frame.

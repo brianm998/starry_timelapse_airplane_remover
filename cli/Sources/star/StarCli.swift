@@ -277,6 +277,11 @@ struct StarCli: AsyncParsableCommand {
           help: ArgumentHelp(localized("cli.help.use_gpu_for_akaze")))
     var useGPUForAKAZE: Bool?
 
+    @Flag(name: [.customLong("cloud-aware-merge")],
+          inversion: .prefixedNo,
+          help: ArgumentHelp(localized("cli.help.cloud_aware_merge")))
+    var cloudAwareMerge: Bool?
+
     @Argument(help: ArgumentHelp(localized("cli.help.image_sequence_dirname")))
     var imageSequenceDirname: String?
 
@@ -299,6 +304,8 @@ struct StarCli: AsyncParsableCommand {
           useGPUForMerge: useGPUForMerge,
           useGPUForSift: useGPUForSift,
           useGPUForAKAZE: useGPUForAKAZE,
+          // --cloud-aware-merge / --no-cloud-aware-merge: tri-state, same reasoning.
+          cloudAwareMerge: cloudAwareMerge,
           horizonDetectionEnabled: noHorizon ? false : nil,
           tripodHeadWasMoving: movingCamera ? true : nil,
           alignmentKeypointDetectionDivisor: keypointDivisor,

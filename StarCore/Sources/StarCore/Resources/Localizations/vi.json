@@ -15,6 +15,7 @@
   "cli.errors.resume_header": "star: thư mục tạm đã được giữ lại — tiếp tục bằng:",
   "cli.frame_state_change": "khung {0} chuyển sang trạng thái {1}",
   "cli.help.clean_method": "Chế độ làm sạch dùng cho chuỗi ảnh này.\nMặc định là automatic với chuỗi mới, còn khi tiếp tục từ cấu hình đã lưu thì\ndùng giá trị trong cấu hình đó.",
+  "cli.help.cloud_aware_merge": "Giữ nguyên vẹn mây chuyển động nhanh trong phép hợp nhất căn chỉnh theo sao.\nMây trôi so với các ngôi sao, nên phép hợp nhất các khung lân cận đã căn chỉnh theo sao lấy\ntừng điểm ảnh mây từ một thời điểm khác nhau và để lại các bản sao lặp lại, thành dải của\nmép mây.  Khi bật, một phép hợp nhất thứ hai căn chỉnh theo chuyển động của mây được trộn vào\nở bất cứ chỗ nào nó giải thích khung tốt hơn, với các ngôi sao được đặt lại, nhờ vậy mây giữ\nnguyên hình dạng trong khi vệt máy bay và vệ tinh vẫn bị loại bỏ.  Bầu trời quang\nkhông thay đổi.\nTốn thêm CPU và bộ nhớ trên các khung có mây.  Tắt theo mặc định.\nThay đổi nó sẽ loại bỏ các kết quả căn chỉnh đã lưu đệm, sau đó chúng được tính lại.\n--no-cloud-aware-merge sẽ tắt nó.  Được lưu vào cấu hình như mọi cờ khác ở đây,\nnên việc tiếp tục mà không lặp lại cờ này sẽ giữ nguyên lựa chọn tương tự.",
   "cli.help.detection_type": "Kiểu phát hiện",
   "cli.help.file_log_level": "Nếu có, star sẽ ghi nhật ký ra tệp ở mức này.",
   "cli.help.final_output_dirname": "Đích cuối cùng của các tệp kết quả\nmặc định là <tên-thư-mục-chuỗi-ảnh>-star-phiên-bản nếu không đặt",

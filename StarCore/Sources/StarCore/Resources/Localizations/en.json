@@ -15,6 +15,7 @@
   "cli.errors.resume_header": "star: the temp directory has been kept — resume with:",
   "cli.frame_state_change": "frame {0} state change to {1}",
   "cli.help.clean_method": "The clean mode to use for this image sequence.\nDefaults to automatic for a new sequence, and to whatever a saved config\nalready holds when resuming one.",
+  "cli.help.cloud_aware_merge": "Keep fast moving clouds intact in the star aligned merge.\nClouds drift against the stars, so a merge of star aligned neighbours takes\neach cloud pixel from a different moment and leaves banded, repeated copies of\ncloud edges.  With this on, a second merge aligned to the cloud motion is blended\nin wherever it explains the frame better, with the stars put back, so clouds keep\ntheir shape while airplane and satellite trails are still removed.  Clear sky is\nunchanged.\nCosts extra CPU and memory on frames that have cloud.  Off by default.\nChanging it discards the cached alignment results, which are then recomputed.\n--no-cloud-aware-merge turns it off.  Saved into the config like every other\nflag here, so a resume that does not repeat it keeps the same choice.",
   "cli.help.detection_type": "Detection Types",
   "cli.help.file_log_level": "If present, star will output a file log at the given level.",
   "cli.help.final_output_dirname": "Final destination for output files\ndefaults to <image-sequence-dirname>-star-version if not set",

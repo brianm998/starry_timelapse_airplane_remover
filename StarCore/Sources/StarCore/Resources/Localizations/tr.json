@@ -15,6 +15,7 @@
   "cli.errors.resume_header": "star: geçici dizin korundu — şu komutla devam edin:",
   "cli.frame_state_change": "kare {0} durumu {1} oldu",
   "cli.help.clean_method": "Bu görüntü dizisi için kullanılacak temizleme kipi.\nYeni bir dizide varsayılan automatic'tir; kaydedilmiş bir yapılandırmadan devam\nederken o yapılandırmadaki değer kullanılır.",
+  "cli.help.cloud_aware_merge": "Hızlı hareket eden bulutları yıldızlara hizalı birleştirmede bozulmadan korur.\nBulutlar yıldızlara göre kayar; bu yüzden yıldızlara hizalı komşu karelerin birleştirmesi\nher bulut pikselini farklı bir andan alır ve bulut kenarlarının bantlı,\ntekrarlanan kopyalarını bırakır.  Açıkken, bulut hareketine hizalı ikinci bir birleştirme\nkareyi daha iyi açıkladığı her yerde, yıldızlar yerine konarak karıştırılır; böylece bulutlar\nşeklini korurken uçak ve uydu izleri yine de kaldırılır.  Açık gökyüzü\ndeğişmez.\nBulut içeren karelerde ek CPU ve bellek harcar.  Varsayılan olarak kapalıdır.\nDeğiştirmek önbelleğe alınmış hizalama sonuçlarını atar; bunlar sonra yeniden hesaplanır.\n--no-cloud-aware-merge bunu kapatır.  Buradaki diğer her bayrak gibi yapılandırmaya kaydedilir,\nbu nedenle bunu tekrarlamayan bir devam aynı seçimi korur.",
   "cli.help.detection_type": "Algılama türleri",
   "cli.help.file_log_level": "Verilirse star bu düzeyde bir dosya günlüğü yazar.",
   "cli.help.final_output_dirname": "Çıktı dosyalarının nihai hedefi\nayarlanmazsa varsayılan <görüntü-dizisi-dizin-adı>-star-sürüm olur",
