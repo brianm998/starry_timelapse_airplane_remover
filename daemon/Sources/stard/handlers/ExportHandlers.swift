@@ -209,7 +209,12 @@ enum ExportHandlers {
         if let fromRequest = Mapping.videoInfo(from: request, hasAudio: hasAudio) {
             return fromRequest
         }
-        return opened ?? Mapping.videoInfoFromConfig(config)
+        // the resolution is a choice of this render, so it is kept when the rest is not the request's
+        var base = opened ?? Mapping.videoInfoFromConfig(config)
+        base = VideoInfo(frameRate: base.frameRate, codec: base.codec, encoder: base.encoder,
+                         pixelFormat: base.pixelFormat, muxer: base.muxer, hasAudio: base.hasAudio,
+                         resolution: OutputResolution(height: Int(request.outputHeight)))
+        return base
     }
 
     // Where an export writes its video: the request's path, or if it left that empty (the

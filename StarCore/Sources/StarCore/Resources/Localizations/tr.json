@@ -321,6 +321,8 @@
   "ui.computing_horizon": "Ufuk hesaplanıyor…",
   "ui.connection_closed": "Bağlantı kapandı",
   "ui.container": "Kapsayıcı",
+  "ui.resolution": "Çözünürlük",
+  "ui.resolution_original": "Orijinal",
   "ui.continue": "Devam",
   "ui.copy_to_clipboard": "Panoya kopyala",
   "ui.could_not_open_the_file_manager_the_video_is_at": "Dosya yöneticisi açılamadı. Video şurada: {0}",

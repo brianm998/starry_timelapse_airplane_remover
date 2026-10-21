@@ -321,6 +321,8 @@
   "ui.computing_horizon": "جارٍ حساب الأفق…",
   "ui.connection_closed": "تم إغلاق الاتصال",
   "ui.container": "الحاوية",
+  "ui.resolution": "الدقة",
+  "ui.resolution_original": "الأصلية",
   "ui.continue": "متابعة",
   "ui.copy_to_clipboard": "نسخ إلى الحافظة",
   "ui.could_not_open_the_file_manager_the_video_is_at": "تعذّر فتح مدير الملفات. الفيديو موجود في {0}",

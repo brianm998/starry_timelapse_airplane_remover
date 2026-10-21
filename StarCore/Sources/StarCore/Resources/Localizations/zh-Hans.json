@@ -321,6 +321,8 @@
   "ui.computing_horizon": "正在计算地平线…",
   "ui.connection_closed": "连接已关闭",
   "ui.container": "容器",
+  "ui.resolution": "分辨率",
+  "ui.resolution_original": "原始",
   "ui.continue": "继续",
   "ui.copy_to_clipboard": "拷贝到剪贴板",
   "ui.could_not_open_the_file_manager_the_video_is_at": "无法打开文件管理器。视频位于 {0}",
