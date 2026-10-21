@@ -31,6 +31,8 @@ import StarCpp
 ///                              `mergedHorizon/`, which is what the merge is given for a
 ///                              static sequence).  Without it the whole frame is sky.
 ///   STAR_CLOUD_REPLAY_OUT      where to write
+///   STAR_CLOUD_REPLAY_WRITE    "0" to skip writing the TIFFs and keep only the stage's own
+///                              debug output (outcome and timing per frame)
 ///   STAR_CLOUD_REPLAY_MODES    optional, default "off,on".  Also "on-full" (the stage
 ///                              without its region restriction), "on-stream" (with the
 ///                              streaming merge paths forced), and "off-gpu" / "on-gpu"
@@ -165,7 +167,9 @@ final class CloudAwareMergeReplayTests: XCTestCase {
                 let cpuUsed = cpuSeconds() - cpu
 
                 let path = "\(out)/\(String(name(fileIndex).dropLast(4)))-\(mode).tif"
-                XCTAssertTrue(result.merged.write(to: path), "could not write \(path)")
+                if env("STAR_CLOUD_REPLAY_WRITE") != "0" {
+                    XCTAssertTrue(result.merged.write(to: path), "could not write \(path)")
+                }
                 print("replay frame \(fileIndex) \(mode): \(result.warpCount) neighbours, " +
                       String(format: "%.2fs wall, %.2fs cpu", seconds, cpuUsed) + " -> \(path)")
             }

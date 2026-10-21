@@ -2038,8 +2038,19 @@ static MatWrapperRef tryGPUAlignedMerge(const cv::Mat &base, int baseFrameIndex,
 // finished merge, not a replacement: wherever it finds nothing to do the output is the
 // star merge, byte for byte, which is what makes it safe to leave on for clear skies.
 //
-// Four decisions here are not obvious from the algorithm, and each was made to buy one
+// Six decisions here are not obvious from the algorithm, and each was made to buy one
 // property:
+//
+//  * Most frames have no cloud moving against the stars, and for those the stage must
+//    cost next to nothing and change nothing.  It looks for moving cloud before anything
+//    else, from a one-neighbour search on every other tile, and stops there when it finds
+//    none.  The gate the algorithm calls for cannot do this job: at full frame scale the
+//    star merge's error exceeds its noise floor over 2-16% of a clear frame's sky, so a
+//    region derived from it covers most of the frame.  See kMovingSpeed.
+//
+//  * The sky the stage works in is the part the star merge can be trusted in, not the
+//    sky mask itself: the neighbours' lifted ground contaminates the merge above the
+//    horizon.  See trustedSky.
 //
 //  * Every blur in the full resolution part is cloudBoxBlur, an integer box filter, and
 //    not cv::blur.  A float box filter keeps a running sum, so a pixel's value depends
@@ -2055,7 +2066,7 @@ static MatWrapperRef tryGPUAlignedMerge(const cv::Mat &base, int baseFrameIndex,
 //    explains the base (eM below).  Blurring just that factor bounds the weight from
 //    above everywhere, and the weight is snapped to 0 under 0.01, so any pixel whose
 //    bound is under 0.01 provably stays the star merge.  Those pixels are never
-//    computed.  On a clear frame that is all of them and the stage costs the gate only.
+//    computed, which keeps a frame with a small cloud from paying for the whole frame.
 //
 //  * Motion is measured on the whole frame, not on the region.  An unmeasured tile
 //    (all ground, say) takes its value from the nearest measured one, and "nearest"
@@ -2804,7 +2815,7 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
         const cv::Mat probeLow(h4, w4, CV_8U, cv::Scalar(255));
         std::vector<LowLayer> low(nbs.size());
         std::vector<std::string> notes(nbs.size());
-        forEachMergeSource((int)nbs.size(), loadConcurrency, [&](int i) {
+        auto makeLayer = [&](int i) {
             MatWrapperRef ref = image_cache_load(nbs[(size_t)i].filename);
             if (!ref) return;
             const cv::Mat &src = ref->mat;
@@ -2836,20 +2847,18 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             layer.bp = bandPass(warped);
             layer.offset = nbs[(size_t)i].offset;
             layer.ok = true;
-        });
-        for (const auto &n : notes) if (!n.empty()) Log_w("%s", n.c_str());
+        };
 
-        // Drop the neighbours that did not load, from both lists together.
-        {
-            std::vector<Neighbour> keepN; std::vector<LowLayer> keepL;
-            for (size_t i = 0; i < nbs.size(); ++i)
-                if (low[i].ok) { keepN.push_back(std::move(nbs[i])); keepL.push_back(std::move(low[i])); }
-            nbs = std::move(keepN); low = std::move(keepL);
+        // The pre-filter below needs one neighbour and nothing else, so that one is built
+        // first and the other seven only if the frame gets past it: on a clear frame, which
+        // is nearly all of them, that is the difference between decoding and downsampling
+        // two frames and nine.  It is the neighbour the velocity search would use first.
+        int probeIndex = -1;
+        for (int offset : {2, -2, 1, -1}) {
+            for (size_t i = 0; i < nbs.size(); ++i) if (nbs[i].offset == offset) { probeIndex = (int)i; break; }
+            if (probeIndex >= 0) break;
         }
-        if (nbs.empty()) return false;
-        clock.mark("lowres");
-
-        const cv::Mat probeFull(H, W, CV_8U, cv::Scalar(255));
+        if (probeIndex >= 0) makeLayer(probeIndex);
 
         // --- motion ---
         const TileGrid tg = makeTileGrid(h4, w4, H, W, sky);
@@ -2870,13 +2879,10 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
         // one.  It only ever stops a frame whose sparse tiles show no cloud motion after a
         // grid median, which is what a clear frame looks like; anything else goes on to
         // the full search, which makes the real decision.
-        {
-            const LowLayer *one = layerAt(2) ? layerAt(2) : layerAt(-2) ? layerAt(-2)
-                                : layerAt(1) ? layerAt(1) : layerAt(-1);
-            if (!one) {
-                Log_d("cloud-aware merge: frame %d has no neighbour at +-1 or +-2", baseFrameIndex);
-                return false;
-            }
+        // (Skipped when that neighbour could not be built: the full search then decides.)
+        const LowLayer *one = layerAt(2) ? layerAt(2) : layerAt(-2) ? layerAt(-2)
+                            : layerAt(1) ? layerAt(1) : layerAt(-1);
+        if (one) {
             const float displacement = std::abs(one->offset) * kMovingSpeed;   // low-res px
             Grid g = measureGrid(baseBp, *one, tg, nullptr, kVelocityRadius, 2);
             int moving = 0;
@@ -2904,6 +2910,27 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
                 return false;
             }
         }
+        // The remaining neighbours.
+        {
+            std::vector<int> remaining;
+            for (int i = 0; i < (int)nbs.size(); ++i) if (!low[(size_t)i].ok && i != probeIndex) remaining.push_back(i);
+            forEachMergeSource((int)remaining.size(), loadConcurrency,
+                               [&](int k) { makeLayer(remaining[(size_t)k]); });
+        }
+        for (const auto &n : notes) if (!n.empty()) Log_w("%s", n.c_str());
+
+        // Drop the neighbours that did not load, from both lists together.
+        {
+            std::vector<Neighbour> keepN; std::vector<LowLayer> keepL;
+            for (size_t i = 0; i < nbs.size(); ++i)
+                if (low[i].ok) { keepN.push_back(std::move(nbs[i])); keepL.push_back(std::move(low[i])); }
+            nbs = std::move(keepN); low = std::move(keepL);
+        }
+        if (nbs.empty()) return false;
+        clock.mark("lowres");
+
+        const cv::Mat probeFull(H, W, CV_8U, cv::Scalar(255));
+
         // How strongly the velocity searches found anything: the correlation of the best
         // shift in each measured tile, counted at a few levels.
         float peakMax = 0.f; int peakTiles = 0, peak30 = 0, peak40 = 0, peak50 = 0, peak60 = 0;

@@ -96,6 +96,21 @@ wrong. The sections below are left as written; read this first.
 - A prediction that puts the search window off the frame leaves the tile unmeasured and it is
   filled from the nearest measured tile (§2.3), not "fall back to the prediction" (§4).
 
+**Results (fx3-1, the final code; "CLI" = end to end through `star`, "replay" = the harness)**
+
+| # | Result |
+|---|---|
+| A1 | Flag off changes nothing: all 19 frames of `test_data/test_a7sii_10` are byte-identical (AE 0) to a CLI built from plain `develop`. StarCpp 209 tests, StarCore 1369 (0 failures), cli 66, daemon and gui build. The three failures that remain also fail on plain `develop`: `OpenCVQoSTests.testLowQoSUsesFewerWorkersThanNormalQoS` (the vendored OpenCV lacks the QoS patch), `ConfigOverridesTests.testEveryOverrideIsWiredToAFlag` (`--use`'s `resourceProfile` is not in its flag list) and `GherkinTests.testOpenAndProcessFeature` (temp dir cleanup). |
+| A2 | Frames 600, 700, 800, 1100 with the flag on are byte-identical to flag off over the **whole frame** (AE 0), because the stage stops at its pre-filter on all four. (Before the early-out existed, 600 and 800 had weight up to 0.24 in rows 1886-2188, where they have real cloud.) |
+| A3 | Frames 6-95 on the A3 crop, CLI output: CLOUDCORR **min 0.934, mean 0.965** (reference 0.949, today 0.599). Worst: #53 0.934, #72 0.935, #7 0.947. Replay gives the same numbers. |
+| A4 | Cloud share (weight > 0.5): #28 0.746 (reference 0.764), #30 0.851 (0.783), #45 0.441 (0.342, +0.099), **#60 0.619 (0.500, +0.119: outside ±0.10)**. Mine is a few points larger throughout. The extra area is where today's output already correlates 0.93-0.96 with the exposed frame and the stage keeps it at 0.965-0.974, so it is harmless, but it is not what the reference does. Reported, not tuned. |
+| A5 | #28 trail: **+0.26σ** (original +2.69σ, today +0.18σ, reference +0.24σ). |
+| A6 | Stars kept in cloud, CLI: #30 median 0.99, 96% kept at >= 80%; #60 median 0.96, 96% kept. Replay: 1.01 / 0.98 and 1.00 / 0.98 (the reference's numbers). |
+| A7 | Triptych of frames 6-95 rendered (`triptych.mp4`, 90 frames). Stills at frames 12, 30 and 60 show today's stepped, repeated cloud edges gone and the exposed frame's structure kept, stars intact inside the cloud, the thin streak at frame 60 removed. Flicker, measured as the frame-to-frame jump of the brightness offset from the original: std 0.98 against today's 1.33, max 3.6 against 6.2. Not watched as motion. |
+| A8 | Whole-run CPU, `star -c automatic`, default GPU, 18 concurrent frames, user+sys: frames 600-700 flag off 5008 / 6055 / 5999 CPU-s, flag on 6110 / 5983 on the final binary (+0.9%, -0.3%; a first on-run with an earlier binary read +11.6%, which is inside this machine's ±10% run-to-run noise). The stage itself measures 0.57 CPU-s per clear frame in the replay (stops at the pre-filter on all 101 frames of 600-700). Frames 1-100 (cloud): 4615 -> 6987 CPU-s (+51%, +24 CPU-s a frame; replay measures the stage at 25-35), wall 402 -> 468 s. Peak op memory, 12 frames of fx3-1 at concurrency 1 with `--log-op-memory`: unchanged to within 11MB (+892MB both). |
+| A9 | `StarCpp`, `StarCore`, `cli`, `daemon` build and test as above; gui `xcodebuild -scheme star` succeeds. |
+| §6.5 | Horizon, frames 6-20, final composite flag on against off: no pixel differs closer than 67px above the horizon, the weight is zero on every ground pixel, and an amplified difference image shows no seam or ghost ridge along the horizon. |
+
 **Tools**
 
 - `StarCpp/Tests/StarCppBridgeTests/CloudAwareMergeReplayTests.swift` is the replay harness
@@ -816,6 +831,16 @@ In StarCore:
   clouds there still smear.
 - **Untested:** aurora, moving-camera sequences, any sequence other than fx3-1, frames
   near the sequence ends, 42MP frames.
+- **Clouds within ~100px of the horizon** are left as the star merge makes them: the stage only
+  works where the merge can be trusted (see 0.1), and the cloud on frame 600's right-hand
+  horizon is one it does not touch.
+- **Small clouds** (fewer than 6 trusted 384px tiles of coherent motion) do not trigger the
+  stage at all; that is the price of the early-out, and what is skipped is a few tiles of banding.
+- **A featureless sky is not rejected as well as a real one.** In a synthetic frame with no
+  gradient the motion of a cloud spreads to the clear tiles around it, and noise alone gives the
+  weight small patches (0.05-0.15) there. Real clear sky never did that on fx3-1 (weight above 0 on
+  0.01-0.2% of the region on the frames that ran the stage), but it is the stage's failure mode.
+- **Cost on cloud frames is large**: +24 CPU-s a frame (+51% of the run) at 12MP, 18 concurrent frames.
 - **Colour speckle where α = 0.** The kernel's per-channel selection still produces it
   wherever the stack is incoherent but no cloud motion is found. Choosing one source per
   pixel by luma rank would fix it everywhere, but it changes clear-sky colour noise and is

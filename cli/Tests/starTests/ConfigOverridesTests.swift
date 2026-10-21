@@ -62,6 +62,7 @@ final class ConfigOverridesTests: XCTestCase {
       "--no-use-gpu",
       "--use-gpu-for-sift",
       "--use-gpu-for-akaze",
+      "--cloud-aware-merge",
       "--no-horizon",
       "--moving-camera",
       "--keypoint-divisor", "1.5",
@@ -90,6 +91,7 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.useGPUForMerge, false, "--no-use-gpu turns it off")
         XCTAssertEqual(c.useGPUForSIFT, true, "--use-gpu-for-sift turns it on")
         XCTAssertEqual(c.useGPUForAKAZE, true, "--use-gpu-for-akaze turns it on")
+        XCTAssertEqual(c.cloudAwareMerge, true, "--cloud-aware-merge turns it on")
         XCTAssertEqual(c.horizonDetectionEnabled, false, "--no-horizon turns it off")
         XCTAssertEqual(c.tripodHeadWasMoving, true)
         XCTAssertEqual(c.alignmentKeypointDetectionDivisor, 1.5)

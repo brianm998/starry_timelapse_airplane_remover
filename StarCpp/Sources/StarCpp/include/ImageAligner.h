@@ -211,7 +211,15 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 // skyMask (nullable, CV_8UC1, non-zero = sky) keeps the stage off the ground: the
 // star aligned neighbours' ground moves by the star motion, the motion search locks
 // onto it, and it would cost time for an effect the composite then discards.  Null
-// means the whole frame is sky.
+// means the whole frame is sky.  The stage works only where the star merge can be
+// trusted, which is less than the mask says: the mask intersected with itself warped
+// by each neighbour's homography (the neighbours' lifted ground contaminates the merge
+// above the horizon, and the composite replaces it), pulled in by the reach of the
+// error filters.
+//
+// The stage also stops, leaving the star merge as it was, when too few tiles of
+// trusted sky show cloud moving against the stars.  That is nearly every clear frame,
+// and costs a fraction of a CPU-second.
 //
 // cloudDebugDir (nullable) is where the stage writes cloud-alpha-<baseFrameIndex>.tif
 // (8-bit, the blend weight times 255) and cloud-velocity-<baseFrameIndex>.txt (the

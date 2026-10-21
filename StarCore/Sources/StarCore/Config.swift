@@ -1329,12 +1329,27 @@ public struct Config: Codable, Sendable {
     /// are still removed. Where there is no moving cloud the result is the star merge
     /// byte for byte.
     ///
-    /// Applies to the star aligned merge only, and only in the sky: the ground comes from
-    /// the earth merge and the stage is kept off it by the horizon mask.
+    /// Applies to the star aligned merge only, and only in the sky the merge can be trusted
+    /// in: the horizon mask intersected with itself warped by each neighbour's homography
+    /// (what `StarAlignedHorizonMask` computes for the composite), pulled in by 96px. The
+    /// ground comes from the earth merge, and a cloud within ~100px of the horizon is left
+    /// as the star merge makes it.
     ///
-    /// Cost: extra CPU and memory on frames that have cloud, see
-    /// `residentBuildExtraMultiplier`. Off by default because it is new and the user has
-    /// not yet watched it on their own footage.
+    /// Measured on the 12MP dusk sequence fx3-1 (fast cirrus, 20-90px a frame), frames
+    /// 6-95: the band-passed correlation of the merged cloud with the exposed frame's own
+    /// goes from 0.60 to 0.97 (worst frame 0.93), stars inside the cloud keep 100% of
+    /// their amplitude (median; 98% of them above 80%), and a faint satellite crossing from
+    /// clear sky into cloud is still removed (+0.26 pixel sigma on the line, against +2.69
+    /// in the frame and +0.18 today).
+    ///
+    /// Cost: the stage looks for moving cloud first and stops at once when there is none,
+    /// so a clear frame pays about 0.6 CPU-seconds (a 12MP frame's whole run costs ~50) and
+    /// its output is the star merge byte for byte. A frame with cloud runs the whole stage,
+    /// about 25-35 CPU-seconds at 12MP: +51% of the run's CPU over fx3-1 frames 1-100, and
+    /// about 16% more wall clock on 18 concurrent frames. Peak memory per merge op did not
+    /// move at 12MP (see `residentBuildExtraMultiplier`). Off by default because it is new
+    /// and the user has not yet watched it on their own footage; not exposed in the gui,
+    /// daemon or desktop settings.
     ///
     /// Changing it discards the alignment stage's cached results (`ArtifactInputs`
     /// records it only while it is on), including that stage's homographies, which are
@@ -2011,6 +2026,21 @@ public struct Config: Codable, Sendable {
         var extra = 0
         if !mergeStreams(sourceCount: aligned + 1) {
             extra = max(extra, aligned - 1)
+            // The cloud-aware stage runs after the star warps are released and holds its
+            // own set: one cloud-aligned layer per neighbour, the merge of them, and the
+            // base and star merge it refines — one frame more than the star build's
+            // warps, the base and its output.  The float planes it works in (the error,
+            // the weight, a few filter scratches) are a few frames' worth of 4 bytes a
+            // pixel against 6 for the frame, and are not held alongside the layers.
+            //
+            // Measured, and the reason this is one frame and not more: 12 frames of the
+            // 12MP fx3-1 sequence through the cli at `--num-concurrent-renders 1` with
+            // `--log-op-memory`, flag off and flag on.  Every merge op's peak is the same
+            // to within 11MB (+892MB against +892MB, +961 against +958, +686 against
+            // +692), so at that size the stage fits inside what the star build already
+            // reserves, which was 77-87% used.  The extra frame is the analytic margin,
+            // not a measured need.
+            if cloudAwareMerge { extra = max(extra, aligned) }
         }
         if !mergeStreams(sourceCount: statics + 1) {
             extra = max(extra, statics - 1)
