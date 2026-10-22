@@ -151,6 +151,25 @@ final class ArtifactInputsTests: XCTestCase {
                        "and the log has to be able to name the reason")
     }
 
+    /// The fitting code gets its own lever, so a change to it re-fits the homographies
+    /// without throwing away the keypoints they are fitted from, which cost far more.
+    func testBumpingTheAlignmentVersionLeavesTheKeypointsAlone() {
+        let alignment = ArtifactStage.alignment.rawValue
+        let current = ArtifactInputs.current(from: config())
+        XCTAssertEqual(current.stages[alignment]?["alignmentAlgorithmVersion"],
+                       "\(ArtifactInputs.alignmentAlgorithmVersion)")
+
+        var stages = current.stages
+        stages[alignment]?["alignmentAlgorithmVersion"] = "1"
+        let fittedByAnEarlierStar = ArtifactInputs(version: current.version, stages: stages)
+
+        XCTAssertEqual(current.staleStages(comparedTo: fittedByAnEarlierStar),
+                       [.alignment, .outliers, .output])
+        XCTAssertEqual(current.differences(from: fittedByAnEarlierStar)[.alignment],
+                       ["alignmentAlgorithmVersion 1 -> " +
+                          "\(ArtifactInputs.alignmentAlgorithmVersion)"])
+    }
+
     /// Every temp directory written by 0.11.4 or 0.11.5 is in this state: a record at the
     /// current version whose keypoint stage predates this key. Their features came out of
     /// the min/max stretch that 485c4e04 replaced, so they have to go — once.
