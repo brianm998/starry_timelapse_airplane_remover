@@ -984,6 +984,15 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    /// `Config.cloudAwareMerge`: off unless the user asks for it.
+    var cloudAwareMerge: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.cloudAwareMerge = cloudAwareMerge
+            config.update(realConfig)
+        }
+    }
+
     var referenceHorizonSmoothingMaxDistance: Int {
         didSet {
             var realConfig = config.config()
@@ -1931,6 +1940,7 @@ public final class ImageSequenceViewModel {
         self.useGPUForMerge = config.useGPUForMerge
         self.useGPUForSIFT = config.useGPUForSIFT
         self.useGPUForAKAZE = config.useGPUForAKAZE
+        self.cloudAwareMerge = config.cloudAwareMerge
         self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance
         self.useReferenceHorizonBrightnessRefinement = config.useReferenceHorizonBrightnessRefinement
         self.referenceHorizonBrightnessRefinementSearchRadius = config.referenceHorizonBrightnessRefinementSearchRadius

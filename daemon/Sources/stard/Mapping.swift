@@ -348,6 +348,7 @@ enum Mapping {
         out.maxConcurrentKeypointOps = Int32(c.maxConcurrentKeypointOps)
         out.mergeStreamingThresholdMb = Int32(c.mergeStreamingThresholdMB)
         out.useGpuAcceleration = c.useGPUForMerge
+        out.cloudAwareMerge = c.cloudAwareMerge
         // Read-only: not a Config field, so there is nothing for applyExpertConfig to
         // apply it back onto — computed fresh on every outgoing Config so a client
         // always shows the daemon's own machine's hardware, not a stale answer from
@@ -423,6 +424,7 @@ enum Mapping {
             c.maxMatMemoryFraction = min(max(p.maxMatMemoryFraction, Mapping.memoryBudgetFractionRange.lowerBound), Mapping.memoryBudgetFractionRange.upperBound)
         }
         if p.hasUseGpuAcceleration { c.useGPUForMerge = p.useGpuAcceleration }
+        if p.hasCloudAwareMerge { c.cloudAwareMerge = p.cloudAwareMerge }
         // Unknown names are ignored rather than rejected: a newer client may know profiles
         // this daemon does not, and keeping the config's own is the safe answer.
         if p.hasResourceProfile, let profile = ResourceProfile(rawValue: p.resourceProfile) {

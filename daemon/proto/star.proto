@@ -326,6 +326,10 @@ message Config {
   // Read-only: the name of the folder the image sequence is in (StarCore Config.imageSequenceDirname), for a window to be titled by; for a video it is
   // the name the daemon gave the frames it took out of it. A client applying a Config back must not send it on.
   string          image_sequence_dirname                               = 61;
+  // Whether the star aligned merge also runs its cloud-aware stage: a second merge aligned to the motion of the clouds, blended in where it
+  // explains the frame better, with the stars put back, so fast-moving clouds are not banded and repeated. StarCore Config.cloudAwareMerge, off
+  // unless asked for. Changing it throws away the alignment stage's results for frames already processed (see Sequence.PreviewConfigChange).
+  optional bool   cloud_aware_merge                                    = 62;
 }
 
 enum CleanMethod {

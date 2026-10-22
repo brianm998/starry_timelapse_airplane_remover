@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
  */
 class ExpertFieldWiringTest {
 
-    private val allFields: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS
+    private val allFields: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + MERGE_FIELDS
 
     @Test
     fun everyFieldIsAbsentOnAnEmptyConfig() {

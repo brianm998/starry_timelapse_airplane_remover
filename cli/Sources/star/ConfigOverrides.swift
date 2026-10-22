@@ -72,8 +72,7 @@ struct ConfigOverrides {
     /// `--cloud-aware-merge` / `--no-cloud-aware-merge`, maps to
     /// `Config.cloudAwareMerge`. Tri-state like `useGPUForMerge`, so a resume that
     /// does not repeat the flag keeps what the saved config holds and `--no-` is the
-    /// way back. Off by default, and deliberately not in the gui, daemon or desktop
-    /// settings UIs yet: it gets reviewed on real sequences through the cli first.
+    /// way back. Off by default; the gui and the desktop client have a toggle for it too.
     var cloudAwareMerge: Bool?
     /// `--no-horizon`, inverted: the flag turns horizon detection off.
     var horizonDetectionEnabled: Bool?

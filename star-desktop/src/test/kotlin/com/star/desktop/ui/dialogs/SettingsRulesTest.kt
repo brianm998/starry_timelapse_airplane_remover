@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /** Which settings rows apply to what is being edited (macOS `ProcessingSettingsView`'s `.disabled(...)`s). */
 class SettingsRulesTest {
-    private val all: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + PERFORMANCE_FIELDS
+    private val all: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + MERGE_FIELDS + PERFORMANCE_FIELDS
 
     private fun field(label: String) = all.single { it.label == label }
 
@@ -80,6 +80,15 @@ class SettingsRulesTest {
 
     @Test fun theMemorySettingsAlwaysApply() {
         for (f in MEMORY_FIELDS) assertTrue(f.enabled(edit(horizon = false, moving = false)), f.label)
+    }
+
+    /** The cloud-aware merge is for any sequence whose sky moves: sky only or with a horizon, fixed camera or moving. */
+    @Test fun theCloudAwareMergeAlwaysApplies() {
+        for (f in MERGE_FIELDS) {
+            for (horizon in listOf(true, false)) for (moving in listOf(true, false)) {
+                assertTrue(f.enabled(edit(horizon = horizon, moving = moving)), "${f.label} horizon=$horizon moving=$moving")
+            }
+        }
     }
 
     /** What decides how strictly outliers are looked for applies to whatever finds them: Selective and Auto-Selective, not Automatic. */

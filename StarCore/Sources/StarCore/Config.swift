@@ -1349,8 +1349,10 @@ public struct Config: Codable, Sendable {
     /// frames 1-100 in three runs (identical runs differ by ~10% on that machine), and 16-30%
     /// more wall clock on 18 concurrent frames. Peak memory per merge op did not
     /// move at 12MP (see `residentBuildExtraMultiplier`). Off by default because it is new
-    /// and the user has not yet watched it on their own footage; not exposed in the gui,
-    /// daemon or desktop settings.
+    /// and the user has not yet watched it on their own footage. Every client can turn it on:
+    /// `--cloud-aware-merge` in the cli, "Cloud-Aware Merge" in the macOS gui's settings, and
+    /// "Cloud-aware merge" under Merge Settings in the desktop client's settings sheet (the
+    /// daemon carries it as `cloud_aware_merge`).
     ///
     /// Changing it discards the alignment stage's cached results (`ArtifactInputs`
     /// records it only while it is on), including that stage's homographies, which are

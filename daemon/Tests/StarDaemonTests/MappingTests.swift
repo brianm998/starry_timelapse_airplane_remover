@@ -373,6 +373,31 @@ final class MappingTests: XCTestCase {
         XCTAssertTrue(untouched.useGPUForMerge, "an absent field must not overwrite the existing value")
     }
 
+    /// The cloud-aware merge is off unless a client asks for it, and a client's choice goes both ways: on reaches the config, and an explicit
+    /// off turns it back off.  A client that says nothing leaves the setting alone.
+    func testCloudAwareMergeIsSentAndAppliedBothWays() {
+        XCTAssertFalse(Mapping.protoConfig(Config()).cloudAwareMerge, "off by default")
+        var enabled = Config()
+        enabled.cloudAwareMerge = true
+        XCTAssertTrue(Mapping.protoConfig(enabled).cloudAwareMerge)
+        XCTAssertTrue(Mapping.protoConfig(enabled).hasCloudAwareMerge, "always sent, so a client can show the real value")
+
+        var target = Config()
+        var on = Star_V1_Config()
+        on.cloudAwareMerge = true
+        Mapping.applyExpertConfig(&target, from: on)
+        XCTAssertTrue(target.cloudAwareMerge, "an explicit true from the client must apply")
+        var off = Star_V1_Config()
+        off.cloudAwareMerge = false
+        Mapping.applyExpertConfig(&target, from: off)
+        XCTAssertFalse(target.cloudAwareMerge, "and an explicit false must turn it back off")
+
+        var untouched = Config()
+        untouched.cloudAwareMerge = true
+        Mapping.applyExpertConfig(&untouched, from: Star_V1_Config())
+        XCTAssertTrue(untouched.cloudAwareMerge, "an absent field must not overwrite the existing value")
+    }
+
     /// The device a GPU toggle would use is named whenever there is one, so the sheet can say which; absent where there is none.  Read-only like
     /// the availability beside it.
     func testTheGPUDeviceIsNamedWhenThereIsOne() {

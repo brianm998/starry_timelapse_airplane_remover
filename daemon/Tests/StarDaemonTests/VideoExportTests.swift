@@ -1,5 +1,6 @@
 import XCTest
 import StarCore
+import StarDaemonMessages
 @testable import stard
 
 /// `Export.Video` used to point ffmpeg at `<outputPath>/image_%04d.tiff`.  Nothing writes a file
