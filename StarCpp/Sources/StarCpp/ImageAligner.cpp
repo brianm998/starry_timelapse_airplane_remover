@@ -2113,6 +2113,38 @@ static cv::Mat refineSkyHomographyWithStars(const cv::Mat &keypointFit,
     return refined;
 }
 
+// Whether the stars overrule a sky keypoint fit they could not confirm.
+//
+// When refineSkyHomographyWithStars finds no fit, the keypoint fit is all that is left,
+// and on a sky full of stars that is damning evidence against it: a right fit would have
+// been confirmed.  Measured on the twilight frames of two sequences from the same night
+// (the moving, moonlit a9-1 and the static, cirrus-covered fx3-1), every keypoint fit the
+// stars refused while both frames held 1000+ centroids was 170-2400px wrong, on a static
+// camera whose sky moves a few pixels between frames — and kept, one such warp makes
+// validation distrust the frame's whole set, so the frame lost its 6-7 good neighbours to
+// a repair copied from frames away.  Reported as no homography instead, it costs one
+// source in the merge.
+//
+// Only a thin fit is overruled.  Every one of those wrong fits stood on 1-11 RANSAC
+// inliers, where fits standing on 32 or more agreed with the stars to 0.2px; a solid
+// consensus the stars cannot confirm is more likely a sky the stars cannot speak for —
+// cloud hiding most of it — than a wrong fit, and it keeps its say.
+static constexpr int kStarsToOverrule  = 1000;
+static constexpr int kThinSkyConsensus = 30;
+
+static bool starsOverruleThinSkyFit(const std::vector<uchar> &inlierMask,
+                                    size_t neighborStars, size_t baseStars,
+                                    int frameIndex, int neighborFrameIndex) {
+    if ((int)neighborStars < kStarsToOverrule || (int)baseStars < kStarsToOverrule) return false;
+    const int inliers = (int)std::count_if(inlierMask.begin(), inlierMask.end(),
+                                           [](uchar flag) { return flag != 0; });
+    if (inliers >= kThinSkyConsensus) return false;
+    Log_d("frame %d sky homography to %d dropped: %d keypoint inliers, and %zu and %zu stars "
+          "that confirm no fit", frameIndex, neighborFrameIndex, inliers, baseStars,
+          neighborStars);
+    return true;
+}
+
 int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                           int frameIndex,
                           const AlignmentNeighborData *neighbors, int neighborCount,
@@ -2279,6 +2311,13 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                           fitted ? H : cv::Mat(), neighbors[ii].keypoints->stars,
                           baseKeypoints->stars, frameIndex, neighbors[ii].frameIndex);
                         if (!refined.empty()) { recordSuccess(refined); continue; }
+                        if (fitted && starsOverruleThinSkyFit(
+                              inlierMask, neighbors[ii].keypoints->stars.size(),
+                              baseKeypoints->stars.size(), frameIndex,
+                              neighbors[ii].frameIndex)) {
+                            outWarpInfos[ii].alignmentState = AlignmentStateObjCNoHomographyFound;
+                            continue;
+                        }
                     }
 
                     if (fitted &&

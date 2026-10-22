@@ -42,7 +42,9 @@ OCVFeatureSetRef ocv_feature_set_load(const char *filename, const char **errorMs
         if (!stars.empty()) stars >> fs->stars;
         storage.release();
 
-        if (fs->keypoints.empty() || fs->descriptors.empty()) {
+        // A sky frame SIFT found nothing in can still have its stars, and they alone
+        // can align it — see refineSkyHomographyWithStars.
+        if ((fs->keypoints.empty() || fs->descriptors.empty()) && fs->stars.empty()) {
             if (errorMsg) *errorMsg = "Feature file contained no data";
             delete fs;
             return nullptr;
@@ -93,7 +95,7 @@ int64_t ocv_feature_set_keypoint_positions(OCVFeatureSetRef ref,
 
 bool ocv_feature_set_write(OCVFeatureSetRef ref, const char *filename,
                            const char **errorMsg) {
-    if (!ref || ref->keypoints.empty() || ref->descriptors.empty()) {
+    if (!ref || ((ref->keypoints.empty() || ref->descriptors.empty()) && ref->stars.empty())) {
         if (errorMsg) *errorMsg = "No features to write";
         return false;
     }

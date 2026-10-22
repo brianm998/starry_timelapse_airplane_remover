@@ -160,6 +160,21 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     ///      version-3 file has no stars, so it would quietly skip the refinement.
     public static let detectionAlgorithmVersion = 4
 
+    /// Which version of the homography *fitting* code produced the stored alignment —
+    /// `detectionAlgorithmVersion`'s counterpart for the stage after it, for a change to
+    /// `ia_compute_homography` that leaves the keypoints alone.  Bumping the keypoint lever
+    /// for one of those would also work, and would re-run every frame's SIFT for nothing.
+    ///
+    /// Recorded unconditionally, so a record that predates the key counts as changed and
+    /// its alignment, outliers and output are rebuilt once.  Every such record also
+    /// predates `detectionAlgorithmVersion` 3, which rebuilds those anyway.
+    ///
+    /// - 1: everything before this key existed.  Never written.
+    /// - 2: a sky keypoint fit that plentiful stars refuse, standing on a thin RANSAC
+    ///      consensus, is dropped rather than kept (ImageAligner.cpp,
+    ///      starsOverruleThinSkyFit).
+    public static let alignmentAlgorithmVersion = 2
+
     public let version: Int
 
     /// stage rawValue → setting name → value.  Nested rather than flat so a stage can be
@@ -324,6 +339,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             // Whether the merge is masked with a horizon, and so whether the sky and the
             // ground are aligned separately at all.
             "horizonDetectionEnabled":       str(config.horizonDetectionEnabled),
+            "alignmentAlgorithmVersion":     str(alignmentAlgorithmVersion),
         ]
         // A fixed camera has no ground to align: the earth branch median merges the
         // static neighbours instead, and reads none of the earth settings.
