@@ -225,6 +225,7 @@ struct ProcessingSettingsView: View {
     @State private var showMergeMultiplierInfo = false
     @State private var showHorizonMultiplierInfo = false
     @State private var showHorizonFloorInfo = false
+    @State private var showCloudAwareMergeInfo = false
     @State private var showUseGPUForMergeInfo = false
     @State private var showUseGPUForSIFTInfo = false
     @State private var showUseGPUForAKAZEInfo = false
@@ -273,6 +274,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo ||
         showHorizonMultiplierInfo ||
         showHorizonFloorInfo ||
+        showCloudAwareMergeInfo ||
         showUseGPUForMergeInfo ||
         showUseGPUForSIFTInfo ||
         showUseGPUForAKAZEInfo
@@ -323,6 +325,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo = true
         showHorizonMultiplierInfo = true
         showHorizonFloorInfo = true
+        showCloudAwareMergeInfo = true
         showUseGPUForMergeInfo = true
         showUseGPUForSIFTInfo = true
         showUseGPUForAKAZEInfo = true
@@ -373,6 +376,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo = false
         showHorizonMultiplierInfo = false
         showHorizonFloorInfo = false
+        showCloudAwareMergeInfo = false
         showUseGPUForMergeInfo = false
         showUseGPUForSIFTInfo = false
         showUseGPUForAKAZEInfo = false
@@ -461,6 +465,11 @@ struct ProcessingSettingsView: View {
                       self.cameraMotionGridRow
                       Divider()
                       self.processingMethodGridRow
+
+                      // Not an expert setting: whether clouds come out banded is something
+                      // anyone shooting a moving sky wants to be able to turn on.
+                      Divider()
+                      self.cloudAwareMergeView
 
                       Divider()
                       DisclosureGroup(isExpanded: $showGPUSettingsExpanded) {
@@ -1211,6 +1220,35 @@ struct ProcessingSettingsView: View {
             }
         }
         .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
+    }
+
+    /// `Config.cloudAwareMerge`: a second merge aligned to the motion of the clouds, blended in
+    /// where it explains the frame better. Off by default; see the property's doc comment for
+    /// what it does, what it costs, and why changing it re-does the alignment stage.
+    private var cloudAwareMergeView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showCloudAwareMergeInfo,
+          addSpacer: { addSpacer },
+          infoText: localized("setting_help.cloud_aware_merge")
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text(localized("ui.cloud_aware_merge"))
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: $viewModel.cloudAwareMerge) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
     }
 
     /// This whole group is disabled (and each toggle forced to display off, not merely

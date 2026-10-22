@@ -544,16 +544,20 @@ All of Step B runs at 1/4 resolution (`f = 4`).
    - Each key sits on one line; edit them in place. Don't round-trip the files through a
      JSON writer.
 
-### 3.5 Deliberately not in v1
+### 3.5 The other clients (originally left out of v1; added when the user asked)
 
-The other config surfaces are left out until the user asks for the setting in the UIs:
-- the gui (`ImageSequenceViewModel`, `FocusedField`, `ProcessingSettingsView`);
-- the daemon `Mapping.swift`;
-- both `star.proto` copies;
-- the Kotlin `ProcessingSettingsDialog`.
+The first version left the other config surfaces out, which meant only the cli could turn the
+setting on. The user then asked for it in every client, so it is also in:
+- the macOS gui: `ImageSequenceViewModel.cloudAwareMerge` and a "Cloud-Aware Merge" row in
+  `ProcessingSettingsView`, outside the expert settings, with the help text under its (i);
+- the daemon: `optional bool cloud_aware_merge = 62` in both `star.proto` copies (regenerated
+  with `daemon/regen-proto.sh`), and the two lines in `Mapping.swift`;
+- the Kotlin desktop client: a `MERGE_FIELDS` row under a "Merge Settings" group in
+  `ProcessingSettingsDialog`, outside the expert settings;
+- the strings, `ui.cloud_aware_merge`, `ui.merge_settings` and `setting_help.cloud_aware_merge`,
+  in all 22 catalogues.
 
-Without them the daemon and GUI simply use the default. Still build the GUI and the
-daemon to prove nothing broke.
+Build the gui, the daemon and `./gradlew checkProtoSync compileKotlin` to prove each.
 
 ### 3.6 Memory estimate
 
