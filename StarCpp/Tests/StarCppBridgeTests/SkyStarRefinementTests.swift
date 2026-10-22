@@ -1,0 +1,112 @@
+import XCTest
+@testable import StarCppBridge
+
+/// The sky homography refined against star centroids.
+///
+/// SIFT matches stars badly: they all look alike, so their descriptors collide and
+/// Lowe's ratio test throws most of them away. In twilight that left 7-18 RANSAC inliers
+/// per pair and fits up to 32px wrong, while the same frames held thousands of stars that
+/// match by position alone. These render the extreme of that — every star identical — and
+/// require the fit to come from the stars.
+final class SkyStarRefinementTests: XCTestCase {
+
+    private let width = 900
+    private let height = 700
+
+    private struct Star { let x, y: Double }
+
+    private func stars() -> [Star] {
+        var rand = Rand(seed: 31)
+        return (0..<600).map { _ in
+            Star(x: 20 + rand.unit() * Double(width - 40), y: 20 + rand.unit() * Double(height - 40))
+        }
+    }
+
+    /// The neighbour's motion: a few pixels of pan and a small rotation about the centre,
+    /// the size of what four frames of a moving sequence do.
+    private let shift = (x: 7.3, y: -3.6)
+    private let rotation = 0.002
+
+    private func moved(_ s: Star) -> (x: Double, y: Double) {
+        let cx = Double(width) / 2, cy = Double(height) / 2
+        let dx = s.x - cx, dy = s.y - cy
+        return (x: cx + dx * cos(rotation) - dy * sin(rotation) + shift.x,
+                y: cy + dx * sin(rotation) + dy * cos(rotation) + shift.y)
+    }
+
+    /// Identical faint stars on a flat twilight sky with sensor noise.
+    private func frame(_ positions: [(x: Double, y: Double)], noiseSeed: UInt64) -> MatWrapper {
+        var rand = Rand(seed: noiseSeed)
+        var pixels = (0..<(width * height)).map { _ in 9000 + Double(rand.next(600)) }
+        for p in positions {
+            for y in max(0, Int(p.y) - 6)...min(height - 1, Int(p.y) + 6) {
+                for x in max(0, Int(p.x) - 6)...min(width - 1, Int(p.x) + 6) {
+                    let dx = Double(x) - p.x, dy = Double(y) - p.y
+                    pixels[y * width + x] += 2500 * exp(-(dx * dx + dy * dy) / (2 * 1.3 * 1.3))
+                }
+            }
+        }
+        let data = UnsafeMutablePointer<UInt16>.allocate(capacity: width * height)
+        for i in 0..<(width * height) { data[i] = UInt16(clamping: Int(pixels[i].rounded())) }
+        return MatWrapper(width: width, height: height,
+                          cvType: MatWrapper.cvType(forBitsPerComponent: 16, componentsPerPixel: 1),
+                          bytesPerRow: width * MemoryLayout<UInt16>.size,
+                          data: UnsafeMutableRawPointer(data), takeOwnership: true)
+    }
+
+    private func skyFeatures(_ image: MatWrapper) throws -> OCVFeatureSet {
+        try XCTUnwrap(ImageAligner.findFeatures(baseImage: image, frameIndex: 0,
+                                                matchMethod: .knnLowes, mask: nil,
+                                                alignmentType: .sky, maxKeypoints: 2000,
+                                                writeDebugImages: false,
+                                                groundHorizonExtension: 100,
+                                                skyHorizonExtension: 40,
+                                                baseImageDilateSize: 20,
+                                                baseImageThresholdValue: 100))
+    }
+
+    func testTheSkyKeepsItsStarCentroids() throws {
+        let features = try skyFeatures(frame(stars().map { (x: $0.x, y: $0.y) }, noiseSeed: 1))
+        XCTAssertGreaterThan(features.starCount, 500, "most of the 600 stars have to be found")
+    }
+
+    /// Where the keypoints cannot say how the sky moved, the stars do — to a fraction of
+    /// a pixel everywhere in the frame.
+    func testIdenticalStarsAlignByTheirPositions() throws {
+        let base = try skyFeatures(frame(stars().map { (x: $0.x, y: $0.y) }, noiseSeed: 1))
+        let neighbor = try skyFeatures(frame(stars().map(moved), noiseSeed: 2))
+
+        let result = try XCTUnwrap(
+          ImageAligner.computeHomography(
+            baseKeypoints: base, frameIndex: 0,
+            neighbors: [AlignmentNeighborInfo(filename: "neighbor", maskFilename: nil,
+                                              keypoints: neighbor, frameIndex: 1)],
+            matchMethod: .knnLowes, alignmentType: .sky, maxKeypoints: 2000,
+            writeDebugImages: false, handler: { _, _, _, _ in }))
+        let warp = try XCTUnwrap(result.warpInfo.first)
+        XCTAssertEqual(warp.alignmentState, .homographySuccess)
+        let h = try XCTUnwrap(warp.homography?.homographyValues)
+
+        // The warp maps the neighbour onto the base: a star the neighbour shows at
+        // moved(s) belongs at s.
+        var worst = 0.0
+        for s in stars() {
+            let p = moved(s)
+            let w = h[6] * p.x + h[7] * p.y + h[8]
+            let mx = (h[0] * p.x + h[1] * p.y + h[2]) / w
+            let my = (h[3] * p.x + h[4] * p.y + h[5]) / w
+            worst = max(worst, hypot(mx - s.x, my - s.y))
+        }
+        XCTAssertLessThan(worst, 0.1, "the sky warp misplaces stars by up to \(worst)px")
+    }
+
+    private struct Rand {
+        private var state: UInt64
+        init(seed: UInt64) { state = seed }
+        mutating func next(_ bound: UInt32) -> UInt32 {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return UInt32(truncatingIfNeeded: state >> 33) % bound
+        }
+        mutating func unit() -> Double { Double(next(1 << 30)) / Double(1 << 30) }
+    }
+}

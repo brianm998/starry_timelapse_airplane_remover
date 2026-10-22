@@ -37,6 +37,9 @@ OCVFeatureSetRef ocv_feature_set_load(const char *filename, const char **errorMs
         }
         storage["keypoints"] >> fs->keypoints;
         storage["descriptors"] >> fs->descriptors;
+        // absent from earth files, and from sky files written before stars were kept
+        cv::FileNode stars = storage["stars"];
+        if (!stars.empty()) stars >> fs->stars;
         storage.release();
 
         if (fs->keypoints.empty() || fs->descriptors.empty()) {
@@ -58,6 +61,10 @@ void ocv_feature_set_release(OCVFeatureSetRef ref) {
 
 int64_t ocv_feature_set_keypoint_count(OCVFeatureSetRef ref) {
     return ref ? (int64_t)ref->keypoints.size() : 0;
+}
+
+int64_t ocv_feature_set_star_count(OCVFeatureSetRef ref) {
+    return ref ? (int64_t)ref->stars.size() : 0;
 }
 
 int64_t ocv_feature_set_descriptor_rows(OCVFeatureSetRef ref) {
@@ -99,6 +106,7 @@ bool ocv_feature_set_write(OCVFeatureSetRef ref, const char *filename,
         }
         storage << "keypoints" << ref->keypoints;
         storage << "descriptors" << ref->descriptors;
+        if (!ref->stars.empty()) storage << "stars" << ref->stars;
         storage.release();
     } catch (...) {
         if (errorMsg) *errorMsg = "Exception writing feature file";

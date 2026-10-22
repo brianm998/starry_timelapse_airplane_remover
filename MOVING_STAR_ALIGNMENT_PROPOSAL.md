@@ -137,7 +137,30 @@ invalidation they need (`detectionAlgorithmVersion` 2 → 3). On a cli run over 
 shipped code repaired 173. The 58 are the twilight frames 0–57, which step 3 is for. On
 two static sequences from the same night, the 3px tolerance kept the same inliers and
 made the fits slightly more consistent (median reciprocity 0.39 → 0.16px on a7riiia-2,
-0.15 → 0.12px on fx3-1). Steps 3 and 4 are still open.
+0.15 → 0.12px on fx3-1).
+
+**Step 3 is implemented too** (`detectionAlgorithmVersion` 4). Two things changed from the
+prototype below. First, the centroids are found at full resolution: at detection scale,
+deep-dusk pairs matched half as many stars and some fits stayed 1.4–2.3px off. Second,
+the refinement tries both starting points, the keypoint fit and a translation vote over
+the brightest stars, and keeps whichever explains more stars. It also rejects any fit
+whose pairs cover less than half of the star-bearing sky. The first attempt seeded only
+from the keypoint fit, and in twilight a wrong keypoint fit grew partial locks: 245–488
+pairs at ~1px RMS, covering 5–8 of 24 regions and 58–108px wrong.
+
+On the 199-frame cli run, validation repairs 6 frames (0–5) instead of 58. The stored
+homographies for twilight frames 30 and 50 and night frames 87, 120 and 160 agree with
+the star-centroid truth to 0.00–0.02px median, against up to 6.6px (p90 22px) with steps
+1–2 alone. In the outputs, frame 10 keeps 85% of its stars' brightness instead of 66%,
+and frame 30 keeps 89% instead of 74%. Night frames are unchanged. CPU cost is about 6%.
+
+Frames 0–5 are the deepest dusk. Each has one or two neighbours 3–4 frames apart where
+the stars cannot confirm any fit, and the keypoint fit left in its place is 170–1970px
+wrong. That one warp makes the validation heuristics condemn the frame's whole set, and
+it is repaired. Dropping a keypoint fit that plentiful stars contradict would let those
+frames keep their 6–7 good neighbours. It has not been done, because its effect on cloudy
+skies has not been measured. Step 4 is still open, and matters less now that repairs are
+rare.
 
 ### Step 1 — keep sky keypoints off the mask edge *(small; measured)*
 
