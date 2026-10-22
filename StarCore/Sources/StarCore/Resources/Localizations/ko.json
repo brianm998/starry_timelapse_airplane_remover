@@ -818,6 +818,7 @@
   "ui.show_info": "정보 표시",
   "ui.show_information": "정보 표시",
   "ui.show_processing_window": "처리 창 표시",
+  "ui.show_progress": "진행 상황 표시",
   "ui.show_settings": "설정 표시",
   "ui.show_speed_settings": "속도 설정 표시",
   "ui.show_the_processing_status_again": "처리 상태를 다시 표시합니다",

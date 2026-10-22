@@ -288,15 +288,19 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             }
             var askUpdate by remember { mutableStateOf(false) }
 
-            // Save the settings and close; with [processNow] go on to start processing (macOS "Process Now"). A save the daemon refuses is
-            // said, and the sheet stays up with the edits in it.
-            val save: (Boolean) -> Unit = { processNow ->
+            // Save the settings and close; with [goOn] go on, which is to start processing (macOS "Process Now") or, over a run that is going and
+            // has nothing here to change in, to put its status back up (the button is Show Progress then). A save the daemon refuses is said, and
+            // the sheet stays up with the edits in it.
+            val showsProgress = change.showsProgress(processing)
+            val save: (Boolean) -> Unit = { goOn ->
                 scope.launch {
                     val saved = runCatching { app.updateSessionConfig(proposed) }
                     saved.onFailure { app.report(it.message ?: it.toString()) }
                     if (saved.isSuccess) {
                         app.closeSettings()
-                        if (processNow) app.requestProcessAll()
+                        if (goOn) {
+                            if (showsProgress) svm?.reopenProcessingModal() else app.requestProcessAll()
+                        }
                     }
                 }
             }
@@ -307,10 +311,10 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                     // Update, over frames this change contradicts, asks before it acts: it does not start a run over an untouched sequence, it
                     // changes one that is part done.
                     onClick = { if (change.contradictsFinishedWork) askUpdate = true else save(true) },
-                    enabled = change.canProcess(processing) && problems.isEmpty(),
+                    enabled = problems.isEmpty(),
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     modifier = Modifier.testTag("settings.process"),
-                ) { Text(localized(change.processKey)) }
+                ) { Text(localized(change.buttonKey(processing))) }
             }
             if (askUpdate) {
                 // The whole question as the title. No is first and Esc, and does the safe thing: nothing is deleted, and the new settings

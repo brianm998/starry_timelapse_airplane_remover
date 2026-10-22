@@ -818,6 +818,7 @@
   "ui.show_info": "แสดงข้อมูล",
   "ui.show_information": "แสดงข้อมูล",
   "ui.show_processing_window": "แสดงหน้าต่างการประมวลผล",
+  "ui.show_progress": "แสดงความคืบหน้า",
   "ui.show_settings": "แสดงการตั้งค่า",
   "ui.show_speed_settings": "แสดงการตั้งค่าความเร็ว",
   "ui.show_the_processing_status_again": "แสดงสถานะการประมวลผลอีกครั้ง",
