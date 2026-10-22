@@ -1,6 +1,7 @@
 package com.star.desktop.engine
 
 import com.star.desktop.data.SessionRepository
+import com.star.desktop.domain.GpuToggle
 import com.star.proto.CleanMethod
 import com.star.proto.Config
 import com.star.proto.OpenProgress
@@ -119,6 +120,50 @@ class InteropIntegrationTest {
         assertEquals(diskA, diskB, "config.json bytes changed across resume — interop format is not stable")
         assertTrue(protoA.starVersion.isNotEmpty(), "config.starVersion missing (version-mismatch warning would not work)")
         assertTrue(protoA.hasNumberAlignedNeighborFrames(), "expert config field not round-tripped")
+    }
+
+    /**
+     * The GPU toggles the user chose on this machine are applied to a session just opened, by an `UpdateConfig` that carries the four settings
+     * the daemon reads every time (clean method, detection type, scene, camera) as the session has them. The daemon does not treat their absence
+     * as "unchanged", so a config holding only the GPU flags would reset those four to the proto's zeros.
+     */
+    @Test
+    fun gpuPreferenceIsAppliedWithoutDisturbingTheOtherSettings() {
+        val seq = seqPath ?: run {
+            println("[skip] gpuPreferenceIsAppliedWithoutDisturbingTheOtherSettings — set -Dstar.it.seq=<sequence dir>")
+            return
+        }
+        withEngine { client ->
+            // Settings that are not the proto's zeros, so losing any of them shows.
+            val initial = Config.newBuilder(SessionRepository.defaultInitialConfig())
+                .setCleanMethod(CleanMethod.CLEAN_AUTOMATIC_TRUE)
+                .setDetectionType(com.star.proto.DetectionType.DETECTION_EXCESSIVE)
+                .setHorizonDetectionEnabled(false)
+                .setTripodHeadWasMoving(true)
+                .setUseGpuAcceleration(true).setUseGpuForSift(true).setUseGpuForAkaze(true)
+                .build()
+            val info = client.openSequence(File(seq).absolutePath, initial)
+            val opened = client.getConfig(info.sessionId)
+            assertTrue(opened.hasUseGpuAcceleration() && opened.hasUseGpuForSift() && opened.hasUseGpuForAkaze(), "this daemon has no GPU toggles")
+
+            // The user turned SIFT and AKAZE off on this machine and never touched the merge one.
+            val chosen = mapOf(GpuToggle.SIFT to false, GpuToggle.AKAZE to false)
+            val changes = GpuToggle.changesToMatch(chosen::get, opened) ?: error("the session differs from the choices, so there should be changes")
+            client.updateConfig(info.sessionId, changes)
+
+            val after = client.getConfig(info.sessionId)
+            assertFalse(after.useGpuForSift, "SIFT should now be off")
+            assertFalse(after.useGpuForAkaze, "AKAZE should now be off")
+            assertTrue(after.useGpuAcceleration, "the toggle the user never chose was changed")
+            assertEquals(CleanMethod.CLEAN_AUTOMATIC_TRUE, after.cleanMethod)
+            assertEquals(com.star.proto.DetectionType.DETECTION_EXCESSIVE, after.detectionType)
+            assertFalse(after.horizonDetectionEnabled)
+            assertTrue(after.tripodHeadWasMoving)
+
+            // Applied, so a second pass has nothing left to change.
+            assertEquals(null, GpuToggle.changesToMatch(chosen::get, after), "the session still differs from the choices")
+            client.closeSession(info.sessionId)
+        }
     }
 
     /** §8.2 RPC smoke against a real stard from a fresh sequence: Hello → open → frame/outlier reads → close. */

@@ -10,6 +10,7 @@ import com.star.desktop.data.ProcessingRepository
 import com.star.desktop.data.SessionRepository
 import com.star.desktop.domain.CloseAction
 import com.star.desktop.domain.CloseConfirmation
+import com.star.desktop.domain.GpuToggle
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.PendingWork
 import com.star.desktop.engine.EngineState
@@ -265,9 +266,12 @@ class AppViewModel(
      * has none. Throws if the daemon refuses it.
      */
     suspend fun updateSessionConfig(config: Config): Config {
-        val before = sessions.session.value?.config?.cleanMethod
-        val beforeDetection = sessions.session.value?.config?.detectionType
+        val beforeConfig = sessions.session.value?.config
+        val before = beforeConfig?.cleanMethod
+        val beforeDetection = beforeConfig?.detectionType
         val updated = sessions.updateConfig(config)
+        // The GPU toggles are about this machine, not this sequence: what the user changed is what every sequence opened from now on starts with.
+        if (beforeConfig != null) GpuToggle.changed(beforeConfig, updated).forEach { (toggle, value) -> prefs.setGpu(toggle, value) }
         if (before != null && updated.cleanMethod != before) currentSequence?.cleanMethodChanged(updated.cleanMethod)
         // The type the user picks is the one the next sequence starts from, wherever it was picked (macOS keeps it as it changes).
         if (beforeDetection != null && updated.detectionType != beforeDetection) rememberDetectionType(updated.detectionType)
@@ -943,6 +947,25 @@ class AppViewModel(
         if (wasOpening) openJob?.cancel()
     }
 
+    /**
+     * [opened], the session just opened, with its GPU toggles as the user last set them on this machine, which win over whatever a re-opened
+     * sequence's `config.json` was saved with (a new one starts from the daemon's defaults, on wherever a GPU is available). A toggle never chosen
+     * is left as it is. Applied straight to the session, not through [updateSessionConfig], so it is not remembered again as if the user had just
+     * changed it. A daemon that refuses it leaves the session as it opened.
+     */
+    private suspend fun withGpuPreferences(opened: SessionInfo): SessionInfo {
+        val changes = GpuToggle.changesToMatch(prefs::gpu, opened.config) ?: return opened
+        return try {
+            sessions.updateConfig(changes)
+            sessions.session.value ?: opened
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Log.w("App") { "could not apply the saved GPU settings: ${e.message}" }
+            opened
+        }
+    }
+
     /** Open a source from [source], which streams how it is going and ends with the session: shows that on the loading screen, then the sequence. */
     private fun launchOpen(path: String, video: Boolean, promptStartup: Boolean = false, afterOpen: (() -> Unit)? = null, source: () -> Flow<OpenProgress>) {
         openJob = scope.launch {
@@ -974,7 +997,7 @@ class AppViewModel(
                     return@launch
                 }
                 sessions.applySessionInfo(opened)
-                onOpened(path, opened, promptStartup = promptStartup)
+                onOpened(path, withGpuPreferences(opened), promptStartup = promptStartup)
                 afterOpen?.invoke()
             } catch (e: CancellationException) {
                 throw e

@@ -147,6 +147,18 @@ public final class ImageSequenceViewModel {
         if let muxer = userPreferences.muxer {
             self.muxer = muxer
         }
+        // The GPU toggles belong to the machine, not to a sequence, so what the user chose
+        // wins over whatever the sequence's own config.json was last saved with.  Compared
+        // first so seeding what already matches does not rewrite the config.
+        if let useGPUForMerge = userPreferences.useGPUForMerge, useGPUForMerge != self.useGPUForMerge {
+            self.useGPUForMerge = useGPUForMerge
+        }
+        if let useGPUForSIFT = userPreferences.useGPUForSIFT, useGPUForSIFT != self.useGPUForSIFT {
+            self.useGPUForSIFT = useGPUForSIFT
+        }
+        if let useGPUForAKAZE = userPreferences.useGPUForAKAZE, useGPUForAKAZE != self.useGPUForAKAZE {
+            self.useGPUForAKAZE = useGPUForAKAZE
+        }
     }
 
     // how far zoomed in the edit view is.
@@ -965,6 +977,12 @@ public final class ImageSequenceViewModel {
             var realConfig = config.config()
             realConfig.useGPUForMerge = useGPUForMerge
             config.update(realConfig)
+            // Remembered for every other sequence too — see `UserPreferences.useGPUForMerge`.
+            // Not written back when it already matches, which is the case when this change
+            // was `applyUserPreferences` seeding the sequence from the preference.
+            if userPreferences.useGPUForMerge != useGPUForMerge {
+                userPreferences.useGPUForMerge = useGPUForMerge
+            }
         }
     }
 
@@ -973,6 +991,12 @@ public final class ImageSequenceViewModel {
             var realConfig = config.config()
             realConfig.useGPUForSIFT = useGPUForSIFT
             config.update(realConfig)
+            // Remembered for every other sequence too — see `UserPreferences.useGPUForSIFT`.
+            // Not written back when it already matches, which is the case when this change
+            // was `applyUserPreferences` seeding the sequence from the preference.
+            if userPreferences.useGPUForSIFT != useGPUForSIFT {
+                userPreferences.useGPUForSIFT = useGPUForSIFT
+            }
         }
     }
 
@@ -981,6 +1005,12 @@ public final class ImageSequenceViewModel {
             var realConfig = config.config()
             realConfig.useGPUForAKAZE = useGPUForAKAZE
             config.update(realConfig)
+            // Remembered for every other sequence too — see `UserPreferences.useGPUForAKAZE`.
+            // Not written back when it already matches, which is the case when this change
+            // was `applyUserPreferences` seeding the sequence from the preference.
+            if userPreferences.useGPUForAKAZE != useGPUForAKAZE {
+                userPreferences.useGPUForAKAZE = useGPUForAKAZE
+            }
         }
     }
 
