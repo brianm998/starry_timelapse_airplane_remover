@@ -198,6 +198,14 @@ public enum ImageAligner {
     /// the set would exceed `streamingThresholdBytes`. Pass 0 to keep them resident;
     /// the output is identical either way.
     ///
+    /// `cloudAware` adds the cloud-aware stage after the merge: it measures how clouds
+    /// move against the stars, merges the neighbours a second time aligned to the
+    /// cloud, and uses that merge wherever it explains `baseImage` better than the
+    /// star merge does, with the stars put back. Clear sky comes out byte-identical to
+    /// the plain merge. `skyMask` (white = sky) keeps it off the ground; nil means the
+    /// whole frame is sky. `cloudDebugDir` makes it write its blend weight and motion
+    /// field there. With `cloudAware` false all three are ignored.
+    ///
     /// Returns nil when no neighbour could be warped, which is the caller's cue to
     /// fall back to the unaligned frame.
     public static func alignAndMedianMerge(baseImage: MatWrapper,
@@ -209,7 +217,10 @@ public enum ImageAligner {
                                             scratchDir: String? = nil,
                                             streamingThresholdBytes: Int64 = 0,
                                             loadConcurrency: Int = 1,
-                                            useGPU: Bool = true)
+                                            useGPU: Bool = true,
+                                            cloudAware: Bool = false,
+                                            skyMask: MatWrapper? = nil,
+                                            cloudDebugDir: String? = nil)
       -> (merged: MatWrapper, warpCount: Int)?
     {
         let cNeighbors = neighbors.map { n in
@@ -244,6 +255,9 @@ public enum ImageAligner {
                                                streamingThresholdBytes,
                                                Int32(loadConcurrency),
                                                useGPU,
+                                               cloudAware,
+                                               skyMask?.ref,
+                                               cloudDebugDir,
                                                &warpCount, &errMsg)
                 }
             }

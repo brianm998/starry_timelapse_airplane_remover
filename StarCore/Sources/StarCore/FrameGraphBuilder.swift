@@ -56,7 +56,9 @@ extension OperationType {
         // defaults (9 and 6) plus the largest residentBuildExtraMultiplier those defaults
         // can produce (numberStaticNeighborFrames - 1 = 15): a fallback can see neither
         // the frame size nor the neighbour counts, so it assumes the worst of both — no
-        // merge inside the op streams, and every neighbour is present.
+        // merge inside the op streams, and every neighbour is present.  Not counting the
+        // cloud-aware stage's one extra frame (Config.residentBuildExtraMultiplier): that
+        // is a margin on the explicit figure, which is always what is passed.
         case .outliers:            return 24
         case .merge:               return 21
         }

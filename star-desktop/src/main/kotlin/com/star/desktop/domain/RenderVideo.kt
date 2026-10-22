@@ -77,4 +77,11 @@ object RenderVideo {
         val entries = caps.frameRateCapsList
         return entries.firstOrNull { !it.custom && abs(it.value - rate) < 1e-9 } ?: entries.firstOrNull { it.custom }
     }
+
+    /**
+     * The entry the picker shows: Custom whenever the user picked it, whatever rate it holds ([rateEntry] alone would read a Custom still at a
+     * standard rate, which is where it starts, as that standard entry and never show the field), else [rateEntry].
+     */
+    fun shownRateEntry(caps: VideoCapabilities, rate: Double, customPicked: Boolean): com.star.proto.FrameRateCaps? =
+        if (customPicked) caps.frameRateCapsList.firstOrNull { it.custom } else rateEntry(caps, rate)
 }

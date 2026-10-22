@@ -185,16 +185,13 @@ final class AKAZEDetectorTests: XCTestCase {
     /// GPU pyramid changes from what the algorithm port itself changes
     /// (covered above). Skipped, not failed, with no GPU handler registered.
     ///
-    /// The bar is measured, not assumed. Measured on this synthetic field:
-    /// 484/501 matched (~96.6%), maxDelta ~1.6px — markedly closer than SIFT's
-    /// own GPU-vs-reference bar (~83%), despite this pyramid leaning on more
-    /// approximations (MPSImageGaussianBlur for both blurs, a clamp-to-edge
-    /// Scharr instead of reflect-101, chained across 16 levels instead of
-    /// SIFT's per-octave-independent ones). The likely reason is the same one
-    /// that made the reference port match real AKAZE exactly above: only the
-    /// *ranking* of Hessian-determinant responses has to survive, and this
-    /// field's features are large and well separated. 90% leaves margin below
-    /// the measurement without the test being a rubber stamp.
+    /// The GPU pyramid now builds every level with OpenCV's own kernels and
+    /// borders (see `buildAkazePyramid` in GPUOps.swift), so it is held to the
+    /// reference port's own bar. It used to be held to 90% against a measured
+    /// 96.6% on this field, which looked close enough — but this field's disks
+    /// are large and well separated, so only the ranking of their responses had
+    /// to survive. On real ground the same pyramid kept 79-88% of cv::AKAZE's
+    /// keypoints; see `testGPUPortAgreesWithRealAKAZEOnARealisticGround`.
     func testGPUPyramidAgreesWithTheReferencePyramid() throws {
         try XCTSkipUnless(GPUCapability.isAvailable(), "no supported GPU on this machine")
         GPUOps.registerIfAvailable()
@@ -210,13 +207,80 @@ final class AKAZEDetectorTests: XCTestCase {
         XCTAssertGreaterThan(gpu.keypointCount, 0, "the GPU pyramid path found no keypoints at all")
 
         let (matched, onlyRef, onlyGPU, maxDelta) = matchPositions(
-          reference.keypointPositions(), gpu.keypointPositions(), tolerance: 2.0)
+          reference.keypointPositions(), gpu.keypointPositions(), tolerance: 0.5)
 
-        XCTAssertGreaterThanOrEqual(matched, Int(Double(reference.keypointCount) * 0.90),
+        XCTAssertGreaterThanOrEqual(matched, Int(Double(reference.keypointCount) * 0.98),
                                     "only \(matched) of \(reference.keypointCount) reference keypoints "
                                     + "matched the GPU pyramid's output (unmatched: \(onlyRef) "
                                     + "reference-only, \(onlyGPU) GPU-only)")
-        XCTAssertLessThanOrEqual(maxDelta, 2.0)
+        XCTAssertLessThanOrEqual(maxDelta, 0.5)
+    }
+
+    /// The GPU port against real cv::AKAZE on fine, continuous texture of the kind
+    /// ground actually has — see `makeGround`. The old MPS pyramid fails this: its
+    /// blurs were neither the 9- and 5-tap kernels nor the replicated borders
+    /// AKAZE asks for, and its 2x2 octave average could not follow cv::resize's
+    /// INTER_AREA on an odd height, where each level is a little more than half
+    /// the last.
+    func testGPUPortAgreesWithRealAKAZEOnARealisticGround() throws {
+        try XCTSkipUnless(GPUCapability.isAvailable(), "no supported GPU on this machine")
+        GPUOps.registerIfAvailable()
+        try XCTSkipUnless(gpu_ops_akaze_pyramid_available(), "no GPU AKAZE pyramid handler registered")
+
+        let img = makeGround(width: 641, height: 481)
+
+        let real = try XCTUnwrap(ImageAligner.debugAkazeOpenCV(img, mask: nil, maxKeypoints: 2000,
+                                                               threshold: productionThreshold))
+        let gpu = try XCTUnwrap(ImageAligner.debugAkazeGPU(img, mask: nil, maxKeypoints: 2000,
+                                                           threshold: productionThreshold))
+
+        XCTAssertGreaterThan(real.keypointCount, 300, "the ground has to yield enough keypoints to compare")
+        XCTAssertEqual(Double(gpu.keypointCount), Double(real.keypointCount),
+                       accuracy: Double(real.keypointCount) * 0.02,
+                       "the GPU port found \(gpu.keypointCount) keypoints where cv::AKAZE found "
+                       + "\(real.keypointCount)")
+        let (matched, onlyReal, onlyGPU, _) = matchPositions(
+          real.keypointPositions(), gpu.keypointPositions(), tolerance: 0.5)
+        XCTAssertGreaterThanOrEqual(matched, Int(Double(real.keypointCount) * 0.98),
+                                    "only \(matched) of \(real.keypointCount) cv::AKAZE keypoints had a "
+                                    + "match from the GPU port (unmatched: \(onlyReal) cv::AKAZE-only, "
+                                    + "\(onlyGPU) GPU-only)")
+    }
+
+    /// Ground-like texture: value noise summed over cell sizes from 64px down to
+    /// 2px, each octave weaker than the last, plus a little pixel noise — fine,
+    /// continuous structure at every scale, where a pyramid error shifts which
+    /// responses win rather than leaving well-separated blobs ranked as before.
+    private func makeGround(width: Int, height: Int, seed: UInt64 = 3) -> MatWrapper {
+        var rng = SplitMix64(seed: seed)
+        var field = [Double](repeating: 0, count: width * height)
+        var amplitude = 1.0
+        for cell in [64, 32, 16, 8, 4, 2] {
+            let gw = width / cell + 2, gh = height / cell + 2
+            let grid = (0..<(gw * gh)).map { _ in Double(rng.nextUInt32()) / Double(UInt32.max) }
+            for y in 0..<height {
+                let fy = Double(y) / Double(cell)
+                let y0 = Int(fy), ty = fy - Double(y0)
+                for x in 0..<width {
+                    let fx = Double(x) / Double(cell)
+                    let x0 = Int(fx), tx = fx - Double(x0)
+                    let top = grid[y0 * gw + x0] * (1 - tx) + grid[y0 * gw + x0 + 1] * tx
+                    let bottom = grid[(y0 + 1) * gw + x0] * (1 - tx) + grid[(y0 + 1) * gw + x0 + 1] * tx
+                    field[y * width + x] += amplitude * (top * (1 - ty) + bottom * ty)
+                }
+            }
+            amplitude *= 0.6
+        }
+        let lo = field.min() ?? 0, hi = field.max() ?? 1
+        let data = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height)
+        for i in 0..<(width * height) {
+            let v = (field[i] - lo) / (hi - lo) * 235 + 10 + Double(rng.nextUInt32() % 7) - 3
+            data[i] = UInt8(clamping: Int(v.rounded()))
+        }
+        return MatWrapper(width: width, height: height,
+                          cvType: MatWrapper.cvType(forBitsPerComponent: 8, componentsPerPixel: 1),
+                          bytesPerRow: width, data: UnsafeMutableRawPointer(data),
+                          takeOwnership: true)
     }
 }
 

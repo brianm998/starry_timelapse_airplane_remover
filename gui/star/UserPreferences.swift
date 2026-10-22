@@ -165,6 +165,29 @@ struct UserPreferences: Codable, Sendable {
         didSet { self.save() }
     }
 
+    /// The three GPU processing toggles — align & merge, SIFT, AKAZE — as the user last set them
+    /// on this machine, or nil until they first touch one.
+    ///
+    /// Whether a machine's GPU is worth using is a fact about the machine, not about the
+    /// sequence being processed, so a toggle turned off here has to stay off for every video and
+    /// image sequence opened afterwards, not just the one whose settings sheet it was changed in
+    /// (each sequence's own `config.json` still records the value it ran with).  nil means "never
+    /// chosen": the sequence's own config — on wherever a GPU is available — is used as it is.
+    ///
+    /// Shared with the Kotlin client, which reads and writes the same keys in the same
+    /// `~/.star.userprefs.json`.
+    var useGPUForMerge: Bool? {
+        didSet { self.save() }
+    }
+
+    var useGPUForSIFT: Bool? {
+        didSet { self.save() }
+    }
+
+    var useGPUForAKAZE: Bool? {
+        didSet { self.save() }
+    }
+
     /// The language the user picked from the Language menu, or nil to follow the system.
     ///
     /// A BCP-47 tag rather than an index, so the file survives languages being added or

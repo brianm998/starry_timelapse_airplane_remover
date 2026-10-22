@@ -130,7 +130,10 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
     val muxers = encCaps?.muxersList.orEmpty()
     val pixelCaps = encCaps?.pixelFormatCapsList?.firstOrNull { it.name == choice.pixelFormat }
     val muxerCaps = encCaps?.muxerCapsList?.firstOrNull { it.name == choice.muxer }
-    val rateEntry = RenderVideo.rateEntry(c, choice.frameRate)
+    // Whether Custom is the picked entry.  Not derivable from the rate: Custom starts at the current rate, which is usually a standard one, and
+    // looking the entry up by rate would read that as the standard entry again and put the picker (and the field) back.
+    var customPicked by remember(c) { mutableStateOf(RenderVideo.rateEntry(c, choice.frameRate)?.custom == true) }
+    val rateEntry = RenderVideo.shownRateEntry(c, choice.frameRate, customPicked)
 
     Text(localized("ui.render_video_from_n_frames", frameCount), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
 
@@ -140,6 +143,7 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
     var customText by remember(c) { mutableStateOf(RenderVideo.rateText(choice.frameRate)) }
     val customRate = RenderVideo.customRate(customText)
     Picker(localized("ui.frame_rate"), rateOptions, rateKey) { key ->
+        customPicked = key == "custom"
         if (key == "custom") {
             // Kept at what it was, or a rate to start from; the field takes over from here.
             val rate = customRate ?: RenderVideo.customRate(RenderVideo.rateText(choice.frameRate)) ?: 24.0

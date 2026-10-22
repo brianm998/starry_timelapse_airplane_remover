@@ -72,6 +72,13 @@ class RenderVideoTest {
         assertEquals("any", entry?.description)
     }
 
+    @Test fun customStaysPickedAtAStandardRate() {
+        // Custom starts at the current rate, a standard one; looking it up by rate alone would hand back "cinema" and the field would never show.
+        assertEquals("cinema", RenderVideo.shownRateEntry(caps, 24.0, customPicked = false)?.description)
+        assertEquals("any", RenderVideo.shownRateEntry(caps, 24.0, customPicked = true)?.description)
+        assertEquals("any", RenderVideo.shownRateEntry(caps, 12.5, customPicked = true)?.description)
+    }
+
     @Test fun anEngineWithoutRatesHasNoEntry() {
         assertNull(RenderVideo.rateEntry(VideoCapabilities.getDefaultInstance(), 24.0))
     }

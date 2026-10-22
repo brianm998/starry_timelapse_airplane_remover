@@ -1048,6 +1048,16 @@ final public actor FrameAlignmentProcessor {
                 let mergeNeighbors = neighbors
                 let mergeConfig = config
                 let mergeIndex = frameIndex
+                // The cloud-aware stage belongs to the star aligned merge alone: this
+                // branch also builds the moving-camera earth merge, which must never
+                // run it, so the alignment type is checked and not just the flag.
+                // It is kept off the ground by the final horizon mask loaded above,
+                // nil when horizon detection is off, which makes the whole frame sky.
+                let mergeCloudAware = type == .starAligned && mergeConfig.cloudAwareMerge
+                let mergeSkyMask = mergeCloudAware ? horizonMask?.image.mat : nil
+                let mergeCloudDebugDir: String? =
+                  mergeCloudAware && mergeConfig.alignmentWriteDebugImages
+                  ? mergeConfig.tempOutputPath + "/cloud-debug" : nil
                 let result = await NativeWork.run {
                     ImageAligner.alignAndMedianMerge(
                       baseImage: mergeBase,
@@ -1060,7 +1070,10 @@ final public actor FrameAlignmentProcessor {
                       streamingThresholdBytes:
                         Int64(mergeConfig.mergeStreamingThresholdMB) * 1024 * 1024,
                       loadConcurrency: mergeConfig.mergeLoadConcurrency,
-                      useGPU: mergeConfig.useGPUForMerge
+                      useGPU: mergeConfig.useGPUForMerge,
+                      cloudAware: mergeCloudAware,
+                      skyMask: mergeSkyMask,
+                      cloudDebugDir: mergeCloudDebugDir
                     )
                 }
 
