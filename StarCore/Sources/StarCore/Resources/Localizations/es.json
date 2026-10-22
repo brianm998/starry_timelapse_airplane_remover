@@ -818,6 +818,7 @@
   "ui.show_info": "Mostrar información",
   "ui.show_information": "Mostrar información",
   "ui.show_processing_window": "Mostrar la ventana de procesamiento",
+  "ui.show_progress": "Mostrar progreso",
   "ui.show_settings": "Mostrar los ajustes",
   "ui.show_speed_settings": "Mostrar los ajustes de velocidad",
   "ui.show_the_processing_status_again": "Volver a mostrar el estado del procesamiento",
