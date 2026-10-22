@@ -268,6 +268,8 @@ class DesktopFeatureRunner {
         var lastDump = 0L
         waitFor(t, "processing to finish", PROCESS_TIMEOUT_MS, { "last progress: $last" }) {
             model.error.value?.let { throw RunnerError("the app reported an error while processing: $it") }
+            // A dead engine (killed by the OS, say for memory) never finishes the run: without this the wait sits out its whole timeout.
+            model.engineDown.value?.let { throw RunnerError("the engine stopped while processing: $it") }
             val nodes = t.onAllNodes(hasTestTag("processing.progress")).fetchSemanticsNodes()
             val state = nodes.firstOrNull()?.config?.getOrNull(SemanticsProperties.StateDescription)
             if (state == null) {
