@@ -155,7 +155,10 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     ///      change to the fit rather than to the keypoints, but it shipped with this one,
     ///      and invalidating the keypoints already takes every homography with them.  A
     ///      fitting change that ships on its own needs a lever on the alignment stage.
-    public static let detectionAlgorithmVersion = 3
+    /// - 4: sky feature files keep the frame's star centroids, and the sky homography is
+    ///      refined against them (ImageAligner.cpp, refineSkyHomographyWithStars).  A
+    ///      version-3 file has no stars, so it would quietly skip the refinement.
+    public static let detectionAlgorithmVersion = 4
 
     public let version: Int
 
