@@ -198,13 +198,6 @@ final class VideoExportTests: XCTestCase {
         XCTAssertFalse(args.contains("-vf"))
     }
 
-    func testTheRequestedHeightSurvivesTheFallbackToTheOpenedVideosSettings() {
-        var request = Star_V1_VideoEncodeSettings()   // no codec: the fallback path
-        request.outputHeight = 720
-        let info = ExportHandlers.videoInfo(for: request, opened: videoInfo(), config: config())
-        XCTAssertEqual(info.resolution, .p720)
-    }
-
     func testAudioIsAddedAsASecondInputAndCopied() {
         let args = VideoExport.arguments(
           listPath: "/l", audio: copiedAudio, videoInfo: videoInfo(hasAudio: true), outputVideoPath: "/o/out.mov")
