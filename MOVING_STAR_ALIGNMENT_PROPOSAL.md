@@ -131,6 +131,14 @@ stretch is biased the same way, no donor scheme can.
 
 ## Proposal
 
+**Status (2026-10-22): steps 1 and 2 are implemented**, together with the keypoint cache
+invalidation they need (`detectionAlgorithmVersion` 2 → 3). On a cli run over the first
+199 frames of this sequence, star alignment validation repaired 58 frames where the
+shipped code repaired 173. The 58 are the twilight frames 0–57, which step 3 is for. On
+two static sequences from the same night, the 3px tolerance kept the same inliers and
+made the fits slightly more consistent (median reciprocity 0.39 → 0.16px on a7riiia-2,
+0.15 → 0.12px on fx3-1). Steps 3 and 4 are still open.
+
 ### Step 1 — keep sky keypoints off the mask edge *(small; measured)*
 
 In `ia_find_features`'s sky branch, intersect the detection mask with
