@@ -149,7 +149,13 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     ///      by anything: it is what a record that omits this key means, which is why the
     ///      key's mere appearance is what invalidates those records, once.
     /// - 2: percentile stretch (485c4e04).
-    public static let detectionAlgorithmVersion = 2
+    /// - 3: sky keypoints kept `kSkyKeypointCutMargin` clear of the sky mask's edge, where
+    ///      the black step the masking leaves is ground-locked (ImageAligner.cpp).  This
+    ///      bump also carries the sky RANSAC tolerance going from 10px to 3px: that is a
+    ///      change to the fit rather than to the keypoints, but it shipped with this one,
+    ///      and invalidating the keypoints already takes every homography with them.  A
+    ///      fitting change that ships on its own needs a lever on the alignment stage.
+    public static let detectionAlgorithmVersion = 3
 
     public let version: Int
 

@@ -1043,6 +1043,41 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize, int thresholdVa
     return mask;
 }
 
+// How far from the edge of the sky mask, in detection pixels, a sky keypoint has to be.
+//
+// toGray8UWithMask blacks out everything the mask excludes, and that leaves a hard step
+// from lit sky to black along the mask's edge.  The erosion below moves the step up off
+// the terrain, but it cannot remove it — the mask makes it — and wherever it sits it
+// follows the horizon, so it moves with the ground, not the stars.  Under moonlight the
+// sky just above the horizon is the brightest sky there is (179/255 after the stretch on
+// the 10_17_2026 a9-1 sequence, against 51/255 overhead), which makes the step the
+// strongest structure in the frame.  There, 23-28% of the sky keypoints sat on it, they
+// were half of all descriptor matches (the edge looks the same along its length, so most
+// matched the wrong place along it), and the 28-62 per pair that RANSAC accepted ran
+// 3.8px per frame sideways off the stars — the ground's drift against the sky.  The fit
+// bent between them and the stars: those in one corner survived the merge and the rest
+// of the sky lost its stars.
+//
+// 40 clears the descriptor of every keypoint the step produced there (SIFT's descriptor
+// reaches about 5.3x a keypoint's size, and the step's ran around 3-7px at detection
+// scale).  It is in detection pixels because that is where SIFT's footprint is measured;
+// at the default 1.5 divisor it keeps keypoints 60px clear of the cut, which with the
+// 40px erosion is 100px off the ground — exactly what was measured.  Measured against
+// thousands of star centroids, it took the frame that lost its stars from 1.5-7.5px
+// wrong to 0.1-0.4px together with the tighter sky RANSAC below.  A band that narrow is
+// a sliver of any real sky, so what it costs is a few stars right at the horizon.
+static constexpr int kSkyKeypointCutMargin = 40;
+
+// The part of `mask` (non-zero = keep) further than `margin` pixels from anything it
+// excludes.  A mask with nothing excluded has no cut and comes back unchanged:
+// distanceTransform measures the distance to the nearest zero pixel, and there is none.
+static cv::Mat awayFromMaskEdge(const cv::Mat &mask, int margin) {
+    cv::Mat binary, dist;
+    cv::threshold(mask, binary, 0, 255, cv::THRESH_BINARY);
+    cv::distanceTransform(binary, dist, cv::DIST_L2, 3);
+    return dist > (float)margin;
+}
+
 // --- Public API ---
 
 MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
@@ -1367,6 +1402,19 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             // every pixel, so the "star mask" selected the whole frame and SIFT ranked
             // noise alongside stars.
             detectionMask = makeStarMask(detectGray, baseImageDilateSize, baseImageThresholdValue);
+
+            // Off the black step at the mask's edge, which is ground-locked — see
+            // kSkyKeypointCutMargin.  The star mask alone does not keep keypoints off it:
+            // the bright sky above the step clears its threshold, and its dilation then
+            // reaches across the step into the black.  Applied to the mask rather than to
+            // the keypoints afterwards, so the step cannot use up SIFT's keypoint cap.
+            cv::Mat clear = awayFromMaskEdge(detectHorizonMask, kSkyKeypointCutMargin);
+            if (cv::countNonZero(clear) > 0) {
+                cv::bitwise_and(detectionMask, clear, detectionMask);
+            } else {
+                Log_d("sky region narrower than the %dpx keypoint margin, keeping the "
+                      "keypoints it would have excluded", kSkyKeypointCutMargin);
+            }
         }
 
         std::vector<cv::KeyPoint> keypoints;
@@ -1597,14 +1645,33 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
 // The 3x3 lift is so everything downstream — warpInto, the Lie-algebra smoothing,
 // homography.db, the deviation norm — keeps taking one kind of matrix.  A similarity is a
 // homography whose last row is (0,0,1); nothing has to know which fit produced it.
+//
+// The sky's RANSAC tolerance is 3px, not the ground's 10.  A star homography fits real
+// stars to a fraction of a pixel — thousands of matched star centroids sat within
+// 0.27-0.48px RMS of one homography on every pair measured — so 10px never bought the
+// sky anything but room for matches that are not stars.  Where stars are plentiful the
+// consensus is wide enough that it does not matter; where they are few (moonlit and
+// twilight frames, 20-60 star inliers per pair) it did: with the horizon keypoints
+// already excluded (kSkyKeypointCutMargin), 10px still let three of eight neighbours of
+// one frame lock onto a wrong consensus, 2.6-15px off, where 3px put all eight within
+// 0.1-0.4px of the stars.
+//
+// Never the tolerance alone, though.  3px with the horizon keypoints still present looks
+// better than it is: the ground-locked matches form a consensus of their own, and a fit
+// to it is as consistent between neighbouring frames as a fit to the stars, so it passes
+// the reciprocity check while 3px wrong.
+static constexpr double kSkyRansacThreshold = 3.0;
+static constexpr double kGroundRansacThreshold = 10.0;
+
 static cv::Mat estimateAlignment(AlignmentType alignmentType,
                                  const std::vector<cv::Point2f> &from,
                                  const std::vector<cv::Point2f> &to,
                                  std::vector<uchar> &inlierMask) {
     if (alignmentType != AlignmentTypeEarth) {
-        return cv::findHomography(from, to, cv::RANSAC, 10, inlierMask);
+        return cv::findHomography(from, to, cv::RANSAC, kSkyRansacThreshold, inlierMask);
     }
-    cv::Mat A = cv::estimateAffinePartial2D(from, to, inlierMask, cv::RANSAC, 10);
+    cv::Mat A = cv::estimateAffinePartial2D(from, to, inlierMask, cv::RANSAC,
+                                            kGroundRansacThreshold);
     if (A.empty()) return cv::Mat();
     if (A.type() != CV_64F) A.convertTo(A, CV_64F);
     cv::Mat H = cv::Mat::eye(3, 3, CV_64F);
