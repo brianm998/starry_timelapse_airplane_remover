@@ -69,7 +69,10 @@ MatWrapperRef buffer_holder_to_mat(BufferHolderRef ref) {
         }
 
         cv::Mat img((int)ref->height, (int)ref->width, cvType, ref->buffer);
-        return new MatWrapperImpl(img); // clones the data
+        // Clones, on purpose: `img` points into this holder's malloc'd buffer with no owner, and
+        // the wrapper this returns is handed to C++ and Swift code that can outlive the holder.
+        // Sharing would need the Mat to keep the holder's memory alive.
+        return new MatWrapperImpl(img);
     } KHT_CATCH_LOG("buffer_holder_to_mat")
     return nullptr;
 }

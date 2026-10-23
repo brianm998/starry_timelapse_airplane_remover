@@ -3,15 +3,21 @@ import logging
 import StarCppBridge
 
 // allows construction of an accessable buffer that can then be converted into
-// a PixelatedImage with a cv::Mat holding the buffer
+// a PixelatedImage with a cv::Mat holding a COPY of the buffer
 /*
 
  Usage:
 
  let buffer = ImageBuffer<UInt16>(width: 200, height: 200, components: 3)
  if let image = buffer.image {
-     // image is a PixelatedImage pointing at buffer
-     // with a cv::Mat (image.mat) pointing to the same buffer 
+     // image is a PixelatedImage that keeps `buffer` alive for its own pixel reads,
+     // with a cv::Mat (image.mat) holding its OWN copy of the pixels: writes to `buffer`
+     // after this point are not seen through image.mat.
+     //
+     // (This used to say the Mat pointed at the same buffer. It never did: the Mat is built
+     // by `BufferHolder.toMat`, which clones. Sharing would need the Mat to keep the holder's
+     // memory alive, and a Mat handed to C++ can outlive the PixelatedImage that holds the
+     // buffer, so the copy is what makes it safe.)
  }
  
  */
