@@ -764,4 +764,18 @@ its input means that frame was never processed.
 
 ## Baseline
 
-*(Filled in by WP-0.)*
+*(Partly filled in by WP-0; recorded 2026-10-22 on `develop` 0.12.5. The machine was shared with
+another agent's runs, so wall times are noisy.)*
+
+| run (`star -l info -n 3`, nice 10) | wall | user | sys | max RSS |
+|---|---|---|---|---|
+| `test_a7sii_10` default, baseline binary | 191 s | 473 s | 324 s | 10.7 GB |
+| same, after WP-A (`star_wpa`) | 158 s | 465 s | 329 s | 10.7 GB |
+
+WP-A identity A/B (default flags, 19 output JPEGs): **all 19 byte-identical** to baseline.
+Outputs are JPEGs (the input format), so compare with `shasum`, not TIFF tools.
+
+**Not yet done:** `selective` / `automatic:true` baselines, the dense-crop baseline and A/B (X1
+step 3 measurements), GPU-slot breakdown, S6 decode counts. The crop runs hang the display if
+mishandled; the GPU tests and `star` runs also hung WindowServer once on 2026-10-22 (logout at
+18:57 and 19:11), so run GPU suites and star runs strictly one at a time.
