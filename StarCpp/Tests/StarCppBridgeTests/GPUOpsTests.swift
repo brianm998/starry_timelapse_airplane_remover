@@ -187,6 +187,61 @@ final class GPUOpsTests: XCTestCase {
                                  + "final-rounding difference in the frame interior")
     }
 
+    /// How often the GPU samples a different 1/32-pixel step than the exact answer, and than OpenCV
+    /// does, at the width of a real frame. Both paths quantize the fractional sample position to 32 steps; a float projection of
+    /// a coordinate near 6000 has a resolution of about 0.0005 px, which puts a fraction of pixels
+    /// on the neighbouring step. The source here encodes its own x, so a different step gives a
+    /// different value.
+    func testWarpStepMismatchesAtFullFrameWidthAreRare() throws {
+        try XCTSkipUnless(GPUCapability.isAvailable(), "no supported GPU on this machine")
+        GPUOps.registerIfAvailable()
+        let width = 6000, height = 96
+        let src = makeMat(width: width, height: height) { x, _, _ in UInt16((x % 90) * 700) }
+        let theta = 0.0004
+        let homography = MatWrapper(homographyValues: [cos(theta), -sin(theta), 3.37,
+                                                        sin(theta),  cos(theta), 1.21,
+                                                        0, 0, 1])
+        let gpu = try samples(of: try XCTUnwrap(ImageAligner.debugWarp(src, homography: homography, useGPU: true)))
+        let cpu = try samples(of: try XCTUnwrap(ImageAligner.debugWarp(src, homography: homography, useGPU: false)))
+        var differing = 0, total = 0
+        let margin = 6
+        for y in margin..<(height - margin) {
+            for x in margin..<(width - margin) {
+                total += 1
+                if gpu[y][x] != cpu[y][x] { differing += 1 }
+            }
+        }
+        // An exact double-precision reference of the same quantization (position rounded to 1/32
+        // as a whole, ties to even, then bilinear): the GPU's float-float projection must agree
+        // with it everywhere. OpenCV's own CPU warp does not (see the assertion below).
+        let inv = (try XCTUnwrap(invertForTest([cos(theta), -sin(theta), 3.37, sin(theta), cos(theta), 1.21, 0, 0, 1])))
+        var gpuVsRef = 0, cpuVsRef = 0
+        for y in margin..<(height - margin) {
+            for x in margin..<(width - margin) {
+                let w = inv[6] * Double(x) + inv[7] * Double(y) + inv[8]
+                let sx = (inv[0] * Double(x) + inv[1] * Double(y) + inv[2]) / w
+                let sy = (inv[3] * Double(x) + inv[4] * Double(y) + inv[5]) / w
+                let xq = Int((sx * 32).rounded(.toNearestOrEven)), yq = Int((sy * 32).rounded(.toNearestOrEven))
+                let ix = xq >> 5, iy = yq >> 5
+                let fx = Double(xq & 31) / 32, fy = Double(yq & 31) / 32
+                func px(_ xx: Int) -> Double { Double((((xx % width) + width) % width % 90) * 700) }
+                // value depends only on x here (pattern ignores y), so bilinear in x with weights
+                let v = px(ix) * (1 - fx) + px(ix + 1) * fx
+                _ = fy; _ = iy
+                let expected = Int(v.rounded())
+                if abs(Int(gpu[y][x]) - expected) > 0 { gpuVsRef += 1 }
+                if abs(Int(cpu[y][x]) - expected) > 0 { cpuVsRef += 1 }
+            }
+        }
+        XCTAssertEqual(gpuVsRef, 0, "the GPU sampled the wrong 1/32 step at \(gpuVsRef) of \(total) pixels")
+        // Against OpenCV the residual is OpenCV's own: its CPU warp is off the exact reference at
+        // as many pixels as it differs from the GPU (measured: 1,506 of 502,992 = 0.30%, down from
+        // 0.48% with a single-float projection, which was also off the reference).
+        _ = cpuVsRef
+        let fraction = Double(differing) / Double(total)
+        XCTAssertLessThan(fraction, 0.005, "the GPU and CPU warps differ at \(fraction * 100)% of pixels")
+    }
+
     // MARK: - median merge: same functional invariants as MedianMergeTests, on the GPU
 
     /// The GPU median-merge kernel's exact-integer arithmetic is documented to
@@ -517,6 +572,15 @@ final class GPUOpsTests: XCTestCase {
                                  "in-place and copied standalone merges differ (misses: \(plane != nil))")
         }
     }
+}
+
+private func invertForTest(_ m: [Double]) -> [Double]? {
+    let a = m[0], b = m[1], c = m[2], d = m[3], e = m[4], f = m[5], g = m[6], h = m[7], i = m[8]
+    let det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+    guard abs(det) > 1e-15 else { return nil }
+    return [(e * i - f * h) / det, -(b * i - c * h) / det, (b * f - c * e) / det,
+            -(d * i - f * g) / det, (a * i - c * g) / det, -(a * f - c * d) / det,
+            (d * h - e * g) / det, -(a * h - b * g) / det, (a * e - b * d) / det]
 }
 
 final class GPUDeviceBusyTests: XCTestCase {

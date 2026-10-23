@@ -465,7 +465,12 @@ private final class MetalGPUBackend: @unchecked Sendable {
         self.device = device
         self.queue = queue
         do {
-            let library = try device.makeLibrary(source: MetalGPUBackend.shaderSource, options: nil)
+            // Fast math off: with it on, Metal turns the warp's perspective divide into an
+            // approximate reciprocal, which moves a sample position by up to a couple of ulps and
+            // so, near a 1/32-pixel step boundary, onto the neighbouring step.
+            let options = MTLCompileOptions()
+            options.fastMathEnabled = false
+            let library = try device.makeLibrary(source: MetalGPUBackend.shaderSource, options: options)
             func pipeline(_ name: String) throws -> MTLComputePipelineState {
                 guard let function = library.makeFunction(name: name) else {
                     throw NSError(domain: "GPUOps", code: 1,
@@ -557,12 +562,12 @@ private final class MetalGPUBackend: @unchecked Sendable {
         let srcStepElems = Int32(srcStepBytes / bytesPerComponent)
         let dstStepElems = Int32(dstStepBytes / bytesPerComponent)
 
-        var hInvFloat = hInv.map { Float($0) }
+        var hInvFloat = splitHighLow(hInv)
 
         guard let srcBuf = device.makeBuffer(bytes: srcPtr, length: rows * srcStepBytes,
                                              options: .storageModeShared),
               let dstBuf = device.makeBuffer(length: rows * dstStepBytes, options: .storageModeShared),
-              let hBuf = device.makeBuffer(bytes: &hInvFloat, length: 9 * MemoryLayout<Float>.stride,
+              let hBuf = device.makeBuffer(bytes: &hInvFloat, length: 18 * MemoryLayout<Float>.stride,
                                            options: .storageModeShared),
               let cmdBuf = queue.makeCommandBuffer(),
               let encoder = cmdBuf.makeComputeCommandEncoder()
@@ -783,10 +788,11 @@ private final class MetalGPUBackend: @unchecked Sendable {
 
         // Each neighbour's INVERSE homography (dst -> src), the convention the
         // warp kernels sample with — same inversion as `warpImpl`.
-        var hInv = [Float](repeating: 0, count: (Self.maxMergeSources - 1) * 9)
+        var hInv = [Float](repeating: 0, count: (Self.maxMergeSources - 1) * 18)
         for i in 0..<neighbourCount {
             guard let inverse = invert3x3(homographies + i * 9) else { return false }
-            for k in 0..<9 { hInv[i * 9 + k] = Float(inverse[k]) }
+            let split = splitHighLow(inverse)
+            for k in 0..<18 { hInv[i * 18 + k] = split[k] }
         }
 
         return runMerge(inputs: planes, dst: dstPlane, format: format) { encoder, bound in
@@ -1682,37 +1688,78 @@ private final class MetalGPUBackend: @unchecked Sendable {
     // `covered` is false exactly where cv::warpPerspective's BORDER_TRANSPARENT
     // leaves the destination untouched: none of the four sample corners exist in
     // the source (or the projection degenerates).
+    // Float-float ("double-float") helpers: a value is a pair (hi, lo) with |lo| <= ulp(hi)/2.
+    // They need exact fused multiply-add and no re-association, which is why the library is
+    // compiled with fast math off.
+    inline float2 two_sum(float a, float b) {
+        float s = a + b;
+        float bb = s - a;
+        return float2(s, (a - (s - bb)) + (b - bb));
+    }
+    inline float2 two_prod(float a, float b) {
+        float p = a * b;
+        return float2(p, fma(a, b, -p));
+    }
+    // (ah + al) * x for an exactly representable x
+    inline float2 df_mul(float ah, float al, float x) {
+        float2 p = two_prod(ah, x);
+        return two_sum(p.x, p.y + al * x);
+    }
+    inline float2 df_add(float2 a, float2 b) {
+        float2 s = two_sum(a.x, b.x);
+        return two_sum(s.x, s.y + a.y + b.y);
+    }
+    // row r of the 3x3 (hi parts at [0..8], low parts at [9..17]) applied to (x, y, 1)
+    inline float2 df_row(constant float* h, int r, float x, float y) {
+        float2 t = df_add(df_mul(h[3 * r], h[9 + 3 * r], x), df_mul(h[3 * r + 1], h[9 + 3 * r + 1], y));
+        return df_add(t, float2(h[3 * r + 2], h[9 + 3 * r + 2]));
+    }
+    // a / b in float-float
+    inline float2 df_div(float2 a, float2 b) {
+        float q1 = a.x / b.x;
+        float2 r = df_add(a, -df_mul(b.x, b.y, q1));
+        float q2 = r.x / b.x;
+        return two_sum(q1, q2);
+    }
+    // round(v * 32) to the nearest integer, ties to even, the way cv::warpPerspective's
+    // saturate_cast<int> does it (cvRound), for a float-float v.
+    inline int round32(float2 v) {
+        float2 t = float2(v.x * 32.0f, v.y * 32.0f);   // scaling by a power of two is exact
+        float i = rint(t.x);
+        float rem = (t.x - i) + t.y;
+        if (rem > 0.5f || (rem == 0.5f && fmod(i, 2.0f) != 0.0f)) i += 1.0f;
+        else if (rem < -0.5f || (rem == -0.5f && fmod(i, 2.0f) != 0.0f)) i -= 1.0f;
+        return int(i);
+    }
+
+    // `hInv` is the inverse homography as 18 floats: nine high parts, then nine low parts
+    // (see splitHighLow on the Swift side).
     inline WarpTap warp_tap(constant float* hInv, int px, int py, int width, int height) {
         WarpTap t;
         t.covered = false;
 
         float x = float(px), y = float(py);
-        float w = hInv[6] * x + hInv[7] * y + hInv[8];
-        if (fabs(w) < 1e-12f) return t;
-        float sx = (hInv[0] * x + hInv[1] * y + hInv[2]) / w;
-        float sy = (hInv[3] * x + hInv[4] * y + hInv[5]) / w;
-        if (!isfinite(sx) || !isfinite(sy)) return t;
-
-        int ix = int(floor(sx));
-        int iy = int(floor(sy));
-        float fx = sx - float(ix);
-        float fy = sy - float(iy);
+        float2 w = df_row(hInv, 2, x, y);
+        if (fabs(w.x) < 1e-12f) return t;
+        float2 sx = df_div(df_row(hInv, 0, x, y), w);
+        float2 sy = df_div(df_row(hInv, 1, x, y), w);
+        if (!isfinite(sx.x) || !isfinite(sy.x)) return t;
 
         // OpenCV's INTER_LINEAR does not interpolate at the exact fractional
-        // position: it quantizes it to one of 32 steps (INTER_TAB_SIZE, a 5-bit
-        // fixed-point fraction) via a precomputed coefficient table. Matching that
-        // quantization -- not just the bilinear formula -- is most of what makes
-        // this kernel track OpenCV's actual output instead of a continuous-float
-        // bilinear resample that merely looks similar; see GPUWarpTests for the
-        // measured effect (removing this raised the interior max delta by >10x on
-        // a synthetic high-frequency pattern).
-        const float kTabSize = 32.0f;
-        int fxi = int(round(fx * kTabSize));
-        if (fxi >= int(kTabSize)) { fxi -= int(kTabSize); ix += 1; }
-        int fyi = int(round(fy * kTabSize));
-        if (fyi >= int(kTabSize)) { fyi -= int(kTabSize); iy += 1; }
-        fx = float(fxi) / kTabSize;
-        fy = float(fyi) / kTabSize;
+        // position: it rounds the position to one of 32 steps per pixel (INTER_TAB_SIZE,
+        // a 5-bit fixed-point fraction) via a precomputed coefficient table, and splits
+        // that integer into pixel and step. Matching that quantization -- not just the
+        // bilinear formula -- is most of what makes this kernel track OpenCV's actual
+        // output instead of a continuous-float bilinear resample that merely looks
+        // similar; see GPUWarpTests for the measured effect (removing this raised the
+        // interior max delta by >10x on a synthetic high-frequency pattern). The position
+        // is rounded as a whole, as OpenCV does, from a float-float projection: a single
+        // float cannot hold a column near 6000 to better than 0.0005 px.
+        int xq = round32(sx);
+        int yq = round32(sy);
+        int ix = xq >> 5, iy = yq >> 5;
+        float fx = float(xq & 31) / 32.0f;
+        float fy = float(yq & 31) / 32.0f;
 
         t.w00 = (1.0f - fx) * (1.0f - fy);
         t.w10 = fx * (1.0f - fy);
@@ -1976,7 +2023,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
             float v[17];
             v[0] = float(base[(size_t)y * baseStep + (size_t)x * channels + c]);
             for (int i = 0; i < neighbourCount; ++i) {
-                WarpTap t = warp_tap(hInv + i * 9, x, y, width, height);
+                WarpTap t = warp_tap(hInv + i * 18, x, y, width, height);
                 if (t.covered) {
                     v[i + 1] = float(warp_value<T, MAXV>(neighbours.src[i], neighbourSteps[i], channels, t, c));
                 } else {
@@ -2293,6 +2340,17 @@ private final class MetalGPUBackend: @unchecked Sendable {
         lt.write(float4(v, 0.0, 0.0, 0.0), gid);
     }
     """
+}
+
+/// A 3x3 matrix as 18 floats: the nine values rounded to float, then the nine rounding
+/// remainders. The warp kernels carry the projection in float-float arithmetic from these, so
+/// a sample position comes out to about 1e-12 relative instead of the 1e-7 a single float
+/// gives, which at a column near 6000 is the difference between 0.0005 px and nothing, and
+/// 0.0005 px is enough to put a sample on the neighbouring 1/32-pixel step.
+func splitHighLow(_ m: [Double]) -> [Float] {
+    let high = m.map { Float($0) }
+    let low = zip(m, high).map { Float($0 - Double($1)) }
+    return high + low
 }
 
 /// Closed-form 3x3 inverse of the row-major matrix `m` points at (9 doubles).
