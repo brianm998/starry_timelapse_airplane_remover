@@ -859,7 +859,15 @@ another agent's runs, so wall times are noisy.)*
 | `test_a7sii_10` default, baseline binary | 191 s | 473 s | 324 s | 10.7 GB |
 | same, after WP-A (`star_wpa`) | 158 s | 465 s | 329 s | 10.7 GB |
 
-WP-A identity A/B (default flags, 19 output JPEGs): **all 19 byte-identical** to baseline.
+| same, after WP-A..C so far (`star_wpb`, `3a547b89`: S1-S13 except S6.2/6.3, C1, C8) | 164 s | 412 s | **100 s** | 13.9 GB |
+
+WP-A identity A/B (default flags, 19 output JPEGs): **all 19 byte-identical** to baseline. Same for
+`star_wpb` (everything up to C8). Wall time is within this machine's noise; the clear change is
+**system time, 324 s -> 100 s** (the Metal resource churn S1 removed). Peak RSS rose 10.7 -> 13.9 GB
+(the texture/readback pools and S5's pinned static neighbours); worth watching on a 42 MP run.
+S6 step 1, `test_a7sii_10` JPEG: `DecodedFrameStore: 364 loads, 311 served from pinned decodes,
+53 decodes (2.79 per frame over 19 frames)`. That is above the ~2 the guide calls for step 2.
+The governor line now reads e.g. `GPU 10% (slots 7%)`.
 Outputs are JPEGs (the input format), so compare with `shasum`, not TIFF tools.
 
 **Not yet done:** `selective` / `automatic:true` baselines, the dense-crop baseline and A/B (X1

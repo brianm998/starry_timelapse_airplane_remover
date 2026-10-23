@@ -167,7 +167,8 @@ public class AbstractBlobProcessor {
     // change only the ids of the blobs, so that they are all in a line from 1, onwards.
     // necessary becasuse of deleted blobs in the middle, helps to avoid UInt16 overflow
     internal func compactBlobIds(of blobMap: [Int32:Blob]) -> [Int32:Blob] {
-        let array = Array(blobMap.values)
+        // ascending old id, so the renumbering is the same every run (dictionary order is not)
+        let array = blobMap.sorted { $0.key < $1.key }.map { $0.value }
       //  Log.i("compactBlobIds \(array.count) blobs, \(UInt16.max-UInt16(array.count)) ids left in UInt16 space")
         var newBlobMap: [Int32:Blob] = [:]
         for (index, blob) in array.enumerated() {

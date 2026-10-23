@@ -241,7 +241,7 @@ public actor Blob: CustomStringConvertible,
     public var line: Line? {
         get async {
             if let _blobLine { return _blobLine }
-            if let lineInfo = await CombinedHoughLineFinder(pixels: Array(self.pixels),
+            if let lineInfo = await CombinedHoughLineFinder(pixels: self.pixels.sorted { ($0.y, $0.x) < ($1.y, $1.x) },
                                                             bounds: self.boundingBox(),
                                                             args: constants.getHoughLineFinderArgs(),
                                                             frameIndex: frameIndex).line

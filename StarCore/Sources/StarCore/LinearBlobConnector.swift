@@ -287,7 +287,12 @@ public actor LinearBlobConnector {
             blobSizes.append(BlobSize(id: id, size: await blob.size(), blob: blob))
         }
 
-        var sortedBlobs = blobSizes.sorted { $0.size > $1.size }
+        // Largest first, and among equal sizes lowest id first. Sorting by size alone left ties in
+        // dictionary order, which varies from run to run, and the cut below keeps only the first
+        // `maxBlobsProcessed`: which tied blobs made it in was luck.
+        var sortedBlobs = blobSizes.sorted {
+            $0.size != $1.size ? $0.size > $1.size : $0.id < $1.id
+        }
 
         let originalNumber = sortedBlobs.count
         
@@ -409,12 +414,17 @@ fileprivate func processBlob(
     
     //Log.d("blob \(id) has \(neighborCloud.count) neighbors")
 
-    let frameIndex = neighborCloud.first?.frameIndex ?? -1
-    let id = neighborCloud.first?.id ?? 0
-    
+    // The cloud is a Set, so its iteration order differs from run to run. Absorbing in that
+    // order mattered twice: `absorb` refuses a blob that would take the total past 65,535
+    // pixels, so which blobs fit under that cap depended on the order, and the temporary blob's
+    // id came from whichever element happened to be first. Ascending id fixes both.
+    let orderedCloud = neighborCloud.sorted { $0.id < $1.id }
+    let frameIndex = orderedCloud.first?.frameIndex ?? -1
+    let id = orderedCloud.first?.id ?? 0
+
     // then create a temporary blob that combines all of the nearby blobs
     let fullBlob = Blob(id: id, frameIndex: frameIndex) // values not used
-    for blob in neighborCloud { _ = await fullBlob.absorb(blob, always: true) }
+    for blob in orderedCloud { _ = await fullBlob.absorb(blob, always: true) }
 
     // here we have combined all of the nearby blobs within our given scanSize
     // to eachother.  This may be enormous, if we have lots of small blobs close together.
