@@ -174,6 +174,32 @@ final class SIFTDetectorTests: XCTestCase {
         }
     }
 
+    /// The cap is applied to what the mask allows, not to the whole frame first. cv::SIFT (and this
+    /// port, before) kept the strongest N of the frame and then dropped those outside the mask,
+    /// so a mask over a minority of the frame lost most of the cap: asked for 40 keypoints under
+    /// a mask over the left quarter, it returned only the few of the frame's top 40 that happened to
+    /// sit there. Now it returns the strongest 40 inside the mask.
+    func testTheCapKeepsTheStrongestKeypointsInsideTheMask() throws {
+        let width = 640, height = 480
+        let img = makeNightSky(width: width, height: height, stars: 700)
+
+        let maskData = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height)
+        for y in 0..<height { for x in 0..<width { maskData[y * width + x] = x < width / 4 ? 255 : 0 } }
+        let mask = MatWrapper(width: width, height: height,
+                              cvType: MatWrapper.cvType(forBitsPerComponent: 8, componentsPerPixel: 1),
+                              bytesPerRow: width, data: UnsafeMutableRawPointer(maskData), takeOwnership: true)
+
+        let uncapped = try XCTUnwrap(ImageAligner.debugSiftReference(img, mask: mask, nfeatures: 0))
+        let cap = 40
+        XCTAssertGreaterThan(uncapped.keypointCount, cap * 2, "the masked quarter needs enough keypoints for a cap to bind")
+        let capped = try XCTUnwrap(ImageAligner.debugSiftReference(img, mask: mask, nfeatures: Int32(cap)))
+        XCTAssertGreaterThanOrEqual(capped.keypointCount, cap, "the cap was spent outside the mask")
+        XCTAssertLessThanOrEqual(capped.keypointCount, cap + 5, "ties at the cutoff only")
+        for (x, _) in capped.keypointPositions() {
+            XCTAssertLessThan(x, Double(width) / 4)
+        }
+    }
+
     /// The port against real cv::SIFT on the kind of image the sky detector is
     /// actually handed — see `makeNightSky`. The disks above are too large and
     /// too hard-edged to exercise the small scales stars live at, which is where

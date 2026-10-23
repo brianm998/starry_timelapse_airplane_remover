@@ -662,7 +662,6 @@ bool detectAndComputeImpl(const cv::Mat &img8u, const cv::Mat &mask, int nfeatur
     }
 
     cv::KeyPointsFilter::removeDuplicatedSorted(keypoints);
-    if (nfeatures > 0) cv::KeyPointsFilter::retainBest(keypoints, nfeatures);
 
     // firstOctave < 0: undo the doubling that let octave -1 exist at all.
     for (auto &kpt : keypoints) {
@@ -672,7 +671,15 @@ bool detectAndComputeImpl(const cv::Mat &img8u, const cv::Mat &mask, int nfeatur
         kpt.size *= scale;
     }
 
+    // The mask first, then the cap. OpenCV's own SIFT caps first and masks afterwards, which
+    // is a bug when the mask is what says where keypoints are wanted: the strongest N
+    // keypoints in the whole frame are chosen, and the mask then discards however many of
+    // them fell outside it. On a moonlit frame the sky was 3,529 keypoints of a larger set,
+    // and capping first left 1,809 of them (a9-1 frame 119); the weakest 40 % of the sky's own
+    // keypoints were never given a chance against bright ground noise. Masked first, the cap
+    // keeps the strongest N of what the mask allows.
     if (!mask.empty()) cv::KeyPointsFilter::runByPixelsMask(keypoints, mask);
+    if (nfeatures > 0) cv::KeyPointsFilter::retainBest(keypoints, nfeatures);
 
     keypoints.shrink_to_fit();
 

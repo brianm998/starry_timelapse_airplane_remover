@@ -1500,7 +1500,9 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             // kSkyKeypointCutMargin.  The star mask alone does not keep keypoints off it:
             // the bright sky above the step clears its threshold, and its dilation then
             // reaches across the step into the black.  Applied to the mask rather than to
-            // the keypoints afterwards, so the step cannot use up SIFT's keypoint cap.
+            // the keypoints afterwards, so the step cannot use up SIFT's keypoint cap. (That
+            // premise holds for both SIFT paths now that each applies this mask before its cap;
+            // cv::SIFT used to cap first, so the step could use up the cap there.)
             cv::Mat clear = awayFromMaskEdge(detectHorizonMask, kSkyKeypointCutMargin);
             if (cv::countNonZero(clear) > 0) {
                 cv::bitwise_and(detectionMask, clear, detectionMask);
@@ -1620,8 +1622,16 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                   detectGray, detectionMask, maxKeypoints, keypoints, descriptors);
             }
             if (!usedGPUPort) {
-                cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
-                siftBase->detectAndCompute(detectGray, detectionMask, keypoints, descriptors);
+                // cv::SIFT applies its keypoint cap BEFORE the mask, so a capped detectAndCompute
+                // keeps the strongest N of the whole frame and then drops those outside the mask
+                // (the port above masks first). Detect uncapped with the mask, keep the strongest
+                // N of what the mask allows, then describe only those.
+                cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(0);
+                siftBase->detect(detectGray, keypoints, detectionMask);
+                if (maxKeypoints > 0 && (int)keypoints.size() > maxKeypoints) {
+                    cv::KeyPointsFilter::retainBest(keypoints, maxKeypoints);
+                }
+                siftBase->compute(detectGray, keypoints, descriptors);
             }
         }
 
