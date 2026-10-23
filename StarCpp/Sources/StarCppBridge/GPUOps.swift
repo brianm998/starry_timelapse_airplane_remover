@@ -48,6 +48,7 @@ public enum GPUOps {
     public static func trimTexturePool() {
         #if canImport(Metal) && os(macOS)
         activeBackend?.texturePool.trim()
+        activeBackend?.trimOutputPool()
         #endif
     }
 
@@ -146,6 +147,12 @@ public enum GPUOps {
     /// have the GPU write a `.storageModeManaged` buffer, synchronize it and copy
     /// it out — even on unified memory. For tests: otherwise that path only runs
     /// on hardware the suite may not be running on.
+    static func setCopyMergeInputsForTesting(_ on: Bool) {
+        #if canImport(Metal) && os(macOS)
+        activeBackend?.setCopyInputs(on)
+        #endif
+    }
+
     static func setDiscreteMergesForTesting(_ on: Bool) {
         #if canImport(Metal) && os(macOS)
         activeBackend?.setDiscreteMerges(on)
@@ -347,6 +354,43 @@ private final class MetalGPUBackend: @unchecked Sendable {
     private var inPlaceMerges = 0
     private var copiedMerges = 0
     private var discreteMerges = false
+    private var copyInputsForTesting = false
+
+    /// `.storageModeManaged` merge outputs kept between merges, by length. A discrete GPU
+    /// writes its result into one of these and it is copied out afterwards; allocating a
+    /// frame-sized managed buffer for every merge was most of what that path cost besides
+    /// the copy itself. Two per size is enough: merges in flight each hold one.
+    private let outputPoolLock = NSLock()
+    private var outputPool: [Int: [MTLBuffer]] = [:]
+
+    private func takeManagedOutput(length: Int) -> MTLBuffer? {
+        outputPoolLock.lock()
+        if var list = outputPool[length], let buffer = list.popLast() {
+            outputPool[length] = list
+            outputPoolLock.unlock()
+            return buffer
+        }
+        outputPoolLock.unlock()
+        return device.makeBuffer(length: length, options: .storageModeManaged)
+    }
+
+    private func giveManagedOutput(_ buffer: MTLBuffer) {
+        outputPoolLock.lock()
+        defer { outputPoolLock.unlock() }
+        var list = outputPool[buffer.length, default: []]
+        if list.count < 2 { list.append(buffer) }
+        outputPool[buffer.length] = list
+    }
+
+    func trimOutputPool() {
+        outputPoolLock.lock()
+        outputPool.removeAll()
+        outputPoolLock.unlock()
+    }
+
+    func setCopyInputs(_ on: Bool) {
+        mergeStateLock.withLock { copyInputsForTesting = on }
+    }
 
     func mergeCounts() -> (inPlace: Int, copied: Int) {
         mergeStateLock.withLock { (inPlaceMerges, copiedMerges) }
@@ -834,9 +878,14 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// are copied (`bindByCopy`).
     private func runMerge(inputs: [MergePlane], dst: MergePlane, format: MergeFormat,
                           encode: (MTLComputeCommandEncoder, MergeBindings) -> Void) -> Bool {
-        let unified = device.hasUnifiedMemory && !mergeStateLock.withLock({ discreteMerges })
-        let inPlace = unified ? bindInPlace(inputs: inputs, dst: dst) : nil
-        if unified && inPlace == nil {
+        let (discrete, copyInputs) = mergeStateLock.withLock { (discreteMerges, copyInputsForTesting) }
+        let unified = device.hasUnifiedMemory && !discrete
+        // Inputs are read where they are on every device. Only the OUTPUT differs: unified
+        // memory writes the destination image itself, a discrete GPU writes a managed buffer
+        // (a kernel writing shared memory pays PCIe on every access) that is copied out.
+        let inPlace = copyInputs ? nil : bindInPlace(inputs: inputs, dst: dst, format: format,
+                                                     writeDstInPlace: unified)
+        if inPlace == nil && !copyInputs {
             Log.d("GPU merge: could not hand the GPU these images in place; copying them")
         }
         guard let bound = inPlace ?? bindByCopy(inputs: inputs, dst: dst, rows: format.rows,
@@ -876,7 +925,8 @@ private final class MetalGPUBackend: @unchecked Sendable {
     ///
     /// Returns nil when any one image cannot be wrapped, and the caller copies
     /// them all instead.
-    private func bindInPlace(inputs: [MergePlane], dst: MergePlane) -> MergeBindings? {
+    private func bindInPlace(inputs: [MergePlane], dst: MergePlane, format: MergeFormat,
+                             writeDstInPlace: Bool) -> MergeBindings? {
         func wrap(_ plane: MergePlane) -> MergeBinding? {
             let page = Int(getpagesize())
             let address = Int(bitPattern: plane.pointer)
@@ -892,14 +942,34 @@ private final class MetalGPUBackend: @unchecked Sendable {
             else { return nil }
             return MergeBinding(buffer: buffer, offset: offset, step: plane.step)
         }
-        guard let dstBinding = wrap(dst) else { return nil }
         var inputBindings: [MergeBinding] = []
         inputBindings.reserveCapacity(inputs.count)
         for input in inputs {
             guard let binding = wrap(input) else { return nil }
             inputBindings.append(binding)
         }
-        return MergeBindings(inputs: inputBindings, dst: dstBinding, managedDst: nil, finish: {})
+        if writeDstInPlace {
+            guard let dstBinding = wrap(dst) else { return nil }
+            return MergeBindings(inputs: inputBindings, dst: dstBinding, managedDst: nil, finish: {})
+        }
+
+        // Discrete GPU: inputs stay put, the result goes to a pooled managed buffer and is
+        // copied out once the GPU is done.
+        let rows = format.rows, rowBytes = format.rowBytes
+        guard let output = takeManagedOutput(length: rowBytes * rows) else { return nil }
+        nonisolated(unsafe) let outPointer = UnsafeMutableRawPointer(mutating: dst.pointer)
+        let dstStep = dst.step
+        return MergeBindings(
+          inputs: inputBindings,
+          dst: MergeBinding(buffer: output, offset: 0, step: rowBytes),
+          managedDst: output,
+          finish: { [self] in
+              let source = output.contents()
+              for y in 0..<rows {
+                  memcpy(outPointer.advanced(by: y * dstStep), source.advanced(by: y * rowBytes), rowBytes)
+              }
+              giveManagedOutput(output)
+          })
     }
 
     /// A discrete GPU (or an image unified memory could not wrap): copy every

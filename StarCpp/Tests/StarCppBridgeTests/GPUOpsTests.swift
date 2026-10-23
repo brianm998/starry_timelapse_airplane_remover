@@ -431,9 +431,9 @@ final class GPUOpsTests: XCTestCase {
         }
     }
 
-    /// A discrete GPU cannot read the images where they are, so there the fused
-    /// merge copies them in and copies a `.storageModeManaged` result back out.
-    /// That has to be the same merge, to the byte, as the unified-memory one.
+    /// A discrete GPU reads the inputs where they are (they are only read) but writes a
+    /// `.storageModeManaged` buffer that is copied back out. That, and the fallback that copies
+    /// the inputs in as well, have to be the same merge, to the byte, as the unified-memory one.
     func testDiscreteGPUAlignedMergeAgreesExactlyWithTheUnifiedMemoryOne() throws {
         let f = alignedMergeFixture()
         for includeAll in [false, true] {
@@ -442,12 +442,25 @@ final class GPUOpsTests: XCTestCase {
             let before = GPUOps.mergeCounts()
             GPUOps.setDiscreteMergesForTesting(true)
             defer { GPUOps.setDiscreteMergesForTesting(false) }
-            let copied = try fusedMerge(f, includeAll: includeAll)
-            XCTAssertEqual(GPUOps.mergeCounts().copied, before.copied + 1,
-                           "the discrete path should have copied")
+            let discrete = try fusedMerge(f, includeAll: includeAll)
+            XCTAssertEqual(GPUOps.mergeCounts().inPlace, before.inPlace + 1,
+                           "the discrete path should bind its inputs in place")
+            // twice, so the second one runs on the recycled managed output buffer
+            let again = try fusedMerge(f, includeAll: includeAll)
 
-            try assertSamePixels(normal, copied,
+            let mid = GPUOps.mergeCounts()
+            GPUOps.setCopyMergeInputsForTesting(true)
+            defer { GPUOps.setCopyMergeInputsForTesting(false) }
+            let copied = try fusedMerge(f, includeAll: includeAll)
+            XCTAssertEqual(GPUOps.mergeCounts().copied, mid.copied + 1,
+                           "the fallback should have copied the inputs")
+
+            try assertSamePixels(normal, discrete,
                                  "discrete and unified-memory merges differ (includeAll: \(includeAll))")
+            try assertSamePixels(normal, again,
+                                 "a recycled managed output gave a different merge (includeAll: \(includeAll))")
+            try assertSamePixels(normal, copied,
+                                 "copied-input and unified-memory merges differ (includeAll: \(includeAll))")
         }
     }
 
@@ -495,9 +508,10 @@ final class GPUOpsTests: XCTestCase {
 
             GPUOps.setDiscreteMergesForTesting(true)
             defer { GPUOps.setDiscreteMergesForTesting(false) }
-            let copiedBefore = GPUOps.mergeCounts().copied
+            let discreteBefore = GPUOps.mergeCounts().inPlace
             let copied = try merged()
-            XCTAssertEqual(GPUOps.mergeCounts().copied, copiedBefore + 1, "the discrete path should have copied")
+            XCTAssertEqual(GPUOps.mergeCounts().inPlace, discreteBefore + 1,
+                           "the discrete path binds its inputs in place")
 
             try assertSamePixels(inPlace, copied,
                                  "in-place and copied standalone merges differ (misses: \(plane != nil))")
