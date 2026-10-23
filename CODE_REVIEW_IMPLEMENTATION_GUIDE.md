@@ -53,14 +53,26 @@ a baseline and a candidate can be run without rebuilding.
 
 ### 0.3 Machine safety (read before running anything big)
 
-On 2026-10-22 two concurrent `selective` runs on the dense crop fixture hung WindowServer and
-the macOS watchdog ended the user session (proposal, finding 8). Until X1 lands:
+On 2026-10-22 the dense crop fixture ended the macOS user session **twice**: first two
+concurrent `selective` runs, then a *single* run with `-n 3`, `nice -n 10` and a memory
+watchdog that never tripped (proposal, finding 8). WindowServer hung in the AMD driver while
+hundreds of threads waited on kernel locks held by `star`; the machine ran at 64-77 % system
+time for the whole line-connector stage. `nice` does not help — the cost is kernel time, not
+CPU priority — and memory never got near the watchdog limits.
 
-* **Never run two dense-field (`a7sii_10_crop16`) runs at once.** One at a time.
-* Pass **`-n 3`** (pipeline depth 3 instead of 72) and run under **`nice -n 10`**.
-* Run under the watchdog in [Appendix A.3](#a3-guarded-runner); it kills `star` on RSS > 30 GB,
-  `memory_pressure -Q` free < 35 %, or swap nearly full. Its PID lookup must use
-  `pgrep -P <pid of time>` — matching on the command line finds `/usr/bin/time` instead.
+* **Until X1 has landed: do not run `selective` or `automatic:true` on `a7sii_10_crop16` (or
+  any dense star field) on this Mac at all.** The numbers it would give you are already in the
+  Baseline section. Verify X1 first at frame level (see X1).
+* After X1: still one dense-field run at a time, `-n 3`, `nice -n 10`, under the watchdog in
+  [Appendix A.3](#a3-guarded-runner) — and add a system-time check to it (sample
+  `top -l 2 -n 0`; kill or `kill -STOP` the run if sys stays above ~40 % for a minute).
+  Tell Brian before starting one; `kill -STOP` (resumable) rather than kill if he needs the
+  machine.
+* The watchdog's PID lookup must use `pgrep -P <pid of time>` — matching on the command line
+  finds `/usr/bin/time` instead. Also note `/usr/bin/time` reports and exits when its child is
+  `SIGSTOP`ped, so a paused run's `time` numbers stop at the pause.
+* `test_a7sii_10` at full frame (default, `selective`, `automatic:true`) is safe; it is the
+  dense crop's blob counts that blow up.
 * Brian usually has Photoshop, Lightroom and the Star gui open (tens of GB). Check
   `ps -axo rss=,comm= | sort -rn | head` before a long run.
 * This machine is an iMac Pro on mains power: never shorten work "to save battery".
@@ -117,10 +129,12 @@ Record, on current `develop`, with a release binary saved as `star_base`:
    (sample every ~15 s), and `shasum` of every output TIFF.
 2. Same sequence, `-c selective` and `-c automatic:true`, both with
    `SWIFT_DETERMINISTIC_HASHING=1`: time and output hashes.
-3. Dense crop, `-c selective -n 3`, `SWIFT_DETERMINISTIC_HASHING=1`, guarded runner: time,
-   peak RSS from the watchdog log, output hashes. Run it **twice, sequentially** and compare
-   (this is also the C3/BUG-001 determinism check; if the proposal's finding 7 is already
-   filled in, reuse that result instead).
+3. Dense crop: **do not run it** (0.3). Its baseline is already recorded below (run E), and
+   the C3/BUG-001 determinism check is done (proposal, finding 7). To have byte-level
+   baselines for later blob-pipeline A/Bs, use a **single frame** instead: pick one crop frame
+   with its neighbours and drive the blob processor through `FrameHarness` (project memory
+   `frame-airplane-remover-harness`) or a cli run with `-L` over a 3-frame copy, `-n 1`,
+   watching system time.
 
 Write the numbers into a `## Baseline` section at the end of this file and commit it. Every
 later item quotes its before/after against these.
@@ -156,11 +170,20 @@ per-seed `taskGroup.addTask` at ~316; `processBlob` ~384; `Blob.absorb` in `Blob
 
 *Why identical:* each seed's work reads only shared, read-only state (`data.blobMap`,
 `data.blobRefs`, `data.analyzer` dimensions) and returns its own mappings; nothing a seed does
-affects another seed. Confirm with the crop A/B under `SWIFT_DETERMINISTIC_HASHING=1`.
+affects another seed.
 
-*Done when:* crop `selective` is byte-identical to baseline (deterministic hashing), its peak
-RSS and CPU-seconds are recorded and lower, and a test covers `absorb` (size, duplicates,
-refusal over 65,535).
+*Verify, in this order:*
+1. Frame level first (no full dense run): run `LinearBlobConnector` on one crop frame's blob
+   map in a test/harness, before and after, under `SWIFT_DETERMINISTIC_HASHING=1`; compare the
+   resulting blob maps (ids and pixel sets) and record `getrusage` user/sys time and peak
+   footprint for the step. The sys share must fall well below the baseline's ~80 %.
+2. Identity A/B on full-frame `test_a7sii_10` `selective` and `automatic:true` (safe).
+3. Only then, and with Brian's go-ahead, one guarded crop `selective` run (0.3 rules) whose
+   outputs must match run E's pixel signatures in the Baseline section.
+
+*Done when:* the above are identical, the crop run's system time no longer dominates and
+WindowServer stays responsive, peak RSS and CPU-seconds are recorded and lower, and a test
+covers `absorb` (size, duplicates, refusal over 65,535).
 
 ### C2 — `MemoryMonitor` books grants late and lets new requests jump the queue
 
@@ -516,8 +539,11 @@ than tuning thresholds.
 * Line fitting from `Array(self.pixels)` (`Blob.swift:239`, `OutlierGroup.swift:104`): sort the
   pixels (y, x) before summing.
 
-*Verify:* the crop `selective` run twice **without** deterministic hashing → identical outputs;
-removal oracle on `a7sii_10` (selective and automatic:true) no worse than baseline. Remove
+*Already established:* with a fixed hash seed two crop runs are byte-identical (proposal,
+finding 7), so ordering is the cause. *Verify (after X1 has landed — 0.3):* the crop
+`selective` run twice **without** deterministic hashing → identical outputs; removal oracle on
+`a7sii_10` (selective and automatic:true) no worse than baseline. Before X1, check the same
+thing at frame level (two processes, normal hashing, same frame → same blob maps). Remove
 BUG-001 from `BUGS.md` if both hold (BUGS.md lives on branch
 `claude/gherkin-removal-validation-40e353`; coordinate if it has not merged).
 
@@ -530,8 +556,9 @@ most of the frame, rebuilt for each seed. Options, in order of preference:
 2. Compute connected components of the "within scanSize" graph once per frame, process each
    component once (skip seeds whose component is done).
 
-*Measure:* crop `selective` wall/CPU/peak RSS (BUG-003: 25-35 min), BUG-001 collateral on the
-crop, removal oracle on `a7sii_10`. If `.linear*` outlier features shift, flag the trees for
+*Measure (crop runs only after X1, under the 0.3 rules):* crop `selective` wall/CPU/sys/peak
+RSS against run E (4,900 s wall, 101,075 s sys), BUG-001 collateral on the crop, removal
+oracle on `a7sii_10`. If `.linear*` outlier features shift, flag the trees for
 retraining rather than tuning.
 
 ### C10 — apply the sky mask before the SIFT keypoint cap
@@ -764,4 +791,49 @@ its input means that frame was never processed.
 
 ## Baseline
 
-*(Filled in by WP-0.)*
+Recorded during the review on `93d7a2b6` (release cli). WP-0 adds the identity hashes and the
+`selective` / `automatic:true` full-frame numbers.
+
+**`test_a7sii_10`, default flags** (19 x 4240x2832 JPEG, `automatic:false`, `strong`, static,
+GPU toggles on): 135.8 s wall, 550.7 s user, 284.7 s sys, 33.7 GB max RSS. Stages: horizon
+27 s, keypoints 65 s, alignment validation 5 s, merges 32 s. Inside `withGPUSlot`: keypoint
+phase Metal create+free 22-43 %, `getBytes` 13-20 %, zero-fill 3-5 %, `waitUntilCompleted`
+0-2 %; merge phase `memcpy` ~60 %. Governor logged "CPU 16 % … GPU 100 % … limited by GPU"
+during keypoints.
+
+**Dense crop `selective`** (19 x 2300x1450 16-bit LZW, `-n 3`, `nice 10`,
+`SWIFT_DETERMINISTIC_HASHING=1`), run E: 4,900 s wall, 23,008 s user, **101,075 s sys**,
+25.7 GB max RSS; machine at 64-77 % sys during the line connector. Run F (same settings)
+produced byte-identical output on all 19 frames. Changed pixels vs input per frame (same in
+both): 82: 745, 83: 14,143, 84: 1,734, 86: 737, 88: 12,638, 89: 19,170, 90: 15,589,
+91: 7,940, 92: 2,812, 94: 10,674, 95: 6,345, 97: 4,361; frames 80, 81, 85, 87, 93, 96, 98: 0.
+(The crop input was regenerated with the `magick` recipe in 0.4, so these counts are against
+that input.)
+
+Pixel signatures (`magick identify -format '%#'`, first 16 hex digits) — check your
+regenerated input matches `in` before comparing a candidate's output with `out`:
+
+```
+LRT_00080 in=138480dc188fc7bd out=138480dc188fc7bd
+LRT_00081 in=b721a159d09296b0 out=b721a159d09296b0
+LRT_00082 in=ec5a97608390e1e3 out=e08dbf4389612cf3
+LRT_00083 in=c0692368d67eae34 out=8b008ab6a27531f8
+LRT_00084 in=744db705aa6311eb out=4417a4707e4f0e55
+LRT_00085 in=4046dd3bce81bb07 out=4046dd3bce81bb07
+LRT_00086 in=7f82ba9302d14f0f out=8a45ae45f4ecff25
+LRT_00087 in=4ec4e7bac0519ea1 out=4ec4e7bac0519ea1
+LRT_00088 in=8e4a14cfd1da515a out=6377336e11ef4326
+LRT_00089 in=d1a294d88a60a29d out=7900915136e1f791
+LRT_00090 in=c98c67f2e1d57bf8 out=7d39c1624efc99eb
+LRT_00091 in=4ec73ff803b58c80 out=694214a737052628
+LRT_00092 in=58941092267883ef out=61bb933641933666
+LRT_00093 in=3a0d83e243395955 out=3a0d83e243395955
+LRT_00094 in=f2c8394d748fae73 out=392005fa4ac7f355
+LRT_00095 in=afb57024bfaf024d out=2b11ead7b49ed872
+LRT_00096 in=a47c63b7404b0d00 out=a47c63b7404b0d00
+LRT_00097 in=43e6701348f68791 out=8ae58d4883d5f996
+LRT_00098 in=cc5d6a1a7914764e out=cc5d6a1a7914764e
+```
+
+These are `selective` outputs with `SWIFT_DETERMINISTIC_HASHING=1` and `-n 3` on `93d7a2b6`;
+an output-identical change must reproduce them under the same settings.
