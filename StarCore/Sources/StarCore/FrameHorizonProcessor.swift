@@ -23,6 +23,53 @@ You should have received a copy of the GNU General Public License along with sta
 // HorizonStats) and extensions on PixelatedImage; those stay in Horizon.swift
 // and are not moved here.
 
+/// Which frames of a sequence have a painted reference mask, kept per `horizonReference/`
+/// directory and revalidated by the directory's modification time (adding or removing a
+/// reference changes it; overwriting one does not change which frames have one).
+final class ReferenceMaskIndex: @unchecked Sendable {
+    static let shared = ReferenceMaskIndex()
+
+    private let lock = NSLock()
+    private var entries: [String: (stamp: Date?, index: [Int: String])] = [:]
+    private(set) var builds = 0
+
+    /// Frame index -> reference mask path for every frame that has one. `build` receives the
+    /// file names present in the directory and maps them to frames; it runs only when the
+    /// directory is new or has changed.
+    func index(of directory: URL,
+               build: (Set<String>) -> [Int: String]) -> [Int: String]
+    {
+        let path = directory.path
+        let stamp = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+        lock.lock()
+        if let entry = entries[path], entry.stamp == stamp, stamp != nil {
+            lock.unlock()
+            return entry.index
+        }
+        lock.unlock()
+
+        let names = Set((try? FileManager.default.contentsOfDirectory(atPath: path)) ?? [])
+        let built = build(names)
+        lock.lock()
+        entries[path] = (stamp, built)
+        builds += 1
+        lock.unlock()
+        return built
+    }
+
+    func invalidate(directory: URL) {
+        lock.lock()
+        entries[directory.path] = nil
+        lock.unlock()
+    }
+
+    func invalidateAll() {
+        lock.lock()
+        entries.removeAll()
+        lock.unlock()
+    }
+}
+
 final public actor FrameHorizonProcessor {
 
     nonisolated public let frameIndex: Int
@@ -591,24 +638,38 @@ final public actor FrameHorizonProcessor {
             .deletingLastPathComponent()
             .appendingPathComponent("horizonReference")
 
-        let fm = FileManager.default
-        var candidates: [(distance: Int, index: Int, maskURL: URL)] = []
+        // Which frames have a painted reference is a property of the sequence's
+        // `horizonReference/` directory, not of this frame. It used to be rediscovered per
+        // frame by statting a candidate file for every frame of the sequence (three times a
+        // frame on a moving sequence), so the cost grew with frames squared. It is now listed
+        // once and kept until the directory changes.
+        let accessor = imageAccessor
+        let frameCount = imageSequence.filenames.count
+        let references = ReferenceMaskIndex.shared.index(of: referenceDir) {
+            existingNames in
+            var found: [Int: String] = [:]
+            for candidateIndex in 0..<frameCount {
+                guard let candidatePath = accessor.nameForImage(
+                        frameIndex: candidateIndex,
+                        ofType: .mergedHorizon,
+                        atSize: .original
+                      )
+                else { continue }
+                let candidateFileName = URL(fileURLWithPath: candidatePath).lastPathComponent
+                if existingNames.contains(candidateFileName) {
+                    found[candidateIndex] = referenceDir.appendingPathComponent(candidateFileName).path
+                }
+            }
+            return found
+        }
 
-        for candidateIndex in 0..<imageSequence.filenames.count {
-            guard candidateIndex != frameIndex else { continue }
-            guard let candidatePath = imageAccessor.nameForImage(
-                    frameIndex: candidateIndex,
-                    ofType: .mergedHorizon,
-                    atSize: .original
-                  )
-            else { continue }
-            let candidateFileName = URL(fileURLWithPath: candidatePath).lastPathComponent
-            let candidateURL = referenceDir.appendingPathComponent(candidateFileName)
-            guard fm.fileExists(atPath: candidateURL.path) else { continue }
+        var candidates: [(distance: Int, index: Int, maskURL: URL)] = []
+        for candidateIndex in references.keys.sorted() where candidateIndex != frameIndex {
+            guard candidateIndex < frameCount, let path = references[candidateIndex] else { continue }
             candidates.append((
                 distance: abs(candidateIndex - frameIndex),
                 index: candidateIndex,
-                maskURL: candidateURL
+                maskURL: URL(fileURLWithPath: path)
             ))
         }
 
@@ -875,7 +936,7 @@ final public actor FrameHorizonProcessor {
     /// The bound is one-sided on purpose — capping upward movement as well measured worse,
     /// because moving the line *up* is the direction that recovers a ridge the references
     /// bracket badly, and it is not the direction that runs away.
-    func referenceStatsBrightnessRefinedHorizonMask(
+    nonisolated func referenceStatsBrightnessRefinedHorizonMask(
       detected: HorizonMask,
       original: PixelatedImage,
       stats: [ReferenceHorizonFrameStats],
@@ -930,6 +991,11 @@ final public actor FrameHorizonProcessor {
         // Gaussian likelihoods in log space.
         let logWeights: [Double] = normWeights.map { Foundation.log(max(1e-12, $0)) }
 
+        // Scratch for the per-pixel mixture below, allocated once rather than twice per pixel
+        // (two 3-element heap arrays per pixel measured at 2.9 s -> 0.88 s hoisted, identical).
+        var skyLLs    = [Double](repeating: -Double.infinity, count: stats.count)
+        var groundLLs = [Double](repeating: -Double.infinity, count: stats.count)
+
         for x in 0..<w {
             guard let expY = expectedYPerColumn[x] else { continue }
             let bandTop    = max(0,     expY - searchRadius)
@@ -951,8 +1017,10 @@ final public actor FrameHorizonProcessor {
                 // (numerically stable mixture) and turn into a sky probability.
                 var maxSky    = -Double.infinity
                 var maxGround = -Double.infinity
-                var skyLLs    = [Double](repeating: -Double.infinity, count: stats.count)
-                var groundLLs = [Double](repeating: -Double.infinity, count: stats.count)
+                for i in 0..<stats.count {
+                    skyLLs[i] = -Double.infinity
+                    groundLLs[i] = -Double.infinity
+                }
                 for i in 0..<stats.count {
                     if let sky = stats[i].skyGaussian {
                         let ll = logWeights[i] + sky.logLikelihood(lab.L, lab.a, lab.b)
@@ -1070,7 +1138,7 @@ final public actor FrameHorizonProcessor {
     /// the corrected horizon Y is set to sky (255), everything at or below is ground (0).
     ///
     /// Returns `nil` if nothing changed.
-    func despikeHorizonY(
+    nonisolated func despikeHorizonY(
       _ bytes: [UInt8],
       width w: Int,
       height h: Int,
@@ -1221,19 +1289,29 @@ final public actor FrameHorizonProcessor {
         // anything at all.
         let tuned = loadTunedHorizonParameters()
 
-        return referenceStatsBrightnessRefinedHorizonMask(
-          detected: mask,
-          original: original,
-          stats: stats,
-          expectedYPerColumn: expectedY,
-          searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius,
-          maxDownwardExtension: tuned.maxDownwardExtension,
-          spikeRemovalEnabled: config.horizonSpikeRemovalEnabled,
-          spikeMaxWidth: config.horizonSpikeMaxWidth,
-          spikeMaxDeviationFraction: config.horizonSpikeMaxDeviationFraction,
-          spikeWindowHalf: config.horizonSpikeWindowHalf,
-          neighborhoodSize: config.referenceHorizonNeighborhoodSize
-        ) ?? mask
+        // A full-resolution per-pixel pass: native work, off the cooperative pool.
+        let searchRadius = config.referenceHorizonBrightnessRefinementSearchRadius
+        let maxDownward = tuned.maxDownwardExtension
+        let spikeEnabled = config.horizonSpikeRemovalEnabled
+        let spikeWidth = config.horizonSpikeMaxWidth
+        let spikeDeviation = config.horizonSpikeMaxDeviationFraction
+        let spikeHalf = config.horizonSpikeWindowHalf
+        let neighborhood = config.referenceHorizonNeighborhoodSize
+        return await NativeWork.run {
+            self.referenceStatsBrightnessRefinedHorizonMask(
+              detected: mask,
+              original: original,
+              stats: stats,
+              expectedYPerColumn: expectedY,
+              searchRadius: searchRadius,
+              maxDownwardExtension: maxDownward,
+              spikeRemovalEnabled: spikeEnabled,
+              spikeMaxWidth: spikeWidth,
+              spikeMaxDeviationFraction: spikeDeviation,
+              spikeWindowHalf: spikeHalf,
+              neighborhoodSize: neighborhood
+            )
+        } ?? mask
     }
 
     /// Look for a user-painted reference horizon mask on disk and return it if found.
@@ -2456,6 +2534,7 @@ final public actor FrameHorizonProcessor {
         // file stamp regardless; dropping it here means no frame can read the old mask
         // in the window before that check.
         await horizonReferenceMaskCache.invalidate(path: savePath)
+        ReferenceMaskIndex.shared.invalidate(directory: referenceDir)
         Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved \(savePath)")
 
         // For static sequences, also write a per-frame marker so this specific frame
