@@ -266,7 +266,7 @@ public actor LinearBlobConnector {
         }
     }
 
-    public func process(_ args: Args) async {
+    public func process(_ args: Args, seedConcurrency: Int = 4) async {
 
         Log.d("frame \(frameIndex) starting")
         internalBlobMap = await analyzer.mapOfBlobs()
@@ -298,6 +298,18 @@ public actor LinearBlobConnector {
         Log.d("frame \(frameIndex) processing \(sortedBlobs.count) blobs out of a total of \(originalNumber)")
         
         let mappings = await withTaskGroup(of: Set<BlobMapping>.self) { taskGroup in
+            // Sliding window: at most `window` seeds in flight. Each seed builds a neighbour
+            // cloud that can be most of the frame in a dense field, so one child per seed
+            // (up to maxBlobsProcessed) held every cloud at once. Results are unioned into a
+            // set, so completion order does not matter.
+            let window = max(1, seedConcurrency)
+            var inFlight = 0
+            var ret = Set<BlobMapping>()
+            func collect(_ blobMapping: Set<BlobMapping>) {
+                Log.d("frame \(frameIndex) ret \(ret.count) adding \(blobMapping.count) mappings")
+                ret.formUnion(blobMapping)
+            }
+
             for sortedBlob in sortedBlobs {
                 let blob = sortedBlob.blob
 
@@ -313,6 +325,11 @@ public actor LinearBlobConnector {
                     continue
                 }
 
+                if inFlight >= window, let done = await taskGroup.next() {
+                    collect(done)
+                    inFlight -= 1
+                }
+                inFlight += 1
                 taskGroup.addTask {
                     // find a cloud of neighbors
                     let neighborCloud =
@@ -335,12 +352,7 @@ public actor LinearBlobConnector {
                 }
             }
 
-            var ret = Set<BlobMapping>()
-            for await blobMapping in taskGroup {
-                Log.d("frame \(frameIndex) ret \(ret.count) adding \(blobMapping.count) mappings")
-                ret = ret.union(blobMapping) // XXX Crashed here :(
-                Log.d("frame \(frameIndex) ret \(ret.count) after adding \(blobMapping.count) mappings")
-            }
+            for await blobMapping in taskGroup { collect(blobMapping) }
             Log.d("frame \(frameIndex) returning set")
             return ret
         }

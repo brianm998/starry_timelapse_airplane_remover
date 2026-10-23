@@ -1300,6 +1300,11 @@ public struct Config: Codable, Sendable {
     /// the whole reason it exists, and workers in flight would each hold one.
     public var mergeLoadConcurrency: Int = 1
 
+    /// How many seed blobs `LinearBlobConnector` builds neighbour clouds for at once.
+    /// Each cloud can be most of a dense frame, so the old one-child-per-seed fan-out
+    /// (up to 400) held them all at the same time. The result does not depend on this.
+    public var linearConnectorSeedConcurrency: Int = 4
+
     public var imageWidth: Int = 0
     public var imageHeight: Int = 0
     public var imageBytesPerPixel: Int = 0
@@ -1620,6 +1625,7 @@ public struct Config: Codable, Sendable {
           ?? self.keypointDivisorWasChosen
         self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
         self.mergeLoadConcurrency = try c.decodeIfPresent(Int.self, forKey: .mergeLoadConcurrency) ?? self.mergeLoadConcurrency
+        self.linearConnectorSeedConcurrency = try c.decodeIfPresent(Int.self, forKey: .linearConnectorSeedConcurrency) ?? self.linearConnectorSeedConcurrency
         self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
         self.keypointCacheMaxMB = try c.decodeIfPresent(Int.self, forKey: .keypointCacheMaxMB) ?? self.keypointCacheMaxMB
         self.horizonMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .horizonMemoryMultiplier) ?? self.horizonMemoryMultiplier

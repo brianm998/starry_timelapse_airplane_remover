@@ -704,15 +704,14 @@ public actor Blob: CustomStringConvertible,
             let selfBeforeSize = self.size()
             
             let newPixels = await otherBlob.getPixels()
-            var updatedPixels = self.pixels
             if newPixels.count == 0 { Log.e("frame \(frameIndex) blob \(self.id) other blob to add has no pixels and size \(await otherBlob.size())") }
             for otherPixel in newPixels {
                 await statusTracker?.record(status: .blobbed(self), for: otherPixel)
-                if updatedPixels.update(with: otherPixel) != nil {
+                // in place: copying the whole set per absorb was quadratic for big blobs
+                if self.pixels.update(with: otherPixel) != nil {
                     Log.w("frame \(frameIndex) blob \(self.id) update with duplicate pixel")
                 }
             }
-            self.pixels = updatedPixels
             reset()
 
             let selfAfterSize = self.size()
