@@ -129,20 +129,37 @@ public actor HomographyDatabase {
 
     private func ensureOpen() throws {
         guard db == nil else { return }
-        guard sqlite3_open(dbPath, &db) == SQLITE_OK else {
-            let msg = db.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown"
+        // sqlite3_open hands back a handle even when it fails (so the error message can be read).
+        // Kept in `db`, that handle made every later call think the database was open and fail in
+        // prepare for the rest of the run, whatever had caused the first failure (a directory not
+        // created yet, a full disk). Only a handle that opened AND was set up is kept; any other is
+        // closed, so the next call tries again.
+        var handle: OpaquePointer?
+        guard sqlite3_open(dbPath, &handle) == SQLITE_OK else {
+            let msg = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown"
+            sqlite3_close(handle)
             throw "HomographyDatabase: cannot open \(dbPath): \(msg)"
         }
-        try runSQL("PRAGMA journal_mode=WAL")
-        try runSQL("PRAGMA synchronous=NORMAL")
-        try runSQL("""
-            CREATE TABLE IF NOT EXISTS homographies (
-                frame_index INTEGER NOT NULL,
-                type        TEXT    NOT NULL,
-                data        BLOB    NOT NULL,
-                PRIMARY KEY (frame_index, type)
-            )
-        """)
+        db = handle
+        do {
+            // Another process (a second star on the same temp dir, a viewer) may hold the write
+            // lock for a moment; wait for it instead of failing at once with SQLITE_BUSY.
+            sqlite3_busy_timeout(db, 5000)
+            try runSQL("PRAGMA journal_mode=WAL")
+            try runSQL("PRAGMA synchronous=NORMAL")
+            try runSQL("""
+                CREATE TABLE IF NOT EXISTS homographies (
+                    frame_index INTEGER NOT NULL,
+                    type        TEXT    NOT NULL,
+                    data        BLOB    NOT NULL,
+                    PRIMARY KEY (frame_index, type)
+                )
+            """)
+        } catch {
+            sqlite3_close(db)
+            db = nil
+            throw error
+        }
     }
 
     private func runSQL(_ sql: String) throws {
