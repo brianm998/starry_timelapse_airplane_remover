@@ -200,6 +200,27 @@ final class SIFTDetectorTests: XCTestCase {
         }
     }
 
+    /// A feature file is written beside its destination and renamed into place: afterwards the
+    /// directory holds the one file, it reads back with the same keypoints, and writing again
+    /// replaces it.
+    func testFeatureFilesAreWrittenAtomically() throws {
+        let img = makeStarField(width: 256, height: 192, count: 30)
+        let features = try XCTUnwrap(ImageAligner.debugSiftReference(img, mask: nil, nfeatures: 200))
+        XCTAssertGreaterThan(features.keypointCount, 0)
+
+        let dir = NSTemporaryDirectory() + "features-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let path = "\(dir)/keypoints_0.yml"
+
+        XCTAssertTrue(features.write(toFilename: path))
+        XCTAssertTrue(features.write(toFilename: path), "writing over an existing file")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir), ["keypoints_0.yml"],
+                       "a temp file was left behind")
+        let back = try XCTUnwrap(OCVFeatureSet.load(fromFilename: path))
+        XCTAssertEqual(back.keypointCount, features.keypointCount)
+    }
+
     /// The port against real cv::SIFT on the kind of image the sky detector is
     /// actually handed — see `makeNightSky`. The disks above are too large and
     /// too hard-edged to exercise the small scales stars live at, which is where

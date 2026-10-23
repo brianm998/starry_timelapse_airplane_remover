@@ -512,7 +512,9 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(self)
         StarCore.mkdir(tempOutputPath)
-        try data.write(to: URL(fileURLWithPath: path))
+        // atomically: a crash part way through a plain write left a torn record, which reads as
+        // absent and so invalidates nothing and rebuilds nothing, for the whole temp dir
+        try data.write(to: URL(fileURLWithPath: path), options: .atomic)
         Log.d("wrote \(path)")
     }
 

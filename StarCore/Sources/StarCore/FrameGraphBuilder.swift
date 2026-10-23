@@ -499,6 +499,12 @@ public final actor FrameGraphBuilder {
             return
         }
 
+        // Temp files an earlier run died in the middle of writing (see StaleTempFiles). Off the
+        // cooperative pool: it walks the temp and output directories.
+        let cleanupConfig = await configManager.config()
+        let cleanupDirectories = [cleanupConfig.tempOutputPath, cleanupConfig.outputPath]
+        _ = await NativeWork.run { StaleTempFiles.clean(in: cleanupDirectories) }
+
         let errors = ArrayActor<String>([])
 
         let config = await configManager.config()

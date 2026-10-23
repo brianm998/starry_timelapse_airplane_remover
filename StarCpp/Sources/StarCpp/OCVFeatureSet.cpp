@@ -8,6 +8,15 @@
 #include <string>
 #include <cstring>
 #include <sys/stat.h>
+#include <atomic>
+#include <filesystem>
+#ifdef _WIN32
+  #include <process.h>
+  static inline long featureWriterPid() { return _getpid(); }
+#else
+  #include <unistd.h>
+  static inline long featureWriterPid() { return static_cast<long>(getpid()); }
+#endif
 
 // MSVC's <sys/stat.h> does not define the POSIX S_ISDIR macro; it only
 // exposes the S_IFMT / S_IFDIR bit constants. Define S_ISDIR ourselves
@@ -100,17 +109,44 @@ bool ocv_feature_set_write(OCVFeatureSetRef ref, const char *filename,
         return false;
     }
 
+    // Written beside the destination and renamed into place. Written in place, a crash or a full
+    // disk part way through left a torn file at the real name, and every neighbour's homography op
+    // then failed to parse it. The temp name keeps the extension (cv::FileStorage picks YAML, XML or
+    // JSON from it) and is unique per call, with the same `.tmp.<pid>-<n>` shape the image writer
+    // uses, so a stale one is recognisable and removable.
+    static std::atomic<unsigned long> sequence{0};
+    const std::string target(filename);
+    std::string base = target, extension;
+    const size_t dot = target.find_last_of('.');
+    const size_t slash = target.find_last_of("/\\");
+    if (dot != std::string::npos && (slash == std::string::npos || dot > slash)) {
+        base = target.substr(0, dot);
+        extension = target.substr(dot);
+    }
+    const std::string temp = base + ".tmp." + std::to_string(featureWriterPid()) + "-" +
+                             std::to_string(sequence.fetch_add(1)) + extension;
+    std::error_code ignored;
     try {
-        cv::FileStorage storage(std::string(filename), cv::FileStorage::WRITE);
-        if (!storage.isOpened()) {
-            if (errorMsg) *errorMsg = "Failed to open file for writing";
+        {
+            cv::FileStorage storage(temp, cv::FileStorage::WRITE);
+            if (!storage.isOpened()) {
+                if (errorMsg) *errorMsg = "Failed to open file for writing";
+                return false;
+            }
+            storage << "keypoints" << ref->keypoints;
+            storage << "descriptors" << ref->descriptors;
+            if (!ref->stars.empty()) storage << "stars" << ref->stars;
+            storage.release();
+        }
+        std::error_code ec;
+        std::filesystem::rename(temp, target, ec);
+        if (ec) {
+            std::filesystem::remove(temp, ignored);
+            if (errorMsg) *errorMsg = "Failed to move the feature file into place";
             return false;
         }
-        storage << "keypoints" << ref->keypoints;
-        storage << "descriptors" << ref->descriptors;
-        if (!ref->stars.empty()) storage << "stars" << ref->stars;
-        storage.release();
     } catch (...) {
+        std::filesystem::remove(temp, ignored);
         if (errorMsg) *errorMsg = "Exception writing feature file";
         return false;
     }
