@@ -2977,12 +2977,23 @@ public final class ImageSequenceViewModel {
     ) {
         Log.d("processing frames from \(startIndex) to \(endIndex)")
         //if isProcessingFrames { return }
+        // A re-process asked for while a run is in flight (the menu items stay enabled) used to
+        // start a second graph over the same frames: the old run's operations were still queued and
+        // writing, and when EITHER run finished it cleared `isProcessingFrames`, dropping the modal
+        // over a run that was still going. This run takes the next generation number so the old
+        // run's completion is ignored, and waits for the old operations to stop before building.
+        let supersedingARun = isProcessingFrames
+        processingGeneration += 1
+        let runGeneration = processingGeneration
         isProcessingFrames = true
         startProcessingModal()
 
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
 
         Task.detached(priority: .medium) { [self] in
+            if supersedingARun {
+                await frameGraphBuilder.cancelAllOperationsAndWait()
+            }
             // The shared builder is pointed at THIS sequence's config as its run starts (idempotent:
             // it registers its callback once per manager), so a sequence that was loaded and then
             // cancelled, or one that is only being looked at, has not taken it over.
@@ -3037,7 +3048,11 @@ public final class ImageSequenceViewModel {
                   endIndex: clampedEndIndex
                 ) { processingState in
                     Task { @MainActor in
-                        self.isProcessingFrames = false
+                        // only the current run's end ends the run state: a superseded run finishing
+                        // (or being cancelled) must not clear it under the one that replaced it
+                        if self.processingGeneration == runGeneration {
+                            self.isProcessingFrames = false
+                        }
                     }
                 }
             } else {
