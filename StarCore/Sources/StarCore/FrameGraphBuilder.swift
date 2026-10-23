@@ -1187,9 +1187,11 @@ public final actor FrameGraphBuilder {
         // Its dependencies are the merge ops, which now exist only for the requested
         // range, so a partial run reports completion when that range is written rather
         // than waiting on frames it never built an op for.
+        let outputFrameCount = range.output.count
         let completionOp = GraphCompletionOp {
             Log.i("Frame graph fully finished")
             Log.i(await MemoryMonitor.shared.stats())
+            Log.i(DecodedFrameStore.shared.statsLine(frames: outputFrameCount))
             closure(await errors.elements())
         }
         Log.d("\(mergeOps.count) mergeOps")
