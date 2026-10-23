@@ -31,6 +31,12 @@ nonisolated(unsafe) private var outHandle = FileHandle.standardOutput
 
 // Call ONCE at startup, before any logging or I/O.
 func setupProtocolIO() {
+#if !os(Windows)
+    // A client that has gone away closes its read end of our stdout pipe. The next write then
+    // raises SIGPIPE, whose default action ends the process on the spot: no session close, no
+    // run-marker clean-up. Ignored, the write fails with EPIPE instead and `writeFrame` reports it.
+    signal(SIGPIPE, SIG_IGN)
+#endif
 #if os(Windows)
     let O_BINARY: Int32 = 0x8000
     let inFD  = _dup(_fileno(stdin))
@@ -65,19 +71,44 @@ private func readExactly(_ n: Int) -> Data? {
     return buf
 }
 
+/// The largest frame the daemon will accept. The length prefix is 32 bits; honouring a corrupt or
+/// hostile one would try to allocate up to 4 GB for a request that is a few kilobytes at most.
+let maxFrameBytes = 256 << 20
+
+func frameLengthIsAcceptable(_ length: Int) -> Bool { length >= 0 && length <= maxFrameBytes }
+
 func readFrame() -> Data? {
     guard let lenBytes = readExactly(4) else { return nil }
     let len = lenBytes.reduce(0) { ($0 << 8) | Int($1) }
+    guard frameLengthIsAcceptable(len) else {
+        // Treated like the pipe closing: after a bad length the stream cannot be re-synchronised.
+        Log.e("stard: frame length \(len) exceeds the \(maxFrameBytes) byte limit — closing the protocol stream")
+        return nil
+    }
     return readExactly(len)
 }
 
+/// Set once a write to the client has failed (it closed the pipe); nothing further is written.
+nonisolated(unsafe) private var outputClosed = false
+
+var protocolOutputClosed: Bool { outputClosed }
+
 // writeFrame must only be called from the single writer task.
 func writeFrame(_ data: Data) {
+    guard !outputClosed else { return }
     let n = UInt32(data.count).bigEndian
     var header = Data(count: 4)
     withUnsafeBytes(of: n) { header.replaceSubrange(0..<4, with: $0) }
-    outHandle.write(header)
-    outHandle.write(data)
+    do {
+        try outHandle.write(contentsOf: header)
+        try outHandle.write(contentsOf: data)
+    } catch {
+        // The client is gone. `FileHandle.write(_:)` would have raised an uncatchable
+        // Objective-C exception here (or, with SIGPIPE at its default, killed the process); either
+        // way the daemon died without closing its sessions. Stop writing and say so once.
+        outputClosed = true
+        Log.w("stard: the client closed the output pipe (\(error)); no further frames will be written")
+    }
 }
 
 // MARK: - StdioTransport
