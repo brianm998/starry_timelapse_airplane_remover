@@ -827,6 +827,14 @@ public enum CombinedHorizonDetector {
         let searchTop = max(0, Int(Double(sH) * searchTopFraction))
         let searchBot = min(sH - 1, Int(Double(sH) * searchBottomFraction))
 
+        // The derivative below reads `derivR` rows either side of every row it scores, so the
+        // band needs 2 * derivR + 1 rows or its range is inverted, which traps.  A band that
+        // narrow has no variance transition to find: report no horizon from this method.
+        let derivR = 3
+        guard searchBot - searchTop >= 2 * derivR else {
+            return [Int?](repeating: nil, count: imgW)
+        }
+
         let img8 = PixelatedImage(mat: scaled.mat.ensureEightBit()) ?? scaled
         let pixelData: [UInt8]
         let cpp: Int
@@ -884,7 +892,6 @@ public enum CombinedHorizonDetector {
 
             // Derivative of variance: find max increase (low→high transition)
             var varDeriv = [Float](repeating: 0, count: sH)
-            let derivR = 3
             for y in (searchTop + derivR)...(searchBot - derivR) {
                 varDeriv[y] = smoothVar[y + derivR] - smoothVar[y - derivR]
             }

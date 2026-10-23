@@ -875,7 +875,7 @@ final public actor FrameHorizonProcessor {
     /// The bound is one-sided on purpose — capping upward movement as well measured worse,
     /// because moving the line *up* is the direction that recovers a ridge the references
     /// bracket badly, and it is not the direction that runs away.
-    private func referenceStatsBrightnessRefinedHorizonMask(
+    func referenceStatsBrightnessRefinedHorizonMask(
       detected: HorizonMask,
       original: PixelatedImage,
       stats: [ReferenceHorizonFrameStats],
@@ -934,6 +934,9 @@ final public actor FrameHorizonProcessor {
             guard let expY = expectedYPerColumn[x] else { continue }
             let bandTop    = max(0,     expY - searchRadius)
             let bandBottom = min(h - 1, expY + searchRadius)
+            // An expected Y far outside the frame leaves an empty band; `bandTop...bandBottom`
+            // would trap on it.  Nothing to refine in that column.
+            if bandTop > bandBottom { continue }
             if bandTop < minBandTop { minBandTop = bandTop }
             if bandBottom > maxBandBottom { maxBandBottom = bandBottom }
 
