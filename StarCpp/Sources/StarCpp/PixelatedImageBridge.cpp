@@ -768,13 +768,16 @@ MatWrapperRef pib_binary_horizon_mask(int width, int height, const int *horizonY
     return nullptr;
 }
 
-MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
-                                  double cannyMin, double cannyMax,
-                                  bool useL2Gradient,
-                                  double smoothnessLambda,
-                                  double sobelWeight, double cannyWeight,
-                                  double searchTopFraction,
-                                  double searchBottomFraction) {
+// The weight-independent part of the DP horizon: grey / 8-bit conversion, Sobel and Canny.
+// A grid search solves the same image with many (lambda, sobel, canny) weights, and these
+// steps dominated each of those calls, so they are done once per image.
+struct DPPrepared {
+    cv::Mat sobelNorm, cannyNorm;
+    int rows = 0, cols = 0;
+};
+
+DPPreparedRef pib_dp_prepare(MatWrapperRef img, double cannyMin, double cannyMax,
+                             bool useL2Gradient) {
     if (!img) return nullptr;
     try {
         cv::Mat input = img->mat;
@@ -787,21 +790,44 @@ MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
         int rows = gray.rows, cols = gray.cols;
         if (rows < 2 || cols < 2) return nullptr;
 
+        auto *prepared = new DPPrepared();
+        prepared->rows = rows;
+        prepared->cols = cols;
+
+        // Sobel vertical gradient
+        cv::Mat sobelY, absSobelY;
+        cv::Sobel(gray, sobelY, CV_32F, 0, 1, 3);
+        cv::convertScaleAbs(sobelY, absSobelY);
+        absSobelY.convertTo(prepared->sobelNorm, CV_32F, 1.0 / 255.0);
+
+        // Canny edges
+        cv::Mat edges;
+        cv::Canny(gray, edges, cannyMin, cannyMax, 3, useL2Gradient);
+        edges.convertTo(prepared->cannyNorm, CV_32F, 1.0 / 255.0);
+        return prepared;
+    } catch (const cv::Exception &e) {
+        Log_e("OpenCV Exception in dpPrepare: %s", e.what());
+    }
+    return nullptr;
+}
+
+void pib_dp_prepared_release(DPPreparedRef prepared) { delete prepared; }
+
+MatWrapperRef pib_dp_solve(DPPreparedRef prepared,
+                           double smoothnessLambda,
+                           double sobelWeight, double cannyWeight,
+                           double searchTopFraction,
+                           double searchBottomFraction) {
+    if (!prepared) return nullptr;
+    try {
+        const int rows = prepared->rows, cols = prepared->cols;
+        const cv::Mat &sobelNorm = prepared->sobelNorm;
+        const cv::Mat &cannyNorm = prepared->cannyNorm;
+
         int searchTop = std::max(0, (int)(rows * searchTopFraction));
         int searchBottom = std::min(rows - 1, (int)(rows * searchBottomFraction));
         int bandHeight = searchBottom - searchTop + 1;
         if (bandHeight < 2) return nullptr;
-
-        // Sobel vertical gradient
-        cv::Mat sobelY, absSobelY, sobelNorm;
-        cv::Sobel(gray, sobelY, CV_32F, 0, 1, 3);
-        cv::convertScaleAbs(sobelY, absSobelY);
-        absSobelY.convertTo(sobelNorm, CV_32F, 1.0 / 255.0);
-
-        // Canny edges
-        cv::Mat edges, cannyNorm;
-        cv::Canny(gray, edges, cannyMin, cannyMax, 3, useL2Gradient);
-        edges.convertTo(cannyNorm, CV_32F, 1.0 / 255.0);
 
         // Cost image
         double baseCost = 1.0;
@@ -883,6 +909,21 @@ MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
         Log_e("OpenCV Exception in dpHorizonMask: %s", e.what());
     }
     return nullptr;
+}
+
+MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
+                                  double cannyMin, double cannyMax,
+                                  bool useL2Gradient,
+                                  double smoothnessLambda,
+                                  double sobelWeight, double cannyWeight,
+                                  double searchTopFraction,
+                                  double searchBottomFraction) {
+    DPPreparedRef prepared = pib_dp_prepare(img, cannyMin, cannyMax, useL2Gradient);
+    if (!prepared) return nullptr;
+    MatWrapperRef result = pib_dp_solve(prepared, smoothnessLambda, sobelWeight, cannyWeight,
+                                        searchTopFraction, searchBottomFraction);
+    pib_dp_prepared_release(prepared);
+    return result;
 }
 
 void pib_grabcut_horizon(MatWrapperRef img,

@@ -414,10 +414,13 @@ public enum CombinedHorizonDetector {
         var bestMask: PixelatedImage? = nil
         var bestScore = -1.0
 
+        // grey / Sobel / Canny do not depend on the weights below: once, not per combination
+        guard let prepared = scaled.dpHorizonPrepare() else { return nil }
+
         for lambda in params.dpLambdas {
             for sobelW in params.dpSobelWeights {
                 for cannyW in params.dpCannyWeights {
-                    guard let mask = try? scaled.dpHorizonDetect(
+                    guard let mask = try? prepared.detect(
                         smoothnessLambda: lambda,
                         sobelWeight: sobelW,
                         cannyWeight: cannyW,
