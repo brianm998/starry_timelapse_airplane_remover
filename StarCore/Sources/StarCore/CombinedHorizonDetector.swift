@@ -37,8 +37,24 @@ public enum CombinedHorizonDetector {
         public var outlierThreshold: Int = 80
 
         /// SIOX band search range (fractions of image height).
+        ///
+        /// The bottom used to be 0.85, and DP's, the gradient profile's and the texture
+        /// method's 0.95: a horizon lower in the frame than that could not be found by them at
+        /// all, so they returned the best line *inside* their band — somewhere in the sky —
+        /// with full confidence.  Night timelapse is shot with the camera aimed up, and lower
+        /// horizons are common: on the a9 01_18 aurora sequence the ground is a strip in the
+        /// bottom 3-6% of the frame for at least 180 consecutive frames, and every one of them
+        /// was detected 30-60% of the frame too high.  At 0.99 all 180 come out right, and over
+        /// 106 painted frames of six moving sequences the mean error falls 8.25% → 0.60% on
+        /// that sequence and moves by no more than 0.02% on the other five.  A line pressed
+        /// against the bottom edge is still caught, by `horizonConfidence`'s edge term.
         public var sioxBandTopFraction: Double = 0.15
-        public var sioxBandBottomFraction: Double = 0.85
+        public var sioxBandBottomFraction: Double = 0.99
+
+        /// The band DP, the gradient profile and the texture method search when there is no
+        /// prior (fractions of image height).  See `sioxBandBottomFraction` for the bottom.
+        public var searchTopFraction: Double = 0.05
+        public var searchBottomFraction: Double = 0.99
 
         /// DP grid search parameters.
         public var dpLambdas: [Double] = [1.0, 1.5, 2.0, 3.0]
@@ -113,8 +129,8 @@ public enum CombinedHorizonDetector {
         // Whole-image defaults unless a prior says otherwise.  These are the values each
         // base method already had baked in as its own default.
         let band = prior?.searchFractions(imageHeight: imgH)
-        let searchTop = band?.top ?? 0.05
-        let searchBottom = band?.bottom ?? 0.95
+        let searchTop = band?.top ?? params.searchTopFraction
+        let searchBottom = band?.bottom ?? params.searchBottomFraction
         var bandedParams = params
         if let band {
             bandedParams.sioxBandTopFraction = band.top

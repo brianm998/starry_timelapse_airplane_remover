@@ -264,6 +264,23 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             "staticNeighborFrameOverrides":  str(config.staticNeighborFrameOverrides),
         ]
 
+        // A static sequence's merged mask is made by one of two methods (see
+        // `Config.useTemporalStaticHorizon`), and they give different masks — on a black
+        // ground under the Milky Way, masks 15% of the frame apart.  Recorded with the
+        // temporal method's own version, so a change to it rebuilds what it made.
+        //
+        // Only where the merge actually runs: a painted reference replaces it outright,
+        // and recording the method there would rebuild a sequence's keypoints and
+        // alignment over a mask nothing reads.
+        if !config.tripodHeadWasMoving && !config.hasStaticReferenceHorizon {
+            inputs["useTemporalStaticHorizon"] = str(config.useTemporalStaticHorizon)
+            if config.useTemporalStaticHorizon {
+                inputs["temporalHorizonSampleCount"] = str(config.temporalHorizonSampleCount)
+                inputs["temporalHorizonAlgorithmVersion"] =
+                  str(TemporalHorizonDetector.algorithmVersion)
+            }
+        }
+
         // The reference-horizon passes are moving-sequence only.
         guard config.tripodHeadWasMoving else { return inputs }
 

@@ -321,11 +321,20 @@ final public actor FrameHorizonProcessor {
 
         await frame?.set(state: .mergingHorizon)
 
-        // get original horizon mask for this frame
-        Log.d("frame \(frameIndex) calling loadOrCreateHorizonMask()")
-        let mask = try await loadOrCreateHorizonMask()
-
         let config = await configManager.config()
+
+        // A static sequence's temporal horizon needs no per-frame detection at all, not even
+        // this frame's: the median it is found in is built from the sampled frames directly.
+        let temporalStatic = !config.tripodHeadWasMoving && config.useTemporalStaticHorizon
+
+        // get original horizon mask for this frame
+        let mask: HorizonMask?
+        if temporalStatic {
+            mask = nil
+        } else {
+            Log.d("frame \(frameIndex) calling loadOrCreateHorizonMask()")
+            mask = try await loadOrCreateHorizonMask()
+        }
 
         // Reference-horizon smoothing pass (moving sequences only).
         // When user-defined reference horizons are near enough to say something about this
@@ -338,7 +347,7 @@ final public actor FrameHorizonProcessor {
         // holding it to the same 30-frame leash would throw away references that predict
         // this frame's horizon to within a few pixels across the whole sequence — which, on
         // a sparsely painted moving sequence, is most of them.
-        if config.useReferenceHorizonSmoothing, config.tripodHeadWasMoving {
+        if config.useReferenceHorizonSmoothing, config.tripodHeadWasMoving, let mask {
             let allStats = try await referenceHorizonsWithStats(
               maxCount: 2,
               numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets,
@@ -399,7 +408,7 @@ final public actor FrameHorizonProcessor {
         Log.i("frame \(frameIndex) making merged horizon \(neighboringHorizons.count) neighboringHorizons")
         
         let mergedHorizonImage: PixelatedImage?
-        if config.tripodHeadWasMoving {
+        if config.tripodHeadWasMoving, let mask {
             // Off the cooperative pool; the threshold is read first because the
             // closure cannot await.
             let mergeThreshold = await configManager.config().pixelThreshold
@@ -413,6 +422,8 @@ final public actor FrameHorizonProcessor {
                   includeAll: true,
                   config: mergeConfig)
             }
+        } else if temporalStatic {
+            mergedHorizonImage = try await temporalStaticHorizonImage(config: config)
         } else if let accumulator = horizonAccumulator {
             // Use the running accumulator that was populated by HorizonDetectionOps.
             // Any frames not yet accumulated will be loaded from disk here.
@@ -544,6 +555,75 @@ final public actor FrameHorizonProcessor {
         Log.w("frame \(frameIndex) unable to calculate merged horizon")
         
         return nil
+    }
+
+    // MARK: - Static sequences: the temporal median
+
+    /// A static sequence's horizon mask, found once in the per-pixel median of frames sampled
+    /// from first to last (see `TemporalHorizonDetector`), at full size.  Nil when no frame
+    /// could be read.
+    ///
+    /// Frames are decoded a few at a time and shrunk as they arrive, so what is held is the
+    /// shrunk copies — a few percent of a frame each — plus the decodes in flight, which is
+    /// what `Config.effectiveTemporalHorizonMemoryMultiplier` reserves for.  Every decode is
+    /// one the keypoint stage repeats shortly after, through the same image cache.
+    private func temporalStaticHorizonImage(config: Config) async throws -> PixelatedImage? {
+        guard let imageSequence else {
+            Log.w("frame \(frameIndex) cannot sample a static horizon without an image sequence")
+            return nil
+        }
+        let indices = TemporalHorizonDetector.sampleIndices(
+          frameCount: imageSequence.filenames.count,
+          count: config.temporalHorizonSampleCount)
+        let imageAccessor = self.imageAccessor
+        let startTime = Date()
+
+        var working: [Int: PixelatedImage] = [:]
+        var fullSize: (width: Int, height: Int)? = nil
+        try await withThrowingTaskGroup(of: (Int, PixelatedImage?, Int, Int).self) { group in
+            var pending = indices[...]
+            func addNext() {
+                guard let index = pending.popFirst() else { return }
+                group.addTask {
+                    guard let original = try await imageAccessor.load(
+                            frameIndex: index, type: .original, atSize: .original)
+                    else { return (index, nil, 0, 0) }
+                    let small = await NativeWork.run {
+                        TemporalHorizonDetector.workingImage(of: original)
+                    }
+                    return (index, small, original.width, original.height)
+                }
+            }
+            for _ in 0..<TemporalHorizonDetector.concurrentDecodes { addNext() }
+            while let (index, small, width, height) = try await group.next() {
+                try Task.checkCancellation()
+                if let small {
+                    working[index] = small
+                    if fullSize == nil { fullSize = (width, height) }
+                } else {
+                    Log.w("frame \(frameIndex) static horizon: could not read frame \(index)")
+                }
+                addNext()
+            }
+        }
+
+        let images = indices.compactMap { working[$0] }
+        guard let fullSize, !images.isEmpty else {
+            Log.w("frame \(frameIndex) static horizon: no frame could be read")
+            return nil
+        }
+        guard let clean = await NativeWork.run({ TemporalHorizonDetector.median(of: images) }) else {
+            Log.w("frame \(frameIndex) static horizon: sampled frames differ in size or depth")
+            return nil
+        }
+        let horizonY = try await TemporalHorizonDetector.horizon(
+          inClean: clean, outputWidth: fullSize.width, outputHeight: fullSize.height)
+        let seconds = String(format: "%.1f", Date().timeIntervalSince(startTime))
+        Log.i("frame \(frameIndex) static horizon from the median of \(images.count) frames "
+                + "in \(seconds)s")
+        return PixelatedImage(mat: PixelatedImageBridge.binaryHorizonMask(
+          width: Int32(fullSize.width), height: Int32(fullSize.height),
+          horizonY: horizonY.map { Optional($0) }))
     }
 
     // MARK: - Reference horizon smoothing helpers
@@ -2688,10 +2768,13 @@ final public actor FrameHorizonProcessor {
             // Combined+RW pipeline: run Otsu, DP, SIOX in parallel, median-combine,
             // then refine with Random Walker. Best-performing method as of 2026-03.
             Log.i("frame \(frameIndex) using combined+RW horizon detection")
-            horizonMask = try await CombinedHorizonDetector.detect(
-              image: original,
-              prior: await detectionPrior(width: original.width, config: config)
-            )
+            if let prior = await detectionPrior(width: original.width, config: config) {
+                // Guided by the user's references: unchanged, at full size, where the prior's
+                // band and the ridge detail it is there to recover are both in full-size rows.
+                horizonMask = try await CombinedHorizonDetector.detect(image: original, prior: prior)
+            } else {
+                horizonMask = try await workingSizeCombinedDetection(of: original)
+            }
         } else {
             // Legacy adaptive search: Otsu multi-crop + DP grid search
             let useAdaptiveSearch = config.horizonSearchCropBounds.count >= 2
@@ -2730,6 +2813,43 @@ final public actor FrameHorizonProcessor {
         )
 
         await frame?.set(state: .horizonDetected)
+        return horizonMask
+    }
+
+    /// `CombinedHorizonDetector` on a copy of `original` shrunk to
+    /// `TemporalHorizonDetector.workingWidth`, answered at full size.
+    ///
+    /// Smaller is better here, not just cheaper.  The detector's base methods already work at
+    /// 512 px whatever they are given, but its Random Walker refines in bands whose brush radii
+    /// are fixed pixel counts — 40, 80 and 160 — so at 6000 px wide they are a sliver of the
+    /// frame and at 1600 a useful search.  Over 106 painted frames of six moving sequences,
+    /// with no references to guide it and the same search band either way, the mean error per
+    /// sequence went 1.23% → 0.38%, 1.65% → 0.60%, 1.11% → 0.35%, 0.84% → 0.62% and
+    /// 0.90% → 0.87%, and the worst single frame 7.7% → 2.5%.  The one sequence it made worse
+    /// moved 0.05% → 0.10%: two pixels to four.
+    ///
+    /// The answer is scaled straight back up.  Unlike `HorizonBoundaryRefiner`'s, the
+    /// detector's rows measured unbiased: moving them up a working row only added error.
+    private func workingSizeCombinedDetection(of original: PixelatedImage) async throws -> HorizonMask {
+        guard let working = await NativeWork.run({ TemporalHorizonDetector.workingImage(of: original) }),
+              working.width < original.width
+        else {
+            return try await CombinedHorizonDetector.detect(image: original)
+        }
+        let mask = try await CombinedHorizonDetector.detect(image: working)
+        let rows = CombinedHorizonDetector.extractHorizonY(from: mask.image)
+        let fullWidth = original.width, fullHeight = original.height
+        let scaleY = Double(fullHeight) / Double(working.height)
+        let full: [Int?] = (0..<fullWidth).map { x in
+            let source = min(working.width - 1, x * working.width / fullWidth)
+            return rows[source].map { min(fullHeight, Int((Double($0) * scaleY).rounded())) }
+        }
+        guard let fullMask = PixelatedImage(mat: PixelatedImageBridge.binaryHorizonMask(
+                width: Int32(fullWidth), height: Int32(fullHeight), horizonY: full)),
+              let horizonMask = HorizonMask(fullMask)
+        else {
+            throw "frame \(frameIndex) cannot build a full-size mask from the working-size detection"
+        }
         return horizonMask
     }
 

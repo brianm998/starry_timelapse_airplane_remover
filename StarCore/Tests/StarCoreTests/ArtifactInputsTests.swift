@@ -223,15 +223,37 @@ final class ArtifactInputsTests: XCTestCase {
     /// takes the merged masks, every keypoint set and every homography with it — a full
     /// reprocess, against the keypoint lever's re-alignment. Change this test when a
     /// horizon change actually moves a mask, and not before.
+    ///
+    /// One has: a static sequence's merged mask now comes from the temporal median
+    /// (`TemporalHorizonDetector`), which moves it by up to 15% of the frame on the
+    /// sequences measured.  So the merged stage records that method's version — but only
+    /// where the merge runs, a static sequence with no painted reference.  A moving
+    /// sequence, or a static one the user painted, records no version in either stage.
     func testOnlyTheKeypointStageRecordsACodeVersion() {
-        let inputs = ArtifactInputs.current(from: config())
-        for stage in [ArtifactStage.horizon, .mergedHorizon] {
-            let versionKeys = (inputs.stages[stage.rawValue] ?? [:]).keys
-              .filter { $0.lowercased().contains("algorithmversion") }
-            XCTAssertTrue(versionKeys.isEmpty,
-                          "\(stage) records \(versionKeys), which invalidates it and " +
-                          "everything downstream on any star upgrade that bumps it")
+        var moving = config()
+        moving.tripodHeadWasMoving = true
+        var painted = config()
+        painted.tripodHeadWasMoving = false
+        painted.hasStaticReferenceHorizon = true
+        for c in [moving, painted] {
+            let inputs = ArtifactInputs.current(from: c)
+            for stage in [ArtifactStage.horizon, .mergedHorizon] {
+                let versionKeys = (inputs.stages[stage.rawValue] ?? [:]).keys
+                  .filter { $0.lowercased().contains("algorithmversion") }
+                XCTAssertTrue(versionKeys.isEmpty,
+                              "\(stage) records \(versionKeys), which invalidates it and " +
+                              "everything downstream on any star upgrade that bumps it")
+            }
         }
+
+        var unpainted = config()
+        unpainted.tripodHeadWasMoving = false
+        let inputs = ArtifactInputs.current(from: unpainted)
+        let horizonVersions = (inputs.stages[ArtifactStage.horizon.rawValue] ?? [:]).keys
+          .filter { $0.lowercased().contains("algorithmversion") }
+        XCTAssertTrue(horizonVersions.isEmpty, "got \(horizonVersions)")
+        XCTAssertEqual(inputs.stages[ArtifactStage.mergedHorizon.rawValue]?["temporalHorizonAlgorithmVersion"],
+                       String(TemporalHorizonDetector.algorithmVersion))
     }
 
     // MARK: - settings that must invalidate
@@ -512,6 +534,65 @@ final class ArtifactInputsTests: XCTestCase {
         let stale = ArtifactInputs.current(from: after)
             .staleStages(comparedTo: ArtifactInputs.current(from: base))
         XCTAssertTrue(stale.isEmpty, "got \(stale)")
+    }
+
+    /// A static sequence's merged mask comes from the temporal median or from the per-frame
+    /// vote, and the two give different masks, so switching between them — or changing how
+    /// many frames the median is taken over — rebuilds it.
+    func testTheStaticHorizonMethodInvalidatesTheMergedHorizon() {
+        var base = config()
+        base.tripodHeadWasMoving = false
+        base.useTemporalStaticHorizon = true
+
+        var voted = base
+        voted.useTemporalStaticHorizon = false
+        XCTAssertTrue(ArtifactInputs.current(from: voted)
+                        .staleStages(comparedTo: ArtifactInputs.current(from: base))
+                        .contains(.mergedHorizon))
+
+        var fewer = base
+        fewer.temporalHorizonSampleCount = 12
+        let stale = ArtifactInputs.current(from: fewer)
+            .staleStages(comparedTo: ArtifactInputs.current(from: base))
+        XCTAssertTrue(stale.contains(.mergedHorizon))
+        XCTAssertFalse(stale.contains(.horizon), "no per-frame mask is involved either way")
+    }
+
+    /// Where the merge never runs — a moving sequence, or a static one with a painted
+    /// reference — the method is not an input, and recording it there would throw away a
+    /// sequence's alignment over a mask nothing reads.
+    func testTheStaticHorizonMethodIsNotAnInputWhereTheMergeDoesNotUseIt() {
+        for moving in [true, false] {
+            var base = config()
+            base.tripodHeadWasMoving = moving
+            base.hasStaticReferenceHorizon = !moving
+            var after = base
+            after.useTemporalStaticHorizon.toggle()
+            after.temporalHorizonSampleCount = 7
+            let stale = ArtifactInputs.current(from: after)
+                .staleStages(comparedTo: ArtifactInputs.current(from: base))
+            XCTAssertTrue(stale.isEmpty, "moving \(moving): got \(stale)")
+        }
+    }
+
+    /// A record written before the temporal method existed has no key for it, so the one
+    /// static merged mask it describes — the per-frame vote's — is rebuilt once, by the method
+    /// that replaced it.
+    func testAStaticRecordFromBeforeTheTemporalMethodRebuildsItsMergedHorizon() {
+        var c = config()
+        c.tripodHeadWasMoving = false
+        let current = ArtifactInputs.current(from: c)
+        var stages = current.stages
+        var merged = stages[ArtifactStage.mergedHorizon.rawValue] ?? [:]
+        merged["useTemporalStaticHorizon"] = nil
+        merged["temporalHorizonSampleCount"] = nil
+        merged["temporalHorizonAlgorithmVersion"] = nil
+        stages[ArtifactStage.mergedHorizon.rawValue] = merged
+        let older = ArtifactInputs(version: current.version, stages: stages)
+
+        let stale = current.staleStages(comparedTo: older)
+        XCTAssertTrue(stale.contains(.mergedHorizon))
+        XCTAssertFalse(stale.contains(.horizon))
     }
 
     // MARK: - what a missing or foreign record means

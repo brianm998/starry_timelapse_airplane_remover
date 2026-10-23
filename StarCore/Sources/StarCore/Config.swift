@@ -791,6 +791,24 @@ public struct Config: Codable, Sendable {
         return max(horizonMemoryMultiplier, Int(floorMultiplier))
     }
 
+    /// What the one op that finds a static sequence's temporal horizon holds at its peak, as
+    /// a multiple of `workingFrameBytes`: `TemporalHorizonDetector.concurrentDecodes`
+    /// full-size frames, every sampled frame's shrunk copy, and a fixed allowance.
+    ///
+    /// Not a constant, because the shrunk copies are a fixed size and the frame is not: 48
+    /// copies at 1600 px wide are 1.9 frames' worth of a 7952 px frame and 6.8 of a 4240 px
+    /// one.  Never below `effectiveHorizonMemoryMultiplier`, which the op would get anyway.
+    public func effectiveTemporalHorizonMemoryMultiplier() -> Int {
+        let working = workingFrameBytes
+        let floor = effectiveHorizonMemoryMultiplier()
+        guard working > 0, imageWidth > 0 else { return floor }
+        let shrink = min(1, Double(TemporalHorizonDetector.workingWidth) / Double(imageWidth))
+        let bytes = Double(TemporalHorizonDetector.concurrentDecodes) * Double(working)
+          + Double(max(0, temporalHorizonSampleCount)) * Double(working) * shrink * shrink
+          + Double(TemporalHorizonDetector.fixedReservationMB) * 1024 * 1024
+        return max(floor, Int((bytes / Double(working)).rounded(.up)))
+    }
+
     // used by updatable log
     public var progressBarLength = 35
 
@@ -936,6 +954,19 @@ public struct Config: Codable, Sendable {
     // when true, this replaces the legacy adaptive Otsu/DP search in loadOrCreateHorizonMask.
     // set to false to fall back to the previous adaptive search approach.
     public var useCombinedHorizonDetection: Bool = true
+
+    // When true, a static sequence's horizon is found once, in the per-pixel median of
+    // `temporalHorizonSampleCount` frames spread across the whole sequence, instead of by
+    // detecting on every frame and voting.  The median keeps the terrain and drops the
+    // stars, clouds and noise that make single night frames hard to read; see
+    // `TemporalHorizonDetector` for the measured difference.  Moving sequences are not
+    // affected.  Set to false to go back to the per-frame vote.
+    public var useTemporalStaticHorizon: Bool = true
+
+    // How many frames, sampled evenly from first to last, that median is taken over.
+    // Fewer frames leave more of whatever moved slowest — a cloud bank that sat for an hour
+    // — in the median; more cost a full-size decode each.
+    public var temporalHorizonSampleCount: Int = 48
 
     // Removed: horizonStripWidth.  It sized the strips that `PixelatedImage.horizonMask`
     // used to Otsu-threshold separately; that step is the `splitIntoMatrix` call still
@@ -1588,6 +1619,8 @@ public struct Config: Codable, Sendable {
         self.horizonSpikeMaxDeviationFraction = try c.decodeIfPresent(Double.self, forKey: .horizonSpikeMaxDeviationFraction) ?? self.horizonSpikeMaxDeviationFraction
         self.horizonSpikeWindowHalf = try c.decodeIfPresent(Int.self, forKey: .horizonSpikeWindowHalf) ?? self.horizonSpikeWindowHalf
         self.useCombinedHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCombinedHorizonDetection) ?? self.useCombinedHorizonDetection
+        self.useTemporalStaticHorizon = try c.decodeIfPresent(Bool.self, forKey: .useTemporalStaticHorizon) ?? self.useTemporalStaticHorizon
+        self.temporalHorizonSampleCount = try c.decodeIfPresent(Int.self, forKey: .temporalHorizonSampleCount) ?? self.temporalHorizonSampleCount
         self.useCannyForHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCannyForHorizonDetection) ?? self.useCannyForHorizonDetection
         self.cannyMinThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMinThreshold) ?? self.cannyMinThreshold
         self.cannyMaxThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMaxThreshold) ?? self.cannyMaxThreshold
