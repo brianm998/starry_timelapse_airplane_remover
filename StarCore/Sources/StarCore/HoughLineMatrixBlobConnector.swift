@@ -214,19 +214,11 @@ public actor HoughLineMatrixBlobConnector {
           maxHeight: args.elementHeight,
           overlapPercent: args.overlapPercent)
 
-        guard let blobImage = await analyzer.pixelatedImage else {
-            Log.w("unable to create blob image")
-            return
-        }
+        // The blob image and the full-frame image are the same image, so the one split serves
+        // both: each element's `sortablePixels` feed the line finder and the same element's
+        // intensities are the blob ids along a line. (It used to load and split it twice.)
+        let blobMatrix = matrix
 
-        // a matrix of images from in image that keeps track of each blob's pixels
-        // used to find blobs independently for each element
-        let blobMatrix = blobImage.splitIntoMatrix(
-          maxWidth: args.elementWidth,
-          maxHeight: args.elementHeight,
-          overlapPercent: args.overlapPercent
-        )
-        
         //let t2 = Date().timeIntervalSince1970
 
         // start with the full list of blobs from the analyzer
@@ -303,25 +295,52 @@ internal func combine(_ blobList: [Blob]) async -> Blob? {
     return first
 }
 
+/// Whether any pixel of a blob-id image is non-zero, i.e. whether any blob touches the element.
+fileprivate func hasAnyBlobPixel(_ image: PixelatedImage) -> Bool {
+    switch image.imageData {
+    case .eightBit(let buffer): return buffer.contains { $0 != 0 }
+    case .sixteenBit(let buffer): return buffer.contains { $0 != 0 }
+    case .thirtyTwoBit(let buffer): return buffer.contains { $0 != 0 }
+    }
+}
+
 fileprivate func process(element: ImageMatrixElement,
                          blobElement: ImageMatrixElement,
                          with args: HoughLineMatrixBlobConnector.Args,
                          frameIndex: Int,
                          blobMap: [Int32: Blob]) async -> Set<BlobMapping>
-{ 
-    //let elementStartTime = Date().timeIntervalSince1970
-    let processedBlobs = SetActor<Blob>()
+{
+    // Native-thread work: a Hough transform and a pixel walk per line, none of which suspends.
+    await NativeWork.run {
+        processSync(element: element, blobElement: blobElement, with: args,
+                    frameIndex: frameIndex, blobMap: blobMap)
+    }
+}
 
-    let finderArgs = HoughLineFinder.Args(imageDataBorderSize: 0,                                         
+/// The element's lines walked synchronously. This was a chain of `await`s on three one-value
+/// actors and a set actor for every pixel of every line; the state they held is a few locals.
+func processSync(element: ImageMatrixElement,
+                             blobElement: ImageMatrixElement,
+                             with args: HoughLineMatrixBlobConnector.Args,
+                             frameIndex: Int,
+                             blobMap: [Int32: Blob]) -> Set<BlobMapping>
+{
+    // No blob touches this element, so no line can pass over one and there is nothing to map:
+    // skip the Hough transform, which is the expensive part.
+    guard hasAnyBlobPixel(blobElement.image) else { return [] }
+
+    var processedBlobs = Set<Int32>()   // blobs already seen on this element, across its lines
+    var ret = Set<BlobMapping>()
+
+    let finderArgs = HoughLineFinder.Args(imageDataBorderSize: 0,
                                           maxLineConstant: args.maxHoughLines)
-    
+
     // find lines
     let finder = /*Combined*/HoughLineFinder(pixels: element.sortablePixels,
                                              bounds: element.bounds,
                                              args: finderArgs,
-                                             frameIndex: frameIndex)
-
-    //let houghLinesTime = Date().timeIntervalSince1970
+                                             frameIndex: frameIndex,
+                                             computePixelScore: false)
 
     var lines = finder.lineData
     lines.sort { $0.intensityScore > $1.intensityScore }
@@ -330,17 +349,12 @@ fileprivate func process(element: ImageMatrixElement,
         lines = Array(lines[0..<args.maxHoughLines])
     }
 
-    let ret = SetActor<BlobMapping>()
-    
     // iterate over lines in order of score
     for line in lines {
+        var lastSeenBlobId: Int32? = nil
+        var lastSeenX: Int? = nil
+        var lastSeenY: Int? = nil
 
-        //let lineStartTime = Date().timeIntervalSince1970
-
-        let lastSeenBlob = OptionalActor<Blob>()
-        let lastSeenX = OptionalActor<Int>()
-        let lastSeenY = OptionalActor<Int>()
-        
         let originZeroLine = finder.originZeroLine(from: line.line)
 
         // find intersections of this line with this matrix element
@@ -350,68 +364,53 @@ fileprivate func process(element: ImageMatrixElement,
         if intersections.count > 1 {
 
             // iterate through blob data on each line
-            await originZeroLine.asyncIterate(between: intersections[0],
-                                              and: intersections[1],
-                                              numberOfAdjecentPixels: args.sideIterationPixels)
+            originZeroLine.iterate(between: intersections[0],
+                                   and: intersections[1],
+                                   numberOfAdjecentPixels: args.sideIterationPixels)
             { x, y, direction in
                 if let potentialBlobId = blobElement.intensity(atX: x, andY: y),
                    potentialBlobId < Int32.max,
                    let blob = blobMap[Int32(potentialBlobId)]
                 {
-                    if let lastSeenBlob = await lastSeenBlob.value,
-                       lastSeenBlob == blob
-                    {
-                        await lastSeenX.set(x)
-                        await lastSeenY.set(y)
+                    if let seenId = lastSeenBlobId, seenId == blob.id {
+                        lastSeenX = x
+                        lastSeenY = y
                     }
-                    
+
                     // skip already seen blobs on this element iteration
-                    if await !processedBlobs.contains(blob) { 
+                    if !processedBlobs.contains(blob.id) {
 
                         // for each blob encountered, keep track of it
-                        await processedBlobs.insert(blob)
-                        
-                        if let previousBlob = await lastSeenBlob.value,
-                           let lastSeenX = await lastSeenX.value,
-                           let lastSeenY = await lastSeenY.value
+                        processedBlobs.insert(blob.id)
+
+                        if let previousId = lastSeenBlobId,
+                           let seenX = lastSeenX,
+                           let seenY = lastSeenY
                         {
-                            let distance = distance(x, y, lastSeenX, lastSeenY)
+                            let gap = distance(x, y, seenX, seenY)
                             //  when another blob is encountered,
                             // see how far along the line we've gotten since the last one
-                            if distance < args.maxBlobDistance {
+                            if gap < args.maxBlobDistance {
                                 // if close enough, combine the blobs
-
-                                /*
-
-                                 may help to check to see if the blobs lines are aligned
-                                 if not, then maybe don't combine them here,
-                                 and maybe don't mark this blob as having been seen on this
-                                 element iteration
-                                 
-                                 */
-
                                 // make a new mapping here
-                                await ret.insert(BlobMapping(blob.id, previousBlob.id))
-
+                                ret.insert(BlobMapping(blob.id, previousId))
                             } else {
                                 // if too far, discard previous blob ref and keep track of new blob
-                                await lastSeenBlob.set(blob)
+                                lastSeenBlobId = blob.id
                             }
                         } else {
                             // no previous last seen blob, set it to this blob
-                            await lastSeenBlob.set(blob)
+                            lastSeenBlobId = blob.id
                         }
-                        await lastSeenX.set(x)
-                        await lastSeenY.set(y)
+                        lastSeenX = x
+                        lastSeenY = y
                     }
                 }
             }
         }
-        //let lineEndTime = Date().timeIntervalSince1970
-        //Log.d("frame \(frameIndex) times line finished in \(lineEndTime-lineStartTime)")
     }
 
-    return await ret.set
+    return ret
 }
 
 func distance(_ x1: Int, _ y1: Int, _ x2: Int, _ y2: Int) -> Double {

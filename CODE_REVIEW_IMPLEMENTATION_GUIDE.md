@@ -675,6 +675,17 @@ race, no frame-length cap) and H5 (cancel over-grant) as known, deferred.
 
 ---
 
+## Findings made while implementing (not in the proposal)
+
+* **The matrix Hough blob connector does nothing in the shipped pipeline.** All four presets pass
+  `overlapPercent: 20` to `.houghLineMatrixBlobConnector`, but `mat_wrapper_split`
+  (`MatWrapper.cpp`) treats it as a *fraction* (`step = tile * (1 - overlap)`), so a value of 20
+  gives a step <= 0 and zero tiles, and the step maps nothing. Measured with a 400x300 image:
+  0.2 gives tiles, 20 gives none. Fixing it (20 -> 0.2, or dividing by 100 in the connector)
+  re-enables a step that has not run since the C++ port and changes outputs, so it was **not**
+  changed; it needs its own A/B and probably the removal oracle. The S11 Hough speedups are
+  identity-tested with a fractional overlap and are real, but cost nothing today.
+
 ## Appendix A — scripts
 
 These were used for the review; paths are placeholders.
