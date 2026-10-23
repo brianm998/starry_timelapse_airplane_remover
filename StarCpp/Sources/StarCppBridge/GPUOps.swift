@@ -1344,22 +1344,22 @@ private final class MetalGPUBackend: @unchecked Sendable {
     }
 
     /// Reads a texture back into a newly allocated, tightly-packed CV_32FC1
-    /// MatWrapper — `mat_wrapper_create(..., takeOwnership: true)` clones the
-    /// buffer this hands it, so the Swift array backing that buffer is safe to
-    /// free (by simply going out of scope) as soon as the call returns. Callers
+    /// MatWrapper, filled in place (`mat_wrapper_new`). Callers
     /// must already have synchronized `texture` (see `buildSiftPyramid`) —
     /// this does not do it again.
     private func matWrapper(fromFloatTexture texture: MTLTexture) -> MatWrapperRef? {
         let width = texture.width, height = texture.height
         let rowBytes = width * MemoryLayout<Float>.size
-        var pixels = [Float](repeating: 0, count: width * height)
-        let ref: MatWrapperRef? = pixels.withUnsafeMutableBytes { raw -> MatWrapperRef? in
-            guard let base = raw.baseAddress else { return nil }
-            texture.getBytes(base, bytesPerRow: rowBytes,
-                             from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
-            let cvType = mat_wrapper_cv_type_for(32, 1)
-            return mat_wrapper_create(Int64(width), Int64(height), cvType, rowBytes, base, true)
+        // One pass: the texture is read straight into the Mat's own buffer. The old route
+        // zero-filled a Swift array, read into that, then had `mat_wrapper_create` clone it.
+        let cvType = mat_wrapper_cv_type_for(32, 1)
+        guard let ref = mat_wrapper_new(Int64(width), Int64(height), cvType) else { return nil }
+        guard let data = mat_wrapper_data_ptr(ref), mat_wrapper_step(ref) == rowBytes else {
+            mat_wrapper_release(ref)
+            return nil
         }
+        texture.getBytes(UnsafeMutableRawPointer(mutating: data), bytesPerRow: rowBytes,
+                         from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
         return ref
     }
 

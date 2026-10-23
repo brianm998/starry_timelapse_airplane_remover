@@ -10,6 +10,11 @@ struct MatWrapperImpl {
     // Tag selecting the constructor that shares the source buffer instead of copying it.
     struct Adopt {};
 
+    // Tag for `mat_wrapper_alias`: share the buffer of a LIVE wrapper. Unlike Adopt this
+    // does not require the source to be the buffer's only holder - that is the whole point
+    // of an alias, the caller keeps its own handle for a moment and then drops it.
+    struct Alias {};
+
     // Deep-copying constructor. Keep using this wherever the wrapper must be
     // independent of the source:
     //   mat_wrapper_clone     (MatWrapper.cpp:77) — the public detach primitive.
@@ -32,6 +37,10 @@ struct MatWrapperImpl {
     // cloning, so tagging a call site wrongly can cost a copy but cannot dangle,
     // corrupt, or alias.
     MatWrapperImpl(Adopt, const cv::Mat& m) : mat(canAdopt(m) ? m : m.clone()) { account(); }
+
+    // Aliasing constructor: shares the source's buffer when it is an ordinary, packed,
+    // OpenCV-owned one, whatever its refcount (see canAlias), and copies otherwise.
+    MatWrapperImpl(Alias, const cv::Mat& m) : mat(canAlias(m) ? m : m.clone()) { account(); }
 
     // Zero-copy: wrap external data
     MatWrapperImpl(int height, int width, int cvType, void* data, size_t step)
@@ -77,6 +86,17 @@ private:
             && m.isContinuous()
             && !(m.flags & cv::Mat::SUBMATRIX_FLAG)
             && m.u->refcount == 1;
+    }
+
+    // canAdopt without the refcount clause. `alias` is handed a live wrapper's mat, whose
+    // refcount is 1 only until the alias itself exists, and may be 2+ when something else
+    // already shares the buffer; neither makes sharing unsafe. The other three clauses are
+    // the ones that guard against dangling (external memory), mis-sized reads (strided
+    // views) and pinning a parent buffer (submatrix), and they stay.
+    static bool canAlias(const cv::Mat& m) {
+        return m.u
+            && m.isContinuous()
+            && !(m.flags & cv::Mat::SUBMATRIX_FLAG);
     }
 
     // Remembered so the destructor subtracts exactly what the constructor added.

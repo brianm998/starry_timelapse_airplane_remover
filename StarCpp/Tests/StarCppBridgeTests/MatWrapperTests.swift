@@ -623,3 +623,79 @@ final class MatWrapperTests: XCTestCase {
         XCTAssertEqual(MatWrapper.totalInstances, before, "split tiles leaked their handles")
     }
 }
+
+// MARK: - S4 / S1: alias shares, mat_wrapper_new allocates owned storage
+
+final class MatWrapperAliasTests: XCTestCase {
+
+    private func filled(_ value: UInt8 = 7) -> MatWrapper {
+        var bytes = [UInt8](repeating: value, count: 128)
+        return bytes.withUnsafeMutableBytes { raw in
+            MatWrapper(width: 16, height: 8,
+                       cvType: MatWrapper.cvType(forBitsPerComponent: 8, componentsPerPixel: 1),
+                       bytesPerRow: 16, data: raw.baseAddress!, takeOwnership: true)
+        }
+    }
+
+    /// `alias` hands the C side a second handle on the same pixels, without a copy, even though
+    /// the source wrapper is still alive and so the buffer's refcount is not 1.
+    func testAnAliasOfALiveWrapperSharesItsBuffer() {
+        let original = filled()
+        let alias = MatWrapper(ref: mat_wrapper_alias(original.ref))
+        XCTAssertEqual(mat_wrapper_data_ptr(alias.ref), mat_wrapper_data_ptr(original.ref),
+                       "the alias copied the buffer instead of sharing it")
+    }
+
+    func testTwoAliasesAndTheOriginalAllShareOneBuffer() {
+        let original = filled()
+        let a = MatWrapper(ref: mat_wrapper_alias(original.ref))
+        let b = MatWrapper(ref: mat_wrapper_alias(a.ref))
+        XCTAssertEqual(mat_wrapper_data_ptr(b.ref), mat_wrapper_data_ptr(original.ref))
+    }
+
+    /// The buffer survives the original being dropped: the alias holds a reference.
+    func testAnAliasOutlivesItsSource() {
+        var original: MatWrapper? = filled(42)
+        let alias = MatWrapper(ref: mat_wrapper_alias(original!.ref))
+        original = nil
+        let p = mat_wrapper_data_ptr(alias.ref)!.assumingMemoryBound(to: UInt8.self)
+        XCTAssertEqual(p[0], 42)
+        XCTAssertEqual(p[127], 42)
+    }
+
+    /// Accounting counts each wrapper, as before sharing existed.
+    func testEachAliasIsAccountedLikeAnyWrapper() {
+        let original = filled()
+        let before = MatWrapper.totalBytes
+        let alias = MatWrapper(ref: mat_wrapper_alias(original.ref))
+        XCTAssertEqual(MatWrapper.totalBytes, before + 128)
+        _ = alias
+    }
+
+    /// A wrapper over external memory cannot be shared (it would dangle), so alias copies it.
+    func testAnAliasOfExternalMemoryIsACopy() {
+        let storage = UnsafeMutablePointer<UInt8>.allocate(capacity: 128)
+        storage.initialize(repeating: 3, count: 128)
+        defer { storage.deallocate() }
+        let external = MatWrapper(width: 16, height: 8,
+                                  cvType: MatWrapper.cvType(forBitsPerComponent: 8, componentsPerPixel: 1),
+                                  bytesPerRow: 16, data: UnsafeMutableRawPointer(storage),
+                                  takeOwnership: false)
+        let alias = MatWrapper(ref: mat_wrapper_alias(external.ref))
+        XCTAssertNotEqual(mat_wrapper_data_ptr(alias.ref), UnsafeRawPointer(storage))
+    }
+
+    func testMatWrapperNewIsOwnedAndContinuous() {
+        let ref = mat_wrapper_new(20, 10, MatWrapper.cvType(forBitsPerComponent: 32, componentsPerPixel: 1))!
+        let mat = MatWrapper(ref: ref)
+        XCTAssertEqual(mat.cols, 20)
+        XCTAssertEqual(mat.rows, 10)
+        XCTAssertEqual(mat_wrapper_step(ref), 80)
+        XCTAssertTrue(mat_wrapper_owns_data(ref))
+        // writable through the data pointer
+        let p = UnsafeMutableRawPointer(mutating: mat_wrapper_data_ptr(ref)!).assumingMemoryBound(to: Float.self)
+        p[0] = 1.5; p[199] = 2.5
+        XCTAssertEqual(p[0], 1.5)
+        XCTAssertEqual(p[199], 2.5)
+    }
+}
