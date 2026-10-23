@@ -423,12 +423,12 @@ public actor MemoryMonitor {
 
         // The ledger says there is room. Check reality agrees before believing it.
         let admissionBudget = effectiveBudget()
-        if reservedBytes + bytes <= admissionBudget {
+        //
+        // Never ahead of anyone already queued: a request that arrives while others wait
+        // joins the back of the queue, and the drain admits them in order.
+        if waiters.isEmpty, reservedBytes + bytes <= admissionBudget {
             if let blocked = realityBlock() {
-                // Not ahead of anyone already queued: they are admitted from the drain, in
-                // order, the moment this rule allows it.
-                if waiters.isEmpty,
-                   admitsDespiteRealityHold(bytes, alreadyAdmitted: reservedBytes)
+                if admitsDespiteRealityHold(bytes, alreadyAdmitted: reservedBytes)
                 {
                     reservedBytes += bytes
                     noteSerialAdmission(bytes, heldBecause: blocked)
@@ -507,7 +507,8 @@ public actor MemoryMonitor {
             startPollingIfNeeded()
         }
 
-        reservedBytes += bytes
+        // The drain booked this grant before it resumed us (see `drainReadyWaiters`), so a
+        // release or reserve that ran between the resume and this line saw it.
 
         let elapsed = Date().timeIntervalSince(startTime)
         totalWaits += 1
@@ -949,6 +950,10 @@ public actor MemoryMonitor {
         }
 
         waiters = remaining
+        // Book the grants now, on the actor, before any waiter runs again. Booking after the
+        // resume left a window in which other reservations saw the headroom as free and the
+        // ledger went over budget.
+        reservedBytes = speculativeReserved
         for waiter in released { waiter.continuation.resume() }
 
         if waiters.isEmpty {
