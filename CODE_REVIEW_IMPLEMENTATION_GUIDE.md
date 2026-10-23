@@ -713,6 +713,47 @@ race, no frame-length cap) and H5 (cancel over-grant) as known, deferred.
   changed; it needs its own A/B and probably the removal oracle. The S11 Hough speedups are
   identity-tested with a fractional overlap and are real, but cost nothing today.
 
+## Backlog notes (WP-H) and what was not done
+
+`BUGS.md` lives only on branch `claude/gherkin-removal-validation-40e353`, so the backlog entry is
+recorded here instead.
+
+**Decision-tree features computed incorrectly — fix only with retraining.**
+`OutlierGroup.swift:779/801` (far end measured from the wrong intersection); `Blob.intensity()` is
+always ~0 (`Blob.swift:624`); `pixelBorderAmount` counts diagonals only
+(`OutlierGroupFeature.swift:650`); Hough lines are scored on the blob-id image
+(`HoughLineMatrixBlobConnector.swift:204-211`; moot while the step produces no tiles, see the
+finding above). Also known and deferred: K1 (the Kotlin `StdioConnection` close race and missing
+frame-length cap) and H5 (`ResizableGate` cancel over-grant, which can hand a cancelled waiter a
+slot beyond the width).
+
+**Implemented on this branch** (one commit per item; see `git log`): X1, C2, C4, C5, C6, C7, C9, C14;
+S1-S5, S6 step 1 only, S7-S14; C1, C3, C8, C10-C13; D1-D7; G1, G2, G3, G5, G4 (mode picker only);
+H1-H4.
+
+**Not done, and why**
+* **S6 steps 2 and 3** (route base-frame loads through `DecodedFrameStore`; uncompressed working
+  copies): step 1's measurement is 2.79 decodes per frame on the JPEG test sequence (see Baseline),
+  above the guide's threshold, but the fix wants the CPU split of decode vs everything else on the
+  42 MP/LZW-TIFF case first, which was not measured.
+* **S15** (Random Walker cost) and **S16** (coverage warp over border strips): both need the
+  horizon-error measurement against the reference masks (S15) or an `--no-use-gpu` identity A/B
+  with the removal oracle (S16), neither of which was run.
+* **G4** except the mode picker: the grid slider cache, sequence-open work and alignment chart need
+  real GUI runs to verify.
+* **Dense crop runs**: never run (0.3). X1's frame-level check is a synthetic-field test that the
+  connector output does not depend on seed concurrency.
+* **Removal oracle** (`removal_tools/` on another branch): not run for any output-changing item (C3,
+  C10-C13, S14). They are unit-tested at the level of what they change; none has the oracle's
+  verdict. Treat them as unmeasured until it is run.
+* **C11**: the GPU warp now agrees with an exact double-precision reference at every pixel; the
+  guide's "0 differing against OpenCV" is not reachable because OpenCV's own CPU warp is off that
+  reference (0.30% of pixels at 6000 px wide).
+
+**Environment note.** `daemon`'s `CancellableFFmpegTests` hung in this session (the `ffmpeg -re -t 3600`
+children it spawns outlived their test and had to be killed by hand); that file and
+`VideoConvert.swift` are untouched here, and the rest of the daemon suite passes.
+
 ## Appendix A — scripts
 
 These were used for the review; paths are placeholders.
