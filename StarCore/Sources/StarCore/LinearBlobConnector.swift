@@ -295,7 +295,8 @@ public actor LinearBlobConnector {
             sortedBlobs = Array(sortedBlobs[0..<args.maxBlobsProcessed])
         }
         
-        Log.d("frame \(frameIndex) processing \(sortedBlobs.count) blobs out of a total of \(originalNumber)")
+        let seedCount = sortedBlobs.count
+        Log.d("frame \(frameIndex) processing \(seedCount) blobs out of a total of \(originalNumber)")
         
         let mappings = await withTaskGroup(of: Set<BlobMapping>.self) { taskGroup in
             // Sliding window: at most `window` seeds in flight. Each seed builds a neighbour
@@ -553,7 +554,10 @@ fileprivate func iterate(on blobLine: Line,
 
             let firstBlob = linearBlobSet.removeFirst()
             
-            Log.d("frame \(data.analyzer.frameIndex) blob \(fullBlob.id) found \(await linearBlobIds.count) linear blobs")
+            if Log.isEnabled(.debug) {
+                let linearCount = await linearBlobIds.count
+                Log.d("frame \(data.analyzer.frameIndex) blob \(fullBlob.id) found \(linearCount) linear blobs")
+            }
             
             // we found more than one blob along the line
             // record a mapping between them 
@@ -562,7 +566,10 @@ fileprivate func iterate(on blobLine: Line,
                 ret.insert(BlobMapping(firstBlob.id, otherBlob.id))
             }
 
-            Log.d("frame \(data.analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count)")
+            if Log.isEnabled(.debug) {
+                let pixelCount = await fullBlob.pixels.count
+                Log.d("frame \(data.analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(pixelCount)")
+            }
             
         } else {
             Log.d("frame \(data.analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")

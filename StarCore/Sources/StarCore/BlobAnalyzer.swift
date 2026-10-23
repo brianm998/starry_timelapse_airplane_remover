@@ -203,8 +203,12 @@ public actor BlobAnalyzer {
 */
     public func logBlobs() async {
         Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
+        // the blob reads below are actor hops, and `await` cannot sit inside a log message
+        guard Log.isEnabled(.debug) else { return }
         for (_, blob) in blobMap {
-            Log.d("frame \(frameIndex) blob.id \(blob.id) \(await blob.size()) pixels \(await blob.pixels)")
+            let size = await blob.size()
+            let pixels = await blob.pixels
+            Log.d("frame \(frameIndex) blob.id \(blob.id) \(size) pixels \(pixels)")
         }
     }
 

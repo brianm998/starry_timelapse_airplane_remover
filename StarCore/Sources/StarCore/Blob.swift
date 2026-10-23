@@ -77,12 +77,13 @@ public actor Blob: CustomStringConvertible,
             
             for _ in 0..<pixelCount {
                 if index+3 <= persitentDataArray.count {
-                    pixels.update(with: SortablePixel(x: Int(persitentDataArray[index]),
+                    self.pixels.update(with: SortablePixel(x: Int(persitentDataArray[index]),
                                                       y: Int(persitentDataArray[index+1]),
                                                       value: .sixteenBit(persitentDataArray[index+2])))
                     index += 3
                 } else {
-                    Log.w("frame \(frameIndex) blob \(id) went out of range")
+                    let loadedId = self.id
+                    Log.w("frame \(frameIndex) blob \(loadedId) went out of range")
                 }
             }
         } else {
@@ -708,7 +709,10 @@ public actor Blob: CustomStringConvertible,
             let selfBeforeSize = self.size()
             
             let newPixels = await otherBlob.getPixels()
-            if newPixels.count == 0 { Log.e("frame \(frameIndex) blob \(self.id) other blob to add has no pixels and size \(await otherBlob.size())") }
+            if newPixels.count == 0 {
+                let otherSize = await otherBlob.size()
+                Log.e("frame \(frameIndex) blob \(self.id) other blob to add has no pixels and size \(otherSize)")
+            }
             for otherPixel in newPixels {
                 await statusTracker?.record(status: .blobbed(self), for: otherPixel)
                 // in place: copying the whole set per absorb was quadratic for big blobs
@@ -720,8 +724,9 @@ public actor Blob: CustomStringConvertible,
 
             let selfAfterSize = self.size()
 
-            if selfAfterSize != selfBeforeSize + (await otherBlob.size()) {
-                Log.w("frame \(frameIndex) blob \(self.id) \(selfAfterSize) != \(selfBeforeSize) + \(await otherBlob.size()) newPixels.count \(newPixels.count)")
+            let otherSizeAfter = await otherBlob.size()
+            if selfAfterSize != selfBeforeSize + otherSizeAfter {
+                Log.w("frame \(frameIndex) blob \(self.id) \(selfAfterSize) != \(selfBeforeSize) + \(otherSizeAfter) newPixels.count \(newPixels.count)")
 //                if frameIndex == 0 {
                   //  Log.i("frame \(frameIndex) blob \(self.id) \(self.pixels.count) pixels \(self.pixels)")
                     //Log.i("frame \(frameIndex) other blob \(otherBlob.id) pixels \(await otherBlob.pixels)")

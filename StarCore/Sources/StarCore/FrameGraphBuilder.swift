@@ -1190,7 +1190,10 @@ public final actor FrameGraphBuilder {
         let outputFrameCount = range.output.count
         let completionOp = GraphCompletionOp {
             Log.i("Frame graph fully finished")
-            Log.i(await MemoryMonitor.shared.stats())
+            if Log.isEnabled(.info) {
+                let memoryStats = await MemoryMonitor.shared.stats()
+                Log.i(memoryStats)
+            }
             Log.i(DecodedFrameStore.shared.statsLine(frames: outputFrameCount))
             closure(await errors.elements())
         }

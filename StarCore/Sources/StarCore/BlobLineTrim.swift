@@ -190,10 +190,18 @@ fileprivate func process(_ blob: Blob,
                 }
             } else {
                 // failing here sometimes
-                Log.i("frame \(frameIndex) ignoring blob of size \(await blob.size()) \(await blob.boundingBox()) because lineLength \(lineLength) <= args.minLineLength \(args.minLineLength)")
+                if Log.isEnabled(.info) {
+                    let size = await blob.size()
+                    let box = await blob.boundingBox()
+                    Log.i("frame \(frameIndex) ignoring blob of size \(size) \(box) because lineLength \(lineLength) <= args.minLineLength \(args.minLineLength)")
+                }
             }
         } else {
-            Log.i("frame \(frameIndex) ignoring blob of size \(await blob.size()) \(await blob.boundingBox()) because of no lineLength")
+            if Log.isEnabled(.info) {
+                let size = await blob.size()
+                let box = await blob.boundingBox()
+                Log.i("frame \(frameIndex) ignoring blob of size \(size) \(box) because of no lineLength")
+            }
         }
     } else {
         //Log.i("frame \(frameIndex) ignoring blob of size \(await blob.size()) \(await blob.boundingBox()) because of args.minBlobSize \(args.minBlobSize)")

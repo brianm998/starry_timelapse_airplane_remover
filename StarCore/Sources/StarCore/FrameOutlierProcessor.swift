@@ -252,7 +252,10 @@ final public actor FrameOutlierProcessor {
                 // frames are linked with their neighbors and outlier
                 // groups can use these links for decision tree values
                 outliersLoadedFromFile = true
-                Log.i("loaded \(String(describing: await outlierGroups.getMembers().count)) outlier groups for frame \(frameIndex)")
+                if Log.isEnabled(.info) {
+                    let groupCount = await outlierGroups.getMembers().count
+                    Log.i("loaded \(groupCount) outlier groups for frame \(frameIndex)")
+                }
                 await frame?.updateCombineSubjects()
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
@@ -674,7 +677,10 @@ final public actor FrameOutlierProcessor {
       keepingUserDecisions: Bool = false,
       minimumSize: Int? = nil
     ) async {
-      Log.d("frame \(frameIndex) applyDecisionTreeToAll \(await outlierGroups?.members.count ?? 0) Outliers")
+      if Log.isEnabled(.debug) {
+          let groupCount = await outlierGroups?.members.count ?? 0
+          Log.d("frame \(frameIndex) applyDecisionTreeToAll \(groupCount) Outliers")
+      }
         let startTime = Date().timeIntervalSince1970
         if let outlierGroups {
             let groups = await outlierGroups.getMembers()

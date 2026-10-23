@@ -143,6 +143,11 @@ public class Log {
     }
 
     private nonisolated(unsafe) static var minimumLogLevel: Log.Level = .error
+
+    /// Whether a line at `level` would be recorded at all. Check this before computing a log
+    /// message that is expensive or needs an `await` to build; `Log.i("\(...)")` itself only
+    /// evaluates its message after this test, so it is the work *around* a call that this guards.
+    public static func isEnabled(_ level: Level) -> Bool { level <= minimumLogLevel }
     
     public enum Output: Sendable {
         case console
@@ -248,7 +253,7 @@ extension Log {
        Log.verbose()
        Log.verbose("something happened")
      */
-    public static func verbose(_ message: String? = nil,
+    public static func verbose(_ message: @autoclosure () -> String? = nil,
                                file: String = #file,
                                function: String = #function,
                                line: Int = #line)
@@ -259,7 +264,7 @@ extension Log {
     /*
        Log.verbose("something happened", somedata)
      */
-    public static func verbose<T>(_ message: String? = nil,
+    public static func verbose<T>(_ message: @autoclosure () -> String? = nil,
                                   _ data: T?,
                                   file: String = #file,
                                   function: String = #function,
@@ -282,7 +287,7 @@ extension Log {
     /*
        Log.verbose("something happened", [somedata, otherdata])
      */
-    public static func verbose<T>(_ message: String? = nil,
+    public static func verbose<T>(_ message: @autoclosure () -> String? = nil,
                                 _ data: [T]?,
                                 file: String = #file,
                                 function: String = #function,
@@ -308,7 +313,7 @@ extension Log {
        Log.v()
        Log.v("something happened")
      */
-    public static func v(_ message: String? = nil,
+    public static func v(_ message: @autoclosure () -> String? = nil,
                          file: String = #file,
                          function: String = #function,
                          line: Int = #line)
@@ -319,7 +324,7 @@ extension Log {
     /*
      Log.v("something happened", somedata)
      */
-    public static func v<T>(_ message: String? = nil,
+    public static func v<T>(_ message: @autoclosure () -> String? = nil,
                             _ data: T?,
                             file: String = #file,
                             function: String = #function,
@@ -342,7 +347,7 @@ extension Log {
     /*
        Log.v("something happened", [somedata, otherdata])
      */
-    public static func v<T>(_ message: String? = nil,
+    public static func v<T>(_ message: @autoclosure () -> String? = nil,
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
@@ -369,7 +374,7 @@ extension Log {
        Log.debug()
        Log.debug("something happened")
      */
-    public static func debug(_ message: String? = nil,
+    public static func debug(_ message: @autoclosure () -> String? = nil,
                              file: String = #file,
                              function: String = #function,
                              line: Int = #line)
@@ -380,7 +385,7 @@ extension Log {
     /*
        Log.debug("something happened", somedata)
      */
-    public static func debug<T>(_ message: String? = nil,
+    public static func debug<T>(_ message: @autoclosure () -> String? = nil,
                                 _ data: T?,
                                 file: String = #file,
                                 function: String = #function,
@@ -403,7 +408,7 @@ extension Log {
     /*
        Log.debug("something happened", [somedata, otherdata])
      */
-    public static func debug<T>(_ message: String? = nil,
+    public static func debug<T>(_ message: @autoclosure () -> String? = nil,
                                 _ data: [T]?,
                                 file: String = #file,
                                 function: String = #function,
@@ -429,7 +434,7 @@ extension Log {
        Log.d()
        Log.d("something happened")
      */
-    public static func d(_ message: String? = nil,
+    public static func d(_ message: @autoclosure () -> String? = nil,
                          file: String = #file,
                          function: String = #function,
                          line: Int = #line)
@@ -440,7 +445,7 @@ extension Log {
     /*
      Log.d("something happened", somedata)
      */
-    public static func d<T>(_ message: String? = nil,
+    public static func d<T>(_ message: @autoclosure () -> String? = nil,
                             _ data: T?,
                             file: String = #file,
                             function: String = #function,
@@ -463,7 +468,7 @@ extension Log {
     /*
        Log.d("something happened", [somedata, otherdata])
      */
-    public static func d<T>(_ message: String? = nil,
+    public static func d<T>(_ message: @autoclosure () -> String? = nil,
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
@@ -489,7 +494,7 @@ extension Log {                 // info
        Log.info()
        Log.info("something happened")
      */
-    public static func info(_ message: String? = nil,
+    public static func info(_ message: @autoclosure () -> String? = nil,
                             file: String = #file,
                             function: String = #function,
                             line: Int = #line)
@@ -500,7 +505,7 @@ extension Log {                 // info
     /*
        Log.info("something happened", somedata)
      */
-    public static func info<T>(_ message: String? = nil,
+    public static func info<T>(_ message: @autoclosure () -> String? = nil,
                                _ data: T?,
                                file: String = #file,
                                function: String = #function,
@@ -523,7 +528,7 @@ extension Log {                 // info
     /*
        Log.info("something happened", [somedata, otherdata])
      */
-    public static func info<T>(_ message: String? = nil,
+    public static func info<T>(_ message: @autoclosure () -> String? = nil,
                                _ data: [T]?,
                                file: String = #file,
                                function: String = #function,
@@ -549,7 +554,7 @@ extension Log {                 // i
        Log.i()
        Log.i("something happened")
      */
-    public static func i(_ message: String? = nil,
+    public static func i(_ message: @autoclosure () -> String? = nil,
                          file: String = #file,
                          function: String = #function,
                          line: Int = #line)
@@ -560,7 +565,7 @@ extension Log {                 // i
     /*
        Log.i("something happened", somedata)
      */
-    public static func i<T>(_ message: String? = nil,
+    public static func i<T>(_ message: @autoclosure () -> String? = nil,
                                _ data: T?,
                                file: String = #file,
                                function: String = #function,
@@ -583,7 +588,7 @@ extension Log {                 // i
     /*
        Log.i("something happened", [somedata, otherdata])
      */
-    public static func i<T>(_ message: String? = nil,
+    public static func i<T>(_ message: @autoclosure () -> String? = nil,
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
@@ -609,7 +614,7 @@ extension Log {
        Log.warn()
        Log.warn("something happened")
      */
-    public static func warn(_ message: String? = nil,
+    public static func warn(_ message: @autoclosure () -> String? = nil,
                             file: String = #file,
                             function: String = #function,
                             line: Int = #line)
@@ -620,7 +625,7 @@ extension Log {
     /*
        Log.warn("something happened", somedata)
      */
-    public static func warn<T>(_ message: String? = nil,
+    public static func warn<T>(_ message: @autoclosure () -> String? = nil,
                                _ data: T?,
                                file: String = #file,
                                function: String = #function,
@@ -643,7 +648,7 @@ extension Log {
     /*
        Log.warn("something happened", [somedata, otherdata])
      */
-    public static func warn<T>(_ message: String? = nil,
+    public static func warn<T>(_ message: @autoclosure () -> String? = nil,
                                _ data: [T]?,
                                file: String = #file,
                                function: String = #function,
@@ -669,7 +674,7 @@ extension Log {
        Log.w()
        Log.w("something happened")
      */
-    public static func w(_ message: String? = nil,
+    public static func w(_ message: @autoclosure () -> String? = nil,
                          file: String = #file,
                          function: String = #function,
                          line: Int = #line)
@@ -680,7 +685,7 @@ extension Log {
     /*
        Log.w("something happened", somedata)
      */
-    public static func w<T>(_ message: String? = nil,
+    public static func w<T>(_ message: @autoclosure () -> String? = nil,
                             _ data: T?,
                             file: String = #file,
                             function: String = #function,
@@ -703,7 +708,7 @@ extension Log {
     /*
        Log.w("something happened", [somedata, otherdata])
      */
-    public static func w<T>(_ message: String? = nil,
+    public static func w<T>(_ message: @autoclosure () -> String? = nil,
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
@@ -729,7 +734,7 @@ extension Log {
        Log.error()
        Log.error("something happened")
      */
-    public static func error(_ message: String? = nil,
+    public static func error(_ message: @autoclosure () -> String? = nil,
                              file: String = #file,
                              function: String = #function,
                              line: Int = #line)
@@ -754,7 +759,7 @@ extension Log {
        Log.error(somedata)
        Log.error("something happened", somedata)
      */
-    public static func error<T>(_ message: String? = nil,
+    public static func error<T>(_ message: @autoclosure () -> String? = nil,
                                 _ data: T?,
                                 file: String = #file,
                                 function: String = #function,
@@ -777,7 +782,7 @@ extension Log {
     /*
        Log.error([somedata, otherdata])
      */
-    public static func error<T>(_ message: String? = nil,
+    public static func error<T>(_ message: @autoclosure () -> String? = nil,
                                 _ data: [T]?,
                                 file: String = #file,
                                 function: String = #function,
@@ -804,7 +809,7 @@ extension Log {
        Log.e()
        Log.e("something happened")
      */
-    public static func e(_ message: String? = nil,
+    public static func e(_ message: @autoclosure () -> String? = nil,
                          file: String = #file,
                          function: String = #function,
                          line: Int = #line)
@@ -829,7 +834,7 @@ extension Log {
        Log.e(somedata)
        Log.e("something happened", somedata)
      */
-    public static func e<T>(_ message: String? = nil,
+    public static func e<T>(_ message: @autoclosure () -> String? = nil,
                             _ data: T?,
                             file: String = #file,
                             function: String = #function,
@@ -852,7 +857,7 @@ extension Log {
     /*
        Log.e([somedata, otherdata])
      */
-    public static func e<T>(_ message: String? = nil,
+    public static func e<T>(_ message: @autoclosure () -> String? = nil,
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
@@ -875,22 +880,8 @@ extension Log {
 
 // after here are the internal implemenation details
 
-fileprivate actor PendingLogCounter {
-    private var pendingLogCount = 0
-
-    public func logIsPending() {
-        pendingLogCount += 1
-    }
-    public func logHasFinished() {
-        pendingLogCount -= 1
-    }
-    public func isPending() -> Bool { pendingLogCount > 0 }
-}
-
-fileprivate let pendingLogCounter = PendingLogCounter()
-
 fileprivate extension Log {
-    static func logInternal(_ message: String? = nil,
+    static func logInternal(_ message: () -> String? = { nil },
                             at logLevel: Level,
                             _ file: String,
                             _ function: String,
@@ -898,8 +889,13 @@ fileprivate extension Log {
     {
         logInternal(message, with: Optional<Int>.none, at: logLevel, file, function, line)
     }
-        
-    static func logInternal<T>(_ message: String? = nil,
+
+    /// Synchronous: the level test, the message evaluation and the queue append all happen on
+    /// the calling thread, in call order. This used to spawn a `Task` per line that hopped
+    /// through three actors before the line reached the queue, which cost far more than the
+    /// line and let lines from one thread overtake each other. A line below the minimum level
+    /// now costs one comparison, and its message is never built.
+    static func logInternal<T>(_ message: () -> String? = { nil },
                                with data: T? = Optional<T>.none,
                                at logLevel: Level,
                                _ file: String,
@@ -910,50 +906,29 @@ fileprivate extension Log {
 
         let logTime = NSDate().timeIntervalSince1970
 
-        Task {
-            
-            await pendingLogCounter.logIsPending()
-            var string = ""
-            
-            if let message = message {
-                string = message
-            } else if data != nil {
-                string = logLevel.description
-            }
-            
-            var extraData: LogData?
+        var string = ""
 
-            
-            if let data = data {
-
-                /*
-
- XXX swift 6 makes this not compile, and it's not really used, so it's in the dustbin for now
-                 
-                if let encodableData = data as? Encodable,
-                   let encodableLogData = EncodableLogData(with: encodableData)
-                {
-                    // first we try to json encode any Encodable data
-                    extraData = encodableLogData
-                } else
-
-*/
-                
-                if let stringConvertibleData = data as? CustomStringConvertible {
-                    // then we try the description of any CustomStringConvertible data
-                    extraData = StringLogData(with: stringConvertibleData)
-                } else {
-                    // our final fallback for data we don't have a better way to encode
-                    extraData = StringLogData(with: data)
-                }
-
-            }
-
-            await gremlin.log(string, at: logLevel,
-                              logTime: logTime, extraData: extraData,
-                              file, function, line)
-            await pendingLogCounter.logHasFinished()
+        if let text = message() {
+            string = text
+        } else if data != nil {
+            string = logLevel.description
         }
+
+        var extraData: LogData?
+
+        if let data = data {
+            if let stringConvertibleData = data as? CustomStringConvertible {
+                // the description of any CustomStringConvertible data
+                extraData = StringLogData(with: stringConvertibleData)
+            } else {
+                // our final fallback for data we don't have a better way to encode
+                extraData = StringLogData(with: data)
+            }
+        }
+
+        gremlin.enqueue(string, at: logLevel,
+                        logTime: logTime, extraData: extraData,
+                        file, function, line)
     }
 }
 
@@ -967,20 +942,105 @@ public struct LogHolder: Sendable {
 
 public let gremlin = LogGremlin()
 
+/// The lines not yet handed to the handlers, behind a lock so that producers on any thread can
+/// append without going through the gremlin actor.
+///
+/// Read from a moving head rather than with `removeFirst()`, which shifts every element
+/// behind it and so made each line cost the length of the backlog.  That is quadratic in
+/// exactly the case it matters: with millions of lines queued, every line drained moved
+/// hundreds of megabytes, so draining got slower the further behind it fell.  The consumed
+/// prefix is dropped in one go once it is at least half the array, which keeps both the
+/// per-line cost and the dead storage bounded.
+///
+/// The drain parks on `waitForWork()` and an append wakes it, instead of polling every
+/// millisecond: an idle process no longer wakes a thousand times a second, and a line is
+/// handed on as soon as it arrives.
+final class LogQueue: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending: [LogHolder] = []
+    private var head = 0
+    private var minimumLevel: Log.Level = .error
+    private var parked: CheckedContinuation<Void, Never>?
+
+    func setMinimumLevel(_ level: Log.Level) {
+        lock.lock(); defer { lock.unlock() }
+        if level < minimumLevel { minimumLevel = level }
+    }
+
+    func append(_ holder: LogHolder) {
+        lock.lock()
+        guard holder.logLevel >= minimumLevel else { lock.unlock(); return }
+        pending.append(holder)
+        let waiter = parked
+        parked = nil
+        lock.unlock()
+        waiter?.resume()
+    }
+
+    var count: Int {
+        lock.lock(); defer { lock.unlock() }
+        return pending.count - head
+    }
+
+    func next() -> LogHolder? {
+        lock.lock(); defer { lock.unlock() }
+        guard head < pending.count else { return nil }
+        let log = pending[head]
+        head += 1
+        if head == pending.count {
+            // Drained.  Keep the storage only if it is small; a backlog's worth of capacity
+            // held for the rest of the session would be the backlog's memory all over again.
+            pending.removeAll(keepingCapacity: pending.count <= 4096)
+            head = 0
+        } else if head >= 1024, head * 2 >= pending.count {
+            pending.removeFirst(head)
+            head = 0
+        }
+        return log
+    }
+
+    /// Returns when there is something queued, or when `wake()` is called. Checks and parks
+    /// under one lock, so an append cannot slip between the two and be missed.
+    func waitForWork() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            lock.lock()
+            if head < pending.count {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                if let existing = parked { existing.resume() }  // never strand a second waiter
+                parked = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    func wake() {
+        lock.lock()
+        let waiter = parked
+        parked = nil
+        lock.unlock()
+        waiter?.resume()
+    }
+}
+
 // this little guy just sits around and keeps the logs orderly by handling one log line at at time
 public actor LogGremlin {
 
     private var running = true
 
     private func isRunning() -> Bool { running }
-    
+
+    /// Appended to by any thread, drained by this actor.
+    nonisolated let queue = LogQueue()
+
+    /// Flush everything still queued to the handlers and stop the background drain.
     public func finishLogging() async {
         running = false
-        repeat {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-        } while await pendingLogCounter.isPending()
-
-        repeat { await logNext() } while pendingLogCount() > 0
+        queue.wake()
+        // Lines are appended synchronously now, so there is no in-flight work to wait for:
+        // whatever has been logged is in the queue.
+        repeat { logBatch(limit: 1 << 20) } while pendingLogCount() > 0
     }
 
     // `self`, not the global `gremlin`.  This used to reach for the global on both lines, which
@@ -997,11 +1057,7 @@ public actor LogGremlin {
     /// Hand up to `limit` queued lines to the handlers, oldest first.
     ///
     /// What the drain loop calls instead of `logNext()`, so that a backlog is worked off
-    /// between sleeps rather than one line per sleep.  One line per 1ms sleep capped the
-    /// gremlin at well under a thousand lines a second, while the gui's alignment chart alone
-    /// could queue two thousand debug lines per redraw — so with file logging at `.debug` the
-    /// queue only ever grew: a real session's log fell twenty minutes behind and was still
-    /// losing ground, with the backlog holding 250MB.  Bounded rather than "everything queued",
+    /// in batches rather than one line at a time.  Bounded rather than "everything queued",
     /// so a long backlog does not hold the actor shut against the producers behind it.
     func logBatch(limit: Int = 1024) {
         var handled = 0
@@ -1028,30 +1084,17 @@ public actor LogGremlin {
     public init(selfDraining: Bool = true) {
         guard selfDraining else { return }
         Task {
-            while(await self.isRunning()) {
+            while await self.isRunning() {
                 await self.logBatch()
-                try? await Task.sleep(nanoseconds: 1_000_000) // 1ms
+                await self.queue.waitForWork()
             }
         }
     }
 
     private var handlers: [Log.Output : LogHandler] = [:]
 
-    /// Lines not yet handed to the handlers, oldest at `pendingHead`.
-    ///
-    /// Read from a moving head rather than with `removeFirst()`, which shifts every element
-    /// behind it and so made each line cost the length of the backlog.  That is quadratic in
-    /// exactly the case it matters: with millions of lines queued, every line drained moved
-    /// hundreds of megabytes, so draining got slower the further behind it fell.  The consumed
-    /// prefix is dropped in one go once it is at least half the array, which keeps both the
-    /// per-line cost and the dead storage bounded.
-    private var pendingLogs: [LogHolder] = []
-    private var pendingHead = 0
-
     public func getHandlers() -> [Log.Output : LogHandler] { handlers }
 
-    private var minimumLogLevel: Log.Level = .error
-    
     func removeHandler(for outputType: Log.Output) {
         handlers.removeValue(forKey: outputType)
         // XXX recompute minimumLogLevel here?
@@ -1059,50 +1102,43 @@ public actor LogGremlin {
 
     func add(handler: LogHandler, for outputType: Log.Output) {
         handlers[outputType] = handler
-        if handler.level < minimumLogLevel {
-            minimumLogLevel = handler.level
-        }
+        queue.setMinimumLevel(handler.level)
     }
 
-    public func pendingLogCount() -> Int { pendingLogs.count - pendingHead }
+    public func pendingLogCount() -> Int { queue.count }
 
-    func nextLog() -> LogHolder? {
-        guard pendingHead < pendingLogs.count else { return nil }
-        let log = pendingLogs[pendingHead]
-        pendingHead += 1
-        if pendingHead == pendingLogs.count {
-            // Drained.  Keep the storage only if it is small; a backlog's worth of capacity
-            // held for the rest of the session would be the backlog's memory all over again.
-            pendingLogs.removeAll(keepingCapacity: pendingLogs.count <= 4096)
-            pendingHead = 0
-        } else if pendingHead >= 1024, pendingHead * 2 >= pendingLogs.count {
-            pendingLogs.removeFirst(pendingHead)
-            pendingHead = 0
-        }
-        return log
+    func nextLog() -> LogHolder? { queue.next() }
+
+    /// Queue a line from any thread, without going through the actor. This is what `Log.*`
+    /// calls; the actor-isolated `log` below is the same append, kept for callers that are
+    /// already on the actor.
+    nonisolated func enqueue(_ message: String,
+                             at logLevel: Log.Level,
+                             logTime: TimeInterval,
+                             extraData: LogData? = nil,
+                             _ file: String,
+                             _ function: String,
+                             _ line: Int)
+    {
+        let filename = file.components(separatedBy: "/").last ?? file
+        let fileLocation = "\(filename)@\(line)"
+        queue.append(LogHolder(message: message,
+                               fileLocation: fileLocation,
+                               data: extraData,
+                               logLevel: logLevel,
+                               logTime: logTime))
     }
 
     func log(_ message: String,
              at logLevel: Log.Level,
-             logTime: TimeInterval,             
+             logTime: TimeInterval,
              extraData: LogData? = nil,
              _ file: String,
              _ function: String,
              _ line: Int)
     {
-        guard logLevel >= minimumLogLevel else { return }
-        
-        let filename = file.components(separatedBy: "/").last ?? file
-        let fileLocation = "\(filename)@\(line)"
-
-        pendingLogs.append(LogHolder(message: message,
-                                     fileLocation: fileLocation,
-                                     data: extraData,
-                                     logLevel: logLevel,
-                                     logTime: logTime))
-        
+        enqueue(message, at: logLevel, logTime: logTime, extraData: extraData, file, function, line)
     }
-    
 }
 
 
