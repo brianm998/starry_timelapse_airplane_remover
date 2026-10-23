@@ -174,6 +174,15 @@ public class ConfigManager {
             callback(config)
         }
     }
+
+    /// Sets one frame's clean-method override. The read, the edit and the write happen in one
+    /// main-actor step: doing them as read / `await` / write let two frames' changes
+    /// interleave, and the second write put back the first frame's old overrides.
+    public func setPixelReplacementOverride(_ cleanMethod: CleanMethod, forFrame frameIndex: Int) {
+        var config = self._config
+        config.pixelReplacementOverrides[frameIndex] = cleanMethod
+        update(config)
+    }
 }
 
 public struct Config: Codable, Sendable {

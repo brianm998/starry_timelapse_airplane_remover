@@ -291,12 +291,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     private var saveTimerTask: Task<Void,Never>?
+    // identifies the latest timer, so a finishing task clears `saveTimerTask` only if it is
+    // still the current one and not a newer timer that replaced it
+    private var saveTimerGeneration = 0
     
     public func startSaveTimerTask(waitTime: TimeInterval = 12,
                                    closure: @Sendable @escaping () async throws -> Void)
     {
         if let saveTimerTask { saveTimerTask.cancel() }
 
+        saveTimerGeneration += 1
+        let generation = saveTimerGeneration
         saveTimerTask = Task {
           do {
             try? await Task.sleep(nanoseconds: UInt64(waitTime*1_000_000_000))
@@ -305,7 +310,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           } catch {
             Log.e("error: \(error)")
           }
-          saveTimerTask = nil
+          if saveTimerGeneration == generation { saveTimerTask = nil }
         }
     }
     
@@ -1668,11 +1673,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var hasChanged = false
         
-        var config = await configManager.config()
-        config.pixelReplacementOverrides[self.frameIndex] = cleanMethod
         if update {
+            let frameIndex = self.frameIndex
             await MainActor.run {
-                configManager.update(config)
+                configManager.setPixelReplacementOverride(cleanMethod, forFrame: frameIndex)
             }
         }
         hasChanged = await observer?.cleanMethod == cleanMethod
