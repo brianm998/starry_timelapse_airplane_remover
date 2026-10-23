@@ -751,6 +751,8 @@ actor Session {
     /// way is let finish first, since it may have begun before the latest edit.  False if the frame could
     /// not be saved, or the save did not end within `timeout`.
     func renderNow(_ frame: FrameAirplaneRemover, timeout: Duration = .seconds(600)) async -> Bool {
+        // A closed session has no save queue worth feeding, and a cancelled caller no longer wants this.
+        if closed || Task.isCancelled { return false }
         let deadline = ContinuousClock.now + timeout
         guard await waitForSave(of: frame, until: deadline) else { return false }
         guard await beginSave(frame) else { return false }
@@ -819,7 +821,10 @@ actor Session {
             case .savePending, .saving: break
             }
             if ContinuousClock.now > deadline { return false }
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            // `try?` here turned a cancelled caller into a busy loop: sleep throws at once when the
+            // task is cancelled, the error was dropped, and the loop spun on `savingState()` with no
+            // pause until the deadline. A cancelled wait is over.
+            do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return false }
         }
     }
 
