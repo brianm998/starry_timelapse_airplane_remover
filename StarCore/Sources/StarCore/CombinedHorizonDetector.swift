@@ -294,7 +294,9 @@ public enum CombinedHorizonDetector {
         let rwBeta = params.rwBeta
         let rwWidth = params.rwMaxWorkingWidth
         let seedY = combinedY
-        let masks: [PixelatedImage] = await withTaskGroup(of: (Int, PixelatedImage).self) { group in
+        // Each brush yields its per-column horizon; the full-resolution mask is built only for the
+        // winner, since scoring reads nothing but those columns.
+        let horizons: [[Int?]] = await withTaskGroup(of: (Int, [Int?]).self) { group in
             for (index, brush) in radii.enumerated() {
                 group.addTask {
                     (index, await NativeWork.run {
@@ -303,21 +305,26 @@ public enum CombinedHorizonDetector {
                     })
                 }
             }
-            var collected: [(Int, PixelatedImage)] = []
+            var collected: [(Int, [Int?])] = []
             for await item in group { collected.append(item) }
             return collected.sorted { $0.0 < $1.0 }.map { $0.1 }
         }
 
-        for (index, mask) in masks.enumerated() {
+        var bestHorizon: [Int?]? = nil
+        for (index, horizonY) in horizons.enumerated() {
             let brush = radii[index]
             // Score by horizon quality: smoothness + coverage
-            let score = selfScore(mask: mask, imageHeight: imgH)
+            let score = selfScore(horizonY: horizonY, imageHeight: imgH)
             Log.d("CombinedHorizonDetector: brush=\(brush) selfScore=\(String(format: "%.4f", score))")
 
             if score > bestScore {
                 bestScore = score
-                bestMask = mask
+                bestHorizon = horizonY
             }
+        }
+        if let bestHorizon {
+            bestMask = PixelatedImage(mat: PixelatedImageBridge.binaryHorizonMask(
+              width: Int32(imgW), height: Int32(imgH), horizonY: bestHorizon))
         }
 
         guard let finalMask = bestMask else {
@@ -1123,7 +1130,7 @@ public enum CombinedHorizonDetector {
         brushRadius: Int,
         beta: Double,
         maxWorkingWidth: Int32
-    ) -> PixelatedImage {
+    ) -> [Int?] {
         let imgW = image.width
         let imgH = image.height
 
@@ -1152,11 +1159,9 @@ public enum CombinedHorizonDetector {
             maxWorkingWidth: maxWorkingWidth
         )
 
-        let yArray: [Int?] = resultY.map { $0 < 0 ? nil : Int($0) }
-        let maskMat = PixelatedImageBridge.binaryHorizonMask(
-            width: Int32(imgW), height: Int32(imgH), horizonY: yArray
-        )
-        return PixelatedImage(mat: maskMat)!
+        // What `extractHorizonY` reads back from the binary mask built from these: a row in
+        // [0, H) is itself, and anything else (all sky, or at/below the last row) is no horizon.
+        return resultY.map { $0 >= 0 && Int($0) < imgH ? Int($0) : nil }
     }
 
     // MARK: - Helpers
@@ -1530,7 +1535,10 @@ public enum CombinedHorizonDetector {
 
     /// Self-score a mask without a reference: smoothness + coverage + plausibility.
     static func selfScore(mask: PixelatedImage, imageHeight: Int) -> Double {
-        let horizonY = extractHorizonY(from: mask)
+        selfScore(horizonY: extractHorizonY(from: mask), imageHeight: imageHeight)
+    }
+
+    static func selfScore(horizonY: [Int?], imageHeight: Int) -> Double {
         let defined = horizonY.compactMap { $0 }
         guard !defined.isEmpty else { return 0 }
 

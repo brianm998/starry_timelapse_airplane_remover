@@ -85,4 +85,29 @@ final class HorizonSpeedIdentityTests: XCTestCase {
         let new = CombinedHorizonDetector.fullResolutionHorizonY(of: small, toWidth: 160, height: 120)
         XCTAssertEqual(old, new)
     }
+
+    // MARK: - Random Walker scoring without building a mask
+
+    /// A brush is scored from its per-column answers instead of from the mask built from them.
+    /// That is only legitimate if reading the mask back gives those answers: a row in [0, H) is
+    /// itself, and -1, H and beyond are no horizon.
+    func testScoringFromColumnsEqualsScoringTheMaskBuiltFromThem() {
+        let h = 40, w = 30
+        let raw: [Int32] = (0..<w).map { x in
+            switch x % 7 {
+            case 0: return -1
+            case 1: return 0
+            case 2: return Int32(h - 1)
+            case 3: return Int32(h)          // at the bottom edge: no dark row
+            case 4: return Int32(h + 9)      // past it
+            default: return Int32(10 + x % 20)
+            }
+        }
+        let viaMask = PixelatedImage(mat: PixelatedImageBridge.binaryHorizonMask(
+            width: Int32(w), height: Int32(h), horizonY: raw.map { $0 < 0 ? nil : Int($0) }))!
+        let direct: [Int?] = raw.map { $0 >= 0 && Int($0) < h ? Int($0) : nil }
+        XCTAssertEqual(CombinedHorizonDetector.extractHorizonY(from: viaMask), direct)
+        XCTAssertEqual(CombinedHorizonDetector.selfScore(mask: viaMask, imageHeight: h),
+                       CombinedHorizonDetector.selfScore(horizonY: direct, imageHeight: h))
+    }
 }
