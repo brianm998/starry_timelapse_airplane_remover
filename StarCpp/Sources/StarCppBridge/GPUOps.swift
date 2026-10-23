@@ -20,6 +20,7 @@ public enum GPUOps {
     private static let stateLock = NSLock()
     nonisolated(unsafe) private static var _dutyCycle = 1.0
     nonisolated(unsafe) private static var _busyNanoseconds: UInt64 = 0
+    nonisolated(unsafe) private static var _deviceNanoseconds: UInt64 = 0
 
     /// Width of the GPU gate. In-flight work finishes under the old width.
     public static func setConcurrency(_ slots: Int) { gate.set(max: slots) }
@@ -38,6 +39,21 @@ public enum GPUOps {
     /// is the GPU's work plus the encode and wait around it). For the resource governor.
     public static var busySeconds: Double {
         Double(stateLock.withLock { _busyNanoseconds }) / 1_000_000_000
+    }
+
+    /// Seconds the GPU itself spent executing this process's command buffers since launch,
+    /// from each buffer's own `gpuStartTime`/`gpuEndTime`. The other number, `busySeconds`, is
+    /// time spent *holding a slot*, which also counts encoding, staging copies and the wait; on
+    /// the discrete Vega the device is idle for most of that (measured: GPU wait 0-2 % of slot
+    /// time), so slot time says almost nothing about how busy the GPU is.
+    public static var deviceBusySeconds: Double {
+        Double(stateLock.withLock { _deviceNanoseconds }) / 1_000_000_000
+    }
+
+    static func recordDevice(startTime: Double, endTime: Double) {
+        guard endTime > startTime, startTime > 0 else { return }
+        let nanoseconds = UInt64((endTime - startTime) * 1_000_000_000)
+        stateLock.withLock { _deviceNanoseconds &+= nanoseconds }
     }
 
     /// GPU entry points currently waiting for a slot.
@@ -400,6 +416,13 @@ private final class MetalGPUBackend: @unchecked Sendable {
         mergeStateLock.withLock { discreteMerges = on }
     }
 
+    /// Commits a command buffer, waits for it, and books how long the device itself ran it.
+    private func commitAndWait(_ cmdBuf: MTLCommandBuffer) {
+        cmdBuf.commit()
+        cmdBuf.waitUntilCompleted()
+        GPUOps.recordDevice(startTime: cmdBuf.gpuStartTime, endTime: cmdBuf.gpuEndTime)
+    }
+
     /// Runs `body` inside `gpuSlots`. Every public entry point below must go
     /// through this rather than calling into Metal directly.
     private func withGPUSlot<T>(_ body: () -> T) -> T {
@@ -562,8 +585,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
 
         dispatch(encoder: encoder, pipeline: pipeline, width: cols, height: rows)
         encoder.endEncoding()
-        cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
+        commitAndWait(cmdBuf)
         guard cmdBuf.status == .completed else { return false }
 
         memcpy(UnsafeMutableRawPointer(mutating: dstPtr), dstBuf.contents(), rows * dstStepBytes)
@@ -903,8 +925,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
             sync.endEncoding()
         }
 
-        cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
+        commitAndWait(cmdBuf)
         guard cmdBuf.status == .completed else { return false }
         bound.finish()
         mergeStateLock.withLock {
@@ -1188,8 +1209,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
         }
         syncEncoder.endEncoding()
 
-        cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
+        commitAndWait(cmdBuf)
         guard cmdBuf.status == .completed else { return false }
 
         for idx in 0..<textures.count {
@@ -1507,8 +1527,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
         }
         syncEncoder.endEncoding()
 
-        cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
+        commitAndWait(cmdBuf)
         guard cmdBuf.status == .completed else { return false }
 
         for i in 0..<levelCount {

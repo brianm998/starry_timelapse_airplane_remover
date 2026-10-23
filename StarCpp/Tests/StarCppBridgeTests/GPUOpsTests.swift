@@ -518,3 +518,22 @@ final class GPUOpsTests: XCTestCase {
         }
     }
 }
+
+final class GPUDeviceBusyTests: XCTestCase {
+    /// Device-busy time is what each command buffer's own GPU start/end say, accumulated.
+    func testDeviceTimeAccumulatesFromACommandBuffersStartAndEnd() {
+        let before = GPUOps.deviceBusySeconds
+        GPUOps.recordDevice(startTime: 10.0, endTime: 10.25)
+        GPUOps.recordDevice(startTime: 20.0, endTime: 20.5)
+        XCTAssertEqual(GPUOps.deviceBusySeconds - before, 0.75, accuracy: 1e-6)
+    }
+
+    /// A buffer that never ran reports 0 for both times (or an end before its start); it adds nothing.
+    func testABufferThatNeverRanAddsNothing() {
+        let before = GPUOps.deviceBusySeconds
+        GPUOps.recordDevice(startTime: 0, endTime: 0)
+        GPUOps.recordDevice(startTime: 5, endTime: 4)
+        GPUOps.recordDevice(startTime: 0, endTime: 3)
+        XCTAssertEqual(GPUOps.deviceBusySeconds, before, accuracy: 1e-9)
+    }
+}
