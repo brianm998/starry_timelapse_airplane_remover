@@ -55,7 +55,7 @@ enum PreviewFiles {
             let made = await FullSizeGate.shared.run {
                 (try? await frame.imageAccessor.writeFullSizeDisplayCopy(frameIndex: frameIndex, ofType: mode, to: path)) ?? false
             }
-            guard made else { return nil }
+            guard made == true else { return nil }
         }
         guard FileManager.default.fileExists(atPath: path) else { return nil }
         var ref = Star_V1_ImageRef()
@@ -81,19 +81,62 @@ enum PreviewFiles {
 
 /// Lets one full-size copy be made at a time: each loads a whole frame (hundreds of megabytes), and the client asks for them as the
 /// user scrubs.
+///
+/// FIFO, and the slot is handed straight to the next waiter: on release `busy` stays true and the
+/// waiter is resumed already holding it. (It used to clear `busy` and then resume the waiter, so a
+/// new arrival that ran in between took the slot and the resumed waiter, having been told it was its
+/// turn, ran alongside it: two whole frames at once.) A waiter that is cancelled while it waits
+/// removes itself and gets `nil` back, and one cancelled before its turn comes is not run either:
+/// the client has stopped wanting that copy, and making it would cost a whole frame decode.
 actor FullSizeGate {
     static let shared = FullSizeGate()
     private var busy = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private struct Waiter { let id: Int; let continuation: CheckedContinuation<Bool, Never> }
+    private var waiters: [Waiter] = []
+    private var nextID = 0
 
-    func run<T: Sendable>(_ work: @Sendable () async -> T) async -> T {
-        if busy {
-            await withCheckedContinuation { waiters.append($0) }
-        }
-        busy = true
-        let result = await work()
-        busy = false
-        if !waiters.isEmpty { waiters.removeFirst().resume() }
-        return result
+    /// `nil` when the caller was cancelled before it got to run.
+    func run<T: Sendable>(_ work: @Sendable () async -> T) async -> T? {
+        guard await acquire() else { return nil }
+        defer { release() }
+        if Task.isCancelled { return nil }
+        return await work()
     }
+
+    /// True once the caller holds the slot; false if it was cancelled while waiting.
+    private func acquire() async -> Bool {
+        if Task.isCancelled { return false }
+        if !busy {
+            busy = true
+            return true
+        }
+        let id = nextID
+        nextID += 1
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                waiters.append(Waiter(id: id, continuation: continuation))
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id) }
+        }
+    }
+
+    private func cancelWaiter(_ id: Int) {
+        if let index = waiters.firstIndex(where: { $0.id == id }) {
+            waiters.remove(at: index).continuation.resume(returning: false)
+        }
+    }
+
+    private func release() {
+        if waiters.isEmpty {
+            busy = false
+        } else {
+            // hand the slot over: `busy` stays true
+            waiters.removeFirst().continuation.resume(returning: true)
+        }
+    }
+
+    /// For tests.
+    var waitingCount: Int { waiters.count }
+    var isBusy: Bool { busy }
 }
