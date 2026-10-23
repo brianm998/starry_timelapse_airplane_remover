@@ -43,6 +43,25 @@ public enum GPUOps {
     /// GPU entry points currently waiting for a slot.
     public static var waiting: Int { gate.waiting }
 
+    /// Drops the pyramid builders' pooled textures, returning that GPU memory. Called on memory
+    /// pressure; the next build simply allocates again.
+    public static func trimTexturePool() {
+        #if canImport(Metal) && os(macOS)
+        activeBackend?.texturePool.trim()
+        #endif
+    }
+
+    /// Pool hits and misses so far, and the bytes it is holding. Diagnostics and tests.
+    public static var texturePoolStats: (hits: Int, misses: Int, heldBytes: Int) {
+        #if canImport(Metal) && os(macOS)
+        if let pool = activeBackend?.texturePool {
+            let c = pool.counts
+            return (c.hits, c.misses, pool.heldBytes)
+        }
+        #endif
+        return (0, 0, 0)
+    }
+
     static func record(busyNanoseconds: UInt64) {
         stateLock.withLock { _busyNanoseconds &+= busyNanoseconds }
     }
@@ -150,6 +169,96 @@ private nonisolated(unsafe) var activeBackend: MetalGPUBackend?
 /// source at first use rather than shipped as a precompiled .metallib — a
 /// build-time step to revisit once that toolchain is available everywhere
 /// this ships.
+/// Float textures kept between pyramid builds.
+///
+/// Profiling a 12 MP keypoint phase put Metal resource creation and release at 22-43 % of the
+/// time spent holding a GPU slot: every build made ~40 textures and let them all go. A pyramid
+/// build needs the same sizes every frame, so they are checked out for one build and returned
+/// after its read-back. Contents are NOT cleared on reuse: every texture is written in full by
+/// a kernel (or by `replace`) before anything reads it.
+///
+/// Storage stays `.managed` with the explicit blit `synchronize` before read-back: `.shared`
+/// textures read back as zeros on the discrete Vega this runs on (see `buildSiftPyramid`).
+/// Apple Silicon has no `.managed` and wants `.shared` here.
+///
+/// Bounded: the free list never holds more than twice the size of the last build's textures
+/// (and never more than half the device's recommended working set), and is emptied outright on
+/// memory pressure via `GPUOps.trimTexturePool()`.
+final class FloatTexturePool: @unchecked Sendable {
+    private let lock = NSLock()
+    private var free: [Int: [MTLTexture]] = [:]
+    private var freeBytes = 0
+    private var lastBuildBytes = 0
+    private(set) var hits = 0
+    private(set) var misses = 0
+
+    private static func key(_ width: Int, _ height: Int) -> Int { width &* 1_000_003 &+ height }
+    private static func bytes(_ width: Int, _ height: Int) -> Int { width * height * 4 }
+
+    func take(device: MTLDevice, width: Int, height: Int) -> MTLTexture? {
+        lock.lock()
+        if var list = free[Self.key(width, height)], let texture = list.popLast() {
+            free[Self.key(width, height)] = list
+            freeBytes -= Self.bytes(width, height)
+            hits += 1
+            lock.unlock()
+            return texture
+        }
+        misses += 1
+        lock.unlock()
+        return MetalGPUBackend.makeFloatTexture(device: device, width: width, height: height)
+    }
+
+    /// Returns a build's textures. `buildBytes` is what that build used, which sets the cap.
+    func give(_ textures: [MTLTexture], buildBytes: Int, device: MTLDevice) {
+        lock.lock()
+        defer { lock.unlock() }
+        lastBuildBytes = buildBytes
+        let cap = min(2 * buildBytes, Int(device.recommendedMaxWorkingSetSize / 2))
+        for texture in textures {
+            let size = Self.bytes(texture.width, texture.height)
+            if freeBytes + size > cap { continue }  // dropped: released with its last reference
+            free[Self.key(texture.width, texture.height), default: []].append(texture)
+            freeBytes += size
+        }
+    }
+
+    func trim() {
+        lock.lock()
+        free.removeAll()
+        freeBytes = 0
+        lock.unlock()
+    }
+
+    var heldBytes: Int { lock.lock(); defer { lock.unlock() }; return freeBytes }
+    var counts: (hits: Int, misses: Int) { lock.lock(); defer { lock.unlock() }; return (hits, misses) }
+}
+
+/// One build's checked-out textures, handed back together.
+final class TextureLease {
+    private let pool: FloatTexturePool
+    private let device: MTLDevice
+    private var leased: [MTLTexture] = []
+    private var bytes = 0
+
+    init(pool: FloatTexturePool, device: MTLDevice) {
+        self.pool = pool
+        self.device = device
+    }
+
+    func make(width: Int, height: Int) -> MTLTexture? {
+        guard let texture = pool.take(device: device, width: width, height: height) else { return nil }
+        leased.append(texture)
+        bytes += width * height * 4
+        return texture
+    }
+
+    func returnAll() {
+        pool.give(leased, buildBytes: bytes, device: device)
+        leased.removeAll()
+    }
+}
+
 private final class MetalGPUBackend: @unchecked Sendable {
     let device: MTLDevice
     let queue: MTLCommandQueue
@@ -898,7 +1007,12 @@ private final class MetalGPUBackend: @unchecked Sendable {
         guard baseRows > 0, baseCols > 0, let basePtr = mat_wrapper_data_ptr(base) else { return false }
         let baseStepBytes = Int(mat_wrapper_step(base))
 
-        guard let inputTexture = makeFloatTexture(width: baseCols, height: baseRows) else { return false }
+        // Every texture below is leased from the pool and handed back when this returns,
+        // which is after the read-back at the end.
+        let lease = TextureLease(pool: texturePool, device: device)
+        defer { lease.returnAll() }
+
+        guard let inputTexture = lease.make(width: baseCols, height: baseRows) else { return false }
         inputTexture.replace(region: MTLRegionMake2D(0, 0, baseCols, baseRows), mipmapLevel: 0,
                              withBytes: basePtr, bytesPerRow: baseStepBytes)
 
@@ -910,7 +1024,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
         var current = inputTexture
         var curWidth = baseCols, curHeight = baseRows
         if doubleImageSize {
-            guard let doubled = makeFloatTexture(width: baseCols * 2, height: baseRows * 2),
+            guard let doubled = lease.make(width: baseCols * 2, height: baseRows * 2),
                   let encoder = cmdBuf.makeComputeCommandEncoder()
             else { return false }
             encoder.setComputePipelineState(upsampleLinear2xF32)
@@ -935,11 +1049,11 @@ private final class MetalGPUBackend: @unchecked Sendable {
         // One row-pass scratch texture per octave, shared by that octave's blurs.
         var scratch = [MTLTexture?](repeating: nil, count: nOctaves)
         func scratchTexture(octave: Int, width: Int, height: Int) -> MTLTexture? {
-            if scratch[octave] == nil { scratch[octave] = makeFloatTexture(width: width, height: height) }
+            if scratch[octave] == nil { scratch[octave] = lease.make(width: width, height: height) }
             return scratch[octave]
         }
 
-        guard let firstLayer = makeFloatTexture(width: curWidth, height: curHeight),
+        guard let firstLayer = lease.make(width: curWidth, height: curHeight),
               let firstScratch = scratchTexture(octave: 0, width: curWidth, height: curHeight),
               encodeGaussianBlur(cmdBuf, source: current, scratch: firstScratch,
                                  destination: firstLayer, sigma: sigDiff)
@@ -973,7 +1087,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
                     guard let src = textures[srcIdx] else { return false }
                     let dstWidth = src.width / 2, dstHeight = src.height / 2
                     guard dstWidth > 0, dstHeight > 0,
-                          let dst = makeFloatTexture(width: dstWidth, height: dstHeight),
+                          let dst = lease.make(width: dstWidth, height: dstHeight),
                           let encoder = cmdBuf.makeComputeCommandEncoder()
                     else { return false }
                     encoder.setComputePipelineState(downsampleNearest2xF32)
@@ -985,7 +1099,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
                     textures[idx] = dst
                 } else {
                     guard let src = textures[idx - 1],
-                          let dst = makeFloatTexture(width: src.width, height: src.height),
+                          let dst = lease.make(width: src.width, height: src.height),
                           let tmp = scratchTexture(octave: o, width: src.width, height: src.height),
                           encodeGaussianBlur(cmdBuf, source: src, scratch: tmp,
                                              destination: dst, sigma: sig[i])
@@ -1158,7 +1272,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
         guard imgRows > 0, imgCols > 0, let imgPtr = mat_wrapper_data_ptr(img) else { return false }
         let imgStepBytes = Int(mat_wrapper_step(img))
 
-        guard let inputTexture = makeFloatTexture(width: imgCols, height: imgRows) else { return false }
+        let lease = TextureLease(pool: texturePool, device: device)
+        defer { lease.returnAll() }
+
+        guard let inputTexture = lease.make(width: imgCols, height: imgRows) else { return false }
         inputTexture.replace(region: MTLRegionMake2D(0, 0, imgCols, imgRows), mipmapLevel: 0,
                              withBytes: imgPtr, bytesPerRow: imgStepBytes)
 
@@ -1172,7 +1289,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
         var scratchBySize: [Int: MTLTexture] = [:]
         func scratchTexture(width: Int, height: Int) -> MTLTexture? {
             let key = width * 1_000_000 + height
-            if scratchBySize[key] == nil { scratchBySize[key] = makeFloatTexture(width: width, height: height) }
+            if scratchBySize[key] == nil { scratchBySize[key] = lease.make(width: width, height: height) }
             return scratchBySize[key]
         }
 
@@ -1183,7 +1300,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
         // in float as it computes it — 9 for the default 1.6 — and the border
         // BORDER_REPLICATE, as every AKAZE blur is.
         let level0Size = Int((2 * (1 + (soffset - 0.8) / 0.3)).rounded(.up)) | 1
-        guard let level0 = makeFloatTexture(width: imgCols, height: imgRows),
+        guard let level0 = lease.make(width: imgCols, height: imgRows),
               let level0Scratch = scratchTexture(width: imgCols, height: imgRows),
               encodeGaussianBlur(cmdBuf, source: inputTexture, scratch: level0Scratch,
                                  destination: level0, sigma: Double(soffset),
@@ -1207,7 +1324,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
             guard let prevLt = ltTextures[i - 1] else { return false }
             let levelLt: MTLTexture
             if info.newOctave != 0 {
-                guard let halved = makeFloatTexture(width: width, height: height),
+                guard let halved = lease.make(width: width, height: height),
                       let xTable = MetalGPUBackend.areaResizeTable(source: prevLt.width,
                                                                    destination: width),
                       let yTable = MetalGPUBackend.areaResizeTable(source: prevLt.height,
@@ -1236,7 +1353,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
                 levelLt = halved
                 kcontrast *= 0.75
             } else {
-                guard let copy = makeFloatTexture(width: width, height: height),
+                guard let copy = lease.make(width: width, height: height),
                       let blit = cmdBuf.makeBlitCommandEncoder()
                 else { return false }
                 blit.copy(from: prevLt, sourceSlice: 0, sourceLevel: 0,
@@ -1251,16 +1368,16 @@ private final class MetalGPUBackend: @unchecked Sendable {
             // for this level's derivatives now and by
             // Compute_Determinant_Hessian_Response later. Five taps, not a full
             // Gaussian: truncated at 2 sigma it is narrower than its sigma says.
-            guard let smooth = makeFloatTexture(width: width, height: height),
+            guard let smooth = lease.make(width: width, height: height),
                   let smoothScratch = scratchTexture(width: width, height: height),
                   encodeGaussianBlur(cmdBuf, source: levelLt, scratch: smoothScratch,
                                      destination: smooth, sigma: 1.0, size: 5,
                                      replicateBorder: true)
             else { return false }
 
-            guard let lx = makeFloatTexture(width: width, height: height),
-                  let ly = makeFloatTexture(width: width, height: height),
-                  let flow = makeFloatTexture(width: width, height: height)
+            guard let lx = lease.make(width: width, height: height),
+                  let ly = lease.make(width: width, height: height),
+                  let flow = lease.make(width: width, height: height)
             else { return false }
             guard let derivEncoder = cmdBuf.makeComputeCommandEncoder() else { return false }
             derivEncoder.setComputePipelineState(scharrXF32)
@@ -1290,7 +1407,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
             let stepCount = Int(stepCounts[i])
             guard stepCount == 0 || tstepsBuffer != nil else { return false }
             for s in 0..<stepCount {
-                guard let lstep = makeFloatTexture(width: width, height: height),
+                guard let lstep = lease.make(width: width, height: height),
                       let stepEncoder = cmdBuf.makeComputeCommandEncoder()
                 else { return false }
                 var stepSize = tstepsBuffer![tstepOffset + s]
@@ -1335,7 +1452,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
         return true
     }
 
-    private func makeFloatTexture(width: Int, height: Int) -> MTLTexture? {
+    /// Pooled `.r32Float` `.managed` textures; see `FloatTexturePool`.
+    let texturePool = FloatTexturePool()
+
+    fileprivate static func makeFloatTexture(device: MTLDevice, width: Int, height: Int) -> MTLTexture? {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
           pixelFormat: .r32Float, width: width, height: height, mipmapped: false)
         descriptor.usage = [.shaderRead, .shaderWrite]

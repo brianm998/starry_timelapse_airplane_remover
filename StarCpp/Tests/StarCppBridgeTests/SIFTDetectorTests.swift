@@ -222,6 +222,36 @@ final class SIFTDetectorTests: XCTestCase {
         XCTAssertLessThanOrEqual(maxDelta, 0.5)
     }
 
+    /// Pyramid textures are pooled between builds. A reused texture carries the previous
+    /// build's pixels, so this pins that nothing reads one before writing it: a second build
+    /// of the same image, entirely on recycled textures, must find exactly the same keypoints.
+    func testRecycledPyramidTexturesGiveTheSameKeypoints() throws {
+        try XCTSkipUnless(GPUCapability.isAvailable(), "no supported GPU on this machine")
+        GPUOps.registerIfAvailable()
+        try XCTSkipUnless(gpu_ops_sift_pyramid_available(), "no GPU SIFT pyramid handler registered")
+
+        let a = makeNightSky(width: 512, height: 384, stars: 400, seed: 11)
+        let b = makeNightSky(width: 512, height: 384, stars: 400, seed: 23)   // different pixels, same sizes
+
+        GPUOps.trimTexturePool()
+        let first = try XCTUnwrap(ImageAligner.debugSiftGPU(a, mask: nil, nfeatures: 1000))
+        let missesAfterFirst = GPUOps.texturePoolStats.misses
+        _ = try XCTUnwrap(ImageAligner.debugSiftGPU(b, mask: nil, nfeatures: 1000))   // dirties the pool
+        let again = try XCTUnwrap(ImageAligner.debugSiftGPU(a, mask: nil, nfeatures: 1000))
+        let stats = GPUOps.texturePoolStats
+
+        XCTAssertGreaterThan(stats.hits, 0, "no texture was ever recycled")
+        XCTAssertGreaterThan(stats.misses, missesAfterFirst - 1)
+        XCTAssertEqual(first.keypointCount, again.keypointCount)
+        let (matched, onlyFirst, onlyAgain, maxDelta) = matchPositions(
+          first.keypointPositions(), again.keypointPositions(), tolerance: 0.001)
+        XCTAssertEqual(matched, first.keypointCount, "\(onlyFirst) / \(onlyAgain) keypoints differ on recycled textures")
+        XCTAssertEqual(maxDelta, 0, accuracy: 1e-6)
+
+        GPUOps.trimTexturePool()
+        XCTAssertEqual(GPUOps.texturePoolStats.heldBytes, 0)
+    }
+
     /// The GPU port against real cv::SIFT on a realistic sky — the comparison the
     /// sky detector's correctness actually rests on. The old MPS pyramid fails this
     /// by a wide margin: it widened every blur by a one-pixel box, which moved the

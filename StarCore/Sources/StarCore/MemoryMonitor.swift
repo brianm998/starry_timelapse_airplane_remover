@@ -1,5 +1,6 @@
 import Foundation
 import StarCoreC
+import StarCppBridge
 import logging
 
 /*
@@ -749,6 +750,10 @@ public actor MemoryMonitor {
                   "(reserved \(reservedBytes / (1024*1024))MB, footprint " +
                   "\(reality.processFootprint() / (1024*1024))MB)")
         }
+
+        // The GPU pyramid builders keep textures between builds; give that memory back the
+        // moment the OS asks for any.
+        if level != .normal { GPUOps.trimTexturePool() }
 
         switch level {
         case .normal:
