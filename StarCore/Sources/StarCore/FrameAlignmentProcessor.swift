@@ -134,7 +134,22 @@ final public actor FrameAlignmentProcessor {
 
     /// Hold the decoded neighbours of this frame's merges, so the star and earth builds of
     /// one op decode each file once between them. Release it when the op's merges are done.
-    func pinNeighborDecodes() -> DecodedFrameStore.Pin {
+    ///
+    /// A static (non-moving) earth also merges `staticNeighborFrames` -- up to 16 sources, only
+    /// some of them the aligned neighbours -- so those are held too, unless that merge streams
+    /// its sources one at a time (then holding them would defeat the streaming).
+    func pinNeighborDecodes() async -> DecodedFrameStore.Pin {
+        var paths = pinnedAlignmentPaths()
+        let config = await configManager.config()
+        if !config.tripodHeadWasMoving,
+           !config.mergeStreams(sourceCount: staticNeighborFrames.count + 1)
+        {
+            paths += getStaticNeighborFilenames()
+        }
+        return DecodedFrameStore.shared.pin(paths)
+    }
+
+    func pinnedAlignmentPaths() -> [String] {
         var paths: [String] = []
         for neighborIndex in alignmentFilenames.keys {
             if let filename = imageAccessor.nameForImage(frameIndex: neighborIndex,
@@ -143,7 +158,7 @@ final public actor FrameAlignmentProcessor {
                 paths.append(filename)
             }
         }
-        return DecodedFrameStore.shared.pin(paths)
+        return paths
     }
 
     public func getStaticNeighborFilenames() -> [String] {
