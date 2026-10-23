@@ -712,7 +712,9 @@ final public actor FrameAlignmentProcessor {
         if let results {
             Log.d("frame \(frameIndex) got \(results.keypointCount) keypoints")
 
-            if results.write(toFilename: fullPath) {
+            // Blocking file write of the whole feature set: off the cooperative pool.
+            let wrote = await NativeWork.run { results.write(toFilename: fullPath) }
+            if wrote {
                 Log.d("frame \(frameIndex) wrote results to \(fullPath)")
             } else {
                 Log.w("frame \(frameIndex) failed to write results to \(fullPath)")
