@@ -902,6 +902,12 @@ another agent's runs, so wall times are noisy.)*
 
 | same, after WP-A..C so far (`star_wpb`, `3a547b89`: S1-S13 except S6.2/6.3, C1, C8) | 164 s | 412 s | **100 s** | 13.9 GB |
 
+| final branch (`star_final`, `c4afe83f`), default flags | **90 s** | 344 s | 97 s | 11.8 GB |
+
+`star_final` outputs: all 19 JPEGs have RMSE 0 against the baseline's (pixel-identical) on this sequence
+and flags, even with C10-C12 in. Full StarCore suite on the branch: 1466 tests, 2 failures, both the
+known `VideoConvertTests` ffmpeg-symlink ones.
+
 WP-A identity A/B (default flags, 19 output JPEGs): **all 19 byte-identical** to baseline. Same for
 `star_wpb` (everything up to C8). Wall time is within this machine's noise; the clear change is
 **system time, 324 s -> 100 s** (the Metal resource churn S1 removed). Peak RSS rose 10.7 -> 13.9 GB
