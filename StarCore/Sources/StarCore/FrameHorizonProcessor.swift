@@ -523,6 +523,7 @@ final public actor FrameHorizonProcessor {
                             .appendingPathComponent("reference.tiff").path
                         cleanedToSave.writeTIFFEncoding(toFilename: referencePath)
                         await horizonReferenceMaskCache.invalidate(path: referencePath)
+                        await starAlignedHorizonMaskCache.invalidateAll()
                         Log.i("frame \(frameIndex) saved median horizon as global reference \(referencePath)")
                     } catch {
                         Log.w("frame \(frameIndex) could not save global reference horizon: \(error)")
@@ -643,6 +644,21 @@ final public actor FrameHorizonProcessor {
         }
     }
 
+    /// The stats cache for this sequence at these settings: the sequence is identified by its
+    /// `horizonReference/` directory, which every frame of it computes the same way.
+    func referenceStatsCache(neighborhoodSize: Int, bucketCount: Int) async -> ReferenceHorizonStatsCache {
+        let sequenceKey: String
+        if let mergedPath = imageAccessor.nameForImage(frameIndex: frameIndex, ofType: .mergedHorizon, atSize: .original) {
+            sequenceKey = URL(fileURLWithPath: mergedPath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("horizonReference").path
+        } else {
+            sequenceKey = "unknown-sequence"
+        }
+        return await ReferenceHorizonStatsRegistry.shared.cache(
+          sequence: sequenceKey, neighborhoodSize: neighborhoodSize, bucketCount: bucketCount)
+    }
+
     /// The painted reference masks nearest this frame, preferring a bracketing pair.
     ///
     /// Split out from `referenceHorizonsWithStats` because detection wants the same
@@ -725,9 +741,13 @@ final public actor FrameHorizonProcessor {
     /// the same one or two references at the same moment — decode each mask once.
     func referenceHorizonCurves(maxCount: Int = 2) async -> [ReferenceHorizonCurve] {
         var result: [ReferenceHorizonCurve] = []
+        let config = await configManager.config()
+        let cache = await referenceStatsCache(
+          neighborhoodSize: config.referenceHorizonNeighborhoodSize,
+          bucketCount: config.referenceHorizonBrightnessRefinementHistogramBuckets)
         for candidate in nearestReferenceMasks(maxCount: maxCount) {
             let maskPath = candidate.maskPath
-            let curve = await referenceHorizonStatsCache.curve(for: candidate.index) {
+            let curve = await cache.curve(for: candidate.index) {
                 guard let maskImage = PixelatedImage(filename: maskPath)?.asHorizonMask
                 else { return nil }
                 return ReferenceHorizonCurve(
@@ -751,11 +771,12 @@ final public actor FrameHorizonProcessor {
         // computations of one reference, each loading that frame's full-resolution original.
         let accessor = imageAccessor
         let owningFrameIndex = frameIndex
+        let cache = await referenceStatsCache(neighborhoodSize: neighborhoodSize, bucketCount: numBuckets)
         var result: [ReferenceHorizonFrameStats] = []
         for candidate in ordered {
             let candidateIndex = candidate.index
             let maskPath = candidate.maskPath
-            let stats = await referenceHorizonStatsCache.stats(for: candidateIndex) {
+            let stats = await cache.stats(for: candidateIndex) {
                 guard let maskImage = PixelatedImage(filename: maskPath)?.asHorizonMask,
                       let mask = HorizonMask(maskImage),
                       let original = try? await accessor.load(
@@ -2559,6 +2580,8 @@ final public actor FrameHorizonProcessor {
         // file stamp regardless; dropping it here means no frame can read the old mask
         // in the window before that check.
         await horizonReferenceMaskCache.invalidate(path: savePath)
+        // The star-aligned intersection is built from the reference mask: a repaint ends it.
+        await starAlignedHorizonMaskCache.invalidateAll()
         ReferenceMaskIndex.shared.invalidate(directory: referenceDir)
         Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved \(savePath)")
 

@@ -141,33 +141,30 @@ public actor StarAlignedHorizonMaskCache {
     /// slot saved.
     public func stats() -> (computes: Int, hits: Int) { (computes, hits) }
 
-    /// FNV-1a over a strided sample of the mask's pixels, plus its full extent.
+    /// FNV-1a over the mask's horizon: its extent and, for every column, the row where it
+    /// turns from sky to ground.
     ///
-    /// Full-content hashing would read 40MB per lookup to answer a question the
-    /// boundary rows decide; a horizon that moves even a few pixels changes tens of
-    /// thousands of pixels, so a ~64K-point stride across the whole plane cannot
-    /// miss it.  This keys the slot without holding the caller's instance identity,
-    /// which is not stable here: the composite path re-wraps the shared reference
-    /// mask's mat in a fresh `PixelatedImage` on every call.
-    private static func digest(of mask: PixelatedImage) -> UInt64 {
+    /// The slot's question is "is this the same horizon", and the horizon is what a repaint
+    /// changes. This used to hash one pixel in about 643 (a stride over the whole plane), on
+    /// the argument that a moved horizon changes tens of thousands of pixels; but a touch-up
+    /// of a few tens of columns by ten rows changes under a thousand, and a stride that wide
+    /// steps right over it, so the stale intersection was served. The per-column horizon cannot
+    /// miss a change to the boundary. It is read row by row and stops once every column has
+    /// its answer, so it costs about one read of the sky part of the plane.
+    ///
+    /// Also keys the slot without holding the caller's instance identity, which is not stable
+    /// here: the composite path re-wraps the shared reference mask's mat in a fresh
+    /// `PixelatedImage` on every call.
+    static func digest(of mask: PixelatedImage) -> UInt64 {
         var hash: UInt64 = 0xcbf29ce484222325
         func mix(_ value: UInt64) {
             hash ^= value
             hash = hash &* 0x100000001b3
         }
-        func mixBuffer<T: FixedWidthInteger>(_ buffer: UnsafeBufferPointer<T>) {
-            mix(UInt64(buffer.count))
-            let stride = Swift.max(1, buffer.count / 65536)
-            var index = 0
-            while index < buffer.count {
-                mix(UInt64(truncatingIfNeeded: buffer[index]))
-                index += stride
-            }
-        }
-        switch mask.imageData {
-        case .eightBit(let buffer):     mixBuffer(buffer)
-        case .sixteenBit(let buffer):   mixBuffer(buffer)
-        case .thirtyTwoBit(let buffer): mixBuffer(buffer)
+        mix(UInt64(mask.width))
+        mix(UInt64(mask.height))
+        for y in CombinedHorizonDetector.extractHorizonY(from: mask) {
+            mix(UInt64(truncatingIfNeeded: y ?? -1))
         }
         return hash
     }

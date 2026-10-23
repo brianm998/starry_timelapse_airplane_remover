@@ -401,6 +401,8 @@ public final class ViewModel {
 
     // prepare for another sequence
     func unloadSequence() {
+        // the closed sequence's cached reference statistics are not the next one's
+        Task { await ReferenceHorizonStatsRegistry.shared.removeAll() }
         imageSequence = nil
         cursorStack = []
         cursor = .arrow

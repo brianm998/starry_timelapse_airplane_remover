@@ -725,6 +725,9 @@ actor Session {
         }
         await flushSaves()
         await configManager.flush()
+        // This sequence's cached reference statistics must not outlive it (another session may
+        // open a sequence whose frames share these indices).
+        await ReferenceHorizonStatsRegistry.shared.removeAll()
         let subscribers = progressSubscribers.values
         progressSubscribers.removeAll()
         for cont in subscribers { cont.finish() }
