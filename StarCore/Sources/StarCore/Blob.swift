@@ -100,41 +100,45 @@ public actor Blob: CustomStringConvertible,
     
     public func update(id: Int32) { self.id = id }
     
+    /// The pixels `persistentDataArray` writes: all of them, or for a blob too big for the
+    /// 16-bit count the brightest `UInt16.max - 1`.
+    private func pixelsForSave() -> Set<SortablePixel> {
+        if pixels.count < Int(UInt16.max) { return pixels }
+        // if a blob has more than 65535 pixels, that's a problem.
+        // both because we store its size in 16 bits, and also because
+        // our use case doesn't really have any blobs this big that matter
+        // trim it down to size, throwing away the dimmest pixels.
+        let keep = Int(UInt16.max) - 1
+        let sortedPixels = pixels.sorted { $0.intensity > $1.intensity }
+        return Set(sortedPixels[0..<keep])
+    }
+
+    /// The blob as 16-bit words: id, pixel count, then x, y, intensity per pixel.  Empty when the
+    /// blob cannot be represented (its id does not fit in 16 bits), so the caller can skip it
+    /// instead of the process trapping.
     public func persistentDataArray() -> [UInt16] {
-        let size = self.persistentDataSizeBytes()
-        var array = [UInt16](repeating: 0, count: size/2)
+        guard let id16 = UInt16(exactly: self.id) else {
+            Log.e("frame \(frameIndex) blob id \(self.id) is too big to save, skipping the blob")
+            return []
+        }
+        let pixelsToSave = pixelsForSave()
+        // sized from what is actually written: sizing from `pixels.count` left trailing zeros
+        // after a trimmed blob, which misaligned every later blob in the file.
+        var array = [UInt16](repeating: 0, count: 2 + pixelsToSave.count * 3)
 
         var index: Int = 0
 
-        var pixelCountForSave = pixels.count
-        var pixelsToSave = pixels
-        
-        if pixelCountForSave >= UInt16.max {
-            // if a blob has more than 65536 pixels, that's a problem.
-            // both because we store its size in 16 bits, and also because
-            // our use case doesn't really have any blobs this big that matter
-            // trim it down to size, throwing away the dimmest pixels.
-            pixelCountForSave = Int(UInt16.max) - 1
-            let sortedPixels = pixels.sorted { $0.intensity > $1.intensity }
-            pixelsToSave = Set(sortedPixels[0..<pixelCountForSave])
-        }
-        
-        // can crash if pixels.count > UInt16.max 
-        let pixelCount = UInt16(pixelCountForSave)
-
-        if self.id > UInt16.max { Log.e("blob id \(self.id) is too big") }
-        
-        array[index] = UInt16(self.id)  // convert from Int32 to UInt16 
+        array[index] = id16
         index += 1
 
-        array[index] = pixelCount
+        array[index] = UInt16(pixelsToSave.count)  // < UInt16.max by construction
         index += 1
 
         for pixel in pixelsToSave {
-            array[index] = UInt16(pixel.x)
+            array[index] = UInt16(clamping: pixel.x)
             index += 1
 
-            array[index] = UInt16(pixel.y)
+            array[index] = UInt16(clamping: pixel.y)
             index += 1
 
             array[index] = pixel.uInt16Value
@@ -155,7 +159,7 @@ public actor Blob: CustomStringConvertible,
         size += 2
 
         // three UInt16 values for each pixel (x, y, intensity)
-        size += self.pixels.count*6 
+        size += self.pixelsForSave().count*6
         
         return size
     }
@@ -833,7 +837,7 @@ public actor Blob: CustomStringConvertible,
                             imageWidth: Double,
                             imageHeight: Double) -> OutlierGroup {
         if let _outlierGroup { return _outlierGroup }
-        let group = OutlierGroup(id: id ?? UInt16(self.id),
+        let group = OutlierGroup(id: id ?? UInt16(clamping: self.id),
                                  size: UInt(self.pixels.count),
                                  brightness: UInt(self.intensity()),
                                  bounds: self.boundingBox(),

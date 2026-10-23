@@ -174,7 +174,7 @@ final public actor FrameOutlierProcessor {
         let newBlobMap = try await blobProcessor.process(
           frame: frame,
           within: bounds,
-          startingBlobID: currentMaxID + 1
+          startingBlobID: currentMaxID < UInt16.max ? currentMaxID + 1 : currentMaxID
         )
 
         // add new blobs to outlier groups, fore-going any classification for now
