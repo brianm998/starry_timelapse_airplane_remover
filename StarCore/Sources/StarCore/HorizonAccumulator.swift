@@ -28,6 +28,29 @@ actor HorizonAccumulator {
     /// being finalised, a mask this late was not going to be included anyway.
     private var isFinalizing = false
 
+    /// Serialises everything that touches `accum`. The in-place accumulate and the finalize both
+    /// hand `accum` to native threads while the actor is free to run other calls, so two of them
+    /// at once would add into the same buffer concurrently. FIFO, so a finalize runs only after
+    /// every accumulate that was accepted before it.
+    private var busy = false
+    private var gateWaiters: [CheckedContinuation<Void, Never>] = []
+
+    private func acquireGate() async {
+        if busy {
+            await withCheckedContinuation { gateWaiters.append($0) }
+        } else {
+            busy = true
+        }
+    }
+
+    private func releaseGate() {
+        if gateWaiters.isEmpty {
+            busy = false
+        } else {
+            gateWaiters.removeFirst().resume()  // ownership passes straight to the next waiter
+        }
+    }
+
     init(frameCount: Int) {
         self.frameCount = frameCount
         self.accumulated = [Bool](repeating: false, count: frameCount)
@@ -35,14 +58,32 @@ actor HorizonAccumulator {
 
     /// Add an in-memory horizon mask for the given frame to the running total.
     /// Safe to call multiple times for the same frame — subsequent calls are ignored.
-    func accumulate(image: PixelatedImage, frameIndex: Int) {
+    func accumulate(image: PixelatedImage, frameIndex: Int) async {
         guard !isFinalizing else {
             Log.w("HorizonAccumulator: frame \(frameIndex) mask arrived during finalize, not accumulated")
             return
         }
         guard frameIndex >= 0, frameIndex < frameCount, !accumulated[frameIndex] else { return }
-        accum = ImageAligner.accumulateOneHorizonMask(accum, mask: image.mat)
+        // Claimed before the first suspension so a second call for this frame is ignored.
         accumulated[frameIndex] = true
+
+        await acquireGate()
+        defer { releaseGate() }
+
+        // Off the cooperative pool: the add touches the whole full-resolution total.
+        let running = accum
+        let mat = image.mat
+        let updated = await NativeWork.run {
+            ImageAligner.accumulateOneHorizonMask(running, mask: mat)
+        }
+        if let updated {
+            accum = updated
+        } else {
+            // Keep the running total rather than replacing it with nothing, and let finalize
+            // load this frame from disk instead.
+            accumulated[frameIndex] = false
+            Log.w("HorizonAccumulator: frame \(frameIndex) could not be accumulated, leaving it for finalize")
+        }
     }
 
     /// Finalize the accumulation and return the binary majority-vote horizon mask.
@@ -51,7 +92,12 @@ actor HorizonAccumulator {
     /// maps a frame index to the on-disk path for that frame's first-round horizon mask.
     /// Returns nil if no masks are available at all.
     func finalize(loadFilename: (Int) -> String?) async -> PixelatedImage? {
-        // `loadFilename` is called here, before any suspension: it is a plain
+        // Behind every accumulate already accepted (they hold or wait on the gate), so the
+        // running total is complete before it is read.
+        await acquireGate()
+        defer { releaseGate() }
+
+        // `loadFilename` is called here, before any further suspension: it is a plain
         // index-to-path mapping and is not Sendable.
         let missingFilenames = (0..<frameCount)
             .filter { !accumulated[$0] }

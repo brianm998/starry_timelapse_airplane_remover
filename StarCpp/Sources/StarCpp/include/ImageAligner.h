@@ -252,7 +252,10 @@ MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count);
 
 // Add a single in-memory horizon mask to a running CV_32S pixel-count accumulator.
 // Pass NULL for `accum` on the first call; pass the previous result on subsequent calls.
-// Caller must release the returned ref (and the old accum if replacing it).
+// `accum` is updated IN PLACE (no copy of the running total) and the returned ref shares its
+// buffer, so the caller must not use `accum` concurrently with this call. If the call fails
+// (NULL result, e.g. a size mismatch) `accum` is unchanged. Caller must release the returned
+// ref (and the old accum if replacing it).
 MatWrapperRef ia_accumulate_one_horizon_mask(MatWrapperRef accum, MatWrapperRef mask);
 
 // Load horizon masks from files and add them to an existing CV_32S accumulator.

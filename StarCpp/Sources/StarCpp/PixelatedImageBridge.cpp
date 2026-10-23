@@ -119,16 +119,19 @@ MatWrapperRef pib_filter_connected_components(MatWrapperRef image, int64_t n) {
         }
         std::sort(areas.begin(), areas.end(), std::greater<>());
 
-        std::set<int> keep;
+        // A per-label lookup table: one array read per pixel instead of a std::set search.
+        std::vector<uint8_t> keep((size_t)nLabels, 0);
         for (int i = 0; i < std::min<int>((int)n, (int)areas.size()); i++) {
-            keep.insert(areas[i].second);
+            keep[(size_t)areas[i].second] = 1;
         }
 
         cv::Mat filtered = cv::Mat::zeros(owned.size(), CV_8UC1);
-        for (int y = 0; y < labels.rows; y++)
+        for (int y = 0; y < labels.rows; y++) {
+            const int *labelRow = labels.ptr<int>(y);
+            uchar *outRow = filtered.ptr<uchar>(y);
             for (int x = 0; x < labels.cols; x++)
-                if (keep.count(labels.at<int>(y, x)))
-                    filtered.at<uchar>(y, x) = 255;
+                if (keep[(size_t)labelRow[x]]) outRow[x] = 255;
+        }
 
         return wrap(filtered);
     } catch (const cv::Exception &e) {
@@ -174,20 +177,22 @@ MatWrapperRef pib_ground_only(MatWrapperRef image) {
         cv::bitwise_not(bin, inv);
 
         cv::Mat labels, stats, centroids;
-        cv::connectedComponentsWithStats(inv, labels, stats, centroids, 8, CV_32S);
+        int nLabels = cv::connectedComponentsWithStats(inv, labels, stats, centroids, 8, CV_32S);
 
-        std::set<int> bottomLabels;
+        std::vector<uint8_t> bottomLabels((size_t)nLabels, 0);
         int bottomY = inv.rows - 1;
         for (int x = 0; x < labels.cols; x++) {
             int lbl = labels.at<int>(bottomY, x);
-            if (lbl > 0) bottomLabels.insert(lbl);
+            if (lbl > 0) bottomLabels[(size_t)lbl] = 1;
         }
 
         cv::Mat groundMask = cv::Mat::zeros(inv.size(), CV_8UC1);
-        for (int y = 0; y < labels.rows; y++)
+        for (int y = 0; y < labels.rows; y++) {
+            const int *labelRow = labels.ptr<int>(y);
+            uchar *outRow = groundMask.ptr<uchar>(y);
             for (int x = 0; x < labels.cols; x++)
-                if (bottomLabels.count(labels.at<int>(y, x)))
-                    groundMask.at<uchar>(y, x) = 255;
+                if (bottomLabels[(size_t)labelRow[x]]) outRow[x] = 255;
+        }
 
         cv::Mat finalMask;
         cv::bitwise_not(groundMask, finalMask);
@@ -212,19 +217,21 @@ MatWrapperRef pib_sky_only(MatWrapperRef image) {
         cv::threshold(owned, bin, 127, 255, cv::THRESH_BINARY);
 
         cv::Mat labels, stats, centroids;
-        cv::connectedComponentsWithStats(bin, labels, stats, centroids, 8, CV_32S);
+        int nLabels = cv::connectedComponentsWithStats(bin, labels, stats, centroids, 8, CV_32S);
 
-        std::set<int> topLabels;
+        std::vector<uint8_t> topLabels((size_t)nLabels, 0);
         for (int x = 0; x < labels.cols; x++) {
             int lbl = labels.at<int>(0, x);
-            if (lbl > 0) topLabels.insert(lbl);
+            if (lbl > 0) topLabels[(size_t)lbl] = 1;
         }
 
         cv::Mat skyMask = cv::Mat::zeros(bin.size(), CV_8UC1);
-        for (int y = 0; y < labels.rows; y++)
+        for (int y = 0; y < labels.rows; y++) {
+            const int *labelRow = labels.ptr<int>(y);
+            uchar *outRow = skyMask.ptr<uchar>(y);
             for (int x = 0; x < labels.cols; x++)
-                if (topLabels.count(labels.at<int>(y, x)))
-                    skyMask.at<uchar>(y, x) = 255;
+                if (topLabels[(size_t)labelRow[x]]) outRow[x] = 255;
+        }
 
         return wrap(skyMask);
     } catch (const cv::Exception &e) {

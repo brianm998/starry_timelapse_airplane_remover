@@ -1315,21 +1315,27 @@ MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count) {
 MatWrapperRef ia_accumulate_one_horizon_mask(MatWrapperRef accum_ref, MatWrapperRef mask_ref) {
     if (!mask_ref) return accum_ref ? wrap(accum_ref->mat.clone()) : wrap(cv::Mat());
     try {
-        cv::Mat mask = mask_ref->mat.clone();
-        if (mask.channels() > 1) cv::cvtColor(mask, mask, cv::COLOR_BGR2GRAY);
+        cv::Mat mask = mask_ref->mat;
+        if (mask.channels() > 1) {
+            cv::Mat grey;
+            cv::cvtColor(mask, grey, cv::COLOR_BGR2GRAY);
+            mask = grey;
+        }
         cv::Mat binary;
         cv::threshold(mask, binary, 0, 1, cv::THRESH_BINARY);
+
+        if (accum_ref && !accum_ref->mat.empty()) {
+            // In place: the accumulator is the caller's to update, and cloning its 168MB for
+            // every frame was most of what this cost. The 8-bit 0/1 plane is added straight in
+            // as CV_32S (no separate converted copy); a size mismatch throws before anything
+            // is written, so a failed call leaves the accumulator as it was. The result
+            // shares the accumulator's buffer.
+            cv::add(accum_ref->mat, binary, accum_ref->mat, cv::noArray(), CV_32S);
+            return new MatWrapperImpl(MatWrapperImpl::Alias{}, accum_ref->mat);
+        }
         cv::Mat frame32s;
         binary.convertTo(frame32s, CV_32S);
-
-        cv::Mat total;
-        if (accum_ref && !accum_ref->mat.empty()) {
-            total = accum_ref->mat.clone();
-            total += frame32s;
-        } else {
-            total = frame32s;
-        }
-        return wrap(total);
+        return wrap(frame32s);
     } KHT_CATCH_LOG("ia_accumulate_one_horizon_mask")
     return nullptr;
 }
