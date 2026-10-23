@@ -10,7 +10,8 @@
 // measured OpenCV's own profiling putting ~100% of SIFT's cost inside
 // buildGaussianPyramid, so this ports the *rest* of the algorithm too —
 // extrema detection, sub-pixel refinement, orientation, descriptors — as a
-// faithful but unhurried scalar port, since none of it is the hot path.
+// faithful scalar port. (The DoG subtraction and extremum scan, though, are run in
+// parallel: a profile showed that CPU tail was no longer negligible once the pyramid was on the GPU.)
 //
 // Faithful, not verbatim: written from an independent reading of OpenCV
 // 4.12.0's real source (modules/features2d/src/sift.{dispatch.cpp,simd.hpp},
@@ -162,14 +163,17 @@ std::vector<cv::Mat> buildGaussianPyramidReference(const cv::Mat &base, int nOct
 std::vector<cv::Mat> buildDoGPyramid(const std::vector<cv::Mat> &gpyr, int nOctaveLayers) {
     int nOctaves = (int)gpyr.size() / (nOctaveLayers + 3);
     std::vector<cv::Mat> dogpyr((size_t)nOctaves * (nOctaveLayers + 2));
-    for (int o = 0; o < nOctaves; o++) {
-        for (int i = 0; i < nOctaveLayers + 2; i++) {
+    // Every level is an independent subtraction into its own Mat, so they run in parallel;
+    // the result is the same Mats in the same slots whatever order they finish in.
+    const int perOctave = nOctaveLayers + 2;
+    cv::parallel_for_(cv::Range(0, nOctaves * perOctave), [&](const cv::Range &range) {
+        for (int k = range.start; k < range.end; k++) {
+            const int o = k / perOctave, i = k % perOctave;
             const cv::Mat &src1 = gpyr[(size_t)o * (nOctaveLayers + 3) + i];
             const cv::Mat &src2 = gpyr[(size_t)o * (nOctaveLayers + 3) + i + 1];
-            cv::subtract(src2, src1, dogpyr[(size_t)o * (nOctaveLayers + 2) + i],
-                        cv::noArray(), CV_32F);
+            cv::subtract(src2, src1, dogpyr[(size_t)k], cv::noArray(), CV_32F);
         }
-    }
+    });
     return dogpyr;
 }
 
@@ -334,21 +338,20 @@ float calcOrientationHist(const cv::Mat &img, cv::Point pt, int radius, float si
 // scale-space extrema, refines each candidate via adjustLocalExtrema, and
 // assigns one or more orientations via calcOrientationHist — ported from
 // findScaleSpaceExtrema's scalar tail loop (this port has no SIMD path, since
-// none of this is the hot path; see the file header).
-void findScaleSpaceExtrema(int o, int i, int threshold, int idx, int step, int cols,
-                           int nOctaveLayers, double contrastThreshold, double edgeThreshold,
-                           double sigma, const std::vector<cv::Mat> &gaussPyr,
-                           const std::vector<cv::Mat> &dogPyr,
-                           std::vector<cv::KeyPoint> &kpts) {
+// the profile later showed this tail is not negligible, so it is banded in parallel below).
+// The scan of rows [rowBegin, rowEnd) of one DoG image, appending to `kpts` in row-major order.
+void scanExtremaRows(int rowBegin, int rowEnd, int o, int i, int threshold, int idx, int step,
+                     int cols, int nOctaveLayers, double contrastThreshold, double edgeThreshold,
+                     double sigma, const std::vector<cv::Mat> &gaussPyr,
+                     const std::vector<cv::Mat> &dogPyr, std::vector<cv::KeyPoint> &kpts) {
     static const int n = kOriHistBins;
     float hist[kOriHistBins];
 
     const cv::Mat &img = dogPyr[idx];
     const cv::Mat &prev = dogPyr[idx - 1];
     const cv::Mat &next = dogPyr[idx + 1];
-    const int rows = img.rows;
 
-    for (int r = kImgBorder; r < rows - kImgBorder; r++) {
+    for (int r = rowBegin; r < rowEnd; r++) {
         const float *currptr = img.ptr<float>(r);
         const float *prevptr = prev.ptr<float>(r);
         const float *nextptr = next.ptr<float>(r);
@@ -429,6 +432,33 @@ void findScaleSpaceExtrema(int o, int i, int threshold, int idx, int step, int c
             }
         }
     }
+}
+
+// Scans the DoG image's rows in contiguous bands in parallel. Each band keeps its own keypoint
+// list and the lists are concatenated in band order, which is exactly the order the serial
+// row-by-row scan produced - so removeDuplicatedSorted and retainBest see the same input.
+void findScaleSpaceExtrema(int o, int i, int threshold, int idx, int step, int cols,
+                           int nOctaveLayers, double contrastThreshold, double edgeThreshold,
+                           double sigma, const std::vector<cv::Mat> &gaussPyr,
+                           const std::vector<cv::Mat> &dogPyr,
+                           std::vector<cv::KeyPoint> &kpts) {
+    const int rows = dogPyr[idx].rows;
+    const int first = kImgBorder, last = rows - kImgBorder;
+    if (last <= first) return;
+
+    const int span = last - first;
+    const int bandCount = std::max(1, std::min(64, span / 8));
+    std::vector<std::vector<cv::KeyPoint>> bands((size_t)bandCount);
+    cv::parallel_for_(cv::Range(0, bandCount), [&](const cv::Range &range) {
+        for (int b = range.start; b < range.end; b++) {
+            const int begin = first + (int)((int64_t)span * b / bandCount);
+            const int end = first + (int)((int64_t)span * (b + 1) / bandCount);
+            scanExtremaRows(begin, end, o, i, threshold, idx, step, cols, nOctaveLayers,
+                            contrastThreshold, edgeThreshold, sigma, gaussPyr, dogPyr,
+                            bands[(size_t)b]);
+        }
+    });
+    for (const auto &band : bands) kpts.insert(kpts.end(), band.begin(), band.end());
 }
 
 // Builds the 128-float descriptor for one keypoint: a rotation-normalised 4x4

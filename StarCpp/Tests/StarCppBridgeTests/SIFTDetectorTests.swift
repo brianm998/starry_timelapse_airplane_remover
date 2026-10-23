@@ -268,6 +268,26 @@ final class SIFTDetectorTests: XCTestCase {
         assertSameKeypoints(gpu, as: real, what: "the GPU port")
     }
 
+    /// The DoG subtraction and the extremum scan run in parallel bands, concatenated in band order.
+    /// That must reproduce the serial order, so repeated runs give byte-identical keypoints and
+    /// descriptors (this was also compared against the serial version before it was removed).
+    func testParallelExtremumScanIsDeterministic() throws {
+        let img = makeNightSky(width: 800, height: 600, stars: 1200, seed: 5)
+        let dir = NSTemporaryDirectory() + "sift-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        var files: [Data] = []
+        for run in 0..<3 {
+            let r = try XCTUnwrap(ImageAligner.debugSiftReference(img, mask: nil, nfeatures: 4000))
+            XCTAssertGreaterThan(r.keypointCount, 300)
+            let path = "\(dir)/run\(run).yml"
+            XCTAssertTrue(r.write(toFilename: path))
+            files.append(try Data(contentsOf: URL(fileURLWithPath: path)))
+        }
+        XCTAssertEqual(files[0], files[1])
+        XCTAssertEqual(files[1], files[2])
+    }
+
     // MARK: - realistic sky
 
     /// A night sky the way `ia_find_features` hands it to the sky detector: point
