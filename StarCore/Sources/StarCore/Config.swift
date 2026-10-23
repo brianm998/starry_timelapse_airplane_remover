@@ -80,6 +80,9 @@ public class ConfigManager {
     public func onUpdate(closure: @escaping @Sendable (Config) -> Void) {
         updateCallbacks.append(closure)
     }
+
+    /// How many update callbacks are registered, for tests.
+    public var updateCallbackCount: Int { updateCallbacks.count }
     
     /// Write the current config now, on the calling thread.
     ///

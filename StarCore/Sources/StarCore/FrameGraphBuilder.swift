@@ -92,13 +92,25 @@ public final actor FrameGraphBuilder {
     var configManager: ConfigManager? = nil
 
     public func set(configManager: ConfigManager) async {
+        // Called again for every session opened, run started and sequence loaded, usually with the
+        // manager it already has. Each call used to add another update callback to that manager,
+        // so a long-lived one ended up applying every config change to this builder once per call
+        // so far, and a manager the builder had moved on from kept applying ITS config to it.
+        let alreadyRegistered = self.configManager === configManager
         self.configManager = configManager
         self.update(from: await configManager.config())
-        await configManager.onUpdate { [weak self] config in
+        guard !alreadyRegistered else { return }
+        await configManager.onUpdate { [weak self, weak configManager] config in
             Task {
-                await self?.update(from: config)
+                await self?.apply(config, from: configManager)
             }
         }
+    }
+
+    /// An update from `manager`, applied only while it is still the builder's own.
+    private func apply(_ config: Config, from manager: ConfigManager?) {
+        guard let manager, manager === configManager else { return }
+        update(from: config)
     }
 
     public func update(from config: Config) {
