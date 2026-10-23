@@ -103,9 +103,12 @@ public class AbstractBlobProcessor {
                   height: frame.height,
                   frameIndex: frame.frameIndex
                 )
+                let connectorConfig = await frame.configManager.config()
                 await connector.process(
                   args,
-                  seedConcurrency: await frame.configManager.config().linearConnectorSeedConcurrency
+                  seedConcurrency: connectorConfig.linearConnectorSeedConcurrency,
+                  neighborHops: connectorConfig.linearConnectorNeighborHops > 0
+                      ? connectorConfig.linearConnectorNeighborHops : nil
                 )
                 blobMap = await connector.blobMap()
                 

@@ -1314,6 +1314,14 @@ public struct Config: Codable, Sendable {
     /// (up to 400) held them all at the same time. The result does not depend on this.
     public var linearConnectorSeedConcurrency: Int = 4
 
+    /// How many neighbour-of-neighbour steps `LinearBlobConnector` follows from a seed when it
+    /// gathers the blobs to fit a line through. The full closure was most of the frame in a
+    /// dense field and was rebuilt for every seed (BUG-003: tens of minutes, a hundred thousand
+    /// seconds of system time on a dense 19-frame sequence). 0 or less means unlimited, the
+    /// old behaviour. Changing it changes which blobs get connected, so the decision-tree
+    /// `.linear*` features can shift; treat it as an output-affecting setting.
+    public var linearConnectorNeighborHops: Int = 2
+
     public var imageWidth: Int = 0
     public var imageHeight: Int = 0
     public var imageBytesPerPixel: Int = 0
@@ -1635,6 +1643,7 @@ public struct Config: Codable, Sendable {
         self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
         self.mergeLoadConcurrency = try c.decodeIfPresent(Int.self, forKey: .mergeLoadConcurrency) ?? self.mergeLoadConcurrency
         self.linearConnectorSeedConcurrency = try c.decodeIfPresent(Int.self, forKey: .linearConnectorSeedConcurrency) ?? self.linearConnectorSeedConcurrency
+        self.linearConnectorNeighborHops = try c.decodeIfPresent(Int.self, forKey: .linearConnectorNeighborHops) ?? self.linearConnectorNeighborHops
         self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
         self.keypointCacheMaxMB = try c.decodeIfPresent(Int.self, forKey: .keypointCacheMaxMB) ?? self.keypointCacheMaxMB
         self.horizonMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .horizonMemoryMultiplier) ?? self.horizonMemoryMultiplier

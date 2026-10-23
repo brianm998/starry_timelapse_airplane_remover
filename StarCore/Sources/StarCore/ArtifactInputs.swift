@@ -379,6 +379,14 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         // The radius of neighbouring frames each group is classified against.
         inputs["numberFinalProcessingNeighborsNeeded"] =
           str(config.numberFinalProcessingNeighborsNeeded)
+        // How far the line connector follows neighbours decides which blobs get joined. Recorded
+        // only when it is not the default, for the reason `cloudAwareMerge` is above: a record
+        // that lacks a key counts as changed, so an unconditional key would throw away every
+        // existing temp dir's outliers once. Off the default (including 0, the old unbounded
+        // behaviour) it invalidates, and so does returning to the default.
+        if config.linearConnectorNeighborHops != Config().linearConnectorNeighborHops {
+            inputs["linearConnectorNeighborHops"] = str(config.linearConnectorNeighborHops)
+        }
         return inputs
     }
 

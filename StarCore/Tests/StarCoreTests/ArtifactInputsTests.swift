@@ -98,6 +98,25 @@ final class ArtifactInputsTests: XCTestCase {
                                .alignment, .outliers, .output])
     }
 
+    /// The connector's neighbour bound decides which blobs join, so moving it off the default
+    /// (or to 0, unbounded) invalidates the outliers and the output; leaving it at the default
+    /// must leave a record exactly as it was before the setting existed.
+    func testTheLineConnectorHopBoundInvalidatesOutliersOnlyOffTheDefault() {
+        var base = config()
+        base.cleanMethod = .selective
+        var unbounded = base
+        unbounded.linearConnectorNeighborHops = 0
+        var wider = base
+        wider.linearConnectorNeighborHops = 5
+
+        let current = ArtifactInputs.current(from: base)
+        XCTAssertNil(current.stages[ArtifactStage.outliers.rawValue]?["linearConnectorNeighborHops"],
+                     "the default must not add a key an existing record lacks")
+        XCTAssertEqual(ArtifactInputs.current(from: unbounded).staleStages(comparedTo: current), [.outliers, .output])
+        XCTAssertEqual(ArtifactInputs.current(from: wider).staleStages(comparedTo: current), [.outliers, .output])
+        XCTAssertEqual(ArtifactInputs.current(from: base).staleStages(comparedTo: current), [])
+    }
+
     func testAKeypointChangeInvalidatesTheKeypointsAndWhatConsumesThem() {
         var before = config()
         before.alignmentMaxKeypoints = 2000

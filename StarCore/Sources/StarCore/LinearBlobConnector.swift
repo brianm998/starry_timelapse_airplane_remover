@@ -266,7 +266,7 @@ public actor LinearBlobConnector {
         }
     }
 
-    public func process(_ args: Args, seedConcurrency: Int = 4) async {
+    public func process(_ args: Args, seedConcurrency: Int = 4, neighborHops: Int? = 2) async {
 
         Log.d("frame \(frameIndex) starting")
         internalBlobMap = await analyzer.mapOfBlobs()
@@ -343,7 +343,8 @@ public actor LinearBlobConnector {
                         of: blob,
                         blobRefs: data.blobRefs,
                         blobMap: data.blobMap,
-                        scanSize: data.args.scanSize
+                        scanSize: data.args.scanSize,
+                        maxHops: neighborHops
                       )
                     
                     if neighborCloud.count != 0 { 
