@@ -230,6 +230,13 @@ public actor ResourceGovernor {
         task = nil
     }
 
+    /// Byte counters keyed by volume id. Not by name: two distinct volumes can report the same
+    /// mount name (a symlinked path, a firmlink), and `Dictionary(uniqueKeysWithValues:)`
+    /// traps on a duplicate key.
+    static func bytesByVolume(_ status: [IOWork.VolumeStatus]) -> [String: UInt64] {
+        Dictionary(status.map { ($0.volume, $0.bytes) }, uniquingKeysWith: +)
+    }
+
     /// One sample, report and tuning step. Public for tests and for a GUI that wants a
     /// reading now.
     @discardableResult
@@ -241,7 +248,7 @@ public actor ResourceGovernor {
           time: now,
           cpuSeconds: Self.processCPUSeconds(),
           gpuSeconds: GPUOps.busySeconds,
-          bytes: Dictionary(uniqueKeysWithValues: status.map { ($0.name, $0.bytes) }),
+          bytes: Self.bytesByVolume(status),
           ops: OperationThroughput.weightedTotal)
         defer { last = current }
         guard let previous = last else { return nil }
@@ -249,7 +256,7 @@ public actor ResourceGovernor {
         let window = max(current.time - previous.time, 0.001)
         let cores = Double(max(PhysicalCores.count, 1))
         let volumes = status.map { v -> ResourceSample.Volume in
-            let delta = v.bytes &- (previous.bytes[v.name] ?? 0)
+            let delta = v.bytes &- (previous.bytes[v.volume] ?? 0)
             return .init(name: v.name, bytesPerSecond: Double(delta) / window,
                          inFlight: v.inFlight, width: v.width, waiting: v.waiting)
         }

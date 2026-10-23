@@ -97,4 +97,26 @@ final class ResourceGovernorTests: XCTestCase {
         for _ in 0..<10 { t.step(throughput: 100, diskSaturated: false, memoryPressure: false) }
         XCTAssertEqual(t.extraStreams, 0)
     }
+
+    // MARK: - volumes that share a name
+
+    /// Two gates reporting one mount name used to trap the governor's tick
+    /// (`Dictionary(uniqueKeysWithValues:)` on the names).  They are separate volumes and keep
+    /// separate counters.
+    func testTwoVolumesWithOneNameDoNotTrapAndKeepTheirOwnBytes() {
+        let a = IOWork.VolumeStatus(volume: "dev1", name: "/", bytes: 100, inFlight: 0, waiting: 0, width: 2)
+        let b = IOWork.VolumeStatus(volume: "dev2", name: "/", bytes: 40, inFlight: 0, waiting: 0, width: 2)
+        let bytes = ResourceGovernor.bytesByVolume([a, b])
+        XCTAssertEqual(bytes["dev1"], 100)
+        XCTAssertEqual(bytes["dev2"], 40)
+    }
+
+    /// A symlinked directory and its target are the same volume.
+    func testASymlinkedPathResolvesToTheSameVolumeAsItsTarget() throws {
+        let base = NSTemporaryDirectory() + "iowork-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: base + "/real", withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(atPath: base + "/link", withDestinationPath: base + "/real")
+        defer { try? FileManager.default.removeItem(atPath: base) }
+        XCTAssertEqual(IOWork.volume(of: base + "/link/file.tif"), IOWork.volume(of: base + "/real/file.tif"))
+    }
 }

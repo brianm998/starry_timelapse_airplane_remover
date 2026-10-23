@@ -57,7 +57,10 @@ public enum IOWork {
     /// The volume a path lives on: the device number of its directory, cached. Paths that
     /// cannot be resolved (not yet created) share one key rather than each making a gate.
     static func volume(of path: String) -> String {
-        let directory = (path as NSString).deletingLastPathComponent
+        // Resolved first, so a symlinked directory and its target are one volume, not two
+        // gates that both claim the same mount.
+        let directory = ((path as NSString).deletingLastPathComponent as NSString)
+            .resolvingSymlinksInPath
         lock.lock()
         if let known = directoryVolumes[directory] {
             lock.unlock()
