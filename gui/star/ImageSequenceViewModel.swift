@@ -2983,6 +2983,10 @@ public final class ImageSequenceViewModel {
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
 
         Task.detached(priority: .medium) { [self] in
+            // The shared builder is pointed at THIS sequence's config as its run starts (idempotent:
+            // it registers its callback once per manager), so a sequence that was loaded and then
+            // cancelled, or one that is only being looked at, has not taken it over.
+            await frameGraphBuilder.set(configManager: self.config)
             let frameCount = await self.frames.count
             guard let range = Self.processingRange(from: startIndex,
                                                    to: endIndex,

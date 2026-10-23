@@ -323,6 +323,36 @@ public final class ViewModel {
     var labelText: String = localized("ui.started")
 
     var isLoadingImageSequence = false
+
+    /// Which load is the current one. Every load takes the next number and Cancel takes one too, so
+    /// a load that finishes under an older number was cancelled (or replaced) while it ran and its
+    /// result is dropped instead of being made the open sequence. The load itself cannot be
+    /// interrupted part way - it is reading frames - but nothing it produces is used afterwards.
+    private var loadGeneration = 0
+
+    private func beginLoad() -> Int {
+        loadGeneration += 1
+        return loadGeneration
+    }
+
+    /// The Cancel button of the loading view.
+    func cancelLoading() {
+        loadGeneration += 1
+        isLoadingImageSequence = false
+        loadingImageSequenceFilename = nil
+        imageSequence = nil
+    }
+
+    /// Whether a load that began as `generation` has been cancelled or superseded; if so, what it
+    /// built is stopped and discarded.
+    private func discardIfCancelled(_ generation: Int, _ built: ImageSequenceViewModel) -> Bool {
+        guard generation != loadGeneration else { return false }
+        Log.i("a cancelled sequence load finished; discarding it")
+        built.stopProcessing()
+        built.stopVideo()
+        built.disable()
+        return true
+    }
     var isProbingImageSequence = false
     var isExtractingImageSequence = false
     var loadingImageSequenceFilename: String?
@@ -403,6 +433,15 @@ public final class ViewModel {
     func unloadSequence() {
         // the closed sequence's cached reference statistics are not the next one's
         Task { await ReferenceHorizonStatsRegistry.shared.removeAll() }
+        // Dropping the view model is not stopping it: a run in flight kept going against the
+        // shared frame-graph builder (and wrote into the closed sequence's folders), video playback
+        // kept its task and its prefetched frames, and the App Nap activity that keeps the Mac
+        // awake for a run was never ended, because `deinit` is not reliably called.
+        if let closing = imageSequence {
+            closing.stopProcessing()
+            closing.stopVideo()
+            closing.disable()
+        }
         imageSequence = nil
         cursorStack = []
         cursor = .arrow
@@ -427,6 +466,7 @@ public final class ViewModel {
     func startup(withConfigFile jsonConfigFilename: String) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = jsonConfigFilename
+        let generation = beginLoad()
 
         numberLoaded = 0
         amountLoaded = 0.0
@@ -449,6 +489,7 @@ public final class ViewModel {
                 }
             }
         }
+        if discardIfCancelled(generation, imageSequenceViewModel) { return }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.applyUserPreferences()
         raiseReopenStep(for: imageSequenceViewModel)
@@ -475,6 +516,7 @@ public final class ViewModel {
     func startup(withConfig config: ConfigManager) async throws {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = config.config().imageSequenceDirname
+        let generation = beginLoad()
 
         numberLoaded = 0
         amountLoaded = 0.0
@@ -493,6 +535,7 @@ public final class ViewModel {
                 }
             }
         }
+        if discardIfCancelled(generation, imageSequenceViewModel) { return }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.applyUserPreferences()
         raiseReopenStep(for: imageSequenceViewModel)
@@ -506,6 +549,7 @@ public final class ViewModel {
     {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = imageSequenceDirname
+        let generation = beginLoad()
 
         // XXX check to see if we should create previews here
         numberLoaded = 0
@@ -526,6 +570,7 @@ public final class ViewModel {
                 }
             }
         }
+        if discardIfCancelled(generation, imageSequenceViewModel) { return }
         imageSequence = imageSequenceViewModel
         imageSequenceViewModel.applyUserPreferences()
         isLoadingImageSequence = false
@@ -539,6 +584,7 @@ public final class ViewModel {
 
     func startup(withVideoToProcess path: String, format: FrameDecodeFormat = .tiff16) async throws {
         isLoadingImageSequence = true
+        let generation = beginLoad()
 
         isProbingImageSequence = true
         let (outputDir, videoInfo) = try await Task.detached() {
@@ -564,6 +610,8 @@ public final class ViewModel {
         
         Log.d("outputDir \(outputDir)")
 
+        // Cancelled while the video was being taken apart: do not go on to open what came out.
+        guard generation == loadGeneration else { return }
         try await startup(withNewImageSequence: outputDir, and: videoInfo)
     }
 }

@@ -64,8 +64,7 @@ struct ImageSequenceLoadingView: View {
             }
             Spacer()
             Button() {
-                viewModel.isLoadingImageSequence = false
-                viewModel.imageSequence = nil
+                viewModel.cancelLoading()
             } label: {
                 Text(localized("ui.cancel"))
                   .font(.largeTitle)

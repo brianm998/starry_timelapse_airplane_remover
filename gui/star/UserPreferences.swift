@@ -228,9 +228,20 @@ struct UserPreferences: Codable, Sendable {
             StarLocalization.shared.languageOverride = instance?.language
         } catch {
             Log.e("\(error)")
+            // The file is there but could not be read (a hand edit, a newer format written by the
+            // other client). Saving the defaults over it later would destroy whatever it holds,
+            // so nothing is saved this session; a copy is kept beside it for the user.
+            Self.loadFailed = true
+            let copy = fullPath + ".undecodable"
+            if FileManager.default.fileExists(atPath: fullPath), !FileManager.default.fileExists(atPath: copy) {
+                try? FileManager.default.copyItem(atPath: fullPath, toPath: copy)
+            }
         }
         return instance
     }
+
+    /// Set when the preferences file exists but did not decode: `save()` then leaves it alone.
+    nonisolated(unsafe) static var loadFailed = false
 
 //    private static var instance: UserPreferences?
 
@@ -257,15 +268,19 @@ struct UserPreferences: Codable, Sendable {
     }
     
     private func save() {
+        guard !Self.loadFailed else {
+            Log.w("not saving preferences: the existing file could not be read and would be overwritten")
+            return
+        }
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
             let data = try encoder.encode(self)
 
-            if FileManager.default.fileExists(atPath: UserPreferences.fullPath) {
-                try FileManager.default.removeItem(atPath: UserPreferences.fullPath)
-            }
-            FileManager.default.createFile(atPath: UserPreferences.fullPath, contents: data, attributes: nil)
+            // Atomically: removing the file and then creating it left a window with no file at all
+            // (and an empty one if the process died in it), and the Kotlin client reads the same
+            // file.
+            try data.write(to: URL(fileURLWithPath: UserPreferences.fullPath), options: .atomic)
         } catch {
             Log.e("\(error)")
         }
