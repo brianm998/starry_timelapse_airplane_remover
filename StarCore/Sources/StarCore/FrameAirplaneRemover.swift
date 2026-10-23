@@ -1331,7 +1331,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           radius: config.outlierGroupPaintBorderPixels
         )
         
-        let removeMaskIntRadius = Int(removeMask.radius)
+        // The mask is symmetric about its `center` pixel (index `Int(radius + 1)`), so that is the
+        // pixel to lay over each outlier pixel. This used `Int(radius)`, one short, which slid
+        // every removal halo a pixel up and to the left of the pixels it was meant to cover.
+        let removeMaskIntRadius = removeMask.center
 
         // The frame's alpha, one 16-bit index per pixel into the mask's own values (see
         // `RemovalAlphaLevels`), and the mask pre-converted to those indices.

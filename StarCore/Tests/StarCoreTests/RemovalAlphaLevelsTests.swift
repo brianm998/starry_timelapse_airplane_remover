@@ -76,3 +76,27 @@ final class RemovalAlphaLevelsTests: XCTestCase {
         XCTAssertEqual(levels.table, levels.table.sorted())
     }
 }
+
+/// Where the halo sits: the mask is symmetric about its `center`, so `center` is the pixel that
+/// belongs over an outlier pixel. `computeRemovalMask` used `Int(radius)`, one off.
+final class RemoveMaskCenterTests: XCTestCase {
+    func testTheMaskPeaksAndIsSymmetricAboutItsCenterIndex() {
+        for (inner, radius) in [(2.0, 5.0), (0.0, 3.0), (1.5, 9.0), (3.0, 6.5)] {
+            let mask = RemoveMask(innerWallSize: inner, radius: radius)
+            let c = mask.center, n = mask.size
+            XCTAssertEqual(c, Int(radius + 1))
+            XCTAssertEqual(mask.pixels[c * n + c], 1.0, "the center pixel is fully opaque")
+            for d in 1..<c {
+                XCTAssertEqual(mask.pixels[c * n + (c - d)], mask.pixels[c * n + (c + d)], "x symmetry at \(d)")
+                XCTAssertEqual(mask.pixels[(c - d) * n + c], mask.pixels[(c + d) * n + c], "y symmetry at \(d)")
+            }
+            // and not symmetric about the old, one-short index (so the old offset was a visible shift)
+            if radius > inner {
+                let old = Int(radius)
+                var asymmetric = false
+                for d in 1..<old where mask.pixels[old * n + (old - d)] != mask.pixels[old * n + (old + d)] { asymmetric = true }
+                XCTAssertTrue(asymmetric)
+            }
+        }
+    }
+}
