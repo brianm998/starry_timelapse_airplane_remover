@@ -60,3 +60,36 @@ final class BlobAbsorbTests: XCTestCase {
         XCTAssertEqual(size, 40_000)
     }
 }
+
+/// `combine` is how both connectors merge a list of blobs; a blob the first one refuses must come back.
+final class BlobCombineTests: XCTestCase {
+    private func blob(id: Int32, count: Int, xOffset: Int = 0) -> Blob {
+        var pixels = Set<SortablePixel>()
+        for i in 0..<count { pixels.insert(SortablePixel(x: xOffset + i % 500, y: i / 500, value: .eightBit(200))) }
+        return Blob(pixels, id: id, frameIndex: 0)
+    }
+
+    func testBlobsThatFitAreMergedIntoTheFirst() async {
+        let a = blob(id: 1, count: 10), b = blob(id: 2, count: 10, xOffset: 600), c = blob(id: 3, count: 5, xOffset: 700)
+        let out = await StarCore.combine([a, b, c])
+        XCTAssertEqual(out.count, 1)
+        let size = await out[0].size()
+        XCTAssertEqual(size, 25)
+    }
+
+    func testARefusedBlobIsReturnedNotDropped() async {
+        let big = blob(id: 1, count: 40_000), other = blob(id: 2, count: 30_000, xOffset: 1000), small = blob(id: 3, count: 20, xOffset: 3000)
+        let out = await StarCore.combine([big, other, small])
+        XCTAssertEqual(out.map { $0.id }.sorted(), [1, 2], "the refused blob must come back")
+        let sizeFirst = await out[0].size()
+        XCTAssertEqual(out[0].id, 1)
+        XCTAssertEqual(sizeFirst, 40_020, "the small one still merged; the 30,000 one did not fit")
+        let sizeRefused = await out[1].size()
+        XCTAssertEqual(sizeRefused, 30_000, "and it is intact")
+    }
+
+    func testAnEmptyListCombinesToNothing() async {
+        let out = await StarCore.combine([])
+        XCTAssertTrue(out.isEmpty)
+    }
+}

@@ -372,7 +372,7 @@ public actor LinearBlobConnector {
 
 
         Log.d("frame \(frameIndex) combining blobs into \(mappingLists.count) merged blobs")
-        await withTaskGroup(of: Optional<Blob>.self) { taskGroup in
+        await withTaskGroup(of: [Blob].self) { taskGroup in
             for mappingList in mappingLists {
                 // a list of blobs that should all be removed
                 //Log.d("mappingList.list.count \(mappingList.list.count)")
@@ -387,10 +387,9 @@ public actor LinearBlobConnector {
                 taskGroup.addTask {
                     return await StarCore.combine(blobList)
                 }
-                for await blob in taskGroup {
-                    if let blob {
-                        internalBlobMap[blob.id] = blob
-                    }
+                for await blobs in taskGroup {
+                    // the merged blob, and any blob it refused (see `combine`): none may be lost
+                    for blob in blobs { internalBlobMap[blob.id] = blob }
                 }
             }
         }

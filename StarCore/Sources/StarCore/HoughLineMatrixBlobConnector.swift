@@ -259,7 +259,7 @@ public actor HoughLineMatrixBlobConnector {
         let mappingLists = blobMapper.mappingLists
 
         Log.d("frame \(frameIndex) combining blobs into \(mappingLists.count) merged blobs")
-        await withTaskGroup(of: Optional<Blob>.self) { taskGroup in
+        await withTaskGroup(of: [Blob].self) { taskGroup in
             for mappingList in mappingLists {
                 // a list of blobs that should all be removed
                 //Log.d("mappingList.list.count \(mappingList.list.count)")
@@ -274,10 +274,9 @@ public actor HoughLineMatrixBlobConnector {
                 taskGroup.addTask { 
                     return await StarCore.combine(blobList)
                 }
-                for await blob in taskGroup {
-                    if let blob {
-                        internalBlobMap[blob.id] = blob
-                    }
+                for await blobs in taskGroup {
+                    // the merged blob, and any blob it refused (see `combine`): none may be lost
+                    for blob in blobs { internalBlobMap[blob.id] = blob }
                 }
             }
         }
@@ -286,13 +285,20 @@ public actor HoughLineMatrixBlobConnector {
     }
 }
 
-internal func combine(_ blobList: [Blob]) async -> Blob? {
-    if blobList.count == 0 { return nil }
+/// Merges `blobList` into its first blob and returns that blob followed by every blob it refused.
+///
+/// `absorb` refuses a blob that would take the total past 65,535 pixels (the saved format's
+/// limit). Callers have already taken all of these blobs out of the blob map, so a refused one,
+/// which this used to ignore, simply vanished along with its pixels. It comes back here instead
+/// and goes back in the map as the blob it was.
+internal func combine(_ blobList: [Blob]) async -> [Blob] {
+    if blobList.count == 0 { return [] }
     let first = blobList[0]
+    var refused: [Blob] = []
     for i in 1..<blobList.count {
-        _ = await first.absorb(blobList[i])
+        if await !first.absorb(blobList[i]) { refused.append(blobList[i]) }
     }
-    return first
+    return [first] + refused
 }
 
 /// Whether any pixel of a blob-id image is non-zero, i.e. whether any blob touches the element.
