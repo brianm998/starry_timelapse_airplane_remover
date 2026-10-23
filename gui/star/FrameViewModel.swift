@@ -25,7 +25,20 @@ public class FrameViewModel {
         }
     }
 
-    var existingImages: Set<FrameViewMode> = []
+    var existingImages: Set<FrameViewMode> = [] {
+        didSet { reportAvailabilityChange(from: oldValue, to: existingImages) }
+    }
+
+    /// Told when this frame gains image types (`added`) or loses some (`removed`), so the sequence
+    /// can keep one running answer to "which image types does any frame have" instead of asking every
+    /// frame each time a view draws. Set by `ImageSequenceViewModel`.
+    @ObservationIgnored var onImageAvailabilityChange: ((_ added: Set<FrameViewMode>, _ removed: Bool) -> Void)?
+
+    private func reportAvailabilityChange(from old: Set<FrameViewMode>, to new: Set<FrameViewMode>) {
+        let added = new.subtracting(old)
+        let removed = !old.subtracting(new).isEmpty
+        if !added.isEmpty || removed { onImageAvailabilityChange?(added, removed) }
+    }
 
     /// The best-available horizon overlay for this frame's filmstrip thumbnail.
     /// Nil until `refreshHorizonOverlay()` completes.
@@ -71,7 +84,9 @@ public class FrameViewModel {
 
     /// Aligned images this frame can build on demand: its homographies exist even though, in
     /// the default mode, the full-size aligned TIFFs are never written.
-    var producibleImages: Set<FrameViewMode> = []
+    var producibleImages: Set<FrameViewMode> = [] {
+        didSet { reportAvailabilityChange(from: oldValue, to: producibleImages) }
+    }
 
     func refreshProducibleImages() async {
         guard let frame else { return }

@@ -2507,6 +2507,24 @@ public final class ImageSequenceViewModel {
         self.frames = [FrameViewModel](count: numberOfFrames) {
             i in FrameViewModel(config, i)
         }
+        for frame in frames {
+            frame.onImageAvailabilityChange = { [weak self] added, removed in
+                guard let self else { return }
+                if removed { self.recomputeAvailableModes() } else { self.availableModes.formUnion(added) }
+            }
+        }
+        recomputeAvailableModes()
+    }
+
+    /// The image types at least one frame has (or can produce): what the grid's mode picker offers.
+    /// Kept up to date as frames report changes, so drawing the picker does not walk every frame (and
+    /// stat a file per frame for the horizon mode) on every redraw.
+    var availableModes: Set<FrameViewMode> = []
+
+    func recomputeAvailableModes() {
+        var modes = Set<FrameViewMode>()
+        for frame in frames { modes.formUnion(frame.existingImages); modes.formUnion(frame.producibleImages) }
+        availableModes = modes
     }
 
     func cancelProcessing() {
