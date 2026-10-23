@@ -389,18 +389,14 @@ public enum CombinedHorizonDetector {
         // Scale to original resolution
         let origW = image.width
         let origH = image.height
-        let fullMask: PixelatedImage
-        if mask.width != origW || mask.height != origH {
-            if let upscaled = mask.mat.upScale(to: UInt(origW), height: UInt(origH)),
-               let pi = PixelatedImage(mat: upscaled) {
-                fullMask = thresholdToBinary(pi)
-            } else {
-                fullMask = mask
-            }
-        } else {
-            fullMask = mask
+        // The old tail thresholded the upscaled mask to a binary image and then read the horizon
+        // from that, but a binary mask built from a column's first dark row has that same first
+        // dark row, so reading it straight off the upscaled mask gives the identical answer
+        // without building a full-resolution image to read. Off the cooperative pool: it is
+        // full-resolution native work.
+        return await NativeWork.run {
+            fullResolutionHorizonY(of: mask, toWidth: origW, height: origH)
         }
-        return extractHorizonY(from: fullMask)
     }
 
     /// Run DP with grid search and return per-column horizon Y at full resolution.
@@ -450,18 +446,7 @@ public enum CombinedHorizonDetector {
 
         let origW = image.width
         let origH = image.height
-        let fullMask: PixelatedImage
-        if mask.width != origW || mask.height != origH {
-            if let up = mask.mat.upScale(to: UInt(origW), height: UInt(origH)),
-               let pi = PixelatedImage(mat: up) {
-                fullMask = thresholdToBinary(pi)
-            } else {
-                fullMask = mask
-            }
-        } else {
-            fullMask = mask
-        }
-        return extractHorizonY(from: fullMask)
+        return fullResolutionHorizonY(of: mask, toWidth: origW, height: origH)
     }
 
     /// Run standalone SIOX horizon detection and return per-column horizon Y at full resolution.
@@ -1446,6 +1431,17 @@ public enum CombinedHorizonDetector {
     }
 
     /// Extract per-column horizon Y (topmost ground pixel) from a mask.
+    /// Per-column horizon of `mask` at the full image size: upscale when the working mask is
+    /// smaller, then read the first dark row of each column. Unscaled masks are read as they are.
+    static func fullResolutionHorizonY(of mask: PixelatedImage, toWidth width: Int, height: Int) -> [Int?] {
+        if mask.width != width || mask.height != height,
+           let up = mask.mat.upScale(to: UInt(width), height: UInt(height)),
+           let upscaled = PixelatedImage(mat: up) {
+            return extractHorizonY(from: upscaled)
+        }
+        return extractHorizonY(from: mask)
+    }
+
     static func extractHorizonY(from mask: PixelatedImage) -> [Int?] {
         let w = mask.width
         let h = mask.height
@@ -1461,12 +1457,17 @@ public enum CombinedHorizonDetector {
         switch mask.imageData {
         case .eightBit:
             let ptr = rawPtr.assumingMemoryBound(to: UInt8.self)
-            for x in 0..<w {
-                for y in 0..<h {
+            // Row by row: the first row at or below the threshold in each column. Walking a
+            // full-resolution mask column by column strides a whole row per step and misses the
+            // cache on every read; this reads memory in order and stops once every column has
+            // an answer. The answer for each column is the same.
+            var remaining = w
+            for y in 0..<h where remaining > 0 {
+                for x in 0..<w where result[x] == nil {
                     let offset = y * rowBytes + x * cpp
                     if offset < totalBytes && ptr[offset] <= 127 {
                         result[x] = y
-                        break
+                        remaining -= 1
                     }
                 }
             }
@@ -1474,12 +1475,13 @@ public enum CombinedHorizonDetector {
             let ptr = rawPtr.assumingMemoryBound(to: UInt16.self)
             let rowElems = rowBytes / MemoryLayout<UInt16>.stride
             let totalElems = h * rowElems
-            for x in 0..<w {
-                for y in 0..<h {
+            var remaining = w
+            for y in 0..<h where remaining > 0 {
+                for x in 0..<w where result[x] == nil {
                     let offset = y * rowElems + x * cpp
                     if offset < totalElems && ptr[offset] <= 32767 {
                         result[x] = y
-                        break
+                        remaining -= 1
                     }
                 }
             }
