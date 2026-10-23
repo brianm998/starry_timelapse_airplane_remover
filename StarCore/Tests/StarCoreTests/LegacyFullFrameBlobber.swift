@@ -1,0 +1,423 @@
+import Foundation
+import logging
+@testable import StarCore
+
+// The FullFrameBlobber as it was before the S11 rewrite, kept verbatim (renamed) as the reference
+// the rewrite is compared against, blob for blob. Not used by anything but the tests.
+
+
+/*
+
+This file is part of the Starry Timelapse Airplane Remover (star).
+
+star is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+star is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with star. If not, see <https://www.gnu.org/licenses/>.
+
+*/
+
+/*
+ A bright blob detector.
+
+ Looks at an image and tries to identify separate blobs
+ based upon local maximums of brightness, and changes in contrast from that.
+
+ All pixels are sorted by brightness, and iterated over from the brightest,
+ down to minIntensity.  All nearby pixels that fall within the minContrast threshold
+ will be included in the blob.
+
+ Directly adjcent blobs should be combined.
+
+ Blobs dimmer on average than minIntensity are discarded.
+ */
+public class LegacyFullFrameBlobber {
+
+    private let config: Config
+    private let args: BlobFinder.Args
+    
+    // sorted by brightness
+    public var sortedPixels: [SortablePixel] = []
+
+    // [x][y] accessable array
+    public var pixels: [[SortablePixel?]]
+
+    public let imageWidth: Int
+    public let imageHeight: Int
+
+    // only operate within this area
+    public let bounds: BoundingBox?
+    
+    public let subtractionPixelData: [UInt16]
+
+    public let originalImage: PixelatedImage
+    public let frameIndex: Int
+    
+    // running blob bucket
+    public var blobs: [Blob] = []
+    
+    // how we search for neighbors
+    public let neighborType: NeighborType
+
+    public let pixelStatusTracker: PixelStatusTracker
+    
+    private var newBlobId: Int32 = 1 // start at one as zero means no blob
+    
+    // neighbor search policies
+    public enum NeighborType {
+        case fourCardinal       // up and down, left and right, no corners
+        case fourCorner         // diagnals only
+        case eight              // the sum of the other two
+    }
+
+    // different directions from a pixel
+    public enum NeighborDirection {
+        case up
+        case down
+        case left
+        case right
+        case lowerRight
+        case upperRight
+        case lowerLeft
+        case upperLeft
+    }
+    
+    public init(config: Config,
+                args: BlobFinder.Args,
+                imageWidth: Int,
+                imageHeight: Int,
+                within bounds: BoundingBox? = nil,
+                subtractionPixelData: [UInt16],
+                originalImage: PixelatedImage,
+                frameIndex: Int,
+                neighborType: NeighborType,
+                startingBlobID: UInt16 = 1) async
+    {
+        // pixels that are local maximums, but have a value lower than this are ignored
+        let minIntensity = args.minPixelIntensity
+        self.pixelStatusTracker = PixelStatusTracker(frameIndex: frameIndex,
+                                                     imageWidth: imageWidth,
+                                                     imageHeight: imageHeight)
+        self.config = config
+        self.args = args
+        self.imageWidth = imageWidth
+        self.imageHeight = imageHeight
+        self.bounds = bounds
+        self.subtractionPixelData = subtractionPixelData
+        self.originalImage = originalImage
+        self.frameIndex = frameIndex
+        self.neighborType = neighborType
+        self.newBlobId = Int32(startingBlobID)
+
+        guard subtractionPixelData.count == imageWidth*imageHeight else {
+            fatalError("subtractionPixelData.count \(subtractionPixelData.count) is not imageWidth*imageHeight \(imageWidth*imageHeight)")
+        }
+        
+        Log.v("frame \(frameIndex) blobbing image of size (\(imageWidth), \(imageHeight))")
+
+        // XXX make this a row major single array
+        pixels = [[SortablePixel?]](repeating: [SortablePixel?](repeating: nil,
+                                                                count: imageHeight),
+                                    count: imageWidth)
+
+
+        let minContrast = args.startMinContrast
+
+        var minX = 0
+        var maxX = imageWidth
+
+        var minY = 0
+        var maxY = imageHeight
+
+        let ignoreLowerPixels = config.ignoreLowerPixels 
+        maxY = imageHeight - ignoreLowerPixels
+        if maxY < 0 { maxY = 0 }
+
+        if let bounds {
+            minX = bounds.min.x
+            maxX = bounds.max.x
+            minY = bounds.min.y
+            maxY = bounds.max.y
+            if minX < 0 { minX = 0 }
+            if minY < 0 { minY = 0 }
+            if maxX > imageWidth { maxX = imageWidth }
+            if maxY > imageHeight { maxY = imageHeight }
+        }
+
+        // Swift runtime failure: Range requires lowerBound <= upperBound + 0 [inlined]
+        guard minX < maxX,
+              minY < maxY
+        else { return }
+        
+        for x in minX..<maxX {
+            for y in minY..<maxY {
+                let intensity = subtractionPixelData[y*imageWidth+x]
+
+                if intensity > minIntensity {
+                    // these pixels are both sorted and added to the pixels multi array
+                    let pixel = SortablePixel(x: x, y: y, value: .sixteenBit(intensity))
+                    pixels[x][y] = pixel
+                    sortedPixels.append(pixel)
+                } else {
+
+                    // XXX check if this step is necessary
+                    
+                    // these pixels are dimmer, and might get added to the pixels multi array
+                    let diff = Double(abs(Int32(intensity) - Int32(minIntensity)))
+                    let max = Double(max(intensity, minIntensity))
+                
+                    let contrast = diff / max * 100
+
+                    // some pixels are too dim to even track
+                    if contrast < minContrast {
+                        let pixel = SortablePixel(x: x, y: y, value: .sixteenBit(intensity))
+                        pixels[x][y] = pixel
+                    }
+                }
+            }
+        }
+    }
+
+    public func sortPixels() {
+        Log.d("frame \(frameIndex) sorting pixel values")
+        sortedPixels.sort { $0.intensity > $1.intensity }
+    }
+    
+    public func process() async {
+        Log.d("frame \(frameIndex) detecting blobs")
+
+        for pixel in sortedPixels {
+
+            if await pixelStatusTracker.status(of: pixel) != .unknown { continue }
+
+            //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
+            let allNeighbors = self.neighbors(of: pixel)
+            //let allNeighbors = self.allNeighbors(of: pixel, within: 4)
+            let higherNeighbors = allNeighbors.filter { $0.intensity > pixel.intensity } 
+            //Log.d("found \(higherNeighbors) higherNeighbors")
+            if higherNeighbors.count == 0 {
+                // no higher neighbors
+                // a local maximum, this pixel is a blob seed
+
+                if newBlobId < Int32.max {
+                    //Log.d("frame \(frameIndex) creating new blob with id \(newBlobId)")
+                    let newBlob = Blob(pixel,
+                                       id: newBlobId,
+                                       frameIndex: frameIndex,
+                                       statusTracker: pixelStatusTracker)
+
+
+                    await expand(blob: newBlob, seedPixel: pixel)
+                    //Log.d("frame \(frameIndex) creating blob \(newBlob)")
+                    
+                    newBlobId += 1
+                    blobs.append(newBlob)
+                        
+                    //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
+
+                } else {
+                    // we've got more than UInt16.max blob seeds, that's a lot
+                    // don't create more blobs
+                    Log.w("frame \(frameIndex) reached newBlobId \(newBlobId), cannot create new blobs") 
+                    break
+                }
+
+                
+            } else {
+                // but only if it's bright enough
+                await pixelStatusTracker.record(status: .background, for: pixel)
+            }                    
+        }
+
+        Log.i("frame \(frameIndex) found \(blobs.count)")
+    }
+    
+    public var blobMap: [Int32:Blob] {
+        var ret: [Int32:Blob] = [:]
+        for blob in self.blobs { ret[blob.id] = blob }
+        return ret
+    }
+
+    public func outputImage() async -> PixelatedImage? {
+        await self.outputData().image
+    }
+
+    // for the NeighborType of this Blobber
+    public func neighbors(of pixel: SortablePixel) -> [SortablePixel] {
+        return neighborsInt(pixel, self.neighborType)
+    }
+
+    fileprivate func neighbor(_ direction: NeighborDirection, for pixel: SortablePixel) -> SortablePixel? {
+        if pixel.x == 0,
+           (direction == .left || 
+            direction == .lowerLeft ||
+            direction == .upperLeft)
+        {
+            return nil
+        }
+        if pixel.y == 0,
+           (direction == .up ||
+            direction == .upperRight ||
+            direction == .upperLeft)
+        {
+            return nil
+        }
+        if pixel.x == 0,
+           (direction == .left ||
+            direction == .lowerLeft ||
+            direction == .upperLeft)
+        {
+            return nil
+        }
+        if pixel.y == imageHeight - 1,
+           (direction == .down ||
+            direction == .lowerLeft ||
+            direction == .lowerRight)
+        {
+            return nil
+        }
+        if pixel.x == imageWidth - 1,
+           (direction == .right ||
+            direction == .lowerRight ||
+            direction == .upperRight)
+        {
+            return nil
+        }
+        switch direction {
+        case .up:
+            return pixels[pixel.x][pixel.y-1]
+        case .down:
+            return pixels[pixel.x][pixel.y+1]
+        case .left:
+            return pixels[pixel.x-1][pixel.y]
+        case .right:
+            return pixels[pixel.x+1][pixel.y]
+        case .lowerRight:
+            return pixels[pixel.x+1][pixel.y+1]
+        case .upperRight:
+            return pixels[pixel.x+1][pixel.y-1]
+        case .lowerLeft:
+            return pixels[pixel.x-1][pixel.y+1]
+        case .upperLeft:
+            return pixels[pixel.x-1][pixel.y-1]
+        }
+    }
+
+    // used for writing out blob data for viewing 
+    public func outputData() async -> ImageBuffer<UInt16> {
+        var ret = ImageBuffer<UInt16>(
+          width: imageWidth,
+          height: imageHeight,
+          components: 1
+        )
+
+        let min:  UInt16 = 0x4FFF
+        let max:  UInt16 = 0xFFFF
+        let step: UInt16 = 0x1000
+
+        var value: UInt16 = min
+        
+        for blob in blobs {
+            //Log.v("writing out \(blob.size) pixel blob")
+            for pixel in await blob.getPixels() {
+                // maybe adjust by size?
+                //ret[pixel.y*imageWidth+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
+                ret[pixel.y*imageWidth+pixel.x] = value
+            }
+            if value >= max { value = min }
+            value += step
+        }
+        return ret
+    }
+
+    private func calculateMinContrast(for blobSize: Int) -> Double {
+        if blobSize < args.startContrastSize {
+            return args.startMinContrast
+        } else if blobSize >= args.endContrastSize {
+            return args.endMinContrast
+        } else {
+            // between the start and end
+            let sizeGap = Double(abs(args.endContrastSize - args.startContrastSize))
+            let contrastGap = Double(abs(args.startMinContrast - args.endMinContrast))
+            let gapAmount = Double(blobSize-args.startContrastSize)
+            return args.startMinContrast - gapAmount/sizeGap*contrastGap
+        }
+    }
+    
+    public func expand(blob: Blob, seedPixel firstSeed: SortablePixel) async {
+        //Log.d("expanding initially seed blob")
+
+        var seedPixels: [SortablePixel] = [firstSeed]
+        
+        while let seedPixel = seedPixels.popLast() {
+            // set this pixel to be part of this blob
+            await blob.add(pixel: seedPixel)
+
+            // look at direct neighbors in unknown status
+            for neighbor in self.neighbors(of: seedPixel) {
+
+                if await pixelStatusTracker.status(of: neighbor) == .unknown {
+                    // if unknown status, check contrast with initial seed pixel
+                    let firstSeedContrast = firstSeed.contrast(with: neighbor)
+                    if firstSeedContrast < calculateMinContrast(for: await blob.size()) {
+                        //Log.v("contrast \(firstSeedContrast) seedPixel.intensity neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
+                        seedPixels.append(neighbor)
+                    } else {
+                        await pixelStatusTracker.record(status: .background, for: neighbor)
+                    }
+                }
+            }
+        }
+
+        //Log.d("after expansion, blob has \(blob.size) pixels")
+    }
+    
+    // for any NeighborType
+    fileprivate func neighborsInt(_ pixel: SortablePixel,
+                                  _ type: NeighborType) -> [SortablePixel]
+    {
+        var ret: [SortablePixel] = []
+        switch type {
+            // up and down, left and right, no corners
+        case .fourCardinal:
+            if let left = neighbor(.left, for: pixel) {
+                ret.append(left)
+            }
+            if let right = neighbor(.right, for: pixel) {
+                ret.append(right)
+            }
+            if let up = neighbor(.up, for: pixel) {
+                ret.append(up)
+            }
+            if let down = neighbor(.down, for: pixel) {
+                ret.append(down)
+            }
+            
+            // diagnals only
+        case .fourCorner:
+            if let upperLeft = neighbor(.upperLeft, for: pixel) {
+                ret.append(upperLeft)
+            }
+            if let upperRight = neighbor(.upperRight, for: pixel) {
+                ret.append(upperRight)
+            }
+            if let lowerLeft = neighbor(.lowerLeft, for: pixel) {
+                ret.append(lowerLeft)
+            }
+            if let lowerRight = neighbor(.lowerRight, for: pixel) {
+                ret.append(lowerRight)
+            }
+
+            // the sum of the other two
+        case .eight:        
+            return neighborsInt(pixel, .fourCardinal) + 
+                   neighborsInt(pixel, .fourCorner)
+            
+        }
+        return ret
+
+    }
+}
+
+

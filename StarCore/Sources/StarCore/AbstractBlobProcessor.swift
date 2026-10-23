@@ -55,7 +55,7 @@ public class AbstractBlobProcessor {
         var blobMap: [Int32:Blob] = [:]
 
         // align neighbor frame, subtract it, sort pixels
-        let (subtractionArray, originalImage) = try await self.setup()
+        let subtractionArray = try await self.setup()
 
         for stepIndex in 0..<steps.count {
             let step = steps[stepIndex]
@@ -71,7 +71,6 @@ public class AbstractBlobProcessor {
                 blobMap = await BlobFinder().process(
                   args,
                   subtractionArray: subtractionArray,
-                  originalImage: originalImage,
                   frame: frame,
                   within: bounds,
                   startingBlobID: startingBlobID
@@ -208,9 +207,10 @@ public class AbstractBlobProcessor {
         return newBlobs
     }
     
-    // use the subtraction and original image for this frame to find an initial set of blobs
+    // use the subtraction image for this frame to find an initial set of blobs.
+    // (the original used to be loaded here and handed to the blobber, which never read it)
 
-    internal func setup() async throws -> ([UInt16], PixelatedImage) {
+    internal func setup() async throws -> [UInt16] {
         guard let frame else { fatalError("need frame") } // XXX ???
         let frameIndex = frame.frameIndex
         let imageAccessor = frame.imageAccessor
@@ -267,12 +267,7 @@ public class AbstractBlobProcessor {
             Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
         }
 
-        guard let originalImage = try await imageAccessor.load(frameIndex: frameIndex,
-                                                               type: .original,
-                                                               atSize: .original)
-        else { throw "couldn't load original file for blobbing" }
-
-        return (subtractionArray, originalImage)
+        return subtractionArray
     }
 
     // re-run something repeatedly
