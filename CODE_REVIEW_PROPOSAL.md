@@ -57,9 +57,15 @@ These shaped the priorities, so they come first.
 6. **Repeated decodes of compressed originals**: on the 16-bit LZW crop, `LZWDecode` under
    `ImageCache.loadImage` (the weak Swift cache) cost ~13.5 CPU-s in two 10 s windows, roughly
    six decodes per frame.
-7. **BUG-001 determinism test**: *(pending — the first attempt was lost to the session crash in
-   finding 8; restarted one run at a time with `-n 3`, `nice 10` and a memory watchdog; result
-   to be filled in before this goes to the guide)*.
+7. **BUG-001 is hash-order non-determinism.** Two `selective` runs of the crop, one after the
+   other, both with `SWIFT_DETERMINISTIC_HASHING=1` and `-n 3`, produced **byte-identical output
+   on all 19 frames**, and not trivially: 13 frames changed from their input (96,888 px in all,
+   up to 19,170 in one frame). One run was paused for a while partway and still matched, so
+   timing does not matter. BUG-001 recorded two runs on this machine differing (44,022 vs
+   80,826 px) with Swift's normal per-process hash seed. Caveat: no control run without the
+   fixed seed at `-n 3` was made (each run costs ~80 min and two of them ended the session,
+   finding 8). Run E's full cost: **4,900 s wall, 23,008 s user, 101,075 s sys** (kernel time
+   81% of CPU), 25.7 GB peak RSS.
 8. **Two concurrent dense-field `selective` runs took down the macOS user session.** At 15:52
    WindowServer's main thread sat 40 s inside the AMD driver (`IOAcceleratorFamily2` /
    `AMDRadeonX5000`) and the userspace watchdog killed it (`/Library/Logs/DiagnosticReports/
@@ -73,6 +79,14 @@ These shaped the priorities, so they come first.
    the connector's unbounded seed tasks churning large allocations (`absorb` copies, per-seed
    Hough accumulators) on the cooperative pool, outside the CPU gate and invisible to
    `MemoryMonitor`, and contending global kernel VM locks. See X1.
+
+   **It happened again with a single guarded run** (`-n 3`, `nice 10`, memory watchdog never
+   tripped): WindowServer watchdog reports sampled at 18:55:45 and 18:56:25 show 66, then 381,
+   threads waiting on the one `star` process while it was in the line connector; the machine
+   sat at ~10-30% user / 64-77% sys for the whole stage, and the session was logged out. Pausing
+   that run (SIGSTOP) dropped the machine from 77% to 3% sys at once. `nice` does not help: the
+   cost is kernel time. **Do not run `selective` or `automatic:true` on a dense field on this Mac
+   until X1 has landed.**
 
 Note: the default `automatic:false` mode does not run the blob pipeline at all, so the S-B
 items below only speed up `selective` and `automatic:true`.
@@ -96,7 +110,7 @@ A/B; **Hold** = needs a decision from you; **Later** = backlog note only.
 |---|---|---|---|---|
 | C1 | Partial-range static run can write an all-ground `reference.tiff` that every later run reuses | wrong output, persistent | read | **Do** |
 | C2 | `MemoryMonitor` grants waiters without booking them; fast path jumps the queue | over-admission at barriers | read + reviewer sim | **Do** |
-| C3 | `LinearBlobConnector` order dependence → BUG-001 non-determinism | non-deterministic output | read (+ test pending) | **A/B** |
+| C3 | `LinearBlobConnector` order dependence → BUG-001 non-determinism | non-deterministic output | measured (fixed hash seed → identical) | **A/B** |
 | C4 | Blob/group ids and sizes over 65,535: traps, and `outliers.bin` corruption | crash / corrupt save | read | **Do** |
 | C5 | Crashes on edge geometry in horizon refinement and texture search | crash | read | **Do** |
 | C6 | `ResourceGovernor` traps on two volumes with the same name (symlinked input) | crash | read + reviewer repro | **Do** |
@@ -617,8 +631,8 @@ report, and S9 makes the log tail trustworthy.
   for C++ kernels use the `#include`-the-real-`.cpp` differential harness.
 * Speed: CPU-seconds (`/usr/bin/time`), the slot-breakdown sampling used here, and min-of-K
   kernel timings — not single end-to-end wall clocks on this machine.
-* Safety while testing: one dense-field (`a7sii_10_crop16`) run at a time, `-n 3`, `nice`,
-  and a watchdog that kills the run on high RSS or low system free memory — two at once
-  crashed the session on 2026-10-22 (finding 8).
+* Safety while testing: no dense-field (`a7sii_10_crop16`) `selective` / `automatic:true` run
+  on this Mac until X1 has landed — two concurrent runs, and later one guarded run with `-n 3`
+  and `nice`, each ended the user session on 2026-10-22 (finding 8).
 * Output-changing items: the removal oracle (`a7sii_10` labels), homography recompute and
   reciprocity harnesses, horizon reference masks; tree retraining where noted.
