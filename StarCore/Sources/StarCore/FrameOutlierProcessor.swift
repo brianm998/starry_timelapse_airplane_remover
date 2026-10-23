@@ -915,11 +915,23 @@ fileprivate class OutlierClassifier {
         self.frame = frame
     }
 
+    /// The frame's original, loaded once and held for a whole classification pass.
+    ///
+    /// `borderBrightness` reads the original for every group it scores, through a cache that
+    /// holds images weakly: with nothing else holding the decoded frame, each group's read
+    /// decoded it again. A strong reference held across the pass keeps the cache entry alive,
+    /// so every group after the first is a cache hit.
+    func holdOriginal() async -> PixelatedImage? {
+        try? await frame.imageAccessor.loadFinal(frameIndex: frameIndex, type: .original, atSize: .original)
+    }
+
     // classifies OutlierGroup actors in OutlierGroups, marking them as removable or not
     // uses the .all classifier, which digs into neighboring frames for more data
     func classifyAll(_ outliers: [OutlierGroup], overwrite: Bool = false, keepingUserDecisions: Bool = false) async {
 //        await Task.detached(priority: .userInitiated) {
         //let dataHarvester = await FrameDataHarvester(for: self.frame)
+            let heldOriginal = outliers.isEmpty ? nil : await holdOriginal()
+            defer { withExtendedLifetime(heldOriginal) {} }
             await withTaskGroup(of: Void.self) { taskGroup in
                 guard let classifier = await currentClassifier.get(for: .all) else { return }
 
@@ -961,6 +973,9 @@ fileprivate class OutlierClassifier {
         let imageWidth = Double(frame.width)
         let imageHeight = Double(frame.height)
         
+        let heldOriginal = blobs.isEmpty ? nil : await holdOriginal()
+        defer { withExtendedLifetime(heldOriginal) {} }
+
         return await Task.detached(priority: .userInitiated) {
             return await withTaskGroup(of: ([OutlierSorter], TimeInterval, TimeInterval, Int).self) { taskGroup in
 
