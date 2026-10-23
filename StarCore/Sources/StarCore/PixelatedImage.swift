@@ -1013,7 +1013,7 @@ extension PixelatedImage {
       includeAll: Bool = false,
       config: Config? = nil
     ) -> PixelatedImage? {
-        let mat = ImageAligner.medianMergeImage(
+        guard let mat = ImageAligner.medianMergeImage(
             self.mat,
             withFilenames: frames,
             outlierThreshold: outlierThreshold,
@@ -1022,7 +1022,10 @@ extension PixelatedImage {
             streamingThresholdBytes: Int64(config?.mergeStreamingThresholdMB ?? 0) * 1024 * 1024,
             loadConcurrency: config?.mergeLoadConcurrency ?? 1,
             useGPU: config?.useGPUForMerge ?? true
-        )
+        ) else {
+            Log.e("median merge produced no image")
+            return nil
+        }
         return PixelatedImage(mat: mat)
     }
     
@@ -1062,12 +1065,11 @@ extension PixelatedImage {
     // areas that were non zero and within borderAmount of the border
     // will be part of the gradient
     public func raiseMaskBy(_ borderAmount: Int) -> PixelatedImage? {
-        PixelatedImage(
-          mat: ImageAligner.createGradientMaskIntoSky(
-            self.mat,
-            gradientDistance: Int32(borderAmount)
-          )
-        )
+        guard let gradient = ImageAligner.createGradientMaskIntoSky(
+                self.mat,
+                gradientDistance: Int32(borderAmount)
+              ) else { return nil }
+        return PixelatedImage(mat: gradient)
     }
     
     // raises the mask by the given amount, creating a gradient
@@ -1213,7 +1215,7 @@ extension PixelatedImage {
         if self.mat.is16Bits {
             return self
         } else {
-            return PixelatedImage(mat: self.mat.ensure16Bits()) ?? self
+            return self.mat.ensure16Bits().flatMap { PixelatedImage(mat: $0) } ?? self
         }
     }
 

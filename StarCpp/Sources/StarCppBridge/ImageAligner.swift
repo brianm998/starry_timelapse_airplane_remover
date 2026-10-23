@@ -26,7 +26,7 @@ public enum ImageAligner {
                                          scratchDir: String? = nil,
                                          streamingThresholdBytes: Int64 = 0,
                                          loadConcurrency: Int = 1,
-                                         useGPU: Bool = true) -> MatWrapper {
+                                         useGPU: Bool = true) -> MatWrapper? {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
@@ -40,13 +40,14 @@ public enum ImageAligner {
                                                   Int32(loadConcurrency),
                                                   useGPU)
         }
-        return MatWrapper(ref: r!)
+        // nil when the C++ merge could not produce an image (unreadable source, allocation)
+        return r.map { MatWrapper(ref: $0) }
     }
 
     public static func medianMergeFilenames(_ filenames: [String],
                                              outlierThreshold: Double,
                                              includeAll: Bool,
-                                             useGPU: Bool = true) -> MatWrapper {
+                                             useGPU: Bool = true) -> MatWrapper? {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
@@ -54,7 +55,7 @@ public enum ImageAligner {
             ia_median_merge_filenames(buf.baseAddress, Int32(buf.count),
                                       outlierThreshold, includeAll, useGPU)
         }
-        return MatWrapper(ref: r!)
+        return r.map { MatWrapper(ref: $0) }
     }
 
     public static func findFeatures(baseImage: MatWrapper, frameIndex: Int32,
@@ -307,8 +308,9 @@ public enum ImageAligner {
     }
 
     public static func createGradientMaskIntoSky(_ binaryMask: MatWrapper,
-                                                   gradientDistance: Int32) -> MatWrapper {
-        MatWrapper(ref: ia_gradient_mask_into_sky(binaryMask.ref, gradientDistance))
+                                                   gradientDistance: Int32) -> MatWrapper? {
+        let r: MatWrapperRef? = ia_gradient_mask_into_sky(binaryMask.ref, gradientDistance)
+        return r.map { MatWrapper(ref: $0) }
     }
 
     public static func createGradientMaskIntoGround(_ binaryMask: MatWrapper,

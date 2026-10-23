@@ -284,7 +284,7 @@ final class GPUOpsTests: XCTestCase {
         func merged(useGPU: Bool) throws -> [[UInt16]] {
             let m = ImageAligner.medianMergeImage(base, withFilenames: filenames,
                                                   outlierThreshold: 1.2, includeAll: false,
-                                                  useGPU: useGPU)
+                                                  useGPU: useGPU)!
             return try samples(of: m)
         }
 

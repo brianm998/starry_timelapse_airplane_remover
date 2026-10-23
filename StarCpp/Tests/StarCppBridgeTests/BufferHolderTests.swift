@@ -101,7 +101,7 @@ final class BufferHolderTests: XCTestCase {
 
     func testConvertingToAMatKeepsTheGeometry() {
         let holder = BufferHolder(width: 12, height: 5, components: 3, bitsPerComponent: 8)
-        let mat = holder.toMat()
+        let mat = holder.toMat()!
         XCTAssertEqual(mat.cols, 12)
         XCTAssertEqual(mat.rows, 5)
         XCTAssertEqual(mat.channels, 3)
@@ -109,7 +109,7 @@ final class BufferHolderTests: XCTestCase {
     }
 
     func testConvertingASixteenBitBufferGivesASixteenBitMat() {
-        let mat = BufferHolder(width: 8, height: 8, components: 3, bitsPerComponent: 16).toMat()
+        let mat = BufferHolder(width: 8, height: 8, components: 3, bitsPerComponent: 16).toMat()!
         XCTAssertTrue(mat.is16Bits)
         XCTAssertEqual(mat.channels, 3)
     }
@@ -123,7 +123,7 @@ final class BufferHolderTests: XCTestCase {
             let holder = BufferHolder(width: 8, height: 4, components: 1, bitsPerComponent: 8)
             let bytes = try XCTUnwrap(holder.asUInt8)
             for i in 0..<Int(holder.length) { bytes[i] = 42 }
-            mat = holder.toMat()
+            mat = holder.toMat()!
         }
         let survivor = try XCTUnwrap(mat)
         XCTAssertEqual(survivor.cols, 8)
@@ -138,7 +138,7 @@ final class BufferHolderTests: XCTestCase {
         // row major: row 1, column 2 is byte 1*4 + 2
         bytes[1 * 4 + 2] = 200
 
-        let mat = holder.toMat()
+        let mat = holder.toMat()!
         XCTAssertEqual(grayPixel(mat, row: 1, col: 2), 200)
         XCTAssertEqual(grayPixel(mat, row: 0, col: 0), 0)
     }
@@ -149,7 +149,7 @@ final class BufferHolderTests: XCTestCase {
         let before = MatWrapper.totalInstances
         do {
             let holder = BufferHolder(width: 16, height: 16, components: 3, bitsPerComponent: 8)
-            _ = holder.toMat()
+            _ = holder.toMat()!
         }
         XCTAssertEqual(MatWrapper.totalInstances, before)
     }

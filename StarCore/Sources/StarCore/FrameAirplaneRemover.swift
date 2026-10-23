@@ -738,7 +738,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var horizonMaskImage: PixelatedImage? = nil
             let result = try await alignmentProcessor.loadOrCreateEarthAlignedImage()
             if let mat = result.warpedFrame {
-                earthAlignedImage = PixelatedImage(mat: mat.ensure16Bits())
+                earthAlignedImage = mat.ensure16Bits().flatMap { PixelatedImage(mat: $0) }
             }
             if let mat = result.warpedHorizon {
                 horizonMaskImage = PixelatedImage(mat: mat)
@@ -758,7 +758,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var skyAlignedImage: PixelatedImage? = nil
         if let starAlignedImage {
-            skyAlignedImage = PixelatedImage(mat: starAlignedImage.ensure16Bits())
+            skyAlignedImage = starAlignedImage.ensure16Bits().flatMap { PixelatedImage(mat: $0) }
         }
 
         guard let skyAlignedImage else {

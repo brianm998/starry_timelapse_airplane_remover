@@ -81,7 +81,10 @@ public struct ImageBuffer<Element: FixedWidthInteger>: @unchecked Sendable {
     }
 
     public var image: PixelatedImage? {
-        let mat = holder.toMat()
+        guard let mat = holder.toMat() else {
+            Log.w("couldn't convert the buffer to a Mat")
+            return nil
+        }
         if Element.self == UInt8.self,
            let buffer = self as? ImageBuffer<UInt8>
         {

@@ -193,7 +193,7 @@ final class MedianMergeTests: XCTestCase {
         try assertSourcesLoad(filenames)
         let merged = ImageAligner.medianMergeImage(base, withFilenames: filenames,
                                                    outlierThreshold: Self.defaultPixelThreshold,
-                                                   includeAll: false)
+                                                   includeAll: false)!
         XCTAssertEqual(Set(try samples(of: merged).flatMap { $0 }), [0])
     }
 
@@ -279,7 +279,7 @@ final class MedianMergeTests: XCTestCase {
             try assertSourcesLoad(filenames)
             let merged = ImageAligner.medianMergeImage(base, withFilenames: filenames,
                                                        outlierThreshold: Self.defaultPixelThreshold,
-                                                       includeAll: false)
+                                                       includeAll: false)!
             XCTAssertEqual(Set(try samples(of: merged).flatMap { $0 }), [10100],
                            "merging \(levels)")
         }
@@ -318,7 +318,7 @@ final class MedianMergeTests: XCTestCase {
             }
             let merged = ImageAligner.medianMergeImage(base, withFilenames: filenames,
                                                        outlierThreshold: Self.defaultPixelThreshold,
-                                                       includeAll: false)
+                                                       includeAll: false)!
             let rows = try samples(of: merged)
             XCTAssertEqual(rows.count, height)
             XCTAssertEqual(rows[0].count, width, "width \(width) came back \(rows[0].count) wide")
@@ -402,7 +402,7 @@ final class MedianMergeTests: XCTestCase {
               concurrencyBase(), withFilenames: filenames,
               outlierThreshold: Self.defaultPixelThreshold,
               includeAll: false,
-              loadConcurrency: concurrency)
+              loadConcurrency: concurrency)!
             XCTAssertEqual(Set(try samples(of: merged).flatMap { $0 }),
                            [Self.concurrencyExpected],
                            "merging with \(concurrency) sources in flight did not merge "
@@ -420,7 +420,7 @@ final class MedianMergeTests: XCTestCase {
         let complete = ImageAligner.medianMergeImage(
           concurrencyBase(), withFilenames: filenames,
           outlierThreshold: Self.defaultPixelThreshold, includeAll: false,
-          loadConcurrency: 4)
+          loadConcurrency: 4)!
         XCTAssertEqual(Set(try samples(of: complete).flatMap { $0 }), [Self.concurrencyExpected])
 
         for dropped in filenames.indices {
@@ -429,7 +429,7 @@ final class MedianMergeTests: XCTestCase {
             let merged = ImageAligner.medianMergeImage(
               concurrencyBase(), withFilenames: short,
               outlierThreshold: Self.defaultPixelThreshold, includeAll: false,
-              loadConcurrency: 4)
+              loadConcurrency: 4)!
             let values = Set(try samples(of: merged).flatMap { $0 })
             XCTAssertTrue(values.contains(Self.concurrencyPerturbed),
                           "dropping source \(dropped + 1) left every column at "
@@ -441,7 +441,7 @@ final class MedianMergeTests: XCTestCase {
             let merged = ImageAligner.medianMergeImage(
               concurrencyBase(), withFilenames: long,
               outlierThreshold: Self.defaultPixelThreshold, includeAll: false,
-              loadConcurrency: 4)
+              loadConcurrency: 4)!
             let values = Set(try samples(of: merged).flatMap { $0 })
             XCTAssertTrue(values.contains(Self.concurrencyPerturbed),
                           "repeating source \(repeated + 1) left every column at "

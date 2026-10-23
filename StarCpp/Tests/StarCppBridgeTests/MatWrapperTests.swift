@@ -188,7 +188,7 @@ final class MatWrapperTests: XCTestCase {
         let eight = makeEightBitGray(width: 4, height: 4)
         XCTAssertTrue(eight.is8Bits)
 
-        let sixteen = eight.ensure16Bits()
+        let sixteen = eight.ensure16Bits()!
         XCTAssertTrue(sixteen.is16Bits)
         XCTAssertFalse(sixteen.is8Bits)
         XCTAssertEqual(sixteen.cols, 4)
@@ -215,7 +215,7 @@ final class MatWrapperTests: XCTestCase {
 
     func testARoundTripThroughSixteenBitsAndBackKeepsTheGeometry() {
         let original = makeEightBitGray(width: 5, height: 6)
-        let back = original.ensure16Bits().ensure8Bits()
+        let back = original.ensure16Bits()!.ensure8Bits()
         XCTAssertTrue(back.is8Bits)
         XCTAssertEqual(back.cols, 5)
         XCTAssertEqual(back.rows, 6)
