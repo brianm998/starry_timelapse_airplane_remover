@@ -1303,20 +1303,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     internal func computeRemovalMask(
       selecting selection: RemovalMaskSelection = .remove
-    ) async throws -> (Bool, [Double], [UInt8]) {
+    ) async throws -> (Bool, RemovalAlphaLevels, [UInt8]) {
         self.set(state: .creatingRemovalMask)
 
         // remove every outlier in the list with pixels from the adjecent frames
         guard let outlierGroups = await outlierProcessor.getOutlierGroups() else {
             Log.e("cannot remove pixels without outlier groups")
-            return (false, [], [])
+            return (false, RemovalAlphaLevels(), [])
         }
         
         // the alpha level to apply to each pixel in the image
         // indexed by y*width+x
         // this is esentially a layer mask for the frame, 
         // with the adjusted neighbor frame underneath
-        var alphaLevels = [Double](repeating: 0, count: width*height)
         var alphaYAxis = [UInt8](repeating: 0, count: height)
 
         // first go through the outlier groups and determine what alpha
@@ -1334,6 +1333,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         let removeMaskIntRadius = Int(removeMask.radius)
 
+        // The frame's alpha, one 16-bit index per pixel into the mask's own values (see
+        // `RemovalAlphaLevels`), and the mask pre-converted to those indices.
+        var alphaLevels = RemovalAlphaLevels(mask: removeMask, pixelCount: width*height)
+        let maskLevels = removeMask.pixels.map { alphaLevels.level(of: $0) }
+
         // only remove when we have found at least one positive outlier group
         var shouldRemove = false
         
@@ -1349,23 +1353,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     let maskStartX = pixel.x - removeMaskIntRadius
                     let maskStartY = pixel.y - removeMaskIntRadius
 
-                    for maskX in 0..<removeMask.size {
-                        for maskY in 0..<removeMask.size {
+                    // rows outermost, so the inner loop walks a row of the frame in memory order
+                    for maskY in 0..<removeMask.size {
+                        let frameY = maskY + maskStartY
+                        if frameY < 0 || frameY >= height { continue }
+                        for maskX in 0..<removeMask.size {
                             let frameX = maskX + maskStartX
-                            let frameY = maskY + maskStartY
-
-                            if frameX >= 0,
-                               frameX < width,
-                               frameY >= 0,
-                               frameY < height
-                            {
+                            if frameX >= 0, frameX < width {
                                 let frameIndex = frameY*width+frameX
                                 let maskIndex = maskY*removeMask.size+maskX
-                                
-                                let frameAlpha = alphaLevels[frameIndex]
-                                let maskAlpha = removeMask.pixels[maskIndex]
-                                if maskAlpha > frameAlpha {
-                                    alphaLevels[frameIndex] = maskAlpha
+
+                                if alphaLevels.raise(frameIndex, to: maskLevels[maskIndex]) {
                                     alphaYAxis[frameY] = 0xFF
                                 }
                             }
@@ -1407,7 +1405,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if shouldRemove {
             return (shouldRemove, alphaLevels, alphaYAxis)
         } else {
-            return (shouldRemove, [], [])
+            return (shouldRemove, RemovalAlphaLevels(), [])
         }
     }
     
