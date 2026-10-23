@@ -18,6 +18,12 @@ actor HorizonAccumulator {
     // running per-pixel sum (CV_32S); nil until the first mask is added
     private var accum: MatWrapper?
 
+    // how many masks are actually in `accum`. The majority vote is against THIS, not against
+    // `frameCount`: a partial run (`star -L 9`) or a sequence with masks missing folds in fewer
+    // masks than there are frames, and voting against the frame count put the threshold above
+    // anything the folded masks could reach, so every pixel came out as ground.
+    private var foldedCount = 0
+
     /// True while `finalize` is running.
     ///
     /// `finalize` hands its two heavy passes to `NativeWork`, so it suspends
@@ -78,6 +84,7 @@ actor HorizonAccumulator {
         }
         if let updated {
             accum = updated
+            foldedCount += 1
         } else {
             // Keep the running total rather than replacing it with nothing, and let finalize
             // load this frame from disk instead.
@@ -99,9 +106,10 @@ actor HorizonAccumulator {
 
         // `loadFilename` is called here, before any further suspension: it is a plain
         // index-to-path mapping and is not Sendable.
-        let missingFilenames = (0..<frameCount)
+        let missing: [(frameIndex: Int, filename: String)] = (0..<frameCount)
             .filter { !accumulated[$0] }
-            .compactMap { loadFilename($0) }
+            .compactMap { index in loadFilename(index).map { (index, $0) } }
+        let missingFilenames = missing.map { $0.filename }
 
         isFinalizing = true
         defer { isFinalizing = false }
@@ -111,8 +119,22 @@ actor HorizonAccumulator {
             // Reads every missing mask off disk and folds them in — off the
             // cooperative pool, like the rest of the native work.
             let running = accum
-            accum = await NativeWork.run {
+            let outcome = await NativeWork.run {
                 ImageAligner.accumulateFromFiles(running, filenames: missingFilenames)
+            }
+            // A failed call keeps the previous total instead of replacing it with nothing.
+            if let total = outcome.total {
+                accum = total
+                for (position, wasLoaded) in outcome.loaded.enumerated() where wasLoaded {
+                    accumulated[missing[position].frameIndex] = true
+                    foldedCount += 1
+                }
+                let skipped = outcome.loaded.filter { !$0 }.count
+                if skipped > 0 {
+                    Log.w("HorizonAccumulator: \(skipped) horizon masks were not on disk and are not in the vote")
+                }
+            } else {
+                Log.w("HorizonAccumulator: loading the missing masks failed; voting without them")
             }
         }
 
@@ -120,7 +142,11 @@ actor HorizonAccumulator {
             Log.w("HorizonAccumulator: no masks accumulated, cannot finalize")
             return nil
         }
-        let total = frameCount
+        guard foldedCount > 0 else {
+            Log.w("HorizonAccumulator: no masks were folded in, cannot finalize")
+            return nil
+        }
+        let total = foldedCount
         guard let result = await NativeWork.run({
                   ImageAligner.finalizeHorizonAccumulation(accum, totalCount: total)
               })

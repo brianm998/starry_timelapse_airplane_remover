@@ -289,15 +289,23 @@ public enum ImageAligner {
 
     /// Load horizon masks from files and add them to an existing CV_32S accumulator.
     /// Pass nil for `accum` to start a fresh accumulation from the files only.
-    public static func accumulateFromFiles(_ accum: MatWrapper?, filenames: [String]) -> MatWrapper? {
-        guard !filenames.isEmpty else { return accum }
+    ///
+    /// Returns the new total and, per file, whether it was actually loaded and added (a missing
+    /// file is skipped, and must not count towards a vote).
+    public static func accumulateFromFiles(_ accum: MatWrapper?,
+                                           filenames: [String]) -> (total: MatWrapper?, loaded: [Bool])
+    {
+        guard !filenames.isEmpty else { return (accum, []) }
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
+        var loadedFlags = [UInt8](repeating: 0, count: filenames.count)
         let r = ptrs.withUnsafeMutableBufferPointer { buf in
-            ia_accumulate_from_files(accum?.ref, buf.baseAddress, Int32(buf.count))
+            loadedFlags.withUnsafeMutableBufferPointer { flags in
+                ia_accumulate_from_files(accum?.ref, buf.baseAddress, Int32(buf.count), flags.baseAddress)
+            }
         }
-        return r.map { MatWrapper(ref: $0) }
+        return (r.map { MatWrapper(ref: $0) }, loadedFlags.map { $0 != 0 })
     }
 
     /// Apply majority-vote threshold to a CV_32S accumulator and return a binary mask.

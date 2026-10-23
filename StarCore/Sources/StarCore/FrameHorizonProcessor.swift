@@ -453,7 +453,16 @@ final public actor FrameHorizonProcessor {
               atSizes: await outputSizes,
               overwrite: true
             )
-            if !config.tripodHeadWasMoving {
+            // A static sequence shares this one mask with every frame and persists it as the
+            // sequence's reference, so an all-ground or all-sky result (which is what a vote
+            // over too few masks, or a failed detection, produces) must not be spread: it would
+            // be reloaded as the truth by every later run. Better to keep it to this run.
+            let uniformMerged = !config.tripodHeadWasMoving && Self.maskIsUniform(cleanedToSave)
+            if uniformMerged {
+                Log.w("frame \(frameIndex) merged horizon is all one value (all ground or all sky); " +
+                      "not linking it to other frames and not saving it as the reference")
+            }
+            if !config.tripodHeadWasMoving, !uniformMerged {
                 // for static videos link all the merged horizons together here
                 for size in await outputSizes {
                     if let fromName = imageAccessor.nameForImage(
@@ -495,7 +504,7 @@ final public actor FrameHorizonProcessor {
                 // Also persist the median as the global reference horizon for the
                 // whole sequence so loadHorizonReferenceMask() picks it up on
                 // subsequent loads and re-runs can skip horizon detection entirely.
-                if let mergedPath = imageAccessor.nameForImage(
+                if !uniformMerged, let mergedPath = imageAccessor.nameForImage(
                      frameIndex: frameIndex,
                      ofType: .mergedHorizon,
                      atSize: .original
@@ -617,6 +626,22 @@ final public actor FrameHorizonProcessor {
     }
 
     // MARK: - Reference stats brightness refinement
+
+    /// True when every pixel of a horizon mask has the same value: all ground or all sky, so no
+    /// horizon at all. Such a mask is never a real result for a sequence that has one.
+    static func maskIsUniform(_ image: PixelatedImage) -> Bool {
+        switch image.imageData {
+        case .eightBit(let buffer):
+            guard let first = buffer.first else { return true }
+            return !buffer.contains { $0 != first }
+        case .sixteenBit(let buffer):
+            guard let first = buffer.first else { return true }
+            return !buffer.contains { $0 != first }
+        case .thirtyTwoBit(let buffer):
+            guard let first = buffer.first else { return true }
+            return !buffer.contains { $0 != first }
+        }
+    }
 
     /// The painted reference masks nearest this frame, preferring a bracketing pair.
     ///

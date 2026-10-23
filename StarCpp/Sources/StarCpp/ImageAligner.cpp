@@ -1340,15 +1340,17 @@ MatWrapperRef ia_accumulate_one_horizon_mask(MatWrapperRef accum_ref, MatWrapper
     return nullptr;
 }
 
-MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum_ref, const char **filenames, int count) {
+MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum_ref, const char **filenames, int count,
+                                       uint8_t *outLoaded) {
     try {
+        if (outLoaded) for (int i = 0; i < count; ++i) outLoaded[i] = 0;
         cv::Mat total;
         if (accum_ref && !accum_ref->mat.empty()) {
             total = accum_ref->mat.clone();
         }
         for (int i = 0; i < count; ++i) {
             MatWrapperRef ref = image_cache_load(filenames[i]);
-            if (!ref) continue;
+            if (!ref) continue;   // a mask that is not there is not in the vote
             cv::Mat mat = ref->mat.clone();
             mat_wrapper_release(ref);
 
@@ -1363,6 +1365,7 @@ MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum_ref, const char **fil
             } else {
                 total += frame32s;
             }
+            if (outLoaded) outLoaded[i] = 1;
         }
         return total.empty() ? wrap(cv::Mat()) : wrap(total);
     } KHT_CATCH_LOG("ia_accumulate_from_files")
