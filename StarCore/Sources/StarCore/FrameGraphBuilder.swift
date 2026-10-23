@@ -464,6 +464,13 @@ public final actor FrameGraphBuilder {
         }
     }
 
+    /// Bumped by every cancel. `build` is long and suspends many times before it enqueues
+    /// anything, so a cancel that lands in the middle finds nothing in the queue to cancel;
+    /// the build compares this against the value it saw on entry before it enqueues.
+    private var cancelGeneration = 0
+    /// Builds currently between entry and enqueue, so a cancel-and-wait can wait for them.
+    var buildsInProgress = 0
+
     public func build(
       frames: [FrameAirplaneRemover],
       startIndex: Int = 0,
@@ -471,6 +478,9 @@ public final actor FrameGraphBuilder {
       closure: @escaping ([String]) -> Void,
       errorClosure: @escaping @Sendable (String) -> Void
     ) async {
+        let generationOnEntry = cancelGeneration
+        buildsInProgress += 1
+        defer { buildsInProgress -= 1 }
         guard let configManager else {
             errorClosure("cannot build without config manager")
             closure(["cannot build without config manager"])
@@ -1197,6 +1207,14 @@ public final actor FrameGraphBuilder {
         outlierOps.values.forEach { completionOp.addDependency($0) }
         allOps.append(completionOp)
 
+        // A cancel arrived while this build was still constructing its graph. There was
+        // nothing queued for it to cancel, so enqueueing now would run the very work the
+        // caller asked to stop.
+        guard cancelGeneration == generationOnEntry else {
+            Log.i("FrameGraphBuilder: build cancelled before it enqueued; dropping its \(allOps.count) operations")
+            return
+        }
+
         await withCheckedContinuation { continuation in
             queue.addOperations(allOps, waitUntilFinished: false)
             continuation.resume()
@@ -1332,6 +1350,7 @@ public final actor FrameGraphBuilder {
     /// so callers that track processing state (e.g. `isProcessingFrames`)
     /// must reset that state themselves after calling this method.
     public func cancelAllOperations() {
+        cancelGeneration += 1
         queue.cancelAllOperations()
         previewQueue.cancelAllOperations()
         Log.i("FrameGraphBuilder: all operations cancelled")
@@ -1361,7 +1380,7 @@ public final actor FrameGraphBuilder {
     ) async -> Bool {
         cancelAllOperations()
         let deadline = ContinuousClock.now.advanced(by: timeout)
-        while queue.operationCount > 0 {
+        while queue.operationCount > 0 || buildsInProgress > 0 {
             guard ContinuousClock.now < deadline else {
                 Log.w("FrameGraphBuilder: \(queue.operationCount) operation(s) still " +
                       "running \(timeout) after being cancelled; going ahead anyway")
