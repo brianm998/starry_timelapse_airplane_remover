@@ -118,18 +118,18 @@ public enum TemporalHorizonDetector {
         let n = images.count
         let rowLength = w * channels
         var output = [UInt16](repeating: 0, count: rowLength * h)
-        let sources = buffers
+        let sources = UncheckedSendable(buffers)
         let rowStrides = strides
         withExtendedLifetime(images) {
             output.withUnsafeMutableBufferPointer { out in
-                let destination = out.baseAddress!
+                let destination = UncheckedSendable(out.baseAddress!)
                 DispatchQueue.concurrentPerform(iterations: h) { y in
                     var values = [UInt16](repeating: 0, count: n)
                     for i in 0..<rowLength {
                         for k in 0..<n {
-                            values[k] = sources[k][y * rowStrides[k] + i]
+                            values[k] = sources.value[k][y * rowStrides[k] + i]
                         }
-                        destination[y * rowLength + i] = middle(&values)
+                        destination.value[y * rowLength + i] = middle(&values)
                     }
                 }
             }
@@ -230,4 +230,11 @@ public enum TemporalHorizonDetector {
         }
         return values[k]
     }
+}
+
+/// Carries raw pointers into `concurrentPerform`; each iteration reads shared input and writes
+/// only its own row of the output, so there is no data race.
+private struct UncheckedSendable<T>: @unchecked Sendable {
+    let value: T
+    init(_ value: T) { self.value = value }
 }
