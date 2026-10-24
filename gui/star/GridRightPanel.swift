@@ -97,6 +97,8 @@ struct GridRightPanel: View {
             .font(.caption)
             .foregroundColor(.white)
 
+            HorizonLineKindToggles(font: .caption)
+
             Toggle(localized("ui.show_filmstrip"), isOn: $viewModel.showFilmstrip)
                 .toggleStyle(.switch)
                 .font(.caption)
@@ -182,7 +184,7 @@ struct GridRightPanel: View {
                 infoRow(localized("ui.mode"), value: localized("ui.selective"))
             }
 
-            if frame.horizonOverlay != nil {
+            if !frame.horizonOverlays.isEmpty {
                 infoRow(localized("ui.horizon"), value: frame.isPendingHorizonRefinement ? localized("ui.pending") : localized("ui.set"))
                     .foregroundColor(frame.isPendingHorizonRefinement ? .orange : .green)
             }

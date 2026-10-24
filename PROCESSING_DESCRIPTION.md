@@ -285,6 +285,12 @@ moving sequences it took a cloudy stretch from 1.9% of the frame height off to
 is skipped for sequences with painted references, and setting
 `useHorizonConsensus` to false in config.json turns it off.
 
+It runs as a processing step of its own, with its own row in the progress
+display, and draws each frame's line as a mask beside the detected and merged
+ones, so the "horizon consensus" view mode shows it. The horizon line overlay
+draws every kind of line a frame has (detected, merged, consensus and painted),
+each in its own colour and each switched on or off separately.
+
 ### 3.3. The Clean Reference: Sigma-Clipped Median Stack
 
 This is the single most important step. For each frame `F`, `star`

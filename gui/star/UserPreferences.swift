@@ -121,6 +121,14 @@ struct UserPreferences: Codable, Sendable {
         didSet { self.save() }
     }
 
+    // which kinds of horizon line (HorizonThumbnailOverlay.Kind raw values) the user has
+    // switched off; nil or empty draws every kind a frame has.  A list of the hidden ones
+    // rather than the shown ones, so a kind added later is drawn until it is switched off.
+    // Shared with the Kotlin client, which reads and writes the same file.
+    var hiddenHorizonLineKinds: [String]? {
+        didSet { self.save() }
+    }
+
     // whether to show the startup instructions overlay in the horizon painter
     var showHorizonPainterInstructions: Bool? {
         didSet { self.save() }
@@ -287,3 +295,17 @@ struct UserPreferences: Codable, Sendable {
     }
 }
 
+extension UserPreferences {
+    /// The horizon line kinds to draw, when the horizon lines are shown at all.
+    var visibleHorizonLineKinds: Set<HorizonThumbnailOverlay.Kind> {
+        let hidden = Set(hiddenHorizonLineKinds ?? [])
+        return Set(HorizonThumbnailOverlay.Kind.allCases.filter { !hidden.contains($0.rawValue) })
+    }
+
+    /// Switch one kind of horizon line on or off.
+    mutating func setHorizonLineKind(_ kind: HorizonThumbnailOverlay.Kind, visible: Bool) {
+        var hidden = Set(hiddenHorizonLineKinds ?? [])
+        if visible { hidden.remove(kind.rawValue) } else { hidden.insert(kind.rawValue) }
+        hiddenHorizonLineKinds = hidden.sorted()
+    }
+}

@@ -414,6 +414,64 @@ final class HorizonConsensusTests: XCTestCase {
                        "only the targets are written")
         XCTAssertTrue(FileManager.default.fileExists(
                         atPath: HorizonConsensusStore.calibrationPath(config)))
+
+        // each line is also drawn as the frame's horizon consensus image, for its view mode
+        XCTAssertEqual(op.type, .horizonConsensus, "a step of its own")
+        for frame in targets {
+            let record = try XCTUnwrap(HorizonConsensusStore.read(frameIndex: frame,
+                                                                  width: pan.width,
+                                                                  height: pan.height,
+                                                                  config: config))
+            let loaded = try await h.frames[frame].imageAccessor.load(
+              frameIndex: frame, type: .consensusHorizon, atSize: .original)
+            let image = try XCTUnwrap(loaded)
+            let drawn = CombinedHorizonDetector.extractHorizonY(from: image)
+            let rows = HorizonConsensus.columnRows(record.line, width: pan.width,
+                                                   height: pan.height)
+            for x in stride(from: 0, to: pan.width, by: 40) {
+                XCTAssertEqual(drawn[x] ?? pan.height, rows[x], "frame \(frame) column \(x)")
+            }
+        }
+        XCTAssertFalse(h.frames[9].imageAccessor.imageExists(frameIndex: 9, ofType: .consensusHorizon,
+                                                            atSize: .original))
+    }
+
+    /// A line an earlier run wrote without its image — every run before the view mode — is drawn
+    /// by an op with nothing to build; and discarding a frame's consensus takes both.
+    func testALineWithoutItsImageIsDrawnAndDiscardedWithIt() async throws {
+        let h = try await FrameHarness.make(frameCount: 2, width: 128, height: 96,
+                                            horizonRow: 60, named: "consensus-draw")
+        harness = h
+        await h.updateConfig {
+            $0.tripodHeadWasMoving = true
+            $0.allowEarthAlignment = true
+            $0.useHorizonConsensus = true
+        }
+        // hoisted so the closure captures the manager rather than the harness
+        let manager = h.configManager
+        let config = await MainActor.run { manager.config() }
+        try HorizonConsensusStore.write(line: [Float](repeating: 40, count: 32), frameIndex: 0,
+                                        width: 128, height: 96, config: config)
+        let accessor = h.frames[0].imageAccessor
+        XCTAssertFalse(accessor.imageExists(frameIndex: 0, ofType: .consensusHorizon, atSize: .original))
+
+        let op = HorizonConsensusOp(frames: h.frames, targets: [], imageTargets: [0],
+                                    configManager: h.configManager, rawImageBytes: 0) { error in
+            XCTFail("the op reported \(error)")
+        }
+        try await op.run()
+
+        let loaded = try await accessor.load(frameIndex: 0, type: .consensusHorizon,
+                                             atSize: .original)
+        let image = try XCTUnwrap(loaded)
+        let rows = CombinedHorizonDetector.extractHorizonY(from: image)
+        XCTAssertEqual(Set(rows.compactMap { $0 }), [40])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: HorizonConsensusStore.calibrationPath(config)),
+                       "nothing was built, so no calibration was written")
+
+        await h.frames[0].horizonProcessor.discardHorizonConsensus()
+        XCTAssertFalse(HorizonConsensusStore.exists(frameIndex: 0, config: config))
+        XCTAssertFalse(accessor.imageExists(frameIndex: 0, ofType: .consensusHorizon, atSize: .original))
     }
 }
 

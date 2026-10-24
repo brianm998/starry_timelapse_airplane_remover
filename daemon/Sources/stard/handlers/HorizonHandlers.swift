@@ -104,13 +104,21 @@ enum HorizonHandlers {
             let w = req.width > 0 ? Int(req.width) : frame.width
             let h = req.height > 0 ? Int(req.height) : frame.height
             var resp = Star_V1_GetHorizonOverlayResponse()
-            if let overlay = try await frame.loadHorizonThumbnailOverlay(thumbnailWidth: w, thumbnailHeight: h) {
+            let overlays = await frame.loadHorizonThumbnailOverlays(thumbnailWidth: w, thumbnailHeight: h)
+            if let overlay = overlays.compositeLine {
                 resp.exists = true
                 resp.kind = Mapping.horizonOverlayKind(overlay.kind)
                 resp.yPerColumn = overlay.yPerColumn.map { Int32($0) }
                 resp.height = Int32(overlay.height)
             } else {
                 resp.exists = false
+            }
+            resp.lines = overlays.drawn(Set(HorizonThumbnailOverlay.Kind.allCases)).map { overlay in
+                var line = Star_V1_HorizonOverlayLine()
+                line.kind = Mapping.horizonOverlayKind(overlay.kind)
+                line.yPerColumn = overlay.yPerColumn.map { Int32($0) }
+                line.height = Int32(overlay.height)
+                return line
             }
             resp.refinementPending = await session.isRefinementPending(Int(req.frameIndex))
             try await transport.respond(id: id, payload: resp.serializedData())

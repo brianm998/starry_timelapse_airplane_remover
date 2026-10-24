@@ -114,6 +114,9 @@ public enum SequenceProgressSurvey {
         count(.mergedHorizon)  { $0.mergedHorizonMaskExistsOnDisk() }
         count(.starKeypoints)  { $0.keypointsExistOnDisk(ofType: .starAligned, config: config) }
         count(.earthKeypoints) { $0.keypointsExistOnDisk(ofType: .earthAligned, config: config) }
+        count(.horizonConsensus) {
+            HorizonConsensusStore.exists(frameIndex: $0.frameIndex, config: config)
+        }
         count(.outliers)       { $0.outliersExistOnDisk(config: config) }
         count(.merge)          { $0.outputFileExistsOnDisk() }
 

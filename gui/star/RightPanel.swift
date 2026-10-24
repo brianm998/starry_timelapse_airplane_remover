@@ -171,6 +171,8 @@ struct RightPanel: View {
                             ))
                               .foregroundColor(.white)
 
+                            HorizonLineKindToggles()
+
                             /*
                              XXX for some unknown reason, these grab focus and refuse
                              XXX to let it go :(

@@ -329,7 +329,7 @@ public final class ImageSequenceViewModel {
     // Scale factor for grid-mode cells relative to the preview image size
     var gridThumbnailScale: CGFloat = 0.3
 
-    // The scale at which gridHorizonOverlay was last generated on each frame.
+    // The scale at which gridHorizonOverlays were last generated on each frame.
     // Zero means it has never been generated.
     var gridHorizonRenderedScale: CGFloat = 0
 
@@ -339,7 +339,7 @@ public final class ImageSequenceViewModel {
         gridHorizonRenderedScale = scale
         let w = max(1, Int(CGFloat(config.config().previewWidth)  * scale))
         let h = max(1, Int(CGFloat(config.config().previewHeight) * scale))
-        for frameView in frames where frameView.horizonOverlay != nil {
+        for frameView in frames where !frameView.horizonOverlays.isEmpty {
             frameView.refreshGridHorizonOverlay(width: w, height: h)
         }
     }

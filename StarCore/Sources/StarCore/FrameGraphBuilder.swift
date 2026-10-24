@@ -12,6 +12,7 @@ public enum OperationType: String, CaseIterable, Sendable {
     case starHomography = "star align"
     case earthHomography = "earth align"
     case alignmentValidation
+    case horizonConsensus
     case outliers
     case merge
 }
@@ -51,6 +52,8 @@ extension OperationType {
         case .starHomography:      return 0
         case .earthHomography:     return 0
         case .alignmentValidation: return 0
+        // Fallback only — `HorizonConsensusOp` passes its own: the masks it decodes at once.
+        case .horizonConsensus:    return 2
         // Fallbacks only — FrameGraphBuilder passes config.effective*MemoryMultiplier
         // explicitly, with the frame's actual neighbour counts.  These are the config
         // defaults (9 and 6) plus the largest residentBuildExtraMultiplier those defaults
@@ -452,17 +455,16 @@ public final actor FrameGraphBuilder {
 
         if stale.contains(.horizonConsensus) {
             var deleted = 0
-            for frameIndex in range.output
-            where HorizonConsensusStore.exists(frameIndex: frameIndex, config: config) {
-                HorizonConsensusStore.delete(frameIndex: frameIndex, config: config)
-                deleted += 1
-            }
-            HorizonConsensusStore.deleteCalibration(config: config)
-            // In a long-lived session a frame may still hold the final mask the old line
-            // gave it.
             for frame in frames where range.output.contains(frame.frameIndex) {
+                if HorizonConsensusStore.exists(frameIndex: frame.frameIndex, config: config) {
+                    deleted += 1
+                }
+                // the line and its image together, and in a long-lived session the final
+                // mask the old line gave the frame
+                await frame.horizonProcessor.discardHorizonConsensus()
                 await frame.horizonProcessor.releaseCachedFinalHorizonMask()
             }
+            HorizonConsensusStore.deleteCalibration(config: config)
             Log.i("deleted \(deleted) stale horizon consensus line(s)")
         }
 
@@ -1187,20 +1189,40 @@ public final actor FrameGraphBuilder {
         // of them and no line yet: a frame whose output is written has nothing left to
         // composite.
         var consensusOp: HorizonConsensusOp? = nil
-        if HorizonConsensus.applies(to: config),
-           !HorizonConsensusStore.hasPaintedReferences(config: config)
-        {
+        let paintedReferences = HorizonConsensus.applies(to: config)
+          && HorizonConsensusStore.hasPaintedReferences(config: config)
+        if paintedReferences {
+            // Said out loud: otherwise a sequence the consensus would run on, and does not,
+            // looks exactly like a build without it.
+            Log.i("horizon consensus skipped: this sequence has painted horizon references, " +
+                  "which decide its horizons instead")
+        }
+        if HorizonConsensus.applies(to: config), !paintedReferences {
             var targets: [Int] = []
-            for frame in outputFrames
-            where !HorizonConsensusStore.exists(frameIndex: frame.frameIndex, config: config) {
-                if await frame.processingState() != .complete {
+            // A line an earlier run wrote without its image — any run before the view mode
+            // existed — is drawn, whatever state its frame is in: drawing it costs nothing like
+            // building it, and it is what the view mode shows.
+            var imageTargets: [Int] = []
+            for frame in outputFrames {
+                if HorizonConsensusStore.exists(frameIndex: frame.frameIndex, config: config) {
+                    if !frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                        ofType: .consensusHorizon,
+                                                        atSize: .original) {
+                        imageTargets.append(frame.frameIndex)
+                    }
+                } else if await frame.processingState() != .complete {
                     targets.append(frame.frameIndex)
                 }
             }
-            if !targets.isEmpty {
+            if targets.isEmpty && imageTargets.isEmpty {
+                // The whole of this step is one op, and what it makes is already written.
+                alreadyDone[.horizonConsensus] = 1
+            }
+            if !targets.isEmpty || !imageTargets.isEmpty {
                 let op = HorizonConsensusOp(
                   frames: frames,
                   targets: targets,
+                  imageTargets: imageTargets,
                   configManager: configManager,
                   rawImageBytes: rawImageBytes
                 ) { errorString in
@@ -1213,7 +1235,8 @@ public final actor FrameGraphBuilder {
                 horizonOps.values.forEach { op.addDependency($0) }
                 allOps.append(op)
                 consensusOp = op
-                Log.i("horizon consensus will be built for \(targets.count) frame(s)")
+                Log.i("horizon consensus will be built for \(targets.count) frame(s) and drawn " +
+                      "for \(imageTargets.count) more")
             }
         }
 

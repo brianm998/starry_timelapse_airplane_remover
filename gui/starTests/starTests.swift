@@ -1491,14 +1491,15 @@ final class ProcessingStepsTests: XCTestCase {
 
     // MARK: - which steps are listed
 
-    /// Everything on: a moving camera with earth alignment, horizon detection and a clean
-    /// method that reviews outliers.
+    /// Everything on: a moving camera with earth alignment, horizon detection, the horizon
+    /// consensus and a clean method that reviews outliers.
     private func allSteps() -> [OperationType] {
         ProcessingSteps.types(horizonDetectionEnabled: true,
                               hasStaticReferenceHorizon: false,
                               cameraWasMoving: true,
                               allowEarthAlignment: true,
-                              usesOutliers: true)
+                              usesOutliers: true,
+                              usesHorizonConsensus: true)
     }
 
     func testTheStepsAreInTheOrderTheModalStacksThem() {
@@ -1506,7 +1507,31 @@ final class ProcessingStepsTests: XCTestCase {
                        [.horizon, .mergedHorizon,
                         .starKeypoints, .earthKeypoints,
                         .starHomography, .earthHomography,
+                        .horizonConsensus,
                         .outliers, .merge])
+    }
+
+    /// The horizon consensus is carried along the aligned ground, so it has a row only where
+    /// the ground is aligned — and only with its own setting on.
+    func testTheHorizonConsensusIsListedOnlyWhereTheGroundIsAligned() {
+        func types(moving: Bool, earth: Bool, consensus: Bool) -> [OperationType] {
+            ProcessingSteps.types(horizonDetectionEnabled: true,
+                                  hasStaticReferenceHorizon: false,
+                                  cameraWasMoving: moving,
+                                  allowEarthAlignment: earth,
+                                  usesOutliers: true,
+                                  usesHorizonConsensus: consensus)
+        }
+        XCTAssertTrue(types(moving: true, earth: true, consensus: true).contains(.horizonConsensus))
+        XCTAssertFalse(types(moving: true, earth: true, consensus: false).contains(.horizonConsensus))
+        XCTAssertFalse(types(moving: false, earth: true, consensus: true).contains(.horizonConsensus))
+        XCTAssertFalse(types(moving: true, earth: false, consensus: true).contains(.horizonConsensus))
+
+        var config = Config()
+        config.tripodHeadWasMoving = true
+        config.allowEarthAlignment = true
+        XCTAssertTrue(ProcessingSteps.types(for: config).contains(.horizonConsensus),
+                      "on by default for a moving camera")
     }
 
     func testEarthStepsAreNotListedWhenEarthAlignmentIsOff() {

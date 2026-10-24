@@ -68,13 +68,15 @@ public enum ProcessingSteps {
     ///
     /// Deliberately not `OperationType.allCases`: `preview` is thumbnail work that has
     /// nothing to do with a processing run, and `alignmentValidation` is an internal stage
-    /// this display does not break out.
+    /// this display does not break out.  `horizonConsensus` is one op for the whole
+    /// sequence, like a static tripod's horizon merge, and has a row of its own.
     public static func types(
       horizonDetectionEnabled: Bool,
       hasStaticReferenceHorizon: Bool,
       cameraWasMoving: Bool,
       allowEarthAlignment: Bool,
-      usesOutliers: Bool
+      usesOutliers: Bool,
+      usesHorizonConsensus: Bool = false
     ) -> [OperationType] {
         let paintedStaticReference = hasStaticReferenceHorizon && !cameraWasMoving
         let detectsHorizons = horizonDetectionEnabled && !paintedStaticReference
@@ -89,6 +91,10 @@ public enum ProcessingSteps {
         if processesEarth { types.append(.earthKeypoints) }
         types.append(.starHomography)
         if processesEarth { types.append(.earthHomography) }
+        // Its own row, after the alignment it is carried along and before the outlier
+        // subtraction and the merge that composite with it.  A sequence with painted
+        // references skips it; the built graph then has no op for it and the row is dropped.
+        if processesEarth && usesHorizonConsensus { types.append(.horizonConsensus) }
         if usesOutliers { types.append(.outliers) }
         types.append(.merge)
         return types
@@ -100,7 +106,8 @@ public enum ProcessingSteps {
               hasStaticReferenceHorizon: config.hasStaticReferenceHorizon,
               cameraWasMoving: config.tripodHeadWasMoving,
               allowEarthAlignment: config.allowEarthAlignment,
-              usesOutliers: config.cleanMethod.usesOutliers)
+              usesOutliers: config.cleanMethod.usesOutliers,
+              usesHorizonConsensus: HorizonConsensus.applies(to: config))
     }
 
     /// The rows worth drawing, out of the steps this configuration can take.
@@ -176,6 +183,7 @@ extension OperationType {
         case .earthKeypoints:  localized("ui.earth_keypoints")
         case .starHomography:  localized("ui.star_alignment")
         case .earthHomography: localized("ui.earth_alignment")
+        case .horizonConsensus: localized("ui.horizon_consensus")
         case .outliers:        localized("ui.outliers")
         case .merge:           localized("ui.merged")
         default:               rawValue
@@ -199,6 +207,7 @@ extension OperationType {
         case .earthKeypoints:  localized("ui.step_help.earth_keypoints")
         case .starHomography:  localized("ui.step_help.star_alignment")
         case .earthHomography: localized("ui.step_help.earth_alignment")
+        case .horizonConsensus: localized("ui.step_help.horizon_consensus")
         case .outliers:        localized("ui.step_help.outliers")
         case .merge:           localized("ui.step_help.merged")
         default:               ""

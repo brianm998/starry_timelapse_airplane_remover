@@ -146,6 +146,7 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
             Spacer(Modifier.width(6.dp))
             Text(localized("ui.show_horizon_line"), color = StarColors.white, fontSize = 11.sp)
         }
+        HorizonLineKindToggles(vm)
         val refinementPending by vm.refinementPending.collectAsState()
         val busy by vm.isProcessing.collectAsState()
         BulkButton(

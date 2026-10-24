@@ -2444,6 +2444,15 @@ public struct Config: Codable, Sendable {
             case .thumbnail:
                 return nil
             }
+        case .consensusHorizon:
+            switch size {
+            case .original:
+                return "\(self.tempOutputPath)/consensusHorizon"
+            case .preview:
+                return "\(self.tempOutputPath)/consensusHorizon-previews"
+            case .thumbnail:
+                return nil
+            }
         case .userHorizon:
             switch size {
             case .original:
@@ -2549,6 +2558,7 @@ public struct Config: Codable, Sendable {
         if let dir = self.dirForImage(ofType: .horizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .mergedHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .userHorizon) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .consensusHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .subtraction) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .validation) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .autoProcessed) { ret.append(dir) }
@@ -2564,6 +2574,7 @@ public struct Config: Codable, Sendable {
             if let dir = self.dirForImage(ofType: .horizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .mergedHorizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .userHorizon, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .consensusHorizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .subtraction, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .validation, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .blobs, atSize: .preview) { ret.append(dir) }

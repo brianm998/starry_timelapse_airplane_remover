@@ -268,6 +268,9 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   case viewAutoProcessed // = 13
   case viewAutoSelectiveProcessed // = 14
   case viewSelectiveProcessed // = 15
+
+  /// a moving sequence's horizon consensus, drawn as a mask
+  case viewConsensusHorizon // = 16
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -292,6 +295,7 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 13: self = .viewAutoProcessed
     case 14: self = .viewAutoSelectiveProcessed
     case 15: self = .viewSelectiveProcessed
+    case 16: self = .viewConsensusHorizon
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -314,6 +318,7 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .viewAutoProcessed: return 13
     case .viewAutoSelectiveProcessed: return 14
     case .viewSelectiveProcessed: return 15
+    case .viewConsensusHorizon: return 16
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -336,6 +341,7 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     .viewAutoProcessed,
     .viewAutoSelectiveProcessed,
     .viewSelectiveProcessed,
+    .viewConsensusHorizon,
   ]
 
 }
@@ -809,7 +815,8 @@ public enum Star_V1_AlignmentState: SwiftProtobuf.Enum, Swift.CaseIterable {
 }
 
 /// Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green,
-/// consensus=purple).
+/// consensus=purple).  A frame has up to one line of each kind, all in `lines`; the single line in `kind`/`y_per_column` is the one
+/// the final composite reads, so a client that draws one line draws that.
 /// `isPendingHorizonRefinement` is NOT engine-derived — the client tracks it from edited reference frames.
 public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
@@ -3250,7 +3257,7 @@ public struct Star_V1_StepCount: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// OperationType's case: horizon, mergedHorizon, starKeypoints, earthKeypoints, starHomography, earthHomography, outliers, merge
+  /// OperationType's case: horizon, mergedHorizon, starKeypoints, earthKeypoints, starHomography, earthHomography, horizonConsensus, outliers, merge
   public var type: String = String()
 
   public var queued: Int32 = 0
@@ -4119,6 +4126,27 @@ public struct Star_V1_GetHorizonOverlayResponse: Sendable {
   /// see FrameInfo.refinement_pending
   public var refinementPending: Bool = false
 
+  /// every horizon line the frame has, one per kind, in drawing order (the composite's on top)
+  public var lines: [Star_V1_HorizonOverlayLine] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_HorizonOverlayLine: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var kind: Star_V1_HorizonOverlayKind = .unspecified
+
+  /// draw-space Y, length == width
+  public var yPerColumn: [Int32] = []
+
+  /// height the line was computed at (scaleY divisor)
+  public var height: Int32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -4251,7 +4279,7 @@ extension Star_V1_PreviewSize: SwiftProtobuf._ProtoNameProviding {
 }
 
 extension Star_V1_FrameViewMode: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0\u{1}VIEW_HORIZON\0\u{1}VIEW_MERGED_HORIZON\0\u{1}VIEW_USER_HORIZON\0\u{1}VIEW_STAR_ALIGNED\0\u{1}VIEW_FAILED_STAR_ALIGNED\0\u{1}VIEW_EARTH_ALIGNED\0\u{1}VIEW_FAILED_EARTH_ALIGNED\0\u{1}VIEW_BLOBS\0\u{1}VIEW_REMOVE_MASK\0\u{1}VIEW_AUTO_PROCESSED\0\u{1}VIEW_AUTO_SELECTIVE_PROCESSED\0\u{1}VIEW_SELECTIVE_PROCESSED\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0\u{1}VIEW_HORIZON\0\u{1}VIEW_MERGED_HORIZON\0\u{1}VIEW_USER_HORIZON\0\u{1}VIEW_STAR_ALIGNED\0\u{1}VIEW_FAILED_STAR_ALIGNED\0\u{1}VIEW_EARTH_ALIGNED\0\u{1}VIEW_FAILED_EARTH_ALIGNED\0\u{1}VIEW_BLOBS\0\u{1}VIEW_REMOVE_MASK\0\u{1}VIEW_AUTO_PROCESSED\0\u{1}VIEW_AUTO_SELECTIVE_PROCESSED\0\u{1}VIEW_SELECTIVE_PROCESSED\0\u{1}VIEW_CONSENSUS_HORIZON\0")
 }
 
 extension Star_V1_NeighborKind: SwiftProtobuf._ProtoNameProviding {
@@ -10045,7 +10073,7 @@ extension Star_V1_GetHorizonOverlayRequest: SwiftProtobuf.Message, SwiftProtobuf
 
 extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetHorizonOverlayResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}exists\0\u{1}kind\0\u{3}y_per_column\0\u{1}height\0\u{3}refinement_pending\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}exists\0\u{1}kind\0\u{3}y_per_column\0\u{1}height\0\u{3}refinement_pending\0\u{1}lines\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -10058,6 +10086,7 @@ extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobu
       case 3: try { try decoder.decodeRepeatedInt32Field(value: &self.yPerColumn) }()
       case 4: try { try decoder.decodeSingularInt32Field(value: &self.height) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.refinementPending) }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.lines) }()
       default: break
       }
     }
@@ -10079,6 +10108,9 @@ extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobu
     if self.refinementPending != false {
       try visitor.visitSingularBoolField(value: self.refinementPending, fieldNumber: 5)
     }
+    if !self.lines.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.lines, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -10088,6 +10120,47 @@ extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobu
     if lhs.yPerColumn != rhs.yPerColumn {return false}
     if lhs.height != rhs.height {return false}
     if lhs.refinementPending != rhs.refinementPending {return false}
+    if lhs.lines != rhs.lines {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_HorizonOverlayLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".HorizonOverlayLine"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{3}y_per_column\0\u{1}height\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 2: try { try decoder.decodeRepeatedInt32Field(value: &self.yPerColumn) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.height) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.kind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.yPerColumn.isEmpty {
+      try visitor.visitPackedInt32Field(value: self.yPerColumn, fieldNumber: 2)
+    }
+    if self.height != 0 {
+      try visitor.visitSingularInt32Field(value: self.height, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_HorizonOverlayLine, rhs: Star_V1_HorizonOverlayLine) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.yPerColumn != rhs.yPerColumn {return false}
+    if lhs.height != rhs.height {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -217,49 +217,62 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
         XCTAssertNil(result[8], "columns past the references' width stay undefined")
     }
 
-    // MARK: - the filmstrip overlay
+    // MARK: - the horizon overlays
 
-    /// The overlay's `kind` is what colours each filmstrip thumbnail, so the user can see at a glance
-    /// which frames they painted and which inherited.  Four sources, in priority order.
-    func testTheOverlayKindReportsWhereTheHorizonCameFrom() async throws {
+    /// Every kind of horizon a frame has comes back, each the line of its own view mode, so the user
+    /// can switch each on and off; `compositeLine` is the one the final composite reads, in the
+    /// priority it reads them: the frame's own painting, then the merged mask, then the raw one.
+    func testEveryHorizonKindAFrameHasIsReturned() async throws {
         let h = try await FrameHarness.make(frameCount: 1, width: 64, height: 64, named: "overlay")
         harness = h
         let horizon = await processor(h)
 
-        // nothing at all
-        let none = try await horizon.loadHorizonThumbnailOverlay(thumbnailWidth: 32,
-                                                                thumbnailHeight: 32)
-        XCTAssertNil(none, "no horizon anywhere means no overlay")
+        let none = await horizon.loadHorizonThumbnailOverlays(thumbnailWidth: 32, thumbnailHeight: 32)
+        XCTAssertTrue(none.isEmpty, "no horizon anywhere means no lines")
 
-        // a raw horizon only: "initial"
         try h.plantImage(FrameHarness.flatMask(width: 64, height: 64, at: 40), ofType: .horizon)
-        var overlayOptional = try await horizon.loadHorizonThumbnailOverlay(thumbnailWidth: 32,
-                                                                            thumbnailHeight: 32)
-        var overlay = try XCTUnwrap(overlayOptional)
-        XCTAssertEqual(overlay.kind, .initial)
+        var overlays = await horizon.loadHorizonThumbnailOverlays(thumbnailWidth: 32, thumbnailHeight: 32)
+        XCTAssertEqual(overlays.kinds, [.initial])
+        XCTAssertEqual(overlays.compositeLine?.kind, .initial)
 
-        // a merged horizon outranks it
         try h.plantImage(FrameHarness.flatMask(width: 64, height: 64, at: 36),
                          ofType: .mergedHorizon)
-        overlayOptional = try await horizon.loadHorizonThumbnailOverlay(thumbnailWidth: 32,
-                                                                       thumbnailHeight: 32)
-        overlay = try XCTUnwrap(overlayOptional)
-        XCTAssertEqual(overlay.kind, .merged)
+        overlays = await horizon.loadHorizonThumbnailOverlays(thumbnailWidth: 32, thumbnailHeight: 32)
+        XCTAssertEqual(overlays.kinds, [.initial, .merged], "the raw line stays, beside the merged one")
+        XCTAssertEqual(overlays.compositeLine?.kind, .merged)
+        let initial = try XCTUnwrap(overlays.first { $0.kind == .initial })
+        let merged = try XCTUnwrap(overlays.first { $0.kind == .merged })
+        XCTAssertEqual(initial.yPerColumn.first ?? -1, 20, accuracy: 1, "row 40 of 64 is 20 of 32")
+        XCTAssertEqual(merged.yPerColumn.first ?? -1, 18, accuracy: 1, "row 36 of 64 is 18 of 32")
 
-        // this frame's own painted reference outranks everything, and is the one shown differently
         try h.plantReferenceMask(FrameHarness.flatMask(width: 64, height: 64, at: 20),
                                  perFrame: true)
-        overlayOptional = try await horizon.loadHorizonThumbnailOverlay(thumbnailWidth: 32,
-                                                                        thumbnailHeight: 32)
-        overlay = try XCTUnwrap(overlayOptional)
-        XCTAssertEqual(overlay.kind, .reference,
+        overlays = await horizon.loadHorizonThumbnailOverlays(thumbnailWidth: 32, thumbnailHeight: 32)
+        XCTAssertEqual(overlays.kinds, [.initial, .merged, .reference])
+        XCTAssertEqual(overlays.compositeLine?.kind, .reference,
                        "the frame the user actually painted must be distinguishable")
     }
 
-    /// On a moving sequence the composite uses the horizon consensus where there is one, so that
-    /// is the line the overlay shows, in a colour of its own — and it still yields to the user's
-    /// painting, which switches the consensus off for the whole sequence.
-    func testTheOverlayShowsTheHorizonConsensusTheCompositeUses() async throws {
+    /// Lines are drawn lowest priority first, so the one the composite reads is on top, and only the
+    /// kinds switched on are drawn at all.
+    func testOnlyTheChosenKindsAreDrawnWithTheCompositeLineOnTop() {
+        func line(_ kind: HorizonThumbnailOverlay.Kind) -> HorizonThumbnailOverlay {
+            HorizonThumbnailOverlay(kind: kind, yPerColumn: [1], height: 2)
+        }
+        let all = [line(.reference), line(.initial), line(.consensus), line(.merged)]
+        XCTAssertEqual(all.drawn(Set(HorizonThumbnailOverlay.Kind.allCases)).map(\.kind),
+                       [.initial, .merged, .consensus, .reference])
+        XCTAssertEqual(all.drawn([.merged, .consensus]).map(\.kind), [.merged, .consensus])
+        XCTAssertTrue(all.drawn([]).isEmpty)
+        XCTAssertEqual(HorizonThumbnailOverlay.Kind.allCases.map(\.viewMode),
+                       [.horizon, .mergedHorizon, .consensusHorizon, .userHorizon],
+                       "each kind is the line of one view mode")
+    }
+
+    /// On a moving sequence the consensus line comes back beside the merged one, and the composite
+    /// reads it — until the setting is off, or the user paints a frame, which switches the consensus
+    /// off for the whole sequence.
+    func testTheConsensusLineComesBackBesideTheMergedOne() async throws {
         let h = try await FrameHarness.make(frameCount: 2, width: 64, height: 64,
                                             named: "overlayconsensus")
         harness = h
@@ -276,47 +289,45 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
         try HorizonConsensusStore.write(line: [Float](repeating: 24, count: 16), frameIndex: 0,
                                         width: 64, height: 64, config: config)
 
-        var overlayOptional = try await processor(h).loadHorizonThumbnailOverlay(thumbnailWidth: 32,
-                                                                                 thumbnailHeight: 32)
-        var overlay = try XCTUnwrap(overlayOptional)
-        XCTAssertEqual(overlay.kind, .consensus, "the consensus outranks the merged mask")
-        for (x, y) in overlay.yPerColumn.enumerated() {
+        var overlays = await processor(h).loadHorizonThumbnailOverlays(thumbnailWidth: 32,
+                                                                      thumbnailHeight: 32)
+        XCTAssertEqual(overlays.kinds, [.merged, .consensus])
+        XCTAssertEqual(overlays.compositeLine?.kind, .consensus, "the consensus outranks the merged mask")
+        let consensus = try XCTUnwrap(overlays.first { $0.kind == .consensus })
+        for (x, y) in consensus.yPerColumn.enumerated() {
             XCTAssertEqual(y, 12, accuracy: 1, "column \(x): row 24 of 64 is 12 of 32")
         }
 
         await h.updateConfig { $0.useHorizonConsensus = false }
-        overlayOptional = try await processor(h).loadHorizonThumbnailOverlay(thumbnailWidth: 32,
-                                                                             thumbnailHeight: 32)
-        overlay = try XCTUnwrap(overlayOptional)
-        XCTAssertEqual(overlay.kind, .merged, "switched off, the composite uses the merged mask")
+        overlays = await processor(h).loadHorizonThumbnailOverlays(thumbnailWidth: 32,
+                                                                  thumbnailHeight: 32)
+        XCTAssertEqual(overlays.kinds, [.merged], "switched off, the composite uses the merged mask")
 
         await h.updateConfig { $0.useHorizonConsensus = true }
         try h.plantReferenceMask(FrameHarness.flatMask(width: 64, height: 64, at: 20),
                                  perFrame: true, frameIndex: 1)
-        overlayOptional = try await processor(h).loadHorizonThumbnailOverlay(thumbnailWidth: 32,
-                                                                             thumbnailHeight: 32)
-        overlay = try XCTUnwrap(overlayOptional)
-        XCTAssertEqual(overlay.kind, .merged,
+        overlays = await processor(h).loadHorizonThumbnailOverlays(thumbnailWidth: 32,
+                                                                  thumbnailHeight: 32)
+        XCTAssertEqual(overlays.kinds, [.merged],
                        "with a frame painted, the user's horizons decide the whole sequence")
-        overlayOptional = try await processor(h, at: 1).loadHorizonThumbnailOverlay(thumbnailWidth: 32,
-                                                                                    thumbnailHeight: 32)
-        overlay = try XCTUnwrap(overlayOptional)
-        XCTAssertEqual(overlay.kind, .reference)
+        overlays = await processor(h, at: 1).loadHorizonThumbnailOverlays(thumbnailWidth: 32,
+                                                                         thumbnailHeight: 32)
+        XCTAssertEqual(overlays.compositeLine?.kind, .reference)
     }
 
-    /// A frame inheriting a sequence-wide reference is *not* the painted frame, so it reports `merged`
-    /// rather than `reference` — that is the blue-versus-green distinction in the filmstrip.
+    /// A frame inheriting a sequence-wide reference is *not* the painted frame, so it shows that
+    /// reference as its merged line rather than as a painted one — the blue-versus-green distinction.
     func testAFrameInheritingAGlobalReferenceIsNotMarkedAsPainted() async throws {
         let h = try await FrameHarness.make(frameCount: 2, width: 64, height: 64, named: "inherit")
         harness = h
         try h.plantReferenceMask(FrameHarness.flatMask(width: 64, height: 64, at: 30),
                                  perFrame: false)
 
-        let overlayOptional = try await processor(h, at: 1).loadHorizonThumbnailOverlay(thumbnailWidth: 32,
-                                                               thumbnailHeight: 32)
-        let overlay = try XCTUnwrap(overlayOptional)
-        XCTAssertEqual(overlay.kind, .merged,
+        let overlays = await processor(h, at: 1).loadHorizonThumbnailOverlays(thumbnailWidth: 32,
+                                                                             thumbnailHeight: 32)
+        XCTAssertEqual(overlays.kinds, [.merged],
                        "inheriting a global reference is not the same as having painted this frame")
+        XCTAssertEqual(overlays.first?.yPerColumn.first ?? -1, 15, accuracy: 1)
     }
 
     /// The Y values are scaled into thumbnail space and clamped inside it, since they index a drawing
@@ -326,8 +337,8 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
         harness = h
         try h.plantImage(FrameHarness.flatMask(width: 128, height: 128, at: 64), ofType: .horizon)
 
-        let overlayOptional = try await processor(h).loadHorizonThumbnailOverlay(thumbnailWidth: 32, thumbnailHeight: 32)
-        let overlay = try XCTUnwrap(overlayOptional)
+        let overlays = await processor(h).loadHorizonThumbnailOverlays(thumbnailWidth: 32, thumbnailHeight: 32)
+        let overlay = try XCTUnwrap(overlays.first)
         XCTAssertEqual(overlay.yPerColumn.count, 32)
         XCTAssertEqual(overlay.height, 32)
         for (x, y) in overlay.yPerColumn.enumerated() {
@@ -344,8 +355,8 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
         harness = h
         try h.plantImage(FrameHarness.flatMask(width: 64, height: 64, at: 64), ofType: .horizon)
 
-        let overlayOptional = try await processor(h).loadHorizonThumbnailOverlay(thumbnailWidth: 16, thumbnailHeight: 16)
-        let overlay = try XCTUnwrap(overlayOptional)
+        let overlays = await processor(h).loadHorizonThumbnailOverlays(thumbnailWidth: 16, thumbnailHeight: 16)
+        let overlay = try XCTUnwrap(overlays.first)
         XCTAssertEqual(overlay.yPerColumn, [Int](repeating: 8, count: 16),
                        "undefined columns default to mid height")
     }

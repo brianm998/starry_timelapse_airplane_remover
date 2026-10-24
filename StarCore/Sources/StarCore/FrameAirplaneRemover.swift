@@ -977,8 +977,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public var hasHorizonReference: Bool {
         get async { await horizonProcessor.hasHorizonReference }
     }
-    public func loadHorizonThumbnailOverlay(thumbnailWidth: Int, thumbnailHeight: Int) async throws -> HorizonThumbnailOverlay? {
-        try await horizonProcessor.loadHorizonThumbnailOverlay(thumbnailWidth: thumbnailWidth, thumbnailHeight: thumbnailHeight)
+    public func loadHorizonThumbnailOverlays(thumbnailWidth: Int, thumbnailHeight: Int) async -> [HorizonThumbnailOverlay] {
+        await horizonProcessor.loadHorizonThumbnailOverlays(thumbnailWidth: thumbnailWidth, thumbnailHeight: thumbnailHeight)
     }
     public func saveHorizonReferenceMask(
         paintedYPerColumn: [Int?],
