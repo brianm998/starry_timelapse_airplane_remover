@@ -1,5 +1,13 @@
 [
   { "case": "openSequence",         "text": "I open the sequence {sequence}" },
+  { "case": "openSequence16",       "text": "I open the 16-bit sequence {sequence16}" },
   { "case": "processEveryFrame",    "text": "I process every frame" },
-  { "case": "outputFramesWritten",  "text": "{expected_outputs} output frames are written" }
+  { "case": "outputFramesWritten",  "text": "{expected_outputs} output frames are written" },
+  { "case": "cleanMethodAutomaticFalse", "text": "the clean method is automatic:false" },
+  { "case": "cleanMethodAutomaticTrue",  "text": "the clean method is automatic:true" },
+  { "case": "cleanMethodSelective",      "text": "the clean method is selective" },
+  { "case": "airplanesRemoved",     "text": "the labelled airplanes are removed" },
+  { "case": "satellitesRemoved",    "text": "the labelled satellites are removed" },
+  { "case": "starsPreserved",       "text": "the stars are preserved" },
+  { "case": "nothingElseChanged",   "text": "nothing outside the labelled trails changed" }
 ]

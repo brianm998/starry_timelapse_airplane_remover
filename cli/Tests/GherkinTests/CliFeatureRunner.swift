@@ -16,6 +16,8 @@ final class CliFeatureRunner {
     let testCase: XCTestCase
     private(set) var sequenceCopy: URL?
     private(set) var outputDir: URL?
+    private(set) var cleanMethod: String?
+    private var featureName = "feature"
     private let scratch: URL
 
     init(testCase: XCTestCase) {
@@ -31,12 +33,21 @@ final class CliFeatureRunner {
             .openSequence: { try $0.openSequence() },
             .processEveryFrame: { try $0.processEveryFrame() },
             .outputFramesWritten: { try $0.outputFramesWritten() },
+            .openSequence16: { try $0.openSequence(placeholder: "sequence16") },
+            .cleanMethodAutomaticFalse: { $0.cleanMethod = "automatic:false" },
+            .cleanMethodAutomaticTrue: { $0.cleanMethod = "automatic:true" },
+            .cleanMethodSelective: { $0.cleanMethod = "selective" },
+            .airplanesRemoved: { try $0.trailsRemoved(trailClass: "airplane") },
+            .satellitesRemoved: { try $0.trailsRemoved(trailClass: "satellite") },
+            .starsPreserved: { try $0.starsPreserved() },
+            .nothingElseChanged: { try $0.nothingElseChanged() },
         ]
     }
 
     func run(_ feature: Feature) throws {
         guard !feature.steps.isEmpty else { throw RunnerError("feature \"\(feature.name)\" has no steps: refusing to pass vacuously") }
         defer { try? FileManager.default.removeItem(at: scratch) }
+        featureName = feature.name
         for step in feature.steps {
             guard let method = Self.methodMap[step.action] else {
                 throw RunnerError("no method for step \"\(step.description)\". Implemented steps:\n"
@@ -87,8 +98,10 @@ final class CliFeatureRunner {
 
     /// Copies the sequence into a fresh temp dir: star derives its temp and output paths from the
     /// input directory's name, so processing a directory in place would pick up the last run's state.
-    private func openSequence() throws {
-        let given = try param("sequence")
+    private func openSequence() throws { try openSequence(placeholder: "sequence") }
+
+    private func openSequence(placeholder: String) throws {
+        let given = try param(placeholder)
         let source = try TestData.resolve(given, cache: dataCache())
             ?? (Self.isAbsolutePath(given) ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given))
         var isDir: ObjCBool = false
@@ -110,7 +123,9 @@ final class CliFeatureRunner {
 
         let p = Process()
         p.executableURL = try starBinary()
-        p.arguments = ["-l", "info", input.path, out.path]
+        var args = ["-l", "info"]
+        if let m = cleanMethod { args += ["-c", m] }
+        p.arguments = args + [input.path, out.path]
         p.standardOutput = logHandle
         p.standardError = logHandle
         try p.run()
@@ -131,6 +146,144 @@ final class CliFeatureRunner {
         guard let out = outputDir else { throw RunnerError("\"I process every frame\" has not run") }
         let files = (try FileManager.default.contentsOfDirectory(atPath: out.path)).filter { !$0.hasPrefix(".") }
         XCTAssertEqual(files.count, want, "frames written to \(out.path): \(files.sorted())")
+    }
+
+    // MARK: removal checks (star-removal-verify)
+
+    /// The directory Star's frames are in: the output directory itself, or the single `*star-v-*` directory inside it.
+    private func framesDirectory(_ out: URL) throws -> URL {
+        let entries = (try? FileManager.default.contentsOfDirectory(atPath: out.path)) ?? []
+        if let sub = entries.first(where: { $0.contains("star-v-") }) { return out.appendingPathComponent(sub) }
+        return out
+    }
+
+    /// Where reports and crops go. Not the scratch directory (deleted when the scenario ends): CI uploads this as an artifact.
+    private func reportsDirectory() -> URL {
+        let base = ProcessInfo.processInfo.environment["STAR_REMOVAL_REPORTS"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+            ?? Self.repoRoot.appendingPathComponent("removal-reports")
+        return base.appendingPathComponent(featureName)
+    }
+
+    private func verifierBinary() throws -> URL {
+        #if os(Windows)
+        let exe = "star-removal-verify.exe"
+        #else
+        let exe = "star-removal-verify"
+        #endif
+        // On Windows SwiftPM builds into .build/<triple>/release, so CI sets STAR_REMOVAL_VERIFY; this default is for local runs.
+        let path = ProcessInfo.processInfo.environment["STAR_REMOVAL_VERIFY"].flatMap { $0.isEmpty ? nil : $0 }
+            ?? Self.repoRoot.appendingPathComponent("removal_tools/.build/release/\(exe)").path
+        guard FileManager.default.isExecutableFile(atPath: path) else {
+            throw RunnerError("no star-removal-verify at \(path): run `swift build -c release --package-path removal_tools`, or set STAR_REMOVAL_VERIFY")
+        }
+        return URL(fileURLWithPath: path)
+    }
+
+    private func labelsFile() throws -> URL {
+        guard let input = sequenceCopy else { throw RunnerError("\"I open the sequence\" has not run") }
+        let labels = input.appendingPathComponent("labels.json")
+        guard FileManager.default.fileExists(atPath: labels.path) else { throw RunnerError("no labels.json in the sequence: \(labels.path)") }
+        return labels
+    }
+
+    /// Runs the verifier. A failing exit status fails the step with its summary and the report and crop paths.
+    private func runVerifier(_ extra: [String], reportName: String) throws -> [String: Any] {
+        guard let input = sequenceCopy else { throw RunnerError("\"I open the sequence\" has not run") }
+        guard let out = outputDir else { throw RunnerError("\"I process every frame\" has not run") }
+        let reports = reportsDirectory()
+        let crops = reports.appendingPathComponent("\(reportName)-crops")
+        let report = reports.appendingPathComponent("\(reportName).json")
+        try FileManager.default.createDirectory(at: reports, withIntermediateDirectories: true)
+        let method = cleanMethod ?? "automatic:false"   // star's default clean method
+
+        var args = ["--input", input.path, "--output", try framesDirectory(out).path, "--labels", try labelsFile().path,
+                    "--thresholds", Self.repoRoot.appendingPathComponent("gherkin/removal-thresholds.json").path,
+                    "--clean-method", method, "--dataset", input.lastPathComponent,
+                    "--skip-unmeasurable", "--report", report.path, "--crops", crops.path]
+        args += extra
+
+        let p = Process()
+        p.executableURL = try verifierBinary()
+        p.arguments = args
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = pipe
+        try p.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        let text = String(decoding: data, as: UTF8.self)
+        print(text.split(separator: "\n").suffix(12).joined(separator: "\n"))
+        guard p.terminationStatus == 0 else {
+            throw RunnerError("star-removal-verify exited \(p.terminationStatus) for \"\(featureName)\"\n"
+                              + text.split(separator: "\n").suffix(30).joined(separator: "\n")
+                              + "\nreport: \(report.path)\ncrops: \(crops.path)")
+        }
+        guard let json = try JSONSerialization.jsonObject(with: Data(contentsOf: report)) as? [String: Any] else {
+            throw RunnerError("unreadable report \(report.path)")
+        }
+        return json
+    }
+
+    private func confirmedObjectCount(trailClass: String) throws -> Int {
+        let data = try Data(contentsOf: try labelsFile())
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let frames = root["frames"] as? [String: [[String: Any]]] else { throw RunnerError("labels.json is not a label set") }
+        return frames.values.joined().filter { ($0["class"] as? String) == trailClass && ($0["confirmed"] as? Bool) == true }.count
+    }
+
+    private func pinCount() throws -> Int {
+        let data = try Data(contentsOf: Self.repoRoot.appendingPathComponent("gherkin/removal-pins.json"))
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any], let pins = root["pins"] as? [Any] else {
+            throw RunnerError("removal-pins.json is not a pin list")
+        }
+        return pins.count
+    }
+
+    private func trailsRemoved(trailClass: String) throws {
+        let expected = try confirmedObjectCount(trailClass: trailClass)
+        // Per-object verdicts differ between platforms, and selective leaves most faint labelled streaks alone by design
+        // (BUGS.md BUG-004, and the measurements in the result notes). automatic:true is judged by the fraction removed plus
+        // pinned objects; the fraction cannot see the 1b2cb327 bug (0.78 broken vs 0.83 fixed), the pins can (43 of 43 come back).
+        let pins = ["--pins", Self.repoRoot.appendingPathComponent("gherkin/removal-pins.json").path]
+        var extra = ["--expect", "\(trailClass)=removed"]
+        switch cleanMethod {
+        case "selective": extra += ["--pins-only"] + pins
+        case "automatic:true": extra += ["--aggregate"] + pins
+        default: break
+        }
+        let report = try runVerifier(extra, reportName: "\(trailClass)s-removed")
+        // not vacuous: the verifier must have looked at every confirmed object of this class
+        let summary = report["summary"] as? [String: Any]
+        let objects = (summary?["objects"] as? Int) ?? -1
+        guard expected > 0 else { throw RunnerError("labels.json has no confirmed \(trailClass) objects: the step would check nothing") }
+        guard objects == expected else {
+            throw RunnerError("the verifier checked \(objects) \(trailClass) objects, labels.json has \(expected) confirmed: refusing to pass")
+        }
+        if cleanMethod == "automatic:true" || cleanMethod == "selective" {
+            let pinned = try pinCount()
+            let checked = (summary?["pinsChecked"] as? Int) ?? -1
+            guard checked == pinned else { throw RunnerError("the verifier checked \(checked) pinned objects, removal-pins.json has \(pinned): refusing to pass") }
+        }
+        let measured = (summary?["passed"] as? Int ?? 0) + (summary?["failed"] as? Int ?? 0)
+        guard measured > 0 else { throw RunnerError("no \(trailClass) object was measurable: refusing to pass") }
+    }
+
+    private func nothingElseChanged() throws {
+        guard cleanMethod == "selective" else { throw RunnerError("\"nothing outside the labelled trails changed\" is only valid with the selective clean method") }
+        guard let out = outputDir else { throw RunnerError("\"I process every frame\" has not run") }
+        let report = try runVerifier(["--unchanged-outside"], reportName: "unchanged-outside")
+        let frames = ((try? FileManager.default.contentsOfDirectory(atPath: try framesDirectory(out).path)) ?? []).filter { !$0.hasPrefix(".") }.count
+        let covered = (report["collateral"] as? [String: Any])?.count ?? 0
+        guard covered == frames, frames > 0 else { throw RunnerError("the unchanged-outside check covered \(covered) frames, Star wrote \(frames): refusing to pass") }
+        guard (report["collateralStatus"] as? String) == "pass" else { throw RunnerError("the unchanged-outside check did not pass (status \(String(describing: report["collateralStatus"])))") }
+    }
+
+    private func starsPreserved() throws {
+        guard let out = outputDir else { throw RunnerError("\"I process every frame\" has not run") }
+        let report = try runVerifier(["--stars"], reportName: "stars")
+        let frames = ((try? FileManager.default.contentsOfDirectory(atPath: try framesDirectory(out).path)) ?? []).filter { !$0.hasPrefix(".") }.count
+        let stars = (report["stars"] as? [String: Any])?.count ?? 0
+        guard stars == frames, frames > 0 else { throw RunnerError("the star check covered \(stars) frames, Star wrote \(frames): refusing to pass") }
     }
 
     // MARK: the binary

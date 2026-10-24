@@ -1,0 +1,185 @@
+name: Removal measurements
+
+# Phase 4 of the removal-validation work: run `star` on a7sii_10 (JPEG) and a7sii_10_crop16 (16-bit TIFF) with every
+# clean method, check the output with `star-removal-verify --report-only`, and publish the numbers (job summary +
+# artifacts) so the thresholds in gherkin/removal-thresholds.json can be set from real Linux and macOS distributions.
+# Manual only: it is a measurement, not a gate. See GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md and gherkin/README.md.
+#
+# Windows has no `star` cli build in this repo (only stard, via the desktop leg), so it is not measured here; its CPU
+# path is the same as Linux's. The verifier itself is plain Swift on top of StarCore.
+
+on:
+  workflow_dispatch:
+  # TEMPORARY: a manual workflow only appears in the Actions tab once its file is on the default branch (develop).
+  # Until this is merged, a push to this branch that changes THIS file runs it. Delete this block when merging.
+  push:
+    branches: [claude/gherkin-removal-validation-40e353]
+    paths: ['.github/workflows/removal-measure.yml']
+
+jobs:
+  measure-linux:
+    name: removal measurements (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache test data
+        uses: actions/cache@v4
+        with:
+          path: .test-data
+          key: testdata-removal-${{ hashFiles('test_data/datasets.json') }}
+
+      - name: Fetch test data (a no-op on a cache hit)
+        run: test_data/fetch.sh a7sii_10 a7sii_10_16bit
+
+      - name: Install apt prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake make git pkg-config perl dpkg-dev zip \
+            libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
+            libcurl4-openssl-dev
+
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: '6.0'
+
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/linux
+            opencv/include
+          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/linux
+            StarDecisionTrees/include/release/linux
+          key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/linux/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
+
+      - name: Build star (release)
+        working-directory: cli
+        run: swift build -c release
+
+      - name: Build the removal verifier (release)
+        working-directory: removal_tools
+        run: swift build -c release
+
+      - name: Unit-test the verifier
+        working-directory: removal_tools
+        run: swift test
+
+      - name: Measure every dataset x clean method
+        run: gherkin/measure-removal.sh linux measure-out
+
+      - name: Summary
+        if: always()
+        run: |
+          python3 gherkin/measure-removal-summary.py measure-out | tee measure-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload reports, crops and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-measurements-linux
+          path: |
+            measure-out
+            measure-summary.md
+          retention-days: 30
+
+  measure-macos:
+    name: removal measurements (macos-15)
+    # TEMPORARY with the push trigger above: put "[skip macos]" in a commit message to rerun only the Linux job.
+    if: ${{ !contains(github.event.head_commit.message, '[skip macos]') }}
+    runs-on: macos-15
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache test data
+        uses: actions/cache@v4
+        with:
+          path: .test-data
+          key: testdata-removal-${{ hashFiles('test_data/datasets.json') }}
+
+      - name: Fetch test data (a no-op on a cache hit)
+        run: test_data/fetch.sh a7sii_10 a7sii_10_16bit
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Toolchain id for the cache key
+        id: toolchain
+        run: echo "id=$(xcodebuild -version | tr -c 'A-Za-z0-9.\n' _ | tr '\n' - | sed 's/-$//')" >> "$GITHUB_OUTPUT"
+
+      - name: Install Eigen3 via Homebrew
+        run: brew install eigen
+
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/macos
+            opencv/include
+          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/macos
+            StarDecisionTrees/include/release/macos
+          key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/macos/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
+
+      - name: Build star (release)
+        working-directory: cli
+        run: swift build -c release
+
+      - name: Build the removal verifier (release)
+        working-directory: removal_tools
+        run: swift build -c release
+
+      - name: Unit-test the verifier
+        working-directory: removal_tools
+        run: swift test
+
+      - name: Measure every dataset x clean method
+        run: gherkin/measure-removal.sh macos measure-out
+
+      - name: Summary
+        if: always()
+        run: |
+          python3 gherkin/measure-removal-summary.py measure-out | tee measure-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload reports, crops and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: removal-measurements-macos
+          path: |
+            measure-out
+            measure-summary.md
+          retention-days: 30
