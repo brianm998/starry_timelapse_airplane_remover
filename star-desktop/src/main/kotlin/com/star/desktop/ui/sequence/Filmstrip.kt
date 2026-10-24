@@ -39,8 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameState
-import com.star.desktop.ui.components.drawHorizonLine
-import com.star.desktop.ui.components.horizonLineColor
+import com.star.desktop.ui.components.drawHorizonLines
 import com.star.desktop.ui.sequence.grid.CleanMethodIcon
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameInfo
@@ -102,6 +101,7 @@ private fun FilmstripCell(
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
     var overlay by remember(index) { mutableStateOf<com.star.proto.GetHorizonOverlayResponse?>(null) }
     val showHorizon by vm.showHorizonOnMainView.collectAsState()
+    val visibleHorizonKinds by vm.visibleHorizonLineKinds.collectAsState()
     val horizonVersion by vm.horizonVersion.collectAsState()
     LaunchedEffect(index, showHorizon, state, horizonVersion) {
         overlay = if (showHorizon) {
@@ -191,10 +191,10 @@ private fun FilmstripCell(
                         contentScale = ContentScale.Crop,
                     )
                 }
-                // The horizon line (orange while the frame waits for a refinement, else by kind), over the thumbnail.
+                // The horizon lines the user has switched on, each by kind (the composite's orange while the frame waits for a refinement).
                 overlay?.takeIf { it.exists }?.let { ov ->
                     androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                        drawHorizonLine(ov, size.width, size.height, horizonLineColor(ov.kind, ov.refinementPending), 1.5.dp.toPx()) { it }
+                        drawHorizonLines(ov, visibleHorizonKinds, size.width, size.height, 1.5.dp.toPx()) { it }
                     }
                 }
                 // macOS `frameState.shortString` is empty for `.complete`, so only label in-progress frames.

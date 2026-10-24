@@ -170,6 +170,8 @@ final class MappingTests: XCTestCase {
         XCTAssertEqual(Mapping.protoFrameViewMode(.starAligned), .viewStarAligned)
         XCTAssertEqual(Mapping.protoFrameViewMode(.horizon), .viewHorizon)
         XCTAssertEqual(Mapping.protoFrameViewMode(.userHorizon), .viewUserHorizon)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.consensusHorizon), .viewConsensusHorizon)
+        XCTAssertEqual(Mapping.frameViewMode(from: .viewConsensusHorizon), .consensusHorizon)
     }
 
     /// And going back out gets the same view: announcing a save and asking for the preview agree, for every image.

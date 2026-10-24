@@ -185,10 +185,9 @@ final public actor FrameHorizonProcessor {
           ofTypes: [.mergedHorizon],
           atSizes: [.original, .preview]
         )
-        // Painted references switch the consensus off for the whole sequence, so this line
-        // would never be read again — and it was built from the detection being thrown away
-        // next.
-        HorizonConsensusStore.delete(frameIndex: frameIndex, config: await configManager.config())
+        // The line was anchored on the references that just changed, and built from the
+        // detection being thrown away next.
+        await discardHorizonConsensus()
         await discardPriorGuidedDetection()
     }
 
@@ -224,9 +223,9 @@ final public actor FrameHorizonProcessor {
         // Reference frames serve their painted mask directly; nothing to recompute.
         if (try await loadHorizonReferenceMask()) != nil { return }
         await releaseCachedFinalHorizonMask()
-        // As in `discardMergedHorizon`: with references painted the consensus is off, and
-        // this frame's line was built from the detection about to be discarded.
-        HorizonConsensusStore.delete(frameIndex: frameIndex, config: await configManager.config())
+        // As in `discardMergedHorizon`: this frame's line was anchored on the references that
+        // changed, and built from the detection about to be discarded.
+        await discardHorizonConsensus()
         // The only caller is `HorizonRefinementOp`, which exists for exactly one reason — a
         // reference was edited — so the detection those references guided is stale too and
         // has to go before the merge asks for it.  This is what makes the recompute cost a
@@ -289,14 +288,34 @@ final public actor FrameHorizonProcessor {
         return mask
     }
     
-    /// This frame's horizon from `HorizonConsensus`, when a run has written one and it
-    /// applies — never on a sequence with painted references, whose merged masks are the
-    /// user's.  Nil otherwise, and the merged mask is used as before.
+    /// Delete this frame's consensus line and the image drawn from it.  They go together: the
+    /// view modes would otherwise show a horizon the composite no longer uses.
+    func discardHorizonConsensus() async {
+        HorizonConsensusStore.delete(frameIndex: frameIndex, config: await configManager.config())
+        imageAccessor.deleteImages(frameIndex: frameIndex, ofTypes: [.consensusHorizon],
+                                   atSizes: [.original, .preview])
+    }
+
+    /// Draw this frame's consensus line as a `.consensusHorizon` mask, at the sizes the
+    /// other horizon masks are written at, so the view modes can show it.  The line on disk
+    /// stays what the composite reads; this is only its picture.
     ///
-    /// Only the final mask reads it.  Keypoint detection, which runs before the consensus
-    /// can exist, keeps reading the merged mask, so what a stage is built from does not
-    /// depend on whether an earlier run got as far as this.
-    private func loadHorizonConsensusMask() async -> HorizonMask? {
+    /// - Returns: whether there was a line to draw, and it was written.
+    func saveHorizonConsensusImage() async -> Bool {
+        guard let mask = await horizonConsensusMask() else { return false }
+        do {
+            try await imageAccessor.save(mask.image, frameIndex: frameIndex,
+                                         as: .consensusHorizon, atSizes: await outputSizes,
+                                         overwrite: true)
+            return true
+        } catch {
+            Log.w("frame \(frameIndex) could not save its horizon consensus image: \(error)")
+            return false
+        }
+    }
+
+    /// The consensus line as a full-size mask, under `horizonConsensusRecord`'s conditions.
+    private func horizonConsensusMask() async -> HorizonMask? {
         guard let frame, let record = await horizonConsensusRecord() else { return nil }
         let rows = HorizonConsensus.columnRows(record.line, width: frame.width,
                                                height: frame.height)
@@ -308,18 +327,28 @@ final public actor FrameHorizonProcessor {
             Log.w("frame \(frameIndex) could not build a mask from its horizon consensus line")
             return nil
         }
+        return mask
+    }
+
+    /// This frame's horizon from `HorizonConsensus`, when a run has written one and it
+    /// applies — anchored on the user's painted references where there are any.  Nil
+    /// otherwise, and the merged mask is used as before.
+    ///
+    /// Only the final mask reads it.  Keypoint detection, which runs before the consensus
+    /// can exist, keeps reading the merged mask, so what a stage is built from does not
+    /// depend on whether an earlier run got as far as this.
+    private func loadHorizonConsensusMask() async -> HorizonMask? {
+        guard let mask = await horizonConsensusMask() else { return nil }
         Log.i("frame \(frameIndex) composites with its horizon consensus line")
         return mask
     }
 
     /// The consensus line the final mask and the overlay read, or nil where neither should:
-    /// the setting is off, it cannot run here, or the user has painted references.
+    /// the setting is off, or it cannot run here.  Painted references do not switch it off;
+    /// they anchor it, and a painted frame's line is its painting.
     private func horizonConsensusRecord() async -> HorizonConsensusStore.Record? {
         let config = await configManager.config()
-        guard HorizonConsensus.applies(to: config),
-              let frame,
-              !HorizonConsensusStore.hasPaintedReferences(config: config)
-        else { return nil }
+        guard HorizonConsensus.applies(to: config), let frame else { return nil }
         return HorizonConsensusStore.read(frameIndex: frameIndex, width: frame.width,
                                           height: frame.height, config: config)
     }
@@ -1512,6 +1541,13 @@ final public actor FrameHorizonProcessor {
         return HorizonMask(refImage)
     }
 
+    /// This frame's own painted horizon — never the sequence-wide one — as the first ground
+    /// row of each column, for `HorizonConsensus` to anchor on.  Nil when it has none.
+    func paintedReferenceColumns() async -> [Int?]? {
+        guard let mask = try? await loadPerFrameHorizonReferenceMask() else { return nil }
+        return CombinedHorizonDetector.extractHorizonY(from: mask.image)
+    }
+
     /// 1. `{horizonReference}/{frameFileName}` — per-frame reference (moving sequences)
     /// 2. `{horizonReference}/reference.tiff`   — global reference (static sequences)
     private func loadHorizonReferenceMask() async throws -> HorizonMask? {
@@ -2541,61 +2577,65 @@ final public actor FrameHorizonProcessor {
         return nil
     }
 
-    /// Load the best-available horizon for this frame and scale it to thumbnail
-    /// dimensions, returning a `HorizonThumbnailOverlay` suitable for drawing
-    /// directly on a filmstrip cell.
+    /// Every horizon line this frame has, one per kind, scaled to thumbnail dimensions for
+    /// drawing directly over a filmstrip cell, a grid cell or the frame.
     ///
-    /// Priority: **reference** (green) › **consensus** (purple) › **merged** (blue) ›
-    /// **initial** (white) — the order `loadOrCreateFinalHorizonMask` reads them in, so the
-    /// line drawn is the one the composite uses.
-    /// Returns `nil` when no horizon of any kind has been computed yet.
+    /// Each kind is the line of its view mode (`HorizonThumbnailOverlay.Kind.viewMode`):
+    /// **initial** (white) the raw detection, **merged** (blue) the merged mask, **consensus**
+    /// (purple) the moving-sequence consensus where the composite would use it, and
+    /// **reference** (green) the horizon the user painted on this frame.  A frame that only
+    /// inherits a sequence-wide reference shows it as its merged line.  Which of them the
+    /// composite reads is `compositeLine`.
     ///
+    /// Each load is guarded on its own, so that a failure for one kind (a corrupt file, say)
+    /// costs that line and not the others.  Empty when no horizon of any kind exists yet.
     ///
     /// - Parameters:
     ///   - thumbnailWidth:  Width of the thumbnail in pixels.
     ///   - thumbnailHeight: Height of the thumbnail in pixels.
-    public func loadHorizonThumbnailOverlay(
+    public func loadHorizonThumbnailOverlays(
         thumbnailWidth:  Int,
         thumbnailHeight: Int
-    ) async throws -> HorizonThumbnailOverlay? {
+    ) async -> [HorizonThumbnailOverlay] {
+        // The first ground row of every image column, nil where it has none, per kind.
+        var sources: [(HorizonThumbnailOverlay.Kind, ([Int?], Int, Int))] = []
 
-        // ── Choose the best available source ────────────────────────────────
-        // Each load is individually guarded with try? so that a failure for
-        // one type (e.g., a corrupt file) falls through to the next rather
-        // than aborting the whole chain and leaving the overlay nil/stale.
-        // The first ground row of every image column, nil where it has none.
-        let imgY: [Int?]
-        let imgW: Int
-        let imgH: Int
-        let kind: HorizonThumbnailOverlay.Kind
-
-        // Per-frame reference (the actual painted frame) → green.
-        // Global-only reference (static timelapse, not the painted frame) → blue.
-        if let refMask = try? await loadPerFrameHorizonReferenceMask() {
-            (imgY, imgW, imgH) = Self.horizonColumns(of: refMask.image)
-            kind = .reference
-        } else if let refMask = try? await loadHorizonReferenceMask() {
-            (imgY, imgW, imgH) = Self.horizonColumns(of: refMask.image)
-            kind = .merged
-        } else if let consensus = await horizonConsensusColumns() {
-            // Read as the line it is stored as, not built into a full-size mask first.
-            (imgY, imgW, imgH) = consensus
-            kind = .consensus
+        if let initialImage = try? await imageAccessor.load(
+               frameIndex: frameIndex, type: .horizon, atSize: .original) {
+            sources.append((.initial, Self.horizonColumns(of: initialImage)))
+        }
+        // A frame inheriting the sequence's one painted reference was not painted itself:
+        // that reference is its merged horizon (`loadOrCreateMergedHorizonMask` serves it as
+        // such), drawn blue, and green is kept for the frames the user actually painted.
+        let perFrameReference = try? await loadPerFrameHorizonReferenceMask()
+        if perFrameReference == nil, let globalReference = try? await loadHorizonReferenceMask() {
+            sources.append((.merged, Self.horizonColumns(of: globalReference.image)))
         } else if let mergedImage = await loadMergedHorizonForOverlayWithRetry() {
-            (imgY, imgW, imgH) = Self.horizonColumns(of: mergedImage)
-            kind = .merged
-        } else if let initialImage = try? await imageAccessor.load(
-                      frameIndex: frameIndex,
-                      type: .horizon,
-                      atSize: .original)
-        {
-            (imgY, imgW, imgH) = Self.horizonColumns(of: initialImage)
-            kind = .initial
-        } else {
-            return nil
+            sources.append((.merged, Self.horizonColumns(of: mergedImage)))
+        }
+        // Read as the line it is stored as, not built into a full-size mask first.
+        if let consensus = await horizonConsensusColumns() {
+            sources.append((.consensus, consensus))
+        }
+        if let perFrameReference {
+            sources.append((.reference, Self.horizonColumns(of: perFrameReference.image)))
         }
 
-        // ── Scale image-space horizon Y → thumbnail Y ────────────────────
+        return sources.map { kind, columns in
+            Self.thumbnailOverlay(kind: kind, columns: columns,
+                                  thumbnailWidth: thumbnailWidth,
+                                  thumbnailHeight: thumbnailHeight)
+        }
+    }
+
+    /// Scale image-space horizon rows to a thumbnail's.
+    private static func thumbnailOverlay(
+        kind: HorizonThumbnailOverlay.Kind,
+        columns: ([Int?], Int, Int),
+        thumbnailWidth: Int,
+        thumbnailHeight: Int
+    ) -> HorizonThumbnailOverlay {
+        let (imgY, imgW, imgH) = columns
         let scaleX = Double(imgW) / Double(thumbnailWidth)
         let scaleY = Double(imgH) / Double(thumbnailHeight)
 
@@ -2607,7 +2647,6 @@ final public actor FrameHorizonProcessor {
                                  max(0, Int((Double(iy) / scaleY).rounded())))
             }
         }
-
         return HorizonThumbnailOverlay(kind: kind, yPerColumn: thumbY, height: thumbnailHeight)
     }
 

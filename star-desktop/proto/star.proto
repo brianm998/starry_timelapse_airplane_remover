@@ -464,6 +464,7 @@ enum FrameViewMode {
   VIEW_AUTO_PROCESSED          = 13;   // the output of each clean method, before it is linked as the final one
   VIEW_AUTO_SELECTIVE_PROCESSED = 14;
   VIEW_SELECTIVE_PROCESSED     = 15;
+  VIEW_CONSENSUS_HORIZON       = 16;   // a moving sequence's horizon consensus, drawn as a mask
 }
 
 message ImageRef { string path = 1; int32 width = 2; int32 height = 3; string format = 4; }
@@ -763,7 +764,7 @@ message ProgressEvent {
 // Counted in operations, since that is what there is to count: most steps have one per frame, but the frames whose work is already on
 // disk have none (`already_done`), and a static camera merges every horizon in one.  Measured from when the run started.
 message StepCount {
-  string type         = 1;   // OperationType's case: horizon, mergedHorizon, starKeypoints, earthKeypoints, starHomography, earthHomography, outliers, merge
+  string type         = 1;   // OperationType's case: horizon, mergedHorizon, starKeypoints, earthKeypoints, starHomography, earthHomography, horizonConsensus, outliers, merge
   int32  queued       = 2;
   int32  running      = 3;
   int32  done         = 4;   // this run's
@@ -993,7 +994,8 @@ message RunRefinementResponse {
 }
 
 // Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green,
-// consensus=purple).
+// consensus=purple).  A frame has up to one line of each kind, all in `lines`; the single line in `kind`/`y_per_column` is the one
+// the final composite reads, so a client that draws one line draws that.
 // `isPendingHorizonRefinement` is NOT engine-derived — the client tracks it from edited reference frames.
 enum HorizonOverlayKind {
   HORIZON_OVERLAY_KIND_UNSPECIFIED = 0;  // no horizon computed (overlay nil)
@@ -1009,6 +1011,12 @@ message GetHorizonOverlayResponse {
   repeated int32     y_per_column = 3;   // draw-space Y, length == width
   int32              height       = 4;   // height the overlay was computed at (scaleY divisor)
   bool               refinement_pending = 5;   // see FrameInfo.refinement_pending
+  repeated HorizonOverlayLine lines = 6;   // every horizon line the frame has, one per kind, in drawing order (the composite's on top)
+}
+message HorizonOverlayLine {
+  HorizonOverlayKind kind         = 1;
+  repeated int32     y_per_column = 2;   // draw-space Y, length == width
+  int32              height       = 3;   // height the line was computed at (scaleY divisor)
 }
 
 // ---- Horizon: interactive band detection (the live painter) ----

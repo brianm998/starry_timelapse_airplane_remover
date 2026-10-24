@@ -18,14 +18,19 @@ You should have received a copy of the GNU General Public License along with sta
 /// the ground homographies that leaves behind) and before anything composites with a
 /// horizon: the outlier subtraction and the merge.
 ///
-/// Typed `.alignmentValidation`, like the op it follows: it is a sequence-wide step between
-/// the per-frame ones, which the progress display does not break out (`ProcessingSteps`),
-/// and a step of its own there would reach the daemon's protocol for no gain.
+/// A step of its own (`OperationType.horizonConsensus`), with its own row in the progress
+/// display: one op for the sequence, as a static tripod's horizon merge is.
+///
+/// Every line it writes is also drawn as a `.consensusHorizon` mask, so the consensus can
+/// be looked at like the other horizons.  A frame whose line an earlier run wrote but never
+/// drew (`imageTargets`) only has its drawing made.
 final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
     /// The whole sequence: every frame's detection votes, not only the ones being written.
     let frames: [FrameAirplaneRemover]
     /// The frames to write a consensus line for.
     let targets: [Int]
+    /// Frames that have a line on disk and no `.consensusHorizon` image of it.
+    let imageTargets: [Int]
     let configManager: ConfigManager
     let parameters: HorizonConsensus.Parameters
     let errorClosure: (String) -> Void
@@ -41,6 +46,7 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
     init(
       frames: [FrameAirplaneRemover],
       targets: [Int],
+      imageTargets: [Int] = [],
       configManager: ConfigManager,
       rawImageBytes: UInt64,
       parameters: HorizonConsensus.Parameters = HorizonConsensus.Parameters(),
@@ -48,10 +54,11 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
     ) {
         self.frames = frames.sorted { $0.frameIndex < $1.frameIndex }
         self.targets = targets.sorted()
+        self.imageTargets = imageTargets.sorted()
         self.configManager = configManager
         self.parameters = parameters
         self.errorClosure = errorClosure
-        super.init(for: .alignmentValidation, rawImageBytes: rawImageBytes,
+        super.init(for: .horizonConsensus, rawImageBytes: rawImageBytes,
                    memoryMultiplier: Self.memoryMultiplier)
         self.name = "horizon consensus"
     }
@@ -71,6 +78,12 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
     }
 
     func run() async throws {
+        if !targets.isEmpty { try await buildLines() }
+        try Task.checkCancellation()
+        try await drawLines(of: Set(targets).union(imageTargets).sorted())
+    }
+
+    private func buildLines() async throws {
         guard let firstFrame = frames.first, !targets.isEmpty else { return }
         let started = Date()
         let config = await configManager.config()
@@ -90,9 +103,18 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
               || (index >= low && index <= high && (index - origin) % stride == 0)
         }
 
-        let lines = try await detectedLines(of: sources, height: height)
+        // The user's painted horizons within reach anchor the lines (`HorizonConsensus`
+        // step 5); each needs its own frame's detection too, to measure the consensus there.
+        let inReach = frames.filter { $0.frameIndex >= low && $0.frameIndex <= high }
+        let references = try await paintedReferences(of: inReach, height: height)
+        let sourceIndices = Set(sources.map(\.frameIndex))
+        let allSources = sources + inReach.filter {
+            references[$0.frameIndex] != nil && !sourceIndices.contains($0.frameIndex)
+        }
+
+        let lines = try await detectedLines(of: allSources, height: height)
         try Task.checkCancellation()
-        let records = await groundFits(of: sources)
+        let records = await groundFits(of: allSources)
         try Task.checkCancellation()
 
         let targets = self.targets
@@ -100,7 +122,7 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
         let outcome = await NativeWork.run {
             HorizonConsensus.run(lines: lines, similarityRecords: records, targets: targets,
                                  width: width, height: height, voterOrigin: origin,
-                                 parameters: parameters)
+                                 references: references, parameters: parameters)
         }
         guard let outcome else {
             Log.w("horizon consensus: could not calibrate the ground rotations from " +
@@ -129,9 +151,62 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
               "(lines carried \(calibration.distance) frames land " +
               String(format: "%.3f", calibration.drift * 100) + "% of the height off), " +
               "\(calibration.rejectedEntries) of \(calibration.entries) ground fits left out " +
-              "as no camera rotation; the long span overrode " +
+              "as no camera rotation; \(references.count) painted horizon(s) in reach, " +
+              "\(outcome.paintedTargets) frame(s) painted, \(outcome.correctedTargets) " +
+              "corrected by them; " +
+              "the long span overrode " +
               String(format: "%.2f", overridden) + "% of columns; in " +
               String(format: "%.1f", Date().timeIntervalSince(started)) + "s")
+    }
+
+    /// Write the `.consensusHorizon` image of each of `frameIndices`' lines, for the view
+    /// modes.  A frame that got no line (it could not be calibrated) simply has none.
+    private func drawLines(of frameIndices: [Int]) async throws {
+        let byIndex = Dictionary(frames.map { ($0.frameIndex, $0) },
+                                 uniquingKeysWith: { first, _ in first })
+        var pending = frameIndices.compactMap { byIndex[$0] }[...]
+        guard !pending.isEmpty else { return }
+        var drawn = 0
+        try await withThrowingTaskGroup(of: Bool.self) { group in
+            func addNext() {
+                guard let frame = pending.popFirst() else { return }
+                group.addTask { await frame.horizonProcessor.saveHorizonConsensusImage() }
+            }
+            for _ in 0..<Self.concurrentDecodes { addNext() }
+            while let saved = try await group.next() {
+                try Task.checkCancellation()
+                if saved { drawn += 1 }
+                addNext()
+            }
+        }
+        Log.i("horizon consensus: drew \(drawn) line(s) as horizon consensus images")
+    }
+
+    /// The user's own painted horizon of each of `frames` that has one, as a grid line.
+    private func paintedReferences(of frames: [FrameAirplaneRemover],
+                                   height: Int) async throws -> [Int: [Float]] {
+        let gridWidth = parameters.gridWidth
+        var references: [Int: [Float]] = [:]
+        try await withThrowingTaskGroup(of: (Int, [Float]?).self) { group in
+            var pending = frames[...]
+            func addNext() {
+                guard let frame = pending.popFirst() else { return }
+                group.addTask {
+                    guard let columns = await frame.horizonProcessor.paintedReferenceColumns()
+                    else { return (frame.frameIndex, nil) }
+                    return (frame.frameIndex,
+                            HorizonConsensus.gridLine(fromColumns: columns, height: height,
+                                                      gridWidth: gridWidth))
+                }
+            }
+            for _ in 0..<Self.concurrentDecodes { addNext() }
+            while let (frameIndex, line) = try await group.next() {
+                try Task.checkCancellation()
+                if let line { references[frameIndex] = line }
+                addNext()
+            }
+        }
+        return references
     }
 
     /// Each frame's detected horizon, as a grid line, for the frames whose first-round mask

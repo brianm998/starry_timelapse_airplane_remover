@@ -666,7 +666,10 @@ actor Session {
         // says what it is doing, since there is no frame graph to count (macOS passes exactly these to its modal).
         var refinementSteps: [OperationType] = []
         if !refinementFrames.isEmpty { refinementSteps.append(.mergedHorizon) }
+        // The consensus lines of the refined and re-merged frames are anchored on the edited references, so they are built again.
+        if HorizonConsensus.applies(to: await configManager.config()) { refinementSteps.append(.horizonConsensus) }
         if !framesToMerge.isEmpty { refinementSteps.append(.merge) }
+        let sequenceFrames = frames
         await beginStepReports(generation: generation, types: refinementSteps,
                                status: localized("ui.horizon_refinement_preparing", framesToMerge.count))
         let weakSelf = WeakSessionRef(self)
@@ -680,6 +683,7 @@ actor Session {
             await frameGraphBuilder.enqueueHorizonRefinement(
               refinementFrames: refining,
               mergeFrames: merging,
+              sequenceFrames: sequenceFrames,
               refinementCompletion: { frame in
                   await weakSelf.session?.horizonRefined(frameIndex: frame.frameIndex)
               },

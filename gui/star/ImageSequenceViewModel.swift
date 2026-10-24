@@ -329,7 +329,7 @@ public final class ImageSequenceViewModel {
     // Scale factor for grid-mode cells relative to the preview image size
     var gridThumbnailScale: CGFloat = 0.3
 
-    // The scale at which gridHorizonOverlay was last generated on each frame.
+    // The scale at which gridHorizonOverlays were last generated on each frame.
     // Zero means it has never been generated.
     var gridHorizonRenderedScale: CGFloat = 0
 
@@ -339,7 +339,7 @@ public final class ImageSequenceViewModel {
         gridHorizonRenderedScale = scale
         let w = max(1, Int(CGFloat(config.config().previewWidth)  * scale))
         let h = max(1, Int(CGFloat(config.config().previewHeight) * scale))
-        for frameView in frames where frameView.horizonOverlay != nil {
+        for frameView in frames where !frameView.horizonOverlays.isEmpty {
             frameView.refreshGridHorizonOverlay(width: w, height: h)
         }
     }
@@ -1365,7 +1365,11 @@ public final class ImageSequenceViewModel {
         // none.
         var steps: [OperationType] = []
         if !refinementFrames.isEmpty { steps.append(.mergedHorizon) }
+        let rebuildsConsensus = HorizonConsensus.applies(to: config.config())
+          && !(refinementFrames.isEmpty && framesToMerge.isEmpty)
+        if rebuildsConsensus { steps.append(.horizonConsensus) }
         if !framesToMerge.isEmpty { steps.append(.merge) }
+        let sequenceFrames = frames.compactMap(\.frame)
 
         // Raising the modal re-takes the progress baseline, so it is skipped while another
         // run is going — that run's bars would otherwise measure from the wrong place.
@@ -1411,6 +1415,7 @@ public final class ImageSequenceViewModel {
             await frameGraphBuilder.enqueueHorizonRefinement(
               refinementFrames: refinementFrames,
               mergeFrames: framesToMerge,
+              sequenceFrames: sequenceFrames,
               refinementCompletion: { [weak self] frame in
                   guard let self else { return }
                   await MainActor.run {

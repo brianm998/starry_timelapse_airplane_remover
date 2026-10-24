@@ -23,6 +23,7 @@ enum Mapping {
         case .viewHorizon:               return .horizon
         case .viewMergedHorizon:         return .mergedHorizon
         case .viewUserHorizon:           return .userHorizon
+        case .viewConsensusHorizon:      return .consensusHorizon
         case .viewStarAligned:           return .starAligned
         case .viewFailedStarAligned:     return .failedStarAligned
         case .viewEarthAligned:          return .earthAligned
@@ -46,6 +47,7 @@ enum Mapping {
         case .horizon:                return .viewHorizon
         case .mergedHorizon:          return .viewMergedHorizon
         case .userHorizon:            return .viewUserHorizon
+        case .consensusHorizon:       return .viewConsensusHorizon
         case .starAligned:            return .viewStarAligned
         case .failedStarAligned:      return .viewFailedStarAligned
         case .earthAligned:           return .viewEarthAligned

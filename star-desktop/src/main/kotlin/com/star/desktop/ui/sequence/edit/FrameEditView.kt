@@ -52,8 +52,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
-import com.star.desktop.ui.components.drawHorizonLine
-import com.star.desktop.ui.components.horizonLineColor
+import com.star.desktop.ui.components.drawHorizonLines
 import com.star.desktop.domain.usesOutliers
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
@@ -142,6 +141,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     // The horizon line (macOS `showHorizonOnMainView`): fetched for this frame when it is shown, and again whenever the horizon
     // or the frame's being pending refinement may have changed (a reference saved, a refinement operation finished).
     val showHorizon by vm.showHorizonOnMainView.collectAsState()
+    val visibleHorizonKinds by vm.visibleHorizonLineKinds.collectAsState()
     val horizonVersion by vm.horizonVersion.collectAsState()
     val frameStates by vm.frameStates.collectAsState()
     var horizonOverlay by remember(current) { mutableStateOf<com.star.proto.GetHorizonOverlayResponse?>(null) }
@@ -282,9 +282,8 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             // The horizon line, through the frame transform so it stays on the image at every zoom and pan; a constant
             // screen thickness (macOS divides by the zoom for the same effect).
             horizonOverlay?.let { ov ->
-                drawHorizonLine(
-                    ov, vm.info.imageWidth.toFloat(), vm.info.imageHeight.toFloat(),
-                    horizonLineColor(ov.kind, ov.refinementPending), strokeWidth = 3f,
+                drawHorizonLines(
+                    ov, visibleHorizonKinds, vm.info.imageWidth.toFloat(), vm.info.imageHeight.toFloat(), strokeWidth = 3f,
                 ) { transform.imageToCanvas(it, size) }
             }
             // Everything the outlier tools draw is one layer, so the outlier opacity slider fades it as a whole (macOS applies

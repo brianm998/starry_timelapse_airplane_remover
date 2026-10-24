@@ -551,6 +551,8 @@ public struct ImageAccessor: Sendable {
                     return (dir, baseFileName)
                 case .userHorizon:
                     return (dir, baseFileName)
+                case .consensusHorizon:
+                    return (dir, baseFileName)
                 case .starAligned:
                     return (dir, baseFileName)
                 case .failedStarAligned:
@@ -656,6 +658,13 @@ public struct ImageAccessor: Sendable {
 
             case .userHorizon:
                 break           // user-defined horizon masks are not auto-generated; preserve them
+
+            case .consensusHorizon:
+                // The image is only a drawing of the line beside it; the two go together, so
+                // a line is never used for a frame whose view of it has gone.
+                try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
+                try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .preview)
+                HorizonConsensusStore.delete(frameIndex: frameIndex, config: config)
 
             case .starAligned:
                 if reprocessingType == .alignment {

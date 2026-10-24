@@ -77,7 +77,8 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
             return "homography.db rows, the aligned-neighbour count file, and the " +
                    "starAligned / earthAligned / subtraction images"
         case .horizonConsensus:
-            return "<temp>/horizonConsensus/<frame>.json, and the calibration.json beside them"
+            return "<temp>/horizonConsensus/<frame>.json, the calibration.json beside them, " +
+              "and <temp>/consensusHorizon*/ (the lines drawn as masks)"
         case .outliers:
             return "<outliers>/<frame>/, the classified outlier group binary"
         case .output:

@@ -26,6 +26,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import com.star.desktop.ui.components.HorizonLineKinds
+import com.star.proto.HorizonOverlayKind
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -113,6 +115,16 @@ class SequenceViewModel(
     fun setShowHorizonOnMainView(show: Boolean) {
         _showHorizonOnMainView.value = show
         prefs?.showHorizonOnMainView = show
+    }
+
+    // Which kinds of horizon line are drawn when they are shown (macOS hiddenHorizonLineKinds, stored in the same file).
+    private val _visibleHorizonLineKinds =
+        MutableStateFlow(HorizonLineKinds.visible(prefs?.hiddenHorizonLineKinds ?: emptyList()))
+    val visibleHorizonLineKinds: StateFlow<Set<HorizonOverlayKind>> = _visibleHorizonLineKinds.asStateFlow()
+    fun setHorizonLineKindVisible(kind: HorizonOverlayKind, visible: Boolean) {
+        val shown = if (visible) _visibleHorizonLineKinds.value + kind else _visibleHorizonLineKinds.value - kind
+        _visibleHorizonLineKinds.value = shown
+        prefs?.hiddenHorizonLineKinds = HorizonLineKinds.all.filter { it !in shown }.mapNotNull { HorizonLineKinds.key(it) }
     }
 
     private val _leftPanelShowing = MutableStateFlow(true)

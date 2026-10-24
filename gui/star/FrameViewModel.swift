@@ -40,19 +40,18 @@ public class FrameViewModel {
         if !added.isEmpty || removed { onImageAvailabilityChange?(added, removed) }
     }
 
-    /// The best-available horizon overlay for this frame's filmstrip thumbnail.
-    /// Nil until `refreshHorizonOverlay()` completes.
-    var horizonOverlay: HorizonThumbnailOverlay? = nil
+    /// Every horizon line this frame has, one per kind, sized for its filmstrip thumbnail.
+    /// Empty until `refreshHorizonOverlay()` completes, or when the frame has none.
+    var horizonOverlays: [HorizonThumbnailOverlay] = []
 
-    /// Full-resolution horizon overlay for display on the main frame edit view.
-    /// Coordinates are in full frame pixel space (yPerColumn.count == frame.width).
-    /// Nil until `refreshFrameHorizonOverlay()` completes.
-    var frameHorizonOverlay: HorizonThumbnailOverlay? = nil
+    /// The same lines for the main frame edit view, in full frame pixel space
+    /// (yPerColumn.count == frame.width).  Empty until `refreshFrameHorizonOverlay()` completes.
+    var frameHorizonOverlays: [HorizonThumbnailOverlay] = []
 
-    /// Horizon overlay sized to the current grid cell dimensions.
-    /// Falls back to `horizonOverlay` in the grid view until this is ready.
-    /// Nil until `refreshGridHorizonOverlay(width:height:)` completes.
-    var gridHorizonOverlay: HorizonThumbnailOverlay? = nil
+    /// The same lines sized to the current grid cell dimensions.  The grid falls back to
+    /// `horizonOverlays` until these are ready.  Empty until
+    /// `refreshGridHorizonOverlay(width:height:)` completes.
+    var gridHorizonOverlays: [HorizonThumbnailOverlay] = []
 
     /// Monotonically-increasing counter. Each call to refreshHorizonOverlay()
     /// stamps the launched task; only the most-recently-requested result is applied.
@@ -512,7 +511,7 @@ public class FrameViewModel {
     
     func refreshHorizonOverlay() {
         guard let frame else {
-            horizonOverlay = nil
+            horizonOverlays = []
             return
         }
         let tw = config.config().thumbnailWidth
@@ -520,13 +519,13 @@ public class FrameViewModel {
         horizonOverlayVersion &+= 1
         let version = horizonOverlayVersion
         Task.detached(priority: .utility) {
-            let overlay = try? await frame.loadHorizonThumbnailOverlay(
+            let overlays = await frame.loadHorizonThumbnailOverlays(
                 thumbnailWidth:  tw,
                 thumbnailHeight: th
             )
             await MainActor.run {
                 guard self.horizonOverlayVersion == version else { return }
-                self.horizonOverlay = overlay
+                self.horizonOverlays = overlays
                 self.reloadID = UUID()
             }
         }
@@ -534,7 +533,7 @@ public class FrameViewModel {
 
     func refreshFrameHorizonOverlay() {
         guard let frame else {
-            frameHorizonOverlay = nil
+            frameHorizonOverlays = []
             return
         }
         let fw = frame.width
@@ -542,13 +541,13 @@ public class FrameViewModel {
         frameHorizonOverlayVersion &+= 1
         let version = frameHorizonOverlayVersion
         Task.detached(priority: .utility) {
-            let overlay = try? await frame.loadHorizonThumbnailOverlay(
+            let overlays = await frame.loadHorizonThumbnailOverlays(
                 thumbnailWidth:  fw,
                 thumbnailHeight: fh
             )
             await MainActor.run {
                 guard self.frameHorizonOverlayVersion == version else { return }
-                self.frameHorizonOverlay = overlay
+                self.frameHorizonOverlays = overlays
             }
         }
     }
@@ -557,19 +556,19 @@ public class FrameViewModel {
     /// grid-cell display. Does NOT bump reloadID so the preview image is not re-fetched.
     func refreshGridHorizonOverlay(width: Int, height: Int) {
         guard let frame else {
-            gridHorizonOverlay = nil
+            gridHorizonOverlays = []
             return
         }
         gridHorizonOverlayVersion &+= 1
         let version = gridHorizonOverlayVersion
         Task.detached(priority: .utility) {
-            let overlay = try? await frame.loadHorizonThumbnailOverlay(
+            let overlays = await frame.loadHorizonThumbnailOverlays(
                 thumbnailWidth:  width,
                 thumbnailHeight: height
             )
             await MainActor.run {
                 guard self.gridHorizonOverlayVersion == version else { return }
-                self.gridHorizonOverlay = overlay
+                self.gridHorizonOverlays = overlays
             }
         }
     }

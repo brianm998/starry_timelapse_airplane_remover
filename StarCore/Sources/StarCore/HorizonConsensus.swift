@@ -59,6 +59,11 @@ You should have received a copy of the GNU General Public License along with sta
 ///    over a long span the chains are less exact, so where nothing that large is wrong the
 ///    short span is the more precise answer.  The corrections that mattered were 8-9% of
 ///    the height, the disagreements that chain error causes about 1%.
+/// 5. Where the user has painted horizons, each frame's line is corrected by the painted
+///    frames either side of it, by as much as the consensus is wrong at them, fading with
+///    the distance to the nearest (`referenceCorrectionDistance`); a painted frame's line is
+///    its painting.  So the user can paint where the consensus goes wrong and keep it
+///    everywhere else.
 ///
 /// ## Measured
 ///
@@ -86,7 +91,9 @@ public enum HorizonConsensus {
     ///
     /// - 1: rotation-model chains, self-calibrated focal length, ±64 / ±400 densest-window
     ///      consensus, long-span override past 2% of the height.
-    public static let algorithmVersion = 1
+    /// - 2: painted references anchor it (`referenceCorrectionDistance`) instead of switching
+    ///      it off.
+    public static let algorithmVersion = 2
 
     public struct Parameters: Sendable, Equatable {
         /// Columns a line is kept at, spread evenly across the frame.  The detections this
@@ -131,6 +138,21 @@ public enum HorizonConsensus {
         /// Fewer measured pairs than this and the focal length is not trusted.
         public var minimumCalibrationPairs = 8
 
+        /// How far, in frames, a painted reference's correction reaches: it fades as
+        /// `exp(-distance / referenceCorrectionDistance)` from the nearest painted frame.
+        ///
+        /// Near a painted frame the reference carried along the ground is the better answer
+        /// (a7iv, 4 frames away: 0.12% → 0.04% of the height); far from one it is the worse,
+        /// because the chain it is carried by drifts (a9-1 10_17, 175 frames away: 0.05% for
+        /// the consensus, 0.18% for the carried reference).  The correction is that
+        /// reference's disagreement with the consensus at the painted frame, carried the same
+        /// way, so chain error largely cancels out of it; fading it measured never worse than
+        /// the consensus alone over leave-one-out tests on four sequences (16 to 128 frames
+        /// all close; 128 helped most where the consensus was biased — a9-2's snow, 0.41% →
+        /// 0.34%), and applying it undiminished hurt next to frames painted because the
+        /// consensus was locally wrong there.
+        public var referenceCorrectionDistance = 128.0
+
         /// Focal lengths tried, as multiples of the frame width: 14 mm to 100 mm on a
         /// full-frame sensor.  The best one is then refined 6% either way.
         public var focalLengthCandidates: [Double] = [
@@ -170,6 +192,9 @@ public enum HorizonConsensus {
         /// Columns, over every target, where the long-span answer replaced the short one.
         public let overriddenColumns: Int
         public let columns: Int
+        /// Targets whose line a painted reference corrected, and targets that were painted.
+        public var correctedTargets = 0
+        public var paintedTargets = 0
     }
 
     // MARK: - Lines
@@ -458,7 +483,7 @@ public enum HorizonConsensus {
         var ys: [Double] = []
         xs.reserveCapacity(gridWidth)
         ys.reserveCapacity(gridWidth)
-        for i in 0..<gridWidth {
+        for i in 0..<gridWidth where !line[i].isNaN {
             let x = gridX(i, width: width, gridWidth: gridWidth)
             let y = Double(line[i]) - 0.5
             let w = homography[6] * x + homography[7] * y + homography[8]
@@ -574,6 +599,8 @@ public enum HorizonConsensus {
                                  nearest: parameters.nearest, scratch: &scratch)
             }
             if long.isNaN { long = short }
+            // with no detection of its own, a column the short span misses takes the long one
+            if short.isNaN { short = long }
             if abs(long - short) > threshold {
                 result[x] = long
                 overridden += 1
@@ -751,6 +778,7 @@ public enum HorizonConsensus {
       width: Int,
       height: Int,
       voterOrigin: Int? = nil,
+      references: [Int: [Float]] = [:],
       parameters: Parameters = Parameters()
     ) -> Outcome? {
         guard let bandTop = bandTop(of: lines, height: height),
@@ -769,13 +797,19 @@ public enum HorizonConsensus {
         let stride = max(1, parameters.neighbourStride)
         let voters = Set(frames.filter { ($0 - first) % stride == 0 })
 
-        let wanted = targets.filter { lines[$0] != nil }
-        let results = Results<(line: [Float], overridden: Int)?>(nil, count: wanted.count)
-        DispatchQueue.concurrentPerform(iterations: wanted.count) { index in
-            let target = wanted[index]
-            guard let own = lines[target] else { return }
-            let chain = chains(into: target, span: parameters.longSpan,
-                               records: records, maxHop: hop)
+        // The consensus at the painted frames near a target is what each painting corrects,
+        // so those go first.  A painted frame is not detected at all — its painting stands in
+        // for the detection — so its consensus is its neighbours' alone.
+        let reach = parameters.longSpan
+        let wantedReferences = Set(references.keys.filter { painted in
+            targets.contains { abs($0 - painted) <= reach }
+        }).sorted()
+        func consensus(of target: Int, chain: [Int: [Double]],
+                       withoutOwn: Bool = false) -> (line: [Float], overridden: Int)? {
+            // NaN rows do not vote; a column no neighbour reaches stays NaN, and corrects nothing
+            let own = withoutOwn ? [Float](repeating: .nan, count: parameters.gridWidth)
+                                 : lines[target]
+            guard let own else { return nil }
             var offsets: [Int] = []
             var carried: [[Float]] = []
             for source in (target - parameters.longSpan)...(target + parameters.longSpan)
@@ -790,19 +824,119 @@ public enum HorizonConsensus {
             let line = consensusLine(own: own, carried: carried, offsets: offsets,
                                      height: height, parameters: parameters,
                                      overridden: &overridden)
-            results.set(index, (line, overridden))
+            return (line, overridden)
+        }
+        let anchorResults = Results<[Float]?>(nil, count: wantedReferences.count)
+        DispatchQueue.concurrentPerform(iterations: wantedReferences.count) { index in
+            let painted = wantedReferences[index]
+            let chain = chains(into: painted, span: parameters.longSpan,
+                               records: records, maxHop: hop)
+            anchorResults.set(index, consensus(of: painted, chain: chain,
+                                               withoutOwn: lines[painted] == nil)?.line)
+        }
+        var anchorConsensus: [Int: [Float]] = [:]
+        for (index, line) in anchorResults.all.enumerated() {
+            if let line { anchorConsensus[wantedReferences[index]] = line }
+        }
+
+        let wanted = targets.filter { lines[$0] != nil || references[$0] != nil }
+        let results = Results<(line: [Float], overridden: Int, corrected: Bool)?>(nil, count: wanted.count)
+        DispatchQueue.concurrentPerform(iterations: wanted.count) { index in
+            let target = wanted[index]
+            // A painted frame's horizon is its painting.
+            if let painting = references[target] {
+                results.set(index, (painting, 0, false))
+                return
+            }
+            let chain = chains(into: target, span: parameters.longSpan,
+                               records: records, maxHop: hop)
+            guard let (line, overridden) = consensus(of: target, chain: chain) else { return }
+            if let corrected = referenceCorrected(line, at: target, chain: chain,
+                                                  references: references,
+                                                  anchorConsensus: anchorConsensus,
+                                                  width: width, height: height,
+                                                  parameters: parameters) {
+                results.set(index, (corrected, overridden, true))
+            } else {
+                results.set(index, (line, overridden, false))
+            }
         }
         var outcome: [Int: [Float]] = [:]
         var overridden = 0
+        var corrected = 0
         let finished = results.all
         for (index, target) in wanted.enumerated() {
             guard let result = finished[index] else { continue }
             outcome[target] = result.line
             overridden += result.overridden
+            if result.corrected { corrected += 1 }
         }
-        return Outcome(lines: outcome, calibration: calibration,
-                       overriddenColumns: overridden,
-                       columns: wanted.count * parameters.gridWidth)
+        var result = Outcome(lines: outcome, calibration: calibration,
+                             overriddenColumns: overridden,
+                             columns: wanted.count * parameters.gridWidth)
+        result.correctedTargets = corrected
+        result.paintedTargets = wanted.filter { references[$0] != nil }.count
+        return result
+    }
+
+    /// `line`, `target`'s consensus, corrected by the painted frames either side of it.
+    ///
+    /// Each painted frame's correction is its painting minus its own consensus line, both
+    /// carried into `target` along the same chain — what the consensus gets wrong there, in
+    /// `target`'s columns.  Between two painted frames the two are blended by how near each
+    /// is; past the last one, the nearest alone.  The whole correction then fades with the
+    /// distance to the nearest painted frame (`Parameters.referenceCorrectionDistance`).
+    /// Nil when no painted frame within reach can be carried here.
+    static func referenceCorrected(
+      _ line: [Float],
+      at target: Int,
+      chain: [Int: [Double]],
+      references: [Int: [Float]],
+      anchorConsensus: [Int: [Float]],
+      width: Int,
+      height: Int,
+      parameters: Parameters
+    ) -> [Float]? {
+        let usable = anchorConsensus.keys.filter { chain[$0] != nil && references[$0] != nil }
+        let before = usable.filter { $0 < target }.max()
+        let after = usable.filter { $0 > target }.min()
+        let sides = [before, after].compactMap { $0 }
+        guard !sides.isEmpty else { return nil }
+
+        func difference(_ painted: Int) -> [Float] {
+            guard let homography = chain[painted], let painting = references[painted],
+                  let consensus = anchorConsensus[painted]
+            else { return [Float](repeating: .nan, count: line.count) }
+            var carriedPainting = [Float](repeating: .nan, count: line.count)
+            var carriedConsensus = [Float](repeating: .nan, count: line.count)
+            carry(painting, by: homography, width: width, height: height, into: &carriedPainting)
+            carry(consensus, by: homography, width: width, height: height, into: &carriedConsensus)
+            return zip(carriedPainting, carriedConsensus).map { $0 - $1 }
+        }
+        let differences = sides.map(difference)
+        let weightOfFirst: Float
+        if let before, let after {
+            weightOfFirst = Float(after - target) / Float(after - before)
+        } else {
+            weightOfFirst = 1
+        }
+        let nearest = sides.map { abs($0 - target) }.min() ?? 0
+        let fade = Float(exp(-Double(nearest) / max(1, parameters.referenceCorrectionDistance)))
+
+        var result = line
+        for x in 0..<line.count {
+            let first = differences[0][x]
+            let second = differences.count > 1 ? differences[1][x] : Float.nan
+            let correction: Float
+            switch (first.isNaN, second.isNaN) {
+            case (false, false): correction = weightOfFirst * first + (1 - weightOfFirst) * second
+            case (false, true):  correction = first
+            case (true, false):  correction = second
+            case (true, true):   correction = 0
+            }
+            result[x] = min(Float(height), max(0, line[x] + fade * correction))
+        }
+        return result
     }
 
     /// What the iterations of a `concurrentPerform` hand back, one index each.

@@ -134,35 +134,14 @@ struct GridCellView: View {
                     .frame(width: imageWidth, height: imageHeight)
                     .clipped()
 
-                if (viewModel.userPreferences.showHorizonOnMainView ?? false) {
-                    let overlay = frameView.gridHorizonOverlay ?? frameView.horizonOverlay
-                    if let overlay {
-                        let strokeColor: Color = frameView.isPendingHorizonRefinement
-                            ? .orange
-                            : { switch overlay.kind {
-                                case .initial:   .white
-                                case .merged:    .blue
-                                case .reference: .green
-                                case .consensus: .purple
-                            }}()
-                        let overlayHeight = overlay.height
-                        Canvas { ctx, size in
-                            var path = Path()
-                            let cols = overlay.yPerColumn.count
-                            guard cols > 0 else { return }
-                            let scaleX = size.width  / CGFloat(cols)
-                            let scaleY = size.height / CGFloat(overlayHeight)
-                            for (col, y) in overlay.yPerColumn.enumerated() {
-                                let pt = CGPoint(x: CGFloat(col) * scaleX,
-                                                 y: CGFloat(y) * scaleY)
-                                if col == 0 { path.move(to: pt) }
-                                else        { path.addLine(to: pt) }
-                            }
-                            ctx.stroke(path, with: .color(strokeColor), lineWidth: 1.5)
-                        }
-                        .frame(width: imageWidth, height: imageHeight)
-                        .allowsHitTesting(false)
-                    }
+                if viewModel.userPreferences.showHorizonOnMainView ?? false {
+                    HorizonLinesCanvas(
+                      overlays: frameView.gridHorizonOverlays.isEmpty
+                        ? frameView.horizonOverlays : frameView.gridHorizonOverlays,
+                      visibleKinds: viewModel.userPreferences.visibleHorizonLineKinds,
+                      isPendingRefinement: frameView.isPendingHorizonRefinement,
+                      lineWidth: 1.5)
+                    .frame(width: imageWidth, height: imageHeight)
                 }
 
                 if let frameState = frameView.frameState {

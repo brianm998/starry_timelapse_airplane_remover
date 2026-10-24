@@ -193,6 +193,9 @@ public actor UpdatableProgressMonitor {
         if let update = progressLine(for: .earthHomography) {
             updates.append(update)
         }
+        if let update = progressLine(for: .horizonConsensus) {
+            updates.append(update)
+        }
         if let update = progressLine(for: .outliers) {
             updates.append(update)
         }
@@ -353,6 +356,8 @@ extension OperationType {
             localized("operation.earth_homography")
         case .alignmentValidation:
             ""
+        case .horizonConsensus:
+            localized("operation.horizon_consensus")
         case .outliers:
             localized("operation.outliers")
         case .merge:
