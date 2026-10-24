@@ -185,9 +185,8 @@ final public actor FrameHorizonProcessor {
           ofTypes: [.mergedHorizon],
           atSizes: [.original, .preview]
         )
-        // Painted references switch the consensus off for the whole sequence, so this line
-        // would never be read again — and it was built from the detection being thrown away
-        // next.
+        // The line was anchored on the references that just changed, and built from the
+        // detection being thrown away next.
         await discardHorizonConsensus()
         await discardPriorGuidedDetection()
     }
@@ -224,8 +223,8 @@ final public actor FrameHorizonProcessor {
         // Reference frames serve their painted mask directly; nothing to recompute.
         if (try await loadHorizonReferenceMask()) != nil { return }
         await releaseCachedFinalHorizonMask()
-        // As in `discardMergedHorizon`: with references painted the consensus is off, and
-        // this frame's line was built from the detection about to be discarded.
+        // As in `discardMergedHorizon`: this frame's line was anchored on the references that
+        // changed, and built from the detection about to be discarded.
         await discardHorizonConsensus()
         // The only caller is `HorizonRefinementOp`, which exists for exactly one reason — a
         // reference was edited — so the detection those references guided is stale too and
@@ -332,8 +331,8 @@ final public actor FrameHorizonProcessor {
     }
 
     /// This frame's horizon from `HorizonConsensus`, when a run has written one and it
-    /// applies — never on a sequence with painted references, whose merged masks are the
-    /// user's.  Nil otherwise, and the merged mask is used as before.
+    /// applies — anchored on the user's painted references where there are any.  Nil
+    /// otherwise, and the merged mask is used as before.
     ///
     /// Only the final mask reads it.  Keypoint detection, which runs before the consensus
     /// can exist, keeps reading the merged mask, so what a stage is built from does not
@@ -345,13 +344,11 @@ final public actor FrameHorizonProcessor {
     }
 
     /// The consensus line the final mask and the overlay read, or nil where neither should:
-    /// the setting is off, it cannot run here, or the user has painted references.
+    /// the setting is off, or it cannot run here.  Painted references do not switch it off;
+    /// they anchor it, and a painted frame's line is its painting.
     private func horizonConsensusRecord() async -> HorizonConsensusStore.Record? {
         let config = await configManager.config()
-        guard HorizonConsensus.applies(to: config),
-              let frame,
-              !HorizonConsensusStore.hasPaintedReferences(config: config)
-        else { return nil }
+        guard HorizonConsensus.applies(to: config), let frame else { return nil }
         return HorizonConsensusStore.read(frameIndex: frameIndex, width: frame.width,
                                           height: frame.height, config: config)
     }
@@ -1542,6 +1539,13 @@ final public actor FrameHorizonProcessor {
         else { return nil }
 
         return HorizonMask(refImage)
+    }
+
+    /// This frame's own painted horizon — never the sequence-wide one — as the first ground
+    /// row of each column, for `HorizonConsensus` to anchor on.  Nil when it has none.
+    func paintedReferenceColumns() async -> [Int?]? {
+        guard let mask = try? await loadPerFrameHorizonReferenceMask() else { return nil }
+        return CombinedHorizonDetector.extractHorizonY(from: mask.image)
     }
 
     /// 1. `{horizonReference}/{frameFileName}` — per-frame reference (moving sequences)

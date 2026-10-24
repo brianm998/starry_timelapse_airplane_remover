@@ -281,9 +281,20 @@ re-expressed as rotations the same way. The
 result is the horizon the outlier subtraction and the final composite use; the
 per-frame masks still mask the keypoints. Against painted horizons on four
 moving sequences it took a cloudy stretch from 1.9% of the frame height off to
-0.1%, halved the error on a clean sequence, and made none measurably worse. It
-is skipped for sequences with painted references, and setting
-`useHorizonConsensus` to false in config.json turns it off.
+0.1%, halved the error on a clean sequence, and made none measurably worse.
+Setting `useHorizonConsensus` to false in config.json turns it off.
+
+Painted reference horizons anchor it rather than replace it. A painted frame's
+line is its painting; every other frame's line is corrected by the painted
+frames either side of it, by as much as the consensus is wrong at them (both
+carried along the same chain, so chain error largely cancels), and the
+correction fades with the distance to the nearest painted frame. So a user can
+paint where the consensus goes wrong — a mistake every frame shares, such as
+moonlit snow read as sky — and keep the consensus everywhere else. Tested by
+leaving each painted frame out in turn, it took the snow sequence from 0.41% to
+0.34% of the height and was never worse than the consensus alone. Repainting a
+reference rebuilds the consensus lines of the frames it affects before they are
+merged again.
 
 It runs as a processing step of its own, with its own row in the progress
 display, and draws each frame's line as a mask beside the detected and merged

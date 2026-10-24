@@ -1189,15 +1189,7 @@ public final actor FrameGraphBuilder {
         // of them and no line yet: a frame whose output is written has nothing left to
         // composite.
         var consensusOp: HorizonConsensusOp? = nil
-        let paintedReferences = HorizonConsensus.applies(to: config)
-          && HorizonConsensusStore.hasPaintedReferences(config: config)
-        if paintedReferences {
-            // Said out loud: otherwise a sequence the consensus would run on, and does not,
-            // looks exactly like a build without it.
-            Log.i("horizon consensus skipped: this sequence has painted horizon references, " +
-                  "which decide its horizons instead")
-        }
-        if HorizonConsensus.applies(to: config), !paintedReferences {
+        if HorizonConsensus.applies(to: config) {
             var targets: [Int] = []
             // A line an earlier run wrote without its image — any run before the view mode
             // existed — is drawn, whatever state its frame is in: drawing it costs nothing like
@@ -1393,6 +1385,10 @@ public final actor FrameGraphBuilder {
     /// - `mergeFrames`: frames with existing output that need re-compositing
     ///   with the updated horizon (each gets a `MergeOp` depending on the
     ///   matching refinement op when one exists).
+    /// - `sequenceFrames`: every frame of the sequence.  Where the horizon consensus
+    ///   applies, the refined and re-merged frames' consensus lines are built again from
+    ///   them, between the refinements and the merges; without them, those frames
+    ///   composite with their merged masks until a full run rebuilds the lines.
     /// - `refinementCompletion`: per-frame callback fired when each refinement
     ///   op finishes — used by callers to refresh overlays.
     ///
@@ -1403,6 +1399,7 @@ public final actor FrameGraphBuilder {
     public func enqueueHorizonRefinement(
       refinementFrames: [FrameAirplaneRemover],
       mergeFrames: [FrameAirplaneRemover],
+      sequenceFrames: [FrameAirplaneRemover] = [],
       refinementCompletion: @escaping @Sendable (FrameAirplaneRemover) async -> Void = { _ in },
       errorClosure: @escaping @Sendable (String) -> Void,
       completion: @escaping @Sendable ([String]) -> Void
@@ -1478,15 +1475,40 @@ public final actor FrameGraphBuilder {
             mergeOps.append(mergeOp)
         }
 
+        // The horizon consensus is anchored on the references that were just edited, so the
+        // lines of every frame being refined or re-merged are built again — after the
+        // refinements, whose detections vote, and before the merges that composite with them.
+        var consensusOps: [Operation] = []
+        if HorizonConsensus.applies(to: config), !sequenceFrames.isEmpty {
+            let targets = Set(refinementFrames.map(\.frameIndex))
+              .union(mergeFrames.map(\.frameIndex)).sorted()
+            if !targets.isEmpty {
+                let consensusOp = HorizonConsensusOp(
+                  frames: sequenceFrames,
+                  targets: targets,
+                  configManager: configManager,
+                  rawImageBytes: rawImageBytes
+                ) { errorString in
+                    Task { await errors.append(errorString) }
+                    errorClosure(errorString)
+                }
+                consensusOp.qualityOfService = .userInteractive
+                refinementOps.values.forEach { consensusOp.addDependency($0) }
+                mergeOps.forEach { $0.addDependency(consensusOp) }
+                consensusOps.append(consensusOp)
+            }
+        }
+
         let completionOp = GraphCompletionOp {
             completion(await errors.elements())
         }
         refinementOps.values.forEach { completionOp.addDependency($0) }
         mergeOps.forEach { completionOp.addDependency($0) }
+        consensusOps.forEach { completionOp.addDependency($0) }
 
         let sortedRefinements = refinementOps.values
             .sorted { $0.frame.frameIndex < $1.frame.frameIndex }
-        let allOps: [Operation] = sortedRefinements + mergeOps + [completionOp]
+        let allOps: [Operation] = sortedRefinements + consensusOps + mergeOps + [completionOp]
         await withCheckedContinuation { continuation in
             queue.addOperations(allOps, waitUntilFinished: false)
             continuation.resume()

@@ -233,6 +233,53 @@ final class HorizonConsensusTests: XCTestCase {
         }
     }
 
+    /// A mistake every frame shares — here the second half of the pan detected 12 rows low,
+    /// as moonlit snow is — gives the other frames nothing to outvote.  Two painted frames fix
+    /// it between them: each painted frame's line is its painting, the frames between are
+    /// corrected by how far its neighbours' consensus is off at the paintings, and without
+    /// paintings the result is what it always was.
+    func testPaintedReferencesCorrectAMistakeEveryFrameShares() throws {
+        let pan = SyntheticPan()
+        var parameters = HorizonConsensus.Parameters()
+        parameters.gridWidth = pan.gridWidth
+        parameters.focalLengthCandidates = [0.61, 0.70, 0.81]
+        var lines = pan.detectedLines(cloudy: nil)
+        for frame in 140..<pan.frameCount {
+            lines[frame] = lines[frame]?.map { $0 + 12 }
+        }
+        let records = pan.storedRecords()
+        let painted = [160, 240]
+        let references = Dictionary(uniqueKeysWithValues: painted.map {
+            ($0, pan.trueLine(frame: $0).map { $0.rounded() })
+        })
+        // as in a run: a painted frame is not detected, its painting stands in
+        for frame in painted { lines[frame] = nil }
+        let between = [170, 200, 230]
+        let targets = painted + between
+
+        let plain = try XCTUnwrap(HorizonConsensus.run(
+          lines: lines, similarityRecords: records, targets: targets,
+          width: pan.width, height: pan.height, voterOrigin: 0, parameters: parameters))
+        let anchored = try XCTUnwrap(HorizonConsensus.run(
+          lines: lines, similarityRecords: records, targets: targets,
+          width: pan.width, height: pan.height, voterOrigin: 0, references: references,
+          parameters: parameters))
+
+        XCTAssertEqual(anchored.paintedTargets, 2)
+        XCTAssertEqual(anchored.correctedTargets, between.count)
+        XCTAssertEqual(plain.correctedTargets, 0)
+        for frame in painted {
+            XCTAssertEqual(anchored.lines[frame], references[frame], "frame \(frame) is its painting")
+        }
+        for frame in between {
+            let truth = pan.trueLine(frame: frame)
+            let before = pan.meanError(try XCTUnwrap(plain.lines[frame]), truth)
+            let after = pan.meanError(try XCTUnwrap(anchored.lines[frame]), truth)
+            XCTAssertGreaterThan(before, 0.012, "frame \(frame) starts 12 rows of 800 off")
+            XCTAssertLessThan(after, 0.004, "frame \(frame)")
+        }
+    }
+
     /// The same pan composed from the stored similarities drifts, which is the failure the
     /// rotations are there to remove.
     func testRotationChainsDriftLessThanTheStoredSimilarities() {
@@ -291,28 +338,11 @@ final class HorizonConsensusTests: XCTestCase {
         XCTAssertFalse(HorizonConsensusStore.exists(frameIndex: 7, config: config))
     }
 
-    func testPaintedReferencesAreTheMasksNotTheirSettings() throws {
-        var config = Config()
-        config.tempOutputPath = FileManager.default.temporaryDirectory
-          .appendingPathComponent("HorizonConsensus-\(UUID().uuidString)").path
-        defer { try? FileManager.default.removeItem(atPath: config.tempOutputPath) }
-        let directory = try XCTUnwrap(config.dirForImage(ofType: .userHorizon, atSize: .original))
-        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-
-        XCTAssertFalse(HorizonConsensusStore.hasPaintedReferences(config: config))
-        // the tuned detector parameters are saved in the same directory
-        try Data("{}".utf8).write(to: URL(fileURLWithPath: "\(directory)/horizon_params.json"))
-        XCTAssertFalse(HorizonConsensusStore.hasPaintedReferences(config: config))
-        let mask = FrameHarness.flatMask(width: 16, height: 16, at: 8)
-        XCTAssertTrue(mask.writeTIFFEncoding(toFilename: "\(directory)/LRT_00012.tif"))
-        XCTAssertTrue(HorizonConsensusStore.hasPaintedReferences(config: config))
-    }
-
     // MARK: - in the pipeline
 
     /// The final mask — what the outlier subtraction and the merge composite with — is the
-    /// consensus line where there is one, and the merged mask where there is not or where the
-    /// user has painted.
+    /// consensus line where there is one, painted references or not, and the merged mask where
+    /// there is none.
     func testTheFinalMaskPrefersTheConsensusLine() async throws {
         let h = try await FrameHarness.make(frameCount: 2, width: 128, height: 96,
                                             horizonRow: 60, named: "consensus-final")
@@ -348,7 +378,7 @@ final class HorizonConsensusTests: XCTestCase {
         try h.plantReferenceMask(FrameHarness.flatMask(width: 128, height: 96, at: 70),
                                  perFrame: true, frameIndex: 1)
         let withReferences = try await finalRow()
-        XCTAssertEqual(withReferences, 60, "a painted sequence keeps its merged masks")
+        XCTAssertEqual(withReferences, 40, "a frame painted elsewhere does not switch the consensus off")
     }
 
     /// The op, against a run's leftovers: first-round masks on disk and ground fits in the

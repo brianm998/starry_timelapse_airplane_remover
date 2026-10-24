@@ -270,8 +270,8 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
     }
 
     /// On a moving sequence the consensus line comes back beside the merged one, and the composite
-    /// reads it — until the setting is off, or the user paints a frame, which switches the consensus
-    /// off for the whole sequence.
+    /// reads it unless the setting is off.  A painted frame shows its painting on top; painting one
+    /// does not switch the consensus off for the others.
     func testTheConsensusLineComesBackBesideTheMergedOne() async throws {
         let h = try await FrameHarness.make(frameCount: 2, width: 64, height: 64,
                                             named: "overlayconsensus")
@@ -308,8 +308,9 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
                                  perFrame: true, frameIndex: 1)
         overlays = await processor(h).loadHorizonThumbnailOverlays(thumbnailWidth: 32,
                                                                   thumbnailHeight: 32)
-        XCTAssertEqual(overlays.kinds, [.merged],
-                       "with a frame painted, the user's horizons decide the whole sequence")
+        XCTAssertEqual(overlays.kinds, [.merged, .consensus],
+                       "a frame painted elsewhere anchors the consensus rather than switching it off")
+        XCTAssertEqual(overlays.compositeLine?.kind, .consensus)
         overlays = await processor(h, at: 1).loadHorizonThumbnailOverlays(thumbnailWidth: 32,
                                                                          thumbnailHeight: 32)
         XCTAssertEqual(overlays.compositeLine?.kind, .reference)

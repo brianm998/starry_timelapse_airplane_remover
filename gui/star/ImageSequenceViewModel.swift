@@ -1365,7 +1365,11 @@ public final class ImageSequenceViewModel {
         // none.
         var steps: [OperationType] = []
         if !refinementFrames.isEmpty { steps.append(.mergedHorizon) }
+        let rebuildsConsensus = HorizonConsensus.applies(to: config.config())
+          && !(refinementFrames.isEmpty && framesToMerge.isEmpty)
+        if rebuildsConsensus { steps.append(.horizonConsensus) }
         if !framesToMerge.isEmpty { steps.append(.merge) }
+        let sequenceFrames = frames.compactMap(\.frame)
 
         // Raising the modal re-takes the progress baseline, so it is skipped while another
         // run is going — that run's bars would otherwise measure from the wrong place.
@@ -1411,6 +1415,7 @@ public final class ImageSequenceViewModel {
             await frameGraphBuilder.enqueueHorizonRefinement(
               refinementFrames: refinementFrames,
               mergeFrames: framesToMerge,
+              sequenceFrames: sequenceFrames,
               refinementCompletion: { [weak self] frame in
                   guard let self else { return }
                   await MainActor.run {

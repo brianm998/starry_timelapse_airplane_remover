@@ -17,9 +17,7 @@ extension HorizonConsensus {
 
     /// Whether `config` describes a run whose horizons the consensus decides: a moving
     /// camera, with horizon detection and earth alignment on, and the setting itself on.
-    ///
-    /// Not the whole answer — a sequence the user has painted references for keeps them, see
-    /// `HorizonConsensusStore.hasPaintedReferences` — but the part that is a setting.
+    /// Painted references anchor it rather than switch it off.
     public static func applies(to config: Config) -> Bool {
         config.useHorizonConsensus && config.tripodHeadWasMoving
           && config.horizonDetectionEnabled && config.allowEarthAlignment
@@ -120,19 +118,5 @@ public enum HorizonConsensusStore {
 
     public static func deleteCalibration(config: Config) {
         try? FileManager.default.removeItem(atPath: calibrationPath(config))
-    }
-
-    /// Whether the user has painted any horizon for this sequence.  Their horizons decide the
-    /// merged masks (`FrameHorizonProcessor.loadOrCreateMergedHorizonMask`), and the consensus
-    /// stays out of the way of a sequence they have taken in hand.
-    public static func hasPaintedReferences(config: Config) -> Bool {
-        guard let directory = config.dirForImage(ofType: .userHorizon, atSize: .original),
-              let names = try? FileManager.default.contentsOfDirectory(atPath: directory)
-        else { return false }
-        return names.contains { name in
-            let lowered = name.lowercased()
-            return !lowered.hasPrefix(".") &&
-              (lowered.hasSuffix(".tif") || lowered.hasSuffix(".tiff") || lowered.hasSuffix(".png"))
-        }
     }
 }

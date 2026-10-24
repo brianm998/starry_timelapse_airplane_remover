@@ -103,9 +103,18 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
               || (index >= low && index <= high && (index - origin) % stride == 0)
         }
 
-        let lines = try await detectedLines(of: sources, height: height)
+        // The user's painted horizons within reach anchor the lines (`HorizonConsensus`
+        // step 5); each needs its own frame's detection too, to measure the consensus there.
+        let inReach = frames.filter { $0.frameIndex >= low && $0.frameIndex <= high }
+        let references = try await paintedReferences(of: inReach, height: height)
+        let sourceIndices = Set(sources.map(\.frameIndex))
+        let allSources = sources + inReach.filter {
+            references[$0.frameIndex] != nil && !sourceIndices.contains($0.frameIndex)
+        }
+
+        let lines = try await detectedLines(of: allSources, height: height)
         try Task.checkCancellation()
-        let records = await groundFits(of: sources)
+        let records = await groundFits(of: allSources)
         try Task.checkCancellation()
 
         let targets = self.targets
@@ -113,7 +122,7 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
         let outcome = await NativeWork.run {
             HorizonConsensus.run(lines: lines, similarityRecords: records, targets: targets,
                                  width: width, height: height, voterOrigin: origin,
-                                 parameters: parameters)
+                                 references: references, parameters: parameters)
         }
         guard let outcome else {
             Log.w("horizon consensus: could not calibrate the ground rotations from " +
@@ -142,7 +151,10 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
               "(lines carried \(calibration.distance) frames land " +
               String(format: "%.3f", calibration.drift * 100) + "% of the height off), " +
               "\(calibration.rejectedEntries) of \(calibration.entries) ground fits left out " +
-              "as no camera rotation; the long span overrode " +
+              "as no camera rotation; \(references.count) painted horizon(s) in reach, " +
+              "\(outcome.paintedTargets) frame(s) painted, \(outcome.correctedTargets) " +
+              "corrected by them; " +
+              "the long span overrode " +
               String(format: "%.2f", overridden) + "% of columns; in " +
               String(format: "%.1f", Date().timeIntervalSince(started)) + "s")
     }
@@ -168,6 +180,33 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
             }
         }
         Log.i("horizon consensus: drew \(drawn) line(s) as horizon consensus images")
+    }
+
+    /// The user's own painted horizon of each of `frames` that has one, as a grid line.
+    private func paintedReferences(of frames: [FrameAirplaneRemover],
+                                   height: Int) async throws -> [Int: [Float]] {
+        let gridWidth = parameters.gridWidth
+        var references: [Int: [Float]] = [:]
+        try await withThrowingTaskGroup(of: (Int, [Float]?).self) { group in
+            var pending = frames[...]
+            func addNext() {
+                guard let frame = pending.popFirst() else { return }
+                group.addTask {
+                    guard let columns = await frame.horizonProcessor.paintedReferenceColumns()
+                    else { return (frame.frameIndex, nil) }
+                    return (frame.frameIndex,
+                            HorizonConsensus.gridLine(fromColumns: columns, height: height,
+                                                      gridWidth: gridWidth))
+                }
+            }
+            for _ in 0..<Self.concurrentDecodes { addNext() }
+            while let (frameIndex, line) = try await group.next() {
+                try Task.checkCancellation()
+                if let line { references[frameIndex] = line }
+                addNext()
+            }
+        }
+        return references
     }
 
     /// Each frame's detected horizon, as a grid line, for the frames whose first-round mask
