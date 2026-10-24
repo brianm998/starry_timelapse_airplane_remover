@@ -200,6 +200,25 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     ///      calibrateGroundFocalLength).
     public static let earthAlignmentAlgorithmVersion = 2
 
+    /// Which version of `CombinedHorizonDetector`, as `FrameHorizonProcessor` runs it on each
+    /// frame of a moving sequence, produced the stored first-round horizon masks.
+    ///
+    /// Recorded only for a moving camera with combined detection on, the one place
+    /// per-frame masks are still detected with it (see `horizonInputs`).  A record that
+    /// predates the key, from such a sequence, counts as changed and is rebuilt from
+    /// scratch once — the whole sequence, since every later stage reads these masks.
+    ///
+    /// The bump covers frames detected without references, which is what changed; a run
+    /// guided by painted references searches the band they give, which did not, but it is
+    /// rebuilt too: this record cannot tell the two apart without flipping every time the
+    /// first reference is painted, which would cost a full rebuild each time instead of once.
+    ///
+    /// - 1: everything before this key existed.  Never written.
+    /// - 2: the base methods search down to 0.99 of the height rather than 0.85/0.95, so a
+    ///      low horizon can be found at all, and an unguided frame is detected on a copy
+    ///      `TemporalHorizonDetector.workingWidth` wide (6804f8f3).
+    public static let movingHorizonDetectionAlgorithmVersion = 2
+
     public let version: Int
 
     /// stage rawValue → setting name → value.  Nested rather than flat so a stage can be
@@ -231,25 +250,28 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     /// Branches on the detection mode so that changing a setting the current mode does
     /// not consult cannot invalidate anything.  The combined+RW detector takes no config
     /// at all — `CombinedHorizonDetector.detect(image:)` is fully parameterised in code
-    /// — so in that mode the only input is the choice of mode itself.
+    /// — so in that mode the inputs are the choice of mode and the code's version.
     ///
-    /// Which means this stage has the same blind spot `detectionAlgorithmVersion` closes
-    /// for the keypoints, and more of it: in combined mode a change to the detector is
-    /// invisible here.  Deliberately left open for now.  The two levers are not
-    /// comparable in cost — `horizon` is first in the dependency order, so a version
-    /// here would take the merged masks and every keypoint set and every homography with
-    /// it, i.e. the entire sequence, where the keypoint lever stops at the alignment —
-    /// and nothing has yet needed it: the horizon code changes since this landed are
-    /// output-neutral by their own measurement (8364ff9e scales every candidate in a
-    /// comparison equally, so the ordering it feeds cannot move; 97928062 fixes a trap on
-    /// an empty horizon, a path that produced no mask to cache).  Add one the first time
-    /// a horizon change moves a mask, and expect it to cost a full reprocess.
+    /// That version is `movingHorizonDetectionAlgorithmVersion`, recorded only where
+    /// per-frame masks are detected with it: a moving camera.  `horizon` is first in the dependency order, so
+    /// bumping it takes the merged masks and every keypoint set and every homography with
+    /// it, i.e. the entire sequence — a lever for a change that moves masks, not for one
+    /// that is output-neutral by its own measurement (8364ff9e, 97928062).
     private static func horizonInputs(_ config: Config) -> [String: String] {
         var inputs: [String: String] = [
             "horizonDetectionEnabled":    str(config.horizonDetectionEnabled),
             "useCombinedHorizonDetection": str(config.useCombinedHorizonDetection),
         ]
-        guard !config.useCombinedHorizonDetection else { return inputs }
+        if config.useCombinedHorizonDetection {
+            // A static sequence detects no per-frame masks at all — its merge reads the
+            // temporal median or the painted reference — so the version means nothing there,
+            // and recording it would rebuild a static sequence for a change it never sees.
+            if config.horizonDetectionEnabled && config.tripodHeadWasMoving {
+                inputs["movingHorizonDetectionAlgorithmVersion"] =
+                  str(movingHorizonDetectionAlgorithmVersion)
+            }
+            return inputs
+        }
 
         inputs["useCannyForHorizonDetection"] = str(config.useCannyForHorizonDetection)
         inputs["cannyMinThreshold"]           = str(config.cannyMinThreshold)
