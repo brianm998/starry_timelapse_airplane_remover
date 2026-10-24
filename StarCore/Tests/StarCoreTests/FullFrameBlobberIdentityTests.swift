@@ -153,6 +153,36 @@ final class FullFrameBlobberIdentityTests: XCTestCase {
         _ = await compare([UInt16](repeating: 40000, count: w * h), width: w, height: h, args: args(), "flat bright")
     }
 
+    /// Ids starting at 0, which is what production uses: `FrameOutlierProcessor.findOutliers()`
+    /// takes `AbstractBlobProcessor.process`'s default. When 0 also meant "unknown" in the
+    /// blobber's pixel state, blob 0 could never mark a pixel as its own, so its flood fill
+    /// queued the same neighbours forever and its stack grew until the process ran out of
+    /// memory (Gherkin run 39982100958, every desktop platform).
+    func testBlobIdsStartingAtZero() async {
+        // An isolated brightest pixel first. With that collision blob 0 comes out empty here
+        // instead of looping, so this half fails fast; the fields below would never finish.
+        let w = 5, h = 5
+        var isolated = [UInt16](repeating: 0, count: w * h)
+        isolated[2 * w + 2] = 30000
+        let blobber = await FullFrameBlobber(
+          config: Config(), args: args(), imageWidth: w, imageHeight: h,
+          subtractionPixelData: isolated, frameIndex: 0, neighborType: .eight, startingBlobID: 0)
+        blobber.sortPixels()
+        await blobber.process()
+        let found = await fingerprint(blobber.blobs)
+        guard found == ["0: 2,2,30000"] else {
+            XCTFail("blob 0 did not keep its own seed: \(found)")
+            return
+        }
+
+        var rng = Rng(state: 9)
+        var dense = [UInt16](repeating: 0, count: 90 * 70)
+        for i in 0..<dense.count { dense[i] = UInt16(7000 + rng.next() % 40000) }
+        _ = await compare(dense, width: 90, height: 70, args: args(), startingBlobID: 0, "dense, id 0")
+        _ = await compare([UInt16](repeating: 40000, count: 20 * 20), width: 20, height: 20,
+                          args: args(), startingBlobID: 0, "flat bright, id 0")
+    }
+
     // MARK: - real subtraction images
 
     /// Neighbouring frames of the shipped test sequence, differenced and cropped: noise, stars
