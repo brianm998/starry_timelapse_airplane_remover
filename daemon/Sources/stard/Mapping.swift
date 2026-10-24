@@ -570,6 +570,7 @@ enum Mapping {
         case .initial:   return .initial
         case .merged:    return .merged
         case .reference: return .reference
+        case .consensus: return .consensus
         }
     }
 }

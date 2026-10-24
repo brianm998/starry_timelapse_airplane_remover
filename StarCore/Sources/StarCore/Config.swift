@@ -968,6 +968,15 @@ public struct Config: Codable, Sendable {
     // — in the median; more cost a full-size decode each.
     public var temporalHorizonSampleCount: Int = 48
 
+    // When true, the horizons a moving sequence's outlier subtraction and final composite
+    // use come from `HorizonConsensus`: once the ground has been aligned, each frame's
+    // horizon is the consensus of the horizons detected in the frames around it, carried
+    // into it along the ground.  That corrects what a per-frame detection gets wrong for a
+    // while — a cloud bank on the ridge measured 1.9% of the frame height off, 0.1% after.
+    // Needs earth alignment, and stays out of a sequence with painted references.  Set to
+    // false to composite with the merged masks.
+    public var useHorizonConsensus: Bool = true
+
     // Removed: horizonStripWidth.  It sized the strips that `PixelatedImage.horizonMask`
     // used to Otsu-threshold separately; that step is the `splitIntoMatrix` call still
     // commented out in Horizon.swift, and since it went the whole bottom crop is
@@ -1621,6 +1630,7 @@ public struct Config: Codable, Sendable {
         self.useCombinedHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCombinedHorizonDetection) ?? self.useCombinedHorizonDetection
         self.useTemporalStaticHorizon = try c.decodeIfPresent(Bool.self, forKey: .useTemporalStaticHorizon) ?? self.useTemporalStaticHorizon
         self.temporalHorizonSampleCount = try c.decodeIfPresent(Int.self, forKey: .temporalHorizonSampleCount) ?? self.temporalHorizonSampleCount
+        self.useHorizonConsensus = try c.decodeIfPresent(Bool.self, forKey: .useHorizonConsensus) ?? self.useHorizonConsensus
         self.useCannyForHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCannyForHorizonDetection) ?? self.useCannyForHorizonDetection
         self.cannyMinThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMinThreshold) ?? self.cannyMinThreshold
         self.cannyMaxThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMaxThreshold) ?? self.cannyMaxThreshold

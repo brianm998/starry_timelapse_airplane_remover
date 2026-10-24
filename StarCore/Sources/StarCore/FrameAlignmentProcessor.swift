@@ -808,9 +808,11 @@ final public actor FrameAlignmentProcessor {
 
             // Only with horizon detection on: FrameGraphBuilder builds no horizon ops
             // without it, so asking here detects and merges a horizon nothing reads.
+            // The final mask, as the freshly merged path below hands back: it is the
+            // horizon consensus where one applies, and the merged mask otherwise.
             var horizonMask: HorizonMask? = nil
             if config.horizonDetectionEnabled {
-                horizonMask = try await frame?.loadOrCreateMergedHorizonMask()
+                horizonMask = try await frame?.loadOrCreateFinalHorizonMask()
             }
             var results: HomographyResultsCodable? = nil
             switch alignmentType {
@@ -861,7 +863,7 @@ final public actor FrameAlignmentProcessor {
                     Log.d("frame \(frameIndex) trying to load image of type \(failedType) because we were unable to load image of type \(type)")
                     var horizonMask: HorizonMask? = nil
                     if config.horizonDetectionEnabled {
-                        horizonMask = try await frame?.loadOrCreateMergedHorizonMask()
+                        horizonMask = try await frame?.loadOrCreateFinalHorizonMask()
                     }
                     var results: HomographyResultsCodable? = nil
                     switch alignmentType {

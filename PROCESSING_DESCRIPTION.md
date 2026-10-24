@@ -112,7 +112,9 @@ be moving (`--moving-camera` on the CLI):
   Earth alignment is available, so the clean reference is built from
   neighbor frames in *both* sky and ground regions.
 - **Moving**: each frame's horizon merge depends only on its local neighbors
-  ([`FrameGraphBuilder.swift:261`](StarCore/Sources/StarCore/FrameGraphBuilder.swift:261)).
+  ([`FrameGraphBuilder.swift:261`](StarCore/Sources/StarCore/FrameGraphBuilder.swift:261)),
+  and after alignment a single consensus step re-derives every frame's horizon
+  from the whole sequence's detections (§3.2).
   Homography is per-frame with no global smoothing. Earth alignment is on by
   default here too, so the ground portion of the clean reference is built from
   neighbor frames as well — except where the ground cannot be tracked
@@ -195,7 +197,9 @@ Each candidate horizon is scored by
 For moving timelapses with no painted reference, detection runs on a copy
 of the frame shrunk to 1600 px wide and the answer is scaled back up: the
 Random Walker's brush radii are fixed pixel counts, which are a sliver of a
-6000 px frame and a useful search at 1600.
+6000 px frame and a useful search at 1600. Those per-frame horizons mask the
+keypoints; once the ground has been aligned they are combined into the
+horizon the composite uses (end of §3.2).
 
 For static timelapses the horizon is found once, not per frame
 ([`TemporalHorizonDetector.swift`](StarCore/Sources/StarCore/TemporalHorizonDetector.swift)).
@@ -258,6 +262,26 @@ then sanity-checks the result. For static sequences it computes the
 median homography across the whole sequence and rejects any frame whose
 homography deviates too far. For moving sequences it can only smooth
 locally, which is part of why moving sequences are harder.
+
+For moving sequences the ground alignment then feeds back into the horizon
+([`HorizonConsensus.swift`](StarCore/Sources/StarCore/HorizonConsensus.swift)).
+Every fourth frame's detected horizon within ±400 frames is carried into each
+frame along the ground, and each column takes the densest cluster of those
+lines, favouring the frames nearest in time. A detection that is wrong for a
+while — a dark cloud bank on the ridge, read as ground for two hundred frames —
+is outvoted by the frames before and after it, where the ridge was clear; where
+the long span and a ±64-frame one disagree by less than 2% of the height, the
+shorter, more precise one is kept. The stored ground fits are 4-DOF
+similarities, which cannot represent a pan's perspective and drift when chained
+over hundreds of frames, so the chains are built from camera rotations fitted
+to them instead, with the focal length that makes carried lines agree best —
+found from the sequence itself, since exported frames carry no lens data. The
+result is the horizon the outlier subtraction and the final composite use; the
+per-frame masks still mask the keypoints. Against painted horizons on four
+moving sequences it took a cloudy stretch from 1.9% of the frame height off to
+0.1%, halved the error on a clean sequence, and made none measurably worse. It
+is skipped for sequences with painted references, and setting
+`useHorizonConsensus` to false in config.json turns it off.
 
 ### 3.3. The Clean Reference: Sigma-Clipped Median Stack
 

@@ -262,6 +262,7 @@ struct FrameEditView: View {
                     case .initial:   .white
                     case .merged:    .blue
                     case .reference: .green
+                    case .consensus: .purple
                 }}
                 let zoom = viewModel.currentZoomScale
                 Canvas { ctx, size in

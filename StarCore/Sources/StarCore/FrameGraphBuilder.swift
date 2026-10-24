@@ -450,6 +450,22 @@ public final actor FrameGraphBuilder {
             }
         }
 
+        if stale.contains(.horizonConsensus) {
+            var deleted = 0
+            for frameIndex in range.output
+            where HorizonConsensusStore.exists(frameIndex: frameIndex, config: config) {
+                HorizonConsensusStore.delete(frameIndex: frameIndex, config: config)
+                deleted += 1
+            }
+            HorizonConsensusStore.deleteCalibration(config: config)
+            // In a long-lived session a frame may still hold the final mask the old line
+            // gave it.
+            for frame in frames where range.output.contains(frame.frameIndex) {
+                await frame.horizonProcessor.releaseCachedFinalHorizonMask()
+            }
+            Log.i("deleted \(deleted) stale horizon consensus line(s)")
+        }
+
         if stale.contains(.outliers) {
             var deleted = 0
             for frame in frames where range.output.contains(frame.frameIndex) {
@@ -1164,6 +1180,43 @@ public final actor FrameGraphBuilder {
         homographyOps.forEach { validationOp.addDependency($0) }
         allOps.append(validationOp)
 
+        // A moving sequence's horizons from the consensus of every frame's detection,
+        // carried along the ground that validation has just settled (`HorizonConsensus`).
+        // Before the outlier ops and the merges, since both composite the two aligned
+        // layers across the horizon.  Built only for frames that still have that work ahead
+        // of them and no line yet: a frame whose output is written has nothing left to
+        // composite.
+        var consensusOp: HorizonConsensusOp? = nil
+        if HorizonConsensus.applies(to: config),
+           !HorizonConsensusStore.hasPaintedReferences(config: config)
+        {
+            var targets: [Int] = []
+            for frame in outputFrames
+            where !HorizonConsensusStore.exists(frameIndex: frame.frameIndex, config: config) {
+                if await frame.processingState() != .complete {
+                    targets.append(frame.frameIndex)
+                }
+            }
+            if !targets.isEmpty {
+                let op = HorizonConsensusOp(
+                  frames: frames,
+                  targets: targets,
+                  configManager: configManager,
+                  rawImageBytes: rawImageBytes
+                ) { errorString in
+                    Task { await errors.append(errorString) }
+                    errorClosure(errorString)
+                }
+                op.qualityOfService = .userInteractive
+                op.addDependency(validationOp)
+                // Every detection is a vote, including those of frames no merge waits on.
+                horizonOps.values.forEach { op.addDependency($0) }
+                allOps.append(op)
+                consensusOp = op
+                Log.i("horizon consensus will be built for \(targets.count) frame(s)")
+            }
+        }
+
         // how many in each direction for final outlier classification.  Clamped at 0:
         // it is a radius, and a negative one would invert the neighbour range below.
         let numOutlierNeighbors = max(0, config.numberFinalProcessingNeighborsNeeded)
@@ -1191,6 +1244,7 @@ public final actor FrameGraphBuilder {
                 }
 
                 outlierOp.addDependency(validationOp)
+                if let consensusOp { outlierOp.addDependency(consensusOp) }
                 allOps.append(outlierOp)
                 outlierOps[frame.frameIndex] = outlierOp
             }
@@ -1224,6 +1278,7 @@ public final actor FrameGraphBuilder {
 
             mergeOp.qualityOfService = .userInteractive
             mergeOp.addDependency(validationOp)
+            if let consensusOp { mergeOp.addDependency(consensusOp) }
 
 
             // add outlier dependencies for neighbor frames; will be a nop
@@ -1276,6 +1331,7 @@ public final actor FrameGraphBuilder {
         // and one of them is already an ancestor of every merge, so this only ever
         // removes a way to report done early.
         completionOp.addDependency(validationOp)
+        if let consensusOp { completionOp.addDependency(consensusOp) }
         outlierOps.values.forEach { completionOp.addDependency($0) }
         allOps.append(completionOp)
 
