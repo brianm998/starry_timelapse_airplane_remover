@@ -496,6 +496,16 @@ public actor MemoryMonitor {
         }
         Log.i(message)
 
+        // Memory is what this waits for, so the GPU pools give theirs back and stop keeping
+        // any until the queue empties (see `drainReadyWaiters`). On unified memory an idle pool
+        // is the process's own footprint, which narrows the budget and inflates the realized
+        // ratio by the same bytes no reservation covers.
+        let pooled = GPUOps.texturePoolStats.heldBytes
+        if GPUOps.setPoolingAllowed(false) {
+            Log.i("MemoryMonitor: GPU resource pools off while reservations wait — released " +
+                  "\(pooled / (1024*1024))MB of pooled textures")
+        }
+
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let id = nextWaiterId
             nextWaiterId += 1
@@ -964,6 +974,9 @@ public actor MemoryMonitor {
         if waiters.isEmpty {
             pollTask?.cancel()
             pollTask = nil
+            if GPUOps.setPoolingAllowed(true) {
+                Log.i("MemoryMonitor: no reservations waiting — GPU resource pools back on")
+            }
         }
     }
 }

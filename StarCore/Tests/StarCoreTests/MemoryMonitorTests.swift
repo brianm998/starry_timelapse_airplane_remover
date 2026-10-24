@@ -1,4 +1,5 @@
 import XCTest
+import StarCppBridge
 @testable import StarCore
 
 /// File scope rather than an instance property: the timeout helper below takes a @Sendable
@@ -976,6 +977,30 @@ final class MemoryMonitorTests: XCTestCase {
         XCTAssertLessThanOrEqual(high, budget)
         let end = await m.snapshot().reservedBytes
         XCTAssertEqual(end, 0)
+    }
+
+    /// Work waiting for memory turns the GPU pools off, and the queue emptying turns them back
+    /// on: an idle pool is footprint no reservation covers, and on a 7GB machine it helped hold
+    /// the budget below one keypoint op.
+    func testAWaitingReservationTurnsGPUPoolingOffUntilTheQueueEmpties() async {
+        let m = await monitor()
+        await m.configure(budgetFraction: 0.1, maxWaitTime: 600)
+        let budget = await m.snapshot().admissionBudgetBytes
+        let big = budget * 6 / 10
+        // The flag is process-wide, and earlier tests here leave monitors with waiters queued.
+        GPUOps.setPoolingAllowed(true)
+
+        await m.reserve(bytes: big)
+        XCTAssertTrue(GPUOps.poolingAllowed, "an admitted reservation turned pooling off")
+
+        let b = Task { await m.reserve(bytes: big) }
+        while await m.snapshot().waiting < 1 { try? await Task.sleep(nanoseconds: 5_000_000) }
+        XCTAssertFalse(GPUOps.poolingAllowed, "pooling stayed on while a reservation waited")
+
+        await m.release(bytes: big)
+        await b.value
+        XCTAssertTrue(GPUOps.poolingAllowed, "pooling stayed off after the queue emptied")
+        await m.release(bytes: big)
     }
 
     private actor Peak {
