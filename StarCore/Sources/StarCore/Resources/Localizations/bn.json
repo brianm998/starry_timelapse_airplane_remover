@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "এই ফ্রেমটি নির্বাচনী মোড ব্যবহার করে",
   "ui.this_sequence_has_not_been_processed_yet": "এই ক্রমটি এখনও প্রক্রিয়া করা হয়নি।",
   "ui.this_sequence_is_partly_processed": "এই ক্রমটি আংশিকভাবে প্রক্রিয়া করা হয়েছে।",
+  "ui.this_sequence_needs_rebuilding": "এই ক্রমের কিছু অংশ star-এর পুরোনো সংস্করণে বা ভিন্ন সেটিংসে তৈরি হয়েছিল, এবং সেগুলো আবার তৈরি করা হবে।",
   "ui.thumbnail_size": "থাম্বনেইলের আকার",
   "ui.to_begin_processing_each_frame_we_must_first": "প্রতিটি ফ্রেম প্রক্রিয়া করা শুরু করতে প্রথমে আমাদের:",
   "ui.toggle_filmstrip": "ফিল্ম স্ট্রিপ দেখান বা লুকান",

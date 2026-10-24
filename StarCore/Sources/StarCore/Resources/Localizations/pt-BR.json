@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "Este quadro usa o modo seletivo",
   "ui.this_sequence_has_not_been_processed_yet": "Esta sequência ainda não foi processada.",
   "ui.this_sequence_is_partly_processed": "Esta sequência está parcialmente processada.",
+  "ui.this_sequence_needs_rebuilding": "Partes desta sequência foram feitas por uma versão mais antiga do star, ou com outras configurações, e serão refeitas.",
   "ui.thumbnail_size": "Tamanho das miniaturas",
   "ui.to_begin_processing_each_frame_we_must_first": "Para começar a processar cada quadro, primeiro é preciso:",
   "ui.toggle_filmstrip": "Exibir/ocultar a tira de filme",

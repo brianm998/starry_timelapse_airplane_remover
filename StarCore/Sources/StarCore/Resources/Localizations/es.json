@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "Este fotograma usa el modo selectivo",
   "ui.this_sequence_has_not_been_processed_yet": "Esta secuencia aún no se ha procesado.",
   "ui.this_sequence_is_partly_processed": "Esta secuencia está procesada en parte.",
+  "ui.this_sequence_needs_rebuilding": "Partes de esta secuencia se hicieron con una versión anterior de star, o con otros ajustes, y se volverán a hacer.",
   "ui.thumbnail_size": "Tamaño de las miniaturas",
   "ui.to_begin_processing_each_frame_we_must_first": "Para empezar a procesar cada fotograma, primero hay que:",
   "ui.toggle_filmstrip": "Mostrar u ocultar la tira de fotogramas",

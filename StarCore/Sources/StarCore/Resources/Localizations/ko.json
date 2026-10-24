@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "이 프레임은 선택 모드를 사용합니다",
   "ui.this_sequence_has_not_been_processed_yet": "이 시퀀스는 아직 처리되지 않았습니다.",
   "ui.this_sequence_is_partly_processed": "이 시퀀스는 일부만 처리되었습니다.",
+  "ui.this_sequence_needs_rebuilding": "이 시퀀스의 일부는 이전 버전의 star 또는 다른 설정으로 만들어졌으므로 다시 만들어집니다.",
   "ui.thumbnail_size": "썸네일 크기",
   "ui.to_begin_processing_each_frame_we_must_first": "각 프레임의 처리를 시작하려면 먼저 다음이 필요합니다:",
   "ui.toggle_filmstrip": "필름 스트립 표시/숨기기",

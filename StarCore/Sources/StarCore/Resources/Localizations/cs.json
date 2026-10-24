@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "Tento snímek používá výběrový režim",
   "ui.this_sequence_has_not_been_processed_yet": "Tato sekvence dosud nebyla zpracována.",
   "ui.this_sequence_is_partly_processed": "Tato sekvence je zpracována částečně.",
+  "ui.this_sequence_needs_rebuilding": "Části této sekvence vytvořila starší verze programu star nebo jiná nastavení a budou vytvořeny znovu.",
   "ui.thumbnail_size": "Velikost miniatur",
   "ui.to_begin_processing_each_frame_we_must_first": "Než začneme zpracovávat každý snímek, je nejprve třeba:",
   "ui.toggle_filmstrip": "Zobrazit/skrýt filmový pás",

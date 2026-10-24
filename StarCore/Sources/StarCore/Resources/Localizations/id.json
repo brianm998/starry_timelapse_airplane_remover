@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "Bingkai ini memakai mode selektif",
   "ui.this_sequence_has_not_been_processed_yet": "Sekuens ini belum diproses.",
   "ui.this_sequence_is_partly_processed": "Sekuens ini diproses sebagian.",
+  "ui.this_sequence_needs_rebuilding": "Sebagian urutan ini dibuat oleh versi star yang lebih lama, atau dengan pengaturan lain, dan akan dibuat ulang.",
   "ui.thumbnail_size": "Ukuran gambar mini",
   "ui.to_begin_processing_each_frame_we_must_first": "Untuk mulai memproses setiap bingkai, pertama-tama kita harus:",
   "ui.toggle_filmstrip": "Tampilkan/sembunyikan pita film",

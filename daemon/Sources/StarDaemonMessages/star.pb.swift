@@ -3317,6 +3317,10 @@ public struct Star_V1_SequenceProgress: Sendable {
   /// every frame has its output written, so a run would have nothing to merge
   public var isComplete: Bool = false
 
+  /// Work on disk was made by other settings or an older version of star's code, so the next run makes it again (and the output with it):
+  /// those steps are counted as not done, and the panel says why.
+  public var needsRebuild: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -8429,7 +8433,7 @@ extension Star_V1_StepProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
 
 extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SequenceProgress"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sequence_name\0\u{3}frame_count\0\u{3}frames_complete\0\u{1}steps\0\u{3}is_untouched\0\u{3}is_complete\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sequence_name\0\u{3}frame_count\0\u{3}frames_complete\0\u{1}steps\0\u{3}is_untouched\0\u{3}is_complete\0\u{3}needs_rebuild\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8443,6 +8447,7 @@ extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._Messag
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.steps) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.isUntouched) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.isComplete) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.needsRebuild) }()
       default: break
       }
     }
@@ -8467,6 +8472,9 @@ extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if self.isComplete != false {
       try visitor.visitSingularBoolField(value: self.isComplete, fieldNumber: 6)
     }
+    if self.needsRebuild != false {
+      try visitor.visitSingularBoolField(value: self.needsRebuild, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8477,6 +8485,7 @@ extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if lhs.steps != rhs.steps {return false}
     if lhs.isUntouched != rhs.isUntouched {return false}
     if lhs.isComplete != rhs.isComplete {return false}
+    if lhs.needsRebuild != rhs.needsRebuild {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
