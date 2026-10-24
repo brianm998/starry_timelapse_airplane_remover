@@ -473,6 +473,8 @@ final public actor FrameAlignmentProcessor {
         let homographyConfig = config
         let homographyIndex = self.frameIndex
         let homographyAlignmentType = alignmentType
+        let homographyWidth = Int32(self.width)
+        let homographyHeight = Int32(self.height)
         let result = await NativeWork.run { [self] in
             ImageAligner.computeHomography(
              baseKeypoints: homographyKeypoints,
@@ -488,6 +490,9 @@ final public actor FrameAlignmentProcessor {
              alignmentType: homographyAlignmentType,
              maxKeypoints: Int32(homographyConfig.alignmentMaxKeypoints),
              writeDebugImages: homographyConfig.alignmentWriteDebugImages,
+             // The ground is fitted as a camera turning about the frame's centre.
+             imageWidth: homographyWidth,
+             imageHeight: homographyHeight,
              handler: { frameIndex,
                         alignmentType,
                         alignmentStep,

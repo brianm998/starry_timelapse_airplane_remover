@@ -175,6 +175,23 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     ///      starsOverruleThinSkyFit).
     public static let alignmentAlgorithmVersion = 2
 
+    /// Which version of the *ground* fit produced the stored earth homographies — the
+    /// lever for a change to how `ia_compute_homography` fits the ground alone.
+    ///
+    /// Not `alignmentAlgorithmVersion`, because only a moving camera with earth alignment
+    /// and horizon detection on has earth homographies (`FrameGraphBuilder` builds no
+    /// earth homography op otherwise), and bumping the shared lever would re-fit every
+    /// static sequence's sky for a change that cannot reach it.  So this is recorded only
+    /// where the ground is fitted, the way `cloudAwareMerge` is recorded only while on: a
+    /// record that predates the key, from a sequence that does fit its ground, counts as
+    /// changed and is re-aligned once; every other record is the one it always was.
+    ///
+    /// - 1: a 4-DOF similarity (cv::estimateAffinePartial2D).  Never written.
+    /// - 2: a camera rotation, K R K^-1, about the frame's centre, with each frame's focal
+    ///      length calibrated from its own correspondences (ImageAligner.cpp,
+    ///      calibrateGroundFocalLength).
+    public static let earthAlignmentAlgorithmVersion = 2
+
     public let version: Int
 
     /// stage rawValue → setting name → value.  Nested rather than flat so a stage can be
@@ -345,6 +362,14 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         // static neighbours instead, and reads none of the earth settings.
         if !config.tripodHeadWasMoving {
             inputs.removeValue(forKey: "allowEarthAlignment")
+        }
+        // The ground fit's version, where there is a ground fit: see
+        // `earthAlignmentAlgorithmVersion`, and the condition FrameGraphBuilder builds
+        // the earth homography ops under.
+        if config.tripodHeadWasMoving && config.allowEarthAlignment &&
+             config.horizonDetectionEnabled
+        {
+            inputs["earthAlignmentAlgorithmVersion"] = str(earthAlignmentAlgorithmVersion)
         }
         // The cloud-aware merge changes the star aligned image this stage writes, so it
         // is an input to it, but it is recorded only while it is on.  A record that lacks
