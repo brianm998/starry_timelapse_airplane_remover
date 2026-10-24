@@ -100,6 +100,8 @@ The benefit of using some of the earth aligned image in the sky is that airplane
 
 For videos shot on a moving tripod, earth alignment is on by default.  There is an option in settings to turn it off.
 
+The ground is aligned as what a panning head actually does to it: the camera turning about its own centre.  On a wide lens that moves the edges of the frame noticeably further than its middle, and a simpler shift-and-rotate fit leaves the ground at the edges smeared sideways in the merged result.  Turning the camera properly needs the lens's focal length, which exported frames rarely carry, so Star works it out for each frame from how its ground moves across the width of the frame.  Where the ground is too dark, or moves too little, to show that, the frame is aligned without the edge correction.
+
 Aligning the ground is harder than aligning the sky, and a really dark foreground can still be untrackable.  Star checks the RANSAC consensus behind each ground homography and throws out the ones that do not have enough agreement, so a neighbor whose ground cannot be tracked drops out of the merge instead of smearing the frame.
 
 #### Final Auto Clean

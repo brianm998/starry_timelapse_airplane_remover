@@ -93,7 +93,9 @@ final class SkyStarRefinementTests: XCTestCase {
             neighbors: [AlignmentNeighborInfo(filename: "neighbor", maskFilename: nil,
                                               keypoints: neighbor, frameIndex: 1)],
             matchMethod: .knnLowes, alignmentType: .sky, maxKeypoints: 2000,
-            writeDebugImages: false, handler: { _, _, _, _ in }))
+            writeDebugImages: false,
+            imageWidth: Int32(width), imageHeight: Int32(height),
+            handler: { _, _, _, _ in }))
         let warp = try XCTUnwrap(result.warpInfo.first)
         XCTAssertEqual(warp.alignmentState, .homographySuccess)
         let h = try XCTUnwrap(warp.homography?.homographyValues)
@@ -160,7 +162,9 @@ final class SkyStarRefinementTests: XCTestCase {
             neighbors: [AlignmentNeighborInfo(filename: "neighbor", maskFilename: nil,
                                               keypoints: neighbor, frameIndex: 1)],
             matchMethod: .knnLowes, alignmentType: .sky, maxKeypoints: 2000,
-            writeDebugImages: false, handler: { _, _, _, _ in }))
+            writeDebugImages: false,
+            imageWidth: Int32(width), imageHeight: Int32(height),
+            handler: { _, _, _, _ in }))
         let warp = try XCTUnwrap(result.warpInfo.first)
         XCTAssertNil(warp.homography,
                      "a fit only the dust supports was reported as the sky's motion")

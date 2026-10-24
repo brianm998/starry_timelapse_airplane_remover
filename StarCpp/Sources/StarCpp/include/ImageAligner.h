@@ -149,12 +149,17 @@ OCVFeatureSetRef ia_debug_akaze_opencv(MatWrapperRef img, MatWrapperRef mask,
 // Compute homography for each neighbor. Returns count of warp infos written.
 // outWarpInfos must point to an array of at least neighborCount elements.
 // On error, returns 0 and sets errorMsg.
+//
+// imageWidth/imageHeight are the full-resolution frame's, which the keypoints are in.  The
+// ground is fitted as a camera rotation about the frame's centre, so earth alignment
+// needs them and fails without; the sky does not read them.
 int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                           int frameIndex,
                           const AlignmentNeighborData *neighbors, int neighborCount,
                           FeatureMatchMethod matchMethod,
                           AlignmentType alignmentType,
                           int maxKeypoints, bool writeDebugImages,
+                          int imageWidth, int imageHeight,
                           AlignmentUpdateFunc updateHandler, void *updateContext,
                           AlignmentWarpInfoData *outWarpInfos,
                           const char **errorMsg);

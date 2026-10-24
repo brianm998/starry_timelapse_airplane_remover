@@ -221,11 +221,11 @@ final class GroundAlignmentTests: XCTestCase {
         }
     }
 
-    private func earthFeatures(of image: MatWrapper) -> OCVFeatureSet? {
+    private func earthFeatures(of image: MatWrapper, mask: MatWrapper? = nil) -> OCVFeatureSet? {
         ImageAligner.findFeatures(baseImage: image,
                                   frameIndex: 0,
                                   matchMethod: .knnLowes,
-                                  mask: alignMask(),
+                                  mask: mask ?? alignMask(),
                                   alignmentType: .earth,
                                   maxKeypoints: 2000,
                                   writeDebugImages: false,
@@ -235,10 +235,14 @@ final class GroundAlignmentTests: XCTestCase {
                                   baseImageThresholdValue: 100)
     }
 
-    private func groundHomography(base: MatWrapper,
-                                  neighbor: MatWrapper) throws -> AlignmentWarpInfo {
-        let baseFeatures = try XCTUnwrap(earthFeatures(of: base))
-        let neighborFeatures = try XCTUnwrap(earthFeatures(of: neighbor))
+    /// The masks and size default to the 480x320 frames above.
+    private func groundHomography(base: MatWrapper, baseMask: MatWrapper? = nil,
+                                  neighbor: MatWrapper, neighborMask: MatWrapper? = nil,
+                                  width: Int? = nil, height: Int? = nil)
+      throws -> AlignmentWarpInfo
+    {
+        let baseFeatures = try XCTUnwrap(earthFeatures(of: base, mask: baseMask))
+        let neighborFeatures = try XCTUnwrap(earthFeatures(of: neighbor, mask: neighborMask))
         let result = try XCTUnwrap(
           ImageAligner.computeHomography(
             baseKeypoints: baseFeatures,
@@ -251,6 +255,8 @@ final class GroundAlignmentTests: XCTestCase {
             alignmentType: .earth,
             maxKeypoints: 2000,
             writeDebugImages: false,
+            imageWidth: Int32(width ?? alignWidth),
+            imageHeight: Int32(height ?? alignHeight),
             handler: { _, _, _, _ in })
         )
         return try XCTUnwrap(result.warpInfo.first)
@@ -286,5 +292,145 @@ final class GroundAlignmentTests: XCTestCase {
         XCTAssertNil(warp.homography,
                      "a ground with no shared content must not produce a warp")
         XCTAssertNotEqual(warp.alignmentState, .homographySuccess)
+    }
+
+    // MARK: - a panning camera
+
+    /// A ground with structure a few pixels across, which a warp can carry from one frame
+    /// to the next where per-pixel noise would be resampled away: random levels on a
+    /// 4px lattice, bilinearly interpolated.  Defined well beyond the frame, so that a
+    /// neighbour rendered through a rotation has ground everywhere it looks.
+    private struct GroundScene {
+        private let spacing = 4.0
+        private let originX = -256.0, originY = 256.0
+        private let columns = 448, rows = 160
+        private var levels: [Double]
+
+        init(seed: UInt64) {
+            var rand = Rand(seed: seed)
+            levels = (0..<(columns * rows)).map { _ in 4000 + Double(rand.next(24000)) }
+        }
+
+        /// The scene at (x, y) of the base frame: sky above `horizon`, ground below.
+        func value(_ x: Double, _ y: Double, horizon: Int) -> UInt16 {
+            if y < Double(horizon) { return 30000 }
+            let u = (x - originX) / spacing, v = (y - originY) / spacing
+            let i = min(max(Int(u.rounded(.down)), 0), columns - 2)
+            let j = min(max(Int(v.rounded(.down)), 0), rows - 2)
+            let fu = min(max(u - Double(i), 0), 1), fv = min(max(v - Double(j), 0), 1)
+            let a = levels[j * columns + i], b = levels[j * columns + i + 1]
+            let c = levels[(j + 1) * columns + i], d = levels[(j + 1) * columns + i + 1]
+            let top = a + (b - a) * fu, bottom = c + (d - c) * fu
+            return UInt16((top + (bottom - top) * fv).rounded())
+        }
+    }
+
+    /// K R K^-1, row-major, for a camera centred on the frame that pans by `pan` about its
+    /// vertical axis and tilts by `tilt` about its horizontal one.
+    private func cameraRotation(pan: Double, tilt: Double,
+                                f: Double, cx: Double, cy: Double) -> [Double] {
+        let yaw: [[Double]] = [[cos(pan), 0, sin(pan)], [0, 1, 0], [-sin(pan), 0, cos(pan)]]
+        let pitch: [[Double]] = [[1, 0, 0], [0, cos(tilt), -sin(tilt)], [0, sin(tilt), cos(tilt)]]
+        let k: [[Double]] = [[f, 0, cx], [0, f, cy], [0, 0, 1]]
+        let kInverse: [[Double]] = [[1 / f, 0, -cx / f], [0, 1 / f, -cy / f], [0, 0, 1]]
+        let h = multiply(multiply(k, multiply(pitch, yaw)), kInverse)
+        return h.flatMap { $0 }.map { $0 / h[2][2] }
+    }
+
+    private func multiply(_ a: [[Double]], _ b: [[Double]]) -> [[Double]] {
+        (0..<3).map { r in (0..<3).map { c in (0..<3).reduce(0.0) { $0 + a[r][$1] * b[$1][c] } } }
+    }
+
+    private func inverse(_ h: [Double]) -> [Double] {
+        let m = [[h[0], h[1], h[2]], [h[3], h[4], h[5]], [h[6], h[7], h[8]]]
+        let cofactor: (Int, Int) -> Double = { r, c in
+            let rows = (0..<3).filter { $0 != r }, cols = (0..<3).filter { $0 != c }
+            let minor = m[rows[0]][cols[0]] * m[rows[1]][cols[1]]
+              - m[rows[0]][cols[1]] * m[rows[1]][cols[0]]
+            return ((r + c) % 2 == 0 ? 1 : -1) * minor
+        }
+        let det = (0..<3).reduce(0.0) { $0 + m[0][$1] * cofactor(0, $1) }
+        return (0..<3).flatMap { r in (0..<3).map { c in cofactor(c, r) / det } }
+    }
+
+    private func apply(_ h: [Double], _ x: Double, _ y: Double) -> (x: Double, y: Double) {
+        let w = h[6] * x + h[7] * y + h[8]
+        return ((h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w)
+    }
+
+    /// The least-squares similarity — rotation, uniform scale, translation — taking each
+    /// `from` onto its `to`, as row-major 3x3.  The closed form: with both sets centred,
+    /// [a -b; b a] is fixed by two sums.
+    private func bestSimilarity(_ pairs: [(from: (x: Double, y: Double),
+                                           to: (x: Double, y: Double))]) -> [Double] {
+        let n = Double(pairs.count)
+        let fx = pairs.reduce(0) { $0 + $1.from.x } / n, fy = pairs.reduce(0) { $0 + $1.from.y } / n
+        let tx = pairs.reduce(0) { $0 + $1.to.x } / n, ty = pairs.reduce(0) { $0 + $1.to.y } / n
+        var dot = 0.0, cross = 0.0, norm = 0.0
+        for p in pairs {
+            let u = p.from.x - fx, v = p.from.y - fy, s = p.to.x - tx, t = p.to.y - ty
+            dot += u * s + v * t
+            cross += u * t - v * s
+            norm += u * u + v * v
+        }
+        let a = dot / norm, b = cross / norm
+        return [a, -b, tx - (a * fx - b * fy), b, a, ty - (b * fx + a * fy), 0, 0, 1]
+    }
+
+    /// A camera turning on its head moves the ground by a homography, K R K^-1, whose
+    /// sideways shift grows towards the edges of the frame — 1 + x²/f² times the centre's.
+    /// The ground is fitted as that rotation, so it has to put the whole width of the
+    /// ground back, edges included, and find the focal length to do it with: the frames
+    /// carry none.  The 4-DOF similarity it replaced is linear in x, and could not.
+    func testAPanIsFittedAcrossTheWholeWidthOfTheGround() throws {
+        let width = 960, height = 640, horizon = 400
+        let f = 0.55 * Double(width)   // about a 20mm lens on full frame
+        let cx = Double(width - 1) / 2, cy = Double(height - 1) / 2
+        // a pan that moves the middle of the frame 12px, and a little tilt
+        let truth = cameraRotation(pan: atan(12 / f), tilt: 0.002, f: f, cx: cx, cy: cy)
+        let untruth = inverse(truth)
+
+        // The neighbour sees at q what the base saw at truth^-1(q), sky and ground alike.
+        let scene = GroundScene(seed: 20261023)
+        let base = mat16(width: width, height: height) { x, y in
+            scene.value(Double(x), Double(y), horizon: horizon)
+        }
+        let neighbor = mat16(width: width, height: height) { x, y in
+            let p = self.apply(untruth, Double(x), Double(y))
+            return scene.value(p.x, p.y, horizon: horizon)
+        }
+        let baseMask = mat8(width: width, height: height) { _, y in y < horizon ? 255 : 0 }
+        let neighborMask = mat8(width: width, height: height) { x, y in
+            self.apply(untruth, Double(x), Double(y)).y < Double(horizon) ? 255 : 0
+        }
+
+        let warp = try groundHomography(base: base, baseMask: baseMask,
+                                        neighbor: neighbor, neighborMask: neighborMask,
+                                        width: width, height: height)
+        XCTAssertEqual(warp.alignmentState, .homographySuccess)
+        let h = try XCTUnwrap(warp.homography?.homographyValues)
+
+        // The warp maps the neighbour onto the base: ground the neighbour shows at
+        // truth(p) belongs at p, all the way across.
+        var ground: [(x: Double, y: Double)] = []
+        for y in stride(from: 420.0, through: 620, by: 40) {
+            for x in stride(from: 40.0, through: 920, by: 40) { ground.append((x, y)) }
+        }
+        let worst = ground.map { p -> Double in
+            let q = apply(truth, p.x, p.y), back = apply(h, q.x, q.y)
+            return hypot(back.x - p.x, back.y - p.y)
+        }.max() ?? .infinity
+        XCTAssertLessThan(worst, 0.75,
+                          "the ground fit is \(worst)px out somewhere across the frame")
+
+        // The pan is one the similarity could not have fitted: the best one to this exact
+        // motion, with no noise at all, is still pixels out at the edges.
+        let similarity = bestSimilarity(ground.map { (from: apply(truth, $0.x, $0.y), to: $0) })
+        let similarityWorst = ground.map { p -> Double in
+            let q = apply(truth, p.x, p.y), back = apply(similarity, q.x, q.y)
+            return hypot(back.x - p.x, back.y - p.y)
+        }.max() ?? 0
+        XCTAssertGreaterThan(similarityWorst, 3,
+                             "precondition: a pan whose curvature a similarity cannot follow")
     }
 }
