@@ -43,9 +43,10 @@ You should have received a copy of the GNU General Public License along with sta
 ///    into a roll — a painted horizon carried 101-200 frames came out 1.10% of the height
 ///    wrong; as rotations, 0.35%.  `estimateAlignment` (ImageAligner.cpp) now fits the ground
 ///    as a rotation itself, with each frame's own focal length, and where the ground has
-///    detail its chains drift less again (a9-2: lines carried 128 frames 0.27% → 0.08% of the
-///    height off; a7iv's black ground, no change); the re-expression reproduces those entries,
-///    and keeps temp directories aligned before the change working.  The focal length `K` needs is not in the exported frames, so it is
+///    detail its chains drift less again (lines carried 128 frames: a9-2 0.27% → 0.08% of the
+///    height off, a9-1 10_17 0.18% → 0.04%; a7iv's black ground, no change); the
+///    re-expression reproduces those entries, and keeps temp directories aligned before the
+///    change working.  The focal length `K` needs is not in the exported frames, so it is
 ///    found from the sequence itself (`calibrateFocalLength`), and entries no rotation
 ///    explains — a broken ground fit — are left out of the chains.
 /// 3. Every `neighbourStride`th frame within `longSpan` carries its detection into the frame.
@@ -71,7 +72,8 @@ You should have received a copy of the GNU General Public License along with sta
 ///
 /// Through the CLI on the a7iv frames, against the merged masks the composite used before:
 /// 2.29 / 4.06 → 0.10 / 0.13, for 25 s over 371 frames — the same with the ground fitted as a
-/// rotation (a9-2 0.41 / 0.46, a7iv 0.10 / 0.13).  The snow is not a mistake that comes
+/// rotation (a9-2 0.41 / 0.46, a7iv 0.10 / 0.13, and a9-1 10_17's first 400 frames 0.05 / 0.07
+/// against 0.15 / 0.18 for the merged masks).  The snow is not a mistake that comes
 /// and goes, so there is little for the other frames to outvote; the broken alignment has a
 /// third of its ground fits left out, and so little to carry lines with.
 ///
@@ -658,10 +660,12 @@ public enum HorizonConsensus {
     /// `Parameters.focalLengthCandidates` × width and then 6% either side of the best.
     ///
     /// Measured against the painted horizons, this picks within ~10% of the focal length
-    /// that carries painted lines best.  That is an *effective* focal length, not the lens's:
-    /// plate solving put a9-1 10_17's at 3227 px, where this picks 3660, because it also
-    /// absorbs the small pan bias of fitting rotations to similarities (see
-    /// `rotationHomography(matching:)`) — and it is the carried lines that have to be right.
+    /// that carries painted lines best.  On ground fitted as a rotation that is the lens's:
+    /// 3180 px on a9-1 10_17, where plate solving gives 3227.  On ground fitted as a 4-DOF
+    /// similarity — a temp directory aligned before the rotation fit — it is an *effective*
+    /// one (3660 there), because it also absorbs the small pan bias of fitting rotations to
+    /// similarities (see `rotationHomography(matching:)`), and it is the carried lines that
+    /// have to be right.
     /// Nil when too few pairs could be measured to trust any of them — a short sequence, or
     /// a ground that was never tracked.
     public static func calibrateFocalLength(
