@@ -21,6 +21,29 @@ public enum GPUOps {
     nonisolated(unsafe) private static var _dutyCycle = 1.0
     nonisolated(unsafe) private static var _busyNanoseconds: UInt64 = 0
     nonisolated(unsafe) private static var _deviceNanoseconds: UInt64 = 0
+    nonisolated(unsafe) private static var _poolingAllowed = true
+
+    /// Whether the pyramid builders and merges may keep Metal resources between calls.
+    ///
+    /// `MemoryMonitor` turns this off while work is waiting for memory and back on when the
+    /// queue empties. A pooled resource is memory no reservation covers, and on unified memory
+    /// all of it is the process's own: on a 7GB CI runner star held 1.1-2.2GB between keypoint
+    /// ops, mostly pooled textures and readback buffers, which kept the admission budget below
+    /// one op and ran the keypoint phase at one forced admission a minute. Turning it off trims
+    /// the pools, and every call after that lets its resources go when it is done, as builds
+    /// did before there were pools.
+    public static var poolingAllowed: Bool { stateLock.withLock { _poolingAllowed } }
+
+    /// Returns whether this changed anything, so a caller can log the transitions only.
+    @discardableResult
+    public static func setPoolingAllowed(_ allowed: Bool) -> Bool {
+        let changed = stateLock.withLock { () -> Bool in
+            defer { _poolingAllowed = allowed }
+            return _poolingAllowed != allowed
+        }
+        if changed && !allowed { trimTexturePool() }
+        return changed
+    }
 
     /// Width of the GPU gate. In-flight work finishes under the old width.
     public static func setConcurrency(_ slots: Int) { gate.set(max: slots) }
@@ -235,6 +258,7 @@ final class FloatTexturePool: @unchecked Sendable {
 
     /// Returns a build's textures. `buildBytes` is what that build used, which sets the cap.
     func give(_ textures: [MTLTexture], buildBytes: Int, device: MTLDevice) {
+        guard GPUOps.poolingAllowed else { return }  // released with their last reference
         lock.lock()
         defer { lock.unlock() }
         lastBuildBytes = buildBytes
@@ -392,6 +416,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
     }
 
     private func giveManagedOutput(_ buffer: MTLBuffer) {
+        guard GPUOps.poolingAllowed else { return }
         outputPoolLock.lock()
         defer { outputPoolLock.unlock() }
         var list = outputPool[buffer.length, default: []]
@@ -430,7 +455,11 @@ private final class MetalGPUBackend: @unchecked Sendable {
         GPUOps.gate.acquire()
         defer { GPUOps.gate.release() }
         let start = DispatchTime.now().uptimeNanoseconds
-        let result = body()
+        // Drained here because callers are worker threads that seldom drain one, and an
+        // autoreleased buffer lives until a pool does: reading a buffer through `contents()`
+        // (an inner pointer, so Swift autoreleases its owner) left every 12MP warp's 34MB
+        // destination buffer behind, one per warp, for as long as the thread kept working.
+        let result = autoreleasepool { body() }
         let used = DispatchTime.now().uptimeNanoseconds - start
         GPUOps.record(busyNanoseconds: used)
         // Duty cycle: after an op that used the GPU for `t`, keep the slot for another
@@ -1598,6 +1627,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
     }
 
     fileprivate func giveReadbackBuffers(_ readbacks: [PendingReadback]) {
+        guard GPUOps.poolingAllowed else { return }
         Self.readbackPoolLock.withLock {
             for readback in readbacks {
                 var list = Self.readbackPool[readback.buffer.length] ?? []
@@ -1642,7 +1672,13 @@ private final class MetalGPUBackend: @unchecked Sendable {
             mat_wrapper_release(ref)
             return nil
         }
-        memcpy(UnsafeMutableRawPointer(mutating: data), readback.buffer.contents(), rowBytes * readback.height)
+        // `contents()` returns an inner pointer, so Swift retains and autoreleases the buffer
+        // to keep it valid — until a pool drains. This runs on worker threads that seldom
+        // drain one, so without this every readback buffer outlived its build, pool or not:
+        // ~430MB a sky keypoint op at 4240x2832 / 1.5, piling up op after op.
+        autoreleasepool {
+            memcpy(UnsafeMutableRawPointer(mutating: data), readback.buffer.contents(), rowBytes * readback.height)
+        }
         return ref
     }
 

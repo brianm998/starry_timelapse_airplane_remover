@@ -63,9 +63,14 @@ public class FullFrameBlobber {
     // pixel that went with them: the blobber is now plain arrays and a loop.
     private var tracked: [UInt8] = []
 
-    // Row-major status of every pixel: 0 unknown, -1 background, otherwise the id of the blob it
-    // belongs to.
+    // Row-major status of every pixel: `unknown`, `background`, or the id of the blob it belongs
+    // to. Both markers are negative because ids never are. Neither may be 0: production starts
+    // the ids there (`FrameOutlierProcessor.findOutliers()`), and while 0 also meant unknown,
+    // blob 0 could never claim a pixel, so its flood fill queued the same neighbours forever and
+    // ran the process out of memory.
     private var state: [Int32] = []
+    private static let unknown: Int32 = -2
+    private static let background: Int32 = -1
 
     // The pixels of each blob as they are found, in the same order the old per-blob sets were
     // filled; the `Blob` actors are built from these once at the end.
@@ -120,7 +125,7 @@ public class FullFrameBlobber {
         Log.v("frame \(frameIndex) blobbing image of size (\(imageWidth), \(imageHeight))")
 
         tracked = [UInt8](repeating: 0, count: imageWidth*imageHeight)
-        state = [Int32](repeating: 0, count: imageWidth*imageHeight)
+        state = [Int32](repeating: Self.unknown, count: imageWidth*imageHeight)
 
         let minContrast = args.startMinContrast
 
@@ -221,7 +226,7 @@ public class FullFrameBlobber {
 
         for pixel in sortedPixels {
             let index = pixel.y*imageWidth + pixel.x
-            if state[index] != 0 { continue }
+            if state[index] != Self.unknown { continue }
 
             let value = subtractionPixelData[index]
             let count = collectNeighbors(of: pixel.x, pixel.y, into: &neighborIndices)
@@ -247,7 +252,7 @@ public class FullFrameBlobber {
                 }
             } else {
                 // but only if it's bright enough
-                state[index] = -1
+                state[index] = Self.background
             }
         }
     }
@@ -276,7 +281,7 @@ public class FullFrameBlobber {
             let count = collectNeighbors(of: x, y, into: &neighborIndices)
             for i in 0..<count {
                 let neighborIndex = neighborIndices[i]
-                if state[neighborIndex] == 0 {
+                if state[neighborIndex] == Self.unknown {
                     // if unknown status, check contrast with initial seed pixel
                     let other = UInt32(subtractionPixelData[neighborIndex])
                     let diff = Double(abs(Int32(firstSeedValue) - Int32(other)))
@@ -286,7 +291,7 @@ public class FullFrameBlobber {
                     if firstSeedContrast < calculateMinContrast(for: pixelsOfBlob.count) {
                         stack.append(neighborIndex)
                     } else {
-                        state[neighborIndex] = -1
+                        state[neighborIndex] = Self.background
                     }
                 }
             }
