@@ -130,6 +130,9 @@ public enum ImageAligner {
           .map { OCVFeatureSet(ref: $0) }
     }
 
+    /// `imageWidth` and `imageHeight` are the full-resolution frame's: the ground is fitted
+    /// as a camera rotation about the frame's centre, so earth alignment returns nil
+    /// without them.  The sky does not read them.
     public static func computeHomography(baseKeypoints: OCVFeatureSet,
                                           frameIndex: Int32,
                                           neighbors: [AlignmentNeighborInfo],
@@ -137,6 +140,8 @@ public enum ImageAligner {
                                           alignmentType: AlignmentType,
                                           maxKeypoints: Int32,
                                           writeDebugImages: Bool,
+                                          imageWidth: Int32,
+                                          imageHeight: Int32,
                                           handler: @escaping (Int32, AlignmentType, ObjCAlignmentStep, Int32) -> Void) -> HomographyResult? {
         let cNeighbors = neighbors.map { n in
             AlignmentNeighborData(filename: strdup(n.filename),
@@ -167,6 +172,7 @@ public enum ImageAligner {
                                        nBuf.baseAddress, Int32(nBuf.count),
                                        matchMethod, alignmentType,
                                        maxKeypoints, writeDebugImages,
+                                       imageWidth, imageHeight,
                                        { frameIdx, aType, step, neighborNum, ctx in
                                            let b = Unmanaged<HandlerBox>.fromOpaque(ctx!).takeUnretainedValue()
                                            b.handler(frameIdx, aType, step, neighborNum)

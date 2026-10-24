@@ -365,6 +365,40 @@ final class ArtifactInputsTests: XCTestCase {
         XCTAssertTrue(stale.isEmpty, "got \(stale)")
     }
 
+    /// The ground fit's lever is recorded only where a ground is fitted, so a bump — or
+    /// the key first appearing, which is what every existing moving-camera record sees,
+    /// once — re-aligns exactly those sequences, keeps their keypoints, and leaves every
+    /// other sequence's alignment where it was.
+    func testTheGroundFitVersionReachesOnlySequencesThatFitTheirGround() {
+        let alignment = ArtifactStage.alignment.rawValue
+        let key = "earthAlignmentAlgorithmVersion"
+
+        var moving = config()
+        moving.tripodHeadWasMoving = true
+        let current = ArtifactInputs.current(from: moving)
+        XCTAssertEqual(current.stages[alignment]?[key],
+                       "\(ArtifactInputs.earthAlignmentAlgorithmVersion)")
+
+        var stages = current.stages
+        stages[alignment]?.removeValue(forKey: key)
+        let fittedBeforeTheKey = ArtifactInputs(version: current.version, stages: stages)
+        XCTAssertEqual(current.staleStages(comparedTo: fittedBeforeTheKey),
+                       [.alignment, .outliers, .output])
+
+        var fixed = config()
+        fixed.tripodHeadWasMoving = false
+        var earthOff = moving
+        earthOff.allowEarthAlignment = false
+        var noHorizon = moving
+        noHorizon.horizonDetectionEnabled = false
+        for (name, other) in [("a fixed camera", fixed),
+                              ("earth alignment off", earthOff),
+                              ("horizon detection off", noHorizon)] {
+            XCTAssertNil(ArtifactInputs.current(from: other).stages[alignment]?[key],
+                         "\(name) fits no ground, so must not record the ground fit's version")
+        }
+    }
+
     func testSettingsFedToOutlierDetectionInvalidateIt() {
         var base = config()
         base.cleanMethod = .selective

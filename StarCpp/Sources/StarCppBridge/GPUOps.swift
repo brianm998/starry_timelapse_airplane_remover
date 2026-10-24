@@ -1368,9 +1368,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// the step 2.0006 rather than 2 and the samples drift a whole source pixel
     /// towards the bottom of the frame, which is where the ground is. Measured
     /// against phase correlation, the old keypoints fitted ground warps no worse
-    /// than these (worst third 2.63 vs 2.58px over 16 pairs): the similarity fit's
-    /// hundreds of inliers absorbed the difference. What this buys is a GPU path
-    /// that finds what the CPU path finds, as Linux, Windows and GPU-less Macs do.
+    /// than these (worst third 2.63 vs 2.58px over 16 pairs): the similarity the ground
+    /// was fitted with then absorbed the difference over its hundreds of inliers. What
+    /// this buys is a GPU path that finds what the CPU path finds, as Linux, Windows
+    /// and GPU-less Macs do.
     ///
     /// Like `buildSiftPyramid`, every texture is `.storageModeManaged` with an
     /// explicit blit-encoder `synchronize` before the final readback — see that
