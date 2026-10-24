@@ -143,6 +143,7 @@ struct GridCellView: View {
                                 case .initial:   .white
                                 case .merged:    .blue
                                 case .reference: .green
+                                case .consensus: .purple
                             }}()
                         let overlayHeight = overlay.height
                         Canvas { ctx, size in

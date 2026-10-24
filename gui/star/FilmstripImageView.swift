@@ -112,7 +112,8 @@ struct FilmstripImageView: View {
                     frameView.thumbnailImage
 
                     // Horizon overlay — coloured polyline tracing the sky/ground boundary.
-                    // white = initial detected, blue = merged, green = user reference.
+                    // white = initial detected, blue = merged, green = user reference,
+                    // purple = the moving-sequence horizon consensus.
                     if (viewModel.userPreferences.showHorizonOnMainView ?? false),
                        let overlay = frameView.horizonOverlay {
                         let strokeColor: Color = if frameView.isPendingHorizonRefinement { .orange }
@@ -120,6 +121,7 @@ struct FilmstripImageView: View {
                             case .initial:   .white
                             case .merged:    .blue
                             case .reference: .green
+                            case .consensus: .purple
                         }}
                         Canvas { ctx, size in
                             var path = Path()

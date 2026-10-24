@@ -204,6 +204,36 @@ public final actor FrameGraphBuilder {
         }
     }
     
+    /// Delete `horizonReference/reference.tiff` when it is the one a previous static merge
+    /// wrote rather than one the user painted.  True when it deleted it.
+    ///
+    /// The merge writes that file and nothing else into the directory.  A painted static
+    /// reference also writes a marker named after the frame it was painted on beside it
+    /// (`saveHorizonReferenceMask`), and the startup painter sets
+    /// `hasStaticReferenceHorizon` — either one means the user made it, and it stays.
+    static func removeAutomaticStaticReference(config: Config) async -> Bool {
+        guard !config.hasStaticReferenceHorizon,
+              let directory = config.dirForImage(ofType: .userHorizon, atSize: .original)
+        else { return false }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? []
+        guard names.contains("reference.tiff"),
+              names.allSatisfy({ $0 == "reference.tiff" || $0.hasPrefix(".") })
+        else { return false }
+        let path = "\(directory)/reference.tiff"
+        do {
+            try FileManager.default.removeItem(atPath: path)
+        } catch {
+            Log.w("could not delete stale \(path): \(error)")
+            return false
+        }
+        // The same three caches its writer drops, for the same reason: each would otherwise
+        // keep serving the mask just deleted.
+        await horizonReferenceMaskCache.invalidate(path: path)
+        await starAlignedHorizonMaskCache.invalidateAll()
+        ReferenceMaskIndex.shared.invalidate(directory: URL(fileURLWithPath: directory))
+        return true
+    }
+
     /// Decide which cached stages this run may no longer reuse, and undo the work that
     /// depended on them.
     ///
@@ -351,6 +381,16 @@ public final actor FrameGraphBuilder {
                 deleted += 1
             }
             Log.i("deleted \(deleted) stale merged horizon mask(s)")
+
+            // A static sequence's merge also leaves its mask behind as
+            // `horizonReference/reference.tiff`, and every later load serves that ahead of
+            // the merged file — so deleting only the merged masks would rebuild nothing: the
+            // merge would come straight back with the old mask.
+            if !config.tripodHeadWasMoving,
+               await Self.removeAutomaticStaticReference(config: config)
+            {
+                Log.i("deleted the static reference horizon the previous merge left behind")
+            }
         }
         if stale.contains(.keypoints) {
             // Both alignment types, whether or not this run uses earth alignment: an
@@ -408,6 +448,22 @@ public final actor FrameGraphBuilder {
                   suggestion: localized("warning.artifacts_invalidated.suggestion")
                 ))
             }
+        }
+
+        if stale.contains(.horizonConsensus) {
+            var deleted = 0
+            for frameIndex in range.output
+            where HorizonConsensusStore.exists(frameIndex: frameIndex, config: config) {
+                HorizonConsensusStore.delete(frameIndex: frameIndex, config: config)
+                deleted += 1
+            }
+            HorizonConsensusStore.deleteCalibration(config: config)
+            // In a long-lived session a frame may still hold the final mask the old line
+            // gave it.
+            for frame in frames where range.output.contains(frame.frameIndex) {
+                await frame.horizonProcessor.releaseCachedFinalHorizonMask()
+            }
+            Log.i("deleted \(deleted) stale horizon consensus line(s)")
         }
 
         if stale.contains(.outliers) {
@@ -523,6 +579,11 @@ public final actor FrameGraphBuilder {
         // reference horizon for a static sequence — the reference.tiff will be
         // loaded directly by each operation that needs the horizon mask.
         let hasStaticReferenceHorizon = config.hasStaticReferenceHorizon && !config.tripodHeadWasMoving
+        // A static sequence without one finds its horizon once, in its single merge op, from
+        // the median of frames sampled across it (`TemporalHorizonDetector`) — so it has no
+        // per-frame detection and nothing to accumulate.
+        let temporalStaticHorizon = hasHorizon && !hasStaticReferenceHorizon
+          && !config.tripodHeadWasMoving && config.useTemporalStaticHorizon
         let processEarth = config.allowEarthAlignment &&
           config.tripodHeadWasMoving // keypoints not used when stationary
 
@@ -722,6 +783,7 @@ public final actor FrameGraphBuilder {
         let horizonAccumulatorInUse = hasHorizon
           && !hasStaticReferenceHorizon
           && !config.tripodHeadWasMoving
+          && !temporalStaticHorizon
           && staticMergeNeeded
 
         if horizonAccumulatorInUse {
@@ -754,7 +816,7 @@ public final actor FrameGraphBuilder {
                 if haveHorizon.contains(frameIndex), !horizonAccumulatorInUse { continue }
                 taskGroup.addTask() {
                     // 1. Horizon
-                    if hasHorizon && !hasStaticReferenceHorizon {
+                    if hasHorizon && !hasStaticReferenceHorizon && !temporalStaticHorizon {
                         let horizonOp = HorizonDetectionOp(
                           frame: frame,
                           rawImageBytes: rawImageBytes,
@@ -785,7 +847,7 @@ public final actor FrameGraphBuilder {
             .sorted { $0.key < $1.key }
             .map { $0.value }
         )
-        if hasHorizon && !hasStaticReferenceHorizon {
+        if hasHorizon && !hasStaticReferenceHorizon && !temporalStaticHorizon {
             recordAlreadyDone(.horizon,
                               consideredFrames: range.horizon,
                               builtOps: horizonOps.count)
@@ -861,10 +923,13 @@ public final actor FrameGraphBuilder {
                     // One op is the whole of this step on a static tripod, and it is done.
                     alreadyDone[.mergedHorizon] = 1
                 } else if let frame = staticMergeAnchor {
+                    let multiplier = temporalStaticHorizon
+                      ? config.effectiveTemporalHorizonMemoryMultiplier()
+                      : config.effectiveHorizonMemoryMultiplier()
                     let horizonOp = HorizonMergeOp(
                       frame: frame,
                       rawImageBytes: rawImageBytes,
-                      memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier())
+                      memoryMultiplier: UInt64(multiplier)
                     ) { errorString in
                         Task { await errors.append(errorString) }
                         errorClosure(errorString)
@@ -1115,6 +1180,43 @@ public final actor FrameGraphBuilder {
         homographyOps.forEach { validationOp.addDependency($0) }
         allOps.append(validationOp)
 
+        // A moving sequence's horizons from the consensus of every frame's detection,
+        // carried along the ground that validation has just settled (`HorizonConsensus`).
+        // Before the outlier ops and the merges, since both composite the two aligned
+        // layers across the horizon.  Built only for frames that still have that work ahead
+        // of them and no line yet: a frame whose output is written has nothing left to
+        // composite.
+        var consensusOp: HorizonConsensusOp? = nil
+        if HorizonConsensus.applies(to: config),
+           !HorizonConsensusStore.hasPaintedReferences(config: config)
+        {
+            var targets: [Int] = []
+            for frame in outputFrames
+            where !HorizonConsensusStore.exists(frameIndex: frame.frameIndex, config: config) {
+                if await frame.processingState() != .complete {
+                    targets.append(frame.frameIndex)
+                }
+            }
+            if !targets.isEmpty {
+                let op = HorizonConsensusOp(
+                  frames: frames,
+                  targets: targets,
+                  configManager: configManager,
+                  rawImageBytes: rawImageBytes
+                ) { errorString in
+                    Task { await errors.append(errorString) }
+                    errorClosure(errorString)
+                }
+                op.qualityOfService = .userInteractive
+                op.addDependency(validationOp)
+                // Every detection is a vote, including those of frames no merge waits on.
+                horizonOps.values.forEach { op.addDependency($0) }
+                allOps.append(op)
+                consensusOp = op
+                Log.i("horizon consensus will be built for \(targets.count) frame(s)")
+            }
+        }
+
         // how many in each direction for final outlier classification.  Clamped at 0:
         // it is a radius, and a negative one would invert the neighbour range below.
         let numOutlierNeighbors = max(0, config.numberFinalProcessingNeighborsNeeded)
@@ -1142,6 +1244,7 @@ public final actor FrameGraphBuilder {
                 }
 
                 outlierOp.addDependency(validationOp)
+                if let consensusOp { outlierOp.addDependency(consensusOp) }
                 allOps.append(outlierOp)
                 outlierOps[frame.frameIndex] = outlierOp
             }
@@ -1175,6 +1278,7 @@ public final actor FrameGraphBuilder {
 
             mergeOp.qualityOfService = .userInteractive
             mergeOp.addDependency(validationOp)
+            if let consensusOp { mergeOp.addDependency(consensusOp) }
 
 
             // add outlier dependencies for neighbor frames; will be a nop
@@ -1227,6 +1331,7 @@ public final actor FrameGraphBuilder {
         // and one of them is already an ancestor of every merge, so this only ever
         // removes a way to report done early.
         completionOp.addDependency(validationOp)
+        if let consensusOp { completionOp.addDependency(consensusOp) }
         outlierOps.values.forEach { completionOp.addDependency($0) }
         allOps.append(completionOp)
 

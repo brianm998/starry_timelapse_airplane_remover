@@ -5,7 +5,8 @@ import Foundation
 /// A scaled-down representation of a frame's best-available horizon line,
 /// used to draw a coloured stroke overlay on filmstrip thumbnails.
 ///
-/// Priority for which mask is shown: reference (green) > merged (blue) > initial (white).
+/// Priority for which mask is shown: reference (green) > consensus (purple) > merged (blue) >
+/// initial (white) — the same order the final composite reads them in.
 public struct HorizonThumbnailOverlay: Sendable {
 
     /// Which horizon source produced this overlay, determining the stroke colour.
@@ -16,6 +17,9 @@ public struct HorizonThumbnailOverlay: Sendable {
         case merged
         /// User-painted reference horizon (`horizonReference/` file) — draw green.
         case reference
+        /// A moving sequence's horizon consensus (`HorizonConsensus`), which the outlier
+        /// subtraction and the composite use in place of the merged mask — draw purple.
+        case consensus
     }
 
     /// Which source this overlay came from.

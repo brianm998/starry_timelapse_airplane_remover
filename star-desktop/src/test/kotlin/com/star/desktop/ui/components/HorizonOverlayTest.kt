@@ -13,6 +13,11 @@ class HorizonOverlayTest {
         assertEquals(StarColors.white, horizonLineColor(HorizonOverlayKind.HORIZON_OVERLAY_KIND_INITIAL, pending = false))
     }
 
+    /** The consensus line is what a moving sequence's output uses, so it must not pass for a merged one. */
+    @Test fun aHorizonConsensusIsPurple() {
+        assertEquals(StarColors.purple, horizonLineColor(HorizonOverlayKind.HORIZON_OVERLAY_KIND_CONSENSUS, pending = false))
+    }
+
     /** Pending wins over the kind: the line shown is the one the user is about to have redone. */
     @Test fun aFrameWaitingForARefinementIsOrangeWhateverItsLine() {
         for (kind in HorizonOverlayKind.values().filter { it != HorizonOverlayKind.UNRECOGNIZED }) {

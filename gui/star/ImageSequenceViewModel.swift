@@ -2337,6 +2337,14 @@ public final class ImageSequenceViewModel {
                     if previousState == .mergingHorizon {
                         self.frames[frame.frameIndex].refreshHorizonOverlay()
                         self.frames[frame.frameIndex].refreshFrameHorizonOverlay()
+                    } else if newState == .complete,
+                              HorizonConsensus.applies(to: self.config.config())
+                    {
+                        // A moving sequence's horizon consensus is written after alignment,
+                        // long after the merged mask the overlay was last read from, and it
+                        // is what this frame was just composited with.
+                        self.frames[frame.frameIndex].refreshHorizonOverlay()
+                        self.frames[frame.frameIndex].refreshFrameHorizonOverlay()
                     }
                 }
 

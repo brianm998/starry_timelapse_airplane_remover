@@ -19,11 +19,16 @@ You should have received a copy of the GNU General Public License along with sta
 /// Declared in dependency order, because each stage consumes the one before it: the
 /// merged horizon is a vote over first-round horizon masks, and keypoint detection is
 /// masked with the merged horizon.  `andDownstream` relies on that order.
+///
+/// `horizonConsensus` reads the first-round masks and the alignment, and is read by both
+/// stages after it: the outlier subtraction and the output composite the two aligned layers
+/// across the horizon.
 public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
     case horizon
     case mergedHorizon
     case keypoints
     case alignment
+    case horizonConsensus
     case outliers
     case output
 
@@ -47,6 +52,7 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
         case .mergedHorizon: return "merged horizon masks"
         case .keypoints:     return "keypoint sets"
         case .alignment:     return "alignment results"
+        case .horizonConsensus: return "horizon consensus lines"
         case .outliers:      return "outlier groups"
         case .output:        return "output images"
         }
@@ -70,6 +76,8 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
         case .alignment:
             return "homography.db rows, the aligned-neighbour count file, and the " +
                    "starAligned / earthAligned / subtraction images"
+        case .horizonConsensus:
+            return "<temp>/horizonConsensus/<frame>.json, and the calibration.json beside them"
         case .outliers:
             return "<outliers>/<frame>/, the classified outlier group binary"
         case .output:
@@ -212,6 +220,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             ArtifactStage.mergedHorizon.rawValue: mergedHorizonInputs(config),
             ArtifactStage.keypoints.rawValue:     keypointInputs(config),
             ArtifactStage.alignment.rawValue:     alignmentInputs(config),
+            ArtifactStage.horizonConsensus.rawValue: horizonConsensusInputs(config),
             ArtifactStage.outliers.rawValue:      outlierInputs(config),
             ArtifactStage.output.rawValue:        outputInputs(config),
         ])
@@ -280,6 +289,23 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             "alignedNeighborFrameOverrides": str(config.alignedNeighborFrameOverrides),
             "staticNeighborFrameOverrides":  str(config.staticNeighborFrameOverrides),
         ]
+
+        // A static sequence's merged mask is made by one of two methods (see
+        // `Config.useTemporalStaticHorizon`), and they give different masks — on a black
+        // ground under the Milky Way, masks 15% of the frame apart.  Recorded with the
+        // temporal method's own version, so a change to it rebuilds what it made.
+        //
+        // Only where the merge actually runs: a painted reference replaces it outright,
+        // and recording the method there would rebuild a sequence's keypoints and
+        // alignment over a mask nothing reads.
+        if !config.tripodHeadWasMoving && !config.hasStaticReferenceHorizon {
+            inputs["useTemporalStaticHorizon"] = str(config.useTemporalStaticHorizon)
+            if config.useTemporalStaticHorizon {
+                inputs["temporalHorizonSampleCount"] = str(config.temporalHorizonSampleCount)
+                inputs["temporalHorizonAlgorithmVersion"] =
+                  str(TemporalHorizonDetector.algorithmVersion)
+            }
+        }
 
         // The reference-horizon passes are moving-sequence only.
         guard config.tripodHeadWasMoving else { return inputs }
@@ -380,6 +406,27 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         // again invalidates too, since the record differs from the one that had it.
         if config.cloudAwareMerge {
             inputs["cloudAwareMerge"] = str(config.cloudAwareMerge)
+        }
+        return inputs
+    }
+
+    /// What `HorizonConsensus` reads beyond the stages before it: whether it runs, and the
+    /// version of the code.
+    ///
+    /// Only the camera's motion where it cannot run — a fixed camera, or a run without earth
+    /// alignment — so its switch moving there invalidates nothing.  A record from before the
+    /// stage existed has no entry for it at all, which counts as no change: the output
+    /// already written for such a sequence was composited with its merged masks, and is kept.
+    private static func horizonConsensusInputs(_ config: Config) -> [String: String] {
+        var inputs: [String: String] = [
+            "tripodHeadWasMoving": str(config.tripodHeadWasMoving),
+        ]
+        guard config.tripodHeadWasMoving, config.horizonDetectionEnabled,
+              config.allowEarthAlignment
+        else { return inputs }
+        inputs["useHorizonConsensus"] = str(config.useHorizonConsensus)
+        if config.useHorizonConsensus {
+            inputs["horizonConsensusAlgorithmVersion"] = str(HorizonConsensus.algorithmVersion)
         }
         return inputs
     }

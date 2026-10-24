@@ -11,12 +11,13 @@ import com.star.proto.HorizonOverlayKind
 
 /**
  * The colour a frame's horizon line is drawn in, as on macOS: orange while the frame waits for a horizon refinement
- * (whatever the line is), else green for a painted reference, blue for a merged (interpolated) horizon, and white for the
- * raw detected one.
+ * (whatever the line is), else green for a painted reference, purple for a moving sequence's horizon consensus (the line
+ * its output is composited with), blue for a merged (interpolated) horizon, and white for the raw detected one.
  */
 fun horizonLineColor(kind: HorizonOverlayKind, pending: Boolean): Color = when {
     pending -> StarColors.orange
     kind == HorizonOverlayKind.HORIZON_OVERLAY_KIND_REFERENCE -> StarColors.green
+    kind == HorizonOverlayKind.HORIZON_OVERLAY_KIND_CONSENSUS -> StarColors.purple
     kind == HorizonOverlayKind.HORIZON_OVERLAY_KIND_MERGED -> StarColors.blue
     else -> StarColors.white
 }

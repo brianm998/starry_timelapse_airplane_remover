@@ -808,7 +808,8 @@ public enum Star_V1_AlignmentState: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
-/// Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green).
+/// Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green,
+/// consensus=purple).
 /// `isPendingHorizonRefinement` is NOT engine-derived — the client tracks it from edited reference frames.
 public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
@@ -818,6 +819,9 @@ public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   case initial // = 1
   case merged // = 2
   case reference // = 3
+
+  /// a moving sequence's horizon consensus, which the composite uses
+  case consensus // = 4
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -830,6 +834,7 @@ public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 1: self = .initial
     case 2: self = .merged
     case 3: self = .reference
+    case 4: self = .consensus
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -840,6 +845,7 @@ public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .initial: return 1
     case .merged: return 2
     case .reference: return 3
+    case .consensus: return 4
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -850,6 +856,7 @@ public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
     .initial,
     .merged,
     .reference,
+    .consensus,
   ]
 
 }
@@ -4272,7 +4279,7 @@ extension Star_V1_AlignmentState: SwiftProtobuf._ProtoNameProviding {
 }
 
 extension Star_V1_HorizonOverlayKind: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HORIZON_OVERLAY_KIND_UNSPECIFIED\0\u{1}HORIZON_OVERLAY_KIND_INITIAL\0\u{1}HORIZON_OVERLAY_KIND_MERGED\0\u{1}HORIZON_OVERLAY_KIND_REFERENCE\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HORIZON_OVERLAY_KIND_UNSPECIFIED\0\u{1}HORIZON_OVERLAY_KIND_INITIAL\0\u{1}HORIZON_OVERLAY_KIND_MERGED\0\u{1}HORIZON_OVERLAY_KIND_REFERENCE\0\u{1}HORIZON_OVERLAY_KIND_CONSENSUS\0")
 }
 
 extension Star_V1_HorizonBandMethod: SwiftProtobuf._ProtoNameProviding {

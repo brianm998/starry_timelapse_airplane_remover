@@ -58,6 +58,18 @@ final class MappingTests: XCTestCase {
                              "a wide box came out tall")
     }
 
+    // MARK: - HorizonThumbnailOverlay.Kind
+
+    /// The client colours a frame's horizon line by where it came from, so each source keeps a
+    /// wire value of its own — the consensus line most of all, since it is the one the output
+    /// uses in place of the merged mask.
+    func testEachHorizonOverlayKindMapsToItsNamesake() {
+        XCTAssertEqual(Mapping.horizonOverlayKind(.initial), .initial)
+        XCTAssertEqual(Mapping.horizonOverlayKind(.merged), .merged)
+        XCTAssertEqual(Mapping.horizonOverlayKind(.reference), .reference)
+        XCTAssertEqual(Mapping.horizonOverlayKind(.consensus), .consensus)
+    }
+
     // MARK: - AlignmentState
 
     /// Every alignment outcome needs its own wire value: the client shows a different thing for

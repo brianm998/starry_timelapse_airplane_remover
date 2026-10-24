@@ -256,6 +256,54 @@ final class FrameHorizonProcessorInteractiveTests: FrameHarnessTestCase {
                        "the frame the user actually painted must be distinguishable")
     }
 
+    /// On a moving sequence the composite uses the horizon consensus where there is one, so that
+    /// is the line the overlay shows, in a colour of its own — and it still yields to the user's
+    /// painting, which switches the consensus off for the whole sequence.
+    func testTheOverlayShowsTheHorizonConsensusTheCompositeUses() async throws {
+        let h = try await FrameHarness.make(frameCount: 2, width: 64, height: 64,
+                                            named: "overlayconsensus")
+        harness = h
+        await h.updateConfig {
+            $0.tripodHeadWasMoving = true
+            $0.allowEarthAlignment = true
+            $0.useHorizonConsensus = true
+        }
+        try h.plantImage(FrameHarness.flatMask(width: 64, height: 64, at: 36),
+                         ofType: .mergedHorizon)
+        // hoisted so the closure captures the manager rather than the harness
+        let manager = h.configManager
+        let config = await MainActor.run { manager.config() }
+        try HorizonConsensusStore.write(line: [Float](repeating: 24, count: 16), frameIndex: 0,
+                                        width: 64, height: 64, config: config)
+
+        var overlayOptional = try await processor(h).loadHorizonThumbnailOverlay(thumbnailWidth: 32,
+                                                                                 thumbnailHeight: 32)
+        var overlay = try XCTUnwrap(overlayOptional)
+        XCTAssertEqual(overlay.kind, .consensus, "the consensus outranks the merged mask")
+        for (x, y) in overlay.yPerColumn.enumerated() {
+            XCTAssertEqual(y, 12, accuracy: 1, "column \(x): row 24 of 64 is 12 of 32")
+        }
+
+        await h.updateConfig { $0.useHorizonConsensus = false }
+        overlayOptional = try await processor(h).loadHorizonThumbnailOverlay(thumbnailWidth: 32,
+                                                                             thumbnailHeight: 32)
+        overlay = try XCTUnwrap(overlayOptional)
+        XCTAssertEqual(overlay.kind, .merged, "switched off, the composite uses the merged mask")
+
+        await h.updateConfig { $0.useHorizonConsensus = true }
+        try h.plantReferenceMask(FrameHarness.flatMask(width: 64, height: 64, at: 20),
+                                 perFrame: true, frameIndex: 1)
+        overlayOptional = try await processor(h).loadHorizonThumbnailOverlay(thumbnailWidth: 32,
+                                                                             thumbnailHeight: 32)
+        overlay = try XCTUnwrap(overlayOptional)
+        XCTAssertEqual(overlay.kind, .merged,
+                       "with a frame painted, the user's horizons decide the whole sequence")
+        overlayOptional = try await processor(h, at: 1).loadHorizonThumbnailOverlay(thumbnailWidth: 32,
+                                                                                    thumbnailHeight: 32)
+        overlay = try XCTUnwrap(overlayOptional)
+        XCTAssertEqual(overlay.kind, .reference)
+    }
+
     /// A frame inheriting a sequence-wide reference is *not* the painted frame, so it reports `merged`
     /// rather than `reference` — that is the blue-versus-green distinction in the filmstrip.
     func testAFrameInheritingAGlobalReferenceIsNotMarkedAsPainted() async throws {
