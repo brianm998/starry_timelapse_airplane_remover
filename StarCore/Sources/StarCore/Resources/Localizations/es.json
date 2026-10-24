@@ -1074,5 +1074,13 @@
   "ui.jpeg_quality": "Calidad: {0}%",
   "ui.video_import_disk_usage": "Se necesitan unos {0} de espacio en disco para {1} fotogramas de {2} × {3}",
   "ui.video_import_disk_unknown": "Este vídeo no indica su duración, por lo que no se puede estimar el espacio en disco necesario.",
-  "ui.video_import_start": "Importar"
+  "ui.video_import_start": "Importar",
+  "cli.help.frame_format": "Formato de los fotogramas cuando la entrada es un vídeo: tiff16 (predeterminado), tiff8 o jpeg[:calidad], con calidad de 1 a 100.",
+  "cli.help.render_video": "Tras una ejecución correcta, genera un vídeo con los fotogramas de salida usando los ajustes del vídeo importado, o los predeterminados (30 fps, ProRes, .mov) para una secuencia de imágenes.",
+  "cli.help.video_path": "Dónde escribir el vídeo generado (con --render-video). Por defecto, la ruta de salida, con el nombre de la secuencia.",
+  "cli.errors.video_path_needs_render_video": "--video-path requiere --render-video.",
+  "cli.errors.frame_format_needs_video": "--frame-format solo se aplica cuando la entrada es un archivo de vídeo.",
+  "cli.errors.ffmpeg_not_found": "Se necesitan ffmpeg y ffprobe para leer un vídeo, pero no se encontraron. Buscados en: ${0}, junto a star, external_binaries/bin de un árbol de compilación y después PATH.",
+  "cli.decoding_video_progress": "Decodificando vídeo: fotograma {0} de {1}",
+  "cli.rendered_video": "Vídeo generado: {0}"
 }

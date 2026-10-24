@@ -1074,5 +1074,13 @@
   "ui.jpeg_quality": "Качество: {0}%",
   "ui.video_import_disk_usage": "Потребуется около {0} места на диске для {1} кадров размером {2} × {3}",
   "ui.video_import_disk_unknown": "В этом видео не указана его длительность, поэтому нужное место на диске оценить нельзя.",
-  "ui.video_import_start": "Импортировать"
+  "ui.video_import_start": "Импортировать",
+  "cli.help.frame_format": "Формат кадров, если на входе видео: tiff16 (по умолчанию), tiff8 или jpeg[:качество], качество 1-100.",
+  "cli.help.render_video": "После успешного запуска собирает выходные кадры в видео с настройками импортированного видео или значениями по умолчанию (30 к/с, ProRes, .mov) для последовательности изображений.",
+  "cli.help.video_path": "Куда записать собранное видео (с --render-video). По умолчанию путь вывода с именем последовательности.",
+  "cli.errors.video_path_needs_render_video": "--video-path требует --render-video.",
+  "cli.errors.frame_format_needs_video": "--frame-format применяется только если на входе видеофайл.",
+  "cli.errors.ffmpeg_not_found": "Для чтения видео нужны ffmpeg и ffprobe, но они не найдены. Искали в: ${0}, рядом со star, external_binaries/bin дерева сборки, затем в PATH.",
+  "cli.decoding_video_progress": "Декодирование видео: кадр {0} из {1}",
+  "cli.rendered_video": "Видео собрано: {0}"
 }

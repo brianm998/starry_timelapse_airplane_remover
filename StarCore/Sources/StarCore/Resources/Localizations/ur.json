@@ -1074,5 +1074,13 @@
   "ui.jpeg_quality": "معیار: {0}%",
   "ui.video_import_disk_usage": "{2} × {3} کے {1} فریم کے لیے تقریباً {0} ڈسک جگہ درکار ہے",
   "ui.video_import_disk_unknown": "یہ ویڈیو اپنا دورانیہ نہیں بتاتی، اس لیے درکار ڈسک جگہ کا اندازہ نہیں لگایا جا سکتا۔",
-  "ui.video_import_start": "درآمد کریں"
+  "ui.video_import_start": "درآمد کریں",
+  "cli.help.frame_format": "ان پٹ ویڈیو ہونے پر فریم فارمیٹ: tiff16 (ڈیفالٹ)، tiff8، یا jpeg[:معیار]، معیار 1-100۔",
+  "cli.help.render_video": "کامیاب رن کے بعد آؤٹ پٹ فریمز کو ویڈیو میں رینڈر کرتا ہے، درآمد شدہ ویڈیو کی سیٹنگز کے ساتھ، یا تصویری ترتیب کے لیے ڈیفالٹ (30 fps، ProRes، .mov) کے ساتھ۔",
+  "cli.help.video_path": "رینڈر کی گئی ویڈیو کہاں لکھنی ہے (--render-video کے ساتھ)۔ ڈیفالٹ: ترتیب کے نام والا آؤٹ پٹ راستہ۔",
+  "cli.errors.video_path_needs_render_video": "--video-path کے لیے --render-video درکار ہے۔",
+  "cli.errors.frame_format_needs_video": "--frame-format صرف تب لاگو ہوتا ہے جب ان پٹ ویڈیو فائل ہو۔",
+  "cli.errors.ffmpeg_not_found": "ویڈیو پڑھنے کے لیے ffmpeg اور ffprobe درکار ہیں مگر نہیں ملے۔ یہاں تلاش کیا گیا: ${0}، star کے ساتھ، بلڈ ٹری کا external_binaries/bin، پھر PATH۔",
+  "cli.decoding_video_progress": "ویڈیو ڈی کوڈ ہو رہی ہے: فریم {0} از {1}",
+  "cli.rendered_video": "ویڈیو رینڈر ہو گئی: {0}"
 }

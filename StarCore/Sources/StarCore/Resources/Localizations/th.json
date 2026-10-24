@@ -1074,5 +1074,13 @@
   "ui.jpeg_quality": "คุณภาพ: {0}%",
   "ui.video_import_disk_usage": "ต้องใช้พื้นที่ดิสก์ประมาณ {0} สำหรับ {1} เฟรม ขนาด {2} × {3}",
   "ui.video_import_disk_unknown": "วิดีโอนี้ไม่ระบุความยาว จึงประมาณพื้นที่ดิสก์ที่ต้องใช้ไม่ได้",
-  "ui.video_import_start": "นำเข้า"
+  "ui.video_import_start": "นำเข้า",
+  "cli.help.frame_format": "รูปแบบเฟรมเมื่ออินพุตเป็นวิดีโอ: tiff16 (ค่าเริ่มต้น), tiff8 หรือ jpeg[:คุณภาพ] โดยคุณภาพ 1-100",
+  "cli.help.render_video": "เมื่อรันสำเร็จ จะเรนเดอร์เฟรมผลลัพธ์เป็นวิดีโอ โดยใช้การตั้งค่าของวิดีโอที่นำเข้า หรือค่าเริ่มต้น (30 fps, ProRes, .mov) สำหรับลำดับภาพ",
+  "cli.help.video_path": "ที่เขียนวิดีโอที่เรนเดอร์ (ใช้กับ --render-video) ค่าเริ่มต้นคือพาธผลลัพธ์ที่ตั้งชื่อตามลำดับภาพ",
+  "cli.errors.video_path_needs_render_video": "--video-path ต้องใช้ร่วมกับ --render-video",
+  "cli.errors.frame_format_needs_video": "--frame-format ใช้ได้เฉพาะเมื่ออินพุตเป็นไฟล์วิดีโอ",
+  "cli.errors.ffmpeg_not_found": "ต้องใช้ ffmpeg และ ffprobe เพื่ออ่านวิดีโอ แต่ไม่พบ ค้นหาใน: ${0}, ข้าง star, external_binaries/bin ของแผนผังบิลด์ แล้วจึง PATH",
+  "cli.decoding_video_progress": "กำลังถอดรหัสวิดีโอ: เฟรม {0} จาก {1}",
+  "cli.rendered_video": "เรนเดอร์วิดีโอแล้ว: {0}"
 }

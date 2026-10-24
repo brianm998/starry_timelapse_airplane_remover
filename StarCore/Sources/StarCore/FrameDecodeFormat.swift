@@ -153,3 +153,18 @@ public struct VideoProbe: Sendable, Equatable {
         return VideoProbe(width: width, height: height, frameCount: frames)
     }
 }
+
+extension FrameDecodeFormat {
+    /// Parses the command line spelling: `tiff16`, `tiff8`, `jpeg`, or `jpeg:<quality>` with the quality 1...100.
+    /// Case-insensitive; nil for anything else, including a quality out of range (silently clamping would hide a typo).
+    public init?(argument: String) {
+        let parts = argument.lowercased().split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        guard let kind = Kind(rawValue: parts[0]) else { return nil }
+        if parts.count == 1 {
+            self.init(kind: kind)
+        } else {
+            guard kind == .jpeg, let quality = Int(parts[1]), Self.jpegQualityRange.contains(quality) else { return nil }
+            self.init(kind: .jpeg, jpegQuality: quality)
+        }
+    }
+}

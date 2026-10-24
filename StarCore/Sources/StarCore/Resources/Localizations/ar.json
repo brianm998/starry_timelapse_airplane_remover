@@ -1074,5 +1074,13 @@
   "ui.jpeg_quality": "الجودة: {0}%",
   "ui.video_import_disk_usage": "يلزم حوالي {0} من مساحة القرص لعدد {1} من الإطارات بحجم {2} × {3}",
   "ui.video_import_disk_unknown": "لا يذكر هذا الفيديو مدته، لذا لا يمكن تقدير مساحة القرص اللازمة.",
-  "ui.video_import_start": "استيراد"
+  "ui.video_import_start": "استيراد",
+  "cli.help.frame_format": "صيغة الإطارات عندما يكون الإدخال فيديو: tiff16 (الافتراضي) أو tiff8 أو jpeg[:الجودة]، والجودة من 1 إلى 100.",
+  "cli.help.render_video": "بعد تشغيل ناجح، يعرض إطارات الإخراج في فيديو بإعدادات الفيديو المستورد، أو بالإعدادات الافتراضية (30 إطارًا/ثانية، ProRes، .mov) لتسلسل الصور.",
+  "cli.help.video_path": "مكان كتابة الفيديو الناتج (مع --render-video). الافتراضي مسار الإخراج باسم التسلسل.",
+  "cli.errors.video_path_needs_render_video": "يتطلب --video-path وجود --render-video.",
+  "cli.errors.frame_format_needs_video": "ينطبق --frame-format فقط عندما يكون الإدخال ملف فيديو.",
+  "cli.errors.ffmpeg_not_found": "يلزم ffmpeg وffprobe لقراءة فيديو لكنهما غير موجودين. تم البحث في: ${0}، بجانب star، وexternal_binaries/bin في شجرة البناء، ثم PATH.",
+  "cli.decoding_video_progress": "فك ترميز الفيديو: الإطار {0} من {1}",
+  "cli.rendered_video": "تم إنشاء الفيديو: {0}"
 }

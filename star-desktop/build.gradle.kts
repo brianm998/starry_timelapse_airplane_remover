@@ -498,6 +498,8 @@ tasks.test {
     // Every daemon a test starts finds (and clears) the run markers in its own directory, never the ones a real run left in the user's
     // application support: a test that wants a killed run to report writes its marker here.
     environment("STAR_RUN_MARKER_DIR", layout.buildDirectory.dir("run-markers").get().asFile.absolutePath)
+    // A marker left by an interrupted run makes the next stard raise a "previous run crashed" alert over the UI, which swallows every click.
+    doFirst { layout.buildDirectory.dir("run-markers").get().asFile.deleteRecursively() }
 }
 
 // The Gherkin desktop tests (gherkin/features/*.feature, tagged @desktop): a `gherkinTest` source set of generated test entry points

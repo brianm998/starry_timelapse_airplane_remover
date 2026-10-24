@@ -1074,5 +1074,13 @@
   "ui.jpeg_quality": "Chất lượng: {0}%",
   "ui.video_import_disk_usage": "Cần khoảng {0} dung lượng đĩa cho {1} khung hình {2} × {3}",
   "ui.video_import_disk_unknown": "Video này không cho biết độ dài nên không thể ước tính dung lượng đĩa cần thiết.",
-  "ui.video_import_start": "Nhập"
+  "ui.video_import_start": "Nhập",
+  "cli.help.frame_format": "Định dạng khung hình khi đầu vào là video: tiff16 (mặc định), tiff8 hoặc jpeg[:chất lượng], chất lượng 1-100.",
+  "cli.help.render_video": "Sau khi chạy thành công, kết xuất các khung hình đầu ra thành video với cài đặt của video đã nhập, hoặc mặc định (30 fps, ProRes, .mov) với chuỗi ảnh.",
+  "cli.help.video_path": "Nơi ghi video đã kết xuất (dùng với --render-video). Mặc định là đường dẫn đầu ra, đặt tên theo chuỗi.",
+  "cli.errors.video_path_needs_render_video": "--video-path cần có --render-video.",
+  "cli.errors.frame_format_needs_video": "--frame-format chỉ áp dụng khi đầu vào là tệp video.",
+  "cli.errors.ffmpeg_not_found": "Cần ffmpeg và ffprobe để đọc video nhưng không tìm thấy. Đã tìm trong: ${0}, cạnh star, external_binaries/bin của cây build, rồi PATH.",
+  "cli.decoding_video_progress": "Đang giải mã video: khung {0}/{1}",
+  "cli.rendered_video": "Đã kết xuất video: {0}"
 }
