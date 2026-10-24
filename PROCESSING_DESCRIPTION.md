@@ -271,11 +271,13 @@ lines, favouring the frames nearest in time. A detection that is wrong for a
 while — a dark cloud bank on the ridge, read as ground for two hundred frames —
 is outvoted by the frames before and after it, where the ridge was clear; where
 the long span and a ±64-frame one disagree by less than 2% of the height, the
-shorter, more precise one is kept. The stored ground fits are 4-DOF
-similarities, which cannot represent a pan's perspective and drift when chained
-over hundreds of frames, so the chains are built from camera rotations fitted
-to them instead, with the focal length that makes carried lines agree best —
-found from the sequence itself, since exported frames carry no lens data. The
+shorter, more precise one is kept. The chains are built from camera rotations,
+with one focal length for the sequence — the one that makes carried lines agree
+best, found from the sequence itself, since exported frames carry no lens data.
+The ground is now fitted as a rotation in the first place; sequences aligned
+before that stored 4-DOF similarities, which cannot represent a pan's
+perspective and drift when chained over hundreds of frames, and they are
+re-expressed as rotations the same way. The
 result is the horizon the outlier subtraction and the final composite use; the
 per-frame masks still mask the keypoints. Against painted horizons on four
 moving sequences it took a cloudy stretch from 1.9% of the frame height off to

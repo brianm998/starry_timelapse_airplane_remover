@@ -35,16 +35,19 @@ You should have received a copy of the GNU General Public License along with sta
 /// ## How
 ///
 /// 1. Each frame's detection is kept as `gridWidth` rows.
-/// 2. Each stored earth homography is re-expressed as a pure camera rotation `K R K⁻¹`, and
-///    chains are composed from those.  The stored fit is a 4-DOF similarity (see
-///    `estimateAlignment` in ImageAligner.cpp for why), which cannot represent the
-///    perspective of a pan: on a wide-angle pan a single ±4-frame entry already leaves a
-///    U-shaped horizontal error of ~10 px across the ground just below the skyline, and
-///    composed over a chain that grows into a roll — a painted horizon carried 101-200
-///    frames came out 1.10% of the height wrong.  As rotations, 0.35%.  The focal length
-///    `K` needs is not in the exported frames, so it is found from the sequence itself
-///    (`calibrateFocalLength`), and entries no rotation explains — a broken ground fit — are
-///    left out of the chains.
+/// 2. Each stored earth homography is re-expressed as a pure camera rotation `K R K⁻¹` with
+///    one focal length for the whole sequence, and chains are composed from those.  The
+///    ground used to be fitted as a 4-DOF similarity, which cannot represent the perspective
+///    of a pan: on a wide-angle pan a single ±4-frame entry left a U-shaped horizontal error
+///    of ~10 px across the ground just below the skyline, and composed over a chain that grew
+///    into a roll — a painted horizon carried 101-200 frames came out 1.10% of the height
+///    wrong; as rotations, 0.35%.  `estimateAlignment` (ImageAligner.cpp) now fits the ground
+///    as a rotation itself, with each frame's own focal length, and where the ground has
+///    detail its chains drift less again (a9-2: lines carried 128 frames 0.27% → 0.08% of the
+///    height off; a7iv's black ground, no change); the re-expression reproduces those entries,
+///    and keeps temp directories aligned before the change working.  The focal length `K` needs is not in the exported frames, so it is
+///    found from the sequence itself (`calibrateFocalLength`), and entries no rotation
+///    explains — a broken ground fit — are left out of the chains.
 /// 3. Every `neighbourStride`th frame within `longSpan` carries its detection into the frame.
 ///    Per column, the densest window `bandFraction` of the height tall wins, and the answer
 ///    is the median of its `nearest` members closest in time — once over `shortSpan` and
@@ -67,7 +70,8 @@ You should have received a copy of the GNU General Public License along with sta
 ///     a9-1 01_18, broken ground alignment (6)   0.59 / 1.68   0.38 / 1.69
 ///
 /// Through the CLI on the a7iv frames, against the merged masks the composite used before:
-/// 2.29 / 4.06 → 0.10 / 0.13, for 25 s over 371 frames.  The snow is not a mistake that comes
+/// 2.29 / 4.06 → 0.10 / 0.13, for 25 s over 371 frames — the same with the ground fitted as a
+/// rotation (a9-2 0.41 / 0.46, a7iv 0.10 / 0.13).  The snow is not a mistake that comes
 /// and goes, so there is little for the other frames to outvote; the broken alignment has a
 /// third of its ground fits left out, and so little to carry lines with.
 ///
