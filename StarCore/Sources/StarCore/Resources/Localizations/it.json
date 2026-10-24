@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "Questo fotogramma usa la modalità selettiva",
   "ui.this_sequence_has_not_been_processed_yet": "Questa sequenza non è ancora stata elaborata.",
   "ui.this_sequence_is_partly_processed": "Questa sequenza è elaborata in parte.",
+  "ui.this_sequence_needs_rebuilding": "Parti di questa sequenza sono state create con una versione precedente di star, o con impostazioni diverse, e verranno rifatte.",
   "ui.thumbnail_size": "Dimensione delle miniature",
   "ui.to_begin_processing_each_frame_we_must_first": "Per iniziare a elaborare ogni fotogramma bisogna prima:",
   "ui.toggle_filmstrip": "Mostra/nascondi la pellicola",

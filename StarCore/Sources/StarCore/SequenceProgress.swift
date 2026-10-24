@@ -22,12 +22,25 @@ public struct SequenceProgress: Equatable, Sendable {
     /// `ProcessingSteps.types` gives them.
     public let steps: [ProcessingStepProgress]
 
-    public init(sequenceName: String, frameCount: Int, framesComplete: Int, steps: [ProcessingStepProgress]) {
+    /// The stages whose artifacts on disk were made by other settings, or by an older
+    /// version of star's code, than this one would use (`ArtifactInputs.staleStages`).  The
+    /// next run throws them away and makes them again, so they are not counted as done:
+    /// with any stage stale the output frames go too, and a sequence whose every frame is
+    /// written is not finished after all.
+    public let staleStages: Set<ArtifactStage>
+
+    public init(sequenceName: String, frameCount: Int, framesComplete: Int,
+                steps: [ProcessingStepProgress], staleStages: Set<ArtifactStage> = []) {
         self.sequenceName = sequenceName
         self.frameCount = frameCount
         self.framesComplete = framesComplete
         self.steps = steps
+        self.staleStages = staleStages
     }
+
+    /// Work is on disk that the next run will redo, because a setting or star itself changed
+    /// since it was made.
+    public var needsRebuild: Bool { !staleStages.isEmpty }
 
     /// Nothing at all has been done to this sequence yet.
     ///
@@ -88,10 +101,12 @@ public enum SequenceProgressSurvey {
     /// `FrameAirplaneRemover`'s predicates).  At ~6us each a 1300 frame sequence costs
     /// tens of milliseconds, which is why this can run on the way in.
     ///
-    /// Takes what is on disk at face value.  A run started afterwards may delete some of
-    /// it — `FrameGraphBuilder.invalidateStaleArtifacts` throws away any stage whose
-    /// settings have changed since it was written — but the settings that wrote these are
-    /// the ones in the config file that was just opened, so at this moment the two agree.
+    /// Takes what is on disk at face value, except where the record of what it was made with
+    /// (`ArtifactInputs`) says the next run will throw it away: a run started afterwards
+    /// deletes every stage whose recorded inputs differ from the current ones
+    /// (`FrameGraphBuilder.invalidateStaleArtifacts`), and those count as not done here.
+    /// The settings are the ones in the config file just opened, so a difference is star's
+    /// own code having changed — a new algorithm version — or a file edited by hand.
     public static func survey(
       frames: [FrameAirplaneRemover],
       config: Config,
@@ -137,11 +152,38 @@ public enum SequenceProgressSurvey {
             }
         }
 
+        // What the next run will throw away is not done.
+        let stale = ArtifactInputs.current(from: config)
+          .staleStages(comparedTo: ArtifactInputs.load(fromTempOutputPath: config.tempOutputPath))
+        for stage in stale {
+            for type in stage.operationTypes { framesOnDisk[type] = 0 }
+        }
+        if !stale.isEmpty {
+            Log.i("opened sequence will rebuild \(stale.map(\.rawValue).sorted()): what it " +
+                  "was made with has changed since")
+        }
+
         return SequenceProgress(
           sequenceName: config.imageSequenceDirname,
           frameCount: frames.count,
           framesComplete: framesOnDisk[.merge] ?? 0,
-          steps: steps(for: types, frameCount: frames.count, framesOnDisk: framesOnDisk)
+          steps: steps(for: types, frameCount: frames.count, framesOnDisk: framesOnDisk),
+          staleStages: stale
         )
+    }
+}
+
+extension ArtifactStage {
+    /// The processing steps whose artifacts this stage is.
+    public var operationTypes: [OperationType] {
+        switch self {
+        case .horizon:          [.horizon]
+        case .mergedHorizon:    [.mergedHorizon]
+        case .keypoints:        [.starKeypoints, .earthKeypoints]
+        case .alignment:        [.starHomography, .earthHomography]
+        case .horizonConsensus: [.horizonConsensus]
+        case .outliers:         [.outliers]
+        case .output:           [.merge]
+        }
     }
 }

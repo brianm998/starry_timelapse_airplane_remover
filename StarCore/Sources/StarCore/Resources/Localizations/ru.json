@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "В этом кадре используется выборочный режим",
   "ui.this_sequence_has_not_been_processed_yet": "Эта последовательность ещё не обработана.",
   "ui.this_sequence_is_partly_processed": "Эта последовательность обработана частично.",
+  "ui.this_sequence_needs_rebuilding": "Части этой последовательности созданы более старой версией star или с другими настройками и будут созданы заново.",
   "ui.thumbnail_size": "Размер миниатюр",
   "ui.to_begin_processing_each_frame_we_must_first": "Чтобы начать обработку каждого кадра, сначала нужно:",
   "ui.toggle_filmstrip": "Показать или скрыть киноленту",

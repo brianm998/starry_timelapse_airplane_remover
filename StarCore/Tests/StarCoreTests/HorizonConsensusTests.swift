@@ -381,6 +381,51 @@ final class HorizonConsensusTests: XCTestCase {
         XCTAssertEqual(withReferences, 40, "a frame painted elsewhere does not switch the consensus off")
     }
 
+    /// A sequence with every output frame written, reopened by a star whose consensus code is
+    /// newer than the one that made it, is not finished: the next run throws the consensus and
+    /// the output away and makes them again, so the reopen panel must offer that run rather
+    /// than only the video.  The stages before it stay done.
+    func testAFinishedSequenceMadeByAnOlderConsensusIsNotComplete() async throws {
+        let h = try await FrameHarness.make(frameCount: 2, width: 64, height: 64,
+                                            named: "survey-stale")
+        harness = h
+        await h.updateConfig {
+            $0.tripodHeadWasMoving = true
+            $0.allowEarthAlignment = true
+            $0.useHorizonConsensus = true
+        }
+        for frame in 0..<2 {
+            try h.plantImage(FrameHarness.flatMask(width: 64, height: 64, at: 40),
+                             ofType: .final, frameIndex: frame)
+            try h.plantImage(FrameHarness.flatMask(width: 64, height: 64, at: 40),
+                             ofType: .horizon, frameIndex: frame)
+        }
+        // hoisted so the closure captures the manager rather than the harness
+        let manager = h.configManager
+        let config = await MainActor.run { manager.config() }
+        let current = ArtifactInputs.current(from: config)
+
+        try current.save(toTempOutputPath: config.tempOutputPath)
+        var progress = await SequenceProgressSurvey.survey(
+          frames: h.frames, config: config, homographyDatabase: manager.homographyDatabase)
+        XCTAssertTrue(progress.isComplete)
+        XCTAssertFalse(progress.needsRebuild)
+
+        var stages = current.stages
+        stages[ArtifactStage.horizonConsensus.rawValue]?["horizonConsensusAlgorithmVersion"] = "1"
+        try ArtifactInputs(version: current.version, stages: stages)
+          .save(toTempOutputPath: config.tempOutputPath)
+        progress = await SequenceProgressSurvey.survey(
+          frames: h.frames, config: config, homographyDatabase: manager.homographyDatabase)
+        XCTAssertTrue(progress.needsRebuild)
+        XCTAssertEqual(progress.staleStages, [.horizonConsensus, .outliers, .output])
+        XCTAssertFalse(progress.isComplete, "the output frames will be made again")
+        XCTAssertEqual(progress.framesComplete, 0)
+        XCTAssertFalse(progress.isUntouched, "the horizons are still done")
+        XCTAssertEqual(progress.steps.first { $0.type == .horizon }?.completed, 2)
+        XCTAssertEqual(progress.steps.first { $0.type == .merge }?.completed, 0)
+    }
+
     /// The op, against a run's leftovers: first-round masks on disk and ground fits in the
     /// homography database, as a moving run leaves them after validation.
     func testTheOpWritesALineForEveryTargetFromWhatARunLeavesOnDisk() async throws {

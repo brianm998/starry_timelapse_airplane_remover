@@ -786,6 +786,9 @@ message SequenceProgress {
   repeated StepCount steps = 4;
   bool   is_untouched    = 5;   // no step has a single frame done, so the sequence has never been processed
   bool   is_complete     = 6;   // every frame has its output written, so a run would have nothing to merge
+  // Work on disk was made by other settings or an older version of star's code, so the next run makes it again (and the output with it):
+  // those steps are counted as not done, and the panel says why.
+  bool   needs_rebuild   = 7;
 }
 
 // Whether this machine can keep its cores busy detecting keypoints on the open sequence at full resolution, and what to suggest when it

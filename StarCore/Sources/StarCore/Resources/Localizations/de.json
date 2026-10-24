@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "Dieses Bild verwendet den selektiven Modus",
   "ui.this_sequence_has_not_been_processed_yet": "Diese Sequenz wurde noch nicht verarbeitet.",
   "ui.this_sequence_is_partly_processed": "Diese Sequenz ist teilweise verarbeitet.",
+  "ui.this_sequence_needs_rebuilding": "Teile dieser Sequenz wurden mit einer älteren Version von star oder mit anderen Einstellungen erstellt und werden neu erstellt.",
   "ui.thumbnail_size": "Größe der Vorschaubilder",
   "ui.to_begin_processing_each_frame_we_must_first": "Um mit der Verarbeitung jedes Bildes zu beginnen, müssen wir zuerst:",
   "ui.toggle_filmstrip": "Filmstreifen ein-/ausblenden",

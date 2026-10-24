@@ -934,6 +934,7 @@
   "ui.this_frame_uses_selective_mode": "Khung này dùng chế độ chọn lọc",
   "ui.this_sequence_has_not_been_processed_yet": "Chuỗi này chưa được xử lý.",
   "ui.this_sequence_is_partly_processed": "Chuỗi này đã được xử lý một phần.",
+  "ui.this_sequence_needs_rebuilding": "Một số phần của chuỗi này được tạo bởi phiên bản star cũ hơn, hoặc với cài đặt khác, và sẽ được tạo lại.",
   "ui.thumbnail_size": "Cỡ ảnh thu nhỏ",
   "ui.to_begin_processing_each_frame_we_must_first": "Để bắt đầu xử lý từng khung, trước hết cần:",
   "ui.toggle_filmstrip": "Hiện/ẩn dải phim",
