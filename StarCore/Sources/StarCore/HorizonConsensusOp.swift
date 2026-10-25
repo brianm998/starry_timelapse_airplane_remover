@@ -90,13 +90,19 @@ final class HorizonConsensusOp: AsyncOperation, @unchecked Sendable {
         let width = firstFrame.width, height = firstFrame.height
 
         // Which frames' detections are needed: the voters within reach of a target, and the
-        // targets themselves.  Voters sit on a grid anchored on the sequence's first frame,
+        // targets and the frames around them.  Voters sit on a grid anchored on the sequence's first frame,
         // so the same frames vote whichever part of the sequence is being written.
         let origin = firstFrame.frameIndex
         let stride = max(1, parameters.neighbourStride)
         let low = (targets.first ?? origin) - parameters.longSpan
         let high = (targets.last ?? origin) + parameters.longSpan
-        let wanted = Set(targets)
+        // A target's line is averaged with its neighbours' (`temporalSmoothingRadius`), so
+        // their detections are needed too.
+        let radius = max(0, parameters.temporalSmoothingRadius)
+        var wanted = Set<Int>()
+        for target in targets {
+            for index in (target - radius)...(target + radius) { wanted.insert(index) }
+        }
         let sources = frames.filter { frame in
             let index = frame.frameIndex
             return wanted.contains(index)
