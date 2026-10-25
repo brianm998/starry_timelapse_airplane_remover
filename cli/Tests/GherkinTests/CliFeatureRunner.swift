@@ -215,8 +215,17 @@ final class CliFeatureRunner {
 
     private func renderOutputVideoStep() throws {
         // `--render-video` ran with the processing (see run()); this checks it happened.
+        // The path star printed, else the video beside the input: a log that came back empty must not hide a video that was written.
+        if renderedVideo == nil || !FileManager.default.fileExists(atPath: renderedVideo!) {
+            let found = (try? FileManager.default.contentsOfDirectory(atPath: scratch.path))?.first {
+                $0.contains("-star-v-") && ["mov", "mp4", "mkv", "avi"].contains(($0 as NSString).pathExtension.lowercased())
+            }
+            renderedVideo = found.map { scratch.appendingPathComponent($0).path } ?? renderedVideo
+        }
         guard let video = renderedVideo, FileManager.default.fileExists(atPath: video) else {
-            throw RunnerError("star did not report a rendered video; last output:\n" + runLog.split(whereSeparator: \.isNewline).suffix(20).joined(separator: "\n"))
+            let listing = (try? FileManager.default.contentsOfDirectory(atPath: scratch.path))?.sorted().joined(separator: ", ") ?? "?"
+            throw RunnerError("star did not report a rendered video and none is in \(scratch.path) (\(listing)); its log was \(runLog.count) characters; last output:\n"
+                              + runLog.split(whereSeparator: \.isNewline).suffix(20).joined(separator: "\n"))
         }
     }
 
