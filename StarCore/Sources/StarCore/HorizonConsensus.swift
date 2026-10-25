@@ -895,18 +895,19 @@ public enum HorizonConsensus {
                 results.set(index, (line, overridden, false))
             }
         }
-        var unsmoothed: [Int: [Float]] = [:]
+        var gathered: [Int: [Float]] = [:]
         var overridden = 0
         var corrected = 0
         let finished = results.all
         for (index, frame) in needed.enumerated() {
             guard let result = finished[index] else { continue }
-            unsmoothed[frame] = result.line
+            gathered[frame] = result.line
             guard targetSet.contains(frame) else { continue }
             overridden += result.overridden
             if result.corrected { corrected += 1 }
         }
 
+        let unsmoothed = gathered
         let wanted = targetSet.sorted().filter { unsmoothed[$0] != nil }
         let smoothed = Results<[Float]?>(nil, count: wanted.count)
         DispatchQueue.concurrentPerform(iterations: wanted.count) { index in
