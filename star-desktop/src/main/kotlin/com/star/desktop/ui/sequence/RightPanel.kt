@@ -32,6 +32,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
@@ -73,17 +74,24 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
         // for these tools to act on, and the whole section is left out.
         val usesOutliers = (info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE).usesOutliers
         if (usesOutliers) {
-            SelectiveToolsSection(vm, fvm)
+            CollapsibleSection(vm, RightPanelSection.SELECTIVE_TOOLS, localized("ui.section.selective_tools"), localized("ui.section.selective_tools_help")) {
+                SelectiveToolsSection(vm, fvm)
+            }
             SectionDivider()
         }
-        DisplaySection(vm)
+        CollapsibleSection(vm, RightPanelSection.DISPLAY, localized("ui.display"), localized("ui.section.display_help")) {
+            DisplaySection(vm)
+        }
         SectionDivider()
-        ProcessingSection(app, vm, fvm)
+        CollapsibleSection(vm, RightPanelSection.PROCESSING, localized("ui.processing"), localized("ui.section.processing_help")) {
+            ProcessingSection(app, vm, fvm)
+        }
         SectionDivider()
-        SectionHeader(localized("ui.section.debug"), localized("ui.section.debug_help"))
-        // macOS keeps the log-to-file switch at the foot of this panel.
-        HoverTip(localized("ui.log_to_file_help")) {
-            Column { com.star.desktop.ui.windows.LogToFileControls(app.debugLog) }
+        CollapsibleSection(vm, RightPanelSection.DEBUG, localized("ui.section.debug"), localized("ui.section.debug_help")) {
+            // macOS keeps the log-to-file switch at the foot of this panel.
+            HoverTip(localized("ui.log_to_file_help")) {
+                Column { com.star.desktop.ui.windows.LogToFileControls(app.debugLog) }
+            }
         }
       }
       com.star.desktop.ui.components.PanelChevron("»", { vm.setRightPanel(false) }, Modifier.padding(6.dp))
@@ -101,7 +109,6 @@ private fun SelectiveToolsSection(vm: SequenceViewModel, fvm: FrameViewModel) {
     val onlyUnclassified by vm.classifyOnlyUnclassified.collectAsState()
     var showToolHelp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
-    SectionHeader(localized("ui.section.selective_tools"), localized("ui.section.selective_tools_help"))
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         HoverTip(localized("ui.tool_help")) {
             Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
@@ -167,7 +174,6 @@ private fun SelectiveToolsSection(vm: SequenceViewModel, fvm: FrameViewModel) {
 @Composable
 private fun DisplaySection(vm: SequenceViewModel) {
     val fastAdv by vm.fastAdvancement.collectAsState()
-    SectionHeader(localized("ui.display"), localized("ui.section.display_help"))
 
     // How the fast buttons (z / x) move, and what they do in the strategy chosen (macOS "Fast Advancement Type").
     val skipAmount by vm.fastSkipAmount.collectAsState()
@@ -225,7 +231,6 @@ private fun DisplaySection(vm: SequenceViewModel) {
 private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel, fvm: FrameViewModel) {
     val current by vm.currentIndex.collectAsState()
     val info by fvm.info.collectAsState()
-    SectionHeader(localized("ui.processing"), localized("ui.section.processing_help"))
 
     // Horizon painting (macOS RightPanel): open or close the painter, and re-run the refinement it feeds.
     val painting by vm.horizonPaintMode.collectAsState()
@@ -286,11 +291,33 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
     ) { vm.renderCurrentFrame() }
 }
 
-/** The labelled top of a section; hovering it explains the section. */
+/** The right panel's sections, each opened and closed from its header (macOS `RightPanelSectionKind`). */
+enum class RightPanelSection { SELECTIVE_TOOLS, DISPLAY, PROCESSING, DEBUG }
+
+/**
+ * A section of the panel: its header, and [content] below it only while the section is open. The contents are laid out straight into
+ * the panel's column, so they keep its spacing.
+ */
 @Composable
-private fun SectionHeader(title: String, help: String) {
+private fun CollapsibleSection(vm: SequenceViewModel, section: RightPanelSection, title: String, help: String, content: @Composable () -> Unit) {
+    val expanded by vm.expandedRightPanelSections.collectAsState()
+    val open = section in expanded
+    SectionHeader(title, help, open) { vm.toggleRightPanelSection(section) }
+    if (open) content()
+}
+
+/** The labelled top of a section, with a chevron pointing right while it is closed and down while it is open; hovering it explains the section. */
+@Composable
+private fun SectionHeader(title: String, help: String, expanded: Boolean, onToggle: () -> Unit) {
     HoverTip(help) {
-        Text(title, color = StarColors.white, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(top = 2.dp),
+        ) {
+            Text("›", color = StarColors.white, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.rotate(if (expanded) 90f else 0f))
+            Text(title, color = StarColors.white, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        }
     }
 }
 
