@@ -498,8 +498,6 @@ tasks.test {
     // Every daemon a test starts finds (and clears) the run markers in its own directory, never the ones a real run left in the user's
     // application support: a test that wants a killed run to report writes its marker here.
     environment("STAR_RUN_MARKER_DIR", layout.buildDirectory.dir("run-markers").get().asFile.absolutePath)
-    // A marker left by an interrupted run makes the next stard raise a "previous run crashed" alert over the UI, which swallows every click.
-    doFirst { layout.buildDirectory.dir("run-markers").get().asFile.deleteRecursively() }
 }
 
 // The Gherkin desktop tests (gherkin/features/*.feature, tagged @desktop): a `gherkinTest` source set of generated test entry points
@@ -531,6 +529,8 @@ tasks.register<Test>("gherkinTest") {
     System.getenv("STAR_TEST_DATA")?.takeIf { it.isNotEmpty() }?.let { systemProperty("star.test.data", it) }
     (findProperty("star.stard.path") as String? ?: System.getProperty("star.stard.path"))?.let { systemProperty("star.stard.path", it) }
     environment("STAR_RUN_MARKER_DIR", layout.buildDirectory.dir("run-markers").get().asFile.absolutePath)
+    // A marker left by an interrupted run makes the next stard raise a "previous run crashed" alert over the UI, which swallows every click.
+    doFirst { layout.buildDirectory.dir("run-markers").get().asFile.deleteRecursively() }
     // Placeholder overrides (STAR_GHERKIN_<NAME>) pass through the environment as they are.
     // Never up to date: the point is to run the real engine again.
     outputs.upToDateWhen { false }

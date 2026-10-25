@@ -205,7 +205,8 @@ class DesktopFeatureRunner {
         val deadline = System.nanoTime() + OPEN_TIMEOUT_MS * 1_000_000
         while (model.screen.value !is AppScreen.Sequence) {
             model.error.value?.let { throw RunnerError("the app reported an error while opening: $it") }
-            if (System.nanoTime() > deadline) throw RunnerError("timed out after ${OPEN_TIMEOUT_MS / 1000}s waiting for the sequence to open (screen: ${model.screen.value})")
+            if (System.nanoTime() > deadline) throw RunnerError(
+                "timed out after ${OPEN_TIMEOUT_MS / 1000}s waiting for the sequence to open (screen: ${model.screen.value})\n" + processSnapshot())
             Thread.sleep(50)
         }
         t.setContent { StarApp(model) }
@@ -380,6 +381,17 @@ class DesktopFeatureRunner {
         val banner = w.banner?.takeUnless { com.star.desktop.domain.WarningRouting.passes(it.warning) }
         assertTrue(banner == null && w.critical == null, "star reported warnings: banner=${w.banner}, critical=${w.critical}")
     }
+
+    /**
+     * What is running when a wait gives up, for the failure message: an open that hangs after the frame count is read is either ffmpeg
+     * or the engine waiting on it, and which one is the whole question. Best effort, and only where `ps` exists.
+     */
+    private fun processSnapshot(): String = runCatching {
+        val p = ProcessBuilder("ps", "-axo", "pid,ppid,stat,etime,pcpu,rss,command").redirectErrorStream(true).start()
+        val lines = p.inputStream.bufferedReader().readLines()
+        p.waitFor()
+        "processes:\n" + (lines.take(1) + lines.filter { Regex("ffmpeg|ffprobe|stard").containsMatchIn(it) && !it.contains("ps -axo") }).joinToString("\n")
+    }.getOrDefault("(no process snapshot: ps is not available)")
 
     /** Copies the validator's reports and the run's config.json to `$STAR_GHERKIN_ARTIFACTS/<feature>` for CI to upload. */
     private fun saveArtifacts(feature: Feature) {
