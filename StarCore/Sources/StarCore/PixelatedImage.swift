@@ -640,6 +640,37 @@ extension PixelatedImage {
         return result
     }
 
+    /// `dpHorizonDetect`'s weight-independent half, done once. A grid search over the DP
+    /// weights calls `solve` on the result for each combination instead of redoing the
+    /// grey conversion, Sobel and Canny every time.
+    public struct DPHorizonPrepared: Sendable {
+        let prepared: PixelatedImageBridge.DPHorizonPrepared
+
+        public func detect(smoothnessLambda: Double = 2.0, sobelWeight: Double = 0.6,
+                           cannyWeight: Double = 0.4, searchTopFraction: Double = 0.0,
+                           searchBottomFraction: Double = 1.0) throws -> PixelatedImage {
+            guard let mat = prepared.solve(smoothnessLambda: smoothnessLambda,
+                                           sobelWeight: sobelWeight, cannyWeight: cannyWeight,
+                                           searchTopFraction: searchTopFraction,
+                                           searchBottomFraction: searchBottomFraction)
+            else { throw "DP horizon detection failed" }
+            guard let result = PixelatedImage(mat: mat) else {
+                throw "cannot create PixelatedImage from DP horizon mask"
+            }
+            return result
+        }
+    }
+
+    public func dpHorizonPrepare(cannyMinThreshold: Double = 50,
+                                 cannyMaxThreshold: Double = 120,
+                                 useL2Gradient: Bool = true) -> DPHorizonPrepared? {
+        guard let p = PixelatedImageBridge.dpHorizonPrepare(
+                self.mat, cannyMin: cannyMinThreshold, cannyMax: cannyMaxThreshold,
+                useL2Gradient: useL2Gradient)
+        else { return nil }
+        return DPHorizonPrepared(prepared: p)
+    }
+
     // returns a 16 bit grayscale image that results from subtrating
     // the given frame from this frame, done in c++ opencv2 land for speed
     public func subtract(_ otherFrame: PixelatedImage) throws -> PixelatedImage {
@@ -1013,7 +1044,7 @@ extension PixelatedImage {
       includeAll: Bool = false,
       config: Config? = nil
     ) -> PixelatedImage? {
-        let mat = ImageAligner.medianMergeImage(
+        guard let mat = ImageAligner.medianMergeImage(
             self.mat,
             withFilenames: frames,
             outlierThreshold: outlierThreshold,
@@ -1022,7 +1053,10 @@ extension PixelatedImage {
             streamingThresholdBytes: Int64(config?.mergeStreamingThresholdMB ?? 0) * 1024 * 1024,
             loadConcurrency: config?.mergeLoadConcurrency ?? 1,
             useGPU: config?.useGPUForMerge ?? true
-        )
+        ) else {
+            Log.e("median merge produced no image")
+            return nil
+        }
         return PixelatedImage(mat: mat)
     }
     
@@ -1062,12 +1096,11 @@ extension PixelatedImage {
     // areas that were non zero and within borderAmount of the border
     // will be part of the gradient
     public func raiseMaskBy(_ borderAmount: Int) -> PixelatedImage? {
-        PixelatedImage(
-          mat: ImageAligner.createGradientMaskIntoSky(
-            self.mat,
-            gradientDistance: Int32(borderAmount)
-          )
-        )
+        guard let gradient = ImageAligner.createGradientMaskIntoSky(
+                self.mat,
+                gradientDistance: Int32(borderAmount)
+              ) else { return nil }
+        return PixelatedImage(mat: gradient)
     }
     
     // raises the mask by the given amount, creating a gradient
@@ -1213,7 +1246,7 @@ extension PixelatedImage {
         if self.mat.is16Bits {
             return self
         } else {
-            return PixelatedImage(mat: self.mat.ensure16Bits()) ?? self
+            return self.mat.ensure16Bits().flatMap { PixelatedImage(mat: $0) } ?? self
         }
     }
 

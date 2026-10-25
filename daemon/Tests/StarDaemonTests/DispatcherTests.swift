@@ -372,4 +372,78 @@ final class DispatcherTests: XCTestCase {
         let dispatcher = self.dispatcher()
         await dispatcher.registerAll()
     }
+
+    // MARK: - a cancel that arrives first
+
+    /// A handler that waits to be cancelled and records whether it was.
+    private actor Outcome {
+        private(set) var cancelled: Bool?
+        func set(_ v: Bool) { cancelled = v }
+    }
+
+    /// The reader hands a request and its cancel to the dispatcher as two separate tasks, so the
+    /// cancel can arrive first. It used to find nothing under the id and do nothing, and the
+    /// request then ran to completion.
+    func testACancelThatArrivesBeforeItsRequestStillCancelsIt() async throws {
+        let dispatcher = self.dispatcher()
+        let outcome = Outcome()
+        await dispatcher.register(method: "Test.Slow") { _, _, _ in
+            // up to 10 s, but only if nobody cancels us
+            for _ in 0..<1000 {
+                if Task.isCancelled { await outcome.set(true); return }
+                try? await Task.sleep(nanoseconds: 10_000_000)
+            }
+            await outcome.set(false)
+        }
+
+        await dispatcher.cancel(id: 77)                       // first
+        let pending = await dispatcher.pendingEarlyCancelCount
+        XCTAssertEqual(pending, 1)
+        await dispatcher.dispatch(envelope: envelope(id: 77, method: "Test.Slow"))   // then the request
+
+        for _ in 0..<400 {
+            if await outcome.cancelled != nil { break }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        let cancelled = await outcome.cancelled
+        XCTAssertEqual(cancelled, true, "the request ran as if it had never been cancelled")
+        let left = await dispatcher.pendingEarlyCancelCount
+        XCTAssertEqual(left, 0, "the remembered cancel was not consumed")
+    }
+
+    /// A cancel for another id must not touch this request.
+    func testAnEarlyCancelForAnotherIdLeavesARequestAlone() async throws {
+        let dispatcher = self.dispatcher()
+        let outcome = Outcome()
+        await dispatcher.register(method: "Test.Quick") { _, _, _ in
+            await outcome.set(Task.isCancelled)
+        }
+        await dispatcher.cancel(id: 5)
+        await dispatcher.dispatch(envelope: envelope(id: 6, method: "Test.Quick"))
+        for _ in 0..<400 {
+            if await outcome.cancelled != nil { break }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        let cancelled = await outcome.cancelled
+        XCTAssertEqual(cancelled, false)
+    }
+
+    /// Remembering is bounded: cancels for requests that already finished pile up otherwise.
+    func testRememberedCancelsAreBounded() async {
+        let dispatcher = self.dispatcher()
+        for id in 0..<1000 { await dispatcher.cancel(id: UInt64(id)) }
+        let pending = await dispatcher.pendingEarlyCancelCount
+        XCTAssertLessThanOrEqual(pending, 256)
+    }
+
+    // MARK: - frame length cap
+
+    func testTheFrameLengthLimitAcceptsRealRequestsAndRefusesAbsurdOnes() {
+        XCTAssertTrue(frameLengthIsAcceptable(0))
+        XCTAssertTrue(frameLengthIsAcceptable(4 << 20))
+        XCTAssertTrue(frameLengthIsAcceptable(maxFrameBytes))
+        XCTAssertFalse(frameLengthIsAcceptable(maxFrameBytes + 1))
+        XCTAssertFalse(frameLengthIsAcceptable(Int(UInt32.max)), "a 4 GB length prefix must not be honoured")
+        XCTAssertFalse(frameLengthIsAcceptable(-1))
+    }
 }

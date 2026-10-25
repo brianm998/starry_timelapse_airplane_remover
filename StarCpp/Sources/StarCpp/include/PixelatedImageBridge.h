@@ -81,7 +81,21 @@ bool pib_sky_shift(MatWrapperRef a, MatWrapperRef b,
                    int x, int y, int w, int h,
                    double *dx, double *dy, double *response);
 
-// Dynamic programming horizon tracing
+// Dynamic programming horizon tracing.
+//
+// `pib_dp_prepare` does everything that does not depend on the DP weights (grey conversion,
+// Sobel, Canny) once; `pib_dp_solve` runs the DP for one set of weights against it. A grid
+// search over weights should prepare once and solve many times. `pib_dp_horizon_mask` is the
+// two together, for a single solve.
+typedef struct DPPrepared *DPPreparedRef;
+DPPreparedRef pib_dp_prepare(MatWrapperRef img, double cannyMin, double cannyMax,
+                             bool useL2Gradient);
+void pib_dp_prepared_release(DPPreparedRef prepared);
+MatWrapperRef pib_dp_solve(DPPreparedRef prepared,
+                           double smoothnessLambda,
+                           double sobelWeight, double cannyWeight,
+                           double searchTopFraction,
+                           double searchBottomFraction);
 MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
                                   double cannyMin, double cannyMax,
                                   bool useL2Gradient,

@@ -32,7 +32,8 @@ public final class BufferHolder: @unchecked Sendable {
     public var asUInt16: UnsafeMutablePointer<UInt16>? { buffer_holder_as_uint16(ref) }
     public var asUInt32: UnsafeMutablePointer<UInt32>? { buffer_holder_as_uint32(ref) }
 
-    public func toMat() -> MatWrapper {
-        MatWrapper(ref: buffer_holder_to_mat(ref))
+    public func toMat() -> MatWrapper? {
+        let r: MatWrapperRef? = buffer_holder_to_mat(ref)
+        return r.map { MatWrapper(ref: $0) }
     }
 }

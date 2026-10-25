@@ -23,6 +23,9 @@ MatWrapperRef mat_wrapper_clone(MatWrapperRef ref);
 // is about to drop its own handle and a full copy would be wasted — notably the
 // ImageCache trampoline, whose Swift MatWrapper deinits as the closure returns.
 //
+// Shares whenever the source owns an ordinary packed buffer, even if another wrapper
+// already shares it - the refcount is not consulted.
+//
 // The buffer is shared, so neither handle may be mutated: a write through one
 // would be visible through the other. Use mat_wrapper_clone when the result must
 // be independent. Falls back to a deep copy when the buffer cannot be shared
@@ -35,6 +38,11 @@ void          mat_wrapper_release(MatWrapperRef ref);
 MatWrapperRef mat_wrapper_create(int64_t width, int64_t height, int cvType,
                                  size_t bytesPerRow, void *data,
                                  bool takeOwnership);
+
+// A new owned, continuous Mat of the given size and type, contents UNINITIALISED: the
+// caller writes every pixel through mat_wrapper_data_ptr (cast away const). Saves the
+// zero-filled staging array and the clone that mat_wrapper_create(takeOwnership) costs.
+MatWrapperRef mat_wrapper_new(int64_t width, int64_t height, int cvType);
 
 // --- Properties ---
 int64_t    mat_wrapper_rows(MatWrapperRef ref);

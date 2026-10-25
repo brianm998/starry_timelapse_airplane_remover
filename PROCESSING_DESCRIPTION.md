@@ -104,16 +104,17 @@ when tracing what happens to one frame.
 The graph builder branches on whether the user has declared the timelapse to
 be moving (`--moving-camera` on the CLI):
 
-- **Static**: a single horizon-merge operation depends on *every* per-frame
-  horizon detection
-  ([`FrameGraphBuilder.swift:292`](StarCore/Sources/StarCore/FrameGraphBuilder.swift:292)),
-  producing one global horizon mask. Homography validation then finds the
+- **Static**: a single horizon-merge operation produces one global horizon
+  mask, from the per-pixel median of frames sampled across the whole sequence
+  (see §3.1) — there is no per-frame horizon detection at all. Homography validation then finds the
   median homography across the whole sequence and applies it uniformly
   ([`AlignmentValidationOp.swift:46`](StarCore/Sources/StarCore/AlignmentValidationOp.swift:46)).
   Earth alignment is available, so the clean reference is built from
   neighbor frames in *both* sky and ground regions.
 - **Moving**: each frame's horizon merge depends only on its local neighbors
-  ([`FrameGraphBuilder.swift:261`](StarCore/Sources/StarCore/FrameGraphBuilder.swift:261)).
+  ([`FrameGraphBuilder.swift:261`](StarCore/Sources/StarCore/FrameGraphBuilder.swift:261)),
+  and after alignment a single consensus step re-derives every frame's horizon
+  from the whole sequence's detections (§3.2).
   Homography is per-frame with no global smoothing. Earth alignment is on by
   default here too, so the ground portion of the clean reference is built from
   neighbor frames as well — except where the ground cannot be tracked
@@ -193,11 +194,31 @@ Each candidate horizon is scored by
 - `cropBoundaryScore` — multiplier that suppresses flat lines pinned to a
   crop edge (a common failure mode).
 
-For static timelapses the per-frame horizons are then accumulated across
-*all* frames as a `CV_32S` per-pixel vote count
+For moving timelapses with no painted reference, detection runs on a copy
+of the frame shrunk to 1600 px wide and the answer is scaled back up: the
+Random Walker's brush radii are fixed pixel counts, which are a sliver of a
+6000 px frame and a useful search at 1600. Those per-frame horizons mask the
+keypoints; once the ground has been aligned they are combined into the
+horizon the composite uses (end of §3.2).
+
+For static timelapses the horizon is found once, not per frame
+([`TemporalHorizonDetector.swift`](StarCore/Sources/StarCore/TemporalHorizonDetector.swift)).
+48 frames spread from first to last are shrunk to 1600 px wide and
+median-combined per pixel. Everything that makes a night frame hard to read
+moves — stars, clouds, aurora, noise — and the terrain does not, so the
+median is a clean, sharp image of the landscape under a starless sky. The
+detector above runs on it for a first guess, and
+[`HorizonBoundaryRefiner`](StarCore/Sources/StarCore/HorizonBoundaryRefiner.swift)
+then picks the best sky-above/ground-below line in each column within a
+corridor around that guess (a dynamic programme over column-local brightness
+levels and bright-to-dark edges), which follows tree tips and distant
+mountains the detector's smoothing removes. Against the user's painted
+horizons this took the worst sequence measured from 15.6% of the frame
+height off to 0.06%. Setting `useTemporalStaticHorizon` to false in
+config.json restores the older path: every frame detected, accumulated as a
+per-pixel vote count
 ([`HorizonAccumulator.swift:39`](StarCore/Sources/StarCore/HorizonAccumulator.swift:39))
-and finalized by majority vote. This eliminates per-frame jitter caused
-by airplane lights or moving clouds biasing the segmentation.
+and finalized by majority vote.
 
 ### 3.2. Frame-to-Frame Alignment
 
@@ -241,6 +262,53 @@ then sanity-checks the result. For static sequences it computes the
 median homography across the whole sequence and rejects any frame whose
 homography deviates too far. For moving sequences it can only smooth
 locally, which is part of why moving sequences are harder.
+
+For moving sequences the ground alignment then feeds back into the horizon
+([`HorizonConsensus.swift`](StarCore/Sources/StarCore/HorizonConsensus.swift)).
+Every fourth frame's detected horizon within ±400 frames is carried into each
+frame along the ground, and each column takes the densest cluster of those
+lines, favouring the frames nearest in time. A detection that is wrong for a
+while — a dark cloud bank on the ridge, read as ground for two hundred frames —
+is outvoted by the frames before and after it, where the ridge was clear; where
+the long span and a ±64-frame one disagree by less than 2% of the height, the
+shorter, more precise one is kept. The chains are built from camera rotations,
+with one focal length for the sequence — the one that makes carried lines agree
+best, found from the sequence itself, since exported frames carry no lens data.
+The ground is now fitted as a rotation in the first place; sequences aligned
+before that stored 4-DOF similarities, which cannot represent a pan's
+perspective and drift when chained over hundreds of frames, and they are
+re-expressed as rotations the same way. The
+result is the horizon the outlier subtraction and the final composite use; the
+per-frame masks still mask the keypoints. Against painted horizons on four
+moving sequences it took a cloudy stretch from 1.9% of the frame height off to
+0.1%, halved the error on a clean sequence, and made none measurably worse.
+Setting `useHorizonConsensus` to false in config.json turns it off.
+
+Painted reference horizons anchor it rather than replace it. A painted frame's
+line is its painting; every other frame's line is corrected by the painted
+frames either side of it, by as much as the consensus is wrong at them (both
+carried along the same chain, so chain error largely cancels), and the
+correction fades with the distance to the nearest painted frame. So a user can
+paint where the consensus goes wrong — a mistake every frame shares, such as
+moonlit snow read as sky — and keep the consensus everywhere else. Tested by
+leaving each painted frame out in turn, it took the snow sequence from 0.41% to
+0.34% of the height and was never worse than the consensus alone. Repainting a
+reference rebuilds the consensus lines of the frames it affects before they are
+merged again.
+
+Last, each frame's line is averaged with its neighbours' within ±16 frames,
+carried into it along the ground. The vote changes its members every fourth
+frame, and a column sitting between two clusters (trees against the slope behind
+them) flips between them as it does; played as a video, those were short lines
+dancing along the horizon. The average removed nearly all of them (frames with a
+jump of more than 0.4% of the height: 65-100% → 0-11% on four sequences) without
+costing any accuracy against the painted horizons.
+
+It runs as a processing step of its own, with its own row in the progress
+display, and draws each frame's line as a mask beside the detected and merged
+ones, so the "horizon consensus" view mode shows it. The horizon line overlay
+draws every kind of line a frame has (detected, merged, consensus and painted),
+each in its own colour and each switched on or off separately.
 
 ### 3.3. The Clean Reference: Sigma-Clipped Median Stack
 

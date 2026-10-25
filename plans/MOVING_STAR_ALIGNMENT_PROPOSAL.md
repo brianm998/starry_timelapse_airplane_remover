@@ -131,6 +131,45 @@ stretch is biased the same way, no donor scheme can.
 
 ## Proposal
 
+**Status (2026-10-22): steps 1 and 2 are implemented**, together with the keypoint cache
+invalidation they need (`detectionAlgorithmVersion` 2 → 3). On a cli run over the first
+199 frames of this sequence, star alignment validation repaired 58 frames where the
+shipped code repaired 173. The 58 are the twilight frames 0–57, which step 3 is for. On
+two static sequences from the same night, the 3px tolerance kept the same inliers and
+made the fits slightly more consistent (median reciprocity 0.39 → 0.16px on a7riiia-2,
+0.15 → 0.12px on fx3-1).
+
+**Step 3 is implemented too** (`detectionAlgorithmVersion` 4). Two things changed from the
+prototype below. First, the centroids are found at full resolution: at detection scale,
+deep-dusk pairs matched half as many stars and some fits stayed 1.4–2.3px off. Second,
+the refinement tries both starting points, the keypoint fit and a translation vote over
+the brightest stars, and keeps whichever explains more stars. It also rejects any fit
+whose pairs cover less than half of the star-bearing sky. The first attempt seeded only
+from the keypoint fit, and in twilight a wrong keypoint fit grew partial locks: 245–488
+pairs at ~1px RMS, covering 5–8 of 24 regions and 58–108px wrong.
+
+On the 199-frame cli run, validation repairs 6 frames (0–5) instead of 58. The stored
+homographies for twilight frames 30 and 50 and night frames 87, 120 and 160 agree with
+the star-centroid truth to 0.00–0.02px median, against up to 6.6px (p90 22px) with steps
+1–2 alone. In the outputs, frame 10 keeps 85% of its stars' brightness instead of 66%,
+and frame 30 keeps 89% instead of 74%. Night frames are unchanged. CPU cost is about 6%.
+
+Frames 0–5 are the deepest dusk. Each had one or two neighbours 3–4 frames apart where
+the stars could not confirm any fit, and the keypoint fit left in its place was
+170–1970px wrong. That one warp made the validation heuristics condemn the frame's whole
+set, and it was repaired. **Such fits are now dropped.** A sky keypoint fit is reported as
+no homography when the stars confirm nothing, both frames hold 1000+ centroids, and the
+fit stands on fewer than 30 RANSAC inliers. Checked first on the static, cirrus-covered
+fx3-1 dusk: the rule fired on 116 of 950 pairs in frames 0–119, all in frames 0–24, and
+every dropped fit moved that static sky by 8–4200px where the stars say it moved 5–13px.
+Frames 0–3 then keep visibly more stars (median brightness kept 66→74%, 72→76%,
+75→81%, 80→83%), and only frames 0, 1 and 3 are repaired. Frames 0 and 1 have too few
+neighbours left; frame 3's deep-dusk fits disagree by 1.68px. Frame 5 got slightly worse
+(80→76%): it now keeps its own set, whose 4-frame-gap warps are ill-conditioned this
+early. A 120-frame fx3-1 run through the static path completed cleanly, with outputs
+matching the original run's star survival to within 0.002. Step 4 is still open, and
+matters less now that repairs are rare.
+
 ### Step 1 — keep sky keypoints off the mask edge *(small; measured)*
 
 In `ia_find_features`'s sky branch, intersect the detection mask with

@@ -1043,6 +1043,125 @@ static cv::Mat makeStarMask(const cv::Mat &gray, int dilateSize, int thresholdVa
     return mask;
 }
 
+// How far from the edge of the sky mask, in detection pixels, a sky keypoint has to be.
+//
+// toGray8UWithMask blacks out everything the mask excludes, and that leaves a hard step
+// from lit sky to black along the mask's edge.  The erosion below moves the step up off
+// the terrain, but it cannot remove it — the mask makes it — and wherever it sits it
+// follows the horizon, so it moves with the ground, not the stars.  Under moonlight the
+// sky just above the horizon is the brightest sky there is (179/255 after the stretch on
+// the 10_17_2026 a9-1 sequence, against 51/255 overhead), which makes the step the
+// strongest structure in the frame.  There, 23-28% of the sky keypoints sat on it, they
+// were half of all descriptor matches (the edge looks the same along its length, so most
+// matched the wrong place along it), and the 28-62 per pair that RANSAC accepted ran
+// 3.8px per frame sideways off the stars — the ground's drift against the sky.  The fit
+// bent between them and the stars: those in one corner survived the merge and the rest
+// of the sky lost its stars.
+//
+// 40 clears the descriptor of every keypoint the step produced there (SIFT's descriptor
+// reaches about 5.3x a keypoint's size, and the step's ran around 3-7px at detection
+// scale).  It is in detection pixels because that is where SIFT's footprint is measured;
+// at the default 1.5 divisor it keeps keypoints 60px clear of the cut, which with the
+// 40px erosion is 100px off the ground — exactly what was measured.  Measured against
+// thousands of star centroids, it took the frame that lost its stars from 1.5-7.5px
+// wrong to 0.1-0.4px together with the tighter sky RANSAC below.  A band that narrow is
+// a sliver of any real sky, so what it costs is a few stars right at the horizon.
+static constexpr int kSkyKeypointCutMargin = 40;
+
+// The part of `mask` (non-zero = keep) further than `margin` pixels from anything it
+// excludes.  A mask with nothing excluded has no cut and comes back unchanged:
+// distanceTransform measures the distance to the nearest zero pixel, and there is none.
+static cv::Mat awayFromMaskEdge(const cv::Mat &mask, int margin) {
+    cv::Mat binary, dist;
+    cv::threshold(mask, binary, 0, 255, cv::THRESH_BINARY);
+    cv::distanceTransform(binary, dist, cv::DIST_L2, 3);
+    return dist > (float)margin;
+}
+
+// --- Star centroids ---------------------------------------------------------
+//
+// SIFT is a poor star matcher.  Stars all look alike, so their descriptors collide and
+// Lowe's ratio test throws most of them away: on a moonlit 24MP frame ~750 genuine sky
+// keypoints became 20-60 RANSAC inliers per neighbour, and in twilight 7-18.  The star
+// *positions* carry far more: the same frames hold thousands of stars, and matched by
+// position under a rough homography they fit one to 0.26-0.48px RMS from ~4000 pairs.
+// So the sky keeps its stars' centroids next to its keypoints, and the homography is
+// refined against them (refineSkyHomographyWithStars).
+//
+// A star here is a peak of a difference of Gaussians (sigma 1.2 minus sigma 4: a
+// point-source filter that flattens sky glow, moonlit gradients and most cloud), more
+// than kStarPeakSigmas above the sky's noise, located to sub-pixel by a 5x5 weighted
+// centroid.  Found on the raw frame's own gray at full resolution, not on the 8-bit
+// stretch SIFT gets and not at detection scale: a faint star on a bright moonlit sky is
+// a few 8-bit levels high, and in deep twilight the full-resolution centroids paired
+// roughly twice as many stars and took the fits that were 1.4-2.3px wrong at detection
+// scale to 0.02-0.5px.  Run after SIFT, whose scale space is many times the size of
+// these few full-frame float buffers, so it adds nothing to the op's memory peak.
+static constexpr int    kMaxStarCentroids = 5000;
+static constexpr double kStarPeakSigmas   = 6.0;
+
+// `image` is the full-resolution frame and `skyMask` (non-zero = search) the same size.
+// Returns centroids brightest first.
+static std::vector<cv::Point2f> findStarCentroids(const cv::Mat &image, const cv::Mat &skyMask) {
+    cv::Mat gray;
+    if (image.channels() == 3)      cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+    else if (image.channels() == 4) cv::cvtColor(image, gray, cv::COLOR_BGRA2GRAY);
+    else                            gray = image;
+    if (gray.size() != skyMask.size()) return {};
+
+    cv::Mat f, narrow, wide;
+    gray.convertTo(f, CV_32F);
+    cv::GaussianBlur(f, narrow, cv::Size(), 1.2);
+    cv::GaussianBlur(f, wide, cv::Size(), 4.0);
+    const cv::Mat dog = narrow - wide;
+
+    // The sky's noise, robustly: the median absolute deviation over a sample.
+    std::vector<float> sample;
+    for (int y = 0; y < dog.rows; y += 7) {
+        const float *d = dog.ptr<float>(y);
+        const uchar *m = skyMask.ptr<uchar>(y);
+        for (int x = 0; x < dog.cols; x += 7) if (m[x]) sample.push_back(d[x]);
+    }
+    if (sample.size() < 100) return {};
+    auto median = [](std::vector<float> &v) {
+        std::nth_element(v.begin(), v.begin() + v.size() / 2, v.end());
+        return v[v.size() / 2];
+    };
+    const float centre = median(sample);
+    for (auto &v : sample) v = std::fabs(v - centre);
+    const float threshold = centre + (float)kStarPeakSigmas * 1.4826f * median(sample);
+
+    cv::Mat localMax;
+    cv::dilate(dog, localMax, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(7, 7)));
+
+    struct Peak { cv::Point2f at; float value; };
+    std::vector<Peak> peaks;
+    for (int y = 4; y < dog.rows - 4; ++y) {
+        const float *d = dog.ptr<float>(y), *mx = localMax.ptr<float>(y);
+        const uchar *m = skyMask.ptr<uchar>(y);
+        for (int x = 4; x < dog.cols - 4; ++x) {
+            if (!m[x] || d[x] <= threshold || d[x] != mx[x]) continue;
+            double sw = 0, sx = 0, sy = 0;
+            for (int j = -2; j <= 2; ++j) {
+                const float *row = dog.ptr<float>(y + j);
+                for (int i = -2; i <= 2; ++i) {
+                    const double w = std::max(0.f, row[x + i]);
+                    sw += w; sx += w * (x + i); sy += w * (y + j);
+                }
+            }
+            peaks.push_back({cv::Point2f((float)(sx / sw), (float)(sy / sw)), d[x]});
+        }
+    }
+    std::sort(peaks.begin(), peaks.end(),
+              [](const Peak &a, const Peak &b) { return a.value > b.value; });
+    if ((int)peaks.size() > kMaxStarCentroids) peaks.resize(kMaxStarCentroids);
+
+    std::vector<cv::Point2f> stars;
+    stars.reserve(peaks.size());
+    for (const auto &p : peaks) stars.push_back(p.at);
+    return stars;
+}
+
 // --- Public API ---
 
 MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
@@ -1196,34 +1315,42 @@ MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count) {
 MatWrapperRef ia_accumulate_one_horizon_mask(MatWrapperRef accum_ref, MatWrapperRef mask_ref) {
     if (!mask_ref) return accum_ref ? wrap(accum_ref->mat.clone()) : wrap(cv::Mat());
     try {
-        cv::Mat mask = mask_ref->mat.clone();
-        if (mask.channels() > 1) cv::cvtColor(mask, mask, cv::COLOR_BGR2GRAY);
+        cv::Mat mask = mask_ref->mat;
+        if (mask.channels() > 1) {
+            cv::Mat grey;
+            cv::cvtColor(mask, grey, cv::COLOR_BGR2GRAY);
+            mask = grey;
+        }
         cv::Mat binary;
         cv::threshold(mask, binary, 0, 1, cv::THRESH_BINARY);
+
+        if (accum_ref && !accum_ref->mat.empty()) {
+            // In place: the accumulator is the caller's to update, and cloning its 168MB for
+            // every frame was most of what this cost. The 8-bit 0/1 plane is added straight in
+            // as CV_32S (no separate converted copy); a size mismatch throws before anything
+            // is written, so a failed call leaves the accumulator as it was. The result
+            // shares the accumulator's buffer.
+            cv::add(accum_ref->mat, binary, accum_ref->mat, cv::noArray(), CV_32S);
+            return new MatWrapperImpl(MatWrapperImpl::Alias{}, accum_ref->mat);
+        }
         cv::Mat frame32s;
         binary.convertTo(frame32s, CV_32S);
-
-        cv::Mat total;
-        if (accum_ref && !accum_ref->mat.empty()) {
-            total = accum_ref->mat.clone();
-            total += frame32s;
-        } else {
-            total = frame32s;
-        }
-        return wrap(total);
+        return wrap(frame32s);
     } KHT_CATCH_LOG("ia_accumulate_one_horizon_mask")
     return nullptr;
 }
 
-MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum_ref, const char **filenames, int count) {
+MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum_ref, const char **filenames, int count,
+                                       uint8_t *outLoaded) {
     try {
+        if (outLoaded) for (int i = 0; i < count; ++i) outLoaded[i] = 0;
         cv::Mat total;
         if (accum_ref && !accum_ref->mat.empty()) {
             total = accum_ref->mat.clone();
         }
         for (int i = 0; i < count; ++i) {
             MatWrapperRef ref = image_cache_load(filenames[i]);
-            if (!ref) continue;
+            if (!ref) continue;   // a mask that is not there is not in the vote
             cv::Mat mat = ref->mat.clone();
             mat_wrapper_release(ref);
 
@@ -1238,6 +1365,7 @@ MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum_ref, const char **fil
             } else {
                 total += frame32s;
             }
+            if (outLoaded) outLoaded[i] = 1;
         }
         return total.empty() ? wrap(cv::Mat()) : wrap(total);
     } KHT_CATCH_LOG("ia_accumulate_from_files")
@@ -1367,6 +1495,21 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
             // every pixel, so the "star mask" selected the whole frame and SIFT ranked
             // noise alongside stars.
             detectionMask = makeStarMask(detectGray, baseImageDilateSize, baseImageThresholdValue);
+
+            // Off the black step at the mask's edge, which is ground-locked — see
+            // kSkyKeypointCutMargin.  The star mask alone does not keep keypoints off it:
+            // the bright sky above the step clears its threshold, and its dilation then
+            // reaches across the step into the black.  Applied to the mask rather than to
+            // the keypoints afterwards, so the step cannot use up SIFT's keypoint cap. (That
+            // premise holds for both SIFT paths now that each applies this mask before its cap;
+            // cv::SIFT used to cap first, so the step could use up the cap there.)
+            cv::Mat clear = awayFromMaskEdge(detectHorizonMask, kSkyKeypointCutMargin);
+            if (cv::countNonZero(clear) > 0) {
+                cv::bitwise_and(detectionMask, clear, detectionMask);
+            } else {
+                Log_d("sky region narrower than the %dpx keypoint margin, keeping the "
+                      "keypoints it would have excluded", kSkyKeypointCutMargin);
+            }
         }
 
         std::vector<cv::KeyPoint> keypoints;
@@ -1479,8 +1622,16 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
                   detectGray, detectionMask, maxKeypoints, keypoints, descriptors);
             }
             if (!usedGPUPort) {
-                cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(maxKeypoints);
-                siftBase->detectAndCompute(detectGray, detectionMask, keypoints, descriptors);
+                // cv::SIFT applies its keypoint cap BEFORE the mask, so a capped detectAndCompute
+                // keeps the strongest N of the whole frame and then drops those outside the mask
+                // (the port above masks first). Detect uncapped with the mask, keep the strongest
+                // N of what the mask allows, then describe only those.
+                cv::Ptr<cv::SIFT> siftBase = cv::SIFT::create(0);
+                siftBase->detect(detectGray, keypoints, detectionMask);
+                if (maxKeypoints > 0 && (int)keypoints.size() > maxKeypoints) {
+                    cv::KeyPointsFilter::retainBest(keypoints, maxKeypoints);
+                }
+                siftBase->compute(detectGray, keypoints, descriptors);
             }
         }
 
@@ -1498,7 +1649,20 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
         }
 
         keypoints.shrink_to_fit();
-        return new OCVFeatureSetImpl(keypoints, descriptors);
+        std::vector<cv::Point2f> stars;
+        if (alignmentType == AlignmentTypeSky) {
+            // The sky, held off the cut by the same margin the keypoints keep — given in
+            // detection pixels, so scaled up to the full-resolution frame's.
+            cv::Mat starMask = awayFromMaskEdge(
+              horizonMask, (int)std::lround(kSkyKeypointCutMargin / scale));
+            if (cv::countNonZero(starMask) == 0) starMask = horizonMask;
+            stars = findStarCentroids(baseImage->mat, starMask);
+            Log_d("frame %d: %zu sky keypoints, %zu star centroids",
+                  frameIndex, keypoints.size(), stars.size());
+        }
+        auto *features = new OCVFeatureSetImpl(keypoints, descriptors);
+        features->stars = std::move(stars);
+        return features;
     } catch (const cv::Exception &e) {
         if (errorMsg) *errorMsg = "OpenCV exception in findFeatures";
         Log_e("Error: %s", e.what());
@@ -1509,6 +1673,444 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
         if (errorMsg) *errorMsg = "Unknown exception";
     }
     return nullptr;
+}
+
+// Fit the transform relating two frames' correspondences: a full homography for the sky,
+// a camera rotation for the ground.
+//
+// The sky gets 8 degrees of freedom because it has the geometry to support them —
+// keypoints are stars, they cover the whole frame, and the fit is heavily
+// over-determined.  Measured, feeding the *identical* sky feature set in reversed order
+// moves the resulting warp's frame corners by 0.00-0.59px: RANSAC lands in the same place
+// however it samples, which is what a well-conditioned fit looks like.
+//
+// The ground has none of that.  It is the bottom of the frame, so its inliers sit in a
+// band measured at 87-98% of the frame width by **11-42% of its height** across seven
+// pairs on two sequences.  Points that flat do not constrain a homography's vertical and
+// perspective terms at all: the fit satisfies every inlier it sampled and is then free to
+// do anything above and below them, and it does.  The same reversed-order test moves the
+// ground warp 11.5-99.5px, and against phase correlation over the same band the fitted
+// warp came out 8-25x the true ground motion.
+//
+// That is degeneracy, not noise, and nothing downstream can see it.  In particular
+// groundConsensusIsUsable cannot: it reads an inlier *ratio*, which measured 0.87-0.88 on
+// exactly these fits — high **because** the model has enough freedom to explain whatever
+// RANSAC sampled.  A ratio asks whether the correspondences agree with the model, never
+// whether they constrain it.
+//
+// So the ground gets a model its evidence can carry.  The first one was a 4-DOF
+// similarity — rotation, uniform scale and translation, cv::estimateAffinePartial2D — and
+// on those seven pairs it moved 0.00-4.65px under reordered input where the homography
+// moved 11.5-99.5, and landed 2-5x closer to the motion phase correlation measured.
+// Affine's 6 DOF sat in between (0.75-31.3px), and tightening the RANSAC threshold did not
+// rescue the homography (10px: 99.3, 3px: 66.3, 1.5px: 110.1 on the first pair): the
+// problem was the model, not the tolerance.  A guard rejecting fits whose inliers are too
+// flat was the other candidate, and was rejected: the 42%-tall band is still degenerate,
+// so the cutoff would have had to throw away nearly every ground fit.
+//
+// But a similarity is the wrong shape for what a panning head does.  A camera turning
+// about its own centre moves everything it sees by a homography, K R K^-1, however far
+// away it is, and the horizontal shift that homography gives a point grows towards the
+// frame edges as 1 + x²/f²: with a 20mm lens on full frame the edges move nearly twice
+// as far as the centre.  A similarity's shift is linear in x, so the best it can do is split
+// the difference, and it leaves a U-shaped residual across the frame, mirrored between
+// earlier and later neighbours.  Measured on the moving 10_17_2026 a9-1 sequence by
+// phase-correlating every warped +-4 neighbour against its base frame in 384x256 patches
+// just below the skyline (17 frames, 5984 measurements): the nine samples the merge picks
+// from at a pixel sat 13.3px apart horizontally at the frame edges (median; p90 25.7),
+// and 5.2px in the centre.  A median over samples spread that far is a sideways median
+// filter.  The run's own earth merge, replayed bit for bit from its homography.db, kept
+// 0.44 of the frame's medium-scale ground detail at the edges and 0.62 in the centre, and
+// looked motion-blurred.  The same residual cost the similarity its stability there: many
+// correspondences sat near the RANSAC threshold, and which consensus won depended on the
+// sampling order (median 1.1px, worst 22.5px in the ground).
+//
+// So the ground is fitted as that rotation.  Three degrees of freedom, each with its own
+// signature even on a thin band — yaw a shift with the 1 + x²/f² curvature, pitch a
+// vertical shift, roll a vertical slope across the width — and no projective terms left
+// over to do anything above and below the band.  Against the similarity it replaced, on
+// the same correspondences:
+//
+//                  edge |dx| at +-4   inlier rms     reordered input, worst   edge detail kept
+//   10_17 a9-1       6.83 -> 0.20     2.62 -> 1.70     22.5 -> 0.09px           0.44 -> 0.71
+//   03_16 a9-2       4.25 -> 0.08     2.59 -> 1.25      9.3 -> 0.11             0.68 -> 0.89
+//   08_15 a7iv       8.20 -> 0.73     2.74 -> 1.74     12.8 -> 0.00             0.25 -> 0.41
+//
+// |dx| and the detail are by phase correlation and band-pass energy against the base
+// frame, as above, with the merge replayed; the rms is over the correspondences both fits
+// keep, and lower on 94-100% of pairs.  On grounds too dark to show the curvature — a
+// black mountain silhouette, a black-clipped foreground — most frames cannot calibrate
+// (see calibrateGroundFocalLength) and the fit does about as well as the similarity did,
+// rms 3.21 -> 3.24px and 2.79 -> 2.53px, still reorder-stable: nothing is lost where there
+// was nothing to gain.
+//
+// The rotation needs the focal length, and these frames do not carry it: exported TIFFs
+// have no EXIF.  The correspondences know it, because f sets the curvature above, so each
+// frame calibrates its own over all of its neighbours — see calibrateGroundFocalLength.
+// The principal point is the frame centre, which an uncropped frame satisfies.  A crop
+// that moved it sideways is the model's weak point: 300px off cost 2.9px at the edges of
+// the 10_17 frames above, and 600px 5.5px, most of the similarity's 6.8.
+//
+// The 3x3 is so everything downstream — warpInto, the continuity filter, homography.db,
+// the earth chains, the deviation norm — keeps taking one kind of matrix.
+//
+// The sky's RANSAC tolerance is 3px, not the ground's 10.  A star homography fits real
+// stars to a fraction of a pixel — thousands of matched star centroids sat within
+// 0.27-0.48px RMS of one homography on every pair measured — so 10px never bought the
+// sky anything but room for matches that are not stars.  Where stars are plentiful the
+// consensus is wide enough that it does not matter; where they are few (moonlit and
+// twilight frames, 20-60 star inliers per pair) it did: with the horizon keypoints
+// already excluded (kSkyKeypointCutMargin), 10px still let three of eight neighbours of
+// one frame lock onto a wrong consensus, 2.6-15px off, where 3px put all eight within
+// 0.1-0.4px of the stars.
+//
+// Never the tolerance alone, though.  3px with the horizon keypoints still present looks
+// better than it is: the ground-locked matches form a consensus of their own, and a fit
+// to it is as consistent between neighbouring frames as a fit to the stars, so it passes
+// the reciprocity check while 3px wrong.
+static constexpr double kSkyRansacThreshold = 3.0;
+static constexpr double kGroundRansacThreshold = 10.0;
+
+namespace {
+// A pinhole camera centred on the frame, which is what a ground rotation is expressed in.
+struct GroundCamera {
+    double f = 0, cx = 0, cy = 0;
+};
+
+// One neighbour's correspondences, for calibrateGroundFocalLength.
+struct GroundPair {
+    const std::vector<cv::Point2f> *from = nullptr, *to = nullptr;
+    uint64_t seed = 0;
+};
+}
+
+static GroundCamera groundCamera(int width, int height, double f) {
+    GroundCamera camera;
+    camera.f = f;
+    camera.cx = (width - 1) / 2.0;
+    camera.cy = (height - 1) / 2.0;
+    return camera;
+}
+
+static std::vector<cv::Vec3d> groundBearings(const std::vector<cv::Point2f> &points,
+                                             const GroundCamera &camera) {
+    std::vector<cv::Vec3d> bearings(points.size());
+    for (size_t i = 0; i < points.size(); ++i) {
+        const cv::Vec3d v((points[i].x - camera.cx) / camera.f,
+                          (points[i].y - camera.cy) / camera.f, 1.0);
+        bearings[i] = v * (1.0 / cv::norm(v));
+    }
+    return bearings;
+}
+
+// Squared distance from `target` to where bearing `b` lands once the camera has turned by
+// R.  A bearing turned behind the camera can only come from a nonsense hypothesis, and
+// lands nowhere.
+static double groundError2(const cv::Matx33d &R, const cv::Vec3d &b,
+                           const cv::Point2f &target, const GroundCamera &camera) {
+    const cv::Vec3d q = R * b;
+    if (q[2] <= 1e-9) return std::numeric_limits<double>::infinity();
+    const double dx = camera.cx + camera.f * q[0] / q[2] - target.x;
+    const double dy = camera.cy + camera.f * q[1] / q[2] - target.y;
+    return dx * dx + dy * dy;
+}
+
+static cv::Matx33d rotationFromVector(const cv::Vec3d &w) {
+    const double angle = cv::norm(w);
+    if (angle < 1e-15) return cv::Matx33d::eye();
+    const cv::Vec3d k = w * (1.0 / angle);
+    const cv::Matx33d K(0, -k[2], k[1], k[2], 0, -k[0], -k[1], k[0], 0);
+    return cv::Matx33d::eye() + std::sin(angle) * K + (1 - std::cos(angle)) * (K * K);
+}
+
+// rotationFromVector's inverse, for the small rotations a pan makes between frames.
+static cv::Vec3d rotationVector(const cv::Matx33d &R) {
+    const cv::Vec3d axis(R(2, 1) - R(1, 2), R(0, 2) - R(2, 0), R(1, 0) - R(0, 1));
+    const double s = 0.5 * cv::norm(axis);                     // sin of the angle
+    const double c = 0.5 * (R(0, 0) + R(1, 1) + R(2, 2) - 1);  // cos of the angle
+    if (s < 1e-12) return axis * 0.5;
+    return axis * (std::atan2(s, c) / (2 * s));
+}
+
+// A ground rotation fitted at focal length `from`, carried to `to` so that it moves the
+// middle of the frame by as many pixels as it did: pan and tilt shift the image by f
+// times their angle, so they scale by from/to, and roll turns it whatever f is.
+static cv::Matx33d carryGroundRotation(const cv::Matx33d &R, double from, double to) {
+    cv::Vec3d w = rotationVector(R);
+    w[0] *= from / to;
+    w[1] *= from / to;
+    return rotationFromVector(w);
+}
+
+// The rotation taking two bearings onto two others, least squares (Kabsch), with their
+// cross products as a third pair so that two correspondences are enough.
+static cv::Matx33d rotationFromTwoBearings(const cv::Vec3d &u1, const cv::Vec3d &u2,
+                                           const cv::Vec3d &v1, const cv::Vec3d &v2) {
+    const cv::Matx33d C = v1 * u1.t() + v2 * u2.t() + v1.cross(v2) * u1.cross(u2).t();
+    cv::Matx31d w;
+    cv::Matx33d U, Vt;
+    cv::SVD::compute(C, w, U, Vt);
+    const double d = cv::determinant(U * Vt) > 0 ? 1.0 : -1.0;
+    return U * cv::Matx33d(1, 0, 0, 0, 1, 0, 0, 0, d) * Vt;
+}
+
+// Gauss-Newton on pixel reprojection error over `use`, updating R <- exp([w]x) R.  Three
+// parameters and a good start, so it converges in two or three steps.
+static cv::Matx33d refineGroundRotation(cv::Matx33d R, const std::vector<cv::Vec3d> &bearings,
+                                        const std::vector<cv::Point2f> &to,
+                                        const std::vector<int> &use,
+                                        const GroundCamera &camera) {
+    if (use.size() < 2) return R;
+    for (int iteration = 0; iteration < 10; ++iteration) {
+        cv::Matx33d JtJ = cv::Matx33d::zeros();
+        cv::Vec3d Jtr(0, 0, 0);
+        for (int i : use) {
+            const cv::Vec3d q = R * bearings[i];
+            const double iz = 1.0 / q[2];
+            const cv::Vec2d r(camera.cx + camera.f * q[0] * iz - to[i].x,
+                              camera.cy + camera.f * q[1] * iz - to[i].y);
+            // dq/dw is -[q]x; then the projection's derivative
+            const cv::Matx33d dq(0, q[2], -q[1], -q[2], 0, q[0], q[1], -q[0], 0);
+            const cv::Matx23d dp(camera.f * iz, 0, -camera.f * q[0] * iz * iz,
+                                 0, camera.f * iz, -camera.f * q[1] * iz * iz);
+            const cv::Matx23d J = dp * dq;
+            JtJ += J.t() * J;
+            Jtr += J.t() * r;
+        }
+        const cv::Vec3d step = JtJ.solve(-Jtr, cv::DECOMP_CHOLESKY);
+        R = rotationFromVector(step) * R;
+        if (cv::norm(step) < 1e-8) break;
+    }
+    return R;
+}
+
+// The consensus of R at the RANSAC tolerance, least squares over it, and a fresh
+// consensus from the result, until it stops changing (three rounds at most).  The first
+// consensus comes from a two-point hypothesis, and in calibration from a focal length that
+// may be well off; every correspondence it missed for either reason gets another chance
+// against the refined rotation.  `inliers` and `truncatedCost` — the sum over every
+// correspondence of its squared error, capped at the tolerance — describe the result.
+static cv::Matx33d polishGroundRotation(cv::Matx33d R, const std::vector<cv::Vec3d> &bearings,
+                                        const std::vector<cv::Point2f> &to,
+                                        const GroundCamera &camera,
+                                        std::vector<uchar> *inliers, double *truncatedCost) {
+    const double limit = kGroundRansacThreshold * kGroundRansacThreshold;
+    std::vector<int> use, previous;
+    for (int round = 0; round < 3; ++round) {
+        use.clear();
+        for (size_t i = 0; i < bearings.size(); ++i) {
+            if (groundError2(R, bearings[i], to[i], camera) < limit) use.push_back((int)i);
+        }
+        if (use.size() < 2 || use == previous) break;
+        R = refineGroundRotation(R, bearings, to, use, camera);
+        previous = use;
+    }
+    double cost = 0;
+    if (inliers) inliers->assign(bearings.size(), 0);
+    for (size_t i = 0; i < bearings.size(); ++i) {
+        const double e = groundError2(R, bearings[i], to[i], camera);
+        cost += std::min(e, limit);
+        if (inliers && e < limit) (*inliers)[i] = 1;
+    }
+    if (truncatedCost) *truncatedCost = cost;
+    return R;
+}
+
+static constexpr int    kGroundRansacMinIterations = 100;
+static constexpr int    kGroundRansacMaxIterations = 2000;
+static constexpr double kGroundRansacConfidence    = 0.995;
+
+// The ground's rotation from its correspondences: RANSAC over two-correspondence samples,
+// which is all a rotation needs, then polishGroundRotation.  Draws from cv::theRNG(), which
+// the caller seeds per frame pair, so a pair always gets the same answer.
+static bool fitGroundRotation(const std::vector<cv::Point2f> &from,
+                              const std::vector<cv::Point2f> &to,
+                              const GroundCamera &camera, cv::Matx33d &rotation,
+                              std::vector<uchar> *inliers, double *truncatedCost) {
+    const int n = (int)from.size();
+    if (n < 2) return false;
+    const std::vector<cv::Vec3d> fromBearings = groundBearings(from, camera);
+    const std::vector<cv::Vec3d> toBearings = groundBearings(to, camera);
+    const double limit = kGroundRansacThreshold * kGroundRansacThreshold;
+
+    cv::RNG &rng = cv::theRNG();
+    int bestCount = -1;
+    double bestError = 0;
+    cv::Matx33d best = cv::Matx33d::eye();
+    int iterations = kGroundRansacMaxIterations;
+    for (int it = 0; it < iterations; ++it) {
+        const int a = rng.uniform(0, n), b = rng.uniform(0, n);
+        // two correspondences in the same place say nothing about the roll
+        if (a == b || cv::norm(from[a] - from[b]) < 4.0) continue;
+        const cv::Matx33d R = rotationFromTwoBearings(fromBearings[a], fromBearings[b],
+                                                      toBearings[a], toBearings[b]);
+        int count = 0;
+        double error = 0;
+        for (int i = 0; i < n; ++i) {
+            const double e = groundError2(R, fromBearings[i], to[i], camera);
+            if (e < limit) { ++count; error += e; }
+        }
+        if (count > bestCount || (count == bestCount && error < bestError)) {
+            bestCount = count;
+            bestError = error;
+            best = R;
+            // how many draws until a clean pair has turned up with that confidence
+            const double share = (double)count / n;
+            const double miss = std::log(std::max(1e-12, 1.0 - share * share));
+            const double needed = miss < 0
+              ? std::ceil(std::log(1.0 - kGroundRansacConfidence) / miss)
+              : (double)kGroundRansacMaxIterations;
+            iterations = (int)std::min<double>(kGroundRansacMaxIterations,
+                                               std::max<double>(kGroundRansacMinIterations, needed));
+        }
+    }
+    if (bestCount < 2) return false;
+    rotation = polishGroundRotation(best, fromBearings, to, camera, inliers, truncatedCost);
+    return true;
+}
+
+// K R K^-1, scaled so its last element is 1 as the sky's is.
+static cv::Mat groundHomography(const cv::Matx33d &R, const GroundCamera &camera) {
+    const cv::Matx33d K(camera.f, 0, camera.cx, 0, camera.f, camera.cy, 0, 0, 1);
+    const cv::Matx33d Kinv(1 / camera.f, 0, -camera.cx / camera.f,
+                           0, 1 / camera.f, -camera.cy / camera.f, 0, 0, 1);
+    cv::Matx33d H = K * R * Kinv;
+    H *= 1.0 / H(2, 2);
+    return cv::Mat(H, true);
+}
+
+// `camera` is the ground's, and is not read for the sky.
+static cv::Mat estimateAlignment(AlignmentType alignmentType, const GroundCamera &camera,
+                                 const std::vector<cv::Point2f> &from,
+                                 const std::vector<cv::Point2f> &to,
+                                 std::vector<uchar> &inlierMask) {
+    if (alignmentType != AlignmentTypeEarth) {
+        return cv::findHomography(from, to, cv::RANSAC, kSkyRansacThreshold, inlierMask);
+    }
+    cv::Matx33d R;
+    if (!fitGroundRotation(from, to, camera, R, &inlierMask, nullptr)) return cv::Mat();
+    return groundHomography(R, camera);
+}
+
+// The focal length a frame's ground rotations are fitted at, from that frame's own
+// correspondences: the one whose rotations explain them best, summed over every neighbour.
+//
+// It can be found because the curvature of a pan can be seen: the edges of the ground move
+// 1 + x²/f² times as far as its centre, and only the right f makes rotations reproduce that
+// across the whole width.  The score is the sum over every correspondence of its squared
+// reprojection error capped at the RANSAC tolerance, so a mismatch counts no more than a
+// miss.  Each pair's consensus is drawn once, by RANSAC at a nominal focal length, and only
+// carried to each candidate and polished there after that (carryGroundRotation), so the
+// search costs least squares rather than RANSAC: a logarithmic scan from a quarter of the
+// frame's width to twenty widths, then a golden section around the best of it.
+//
+// Measured per frame against plate solves of the same sequences (catalogue stars fitted
+// with the same pinhole camera): 10_17 a9-1 3227px against a median of 3240 over 188
+// frames (p10-p90 3187-3274), and the a7iv on 08_15 4596px against 4580 over 23 frames
+// (4496-4630).  A 10% error would cost 0.8px at the edges of a +-4 neighbour on 10_17,
+// where the similarity left 6.8, so that spread is immaterial.
+//
+// There is nothing to see when nothing moves, or when the ground is too dark to show it:
+// then every focal length explains the correspondences about equally well and the scan's
+// minimum is noise.  The gain over the longest focal length tells the two apart — at least
+// 17.6% on every frame of two textured sequences, at most 6.0% on any of 91 frames of a
+// black mountain silhouette, and under 10% on 10_17 only for the five frames before its
+// pan gets going — and below kGroundFocalMinGain a frame takes the longest.  That one
+// has no curvature to speak of, so its rotations pan like translations: what a ground that
+// shows no curvature looks like, and harmless where nothing moved.
+static constexpr double kGroundFocalMinWidths     = 0.25;
+static constexpr double kGroundFocalMaxWidths     = 20.0;
+static constexpr double kGroundFocalNominalWidths = 0.6;
+static constexpr double kGroundFocalScanStep      = 1.25;
+static constexpr int    kGroundFocalRefinements   = 14;
+static constexpr double kGroundFocalMinGain       = 0.10;
+// Correspondences per pair the search reads: an even sample, since f only has to be about
+// right (see above) and the rotations are fitted from all of them afterwards.
+static constexpr size_t kGroundFocalMaxCorrespondences = 400;
+
+static double calibrateGroundFocalLength(const std::vector<GroundPair> &pairs,
+                                         int width, int height, int frameIndex) {
+    const double longest = kGroundFocalMaxWidths * width;
+
+    // The sample is taken in the order of the base frame's points, not of the matches, so
+    // that the focal length depends on which correspondences there are and not on the
+    // order they arrived in — the same property the rotations themselves have.
+    std::vector<std::vector<cv::Point2f>> from(pairs.size()), to(pairs.size());
+    for (size_t k = 0; k < pairs.size(); ++k) {
+        const std::vector<cv::Point2f> &base = *pairs[k].to;
+        std::vector<size_t> order(base.size());
+        for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+        std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+            return base[a].y != base[b].y ? base[a].y < base[b].y : base[a].x < base[b].x;
+        });
+        const size_t every = std::max<size_t>(
+          1, (order.size() + kGroundFocalMaxCorrespondences - 1) / kGroundFocalMaxCorrespondences);
+        for (size_t i = 0; i < order.size(); i += every) {
+            from[k].push_back((*pairs[k].from)[order[i]]);
+            to[k].push_back(base[order[i]]);
+        }
+    }
+
+    const GroundCamera nominal =
+      groundCamera(width, height, kGroundFocalNominalWidths * width);
+    std::vector<cv::Matx33d> starts(pairs.size());
+    std::vector<bool> started(pairs.size(), false);
+    double correspondences = 0;
+    for (size_t k = 0; k < pairs.size(); ++k) {
+        cv::theRNG() = cv::RNG(pairs[k].seed);
+        started[k] = fitGroundRotation(from[k], to[k], nominal, starts[k], nullptr, nullptr);
+        if (started[k]) correspondences += from[k].size();
+    }
+    if (correspondences == 0) return longest;
+
+    auto cost = [&](double f) {
+        const GroundCamera camera = groundCamera(width, height, f);
+        double total = 0;
+        for (size_t k = 0; k < pairs.size(); ++k) {
+            if (!started[k]) continue;
+            double pairCost = 0;
+            polishGroundRotation(carryGroundRotation(starts[k], nominal.f, f),
+                                 groundBearings(from[k], camera), to[k], camera,
+                                 nullptr, &pairCost);
+            total += pairCost;
+        }
+        return total / correspondences;
+    };
+
+    std::vector<double> scanned, costs;
+    for (double f = kGroundFocalMinWidths * width; f < longest; f *= kGroundFocalScanStep) {
+        scanned.push_back(f);
+        costs.push_back(cost(f));
+    }
+    scanned.push_back(longest);
+    costs.push_back(cost(longest));
+    const size_t best = std::min_element(costs.begin(), costs.end()) - costs.begin();
+
+    double lo = std::log(scanned[best > 0 ? best - 1 : 0]);
+    double hi = std::log(scanned[std::min(best + 1, scanned.size() - 1)]);
+    const double golden = (std::sqrt(5.0) - 1) / 2;
+    double x1 = hi - golden * (hi - lo), x2 = lo + golden * (hi - lo);
+    double c1 = cost(std::exp(x1)), c2 = cost(std::exp(x2));
+    for (int i = 0; i < kGroundFocalRefinements; ++i) {
+        if (c1 < c2) {
+            hi = x2; x2 = x1; c2 = c1;
+            x1 = hi - golden * (hi - lo); c1 = cost(std::exp(x1));
+        } else {
+            lo = x1; x1 = x2; c1 = c2;
+            x2 = lo + golden * (hi - lo); c2 = cost(std::exp(x2));
+        }
+    }
+    const double f = std::exp(c1 < c2 ? x1 : x2);
+    const double fCost = std::min(c1, c2);
+    const double gain = costs.back() > 0 ? 1.0 - fCost / costs.back() : 0.0;
+    if (gain < kGroundFocalMinGain) {
+        Log_d("frame %d: ground focal length not observable (%.1f%% better than none at "
+              "%.0fpx), fitting at %.0fpx", frameIndex, gain * 100, f, longest);
+        return longest;
+    }
+    Log_d("frame %d: ground focal length %.0fpx (%.3f widths) over %zu neighbours, %.1f%% "
+          "better than none", frameIndex, f, f / width, pairs.size(), gain * 100);
+    return f;
 }
 
 // Whether RANSAC's consensus set is enough evidence to warp a frame's ground by the
@@ -1538,6 +2140,12 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
 // The two do not overlap and the gap is wide, so the cutoffs sit nearer the failing
 // side: a sequence that is merely hard to track should keep being tracked.
 //
+// Those were homography fits; the rotation that replaced them reads the same.  On five
+// sequences it passes every pair the similarity before it passed, and one more, and with
+// a share of a pair's correspondences re-paired at random its inlier ratio follows the
+// share left intact as the similarity's did — 0.79 with a fifth re-paired, 0.49 with
+// half, 0.10 with nine tenths — so the cutoffs still mean what they were set to mean.
+//
 // Not applied to the sky, where a low ratio is normal rather than damning.  Stars all
 // look alike, so SIFT descriptors collide and Lowe's test passes many pairs RANSAC
 // then rejects.  The same measurement over the sky of the crushed sequence read
@@ -1545,73 +2153,6 @@ OCVFeatureSetRef ia_find_features(MatWrapperRef baseImage, int frameIndex,
 // moved the sky 4.9, 23.5 and 6.5px) — two of the three would have failed this test.
 // The sky also has no graceful fallback: a missing ground warp costs one source in a
 // median merge, a missing sky warp costs the frame.
-// Fit the transform relating two frames' correspondences: a full homography for the sky,
-// a 4-DOF similarity for the ground.
-//
-// The sky gets 8 degrees of freedom because it has the geometry to support them —
-// keypoints are stars, they cover the whole frame, and the fit is heavily
-// over-determined.  Measured, feeding the *identical* sky feature set in reversed order
-// moves the resulting warp's frame corners by 0.00-0.59px: RANSAC lands in the same place
-// however it samples, which is what a well-conditioned fit looks like.
-//
-// The ground has none of that.  It is the bottom of the frame, so its inliers sit in a
-// band measured at 87-98% of the frame width by **11-42% of its height** across seven
-// pairs on two sequences.  Points that flat do not constrain a homography's vertical and
-// perspective terms at all: the fit satisfies every inlier it sampled and is then free to
-// do anything above and below them, and it does.  The same reversed-order test moves the
-// ground warp 11.5-99.5px, and against phase correlation over the same band the fitted
-// warp came out 8-25x the true ground motion.
-//
-// That is degeneracy, not noise, and nothing downstream can see it.  In particular
-// groundConsensusIsUsable cannot: it reads an inlier *ratio*, which measured 0.87-0.88 on
-// exactly these fits — high **because** the model has enough freedom to explain whatever
-// RANSAC sampled.  A ratio asks whether the correspondences agree with the model, never
-// whether they constrain it.
-//
-// So the ground gets a model its evidence can carry.  Rotation, uniform scale and
-// translation is what a tripod that has settled, or a slow pan across distant terrain,
-// actually does to a foreground; the projective terms were only ever describing noise.
-// Same correspondences, same seed, forward against reversed, with phase correlation over
-// the ground band as independent truth:
-//
-//                      band      truth   homography fwd-rev / vs I   similarity fwd-rev / vs I
-//   a7iv  905->903   90%x17%      7.6         27.5 / 60.2                0.64 / 18.6
-//   a7iv  905->909   94%x12%     16.6         19.6 / 159.5               1.82 / 37.5
-//   a7iv  950->949   91%x12%      4.3         30.4 / 107.4               0.00 / 10.0
-//   a7iv  950->954   98%x11%     18.2         99.5 / 147.6               0.79 / 39.5
-//   a7sii 1205->1204 95%x42%      1.1         21.2 / 14.2                0.79 /  3.8
-//   a7sii 1205->1209 87%x28%      6.0         11.5 / 35.4                2.93 / 16.3
-//   a7sii 1220->1224 91%x18%      6.9         64.1 / 35.5                4.65 / 19.0
-//
-// 1-2 orders of magnitude more stable, and 2-5x closer to the measured motion on every
-// pair.  Affine's 6 DOF were tried and sit in between (0.75-31.3px, not stable enough),
-// and tightening the RANSAC threshold does not rescue the homography (10px: 99.3,
-// 3px: 66.3, 1.5px: 110.1 on the first pair) — the problem is the model, not the
-// tolerance.
-//
-// A "reject fits whose inliers are too flat" guard was the other candidate and was
-// rejected: the 42%-tall band above is still degenerate, so the cutoff would have to sit
-// high enough to throw away nearly every ground fit, including the ones a similarity
-// recovers cleanly.
-//
-// The 3x3 lift is so everything downstream — warpInto, the Lie-algebra smoothing,
-// homography.db, the deviation norm — keeps taking one kind of matrix.  A similarity is a
-// homography whose last row is (0,0,1); nothing has to know which fit produced it.
-static cv::Mat estimateAlignment(AlignmentType alignmentType,
-                                 const std::vector<cv::Point2f> &from,
-                                 const std::vector<cv::Point2f> &to,
-                                 std::vector<uchar> &inlierMask) {
-    if (alignmentType != AlignmentTypeEarth) {
-        return cv::findHomography(from, to, cv::RANSAC, 10, inlierMask);
-    }
-    cv::Mat A = cv::estimateAffinePartial2D(from, to, inlierMask, cv::RANSAC, 10);
-    if (A.empty()) return cv::Mat();
-    if (A.type() != CV_64F) A.convertTo(A, CV_64F);
-    cv::Mat H = cv::Mat::eye(3, 3, CV_64F);
-    A.copyTo(H(cv::Rect(0, 0, 3, 2)));
-    return H;
-}
-
 static constexpr double kMinGroundInlierRatio = 0.65;
 static constexpr int    kMinGroundInliers     = 20;
 
@@ -1636,17 +2177,378 @@ static bool groundConsensusIsUsable(AlignmentType alignmentType,
     return false;
 }
 
+// --- Refining the sky homography against star centroids ----------------------
+//
+// The keypoint fit says roughly how the sky moved; the stars say exactly.  Under the
+// rough fit each of the neighbour's stars should land within a few pixels of the same
+// star in the base frame, so the true correction shows up as a sharp peak among the
+// offsets to nearby stars, while chance neighbours spread thin.  The peak is found per
+// region of the frame, not once, because a homography's error varies across the frame
+// — that is how the moonlit failure looked, right in one corner and wrong elsewhere.
+// The stars it gathers seed a least-squares fit, which then re-associates every star
+// to its unique neighbour within kStarMatchRadius and refits, four times over.
+//
+// Measured on the moving moonlit 10_17_2026 a9-1 sequence against an independent fit
+// of the same centroids: it agrees with clean dark-sky fits to 0.03-0.08px, recovers
+// from a keypoint fit 19px wrong, and in twilight — where SIFT gets 7-18 inliers per
+// pair and the shipped fits were off by up to 32px — converges to the same matrix from
+// a donor's homography or from no motion at all (0.00-0.02px apart) with ~4000 pairs
+// at 0.36px RMS.
+static constexpr float  kStarVoteRadius    = 25.f;   // how wrong the seed may be
+static constexpr float  kStarVoteBin       = 0.5f;
+static constexpr int    kStarRegionsX      = 6, kStarRegionsY = 4;
+static constexpr float  kStarMatchRadius   = 1.5f;
+// A chance coincidence within kStarMatchRadius happens for about 1 star in 200 at
+// these densities, so a few hundred pairs cannot be luck; a cloud-covered or empty sky
+// simply fails this and keeps the keypoint fit.
+static constexpr int    kStarMinPairs      = 100;
+static constexpr double kStarMaxRmsPx      = 1.0;
+// The pairs must reach at least half the regions that hold stars.  A seed that is right
+// in one corner and wrong elsewhere can grow a "fit" from that corner alone: in twilight
+// it reached 245-488 pairs at ~1px RMS while 58-108px wrong across the frame — and
+// covered 5-8 of 24 regions, where every correct fit measured covered 12-24.
+static constexpr double kStarMinCoverage   = 0.5;
+
+// Points bucketed on a uniform grid, for "every point within r of q".
+class StarGrid {
+public:
+    StarGrid(const std::vector<cv::Point2f> &points, float cell) : points_(points), cell_(cell) {
+        if (points.empty()) return;
+        float maxX = points[0].x, maxY = points[0].y;
+        minX_ = maxX; minY_ = maxY;
+        for (const auto &p : points) {
+            minX_ = std::min(minX_, p.x); maxX = std::max(maxX, p.x);
+            minY_ = std::min(minY_, p.y); maxY = std::max(maxY, p.y);
+        }
+        cols_ = (int)((maxX - minX_) / cell_) + 1;
+        rows_ = (int)((maxY - minY_) / cell_) + 1;
+        bins_.assign((size_t)cols_ * rows_, {});
+        for (int i = 0; i < (int)points.size(); ++i) {
+            const int cx = (int)((points[i].x - minX_) / cell_);
+            const int cy = (int)((points[i].y - minY_) / cell_);
+            bins_[(size_t)cy * cols_ + cx].push_back(i);
+        }
+    }
+
+    // body(index, point - q) for every point within r of q.
+    template <class Body>
+    void within(cv::Point2f q, float r, Body &&body) const {
+        if (bins_.empty()) return;
+        const int x0 = std::max(0, (int)std::floor((q.x - r - minX_) / cell_));
+        const int x1 = std::min(cols_ - 1, (int)std::floor((q.x + r - minX_) / cell_));
+        const int y0 = std::max(0, (int)std::floor((q.y - r - minY_) / cell_));
+        const int y1 = std::min(rows_ - 1, (int)std::floor((q.y + r - minY_) / cell_));
+        for (int cy = y0; cy <= y1; ++cy) {
+            for (int cx = x0; cx <= x1; ++cx) {
+                for (int i : bins_[(size_t)cy * cols_ + cx]) {
+                    const cv::Point2f d = points_[i] - q;
+                    if (d.x * d.x + d.y * d.y <= r * r) body(i, d);
+                }
+            }
+        }
+    }
+
+private:
+    const std::vector<cv::Point2f> &points_;
+    float cell_, minX_ = 0, minY_ = 0;
+    int cols_ = 0, rows_ = 0;
+    std::vector<std::vector<int>> bins_;
+};
+
+// The peak of a square 2-D histogram of `bins` x `bins` counts after a 3x3 box sum,
+// and how far it stands above the typical occupied bin.
+static void histogramPeak(const std::vector<int> &hist, int bins,
+                          int &peakX, int &peakY, int &peak, double &contrast) {
+    std::vector<int> summed((size_t)bins * bins, 0), occupied;
+    peak = 0; peakX = peakY = bins / 2;
+    for (int y = 1; y < bins - 1; ++y) {
+        for (int x = 1; x < bins - 1; ++x) {
+            int s = 0;
+            for (int j = -1; j <= 1; ++j)
+                for (int i = -1; i <= 1; ++i) s += hist[(size_t)(y + j) * bins + x + i];
+            summed[(size_t)y * bins + x] = s;
+            if (s > 0) occupied.push_back(s);
+            if (s > peak) { peak = s; peakX = x; peakY = y; }
+        }
+    }
+    if (occupied.empty()) { contrast = 0; return; }
+    std::nth_element(occupied.begin(), occupied.begin() + occupied.size() / 2, occupied.end());
+    contrast = (double)peak / std::max(1, occupied[occupied.size() / 2]);
+}
+
+// Star pairs (neighbour -> base) that agree, region by region, on one correction to
+// `seed`.  A region with too few stars, or no clear peak, contributes none.
+static void starPairsByRegionalVote(const std::vector<cv::Point2f> &nb,
+                                    const std::vector<cv::Point2f> &base,
+                                    const StarGrid &baseGrid, const cv::Mat &seed,
+                                    std::vector<cv::Point2f> &src,
+                                    std::vector<cv::Point2f> &dst) {
+    std::vector<cv::Point2f> predicted;
+    cv::perspectiveTransform(nb, predicted, seed);
+
+    float minX = base[0].x, maxX = base[0].x, minY = base[0].y, maxY = base[0].y;
+    for (const auto &p : base) {
+        minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
+        minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
+    }
+    const float regionW = std::max(1.f, (maxX - minX) / kStarRegionsX);
+    const float regionH = std::max(1.f, (maxY - minY) / kStarRegionsY);
+
+    struct Candidate { int nb, base; cv::Point2f offset; };
+    std::vector<std::vector<Candidate>> regions(kStarRegionsX * kStarRegionsY);
+    for (int i = 0; i < (int)predicted.size(); ++i) {
+        const cv::Point2f q = predicted[i];
+        const int rx = std::clamp((int)((q.x - minX) / regionW), 0, kStarRegionsX - 1);
+        const int ry = std::clamp((int)((q.y - minY) / regionH), 0, kStarRegionsY - 1);
+        auto &candidates = regions[(size_t)ry * kStarRegionsX + rx];
+        baseGrid.within(q, kStarVoteRadius, [&](int k, cv::Point2f d) {
+            candidates.push_back({i, k, d});
+        });
+    }
+
+    const int bins = (int)(2 * kStarVoteRadius / kStarVoteBin);
+    std::vector<int> hist((size_t)bins * bins);
+    for (const auto &candidates : regions) {
+        if (candidates.size() < 8) continue;
+        std::fill(hist.begin(), hist.end(), 0);
+        for (const auto &c : candidates) {
+            const int bx = std::clamp((int)((c.offset.x + kStarVoteRadius) / kStarVoteBin), 0, bins - 1);
+            const int by = std::clamp((int)((c.offset.y + kStarVoteRadius) / kStarVoteBin), 0, bins - 1);
+            hist[(size_t)by * bins + bx]++;
+        }
+        int px, py, peak; double contrast;
+        histogramPeak(hist, bins, px, py, peak, contrast);
+        if (contrast < 4) continue;
+
+        // the peak's bin centre, then the mean of the offsets around it
+        cv::Point2f mode(-kStarVoteRadius + (px + 0.5f) * kStarVoteBin,
+                         -kStarVoteRadius + (py + 0.5f) * kStarVoteBin);
+        cv::Point2f sum(0, 0); int n = 0;
+        for (const auto &c : candidates) {
+            if (cv::norm(c.offset - mode) < 1.5) { sum += c.offset; ++n; }
+        }
+        if (n >= 3) mode = sum * (1.f / n);
+
+        std::vector<const Candidate *> agreeing;
+        for (const auto &c : candidates) {
+            if (cv::norm(c.offset - mode) < 1.0) agreeing.push_back(&c);
+        }
+        if (agreeing.size() < 8) continue;
+        for (const Candidate *c : agreeing) {
+            src.push_back(nb[c->nb]);
+            dst.push_back(base[c->base]);
+        }
+    }
+}
+
+// Of the regions holding at least 20 of the base frame's stars, the fraction holding at
+// least 10 of `matched`, on the same 6x4 grid the vote uses.
+static double starCoverage(const std::vector<cv::Point2f> &base,
+                           const std::vector<cv::Point2f> &matched) {
+    float minX = base[0].x, maxX = base[0].x, minY = base[0].y, maxY = base[0].y;
+    for (const auto &p : base) {
+        minX = std::min(minX, p.x); maxX = std::max(maxX, p.x);
+        minY = std::min(minY, p.y); maxY = std::max(maxY, p.y);
+    }
+    const float regionW = std::max(1.f, (maxX - minX) / kStarRegionsX);
+    const float regionH = std::max(1.f, (maxY - minY) / kStarRegionsY);
+    auto region = [&](cv::Point2f p) {
+        const int rx = std::clamp((int)((p.x - minX) / regionW), 0, kStarRegionsX - 1);
+        const int ry = std::clamp((int)((p.y - minY) / regionH), 0, kStarRegionsY - 1);
+        return ry * kStarRegionsX + rx;
+    };
+    std::vector<int> stars(kStarRegionsX * kStarRegionsY, 0), hits(stars.size(), 0);
+    for (const auto &p : base) stars[region(p)]++;
+    for (const auto &p : matched) hits[region(p)]++;
+    int withStars = 0, covered = 0;
+    for (size_t r = 0; r < stars.size(); ++r) {
+        if (stars[r] < 20) continue;
+        ++withStars;
+        if (hits[r] >= 10) ++covered;
+    }
+    return withStars ? (double)covered / withStars : 0.0;
+}
+
+// Refine `seed` against the stars, or return an empty Mat when they do not support a
+// fit (too few stars, too few that agree, or agreement confined to part of the sky).
+static cv::Mat refineSkyFromSeed(const std::vector<cv::Point2f> &nb,
+                                 const std::vector<cv::Point2f> &base,
+                                 const StarGrid &baseGrid, const cv::Mat &seed,
+                                 int &pairs, double &rms) {
+    std::vector<cv::Point2f> src, dst;
+    starPairsByRegionalVote(nb, base, baseGrid, seed, src, dst);
+    if ((int)src.size() < kStarMinPairs) return cv::Mat();
+    cv::Mat H = cv::findHomography(src, dst, 0);
+    if (H.empty()) return cv::Mat();
+
+    // A point at the same place in both frames is the sensor, not the sky: a hot pixel
+    // or a dust shadow.  It cannot be a star wherever the sky has visibly moved, and
+    // left in, it votes for no motion at all.
+    std::vector<char> fixedPattern(nb.size(), 0);
+    for (size_t i = 0; i < nb.size(); ++i) {
+        baseGrid.within(nb[i], 0.5f, [&](int, cv::Point2f) { fixedPattern[i] = 1; });
+    }
+
+    std::vector<cv::Point2f> predicted;
+    for (int iteration = 0; iteration < 4; ++iteration) {
+        cv::perspectiveTransform(nb, predicted, H);
+        src.clear(); dst.clear();
+        for (size_t i = 0; i < nb.size(); ++i) {
+            if (fixedPattern[i] && cv::norm(predicted[i] - nb[i]) > 1.0) continue;
+            int match = -1, found = 0;
+            baseGrid.within(predicted[i], kStarMatchRadius, [&](int k, cv::Point2f) {
+                match = k; ++found;
+            });
+            if (found == 1) { src.push_back(nb[i]); dst.push_back(base[match]); }
+        }
+        if ((int)src.size() < kStarMinPairs) return cv::Mat();
+        cv::Mat refit = cv::findHomography(src, dst, 0);
+        if (refit.empty()) return cv::Mat();
+        H = refit;
+    }
+
+    cv::perspectiveTransform(src, predicted, H);
+    double sumSq = 0;
+    for (size_t i = 0; i < src.size(); ++i) {
+        const cv::Point2f d = predicted[i] - dst[i];
+        sumSq += d.x * d.x + d.y * d.y;
+    }
+    pairs = (int)src.size();
+    rms = std::sqrt(sumSq / src.size());
+    if (rms > kStarMaxRmsPx) return cv::Mat();
+    if (starCoverage(base, dst) < kStarMinCoverage) return cv::Mat();
+    if (H.type() != CV_64F) H.convertTo(H, CV_64F);
+    return H;
+}
+
+// A translation-only seed for a pair with no keypoint fit to start from: the most
+// common offset between the brightest stars of the two frames, out to
+// kStarSeedSearchRadius.  Rotation across the frame is left for the regional vote,
+// whose kStarVoteRadius covers it at the neighbour distances star aligns over.
+static constexpr int kStarSeedStars        = 1500;
+static constexpr int kStarSeedSearchRadius = 100;
+
+static cv::Mat translationSeedFromStars(const std::vector<cv::Point2f> &nb,
+                                        const std::vector<cv::Point2f> &base) {
+    const std::vector<cv::Point2f> nbBright(nb.begin(),
+        nb.begin() + std::min<size_t>(nb.size(), kStarSeedStars));
+    const std::vector<cv::Point2f> baseBright(base.begin(),
+        base.begin() + std::min<size_t>(base.size(), kStarSeedStars));
+    const float r = (float)kStarSeedSearchRadius;
+    const StarGrid grid(baseBright, r);
+    const int bins = 2 * kStarSeedSearchRadius + 1;
+    std::vector<int> hist((size_t)bins * bins, 0);
+    for (const auto &p : nbBright) {
+        grid.within(p, r, [&](int, cv::Point2f d) {
+            const int bx = std::clamp((int)std::lround(d.x) + kStarSeedSearchRadius, 0, bins - 1);
+            const int by = std::clamp((int)std::lround(d.y) + kStarSeedSearchRadius, 0, bins - 1);
+            hist[(size_t)by * bins + bx]++;
+        });
+    }
+    int px, py, peak; double contrast;
+    histogramPeak(hist, bins, px, py, peak, contrast);
+    if (peak < 20 || contrast < 6) return cv::Mat();
+    cv::Mat seed = cv::Mat::eye(3, 3, CV_64F);
+    seed.at<double>(0, 2) = px - kStarSeedSearchRadius;
+    seed.at<double>(1, 2) = py - kStarSeedSearchRadius;
+    return seed;
+}
+
+// The sky homography from the stars: refined from the keypoint fit when there is one,
+// otherwise (or if that fails) from a translation seed.  Empty when the stars cannot
+// support a fit, which leaves the keypoint fit as it was.
+static cv::Mat refineSkyHomographyWithStars(const cv::Mat &keypointFit,
+                                            const std::vector<cv::Point2f> &nb,
+                                            const std::vector<cv::Point2f> &base,
+                                            int frameIndex, int neighborFrameIndex) {
+    if ((int)nb.size() < kStarMinPairs || (int)base.size() < kStarMinPairs) return cv::Mat();
+    const StarGrid baseGrid(base, kStarVoteRadius);
+    // Both starting points, whichever explains more of the stars.  Not the keypoint fit
+    // first and the vote only if it fails: in twilight the keypoint fit is often wrong in
+    // a way the refinement can half-follow, and the half it finds can pass every other
+    // test while the vote, from no keypoints at all, finds three times the pairs.
+    int pairs = 0; double rms = 0;
+    cv::Mat refined;
+    const char *from = "keypoint fit";
+    if (!keypointFit.empty()) refined = refineSkyFromSeed(nb, base, baseGrid, keypointFit, pairs, rms);
+    const cv::Mat seed = translationSeedFromStars(nb, base);
+    if (!seed.empty()) {
+        int votePairs = 0; double voteRms = 0;
+        cv::Mat fromVote = refineSkyFromSeed(nb, base, baseGrid, seed, votePairs, voteRms);
+        if (!fromVote.empty() && (refined.empty() || votePairs > pairs)) {
+            refined = fromVote; pairs = votePairs; rms = voteRms;
+            from = "star translation vote";
+        }
+    }
+    if (refined.empty()) {
+        Log_d("frame %d sky homography to %d: stars (%zu, %zu) could not refine it",
+              frameIndex, neighborFrameIndex, nb.size(), base.size());
+    } else {
+        Log_d("frame %d sky homography to %d refined from the %s: %d star pairs, %.2fpx rms",
+              frameIndex, neighborFrameIndex, from, pairs, rms);
+    }
+    return refined;
+}
+
+// Whether the stars overrule a sky keypoint fit they could not confirm.
+//
+// When refineSkyHomographyWithStars finds no fit, the keypoint fit is all that is left,
+// and on a sky full of stars that is damning evidence against it: a right fit would have
+// been confirmed.  Measured on the twilight frames of two sequences from the same night
+// (the moving, moonlit a9-1 and the static, cirrus-covered fx3-1), every keypoint fit the
+// stars refused while both frames held 1000+ centroids was 170-2400px wrong, on a static
+// camera whose sky moves a few pixels between frames — and kept, one such warp makes
+// validation distrust the frame's whole set, so the frame lost its 6-7 good neighbours to
+// a repair copied from frames away.  Reported as no homography instead, it costs one
+// source in the merge.
+//
+// Only a thin fit is overruled.  Every one of those wrong fits stood on 1-11 RANSAC
+// inliers, where fits standing on 32 or more agreed with the stars to 0.2px; a solid
+// consensus the stars cannot confirm is more likely a sky the stars cannot speak for —
+// cloud hiding most of it — than a wrong fit, and it keeps its say.
+static constexpr int kStarsToOverrule  = 1000;
+static constexpr int kThinSkyConsensus = 30;
+
+static bool starsOverruleThinSkyFit(const std::vector<uchar> &inlierMask,
+                                    size_t neighborStars, size_t baseStars,
+                                    int frameIndex, int neighborFrameIndex) {
+    if ((int)neighborStars < kStarsToOverrule || (int)baseStars < kStarsToOverrule) return false;
+    const int inliers = (int)std::count_if(inlierMask.begin(), inlierMask.end(),
+                                           [](uchar flag) { return flag != 0; });
+    if (inliers >= kThinSkyConsensus) return false;
+    Log_d("frame %d sky homography to %d dropped: %d keypoint inliers, and %zu and %zu stars "
+          "that confirm no fit", frameIndex, neighborFrameIndex, inliers, baseStars,
+          neighborStars);
+    return true;
+}
+
+// The RANSAC seed for one frame pair.  cv::findHomography's RANSAC, and the ground's, draw
+// random subsets via cv::theRNG(); without an explicit seed the chosen consensus set varies
+// run-to-run, occasionally producing homographies whose deviation magnitude looks fine but
+// whose tx/ty are off by several pixels.  Seeded per (baseFrame, neighborFrame), the same
+// pair always gets the same RANSAC sequence.
+static uint64_t pairSeed(int frameIndex, int neighborFrameIndex) {
+    return (static_cast<uint64_t>(frameIndex) * 2654435761ULL) ^
+           static_cast<uint64_t>(neighborFrameIndex);
+}
+
 int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                           int frameIndex,
                           const AlignmentNeighborData *neighbors, int neighborCount,
                           FeatureMatchMethod matchMethod,
                           AlignmentType alignmentType,
                           int maxKeypoints, bool writeDebugImages,
+                          int imageWidth, int imageHeight,
                           AlignmentUpdateFunc updateHandler, void *updateContext,
                           AlignmentWarpInfoData *outWarpInfos,
                           const char **errorMsg) {
     if (!baseKeypoints || !outWarpInfos) {
         if (errorMsg) *errorMsg = "not given keypoints on base frame";
+        return 0;
+    }
+    // The ground turns about the frame's centre, which cannot be found without the frame.
+    if (alignmentType == AlignmentTypeEarth && (imageWidth <= 0 || imageHeight <= 0)) {
+        if (errorMsg) *errorMsg = "ground alignment needs the frame size";
         return 0;
     }
 
@@ -1659,6 +2561,31 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 
         std::vector<cv::KeyPoint>& kpBase = baseKeypoints->keypoints;
         cv::Mat& descBase = baseKeypoints->descriptors;
+
+        auto recordSuccess = [&](int ii, const cv::Mat &H) {
+            cv::Mat I = cv::Mat::eye(3, 3, H.type());
+            outWarpInfos[ii].homography = wrap(H);
+            outWarpInfos[ii].deviation = cv::norm(H - I, cv::NORM_L2);
+            outWarpInfos[ii].alignmentState = AlignmentStateObjCHomographySuccess;
+        };
+        // The sky's stars, for when the keypoints alone cannot fit it at all —
+        // twilight frames that SIFT finds next to nothing in.
+        auto skyFromStarsAlone = [&](int ii) {
+            if (alignmentType != AlignmentTypeSky) return false;
+            cv::Mat H = refineSkyHomographyWithStars(
+              cv::Mat(), neighbors[ii].keypoints->stars, baseKeypoints->stars,
+              frameIndex, neighbors[ii].frameIndex);
+            if (H.empty()) return false;
+            recordSuccess(ii, H);
+            return true;
+        };
+
+        // Every neighbour is matched before any is fitted: the ground's focal length is
+        // calibrated over all of a frame's correspondences at once, and its rotations
+        // cannot be fitted until it is.
+        std::vector<std::vector<cv::Point2f>> matchedNeighbor(neighborCount),
+                                              matchedBase(neighborCount);
+        std::vector<bool> matched(neighborCount, false);
 
         for (int ii = 0; ii < neighborCount; ++ii) {
             notify(ObjCAlignmentStepNeighborKeypointDetection, ii);
@@ -1674,11 +2601,15 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                 std::vector<cv::KeyPoint>& kpNeighbor = neighbors[ii].keypoints->keypoints;
                 cv::Mat& descNeighbor = neighbors[ii].keypoints->descriptors;
 
-                if (descNeighbor.empty() || descBase.empty()) continue;
+                if (descNeighbor.empty() || descBase.empty()) {
+                    skyFromStarsAlone(ii);
+                    continue;
+                }
 
                 notify(ObjCAlignmentStepNeighborKeypointMatch, ii);
 
-                std::vector<cv::Point2f> ptsNeighbor, ptsBase;
+                std::vector<cv::Point2f> &ptsNeighbor = matchedNeighbor[ii];
+                std::vector<cv::Point2f> &ptsBase = matchedBase[ii];
                 std::vector<std::vector<cv::DMatch>> knnMatches;
                 std::vector<cv::DMatch> matches;
                 // The norm has to match the descriptor, and the two detectors here do
@@ -1756,38 +2687,72 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                 }
                 }
 
+                matched[ii] = true;
+            } catch (const cv::Exception &e) {
+                Log_e("frame %d Error: %s", frameIndex, e.what());
+            } catch (const std::exception &e) {
+                Log_e("frame %d Error: %s", frameIndex, e.what());
+            }
+        }
+
+        GroundCamera camera;
+        if (alignmentType == AlignmentTypeEarth) {
+            std::vector<GroundPair> pairs;
+            for (int ii = 0; ii < neighborCount; ++ii) {
+                // a pair the consensus check would refuse anyway has nothing to add
+                if (!matched[ii] || (int)matchedNeighbor[ii].size() < kMinGroundInliers) continue;
+                pairs.push_back({&matchedNeighbor[ii], &matchedBase[ii],
+                                 pairSeed(frameIndex, neighbors[ii].frameIndex)});
+            }
+            double f = kGroundFocalMaxWidths * imageWidth;
+            try {
+                f = calibrateGroundFocalLength(pairs, imageWidth, imageHeight, frameIndex);
+            } catch (const std::exception &e) {
+                Log_e("frame %d ground focal length calibration failed, fitting at %.0fpx: %s",
+                      frameIndex, f, e.what());
+            }
+            camera = groundCamera(imageWidth, imageHeight, f);
+        }
+
+        for (int ii = 0; ii < neighborCount; ++ii) {
+            if (!matched[ii]) continue;
+            try {
+                std::vector<cv::Point2f> &ptsNeighbor = matchedNeighbor[ii];
+                std::vector<cv::Point2f> &ptsBase = matchedBase[ii];
                 if (ptsNeighbor.size() >= 4) {
                     notify(ObjCAlignmentStepAligningNeighbor, ii);
-                    // cv::findHomography with RANSAC draws random subsets via
-                    // cv::theRNG().  Without an explicit seed the chosen
-                    // consensus set varies run-to-run, occasionally producing
-                    // homographies whose deviation magnitude looks fine but
-                    // whose tx/ty are off by several pixels.  Seed
-                    // per (baseFrame, neighborFrame) so the same pair always
-                    // gets the same RANSAC sequence.
-                    uint64_t rngSeed =
-                        (static_cast<uint64_t>(frameIndex) * 2654435761ULL) ^
-                        static_cast<uint64_t>(neighbors[ii].frameIndex);
-                    cv::theRNG() = cv::RNG(rngSeed);
+                    cv::theRNG() = cv::RNG(pairSeed(frameIndex, neighbors[ii].frameIndex));
                     std::vector<uchar> inlierMask;
-                    cv::Mat H = estimateAlignment(alignmentType, ptsNeighbor, ptsBase,
+                    cv::Mat H = estimateAlignment(alignmentType, camera, ptsNeighbor, ptsBase,
                                                   inlierMask);
                     if (!H.empty() && H.type() != CV_64F) H.convertTo(H, CV_64F);
+                    const bool fitted = !H.empty() && H.rows == 3 && H.cols == 3;
 
-                    if (!H.empty() && H.rows == 3 && H.cols == 3 &&
+                    // The sky's keypoint fit is a starting point; its stars finish it.
+                    if (alignmentType == AlignmentTypeSky) {
+                        cv::Mat refined = refineSkyHomographyWithStars(
+                          fitted ? H : cv::Mat(), neighbors[ii].keypoints->stars,
+                          baseKeypoints->stars, frameIndex, neighbors[ii].frameIndex);
+                        if (!refined.empty()) { recordSuccess(ii, refined); continue; }
+                        if (fitted && starsOverruleThinSkyFit(
+                              inlierMask, neighbors[ii].keypoints->stars.size(),
+                              baseKeypoints->stars.size(), frameIndex,
+                              neighbors[ii].frameIndex)) {
+                            outWarpInfos[ii].alignmentState = AlignmentStateObjCNoHomographyFound;
+                            continue;
+                        }
+                    }
+
+                    if (fitted &&
                         groundConsensusIsUsable(alignmentType, inlierMask,
                                                 ptsNeighbor.size(), frameIndex,
                                                 neighbors[ii].frameIndex))
                     {
-                        cv::Mat I = cv::Mat::eye(3, 3, H.type());
-                        double deviation = cv::norm(H - I, cv::NORM_L2);
-                        outWarpInfos[ii].homography = wrap(H);
-                        outWarpInfos[ii].deviation = deviation;
-                        outWarpInfos[ii].alignmentState = AlignmentStateObjCHomographySuccess;
+                        recordSuccess(ii, H);
                     } else {
                         outWarpInfos[ii].alignmentState = AlignmentStateObjCNoHomographyFound;
                     }
-                } else {
+                } else if (!skyFromStarsAlone(ii)) {
                     outWarpInfos[ii].alignmentState = AlignmentStateObjCNotEnoughKeypoints;
                 }
             } catch (const cv::Exception &e) {

@@ -99,6 +99,14 @@ class LocalPreferences {
         get() = bool("showHorizonPainterInstructions") ?: true
         set(value) = setBool("showHorizonPainterInstructions", value)
 
+    /**
+     * macOS `hiddenHorizonLineKinds`: the kinds of horizon line (initial, merged, consensus, reference) the user has switched
+     * off; empty draws every kind a frame has.  The hidden ones rather than the shown ones, so a kind added later is drawn.
+     */
+    var hiddenHorizonLineKinds: List<String>
+        get() = strings("hiddenHorizonLineKinds") ?: emptyList()
+        set(value) = setStrings("hiddenHorizonLineKinds", value.distinct().sorted())
+
     /** macOS `showHorizonOnMainView`: whether the horizon line is drawn on the frame, the filmstrip and the grid. Off until turned on. */
     var showHorizonOnMainView: Boolean
         get() = bool("showHorizonOnMainView") ?: false

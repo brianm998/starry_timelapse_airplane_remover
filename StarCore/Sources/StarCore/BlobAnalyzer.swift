@@ -203,8 +203,12 @@ public actor BlobAnalyzer {
 */
     public func logBlobs() async {
         Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
+        // the blob reads below are actor hops, and `await` cannot sit inside a log message
+        guard Log.isEnabled(.debug) else { return }
         for (_, blob) in blobMap {
-            Log.d("frame \(frameIndex) blob.id \(blob.id) \(await blob.size()) pixels \(await blob.pixels)")
+            let size = await blob.size()
+            let pixels = await blob.pixels
+            Log.d("frame \(frameIndex) blob.id \(blob.id) \(size) pixels \(pixels)")
         }
     }
 
@@ -248,30 +252,45 @@ public final class BlobRefs: Sendable {
     }
 }
 
+/// The blobs reachable from `blob` by repeatedly stepping to blobs within `scanSize`, at most
+/// `maxHops` steps (nil: no limit, the full transitive closure).
+///
+/// With no limit this is a flood fill, and in a dense field it is most of the frame, rebuilt for
+/// every seed: the cost that took a 19-frame dense sequence 25-35 minutes and a hundred thousand
+/// seconds of system time (BUG-003). Bounding the hops keeps a seed's cloud to its own
+/// neighbourhood, which is all the line fit downstream is for. Hop 1 is the seed's direct
+/// neighbours; the closure and the bounded cloud agree whenever the chain of neighbours is no
+/// longer than the bound.
 internal func neighborCloud(of blob: Blob,
                             blobRefs: BlobRefs,
                             blobMap: [Int32: Blob],
-                            scanSize: Int = 12) async -> Set<Blob>
+                            scanSize: Int = 12,
+                            maxHops: Int? = nil) async -> Set<Blob>
 {
-    var blobsToProcess = [blob]
+    var frontier = [blob]
     var ret: Set<Blob> = []
 
     let processedBlobs = ProcessedBlobsSync()
     processedBlobs.insert(blob)
-    
-    while blobsToProcess.count > 0 {
-        let blobToProcess = blobsToProcess.removeFirst()
-        for otherBlob in await StarCore.directNeighbors(of: blobToProcess,
-                                                        blobRefs: blobRefs,
-                                                        blobMap: blobMap,
-                                                        scanSize: scanSize)
-        {
-            if !(processedBlobs.contains(otherBlob.id)) {
-                processedBlobs.insert(otherBlob.id) // XXX combine this with above
-                ret.insert(otherBlob)
-                blobsToProcess.append(otherBlob)
+
+    var hop = 0
+    while !frontier.isEmpty, maxHops == nil || hop < maxHops! {
+        var next: [Blob] = []
+        for blobToProcess in frontier {
+            for otherBlob in await StarCore.directNeighbors(of: blobToProcess,
+                                                            blobRefs: blobRefs,
+                                                            blobMap: blobMap,
+                                                            scanSize: scanSize)
+            {
+                if !(processedBlobs.contains(otherBlob.id)) {
+                    processedBlobs.insert(otherBlob.id) // XXX combine this with above
+                    ret.insert(otherBlob)
+                    next.append(otherBlob)
+                }
             }
         }
+        frontier = next
+        hop += 1
     }
     return ret
 }

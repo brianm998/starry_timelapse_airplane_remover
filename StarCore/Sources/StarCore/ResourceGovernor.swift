@@ -46,8 +46,14 @@ public struct ResourceSample: Sendable, Equatable {
     public var cpuRunning: Int
     public var cpuWidth: Int
     public var cpuWaiting: Int
-    /// Percent of the window star held a GPU slot.
+    /// Percent of the window the GPU itself was executing star's command buffers (device-busy
+    /// time, from each buffer's GPU start/end). This is what "limited by GPU" is judged on.
     public var gpuPercent: Double
+    /// Percent of the available GPU slot-time star held a slot for: time inside the entry points
+    /// (encode, staging copies, the wait) over the window and the gate's width. A diagnostic: a
+    /// high value with a low `gpuPercent` means slots are held doing something other than GPU
+    /// work. Defaults to 0 so existing constructors compile.
+    public var gpuSlotPercent: Double = 0
     public var gpuWaiting: Int
     public var volumes: [Volume]
     public var footprintBytes: UInt64
@@ -88,9 +94,10 @@ public struct ResourceReport: Sendable, Equatable {
 
     /// Which resource is holding the run back, if one is.
     ///
-    /// A resource is *saturated* when its gate is full and callers are queued behind it
-    /// (the GPU gate by queue alone, since the GPU's own busy time is only wall time inside
-    /// its slots). When several are, the order is disk, GPU, CPU, memory: work that is
+    /// A resource is *saturated* when its gate is full and callers are queued behind it. The
+    /// GPU is blamed on the device's own busy time, not on slot occupancy: callers queueing
+    /// for a slot another caller holds while it copies memory are waiting on the CPU and the
+    /// memory bus, and the device may be nearly idle. When several are saturated, the order is disk, GPU, CPU, memory: work that is
     /// waiting on a slow disk is *holding* its memory reservation while it waits, so a full
     /// ledger beside a saturated disk is the disk's doing.
     static func limiter(in sample: ResourceSample) -> LimitingResource? {
@@ -101,7 +108,8 @@ public struct ResourceReport: Sendable, Equatable {
         {
             return .disk(volume.name)
         }
-        if sample.gpuWaiting > 0 || sample.gpuPercent >= 85 { return .gpu }
+        // Callers queued for a slot count only when the device is doing real work too.
+        if sample.gpuPercent >= 85 || (sample.gpuWaiting > 0 && sample.gpuPercent >= 40) { return .gpu }
         if (sample.cpuWaiting > 0 && sample.cpuRunning >= sample.cpuWidth) || sample.cpuPercent >= 85 {
             return .cpu
         }
@@ -113,7 +121,7 @@ public struct ResourceReport: Sendable, Equatable {
         func gb(_ bytes: UInt64) -> String { String(format: "%.1f", Double(bytes) / 1_073_741_824) }
         var parts: [String] = []
         parts.append("CPU \(Int(sample.cpuPercent.rounded()))% (gate \(sample.cpuRunning)/\(sample.cpuWidth))")
-        parts.append("GPU \(Int(sample.gpuPercent.rounded()))%")
+        parts.append("GPU \(Int(sample.gpuPercent.rounded()))% (slots \(Int(sample.gpuSlotPercent.rounded()))%)")
         for v in sample.volumes {
             var part = "\(v.name) \(Int((v.bytesPerSecond / 1_000_000).rounded()))MB/s "
             part += "(gate \(v.inFlight)/\(v.width)"
@@ -202,6 +210,7 @@ public actor ResourceGovernor {
         let time: Double
         let cpuSeconds: Double
         let gpuSeconds: Double
+        let gpuDeviceSeconds: Double
         let bytes: [String: UInt64]
         let ops: Double
     }
@@ -230,6 +239,13 @@ public actor ResourceGovernor {
         task = nil
     }
 
+    /// Byte counters keyed by volume id. Not by name: two distinct volumes can report the same
+    /// mount name (a symlinked path, a firmlink), and `Dictionary(uniqueKeysWithValues:)`
+    /// traps on a duplicate key.
+    static func bytesByVolume(_ status: [IOWork.VolumeStatus]) -> [String: UInt64] {
+        Dictionary(status.map { ($0.volume, $0.bytes) }, uniquingKeysWith: +)
+    }
+
     /// One sample, report and tuning step. Public for tests and for a GUI that wants a
     /// reading now.
     @discardableResult
@@ -241,7 +257,8 @@ public actor ResourceGovernor {
           time: now,
           cpuSeconds: Self.processCPUSeconds(),
           gpuSeconds: GPUOps.busySeconds,
-          bytes: Dictionary(uniqueKeysWithValues: status.map { ($0.name, $0.bytes) }),
+          gpuDeviceSeconds: GPUOps.deviceBusySeconds,
+          bytes: Self.bytesByVolume(status),
           ops: OperationThroughput.weightedTotal)
         defer { last = current }
         guard let previous = last else { return nil }
@@ -249,7 +266,7 @@ public actor ResourceGovernor {
         let window = max(current.time - previous.time, 0.001)
         let cores = Double(max(PhysicalCores.count, 1))
         let volumes = status.map { v -> ResourceSample.Volume in
-            let delta = v.bytes &- (previous.bytes[v.name] ?? 0)
+            let delta = v.bytes &- (previous.bytes[v.volume] ?? 0)
             return .init(name: v.name, bytesPerSecond: Double(delta) / window,
                          inFlight: v.inFlight, width: v.width, waiting: v.waiting)
         }
@@ -259,7 +276,9 @@ public actor ResourceGovernor {
           cpuRunning: NativeWork.running,
           cpuWidth: NativeWork.concurrencyLimit,
           cpuWaiting: NativeWork.waiting,
-          gpuPercent: min(100, (current.gpuSeconds - previous.gpuSeconds) / window * 100),
+          gpuPercent: min(100, (current.gpuDeviceSeconds - previous.gpuDeviceSeconds) / window * 100),
+          gpuSlotPercent: min(100, (current.gpuSeconds - previous.gpuSeconds) / window
+                                    / Double(max(GPUOps.concurrency, 1)) * 100),
           gpuWaiting: GPUOps.waiting,
           volumes: volumes,
           footprintBytes: memory.footprintBytes,

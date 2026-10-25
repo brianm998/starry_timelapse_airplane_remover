@@ -174,6 +174,53 @@ final class SIFTDetectorTests: XCTestCase {
         }
     }
 
+    /// The cap is applied to what the mask allows, not to the whole frame first. cv::SIFT (and this
+    /// port, before) kept the strongest N of the frame and then dropped those outside the mask,
+    /// so a mask over a minority of the frame lost most of the cap: asked for 40 keypoints under
+    /// a mask over the left quarter, it returned only the few of the frame's top 40 that happened to
+    /// sit there. Now it returns the strongest 40 inside the mask.
+    func testTheCapKeepsTheStrongestKeypointsInsideTheMask() throws {
+        let width = 640, height = 480
+        let img = makeNightSky(width: width, height: height, stars: 700)
+
+        let maskData = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height)
+        for y in 0..<height { for x in 0..<width { maskData[y * width + x] = x < width / 4 ? 255 : 0 } }
+        let mask = MatWrapper(width: width, height: height,
+                              cvType: MatWrapper.cvType(forBitsPerComponent: 8, componentsPerPixel: 1),
+                              bytesPerRow: width, data: UnsafeMutableRawPointer(maskData), takeOwnership: true)
+
+        let uncapped = try XCTUnwrap(ImageAligner.debugSiftReference(img, mask: mask, nfeatures: 0))
+        let cap = 40
+        XCTAssertGreaterThan(uncapped.keypointCount, cap * 2, "the masked quarter needs enough keypoints for a cap to bind")
+        let capped = try XCTUnwrap(ImageAligner.debugSiftReference(img, mask: mask, nfeatures: Int32(cap)))
+        XCTAssertGreaterThanOrEqual(capped.keypointCount, cap, "the cap was spent outside the mask")
+        XCTAssertLessThanOrEqual(capped.keypointCount, cap + 5, "ties at the cutoff only")
+        for (x, _) in capped.keypointPositions() {
+            XCTAssertLessThan(x, Double(width) / 4)
+        }
+    }
+
+    /// A feature file is written beside its destination and renamed into place: afterwards the
+    /// directory holds the one file, it reads back with the same keypoints, and writing again
+    /// replaces it.
+    func testFeatureFilesAreWrittenAtomically() throws {
+        let img = makeStarField(width: 256, height: 192, count: 30)
+        let features = try XCTUnwrap(ImageAligner.debugSiftReference(img, mask: nil, nfeatures: 200))
+        XCTAssertGreaterThan(features.keypointCount, 0)
+
+        let dir = NSTemporaryDirectory() + "features-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let path = "\(dir)/keypoints_0.yml"
+
+        XCTAssertTrue(features.write(toFilename: path))
+        XCTAssertTrue(features.write(toFilename: path), "writing over an existing file")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir), ["keypoints_0.yml"],
+                       "a temp file was left behind")
+        let back = try XCTUnwrap(OCVFeatureSet.load(fromFilename: path))
+        XCTAssertEqual(back.keypointCount, features.keypointCount)
+    }
+
     /// The port against real cv::SIFT on the kind of image the sky detector is
     /// actually handed — see `makeNightSky`. The disks above are too large and
     /// too hard-edged to exercise the small scales stars live at, which is where
@@ -222,6 +269,36 @@ final class SIFTDetectorTests: XCTestCase {
         XCTAssertLessThanOrEqual(maxDelta, 0.5)
     }
 
+    /// Pyramid textures are pooled between builds. A reused texture carries the previous
+    /// build's pixels, so this pins that nothing reads one before writing it: a second build
+    /// of the same image, entirely on recycled textures, must find exactly the same keypoints.
+    func testRecycledPyramidTexturesGiveTheSameKeypoints() throws {
+        try XCTSkipUnless(GPUCapability.isAvailable(), "no supported GPU on this machine")
+        GPUOps.registerIfAvailable()
+        try XCTSkipUnless(gpu_ops_sift_pyramid_available(), "no GPU SIFT pyramid handler registered")
+
+        let a = makeNightSky(width: 512, height: 384, stars: 400, seed: 11)
+        let b = makeNightSky(width: 512, height: 384, stars: 400, seed: 23)   // different pixels, same sizes
+
+        GPUOps.trimTexturePool()
+        let first = try XCTUnwrap(ImageAligner.debugSiftGPU(a, mask: nil, nfeatures: 1000))
+        let missesAfterFirst = GPUOps.texturePoolStats.misses
+        _ = try XCTUnwrap(ImageAligner.debugSiftGPU(b, mask: nil, nfeatures: 1000))   // dirties the pool
+        let again = try XCTUnwrap(ImageAligner.debugSiftGPU(a, mask: nil, nfeatures: 1000))
+        let stats = GPUOps.texturePoolStats
+
+        XCTAssertGreaterThan(stats.hits, 0, "no texture was ever recycled")
+        XCTAssertGreaterThan(stats.misses, missesAfterFirst - 1)
+        XCTAssertEqual(first.keypointCount, again.keypointCount)
+        let (matched, onlyFirst, onlyAgain, maxDelta) = matchPositions(
+          first.keypointPositions(), again.keypointPositions(), tolerance: 0.001)
+        XCTAssertEqual(matched, first.keypointCount, "\(onlyFirst) / \(onlyAgain) keypoints differ on recycled textures")
+        XCTAssertEqual(maxDelta, 0, accuracy: 1e-6)
+
+        GPUOps.trimTexturePool()
+        XCTAssertEqual(GPUOps.texturePoolStats.heldBytes, 0)
+    }
+
     /// The GPU port against real cv::SIFT on a realistic sky — the comparison the
     /// sky detector's correctness actually rests on. The old MPS pyramid fails this
     /// by a wide margin: it widened every blur by a one-pixel box, which moved the
@@ -236,6 +313,26 @@ final class SIFTDetectorTests: XCTestCase {
         let real = try XCTUnwrap(ImageAligner.debugSiftOpenCV(img, mask: nil, nfeatures: 2000))
         let gpu = try XCTUnwrap(ImageAligner.debugSiftGPU(img, mask: nil, nfeatures: 2000))
         assertSameKeypoints(gpu, as: real, what: "the GPU port")
+    }
+
+    /// The DoG subtraction and the extremum scan run in parallel bands, concatenated in band order.
+    /// That must reproduce the serial order, so repeated runs give byte-identical keypoints and
+    /// descriptors (this was also compared against the serial version before it was removed).
+    func testParallelExtremumScanIsDeterministic() throws {
+        let img = makeNightSky(width: 800, height: 600, stars: 1200, seed: 5)
+        let dir = NSTemporaryDirectory() + "sift-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        var files: [Data] = []
+        for run in 0..<3 {
+            let r = try XCTUnwrap(ImageAligner.debugSiftReference(img, mask: nil, nfeatures: 4000))
+            XCTAssertGreaterThan(r.keypointCount, 300)
+            let path = "\(dir)/run\(run).yml"
+            XCTAssertTrue(r.write(toFilename: path))
+            files.append(try Data(contentsOf: URL(fileURLWithPath: path)))
+        }
+        XCTAssertEqual(files[0], files[1])
+        XCTAssertEqual(files[1], files[2])
     }
 
     // MARK: - realistic sky

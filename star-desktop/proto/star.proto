@@ -464,6 +464,7 @@ enum FrameViewMode {
   VIEW_AUTO_PROCESSED          = 13;   // the output of each clean method, before it is linked as the final one
   VIEW_AUTO_SELECTIVE_PROCESSED = 14;
   VIEW_SELECTIVE_PROCESSED     = 15;
+  VIEW_CONSENSUS_HORIZON       = 16;   // a moving sequence's horizon consensus, drawn as a mask
 }
 
 message ImageRef { string path = 1; int32 width = 2; int32 height = 3; string format = 4; }
@@ -754,7 +755,7 @@ message ProgressEvent {
     SequenceStateEvent sequence_state      = 6;
     VideoExportedEvent video_exported      = 7;
     ImageSaved         image_saved         = 8;
-    int32              horizon_updated     = 9;   // frame index: a horizon refinement operation finished for this frame
+    int32              horizon_updated     = 9;   // frame index: its horizon lines changed (a mask written or deleted, a reference painted or cleared, a refinement finished)
     StepProgress       step_progress       = 10;
   }
 }
@@ -763,7 +764,7 @@ message ProgressEvent {
 // Counted in operations, since that is what there is to count: most steps have one per frame, but the frames whose work is already on
 // disk have none (`already_done`), and a static camera merges every horizon in one.  Measured from when the run started.
 message StepCount {
-  string type         = 1;   // OperationType's case: horizon, mergedHorizon, starKeypoints, earthKeypoints, starHomography, earthHomography, outliers, merge
+  string type         = 1;   // OperationType's case: horizon, mergedHorizon, starKeypoints, earthKeypoints, starHomography, earthHomography, horizonConsensus, outliers, merge
   int32  queued       = 2;
   int32  running      = 3;
   int32  done         = 4;   // this run's
@@ -785,6 +786,9 @@ message SequenceProgress {
   repeated StepCount steps = 4;
   bool   is_untouched    = 5;   // no step has a single frame done, so the sequence has never been processed
   bool   is_complete     = 6;   // every frame has its output written, so a run would have nothing to merge
+  // Work on disk was made by other settings or an older version of star's code, so the next run makes it again (and the output with it):
+  // those steps are counted as not done, and the panel says why.
+  bool   needs_rebuild   = 7;
 }
 
 // Whether this machine can keep its cores busy detecting keypoints on the open sequence at full resolution, and what to suggest when it
@@ -992,13 +996,16 @@ message RunRefinementResponse {
   bool started = 1;   // false when there was nothing to run, or a run was already going
 }
 
-// Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green).
+// Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green,
+// consensus=purple).  A frame has up to one line of each kind, all in `lines`; the single line in `kind`/`y_per_column` is the one
+// the final composite reads, so a client that draws one line draws that.
 // `isPendingHorizonRefinement` is NOT engine-derived — the client tracks it from edited reference frames.
 enum HorizonOverlayKind {
   HORIZON_OVERLAY_KIND_UNSPECIFIED = 0;  // no horizon computed (overlay nil)
   HORIZON_OVERLAY_KIND_INITIAL     = 1;
   HORIZON_OVERLAY_KIND_MERGED      = 2;
   HORIZON_OVERLAY_KIND_REFERENCE   = 3;
+  HORIZON_OVERLAY_KIND_CONSENSUS   = 4;  // a moving sequence's horizon consensus, which the composite uses
 }
 message GetHorizonOverlayRequest  { string session_id = 1; int32 frame_index = 2; int32 width = 3; int32 height = 4; }
 message GetHorizonOverlayResponse {
@@ -1007,6 +1014,12 @@ message GetHorizonOverlayResponse {
   repeated int32     y_per_column = 3;   // draw-space Y, length == width
   int32              height       = 4;   // height the overlay was computed at (scaleY divisor)
   bool               refinement_pending = 5;   // see FrameInfo.refinement_pending
+  repeated HorizonOverlayLine lines = 6;   // every horizon line the frame has, one per kind, in drawing order (the composite's on top)
+}
+message HorizonOverlayLine {
+  HorizonOverlayKind kind         = 1;
+  repeated int32     y_per_column = 2;   // draw-space Y, length == width
+  int32              height       = 3;   // height the line was computed at (scaleY divisor)
 }
 
 // ---- Horizon: interactive band detection (the live painter) ----

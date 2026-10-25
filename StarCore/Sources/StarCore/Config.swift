@@ -80,6 +80,9 @@ public class ConfigManager {
     public func onUpdate(closure: @escaping @Sendable (Config) -> Void) {
         updateCallbacks.append(closure)
     }
+
+    /// How many update callbacks are registered, for tests.
+    public var updateCallbackCount: Int { updateCallbacks.count }
     
     /// Write the current config now, on the calling thread.
     ///
@@ -173,6 +176,15 @@ public class ConfigManager {
         for callback in updateCallbacks {
             callback(config)
         }
+    }
+
+    /// Sets one frame's clean-method override. The read, the edit and the write happen in one
+    /// main-actor step: doing them as read / `await` / write let two frames' changes
+    /// interleave, and the second write put back the first frame's old overrides.
+    public func setPixelReplacementOverride(_ cleanMethod: CleanMethod, forFrame frameIndex: Int) {
+        var config = self._config
+        config.pixelReplacementOverrides[frameIndex] = cleanMethod
+        update(config)
     }
 }
 
@@ -779,6 +791,24 @@ public struct Config: Codable, Sendable {
         return max(horizonMemoryMultiplier, Int(floorMultiplier))
     }
 
+    /// What the one op that finds a static sequence's temporal horizon holds at its peak, as
+    /// a multiple of `workingFrameBytes`: `TemporalHorizonDetector.concurrentDecodes`
+    /// full-size frames, every sampled frame's shrunk copy, and a fixed allowance.
+    ///
+    /// Not a constant, because the shrunk copies are a fixed size and the frame is not: 48
+    /// copies at 1600 px wide are 1.9 frames' worth of a 7952 px frame and 6.8 of a 4240 px
+    /// one.  Never below `effectiveHorizonMemoryMultiplier`, which the op would get anyway.
+    public func effectiveTemporalHorizonMemoryMultiplier() -> Int {
+        let working = workingFrameBytes
+        let floor = effectiveHorizonMemoryMultiplier()
+        guard working > 0, imageWidth > 0 else { return floor }
+        let shrink = min(1, Double(TemporalHorizonDetector.workingWidth) / Double(imageWidth))
+        let bytes = Double(TemporalHorizonDetector.concurrentDecodes) * Double(working)
+          + Double(max(0, temporalHorizonSampleCount)) * Double(working) * shrink * shrink
+          + Double(TemporalHorizonDetector.fixedReservationMB) * 1024 * 1024
+        return max(floor, Int((bytes / Double(working)).rounded(.up)))
+    }
+
     // used by updatable log
     public var progressBarLength = 35
 
@@ -924,6 +954,28 @@ public struct Config: Codable, Sendable {
     // when true, this replaces the legacy adaptive Otsu/DP search in loadOrCreateHorizonMask.
     // set to false to fall back to the previous adaptive search approach.
     public var useCombinedHorizonDetection: Bool = true
+
+    // When true, a static sequence's horizon is found once, in the per-pixel median of
+    // `temporalHorizonSampleCount` frames spread across the whole sequence, instead of by
+    // detecting on every frame and voting.  The median keeps the terrain and drops the
+    // stars, clouds and noise that make single night frames hard to read; see
+    // `TemporalHorizonDetector` for the measured difference.  Moving sequences are not
+    // affected.  Set to false to go back to the per-frame vote.
+    public var useTemporalStaticHorizon: Bool = true
+
+    // How many frames, sampled evenly from first to last, that median is taken over.
+    // Fewer frames leave more of whatever moved slowest — a cloud bank that sat for an hour
+    // — in the median; more cost a full-size decode each.
+    public var temporalHorizonSampleCount: Int = 48
+
+    // When true, the horizons a moving sequence's outlier subtraction and final composite
+    // use come from `HorizonConsensus`: once the ground has been aligned, each frame's
+    // horizon is the consensus of the horizons detected in the frames around it, carried
+    // into it along the ground.  That corrects what a per-frame detection gets wrong for a
+    // while — a cloud bank on the ridge measured 1.9% of the frame height off, 0.1% after.
+    // Needs earth alignment, and stays out of a sequence with painted references.  Set to
+    // false to composite with the merged masks.
+    public var useHorizonConsensus: Bool = true
 
     // Removed: horizonStripWidth.  It sized the strips that `PixelatedImage.horizonMask`
     // used to Otsu-threshold separately; that step is the `splitIntoMatrix` call still
@@ -1300,6 +1352,19 @@ public struct Config: Codable, Sendable {
     /// the whole reason it exists, and workers in flight would each hold one.
     public var mergeLoadConcurrency: Int = 1
 
+    /// How many seed blobs `LinearBlobConnector` builds neighbour clouds for at once.
+    /// Each cloud can be most of a dense frame, so the old one-child-per-seed fan-out
+    /// (up to 400) held them all at the same time. The result does not depend on this.
+    public var linearConnectorSeedConcurrency: Int = 4
+
+    /// How many neighbour-of-neighbour steps `LinearBlobConnector` follows from a seed when it
+    /// gathers the blobs to fit a line through. The full closure was most of the frame in a
+    /// dense field and was rebuilt for every seed (BUG-003: tens of minutes, a hundred thousand
+    /// seconds of system time on a dense 19-frame sequence). 0 or less means unlimited, the
+    /// old behaviour. Changing it changes which blobs get connected, so the decision-tree
+    /// `.linear*` features can shift; treat it as an output-affecting setting.
+    public var linearConnectorNeighborHops: Int = 2
+
     public var imageWidth: Int = 0
     public var imageHeight: Int = 0
     public var imageBytesPerPixel: Int = 0
@@ -1563,6 +1628,9 @@ public struct Config: Codable, Sendable {
         self.horizonSpikeMaxDeviationFraction = try c.decodeIfPresent(Double.self, forKey: .horizonSpikeMaxDeviationFraction) ?? self.horizonSpikeMaxDeviationFraction
         self.horizonSpikeWindowHalf = try c.decodeIfPresent(Int.self, forKey: .horizonSpikeWindowHalf) ?? self.horizonSpikeWindowHalf
         self.useCombinedHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCombinedHorizonDetection) ?? self.useCombinedHorizonDetection
+        self.useTemporalStaticHorizon = try c.decodeIfPresent(Bool.self, forKey: .useTemporalStaticHorizon) ?? self.useTemporalStaticHorizon
+        self.temporalHorizonSampleCount = try c.decodeIfPresent(Int.self, forKey: .temporalHorizonSampleCount) ?? self.temporalHorizonSampleCount
+        self.useHorizonConsensus = try c.decodeIfPresent(Bool.self, forKey: .useHorizonConsensus) ?? self.useHorizonConsensus
         self.useCannyForHorizonDetection = try c.decodeIfPresent(Bool.self, forKey: .useCannyForHorizonDetection) ?? self.useCannyForHorizonDetection
         self.cannyMinThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMinThreshold) ?? self.cannyMinThreshold
         self.cannyMaxThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMaxThreshold) ?? self.cannyMaxThreshold
@@ -1620,6 +1688,8 @@ public struct Config: Codable, Sendable {
           ?? self.keypointDivisorWasChosen
         self.mergeStreamingThresholdMB = try c.decodeIfPresent(Int.self, forKey: .mergeStreamingThresholdMB) ?? self.mergeStreamingThresholdMB
         self.mergeLoadConcurrency = try c.decodeIfPresent(Int.self, forKey: .mergeLoadConcurrency) ?? self.mergeLoadConcurrency
+        self.linearConnectorSeedConcurrency = try c.decodeIfPresent(Int.self, forKey: .linearConnectorSeedConcurrency) ?? self.linearConnectorSeedConcurrency
+        self.linearConnectorNeighborHops = try c.decodeIfPresent(Int.self, forKey: .linearConnectorNeighborHops) ?? self.linearConnectorNeighborHops
         self.maxConcurrentKeypointOps = try c.decodeIfPresent(Int.self, forKey: .maxConcurrentKeypointOps) ?? self.maxConcurrentKeypointOps
         self.keypointCacheMaxMB = try c.decodeIfPresent(Int.self, forKey: .keypointCacheMaxMB) ?? self.keypointCacheMaxMB
         self.horizonMemoryMultiplier = try c.decodeIfPresent(Int.self, forKey: .horizonMemoryMultiplier) ?? self.horizonMemoryMultiplier
@@ -1818,11 +1888,13 @@ public struct Config: Codable, Sendable {
     // 0.12.2 windows kotlin fixes
     // 0.12.3 windows kotlin fixes
     // 0.12.4 better ffmpeg support (missing arm arch on macos)
-    //
+    // 0.12.5 better alignment
+    //        cloud merge option
+
 
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.12.4"
+    public static let latestVersion = "0.12.5"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
@@ -2372,6 +2444,15 @@ public struct Config: Codable, Sendable {
             case .thumbnail:
                 return nil
             }
+        case .consensusHorizon:
+            switch size {
+            case .original:
+                return "\(self.tempOutputPath)/consensusHorizon"
+            case .preview:
+                return "\(self.tempOutputPath)/consensusHorizon-previews"
+            case .thumbnail:
+                return nil
+            }
         case .userHorizon:
             switch size {
             case .original:
@@ -2477,6 +2558,7 @@ public struct Config: Codable, Sendable {
         if let dir = self.dirForImage(ofType: .horizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .mergedHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .userHorizon) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .consensusHorizon) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .subtraction) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .validation) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .autoProcessed) { ret.append(dir) }
@@ -2492,6 +2574,7 @@ public struct Config: Codable, Sendable {
             if let dir = self.dirForImage(ofType: .horizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .mergedHorizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .userHorizon, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .consensusHorizon, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .subtraction, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .validation, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .blobs, atSize: .preview) { ret.append(dir) }

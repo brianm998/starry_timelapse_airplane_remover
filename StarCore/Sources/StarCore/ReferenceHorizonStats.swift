@@ -211,8 +211,51 @@ public extension ReferenceHorizonFrameStats {
     }
 }
 
-/// Module-level shared cache so stats for each reference frame are computed at most once.
-public let referenceHorizonStatsCache = ReferenceHorizonStatsCache()
+/// The per-sequence stats caches.
+///
+/// There used to be one process-wide cache keyed by frame index alone. Two sequences open in one
+/// process (the daemon holds several sessions, the gui opens one after another) both have a
+/// frame 12, and the second was served the first's reference statistics; so was a frame asked
+/// with a different neighbourhood size or histogram bucket count than the one cached. Each
+/// distinct (sequence, neighbourhood size, bucket count) now has its own cache, and a sequence's
+/// caches are dropped when it closes.
+public actor ReferenceHorizonStatsRegistry {
+    public static let shared = ReferenceHorizonStatsRegistry()
+
+    private struct Key: Hashable {
+        let sequence: String
+        let neighborhoodSize: Int
+        let bucketCount: Int
+    }
+
+    private var caches: [Key: ReferenceHorizonStatsCache] = [:]
+
+    /// The cache for this sequence (its `horizonReference/` directory path stands for it) and
+    /// settings.
+    public func cache(sequence: String, neighborhoodSize: Int, bucketCount: Int) -> ReferenceHorizonStatsCache {
+        let key = Key(sequence: sequence, neighborhoodSize: neighborhoodSize, bucketCount: bucketCount)
+        if let existing = caches[key] { return existing }
+        let created = ReferenceHorizonStatsCache()
+        caches[key] = created
+        return created
+    }
+
+    /// A reference was repainted: forget that frame's numbers in every sequence's caches.
+    /// (Over-clearing a sequence that was not repainted only costs a recompute.)
+    public func clearStats(for frameIndex: Int) async {
+        for cache in caches.values { await cache.clearStats(for: frameIndex) }
+    }
+
+    /// A sequence closed: drop everything cached for it.
+    public func removeSequence(_ sequence: String) {
+        caches = caches.filter { $0.key.sequence != sequence }
+    }
+
+    /// Drop everything, for a host that does not know which sequence it is closing.
+    public func removeAll() { caches.removeAll() }
+
+    public var cacheCount: Int { caches.count }
+}
 
 public actor ReferenceHorizonStatsCache {
     private var cache: [Int: ReferenceHorizonFrameStats] = [:]

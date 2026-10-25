@@ -26,7 +26,7 @@ public enum ImageAligner {
                                          scratchDir: String? = nil,
                                          streamingThresholdBytes: Int64 = 0,
                                          loadConcurrency: Int = 1,
-                                         useGPU: Bool = true) -> MatWrapper {
+                                         useGPU: Bool = true) -> MatWrapper? {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
@@ -40,13 +40,14 @@ public enum ImageAligner {
                                                   Int32(loadConcurrency),
                                                   useGPU)
         }
-        return MatWrapper(ref: r!)
+        // nil when the C++ merge could not produce an image (unreadable source, allocation)
+        return r.map { MatWrapper(ref: $0) }
     }
 
     public static func medianMergeFilenames(_ filenames: [String],
                                              outlierThreshold: Double,
                                              includeAll: Bool,
-                                             useGPU: Bool = true) -> MatWrapper {
+                                             useGPU: Bool = true) -> MatWrapper? {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
@@ -54,7 +55,7 @@ public enum ImageAligner {
             ia_median_merge_filenames(buf.baseAddress, Int32(buf.count),
                                       outlierThreshold, includeAll, useGPU)
         }
-        return MatWrapper(ref: r!)
+        return r.map { MatWrapper(ref: $0) }
     }
 
     public static func findFeatures(baseImage: MatWrapper, frameIndex: Int32,
@@ -129,6 +130,9 @@ public enum ImageAligner {
           .map { OCVFeatureSet(ref: $0) }
     }
 
+    /// `imageWidth` and `imageHeight` are the full-resolution frame's: the ground is fitted
+    /// as a camera rotation about the frame's centre, so earth alignment returns nil
+    /// without them.  The sky does not read them.
     public static func computeHomography(baseKeypoints: OCVFeatureSet,
                                           frameIndex: Int32,
                                           neighbors: [AlignmentNeighborInfo],
@@ -136,6 +140,8 @@ public enum ImageAligner {
                                           alignmentType: AlignmentType,
                                           maxKeypoints: Int32,
                                           writeDebugImages: Bool,
+                                          imageWidth: Int32,
+                                          imageHeight: Int32,
                                           handler: @escaping (Int32, AlignmentType, ObjCAlignmentStep, Int32) -> Void) -> HomographyResult? {
         let cNeighbors = neighbors.map { n in
             AlignmentNeighborData(filename: strdup(n.filename),
@@ -166,6 +172,7 @@ public enum ImageAligner {
                                        nBuf.baseAddress, Int32(nBuf.count),
                                        matchMethod, alignmentType,
                                        maxKeypoints, writeDebugImages,
+                                       imageWidth, imageHeight,
                                        { frameIdx, aType, step, neighborNum, ctx in
                                            let b = Unmanaged<HandlerBox>.fromOpaque(ctx!).takeUnretainedValue()
                                            b.handler(frameIdx, aType, step, neighborNum)
@@ -288,15 +295,23 @@ public enum ImageAligner {
 
     /// Load horizon masks from files and add them to an existing CV_32S accumulator.
     /// Pass nil for `accum` to start a fresh accumulation from the files only.
-    public static func accumulateFromFiles(_ accum: MatWrapper?, filenames: [String]) -> MatWrapper? {
-        guard !filenames.isEmpty else { return accum }
+    ///
+    /// Returns the new total and, per file, whether it was actually loaded and added (a missing
+    /// file is skipped, and must not count towards a vote).
+    public static func accumulateFromFiles(_ accum: MatWrapper?,
+                                           filenames: [String]) -> (total: MatWrapper?, loaded: [Bool])
+    {
+        guard !filenames.isEmpty else { return (accum, []) }
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
+        var loadedFlags = [UInt8](repeating: 0, count: filenames.count)
         let r = ptrs.withUnsafeMutableBufferPointer { buf in
-            ia_accumulate_from_files(accum?.ref, buf.baseAddress, Int32(buf.count))
+            loadedFlags.withUnsafeMutableBufferPointer { flags in
+                ia_accumulate_from_files(accum?.ref, buf.baseAddress, Int32(buf.count), flags.baseAddress)
+            }
         }
-        return r.map { MatWrapper(ref: $0) }
+        return (r.map { MatWrapper(ref: $0) }, loadedFlags.map { $0 != 0 })
     }
 
     /// Apply majority-vote threshold to a CV_32S accumulator and return a binary mask.
@@ -307,8 +322,9 @@ public enum ImageAligner {
     }
 
     public static func createGradientMaskIntoSky(_ binaryMask: MatWrapper,
-                                                   gradientDistance: Int32) -> MatWrapper {
-        MatWrapper(ref: ia_gradient_mask_into_sky(binaryMask.ref, gradientDistance))
+                                                   gradientDistance: Int32) -> MatWrapper? {
+        let r: MatWrapperRef? = ia_gradient_mask_into_sky(binaryMask.ref, gradientDistance)
+        return r.map { MatWrapper(ref: $0) }
     }
 
     public static func createGradientMaskIntoGround(_ binaryMask: MatWrapper,

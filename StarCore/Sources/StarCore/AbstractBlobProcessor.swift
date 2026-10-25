@@ -55,7 +55,7 @@ public class AbstractBlobProcessor {
         var blobMap: [Int32:Blob] = [:]
 
         // align neighbor frame, subtract it, sort pixels
-        let (subtractionArray, originalImage) = try await self.setup()
+        let subtractionArray = try await self.setup()
 
         for stepIndex in 0..<steps.count {
             let step = steps[stepIndex]
@@ -71,7 +71,6 @@ public class AbstractBlobProcessor {
                 blobMap = await BlobFinder().process(
                   args,
                   subtractionArray: subtractionArray,
-                  originalImage: originalImage,
                   frame: frame,
                   within: bounds,
                   startingBlobID: startingBlobID
@@ -104,7 +103,13 @@ public class AbstractBlobProcessor {
                   height: frame.height,
                   frameIndex: frame.frameIndex
                 )
-                await connector.process(args)
+                let connectorConfig = await frame.configManager.config()
+                await connector.process(
+                  args,
+                  seedConcurrency: connectorConfig.linearConnectorSeedConcurrency,
+                  neighborHops: connectorConfig.linearConnectorNeighborHops > 0
+                      ? connectorConfig.linearConnectorNeighborHops : nil
+                )
                 blobMap = await connector.blobMap()
                 
                 
@@ -165,7 +170,8 @@ public class AbstractBlobProcessor {
     // change only the ids of the blobs, so that they are all in a line from 1, onwards.
     // necessary becasuse of deleted blobs in the middle, helps to avoid UInt16 overflow
     internal func compactBlobIds(of blobMap: [Int32:Blob]) -> [Int32:Blob] {
-        let array = Array(blobMap.values)
+        // ascending old id, so the renumbering is the same every run (dictionary order is not)
+        let array = blobMap.sorted { $0.key < $1.key }.map { $0.value }
       //  Log.i("compactBlobIds \(array.count) blobs, \(UInt16.max-UInt16(array.count)) ids left in UInt16 space")
         var newBlobMap: [Int32:Blob] = [:]
         for (index, blob) in array.enumerated() {
@@ -205,9 +211,10 @@ public class AbstractBlobProcessor {
         return newBlobs
     }
     
-    // use the subtraction and original image for this frame to find an initial set of blobs
+    // use the subtraction image for this frame to find an initial set of blobs.
+    // (the original used to be loaded here and handed to the blobber, which never read it)
 
-    internal func setup() async throws -> ([UInt16], PixelatedImage) {
+    internal func setup() async throws -> [UInt16] {
         guard let frame else { fatalError("need frame") } // XXX ???
         let frameIndex = frame.frameIndex
         let imageAccessor = frame.imageAccessor
@@ -264,12 +271,7 @@ public class AbstractBlobProcessor {
             Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
         }
 
-        guard let originalImage = try await imageAccessor.load(frameIndex: frameIndex,
-                                                               type: .original,
-                                                               atSize: .original)
-        else { throw "couldn't load original file for blobbing" }
-
-        return (subtractionArray, originalImage)
+        return subtractionArray
     }
 
     // re-run something repeatedly

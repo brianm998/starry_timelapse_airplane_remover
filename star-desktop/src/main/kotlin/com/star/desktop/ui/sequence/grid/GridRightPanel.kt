@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameState
 import com.star.desktop.ui.components.PanelChevron
 import com.star.desktop.ui.sequence.SequenceViewModel
+import com.star.desktop.ui.sequence.HorizonLineKindToggles
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.CleanMethod
 import com.star.proto.FrameInfo
@@ -74,6 +75,7 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     Switch(checked = showHorizon, onCheckedChange = vm::setShowHorizonOnMainView)
                     Text(localized("ui.show_horizon_lines"), color = StarColors.white, fontSize = 11.sp)
                 }
+                HorizonLineKindToggles(vm)
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

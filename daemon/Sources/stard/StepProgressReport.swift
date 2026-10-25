@@ -56,6 +56,7 @@ enum StepProgressReport {
         out.steps = progress.steps.map(stepCount)
         out.isUntouched = progress.isUntouched
         out.isComplete = progress.isComplete
+        out.needsRebuild = progress.needsRebuild
         return out
     }
 }

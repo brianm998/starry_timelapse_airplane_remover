@@ -124,7 +124,7 @@ final class GPUOpsConcurrencyStressTests: XCTestCase {
             DispatchQueue.global(qos: .userInitiated).async {
                 let merged = ImageAligner.medianMergeImage(job.base, withFilenames: job.filenames,
                                                            outlierThreshold: 3.0, includeAll: true,
-                                                           useGPU: true)
+                                                           useGPU: true)!
                 var rows: [[UInt16]] = []
                 if let base = merged.dataPtr {
                     let step = merged.step

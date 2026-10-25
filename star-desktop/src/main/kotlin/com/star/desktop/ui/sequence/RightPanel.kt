@@ -32,6 +32,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
@@ -45,25 +46,18 @@ import com.star.desktop.ui.components.toolPainter
 import com.star.desktop.ui.sequence.edit.FrameTransform
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.CleanMethod
-import com.star.proto.ReprocessingType
 import com.star.desktop.i18n.localized
 
 /**
- * Right panel (macOS `RightPanel`): the editing tool picker. Tool *paint* behavior is wired in
- * Phase 4 (outlier editing); this presents the 8 tools (shortcuts 1–8) with selection highlight.
+ * Right panel (macOS `RightPanel`), in labelled sections split by dividers: the selective tools (only while this frame's clean
+ * method reviews outliers), how the frame is displayed, what changes its processing, and debug. Every section and control has
+ * hover help.
  */
 @Composable
 fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel, modifier: Modifier = Modifier) {
-    val tool by vm.tool.collectAsState()
     val current by vm.currentIndex.collectAsState()
     val fvm = androidx.compose.runtime.remember(current) { vm.frameVMFor(current) }
-    val groups by fvm.groups.collectAsState()
-    val decisions by fvm.decisions.collectAsState()
-    val selection by fvm.selection.collectAsState()
     val info by fvm.info.collectAsState()
-    val fastAdv by vm.fastAdvancement.collectAsState()
-    val onlyUnclassified by vm.classifyOnlyUnclassified.collectAsState()
-    var showToolHelp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Column(modifier.width(150.dp).fillMaxHeight().background(StarColors.sidePanel)) {
       Column(
@@ -77,122 +71,207 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
         // Selective-removal tools (remove/keep/razor/shovel/...) only apply when this frame's
         // clean method actually reviews outliers (macOS `currentFrameUsesOutliers`) — plain
         // automatic mode replaces every bad pixel with no per-frame review, so there is nothing
-        // for these tools to act on.
+        // for these tools to act on, and the whole section is left out.
         val usesOutliers = (info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE).usesOutliers
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            ToolHelpButton { showToolHelp = true }
+        if (usesOutliers) {
+            CollapsibleSection(vm, RightPanelSection.SELECTIVE_TOOLS, localized("ui.section.selective_tools"), localized("ui.section.selective_tools_help")) {
+                SelectiveToolsSection(vm, fvm)
+            }
+            SectionDivider()
         }
-        if (showToolHelp) com.star.desktop.ui.dialogs.ToolHelpDialog(onClose = { showToolHelp = false })
-        ToolType.selectable.forEachIndexed { i, t ->
-            ToolRow(t, number = i + 1, selected = t == tool, enabled = usesOutliers, onClick = { vm.setTool(t) })
+        CollapsibleSection(vm, RightPanelSection.DISPLAY, localized("ui.display"), localized("ui.section.display_help")) {
+            DisplaySection(vm)
         }
-        // With this on, clicking a group that has a decision opens the multi-choice sheet whatever the tool (macOS "multi choice").
-        val multiChoice by vm.multiChoiceMode.collectAsState()
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.Switch(checked = multiChoice, onCheckedChange = vm::setMultiChoiceMode, enabled = usesOutliers)
-            Spacer(Modifier.width(6.dp))
-            Text(localized("ui.multi_choice"), color = StarColors.white, fontSize = 11.sp)
+        SectionDivider()
+        CollapsibleSection(vm, RightPanelSection.PROCESSING, localized("ui.processing"), localized("ui.section.processing_help")) {
+            ProcessingSection(app, vm, fvm)
         }
+        SectionDivider()
+        CollapsibleSection(vm, RightPanelSection.DEBUG, localized("ui.section.debug"), localized("ui.section.debug_help")) {
+            // macOS keeps the log-to-file switch at the foot of this panel.
+            HoverTip(localized("ui.log_to_file_help")) {
+                Column { com.star.desktop.ui.windows.LogToFileControls(app.debugLog) }
+            }
+        }
+      }
+      com.star.desktop.ui.components.PanelChevron("»", { vm.setRightPanel(false) }, Modifier.padding(6.dp))
+    }
+}
 
-        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
+/** The tools for deciding by hand which outliers go and which stay, and how the outliers and the trash are drawn. */
+@Composable
+private fun SelectiveToolsSection(vm: SequenceViewModel, fvm: FrameViewModel) {
+    val tool by vm.tool.collectAsState()
+    val groups by fvm.groups.collectAsState()
+    val decisions by fvm.decisions.collectAsState()
+    val selection by fvm.selection.collectAsState()
+    val info by fvm.info.collectAsState()
+    val onlyUnclassified by vm.classifyOnlyUnclassified.collectAsState()
+    var showToolHelp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
-        val remove = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == true }
-        val keep = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == false }
-        val undecided = groups.size - remove - keep
-        Text(localized("ui.outliers_count", groups.size), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("✕$remove", color = StarColors.red, fontSize = 11.sp)
-            Text("✓$keep", color = StarColors.green, fontSize = 11.sp)
-            Text("?$undecided", color = StarColors.orange, fontSize = 11.sp)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        HoverTip(localized("ui.tool_help")) {
+            Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         }
-        val showTrash by vm.showTrash.collectAsState()
-        // The trash, and what is in it: shown over the frame and, while it is, taken in by the tools below.
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.Switch(checked = showTrash, onCheckedChange = vm::setShowTrash, enabled = usesOutliers)
-            Spacer(Modifier.width(6.dp))
-            Text(localized("ui.show_trash"), color = StarColors.white, fontSize = 11.sp)
+        ToolHelpButton { showToolHelp = true }
+    }
+    if (showToolHelp) com.star.desktop.ui.dialogs.ToolHelpDialog(onClose = { showToolHelp = false })
+    ToolType.selectable.forEachIndexed { i, t ->
+        ToolRow(t, number = i + 1, selected = t == tool, onClick = { vm.setTool(t) })
+    }
+    // With this on, clicking a group that has a decision opens the multi-choice sheet whatever the tool (macOS "multi choice").
+    val multiChoice by vm.multiChoiceMode.collectAsState()
+    SwitchRow(localized("ui.multi_choice"), localized("ui.multi_choice_help"), multiChoice, vm::setMultiChoiceMode)
+
+    val remove = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == true }
+    val keep = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == false }
+    val undecided = groups.size - remove - keep
+    HoverTip(localized("ui.outlier_counts_help")) {
+        Column {
+            Text(localized("ui.outliers_count", groups.size), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("✕$remove", color = StarColors.red, fontSize = 11.sp)
+                Text("✓$keep", color = StarColors.green, fontSize = 11.sp)
+                Text("?$undecided", color = StarColors.orange, fontSize = 11.sp)
+            }
         }
-        info?.let { if (it.numTrashOutliers > 0) Text("${localized("ui.trash")}: ${it.numTrashOutliers}", color = StarColors.gray, fontSize = 11.sp) }
-        BulkButton(localized("ui.keep_all"), StarColors.green, help = localized("ui.keep_all_of_the_outlier_groups_in_the_frame")) { fvm.keepAll(showTrash) }
-        BulkButton(localized("ui.remove_all"), StarColors.red, help = localized("ui.remove_all_of_the_outlier_groups_in_the")) { fvm.removeAll(showTrash) }
-        BulkButton(localized("ui.clear_undecided"), StarColors.gray) { fvm.clearUndecided(showTrash) }
-        BulkButton(
-            localized("ui.decision_tree_all"), StarColors.blue,
-            help = localized("ui.apply_the_outlier_group_decision_tree_to_all"), enabled = usesOutliers,
-        ) { vm.applyDecisionTreeToCurrentFrame() }
-        BulkButton(
-            localized("ui.dt_auto_only"), StarColors.blue,
-            help = localized("ui.apply_the_outlier_group_decision_tree_to_all_2"), enabled = usesOutliers,
-        ) { vm.applyDecisionTreeToCurrentFrame(autoOnly = true) }
-        BulkButton(localized("ui.decision_tree_all_frames"), StarColors.blue, enabled = usesOutliers) { vm.applyDecisionTreeAll() }
+    }
+    val showTrash by vm.showTrash.collectAsState()
+    // The trash, and what is in it: shown over the frame and, while it is, taken in by the tools below.
+    SwitchRow(localized("ui.show_trash"), localized("ui.show_trash_help"), showTrash, vm::setShowTrash)
+    info?.let { if (it.numTrashOutliers > 0) Text("${localized("ui.trash")}: ${it.numTrashOutliers}", color = StarColors.gray, fontSize = 11.sp) }
+    BulkButton(localized("ui.keep_all"), StarColors.green, help = localized("ui.keep_all_of_the_outlier_groups_in_the_frame")) { fvm.keepAll(showTrash) }
+    BulkButton(localized("ui.remove_all"), StarColors.red, help = localized("ui.remove_all_of_the_outlier_groups_in_the")) { fvm.removeAll(showTrash) }
+    BulkButton(localized("ui.clear_undecided"), StarColors.gray, help = localized("ui.don_t_paint_any_of_the_undecided_outlier")) { fvm.clearUndecided(showTrash) }
+    BulkButton(
+        localized("ui.decision_tree_all"), StarColors.blue,
+        help = localized("ui.apply_the_outlier_group_decision_tree_to_all"),
+    ) { vm.applyDecisionTreeToCurrentFrame() }
+    BulkButton(
+        localized("ui.dt_auto_only"), StarColors.blue,
+        help = localized("ui.apply_the_outlier_group_decision_tree_to_all_2"),
+    ) { vm.applyDecisionTreeToCurrentFrame(autoOnly = true) }
+    BulkButton(
+        localized("ui.decision_tree_all_frames"), StarColors.blue,
+        help = localized("ui.decision_tree_all_frames_help"),
+    ) { vm.applyDecisionTreeAll() }
+    HoverTip(localized("ui.only_unclassified_help")) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             androidx.compose.material3.Checkbox(checked = onlyUnclassified, onCheckedChange = { vm.setClassifyOnlyUnclassified(it) })
             Text(localized("ui.only_unclassified"), color = StarColors.orange, fontSize = 11.sp)
         }
-        selection.singleOrNull()?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
+    }
+    selection.singleOrNull()?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
 
-        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
-        // Horizon painting (macOS RightPanel): open or close the painter, and show the horizon line on the frame, the
-        // filmstrip and the grid.
-        val painting by vm.horizonPaintMode.collectAsState()
-        BulkButton(
-            localized(if (painting) "ui.close_horizon_painter" else "ui.paint_horizon_reference"),
-            if (painting) StarColors.red else StarColors.blue,
-        ) { vm.toggleHorizonPaint() }
-        val showHorizon by vm.showHorizonOnMainView.collectAsState()
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.Switch(checked = showHorizon, onCheckedChange = vm::setShowHorizonOnMainView)
-            Spacer(Modifier.width(6.dp))
-            Text(localized("ui.show_horizon_line"), color = StarColors.white, fontSize = 11.sp)
+    // How strongly the outlier groups and the trash are drawn (macOS: sliders, in memory only).
+    val outlierOpacity by vm.outlierOpacity.collectAsState()
+    val trashOpacity by vm.trashOpacity.collectAsState()
+    OpacitySlider(localized("ui.outlier_group_opacity"), localized("ui.outlier_group_opacity_help"), outlierOpacity, vm::setOutlierOpacity)
+    OpacitySlider(localized("ui.trash_opacity"), localized("ui.trash_opacity_help"), trashOpacity, vm::setTrashOpacity)
+}
+
+/** How the frame is shown and stepped through; nothing here changes the processed output. */
+@Composable
+private fun DisplaySection(vm: SequenceViewModel) {
+    val fastAdv by vm.fastAdvancement.collectAsState()
+
+    // How the fast buttons (z / x) move, and what they do in the strategy chosen (macOS "Fast Advancement Type").
+    val skipAmount by vm.fastSkipAmount.collectAsState()
+    HoverTip(localized("ui.fast_advancement_type_help")) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(localized("ui.fast_advancement_type"), color = StarColors.textPrimary, fontSize = 11.sp)
+            com.star.desktop.ui.components.VerticalStarPicker(
+                options = FastAdvancementType.entries,
+                selected = fastAdv,
+                label = { it.label },
+                onSelect = { vm.setFastAdvancement(it) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(fastAdv.description(skipAmount), color = StarColors.textSecondary, fontSize = 10.sp)
         }
-        val refinementPending by vm.refinementPending.collectAsState()
-        val busy by vm.isProcessing.collectAsState()
-        BulkButton(
-            localized("ui.re_run_horizon_refinement"), StarColors.orange,
-            help = localized("ui.re_run_brightness_position_refinement_for"), enabled = refinementPending && !busy,
-        ) { vm.runHorizonRefinement() }
-
-        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
-        // How strongly the outlier groups, the trash and the frame itself are drawn (macOS: three sliders, in memory only).
-        val outlierOpacity by vm.outlierOpacity.collectAsState()
-        val trashOpacity by vm.trashOpacity.collectAsState()
-        val frameOpacity by vm.frameOpacity.collectAsState()
-        OpacitySlider(localized("ui.outlier_group_opacity"), outlierOpacity, vm::setOutlierOpacity, usesOutliers)
-        OpacitySlider(localized("ui.trash_opacity"), trashOpacity, vm::setTrashOpacity, usesOutliers)
-        OpacitySlider(localized("ui.frame_opacity"), frameOpacity, vm::setFrameOpacity, usesOutliers)
-
-        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
-        ZoomControls(vm)
-        val fullResolution by vm.showFullResolution.collectAsState()
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.Switch(checked = fullResolution, onCheckedChange = vm::setShowFullResolution)
-            Spacer(Modifier.width(6.dp))
-            Text(localized("ui.show_full_resolution"), color = StarColors.white, fontSize = 11.sp)
+    }
+    if (fastAdv == FastAdvancementType.NORMAL) {
+        HoverTip(localized("ui.fast_skip_help")) {
+            Column {
+                Text(localized("ui.fast_skip"), color = StarColors.textPrimary, fontSize = 11.sp)
+                androidx.compose.material3.Slider(
+                    value = skipAmount.toFloat(),
+                    onValueChange = { vm.setFastSkipAmount(it.toInt()) },
+                    valueRange = 0f..FastAdvancementType.MAX_SKIP_AMOUNT.toFloat(),
+                    steps = FastAdvancementType.MAX_SKIP_AMOUNT - 1,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(localized("ui.n_frames_lower", skipAmount), color = StarColors.textSecondary, fontSize = 10.sp)
+            }
         }
+    }
 
-        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
-        Text(localized("ui.clean_method"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-        val activeMethod = info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE
-        // Whether the method is this frame's own or the sequence's (macOS Custom / Default).
-        Text(
-            localized(if (info?.cleanMethodOverridden == true) "ui.custom" else "ui.default"),
-            color = StarColors.white, fontSize = 11.sp,
-        )
-        val cmLabels = CLEAN_METHODS.toMap()
-        com.star.desktop.ui.components.VerticalStarPicker(
-            options = CLEAN_METHODS.map { it.first },
-            selected = activeMethod,
-            label = { cmLabels[it]?.let { key -> localized(key) } ?: "" },
-            onSelect = { fvm.setCleanMethod(it) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        // How many neighbours this frame is merged with for the horizon (a fixed camera only), the sequence's number until the frame is
-        // given its own. macOS dropped the matching "align with N neighbor frames" row, so it is not here either; the daemon still
-        // takes an aligned count (Frame.SetNeighborOverride).
-        val session by app.sessions.session.collectAsState()
-        info?.let { i ->
-            if (session?.config?.tripodHeadWasMoving != true) {
+    // The horizon line on the frame, the filmstrip and the grid, and which kinds of it.
+    val showHorizon by vm.showHorizonOnMainView.collectAsState()
+    HoverTip(localized("ui.show_horizon_line_help")) {
+        Column {
+            SwitchRow(localized("ui.show_horizon_line"), null, showHorizon, vm::setShowHorizonOnMainView)
+            HorizonLineKindToggles(vm)
+        }
+    }
+
+    // Not tied to the outliers like the two in the selective tools: it dims the frame itself, which helps in every clean mode.
+    val frameOpacity by vm.frameOpacity.collectAsState()
+    OpacitySlider(localized("ui.frame_opacity"), localized("ui.frame_opacity_help"), frameOpacity, vm::setFrameOpacity)
+
+    HoverTip(localized("ui.zoom_help")) {
+        Column { ZoomControls(vm) }
+    }
+    val fullResolution by vm.showFullResolution.collectAsState()
+    SwitchRow(localized("ui.show_full_resolution"), localized("ui.show_full_resolution_help"), fullResolution, vm::setShowFullResolution)
+}
+
+/** What changes how frames are processed: the horizon reference, the clean method, the static merge and rendering. */
+@Composable
+private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel, fvm: FrameViewModel) {
+    val current by vm.currentIndex.collectAsState()
+    val info by fvm.info.collectAsState()
+
+    // Horizon painting (macOS RightPanel): open or close the painter, and re-run the refinement it feeds.
+    val painting by vm.horizonPaintMode.collectAsState()
+    BulkButton(
+        localized(if (painting) "ui.close_horizon_painter" else "ui.paint_horizon_reference"),
+        if (painting) StarColors.red else StarColors.blue,
+        help = localized("ui.paint_horizon_reference_help"),
+    ) { vm.toggleHorizonPaint() }
+    val refinementPending by vm.refinementPending.collectAsState()
+    val busy by vm.isProcessing.collectAsState()
+    BulkButton(
+        localized("ui.re_run_horizon_refinement"), StarColors.orange,
+        help = localized("ui.re_run_brightness_position_refinement_for"), enabled = refinementPending && !busy,
+    ) { vm.runHorizonRefinement() }
+
+    val activeMethod = info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE
+    val cmLabels = CLEAN_METHODS.toMap()
+    HoverTip(localized("ui.clean_method_help")) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(localized("ui.clean_method"), color = StarColors.textPrimary, fontSize = 11.sp)
+            // Whether the method is this frame's own or the sequence's (macOS Custom / Default).
+            Text(
+                localized(if (info?.cleanMethodOverridden == true) "ui.custom" else "ui.default"),
+                color = StarColors.white, fontSize = 11.sp,
+            )
+            com.star.desktop.ui.components.VerticalStarPicker(
+                options = CLEAN_METHODS.map { it.first },
+                selected = activeMethod,
+                label = { cmLabels[it]?.let { key -> localized(key) } ?: "" },
+                onSelect = { fvm.setCleanMethod(it) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+    // How many neighbours this frame is merged with for the horizon (a fixed camera only), the sequence's number until the frame is
+    // given its own. macOS dropped the matching "align with N neighbor frames" row, so it is not here either; the daemon still
+    // takes an aligned count (Frame.SetNeighborOverride).
+    val session by app.sessions.session.collectAsState()
+    info?.let { i ->
+        if (session?.config?.tripodHeadWasMoving != true) {
+            HoverTip(localized("ui.static_merge_help")) {
                 NeighborCountEditor(
                     prefixKey = "ui.slider.static_merge", suffixKey = "ui.slider.neighbors",
                     count = i.staticNeighborCount, overridden = i.staticNeighborOverridden, max = vm.frameCount - 1, frame = current,
@@ -201,118 +280,64 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
                 )
             }
         }
-
-        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
-        // How the fast buttons (z / x) move, and what they do in the strategy chosen (macOS "Fast Advancement Type").
-        Text(localized("ui.fast_advancement_type"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-        com.star.desktop.ui.components.VerticalStarPicker(
-            options = FastAdvancementType.entries,
-            selected = fastAdv,
-            label = { it.label },
-            onSelect = { vm.setFastAdvancement(it) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        val skipAmount by vm.fastSkipAmount.collectAsState()
-        Text(fastAdv.description(skipAmount), color = StarColors.textSecondary, fontSize = 10.sp)
-        if (fastAdv == FastAdvancementType.NORMAL) {
-            Text(localized("ui.fast_skip"), color = StarColors.textPrimary, fontSize = 11.sp)
-            androidx.compose.material3.Slider(
-                value = skipAmount.toFloat(),
-                onValueChange = { vm.setFastSkipAmount(it.toInt()) },
-                valueRange = 0f..FastAdvancementType.MAX_SKIP_AMOUNT.toFloat(),
-                steps = FastAdvancementType.MAX_SKIP_AMOUNT - 1,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(localized("ui.n_frames_lower", skipAmount), color = StarColors.textSecondary, fontSize = 10.sp)
-        }
-
-        androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
-        ReprocessControls(app, vm)
-        // macOS keeps the log-to-file switch at the foot of this panel.
-        com.star.desktop.ui.windows.LogToFileControls(app.debugLog)
-      }
-      com.star.desktop.ui.components.PanelChevron("»", { vm.setRightPanel(false) }, Modifier.padding(6.dp))
     }
+
+    // Writes the frame's decisions into its finished image; there is nothing to write until its outliers are loaded.
+    // (macOS dropped the "re-process the next N frames" controls that used to sit above this, so they are gone here too.)
+    val rendering by vm.rendering.collectAsState()
+    BulkButton(
+        localized("ui.render_updates"), StarColors.blue,
+        help = localized("ui.render_updates_help"), enabled = info?.outliersLoaded == true && !rendering,
+    ) { vm.renderCurrentFrame() }
 }
+
+/** The right panel's sections, each opened and closed from its header (macOS `RightPanelSectionKind`). */
+enum class RightPanelSection { SELECTIVE_TOOLS, DISPLAY, PROCESSING, DEBUG }
 
 /**
- * "Re-process the next N frames" (macOS RightPanel): what to throw away first, the button that processes from this frame on, how many
- * frames, and the detection strength they are processed with; and "Render Updates", which writes this frame's decisions into its image.
+ * A section of the panel: its header, and [content] below it only while the section is open. The contents are laid out straight into
+ * the panel's column, so they keep its spacing.
  */
 @Composable
-private fun ReprocessControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel) {
-    val type by vm.reprocessType.collectAsState()
-    val processing by vm.isProcessing.collectAsState()
-    val rendering by vm.rendering.collectAsState()
-    val busy = processing || rendering
-    val frames by vm.framesToProcess.collectAsState()
-    val session by app.sessions.session.collectAsState()
-    val current by vm.currentIndex.collectAsState()
-    val info by vm.frameVMFor(current).info.collectAsState()
-
-    Text(localized("ui.redo"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-    com.star.desktop.ui.components.VerticalStarPicker(
-        options = REDO_TYPES,
-        selected = type,
-        label = { redoLabel(it) },
-        onSelect = vm::setReprocessType,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    BulkButton(
-        localized(when (type) {
-            ReprocessingType.REPROCESS_NONE -> "ui.process_the_next"
-            ReprocessingType.REPROCESS_ALL_HORIZONS -> "ui.re_process_all_horizons"
-            else -> "ui.re_process_the_next"
-        }),
-        StarColors.orange, enabled = !busy,
-    ) { vm.reprocessNext() }
-    if (type != ReprocessingType.REPROCESS_ALL_HORIZONS) {
-        var text by androidx.compose.runtime.remember(frames) { androidx.compose.runtime.mutableStateOf(frames.toString()) }
-        val parsed = text.toIntOrNull()
-        val valid = parsed != null && parsed in 1..vm.frameCount
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            androidx.compose.foundation.text.BasicTextField(
-                value = text,
-                onValueChange = { text = it.filter(Char::isDigit); text.toIntOrNull()?.takeIf { n -> n in 1..vm.frameCount }?.let(vm::setFramesToProcess) },
-                singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(color = if (valid) StarColors.white else StarColors.red, fontSize = 11.sp),
-                cursorBrush = SolidColor(StarColors.white),
-                modifier = Modifier.width(44.dp).clip(RoundedCornerShape(3.dp)).background(StarColors.cellDefault).padding(horizontal = 4.dp, vertical = 2.dp),
-            )
-            Text(localized(if (frames == 1) "ui.slider.frame_as" else "ui.slider.frames_as"), color = StarColors.white, fontSize = 11.sp)
-        }
-        val detection = session?.config?.detectionType ?: com.star.proto.DetectionType.DETECTION_STRONG
-        com.star.desktop.ui.components.VerticalStarPicker(
-            options = DETECTION_TYPES,
-            selected = detection,
-            label = { localized("detection_type." + it.name.removePrefix("DETECTION_").lowercase()) },
-            onSelect = app::setDetectionType,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
-    // Writes the frame's decisions into its finished image; there is nothing to write until its outliers are loaded.
-    BulkButton(localized("ui.render_updates"), StarColors.blue, enabled = info?.outliersLoaded == true && !rendering) { vm.renderCurrentFrame() }
+private fun CollapsibleSection(vm: SequenceViewModel, section: RightPanelSection, title: String, help: String, content: @Composable () -> Unit) {
+    val expanded by vm.expandedRightPanelSections.collectAsState()
+    val open = section in expanded
+    SectionHeader(title, help, open) { vm.toggleRightPanelSection(section) }
+    if (open) content()
 }
 
-/** What the redo picker can clear first (macOS `FrameReprocessingType`), in macOS's order. */
-private val REDO_TYPES = listOf(
-    ReprocessingType.REPROCESS_EVERYTHING, ReprocessingType.REPROCESS_ALIGNMENT, ReprocessingType.REPROCESS_OUTLIERS,
-    ReprocessingType.REPROCESS_HORIZONS, ReprocessingType.REPROCESS_ALL_HORIZONS, ReprocessingType.REPROCESS_NONE,
-)
+/** The labelled top of a section, with a chevron pointing right while it is closed and down while it is open; hovering it explains the section. */
+@Composable
+private fun SectionHeader(title: String, help: String, expanded: Boolean, onToggle: () -> Unit) {
+    HoverTip(help) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(top = 2.dp),
+        ) {
+            Text("›", color = StarColors.white, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.rotate(if (expanded) 90f else 0f))
+            Text(title, color = StarColors.white, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        }
+    }
+}
 
-private fun redoLabel(t: ReprocessingType): String = localized(when (t) {
-    ReprocessingType.REPROCESS_EVERYTHING -> "ui.re_process_everything"
-    ReprocessingType.REPROCESS_ALIGNMENT -> "ui.re_process_alignment"
-    ReprocessingType.REPROCESS_OUTLIERS -> "ui.re_process_outliers"
-    ReprocessingType.REPROCESS_HORIZONS -> "ui.re_process_horizons"
-    ReprocessingType.REPROCESS_ALL_HORIZONS -> "ui.re_process_all_horizons"
-    else -> "ui.redo_none"
-})
+@Composable
+private fun SectionDivider() {
+    androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
+}
 
-private val DETECTION_TYPES = listOf(
-    com.star.proto.DetectionType.DETECTION_MILD, com.star.proto.DetectionType.DETECTION_STRONG,
-    com.star.proto.DetectionType.DETECTION_STRONGER, com.star.proto.DetectionType.DETECTION_EXCESSIVE, com.star.proto.DetectionType.DETECTION_CUSTOM,
-)
+/** A switch and its label, with hover help when [help] is given. */
+@Composable
+private fun SwitchRow(label: String, help: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val row = @Composable {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            androidx.compose.material3.Switch(checked = checked, onCheckedChange = onChange)
+            Spacer(Modifier.width(6.dp))
+            Text(label, color = StarColors.white, fontSize = 11.sp)
+        }
+    }
+    if (help != null) HoverTip(help, row) else row()
+}
 
 /**
  * A number of neighbour frames for the frame being looked at (macOS `AlignedNeighborFrameOverrideView` / `StaticNeighborFrameOverrideView`):
@@ -481,9 +506,13 @@ private fun ZoomControls(vm: SequenceViewModel) {
 
 /** One of the opacity sliders: its name, and 0 to 1. */
 @Composable
-private fun OpacitySlider(label: String, value: Float, onChange: (Float) -> Unit, enabled: Boolean) {
-    Text(label, color = StarColors.textPrimary, fontSize = 11.sp)
-    androidx.compose.material3.Slider(value = value, onValueChange = onChange, valueRange = 0f..1f, enabled = enabled, modifier = Modifier.fillMaxWidth())
+private fun OpacitySlider(label: String, help: String, value: Float, onChange: (Float) -> Unit) {
+    HoverTip(help) {
+        Column {
+            Text(label, color = StarColors.textPrimary, fontSize = 11.sp)
+            androidx.compose.material3.Slider(value = value, onValueChange = onChange, valueRange = 0f..1f, modifier = Modifier.fillMaxWidth())
+        }
+    }
 }
 
 /** A scale for the Max field: "1", "2.5", not "1.0000". */

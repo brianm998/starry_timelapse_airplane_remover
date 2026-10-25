@@ -20,6 +20,30 @@ public enum GPUOps {
     private static let stateLock = NSLock()
     nonisolated(unsafe) private static var _dutyCycle = 1.0
     nonisolated(unsafe) private static var _busyNanoseconds: UInt64 = 0
+    nonisolated(unsafe) private static var _deviceNanoseconds: UInt64 = 0
+    nonisolated(unsafe) private static var _poolingAllowed = true
+
+    /// Whether the pyramid builders and merges may keep Metal resources between calls.
+    ///
+    /// `MemoryMonitor` turns this off while work is waiting for memory and back on when the
+    /// queue empties. A pooled resource is memory no reservation covers, and on unified memory
+    /// all of it is the process's own: on a 7GB CI runner star held 1.1-2.2GB between keypoint
+    /// ops, mostly pooled textures and readback buffers, which kept the admission budget below
+    /// one op and ran the keypoint phase at one forced admission a minute. Turning it off trims
+    /// the pools, and every call after that lets its resources go when it is done, as builds
+    /// did before there were pools.
+    public static var poolingAllowed: Bool { stateLock.withLock { _poolingAllowed } }
+
+    /// Returns whether this changed anything, so a caller can log the transitions only.
+    @discardableResult
+    public static func setPoolingAllowed(_ allowed: Bool) -> Bool {
+        let changed = stateLock.withLock { () -> Bool in
+            defer { _poolingAllowed = allowed }
+            return _poolingAllowed != allowed
+        }
+        if changed && !allowed { trimTexturePool() }
+        return changed
+    }
 
     /// Width of the GPU gate. In-flight work finishes under the old width.
     public static func setConcurrency(_ slots: Int) { gate.set(max: slots) }
@@ -40,8 +64,44 @@ public enum GPUOps {
         Double(stateLock.withLock { _busyNanoseconds }) / 1_000_000_000
     }
 
+    /// Seconds the GPU itself spent executing this process's command buffers since launch,
+    /// from each buffer's own `gpuStartTime`/`gpuEndTime`. The other number, `busySeconds`, is
+    /// time spent *holding a slot*, which also counts encoding, staging copies and the wait; on
+    /// the discrete Vega the device is idle for most of that (measured: GPU wait 0-2 % of slot
+    /// time), so slot time says almost nothing about how busy the GPU is.
+    public static var deviceBusySeconds: Double {
+        Double(stateLock.withLock { _deviceNanoseconds }) / 1_000_000_000
+    }
+
+    static func recordDevice(startTime: Double, endTime: Double) {
+        guard endTime > startTime, startTime > 0 else { return }
+        let nanoseconds = UInt64((endTime - startTime) * 1_000_000_000)
+        stateLock.withLock { _deviceNanoseconds &+= nanoseconds }
+    }
+
     /// GPU entry points currently waiting for a slot.
     public static var waiting: Int { gate.waiting }
+
+    /// Drops the pyramid builders' pooled textures, returning that GPU memory. Called on memory
+    /// pressure; the next build simply allocates again.
+    public static func trimTexturePool() {
+        #if canImport(Metal) && os(macOS)
+        activeBackend?.texturePool.trim()
+        activeBackend?.trimOutputPool()
+        activeBackend?.trimReadbackPool()
+        #endif
+    }
+
+    /// Pool hits and misses so far, and the bytes it is holding. Diagnostics and tests.
+    public static var texturePoolStats: (hits: Int, misses: Int, heldBytes: Int) {
+        #if canImport(Metal) && os(macOS)
+        if let pool = activeBackend?.texturePool {
+            let c = pool.counts
+            return (c.hits, c.misses, pool.heldBytes)
+        }
+        #endif
+        return (0, 0, 0)
+    }
 
     static func record(busyNanoseconds: UInt64) {
         stateLock.withLock { _busyNanoseconds &+= busyNanoseconds }
@@ -127,6 +187,12 @@ public enum GPUOps {
     /// have the GPU write a `.storageModeManaged` buffer, synchronize it and copy
     /// it out — even on unified memory. For tests: otherwise that path only runs
     /// on hardware the suite may not be running on.
+    static func setCopyMergeInputsForTesting(_ on: Bool) {
+        #if canImport(Metal) && os(macOS)
+        activeBackend?.setCopyInputs(on)
+        #endif
+    }
+
     static func setDiscreteMergesForTesting(_ on: Bool) {
         #if canImport(Metal) && os(macOS)
         activeBackend?.setDiscreteMerges(on)
@@ -150,6 +216,97 @@ private nonisolated(unsafe) var activeBackend: MetalGPUBackend?
 /// source at first use rather than shipped as a precompiled .metallib — a
 /// build-time step to revisit once that toolchain is available everywhere
 /// this ships.
+/// Float textures kept between pyramid builds.
+///
+/// Profiling a 12 MP keypoint phase put Metal resource creation and release at 22-43 % of the
+/// time spent holding a GPU slot: every build made ~40 textures and let them all go. A pyramid
+/// build needs the same sizes every frame, so they are checked out for one build and returned
+/// after its read-back. Contents are NOT cleared on reuse: every texture is written in full by
+/// a kernel (or by `replace`) before anything reads it.
+///
+/// Storage stays `.managed` with the explicit blit `synchronize` before read-back: `.shared`
+/// textures read back as zeros on the discrete Vega this runs on (see `buildSiftPyramid`).
+/// Apple Silicon has no `.managed` and wants `.shared` here.
+///
+/// Bounded: the free list never holds more than twice the size of the last build's textures
+/// (and never more than half the device's recommended working set), and is emptied outright on
+/// memory pressure via `GPUOps.trimTexturePool()`.
+final class FloatTexturePool: @unchecked Sendable {
+    private let lock = NSLock()
+    private var free: [Int: [MTLTexture]] = [:]
+    private var freeBytes = 0
+    private var lastBuildBytes = 0
+    private(set) var hits = 0
+    private(set) var misses = 0
+
+    private static func key(_ width: Int, _ height: Int) -> Int { width &* 1_000_003 &+ height }
+    private static func bytes(_ width: Int, _ height: Int) -> Int { width * height * 4 }
+
+    func take(device: MTLDevice, width: Int, height: Int) -> MTLTexture? {
+        lock.lock()
+        if var list = free[Self.key(width, height)], let texture = list.popLast() {
+            free[Self.key(width, height)] = list
+            freeBytes -= Self.bytes(width, height)
+            hits += 1
+            lock.unlock()
+            return texture
+        }
+        misses += 1
+        lock.unlock()
+        return MetalGPUBackend.makeFloatTexture(device: device, width: width, height: height)
+    }
+
+    /// Returns a build's textures. `buildBytes` is what that build used, which sets the cap.
+    func give(_ textures: [MTLTexture], buildBytes: Int, device: MTLDevice) {
+        guard GPUOps.poolingAllowed else { return }  // released with their last reference
+        lock.lock()
+        defer { lock.unlock() }
+        lastBuildBytes = buildBytes
+        let cap = min(2 * buildBytes, Int(device.recommendedMaxWorkingSetSize / 2))
+        for texture in textures {
+            let size = Self.bytes(texture.width, texture.height)
+            if freeBytes + size > cap { continue }  // dropped: released with its last reference
+            free[Self.key(texture.width, texture.height), default: []].append(texture)
+            freeBytes += size
+        }
+    }
+
+    func trim() {
+        lock.lock()
+        free.removeAll()
+        freeBytes = 0
+        lock.unlock()
+    }
+
+    var heldBytes: Int { lock.lock(); defer { lock.unlock() }; return freeBytes }
+    var counts: (hits: Int, misses: Int) { lock.lock(); defer { lock.unlock() }; return (hits, misses) }
+}
+
+/// One build's checked-out textures, handed back together.
+final class TextureLease {
+    private let pool: FloatTexturePool
+    private let device: MTLDevice
+    private var leased: [MTLTexture] = []
+    private var bytes = 0
+
+    init(pool: FloatTexturePool, device: MTLDevice) {
+        self.pool = pool
+        self.device = device
+    }
+
+    func make(width: Int, height: Int) -> MTLTexture? {
+        guard let texture = pool.take(device: device, width: width, height: height) else { return nil }
+        leased.append(texture)
+        bytes += width * height * 4
+        return texture
+    }
+
+    func returnAll() {
+        pool.give(leased, buildBytes: bytes, device: device)
+        leased.removeAll()
+    }
+}
+
 private final class MetalGPUBackend: @unchecked Sendable {
     let device: MTLDevice
     let queue: MTLCommandQueue
@@ -238,6 +395,44 @@ private final class MetalGPUBackend: @unchecked Sendable {
     private var inPlaceMerges = 0
     private var copiedMerges = 0
     private var discreteMerges = false
+    private var copyInputsForTesting = false
+
+    /// `.storageModeManaged` merge outputs kept between merges, by length. A discrete GPU
+    /// writes its result into one of these and it is copied out afterwards; allocating a
+    /// frame-sized managed buffer for every merge was most of what that path cost besides
+    /// the copy itself. Two per size is enough: merges in flight each hold one.
+    private let outputPoolLock = NSLock()
+    private var outputPool: [Int: [MTLBuffer]] = [:]
+
+    private func takeManagedOutput(length: Int) -> MTLBuffer? {
+        outputPoolLock.lock()
+        if var list = outputPool[length], let buffer = list.popLast() {
+            outputPool[length] = list
+            outputPoolLock.unlock()
+            return buffer
+        }
+        outputPoolLock.unlock()
+        return device.makeBuffer(length: length, options: .storageModeManaged)
+    }
+
+    private func giveManagedOutput(_ buffer: MTLBuffer) {
+        guard GPUOps.poolingAllowed else { return }
+        outputPoolLock.lock()
+        defer { outputPoolLock.unlock() }
+        var list = outputPool[buffer.length, default: []]
+        if list.count < 2 { list.append(buffer) }
+        outputPool[buffer.length] = list
+    }
+
+    func trimOutputPool() {
+        outputPoolLock.lock()
+        outputPool.removeAll()
+        outputPoolLock.unlock()
+    }
+
+    func setCopyInputs(_ on: Bool) {
+        mergeStateLock.withLock { copyInputsForTesting = on }
+    }
 
     func mergeCounts() -> (inPlace: Int, copied: Int) {
         mergeStateLock.withLock { (inPlaceMerges, copiedMerges) }
@@ -247,13 +442,24 @@ private final class MetalGPUBackend: @unchecked Sendable {
         mergeStateLock.withLock { discreteMerges = on }
     }
 
+    /// Commits a command buffer, waits for it, and books how long the device itself ran it.
+    private func commitAndWait(_ cmdBuf: MTLCommandBuffer) {
+        cmdBuf.commit()
+        cmdBuf.waitUntilCompleted()
+        GPUOps.recordDevice(startTime: cmdBuf.gpuStartTime, endTime: cmdBuf.gpuEndTime)
+    }
+
     /// Runs `body` inside `gpuSlots`. Every public entry point below must go
     /// through this rather than calling into Metal directly.
     private func withGPUSlot<T>(_ body: () -> T) -> T {
         GPUOps.gate.acquire()
         defer { GPUOps.gate.release() }
         let start = DispatchTime.now().uptimeNanoseconds
-        let result = body()
+        // Drained here because callers are worker threads that seldom drain one, and an
+        // autoreleased buffer lives until a pool does: reading a buffer through `contents()`
+        // (an inner pointer, so Swift autoreleases its owner) left every 12MP warp's 34MB
+        // destination buffer behind, one per warp, for as long as the thread kept working.
+        let result = autoreleasepool { body() }
         let used = DispatchTime.now().uptimeNanoseconds - start
         GPUOps.record(busyNanoseconds: used)
         // Duty cycle: after an op that used the GPU for `t`, keep the slot for another
@@ -288,7 +494,12 @@ private final class MetalGPUBackend: @unchecked Sendable {
         self.device = device
         self.queue = queue
         do {
-            let library = try device.makeLibrary(source: MetalGPUBackend.shaderSource, options: nil)
+            // Fast math off: with it on, Metal turns the warp's perspective divide into an
+            // approximate reciprocal, which moves a sample position by up to a couple of ulps and
+            // so, near a 1/32-pixel step boundary, onto the neighbouring step.
+            let options = MTLCompileOptions()
+            options.fastMathEnabled = false
+            let library = try device.makeLibrary(source: MetalGPUBackend.shaderSource, options: options)
             func pipeline(_ name: String) throws -> MTLComputePipelineState {
                 guard let function = library.makeFunction(name: name) else {
                     throw NSError(domain: "GPUOps", code: 1,
@@ -380,12 +591,12 @@ private final class MetalGPUBackend: @unchecked Sendable {
         let srcStepElems = Int32(srcStepBytes / bytesPerComponent)
         let dstStepElems = Int32(dstStepBytes / bytesPerComponent)
 
-        var hInvFloat = hInv.map { Float($0) }
+        var hInvFloat = splitHighLow(hInv)
 
         guard let srcBuf = device.makeBuffer(bytes: srcPtr, length: rows * srcStepBytes,
                                              options: .storageModeShared),
               let dstBuf = device.makeBuffer(length: rows * dstStepBytes, options: .storageModeShared),
-              let hBuf = device.makeBuffer(bytes: &hInvFloat, length: 9 * MemoryLayout<Float>.stride,
+              let hBuf = device.makeBuffer(bytes: &hInvFloat, length: 18 * MemoryLayout<Float>.stride,
                                            options: .storageModeShared),
               let cmdBuf = queue.makeCommandBuffer(),
               let encoder = cmdBuf.makeComputeCommandEncoder()
@@ -409,8 +620,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
 
         dispatch(encoder: encoder, pipeline: pipeline, width: cols, height: rows)
         encoder.endEncoding()
-        cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
+        commitAndWait(cmdBuf)
         guard cmdBuf.status == .completed else { return false }
 
         memcpy(UnsafeMutableRawPointer(mutating: dstPtr), dstBuf.contents(), rows * dstStepBytes)
@@ -607,10 +817,11 @@ private final class MetalGPUBackend: @unchecked Sendable {
 
         // Each neighbour's INVERSE homography (dst -> src), the convention the
         // warp kernels sample with — same inversion as `warpImpl`.
-        var hInv = [Float](repeating: 0, count: (Self.maxMergeSources - 1) * 9)
+        var hInv = [Float](repeating: 0, count: (Self.maxMergeSources - 1) * 18)
         for i in 0..<neighbourCount {
             guard let inverse = invert3x3(homographies + i * 9) else { return false }
-            for k in 0..<9 { hInv[i * 9 + k] = Float(inverse[k]) }
+            let split = splitHighLow(inverse)
+            for k in 0..<18 { hInv[i * 18 + k] = split[k] }
         }
 
         return runMerge(inputs: planes, dst: dstPlane, format: format) { encoder, bound in
@@ -725,9 +936,14 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// are copied (`bindByCopy`).
     private func runMerge(inputs: [MergePlane], dst: MergePlane, format: MergeFormat,
                           encode: (MTLComputeCommandEncoder, MergeBindings) -> Void) -> Bool {
-        let unified = device.hasUnifiedMemory && !mergeStateLock.withLock({ discreteMerges })
-        let inPlace = unified ? bindInPlace(inputs: inputs, dst: dst) : nil
-        if unified && inPlace == nil {
+        let (discrete, copyInputs) = mergeStateLock.withLock { (discreteMerges, copyInputsForTesting) }
+        let unified = device.hasUnifiedMemory && !discrete
+        // Inputs are read where they are on every device. Only the OUTPUT differs: unified
+        // memory writes the destination image itself, a discrete GPU writes a managed buffer
+        // (a kernel writing shared memory pays PCIe on every access) that is copied out.
+        let inPlace = copyInputs ? nil : bindInPlace(inputs: inputs, dst: dst, format: format,
+                                                     writeDstInPlace: unified)
+        if inPlace == nil && !copyInputs {
             Log.d("GPU merge: could not hand the GPU these images in place; copying them")
         }
         guard let bound = inPlace ?? bindByCopy(inputs: inputs, dst: dst, rows: format.rows,
@@ -745,8 +961,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
             sync.endEncoding()
         }
 
-        cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
+        commitAndWait(cmdBuf)
         guard cmdBuf.status == .completed else { return false }
         bound.finish()
         mergeStateLock.withLock {
@@ -767,7 +982,8 @@ private final class MetalGPUBackend: @unchecked Sendable {
     ///
     /// Returns nil when any one image cannot be wrapped, and the caller copies
     /// them all instead.
-    private func bindInPlace(inputs: [MergePlane], dst: MergePlane) -> MergeBindings? {
+    private func bindInPlace(inputs: [MergePlane], dst: MergePlane, format: MergeFormat,
+                             writeDstInPlace: Bool) -> MergeBindings? {
         func wrap(_ plane: MergePlane) -> MergeBinding? {
             let page = Int(getpagesize())
             let address = Int(bitPattern: plane.pointer)
@@ -783,14 +999,34 @@ private final class MetalGPUBackend: @unchecked Sendable {
             else { return nil }
             return MergeBinding(buffer: buffer, offset: offset, step: plane.step)
         }
-        guard let dstBinding = wrap(dst) else { return nil }
         var inputBindings: [MergeBinding] = []
         inputBindings.reserveCapacity(inputs.count)
         for input in inputs {
             guard let binding = wrap(input) else { return nil }
             inputBindings.append(binding)
         }
-        return MergeBindings(inputs: inputBindings, dst: dstBinding, managedDst: nil, finish: {})
+        if writeDstInPlace {
+            guard let dstBinding = wrap(dst) else { return nil }
+            return MergeBindings(inputs: inputBindings, dst: dstBinding, managedDst: nil, finish: {})
+        }
+
+        // Discrete GPU: inputs stay put, the result goes to a pooled managed buffer and is
+        // copied out once the GPU is done.
+        let rows = format.rows, rowBytes = format.rowBytes
+        guard let output = takeManagedOutput(length: rowBytes * rows) else { return nil }
+        nonisolated(unsafe) let outPointer = UnsafeMutableRawPointer(mutating: dst.pointer)
+        let dstStep = dst.step
+        return MergeBindings(
+          inputs: inputBindings,
+          dst: MergeBinding(buffer: output, offset: 0, step: rowBytes),
+          managedDst: output,
+          finish: { [self] in
+              let source = output.contents()
+              for y in 0..<rows {
+                  memcpy(outPointer.advanced(by: y * dstStep), source.advanced(by: y * rowBytes), rowBytes)
+              }
+              giveManagedOutput(output)
+          })
     }
 
     /// A discrete GPU (or an image unified memory could not wrap): copy every
@@ -880,29 +1116,45 @@ private final class MetalGPUBackend: @unchecked Sendable {
     func buildSiftPyramid(base: MatWrapperRef, doubleImageSize: Bool, sigma: Double,
                           nOctaves: Int, nOctaveLayers: Int,
                           outPyramid: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
-        withGPUSlot {
+        // The GPU part holds a slot; reading the results out into Mats does not need one, so
+        // it happens after the slot is released and another caller can start its own GPU work.
+        let pending = withGPUSlot {
             buildSiftPyramidImpl(base: base, doubleImageSize: doubleImageSize, sigma: sigma,
-                                 nOctaves: nOctaves, nOctaveLayers: nOctaveLayers, outPyramid: outPyramid)
+                                 nOctaves: nOctaves, nOctaveLayers: nOctaveLayers)
         }
+        guard let pending else { return false }
+        defer { giveReadbackBuffers(pending) }
+        for (index, readback) in pending.enumerated() {
+            guard let mat = matWrapper(fromReadback: readback) else {
+                for i in 0..<index { if let m = outPyramid[i] { mat_wrapper_release(m); outPyramid[i] = nil } }
+                return false
+            }
+            outPyramid[index] = mat
+        }
+        return true
     }
 
     private func buildSiftPyramidImpl(base: MatWrapperRef, doubleImageSize: Bool, sigma: Double,
-                                      nOctaves: Int, nOctaveLayers: Int,
-                                      outPyramid: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
-        guard nOctaves > 0, nOctaveLayers > 0 else { return false }
+                                      nOctaves: Int, nOctaveLayers: Int) -> [PendingReadback]? {
+        guard nOctaves > 0, nOctaveLayers > 0 else { return nil }
         guard mat_wrapper_bits_per_component(base) == 32, mat_wrapper_channels(base) == 1 else {
-            return false  // SIFTDetector.cpp always hands this CV_32FC1; anything else is a caller bug
+            return nil  // SIFTDetector.cpp always hands this CV_32FC1; anything else is a caller bug
         }
         let baseRows = Int(mat_wrapper_rows(base))
         let baseCols = Int(mat_wrapper_cols(base))
-        guard baseRows > 0, baseCols > 0, let basePtr = mat_wrapper_data_ptr(base) else { return false }
+        guard baseRows > 0, baseCols > 0, let basePtr = mat_wrapper_data_ptr(base) else { return nil }
         let baseStepBytes = Int(mat_wrapper_step(base))
 
-        guard let inputTexture = makeFloatTexture(width: baseCols, height: baseRows) else { return false }
+        // Every texture below is leased from the pool and handed back when this returns,
+        // which is after the read-back at the end.
+        let lease = TextureLease(pool: texturePool, device: device)
+        defer { lease.returnAll() }
+
+        guard let inputTexture = lease.make(width: baseCols, height: baseRows) else { return nil }
         inputTexture.replace(region: MTLRegionMake2D(0, 0, baseCols, baseRows), mipmapLevel: 0,
                              withBytes: basePtr, bytesPerRow: baseStepBytes)
 
-        guard let cmdBuf = queue.makeCommandBuffer() else { return false }
+        guard let cmdBuf = queue.makeCommandBuffer() else { return nil }
 
         // createInitialImage: the optional 2x upscale (plain bilinear — matching
         // cv::SIFT::create()'s actual enable_precise_upscale=false default, not
@@ -910,9 +1162,9 @@ private final class MetalGPUBackend: @unchecked Sendable {
         var current = inputTexture
         var curWidth = baseCols, curHeight = baseRows
         if doubleImageSize {
-            guard let doubled = makeFloatTexture(width: baseCols * 2, height: baseRows * 2),
+            guard let doubled = lease.make(width: baseCols * 2, height: baseRows * 2),
                   let encoder = cmdBuf.makeComputeCommandEncoder()
-            else { return false }
+            else { return nil }
             encoder.setComputePipelineState(upsampleLinear2xF32)
             encoder.setTexture(current, index: 0)
             encoder.setTexture(doubled, index: 1)
@@ -935,15 +1187,15 @@ private final class MetalGPUBackend: @unchecked Sendable {
         // One row-pass scratch texture per octave, shared by that octave's blurs.
         var scratch = [MTLTexture?](repeating: nil, count: nOctaves)
         func scratchTexture(octave: Int, width: Int, height: Int) -> MTLTexture? {
-            if scratch[octave] == nil { scratch[octave] = makeFloatTexture(width: width, height: height) }
+            if scratch[octave] == nil { scratch[octave] = lease.make(width: width, height: height) }
             return scratch[octave]
         }
 
-        guard let firstLayer = makeFloatTexture(width: curWidth, height: curHeight),
+        guard let firstLayer = lease.make(width: curWidth, height: curHeight),
               let firstScratch = scratchTexture(octave: 0, width: curWidth, height: curHeight),
               encodeGaussianBlur(cmdBuf, source: current, scratch: firstScratch,
                                  destination: firstLayer, sigma: sigDiff)
-        else { return false }
+        else { return nil }
 
         // buildGaussianPyramid's own incremental sigma schedule: sigma_total^2 =
         // sigma_i^2 + sigma_{i-1}^2, so blur i only ever adds the sigma blur
@@ -970,12 +1222,12 @@ private final class MetalGPUBackend: @unchecked Sendable {
                     // previous octave's last layer — matching buildGaussianPyramid's
                     // own INTER_NEAREST resize, not a blur.
                     let srcIdx = (o - 1) * (nOctaveLayers + 3) + nOctaveLayers
-                    guard let src = textures[srcIdx] else { return false }
+                    guard let src = textures[srcIdx] else { return nil }
                     let dstWidth = src.width / 2, dstHeight = src.height / 2
                     guard dstWidth > 0, dstHeight > 0,
-                          let dst = makeFloatTexture(width: dstWidth, height: dstHeight),
+                          let dst = lease.make(width: dstWidth, height: dstHeight),
                           let encoder = cmdBuf.makeComputeCommandEncoder()
-                    else { return false }
+                    else { return nil }
                     encoder.setComputePipelineState(downsampleNearest2xF32)
                     encoder.setTexture(src, index: 0)
                     encoder.setTexture(dst, index: 1)
@@ -985,36 +1237,29 @@ private final class MetalGPUBackend: @unchecked Sendable {
                     textures[idx] = dst
                 } else {
                     guard let src = textures[idx - 1],
-                          let dst = makeFloatTexture(width: src.width, height: src.height),
+                          let dst = lease.make(width: src.width, height: src.height),
                           let tmp = scratchTexture(octave: o, width: src.width, height: src.height),
                           encodeGaussianBlur(cmdBuf, source: src, scratch: tmp,
                                              destination: dst, sigma: sig[i])
-                    else { return false }
+                    else { return nil }
                     textures[idx] = dst
                 }
             }
         }
 
-        // `.managed` textures need an explicit GPU->CPU sync before a CPU-side
-        // `getBytes` sees what the GPU wrote — see this function's doc comment.
-        guard let syncEncoder = cmdBuf.makeBlitCommandEncoder() else { return false }
-        for texture in textures {
-            guard let texture else { return false }
-            syncEncoder.synchronize(resource: texture)
-        }
-        syncEncoder.endEncoding()
+        // Each level is blitted into a linear shared buffer by the GPU's own copy engine (which
+        // also de-tiles it); the CPU then memcpy's out of those buffers after the slot is gone.
+        // No `.managed` synchronize is needed: nothing reads the textures from the CPU.
+        let all = textures.compactMap { $0 }
+        guard all.count == textures.count else { return nil }
+        guard let readbacks = encodeReadbacks(cmdBuf, textures: all) else { return nil }
 
-        cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
-        guard cmdBuf.status == .completed else { return false }
-
-        for idx in 0..<textures.count {
-            guard let texture = textures[idx], let mat = matWrapper(fromFloatTexture: texture) else {
-                return false
-            }
-            outPyramid[idx] = mat
+        commitAndWait(cmdBuf)
+        guard cmdBuf.status == .completed else {
+            giveReadbackBuffers(readbacks)
+            return nil
         }
-        return true
+        return readbacks
     }
 
     /// cv::GaussianBlur(src, dst, Size(size, size), sigma, sigma, border) on a
@@ -1123,9 +1368,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
     /// the step 2.0006 rather than 2 and the samples drift a whole source pixel
     /// towards the bottom of the frame, which is where the ground is. Measured
     /// against phase correlation, the old keypoints fitted ground warps no worse
-    /// than these (worst third 2.63 vs 2.58px over 16 pairs): the similarity fit's
-    /// hundreds of inliers absorbed the difference. What this buys is a GPU path
-    /// that finds what the CPU path finds, as Linux, Windows and GPU-less Macs do.
+    /// than these (worst third 2.63 vs 2.58px over 16 pairs): the similarity the ground
+    /// was fitted with then absorbed the difference over its hundreds of inliers. What
+    /// this buys is a GPU path that finds what the CPU path finds, as Linux, Windows
+    /// and GPU-less Macs do.
     ///
     /// Like `buildSiftPyramid`, every texture is `.storageModeManaged` with an
     /// explicit blit-encoder `synchronize` before the final readback — see that
@@ -1137,32 +1383,49 @@ private final class MetalGPUBackend: @unchecked Sendable {
                           tstepsCount: Int, kcontrastBase: Float,
                           outLt: UnsafeMutablePointer<MatWrapperRef?>,
                           outLsmooth: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
-        withGPUSlot {
+        let pending = withGPUSlot {
             buildAkazePyramidImpl(img: img, soffset: soffset, levels: levels, levelCount: levelCount,
                                   stepCounts: stepCounts, tsteps: tsteps, tstepsCount: tstepsCount,
-                                  kcontrastBase: kcontrastBase, outLt: outLt, outLsmooth: outLsmooth)
+                                  kcontrastBase: kcontrastBase)
         }
+        guard let pending else { return false }
+        defer { giveReadbackBuffers(pending) }
+        // lt levels first, then lsmooth levels (see the impl)
+        var made: [MatWrapperRef] = []
+        for readback in pending {
+            guard let mat = matWrapper(fromReadback: readback) else {
+                made.forEach { mat_wrapper_release($0) }
+                return false
+            }
+            made.append(mat)
+        }
+        for i in 0..<levelCount {
+            outLt[i] = made[i]
+            outLsmooth[i] = made[levelCount + i]
+        }
+        return true
     }
 
     private func buildAkazePyramidImpl(img: MatWrapperRef, soffset: Float,
                                        levels: UnsafePointer<GPUAkazeLevelInfo>, levelCount: Int,
                                        stepCounts: UnsafePointer<Int32>, tsteps: UnsafePointer<Float>?,
-                                       tstepsCount: Int, kcontrastBase: Float,
-                                       outLt: UnsafeMutablePointer<MatWrapperRef?>,
-                                       outLsmooth: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
-        guard levelCount > 1 else { return false }  // the trivial 1-level case never reaches here
+                                       tstepsCount: Int, kcontrastBase: Float) -> [PendingReadback]? {
+        guard levelCount > 1 else { return nil }  // the trivial 1-level case never reaches here
         guard mat_wrapper_bits_per_component(img) == 32, mat_wrapper_channels(img) == 1 else {
-            return false  // AKAZEDetector.cpp always hands this CV_32FC1; anything else is a caller bug
+            return nil  // AKAZEDetector.cpp always hands this CV_32FC1; anything else is a caller bug
         }
         let imgRows = Int(mat_wrapper_rows(img)), imgCols = Int(mat_wrapper_cols(img))
-        guard imgRows > 0, imgCols > 0, let imgPtr = mat_wrapper_data_ptr(img) else { return false }
+        guard imgRows > 0, imgCols > 0, let imgPtr = mat_wrapper_data_ptr(img) else { return nil }
         let imgStepBytes = Int(mat_wrapper_step(img))
 
-        guard let inputTexture = makeFloatTexture(width: imgCols, height: imgRows) else { return false }
+        let lease = TextureLease(pool: texturePool, device: device)
+        defer { lease.returnAll() }
+
+        guard let inputTexture = lease.make(width: imgCols, height: imgRows) else { return nil }
         inputTexture.replace(region: MTLRegionMake2D(0, 0, imgCols, imgRows), mipmapLevel: 0,
                              withBytes: imgPtr, bytesPerRow: imgStepBytes)
 
-        guard let cmdBuf = queue.makeCommandBuffer() else { return false }
+        guard let cmdBuf = queue.makeCommandBuffer() else { return nil }
 
         var ltTextures = [MTLTexture?](repeating: nil, count: levelCount)
         var lsmoothTextures = [MTLTexture?](repeating: nil, count: levelCount)
@@ -1172,7 +1435,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
         var scratchBySize: [Int: MTLTexture] = [:]
         func scratchTexture(width: Int, height: Int) -> MTLTexture? {
             let key = width * 1_000_000 + height
-            if scratchBySize[key] == nil { scratchBySize[key] = makeFloatTexture(width: width, height: height) }
+            if scratchBySize[key] == nil { scratchBySize[key] = lease.make(width: width, height: height) }
             return scratchBySize[key]
         }
 
@@ -1183,12 +1446,12 @@ private final class MetalGPUBackend: @unchecked Sendable {
         // in float as it computes it — 9 for the default 1.6 — and the border
         // BORDER_REPLICATE, as every AKAZE blur is.
         let level0Size = Int((2 * (1 + (soffset - 0.8) / 0.3)).rounded(.up)) | 1
-        guard let level0 = makeFloatTexture(width: imgCols, height: imgRows),
+        guard let level0 = lease.make(width: imgCols, height: imgRows),
               let level0Scratch = scratchTexture(width: imgCols, height: imgRows),
               encodeGaussianBlur(cmdBuf, source: inputTexture, scratch: level0Scratch,
                                  destination: level0, sigma: Double(soffset),
                                  size: level0Size, replicateBorder: true)
-        else { return false }
+        else { return nil }
         ltTextures[0] = level0
         lsmoothTextures[0] = level0
 
@@ -1199,20 +1462,20 @@ private final class MetalGPUBackend: @unchecked Sendable {
         for i in 1..<levelCount {
             let info = levels[i]
             let width = Int(info.width), height = Int(info.height)
-            guard width > 0, height > 0 else { return false }
+            guard width > 0, height > 0 else { return nil }
 
             // Halve (new octave) or copy (same octave) the previous level's Lt,
             // producing THIS level's pre-diffusion Lt — matching
             // create_nonlinear_scale_space's own branch.
-            guard let prevLt = ltTextures[i - 1] else { return false }
+            guard let prevLt = ltTextures[i - 1] else { return nil }
             let levelLt: MTLTexture
             if info.newOctave != 0 {
-                guard let halved = makeFloatTexture(width: width, height: height),
+                guard let halved = lease.make(width: width, height: height),
                       let xTable = MetalGPUBackend.areaResizeTable(source: prevLt.width,
                                                                    destination: width),
                       let yTable = MetalGPUBackend.areaResizeTable(source: prevLt.height,
                                                                    destination: height)
-                else { return false }
+                else { return nil }
                 var buffers: [MTLBuffer] = []
                 for table in [xTable, yTable] {
                     guard let index = table.index.withUnsafeBytes({
@@ -1221,10 +1484,10 @@ private final class MetalGPUBackend: @unchecked Sendable {
                           let weight = table.weight.withUnsafeBytes({
                               device.makeBuffer(bytes: $0.baseAddress!, length: $0.count,
                                                 options: .storageModeShared) })
-                    else { return false }
+                    else { return nil }
                     buffers += [index, weight]
                 }
-                guard let encoder = cmdBuf.makeComputeCommandEncoder() else { return false }
+                guard let encoder = cmdBuf.makeComputeCommandEncoder() else { return nil }
                 encoder.setComputePipelineState(resizeAreaF32)
                 encoder.setTexture(prevLt, index: 0)
                 encoder.setTexture(halved, index: 1)
@@ -1236,9 +1499,9 @@ private final class MetalGPUBackend: @unchecked Sendable {
                 levelLt = halved
                 kcontrast *= 0.75
             } else {
-                guard let copy = makeFloatTexture(width: width, height: height),
+                guard let copy = lease.make(width: width, height: height),
                       let blit = cmdBuf.makeBlitCommandEncoder()
-                else { return false }
+                else { return nil }
                 blit.copy(from: prevLt, sourceSlice: 0, sourceLevel: 0,
                          sourceOrigin: MTLOriginMake(0, 0, 0), sourceSize: MTLSizeMake(width, height, 1),
                          to: copy, destinationSlice: 0, destinationLevel: 0,
@@ -1251,18 +1514,18 @@ private final class MetalGPUBackend: @unchecked Sendable {
             // for this level's derivatives now and by
             // Compute_Determinant_Hessian_Response later. Five taps, not a full
             // Gaussian: truncated at 2 sigma it is narrower than its sigma says.
-            guard let smooth = makeFloatTexture(width: width, height: height),
+            guard let smooth = lease.make(width: width, height: height),
                   let smoothScratch = scratchTexture(width: width, height: height),
                   encodeGaussianBlur(cmdBuf, source: levelLt, scratch: smoothScratch,
                                      destination: smooth, sigma: 1.0, size: 5,
                                      replicateBorder: true)
-            else { return false }
+            else { return nil }
 
-            guard let lx = makeFloatTexture(width: width, height: height),
-                  let ly = makeFloatTexture(width: width, height: height),
-                  let flow = makeFloatTexture(width: width, height: height)
-            else { return false }
-            guard let derivEncoder = cmdBuf.makeComputeCommandEncoder() else { return false }
+            guard let lx = lease.make(width: width, height: height),
+                  let ly = lease.make(width: width, height: height),
+                  let flow = lease.make(width: width, height: height)
+            else { return nil }
+            guard let derivEncoder = cmdBuf.makeComputeCommandEncoder() else { return nil }
             derivEncoder.setComputePipelineState(scharrXF32)
             derivEncoder.setTexture(smooth, index: 0)
             derivEncoder.setTexture(lx, index: 1)
@@ -1288,11 +1551,11 @@ private final class MetalGPUBackend: @unchecked Sendable {
             // `current`.
             let current = levelLt
             let stepCount = Int(stepCounts[i])
-            guard stepCount == 0 || tstepsBuffer != nil else { return false }
+            guard stepCount == 0 || tstepsBuffer != nil else { return nil }
             for s in 0..<stepCount {
-                guard let lstep = makeFloatTexture(width: width, height: height),
+                guard let lstep = lease.make(width: width, height: height),
                       let stepEncoder = cmdBuf.makeComputeCommandEncoder()
-                else { return false }
+                else { return nil }
                 var stepSize = tstepsBuffer![tstepOffset + s]
                 stepEncoder.setComputePipelineState(fedStepF32)
                 stepEncoder.setTexture(current, index: 0)
@@ -1313,29 +1576,24 @@ private final class MetalGPUBackend: @unchecked Sendable {
             lsmoothTextures[i] = smooth
         }
 
-        guard let syncEncoder = cmdBuf.makeBlitCommandEncoder() else { return false }
-        for texture in ltTextures + lsmoothTextures {
-            guard let texture else { return false }
-            syncEncoder.synchronize(resource: texture)
-        }
-        syncEncoder.endEncoding()
+        // Lt levels, then Lsmooth levels, each blitted into a linear shared buffer; the caller
+        // reads them out after the slot is released. (Level 0 is the same texture in both.)
+        let ltAll = ltTextures.compactMap { $0 }, smoothAll = lsmoothTextures.compactMap { $0 }
+        guard ltAll.count == levelCount, smoothAll.count == levelCount else { return nil }
+        guard let readbacks = encodeReadbacks(cmdBuf, textures: ltAll + smoothAll) else { return nil }
 
-        cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
-        guard cmdBuf.status == .completed else { return false }
-
-        for i in 0..<levelCount {
-            guard let ltTex = ltTextures[i], let smoothTex = lsmoothTextures[i],
-                  let ltMat = matWrapper(fromFloatTexture: ltTex),
-                  let smoothMat = matWrapper(fromFloatTexture: smoothTex)
-            else { return false }
-            outLt[i] = ltMat
-            outLsmooth[i] = smoothMat
+        commitAndWait(cmdBuf)
+        guard cmdBuf.status == .completed else {
+            giveReadbackBuffers(readbacks)
+            return nil
         }
-        return true
+        return readbacks
     }
 
-    private func makeFloatTexture(width: Int, height: Int) -> MTLTexture? {
+    /// Pooled `.r32Float` `.managed` textures; see `FloatTexturePool`.
+    let texturePool = FloatTexturePool()
+
+    fileprivate static func makeFloatTexture(device: MTLDevice, width: Int, height: Int) -> MTLTexture? {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
           pixelFormat: .r32Float, width: width, height: height, mipmapped: false)
         descriptor.usage = [.shaderRead, .shaderWrite]
@@ -1343,22 +1601,84 @@ private final class MetalGPUBackend: @unchecked Sendable {
         return device.makeTexture(descriptor: descriptor)
     }
 
-    /// Reads a texture back into a newly allocated, tightly-packed CV_32FC1
-    /// MatWrapper — `mat_wrapper_create(..., takeOwnership: true)` clones the
-    /// buffer this hands it, so the Swift array backing that buffer is safe to
-    /// free (by simply going out of scope) as soon as the call returns. Callers
-    /// must already have synchronized `texture` (see `buildSiftPyramid`) —
-    /// this does not do it again.
-    private func matWrapper(fromFloatTexture texture: MTLTexture) -> MatWrapperRef? {
-        let width = texture.width, height = texture.height
-        let rowBytes = width * MemoryLayout<Float>.size
-        var pixels = [Float](repeating: 0, count: width * height)
-        let ref: MatWrapperRef? = pixels.withUnsafeMutableBytes { raw -> MatWrapperRef? in
-            guard let base = raw.baseAddress else { return nil }
-            texture.getBytes(base, bytesPerRow: rowBytes,
-                             from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0)
-            let cvType = mat_wrapper_cv_type_for(32, 1)
-            return mat_wrapper_create(Int64(width), Int64(height), cvType, rowBytes, base, true)
+    /// One texture's pixels, copied by the GPU into a linear shared buffer, waiting to be read out.
+    fileprivate struct PendingReadback {
+        let buffer: MTLBuffer
+        let width: Int
+        let height: Int
+    }
+
+    /// Linear `.shared` readback buffers kept between builds, by length (two per size). Making a
+    /// frame-sized buffer per pyramid level was a large share of the time spent in a slot.
+    private static let readbackPoolLock = NSLock()
+    nonisolated(unsafe) private static var readbackPool: [Int: [MTLBuffer]] = [:]
+
+    func trimReadbackPool() {
+        Self.readbackPoolLock.withLock { Self.readbackPool.removeAll() }
+    }
+
+    private func takeReadbackBuffer(length: Int) -> MTLBuffer? {
+        let reused: MTLBuffer? = Self.readbackPoolLock.withLock {
+            var list = Self.readbackPool[length] ?? []
+            let buffer = list.popLast()
+            Self.readbackPool[length] = list
+            return buffer
+        }
+        return reused ?? device.makeBuffer(length: length, options: .storageModeShared)
+    }
+
+    fileprivate func giveReadbackBuffers(_ readbacks: [PendingReadback]) {
+        guard GPUOps.poolingAllowed else { return }
+        Self.readbackPoolLock.withLock {
+            for readback in readbacks {
+                var list = Self.readbackPool[readback.buffer.length] ?? []
+                if list.count < 2 { list.append(readback.buffer) }
+                Self.readbackPool[readback.buffer.length] = list
+            }
+        }
+    }
+
+    /// Encodes a GPU copy of every texture into its own linear buffer, in `cmdBuf`'s blit stage.
+    /// The blit engine does the de-tiling, so the CPU side is a straight memcpy afterwards.
+    private func encodeReadbacks(_ cmdBuf: MTLCommandBuffer, textures: [MTLTexture]) -> [PendingReadback]? {
+        guard let blit = cmdBuf.makeBlitCommandEncoder() else { return nil }
+        var readbacks: [PendingReadback] = []
+        readbacks.reserveCapacity(textures.count)
+        for texture in textures {
+            let rowBytes = texture.width * MemoryLayout<Float>.size
+            let length = rowBytes * texture.height
+            guard let buffer = takeReadbackBuffer(length: length) else {
+                blit.endEncoding()
+                giveReadbackBuffers(readbacks)
+                return nil
+            }
+            blit.copy(from: texture, sourceSlice: 0, sourceLevel: 0,
+                      sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                      sourceSize: MTLSize(width: texture.width, height: texture.height, depth: 1),
+                      to: buffer, destinationOffset: 0,
+                      destinationBytesPerRow: rowBytes, destinationBytesPerImage: length)
+            readbacks.append(PendingReadback(buffer: buffer, width: texture.width, height: texture.height))
+        }
+        blit.endEncoding()
+        return readbacks
+    }
+
+    /// Copies one finished readback buffer into a newly allocated, tightly-packed CV_32FC1
+    /// MatWrapper (`mat_wrapper_new`: one allocation, no zero fill, no clone). Needs no GPU slot.
+    fileprivate func matWrapper(fromReadback readback: PendingReadback) -> MatWrapperRef? {
+        let rowBytes = readback.width * MemoryLayout<Float>.size
+        let cvType = mat_wrapper_cv_type_for(32, 1)
+        guard let ref = mat_wrapper_new(Int64(readback.width), Int64(readback.height), cvType) else { return nil }
+        guard let data = mat_wrapper_data_ptr(ref), mat_wrapper_step(ref) == rowBytes else {
+            mat_wrapper_release(ref)
+            return nil
+        }
+        // `contents()` returns an inner pointer, so Swift retains and autoreleases the buffer
+        // to keep it valid — until a pool drains. This runs on worker threads that seldom
+        // drain one, so without this every readback buffer outlived its build, pool or not:
+        // ~430MB a sky keypoint op at 4240x2832 / 1.5, piling up op after op.
+        autoreleasepool {
+            memcpy(UnsafeMutableRawPointer(mutating: data), readback.buffer.contents(), rowBytes * readback.height)
         }
         return ref
     }
@@ -1405,37 +1725,78 @@ private final class MetalGPUBackend: @unchecked Sendable {
     // `covered` is false exactly where cv::warpPerspective's BORDER_TRANSPARENT
     // leaves the destination untouched: none of the four sample corners exist in
     // the source (or the projection degenerates).
+    // Float-float ("double-float") helpers: a value is a pair (hi, lo) with |lo| <= ulp(hi)/2.
+    // They need exact fused multiply-add and no re-association, which is why the library is
+    // compiled with fast math off.
+    inline float2 two_sum(float a, float b) {
+        float s = a + b;
+        float bb = s - a;
+        return float2(s, (a - (s - bb)) + (b - bb));
+    }
+    inline float2 two_prod(float a, float b) {
+        float p = a * b;
+        return float2(p, fma(a, b, -p));
+    }
+    // (ah + al) * x for an exactly representable x
+    inline float2 df_mul(float ah, float al, float x) {
+        float2 p = two_prod(ah, x);
+        return two_sum(p.x, p.y + al * x);
+    }
+    inline float2 df_add(float2 a, float2 b) {
+        float2 s = two_sum(a.x, b.x);
+        return two_sum(s.x, s.y + a.y + b.y);
+    }
+    // row r of the 3x3 (hi parts at [0..8], low parts at [9..17]) applied to (x, y, 1)
+    inline float2 df_row(constant float* h, int r, float x, float y) {
+        float2 t = df_add(df_mul(h[3 * r], h[9 + 3 * r], x), df_mul(h[3 * r + 1], h[9 + 3 * r + 1], y));
+        return df_add(t, float2(h[3 * r + 2], h[9 + 3 * r + 2]));
+    }
+    // a / b in float-float
+    inline float2 df_div(float2 a, float2 b) {
+        float q1 = a.x / b.x;
+        float2 r = df_add(a, -df_mul(b.x, b.y, q1));
+        float q2 = r.x / b.x;
+        return two_sum(q1, q2);
+    }
+    // round(v * 32) to the nearest integer, ties to even, the way cv::warpPerspective's
+    // saturate_cast<int> does it (cvRound), for a float-float v.
+    inline int round32(float2 v) {
+        float2 t = float2(v.x * 32.0f, v.y * 32.0f);   // scaling by a power of two is exact
+        float i = rint(t.x);
+        float rem = (t.x - i) + t.y;
+        if (rem > 0.5f || (rem == 0.5f && fmod(i, 2.0f) != 0.0f)) i += 1.0f;
+        else if (rem < -0.5f || (rem == -0.5f && fmod(i, 2.0f) != 0.0f)) i -= 1.0f;
+        return int(i);
+    }
+
+    // `hInv` is the inverse homography as 18 floats: nine high parts, then nine low parts
+    // (see splitHighLow on the Swift side).
     inline WarpTap warp_tap(constant float* hInv, int px, int py, int width, int height) {
         WarpTap t;
         t.covered = false;
 
         float x = float(px), y = float(py);
-        float w = hInv[6] * x + hInv[7] * y + hInv[8];
-        if (fabs(w) < 1e-12f) return t;
-        float sx = (hInv[0] * x + hInv[1] * y + hInv[2]) / w;
-        float sy = (hInv[3] * x + hInv[4] * y + hInv[5]) / w;
-        if (!isfinite(sx) || !isfinite(sy)) return t;
-
-        int ix = int(floor(sx));
-        int iy = int(floor(sy));
-        float fx = sx - float(ix);
-        float fy = sy - float(iy);
+        float2 w = df_row(hInv, 2, x, y);
+        if (fabs(w.x) < 1e-12f) return t;
+        float2 sx = df_div(df_row(hInv, 0, x, y), w);
+        float2 sy = df_div(df_row(hInv, 1, x, y), w);
+        if (!isfinite(sx.x) || !isfinite(sy.x)) return t;
 
         // OpenCV's INTER_LINEAR does not interpolate at the exact fractional
-        // position: it quantizes it to one of 32 steps (INTER_TAB_SIZE, a 5-bit
-        // fixed-point fraction) via a precomputed coefficient table. Matching that
-        // quantization -- not just the bilinear formula -- is most of what makes
-        // this kernel track OpenCV's actual output instead of a continuous-float
-        // bilinear resample that merely looks similar; see GPUWarpTests for the
-        // measured effect (removing this raised the interior max delta by >10x on
-        // a synthetic high-frequency pattern).
-        const float kTabSize = 32.0f;
-        int fxi = int(round(fx * kTabSize));
-        if (fxi >= int(kTabSize)) { fxi -= int(kTabSize); ix += 1; }
-        int fyi = int(round(fy * kTabSize));
-        if (fyi >= int(kTabSize)) { fyi -= int(kTabSize); iy += 1; }
-        fx = float(fxi) / kTabSize;
-        fy = float(fyi) / kTabSize;
+        // position: it rounds the position to one of 32 steps per pixel (INTER_TAB_SIZE,
+        // a 5-bit fixed-point fraction) via a precomputed coefficient table, and splits
+        // that integer into pixel and step. Matching that quantization -- not just the
+        // bilinear formula -- is most of what makes this kernel track OpenCV's actual
+        // output instead of a continuous-float bilinear resample that merely looks
+        // similar; see GPUWarpTests for the measured effect (removing this raised the
+        // interior max delta by >10x on a synthetic high-frequency pattern). The position
+        // is rounded as a whole, as OpenCV does, from a float-float projection: a single
+        // float cannot hold a column near 6000 to better than 0.0005 px.
+        int xq = round32(sx);
+        int yq = round32(sy);
+        int ix = xq >> 5, iy = yq >> 5;
+        float fx = float(xq & 31) / 32.0f;
+        float fy = float(yq & 31) / 32.0f;
 
         t.w00 = (1.0f - fx) * (1.0f - fy);
         t.w10 = fx * (1.0f - fy);
@@ -1699,7 +2060,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
             float v[17];
             v[0] = float(base[(size_t)y * baseStep + (size_t)x * channels + c]);
             for (int i = 0; i < neighbourCount; ++i) {
-                WarpTap t = warp_tap(hInv + i * 9, x, y, width, height);
+                WarpTap t = warp_tap(hInv + i * 18, x, y, width, height);
                 if (t.covered) {
                     v[i + 1] = float(warp_value<T, MAXV>(neighbours.src[i], neighbourSteps[i], channels, t, c));
                 } else {
@@ -2016,6 +2377,17 @@ private final class MetalGPUBackend: @unchecked Sendable {
         lt.write(float4(v, 0.0, 0.0, 0.0), gid);
     }
     """
+}
+
+/// A 3x3 matrix as 18 floats: the nine values rounded to float, then the nine rounding
+/// remainders. The warp kernels carry the projection in float-float arithmetic from these, so
+/// a sample position comes out to about 1e-12 relative instead of the 1e-7 a single float
+/// gives, which at a column near 6000 is the difference between 0.0005 px and nothing, and
+/// 0.0005 px is enough to put a sample on the neighbouring 1/32-pixel step.
+func splitHighLow(_ m: [Double]) -> [Float] {
+    let high = m.map { Float($0) }
+    let low = zip(m, high).map { Float($0 - Double($1)) }
+    return high + low
 }
 
 /// Closed-form 3x3 inverse of the row-major matrix `m` points at (9 doubles).

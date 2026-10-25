@@ -101,7 +101,7 @@ public actor OutlierGroup: CustomStringConvertible,
 
     public var lineFinder: CombinedHoughLineFinder {
         get async {
-            CombinedHoughLineFinder(pixels: Array(self.pixelSet),
+            CombinedHoughLineFinder(pixels: self.pixelSet.sorted { ($0.y, $0.x) < ($1.y, $1.x) },
                                     bounds: self.bounds,
                                     args: await constants.getHoughLineFinderArgs(),
                                     frameIndex: self.frameIndex)

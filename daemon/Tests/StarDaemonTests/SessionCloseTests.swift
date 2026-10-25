@@ -110,6 +110,33 @@ final class SessionCloseTests: XCTestCase {
         XCTAssertEqual(events, 0, "a closed session reported a run")
     }
 
+    /// A render asked of a closed session has nothing to save into: false at once, and a cancelled
+    /// caller likewise, instead of waiting out the timeout on a queue nobody will run.
+    func testRenderNowOnAClosedSessionReturnsFalseAtOnce() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let maybeFrame = await session.frame(at: 0)
+        let frame = try XCTUnwrap(maybeFrame)
+        await session.close()
+        let started = Date()
+        let rendered = await session.renderNow(frame)
+        XCTAssertFalse(rendered)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+    }
+
+    func testRenderNowForACancelledCallerReturnsFalseAtOnce() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let maybeFrame = await session.frame(at: 0)
+        let frame = try XCTUnwrap(maybeFrame)
+        let task = Task { await session.renderNow(frame) }
+        task.cancel()
+        let started = Date()
+        let rendered = await task.value
+        XCTAssertFalse(rendered)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+    }
+
     func testClosingTwiceIsHarmless() async throws {
         let session = try await makeSession()
         await session.close()

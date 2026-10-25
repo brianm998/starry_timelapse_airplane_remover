@@ -218,6 +218,14 @@ class LocalPreferencesBooleansTest {
         assertEquals(false, LocalPreferences().showHorizonPainterInstructions)
     }
 
+    /** Every kind of horizon line is drawn until the user hides one, and the choice is the macOS app's key and raw values. */
+    @Test fun hiddenHorizonLineKindsRoundTripUnderTheMacOSKey() {
+        assertEquals(emptyList(), LocalPreferences().hiddenHorizonLineKinds)
+        LocalPreferences().hiddenHorizonLineKinds = listOf("merged", "initial", "merged")
+        assertTrue(prefsFile.readText().contains("\"hiddenHorizonLineKinds\":[\"initial\",\"merged\"]"), prefsFile.readText())
+        assertEquals(listOf("initial", "merged"), LocalPreferences().hiddenHorizonLineKinds)
+    }
+
     /** The processing screen's charts: on until turned off, under the macOS app's own key so the two clients share the choice. */
     @Test fun theProcessingWindowsAlignmentChartsAreOnUntilTurnedOff() {
         assertTrue(LocalPreferences().showAlignmentInProcessingWindow)

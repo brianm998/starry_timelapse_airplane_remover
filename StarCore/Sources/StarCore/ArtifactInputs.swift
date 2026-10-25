@@ -19,11 +19,16 @@ You should have received a copy of the GNU General Public License along with sta
 /// Declared in dependency order, because each stage consumes the one before it: the
 /// merged horizon is a vote over first-round horizon masks, and keypoint detection is
 /// masked with the merged horizon.  `andDownstream` relies on that order.
+///
+/// `horizonConsensus` reads the first-round masks and the alignment, and is read by both
+/// stages after it: the outlier subtraction and the output composite the two aligned layers
+/// across the horizon.
 public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
     case horizon
     case mergedHorizon
     case keypoints
     case alignment
+    case horizonConsensus
     case outliers
     case output
 
@@ -47,6 +52,7 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
         case .mergedHorizon: return "merged horizon masks"
         case .keypoints:     return "keypoint sets"
         case .alignment:     return "alignment results"
+        case .horizonConsensus: return "horizon consensus lines"
         case .outliers:      return "outlier groups"
         case .output:        return "output images"
         }
@@ -70,6 +76,9 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
         case .alignment:
             return "homography.db rows, the aligned-neighbour count file, and the " +
                    "starAligned / earthAligned / subtraction images"
+        case .horizonConsensus:
+            return "<temp>/horizonConsensus/<frame>.json, the calibration.json beside them, " +
+              "and <temp>/consensusHorizon*/ (the lines drawn as masks)"
         case .outliers:
             return "<outliers>/<frame>/, the classified outlier group binary"
         case .output:
@@ -149,7 +158,67 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     ///      by anything: it is what a record that omits this key means, which is why the
     ///      key's mere appearance is what invalidates those records, once.
     /// - 2: percentile stretch (485c4e04).
-    public static let detectionAlgorithmVersion = 2
+    /// - 3: sky keypoints kept `kSkyKeypointCutMargin` clear of the sky mask's edge, where
+    ///      the black step the masking leaves is ground-locked (ImageAligner.cpp).  This
+    ///      bump also carries the sky RANSAC tolerance going from 10px to 3px: that is a
+    ///      change to the fit rather than to the keypoints, but it shipped with this one,
+    ///      and invalidating the keypoints already takes every homography with them.  A
+    ///      fitting change that ships on its own needs a lever on the alignment stage.
+    /// - 4: sky feature files keep the frame's star centroids, and the sky homography is
+    ///      refined against them (ImageAligner.cpp, refineSkyHomographyWithStars).  A
+    ///      version-3 file has no stars, so it would quietly skip the refinement.
+    public static let detectionAlgorithmVersion = 4
+
+    /// Which version of the homography *fitting* code produced the stored alignment —
+    /// `detectionAlgorithmVersion`'s counterpart for the stage after it, for a change to
+    /// `ia_compute_homography` that leaves the keypoints alone.  Bumping the keypoint lever
+    /// for one of those would also work, and would re-run every frame's SIFT for nothing.
+    ///
+    /// Recorded unconditionally, so a record that predates the key counts as changed and
+    /// its alignment, outliers and output are rebuilt once.  Every such record also
+    /// predates `detectionAlgorithmVersion` 3, which rebuilds those anyway.
+    ///
+    /// - 1: everything before this key existed.  Never written.
+    /// - 2: a sky keypoint fit that plentiful stars refuse, standing on a thin RANSAC
+    ///      consensus, is dropped rather than kept (ImageAligner.cpp,
+    ///      starsOverruleThinSkyFit).
+    public static let alignmentAlgorithmVersion = 2
+
+    /// Which version of the *ground* fit produced the stored earth homographies — the
+    /// lever for a change to how `ia_compute_homography` fits the ground alone.
+    ///
+    /// Not `alignmentAlgorithmVersion`, because only a moving camera with earth alignment
+    /// and horizon detection on has earth homographies (`FrameGraphBuilder` builds no
+    /// earth homography op otherwise), and bumping the shared lever would re-fit every
+    /// static sequence's sky for a change that cannot reach it.  So this is recorded only
+    /// where the ground is fitted, the way `cloudAwareMerge` is recorded only while on: a
+    /// record that predates the key, from a sequence that does fit its ground, counts as
+    /// changed and is re-aligned once; every other record is the one it always was.
+    ///
+    /// - 1: a 4-DOF similarity (cv::estimateAffinePartial2D).  Never written.
+    /// - 2: a camera rotation, K R K^-1, about the frame's centre, with each frame's focal
+    ///      length calibrated from its own correspondences (ImageAligner.cpp,
+    ///      calibrateGroundFocalLength).
+    public static let earthAlignmentAlgorithmVersion = 2
+
+    /// Which version of `CombinedHorizonDetector`, as `FrameHorizonProcessor` runs it on each
+    /// frame of a moving sequence, produced the stored first-round horizon masks.
+    ///
+    /// Recorded only for a moving camera with combined detection on, the one place
+    /// per-frame masks are still detected with it (see `horizonInputs`).  A record that
+    /// predates the key, from such a sequence, counts as changed and is rebuilt from
+    /// scratch once — the whole sequence, since every later stage reads these masks.
+    ///
+    /// The bump covers frames detected without references, which is what changed; a run
+    /// guided by painted references searches the band they give, which did not, but it is
+    /// rebuilt too: this record cannot tell the two apart without flipping every time the
+    /// first reference is painted, which would cost a full rebuild each time instead of once.
+    ///
+    /// - 1: everything before this key existed.  Never written.
+    /// - 2: the base methods search down to 0.99 of the height rather than 0.85/0.95, so a
+    ///      low horizon can be found at all, and an unguided frame is detected on a copy
+    ///      `TemporalHorizonDetector.workingWidth` wide (6804f8f3).
+    public static let movingHorizonDetectionAlgorithmVersion = 2
 
     public let version: Int
 
@@ -171,6 +240,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             ArtifactStage.mergedHorizon.rawValue: mergedHorizonInputs(config),
             ArtifactStage.keypoints.rawValue:     keypointInputs(config),
             ArtifactStage.alignment.rawValue:     alignmentInputs(config),
+            ArtifactStage.horizonConsensus.rawValue: horizonConsensusInputs(config),
             ArtifactStage.outliers.rawValue:      outlierInputs(config),
             ArtifactStage.output.rawValue:        outputInputs(config),
         ])
@@ -181,25 +251,28 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     /// Branches on the detection mode so that changing a setting the current mode does
     /// not consult cannot invalidate anything.  The combined+RW detector takes no config
     /// at all — `CombinedHorizonDetector.detect(image:)` is fully parameterised in code
-    /// — so in that mode the only input is the choice of mode itself.
+    /// — so in that mode the inputs are the choice of mode and the code's version.
     ///
-    /// Which means this stage has the same blind spot `detectionAlgorithmVersion` closes
-    /// for the keypoints, and more of it: in combined mode a change to the detector is
-    /// invisible here.  Deliberately left open for now.  The two levers are not
-    /// comparable in cost — `horizon` is first in the dependency order, so a version
-    /// here would take the merged masks and every keypoint set and every homography with
-    /// it, i.e. the entire sequence, where the keypoint lever stops at the alignment —
-    /// and nothing has yet needed it: the horizon code changes since this landed are
-    /// output-neutral by their own measurement (8364ff9e scales every candidate in a
-    /// comparison equally, so the ordering it feeds cannot move; 97928062 fixes a trap on
-    /// an empty horizon, a path that produced no mask to cache).  Add one the first time
-    /// a horizon change moves a mask, and expect it to cost a full reprocess.
+    /// That version is `movingHorizonDetectionAlgorithmVersion`, recorded only where
+    /// per-frame masks are detected with it: a moving camera.  `horizon` is first in the dependency order, so
+    /// bumping it takes the merged masks and every keypoint set and every homography with
+    /// it, i.e. the entire sequence — a lever for a change that moves masks, not for one
+    /// that is output-neutral by its own measurement (8364ff9e, 97928062).
     private static func horizonInputs(_ config: Config) -> [String: String] {
         var inputs: [String: String] = [
             "horizonDetectionEnabled":    str(config.horizonDetectionEnabled),
             "useCombinedHorizonDetection": str(config.useCombinedHorizonDetection),
         ]
-        guard !config.useCombinedHorizonDetection else { return inputs }
+        if config.useCombinedHorizonDetection {
+            // A static sequence detects no per-frame masks at all — its merge reads the
+            // temporal median or the painted reference — so the version means nothing there,
+            // and recording it would rebuild a static sequence for a change it never sees.
+            if config.horizonDetectionEnabled && config.tripodHeadWasMoving {
+                inputs["movingHorizonDetectionAlgorithmVersion"] =
+                  str(movingHorizonDetectionAlgorithmVersion)
+            }
+            return inputs
+        }
 
         inputs["useCannyForHorizonDetection"] = str(config.useCannyForHorizonDetection)
         inputs["cannyMinThreshold"]           = str(config.cannyMinThreshold)
@@ -239,6 +312,23 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             "alignedNeighborFrameOverrides": str(config.alignedNeighborFrameOverrides),
             "staticNeighborFrameOverrides":  str(config.staticNeighborFrameOverrides),
         ]
+
+        // A static sequence's merged mask is made by one of two methods (see
+        // `Config.useTemporalStaticHorizon`), and they give different masks — on a black
+        // ground under the Milky Way, masks 15% of the frame apart.  Recorded with the
+        // temporal method's own version, so a change to it rebuilds what it made.
+        //
+        // Only where the merge actually runs: a painted reference replaces it outright,
+        // and recording the method there would rebuild a sequence's keypoints and
+        // alignment over a mask nothing reads.
+        if !config.tripodHeadWasMoving && !config.hasStaticReferenceHorizon {
+            inputs["useTemporalStaticHorizon"] = str(config.useTemporalStaticHorizon)
+            if config.useTemporalStaticHorizon {
+                inputs["temporalHorizonSampleCount"] = str(config.temporalHorizonSampleCount)
+                inputs["temporalHorizonAlgorithmVersion"] =
+                  str(TemporalHorizonDetector.algorithmVersion)
+            }
+        }
 
         // The reference-horizon passes are moving-sequence only.
         guard config.tripodHeadWasMoving else { return inputs }
@@ -315,11 +405,20 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             // Whether the merge is masked with a horizon, and so whether the sky and the
             // ground are aligned separately at all.
             "horizonDetectionEnabled":       str(config.horizonDetectionEnabled),
+            "alignmentAlgorithmVersion":     str(alignmentAlgorithmVersion),
         ]
         // A fixed camera has no ground to align: the earth branch median merges the
         // static neighbours instead, and reads none of the earth settings.
         if !config.tripodHeadWasMoving {
             inputs.removeValue(forKey: "allowEarthAlignment")
+        }
+        // The ground fit's version, where there is a ground fit: see
+        // `earthAlignmentAlgorithmVersion`, and the condition FrameGraphBuilder builds
+        // the earth homography ops under.
+        if config.tripodHeadWasMoving && config.allowEarthAlignment &&
+             config.horizonDetectionEnabled
+        {
+            inputs["earthAlignmentAlgorithmVersion"] = str(earthAlignmentAlgorithmVersion)
         }
         // The cloud-aware merge changes the star aligned image this stage writes, so it
         // is an input to it, but it is recorded only while it is on.  A record that lacks
@@ -330,6 +429,27 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         // again invalidates too, since the record differs from the one that had it.
         if config.cloudAwareMerge {
             inputs["cloudAwareMerge"] = str(config.cloudAwareMerge)
+        }
+        return inputs
+    }
+
+    /// What `HorizonConsensus` reads beyond the stages before it: whether it runs, and the
+    /// version of the code.
+    ///
+    /// Only the camera's motion where it cannot run — a fixed camera, or a run without earth
+    /// alignment — so its switch moving there invalidates nothing.  A record from before the
+    /// stage existed has no entry for it at all, which counts as no change: the output
+    /// already written for such a sequence was composited with its merged masks, and is kept.
+    private static func horizonConsensusInputs(_ config: Config) -> [String: String] {
+        var inputs: [String: String] = [
+            "tripodHeadWasMoving": str(config.tripodHeadWasMoving),
+        ]
+        guard config.tripodHeadWasMoving, config.horizonDetectionEnabled,
+              config.allowEarthAlignment
+        else { return inputs }
+        inputs["useHorizonConsensus"] = str(config.useHorizonConsensus)
+        if config.useHorizonConsensus {
+            inputs["horizonConsensusAlgorithmVersion"] = str(HorizonConsensus.algorithmVersion)
         }
         return inputs
     }
@@ -354,6 +474,14 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         // The radius of neighbouring frames each group is classified against.
         inputs["numberFinalProcessingNeighborsNeeded"] =
           str(config.numberFinalProcessingNeighborsNeeded)
+        // How far the line connector follows neighbours decides which blobs get joined. Recorded
+        // only when it is not the default, for the reason `cloudAwareMerge` is above: a record
+        // that lacks a key counts as changed, so an unconditional key would throw away every
+        // existing temp dir's outliers once. Off the default (including 0, the old unbounded
+        // behaviour) it invalidates, and so does returning to the default.
+        if config.linearConnectorNeighborHops != Config().linearConnectorNeighborHops {
+            inputs["linearConnectorNeighborHops"] = str(config.linearConnectorNeighborHops)
+        }
         return inputs
     }
 
@@ -479,7 +607,9 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(self)
         StarCore.mkdir(tempOutputPath)
-        try data.write(to: URL(fileURLWithPath: path))
+        // atomically: a crash part way through a plain write left a torn record, which reads as
+        // absent and so invalidates nothing and rebuilds nothing, for the whole temp dir
+        try data.write(to: URL(fileURLWithPath: path), options: .atomic)
         Log.d("wrote \(path)")
     }
 

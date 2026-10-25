@@ -58,7 +58,20 @@ public struct ImageAccessor: Sendable {
         FrameViewMode,
         ImageDisplaySize
       ) -> Void)?
-    
+
+    /// Told the index of a frame whose horizon lines have changed: a horizon mask of any kind
+    /// (`FrameViewMode.isHorizonMask`) written or deleted at full size, or a painted reference
+    /// saved or cleared.  How the clients know to draw a frame's lines again — the consensus,
+    /// for one, is written for the whole sequence long before most frames finish merging, and
+    /// nothing else about those frames changes when it is.  Set before the accessor is handed
+    /// to the frames, which take copies.
+    public var horizonChangedClosure: (@Sendable (Int) -> Void)? = nil
+
+    /// Say that `frameIndex`'s horizon lines have changed (`horizonChangedClosure`).
+    public func horizonLinesChanged(frameIndex: Int) {
+        horizonChangedClosure?(frameIndex)
+    }
+
     public init(
       config: Config,
       imageSequence: ImageSequence,
@@ -466,6 +479,9 @@ public struct ImageAccessor: Sendable {
             let ok = await IOWork.run(path: filename, bytes: image.byteCount) {
                 image.writeTIFFEncoding(toFilename: filename)
             }
+            if ok, type.isHorizonMask {
+                horizonLinesChanged(frameIndex: frameIndex)
+            }
             if !ok {
                 Log.w("frame \(frameIndex) failed to write intermediate image of type \(type) to \(filename)")
             }
@@ -550,6 +566,8 @@ public struct ImageAccessor: Sendable {
                 case .mergedHorizon:
                     return (dir, baseFileName)
                 case .userHorizon:
+                    return (dir, baseFileName)
+                case .consensusHorizon:
                     return (dir, baseFileName)
                 case .starAligned:
                     return (dir, baseFileName)
@@ -641,6 +659,9 @@ public struct ImageAccessor: Sendable {
                                        atSize: size)
         {
             try FileManager.default.removeItem(atPath: filename)
+            if imageType.isHorizonMask && size == .original {
+                horizonLinesChanged(frameIndex: frameIndex)
+            }
         }
     }
 
@@ -656,6 +677,13 @@ public struct ImageAccessor: Sendable {
 
             case .userHorizon:
                 break           // user-defined horizon masks are not auto-generated; preserve them
+
+            case .consensusHorizon:
+                // The image is only a drawing of the line beside it; the two go together, so
+                // a line is never used for a frame whose view of it has gone.
+                try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .original)
+                try? deleteImage(frameIndex: frameIndex, ofType: type, atSize: .preview)
+                HorizonConsensusStore.delete(frameIndex: frameIndex, config: config)
 
             case .starAligned:
                 if reprocessingType == .alignment {

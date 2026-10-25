@@ -111,26 +111,13 @@ struct FilmstripImageView: View {
 
                     frameView.thumbnailImage
 
-                    // Horizon overlay — coloured polyline tracing the sky/ground boundary.
-                    // white = initial detected, blue = merged, green = user reference.
-                    if (viewModel.userPreferences.showHorizonOnMainView ?? false),
-                       let overlay = frameView.horizonOverlay {
-                        let strokeColor: Color = if frameView.isPendingHorizonRefinement { .orange }
-                        else { switch overlay.kind {
-                            case .initial:   .white
-                            case .merged:    .blue
-                            case .reference: .green
-                        }}
-                        Canvas { ctx, size in
-                            var path = Path()
-                            for (col, y) in overlay.yPerColumn.enumerated() {
-                                let pt = CGPoint(x: CGFloat(col), y: CGFloat(y))
-                                if col == 0 { path.move(to: pt) }
-                                else        { path.addLine(to: pt) }
-                            }
-                            ctx.stroke(path, with: .color(strokeColor), lineWidth: 1.5)
-                        }
-                        .allowsHitTesting(false)
+                    // Horizon lines — one coloured polyline per kind the user has switched on.
+                    if viewModel.userPreferences.showHorizonOnMainView ?? false {
+                        HorizonLinesCanvas(
+                          overlays: frameView.horizonOverlays,
+                          visibleKinds: viewModel.userPreferences.visibleHorizonLineKinds,
+                          isPendingRefinement: frameView.isPendingHorizonRefinement,
+                          lineWidth: 1.5)
                     }
 
                     if let frameState = frameView.frameState {
@@ -308,5 +295,87 @@ struct AutoSelectiveIcon: View {
                 .offset(x: 5, y: -5) // adjust to fit your corner
                 .opacity(0.5)
         }
+    }
+}
+
+extension HorizonThumbnailOverlay.Kind {
+    /// The colour each kind of horizon line is drawn in, everywhere one is drawn.
+    var lineColor: Color {
+        switch self {
+        case .initial:   .white
+        case .merged:    .blue
+        case .consensus: .purple
+        case .reference: .green
+        }
+    }
+
+    /// The label of this kind's show/hide toggle.
+    var toggleLabel: String {
+        localized("ui.horizon_line.\(rawValue)")
+    }
+}
+
+/// A frame's horizon lines, one polyline per kind in `visibleKinds`, scaled from the size they
+/// were computed at to the canvas.  The line the composite reads is drawn last, on top, and in
+/// orange while a repainted reference is waiting to be applied to it.
+struct HorizonLinesCanvas: View {
+    let overlays: [HorizonThumbnailOverlay]
+    let visibleKinds: Set<HorizonThumbnailOverlay.Kind>
+    let isPendingRefinement: Bool
+    let lineWidth: CGFloat
+
+    var body: some View {
+        let lines = overlays.drawn(visibleKinds)
+        let pendingKind = isPendingRefinement ? overlays.compositeLine?.kind : nil
+        Canvas { ctx, size in
+            for overlay in lines {
+                let cols = overlay.yPerColumn.count
+                guard cols > 0, overlay.height > 0 else { continue }
+                let scaleX = size.width / CGFloat(cols)
+                let scaleY = size.height / CGFloat(overlay.height)
+                var path = Path()
+                for (col, y) in overlay.yPerColumn.enumerated() {
+                    let pt = CGPoint(x: CGFloat(col) * scaleX, y: CGFloat(y) * scaleY)
+                    if col == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+                }
+                let color = overlay.kind == pendingKind ? Color.orange : overlay.kind.lineColor
+                ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// One show/hide switch per kind of horizon line, under the "show horizon lines" switch.  A kind
+/// the current frame has no line of is greyed out, as is every kind while the lines are hidden.
+struct HorizonLineKindToggles: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    var font: Font = .body
+
+    var body: some View {
+        let frame = viewModel.frames.indices.contains(viewModel.currentIndex)
+          ? viewModel.frames[viewModel.currentIndex] : nil
+        // either size: the thumbnail lines arrive first, the full-size ones when the frame is opened
+        let available = (frame?.horizonOverlays.kinds ?? [])
+          .union(frame?.frameHorizonOverlays.kinds ?? [])
+        let linesShown = viewModel.userPreferences.showHorizonOnMainView ?? false
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(HorizonThumbnailOverlay.Kind.allCases, id: \.self) { kind in
+                Toggle(isOn: Binding(
+                    get: { viewModel.userPreferences.visibleHorizonLineKinds.contains(kind) },
+                    set: { viewModel.userPreferences.setHorizonLineKind(kind, visible: $0) }
+                )) {
+                    HStack(spacing: 4) {
+                        Circle().fill(kind.lineColor).frame(width: 8, height: 8)
+                        Text(kind.toggleLabel)
+                    }
+                }
+                .font(font)
+                .foregroundColor(.white)
+                .disabled(!linesShown || !available.contains(kind))
+                .opacity(linesShown && available.contains(kind) ? 1 : 0.4)
+            }
+        }
+        .padding(.leading, 16)
     }
 }

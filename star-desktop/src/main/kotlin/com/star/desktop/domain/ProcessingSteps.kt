@@ -38,13 +38,13 @@ data class StepRow(val type: String, val queued: Int, val running: Int, val done
         private val NAMES = mapOf(
             "horizon" to "ui.horizon", "mergedHorizon" to "ui.merged_horizon", "starKeypoints" to "ui.star_keypoints",
             "earthKeypoints" to "ui.earth_keypoints", "starHomography" to "ui.star_alignment", "earthHomography" to "ui.earth_alignment",
-            "outliers" to "ui.outliers", "merge" to "ui.merged",
+            "horizonConsensus" to "ui.horizon_consensus", "outliers" to "ui.outliers", "merge" to "ui.merged",
         )
 
         private val HELPS = mapOf(
             "horizon" to "ui.step_help.horizon", "mergedHorizon" to "ui.step_help.merged_horizon", "starKeypoints" to "ui.step_help.star_keypoints",
             "earthKeypoints" to "ui.step_help.earth_keypoints", "starHomography" to "ui.step_help.star_alignment",
-            "earthHomography" to "ui.step_help.earth_alignment", "outliers" to "ui.step_help.outliers", "merge" to "ui.step_help.merged",
+            "earthHomography" to "ui.step_help.earth_alignment", "horizonConsensus" to "ui.step_help.horizon_consensus", "outliers" to "ui.step_help.outliers", "merge" to "ui.step_help.merged",
         )
 
         fun nameKey(type: String): String? = NAMES[type]

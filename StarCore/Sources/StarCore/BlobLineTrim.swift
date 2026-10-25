@@ -121,19 +121,37 @@ public actor BlobLineTrim {
         let blobMap = blobMap
         self.blobMap = await Task.detached(priority: .userInitiated) {
             var blobMap = blobMap
-            await withTaskGroup(of: [Blob].self) { taskGroup in
-                for (_, blob) in blobMap {
+            // Each task numbers the blobs it makes from its own counter (the ids mean nothing
+            // until the end); the real ids are handed out below, in ascending order of the
+            // blob each came from. Taking them from one shared counter as tasks ran gave each
+            // new blob whichever id its task happened to reach first, so the same frame could
+            // number its blobs differently from run to run.
+            let results = await withTaskGroup(of: (Int32, [Blob]).self) { taskGroup in
+                for (id, blob) in blobMap {
                     taskGroup.addTask {
-                        await StarCore.process(blob,
-                                               with: args,
-                                               maxBlobID: self.maxBlobID,
-                                               frameIndex: self.frameIndex,
-                                               maxIterations: 10)
+                        let provisional = IntegralActor(value: 0)
+                        let made = await StarCore.process(blob,
+                                                          with: args,
+                                                          maxBlobID: provisional,
+                                                          frameIndex: self.frameIndex,
+                                                          maxIterations: 10)
+                        return (id, made)
                     }
                 }
-                for await newBlobs in taskGroup {
-                    for newBlob in newBlobs {
+                var collected: [Int32: [Blob]] = [:]
+                for await (id, made) in taskGroup { collected[id] = made }
+                return collected
+            }
+            for id in results.keys.sorted() {
+                for newBlob in results[id] ?? [] {
+                    let newBlobID = await self.maxBlobID.increment()
+                    if newBlobID < Int32.max {
+                        await newBlob.update(id: Int32(newBlobID))
                         blobMap[newBlob.id] = newBlob
+                    } else {
+                        // avoid arithmetic overflow: put the trimmed pixels back where they came from
+                        Log.w("frame \(self.frameIndex) out of blob ids in blob line trim; re-absorbing")
+                        if let source = blobMap[id] { _ = await source.absorb(newBlob, always: true) }
                     }
                 }
             }
@@ -190,10 +208,18 @@ fileprivate func process(_ blob: Blob,
                 }
             } else {
                 // failing here sometimes
-                Log.i("frame \(frameIndex) ignoring blob of size \(await blob.size()) \(await blob.boundingBox()) because lineLength \(lineLength) <= args.minLineLength \(args.minLineLength)")
+                if Log.isEnabled(.info) {
+                    let size = await blob.size()
+                    let box = await blob.boundingBox()
+                    Log.i("frame \(frameIndex) ignoring blob of size \(size) \(box) because lineLength \(lineLength) <= args.minLineLength \(args.minLineLength)")
+                }
             }
         } else {
-            Log.i("frame \(frameIndex) ignoring blob of size \(await blob.size()) \(await blob.boundingBox()) because of no lineLength")
+            if Log.isEnabled(.info) {
+                let size = await blob.size()
+                let box = await blob.boundingBox()
+                Log.i("frame \(frameIndex) ignoring blob of size \(size) \(box) because of no lineLength")
+            }
         }
     } else {
         //Log.i("frame \(frameIndex) ignoring blob of size \(await blob.size()) \(await blob.boundingBox()) because of args.minBlobSize \(args.minBlobSize)")

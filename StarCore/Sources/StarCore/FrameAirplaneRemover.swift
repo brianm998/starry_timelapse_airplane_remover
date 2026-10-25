@@ -291,12 +291,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     private var saveTimerTask: Task<Void,Never>?
+    // identifies the latest timer, so a finishing task clears `saveTimerTask` only if it is
+    // still the current one and not a newer timer that replaced it
+    private var saveTimerGeneration = 0
     
     public func startSaveTimerTask(waitTime: TimeInterval = 12,
                                    closure: @Sendable @escaping () async throws -> Void)
     {
         if let saveTimerTask { saveTimerTask.cancel() }
 
+        saveTimerGeneration += 1
+        let generation = saveTimerGeneration
         saveTimerTask = Task {
           do {
             try? await Task.sleep(nanoseconds: UInt64(waitTime*1_000_000_000))
@@ -305,7 +310,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           } catch {
             Log.e("error: \(error)")
           }
-          saveTimerTask = nil
+          if saveTimerGeneration == generation { saveTimerTask = nil }
         }
     }
     
@@ -738,7 +743,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var horizonMaskImage: PixelatedImage? = nil
             let result = try await alignmentProcessor.loadOrCreateEarthAlignedImage()
             if let mat = result.warpedFrame {
-                earthAlignedImage = PixelatedImage(mat: mat.ensure16Bits())
+                earthAlignedImage = mat.ensure16Bits().flatMap { PixelatedImage(mat: $0) }
             }
             if let mat = result.warpedHorizon {
                 horizonMaskImage = PixelatedImage(mat: mat)
@@ -758,7 +763,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var skyAlignedImage: PixelatedImage? = nil
         if let starAlignedImage {
-            skyAlignedImage = PixelatedImage(mat: starAlignedImage.ensure16Bits())
+            skyAlignedImage = starAlignedImage.ensure16Bits().flatMap { PixelatedImage(mat: $0) }
         }
 
         guard let skyAlignedImage else {
@@ -972,8 +977,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public var hasHorizonReference: Bool {
         get async { await horizonProcessor.hasHorizonReference }
     }
-    public func loadHorizonThumbnailOverlay(thumbnailWidth: Int, thumbnailHeight: Int) async throws -> HorizonThumbnailOverlay? {
-        try await horizonProcessor.loadHorizonThumbnailOverlay(thumbnailWidth: thumbnailWidth, thumbnailHeight: thumbnailHeight)
+    public func loadHorizonThumbnailOverlays(thumbnailWidth: Int, thumbnailHeight: Int) async -> [HorizonThumbnailOverlay] {
+        await horizonProcessor.loadHorizonThumbnailOverlays(thumbnailWidth: thumbnailWidth, thumbnailHeight: thumbnailHeight)
     }
     public func saveHorizonReferenceMask(
         paintedYPerColumn: [Int?],
@@ -1298,20 +1303,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     internal func computeRemovalMask(
       selecting selection: RemovalMaskSelection = .remove
-    ) async throws -> (Bool, [Double], [UInt8]) {
+    ) async throws -> (Bool, RemovalAlphaLevels, [UInt8]) {
         self.set(state: .creatingRemovalMask)
 
         // remove every outlier in the list with pixels from the adjecent frames
         guard let outlierGroups = await outlierProcessor.getOutlierGroups() else {
             Log.e("cannot remove pixels without outlier groups")
-            return (false, [], [])
+            return (false, RemovalAlphaLevels(), [])
         }
         
         // the alpha level to apply to each pixel in the image
         // indexed by y*width+x
         // this is esentially a layer mask for the frame, 
         // with the adjusted neighbor frame underneath
-        var alphaLevels = [Double](repeating: 0, count: width*height)
         var alphaYAxis = [UInt8](repeating: 0, count: height)
 
         // first go through the outlier groups and determine what alpha
@@ -1327,7 +1331,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
           radius: config.outlierGroupPaintBorderPixels
         )
         
-        let removeMaskIntRadius = Int(removeMask.radius)
+        // The mask is symmetric about its `center` pixel (index `Int(radius + 1)`), so that is the
+        // pixel to lay over each outlier pixel. This used `Int(radius)`, one short, which slid
+        // every removal halo a pixel up and to the left of the pixels it was meant to cover.
+        let removeMaskIntRadius = removeMask.center
+
+        // The frame's alpha, one 16-bit index per pixel into the mask's own values (see
+        // `RemovalAlphaLevels`), and the mask pre-converted to those indices.
+        var alphaLevels = RemovalAlphaLevels(mask: removeMask, pixelCount: width*height)
+        let maskLevels = removeMask.pixels.map { alphaLevels.level(of: $0) }
 
         // only remove when we have found at least one positive outlier group
         var shouldRemove = false
@@ -1344,23 +1356,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     let maskStartX = pixel.x - removeMaskIntRadius
                     let maskStartY = pixel.y - removeMaskIntRadius
 
-                    for maskX in 0..<removeMask.size {
-                        for maskY in 0..<removeMask.size {
+                    // rows outermost, so the inner loop walks a row of the frame in memory order
+                    for maskY in 0..<removeMask.size {
+                        let frameY = maskY + maskStartY
+                        if frameY < 0 || frameY >= height { continue }
+                        for maskX in 0..<removeMask.size {
                             let frameX = maskX + maskStartX
-                            let frameY = maskY + maskStartY
-
-                            if frameX >= 0,
-                               frameX < width,
-                               frameY >= 0,
-                               frameY < height
-                            {
+                            if frameX >= 0, frameX < width {
                                 let frameIndex = frameY*width+frameX
                                 let maskIndex = maskY*removeMask.size+maskX
-                                
-                                let frameAlpha = alphaLevels[frameIndex]
-                                let maskAlpha = removeMask.pixels[maskIndex]
-                                if maskAlpha > frameAlpha {
-                                    alphaLevels[frameIndex] = maskAlpha
+
+                                if alphaLevels.raise(frameIndex, to: maskLevels[maskIndex]) {
                                     alphaYAxis[frameY] = 0xFF
                                 }
                             }
@@ -1402,7 +1408,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if shouldRemove {
             return (shouldRemove, alphaLevels, alphaYAxis)
         } else {
-            return (shouldRemove, [], [])
+            return (shouldRemove, RemovalAlphaLevels(), [])
         }
     }
     
@@ -1668,11 +1674,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         var hasChanged = false
         
-        var config = await configManager.config()
-        config.pixelReplacementOverrides[self.frameIndex] = cleanMethod
         if update {
+            let frameIndex = self.frameIndex
             await MainActor.run {
-                configManager.update(config)
+                configManager.setPixelReplacementOverride(cleanMethod, forFrame: frameIndex)
             }
         }
         hasChanged = await observer?.cleanMethod == cleanMethod

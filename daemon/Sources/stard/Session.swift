@@ -89,13 +89,17 @@ actor Session {
 
         let weakSelf = WeakSessionRef(self)
         // Told whenever a preview is written, which is how a client learns that the picture it has is old.
-        let imageAccessor = ImageAccessor(
+        var imageAccessor = ImageAccessor(
             config: config,
             imageSequence: imageSequence,
             frameIndexToBaseNameMap: frameIndexToBaseNameMap
         ) { _, frameIndex, type, size in
             guard size == .preview else { return }
             Task { await weakSelf.session?.onImageSaved(frameIndex: frameIndex, type: type) }
+        }
+        // Told whenever a frame's horizon lines change, so the client draws them again.
+        imageAccessor.horizonChangedClosure = { frameIndex in
+            Task { await weakSelf.session?.horizonRefined(frameIndex: frameIndex) }
         }
 
         var callbacks = Callbacks()
@@ -666,7 +670,10 @@ actor Session {
         // says what it is doing, since there is no frame graph to count (macOS passes exactly these to its modal).
         var refinementSteps: [OperationType] = []
         if !refinementFrames.isEmpty { refinementSteps.append(.mergedHorizon) }
+        // The consensus lines of the refined and re-merged frames are anchored on the edited references, so they are built again.
+        if HorizonConsensus.applies(to: await configManager.config()) { refinementSteps.append(.horizonConsensus) }
         if !framesToMerge.isEmpty { refinementSteps.append(.merge) }
+        let sequenceFrames = frames
         await beginStepReports(generation: generation, types: refinementSteps,
                                status: localized("ui.horizon_refinement_preparing", framesToMerge.count))
         let weakSelf = WeakSessionRef(self)
@@ -680,6 +687,7 @@ actor Session {
             await frameGraphBuilder.enqueueHorizonRefinement(
               refinementFrames: refining,
               mergeFrames: merging,
+              sequenceFrames: sequenceFrames,
               refinementCompletion: { frame in
                   await weakSelf.session?.horizonRefined(frameIndex: frame.frameIndex)
               },
@@ -693,7 +701,8 @@ actor Session {
         return true
     }
 
-    /// One frame's merged horizon was recomputed: tell the client to draw its horizon again.
+    /// One frame's horizon lines changed — a mask of any kind written or deleted, a reference painted or cleared, a refinement
+    /// finished: tell the client to draw them again.
     private func horizonRefined(frameIndex: Int) {
         var prog = Star_V1_ProgressEvent()
         prog.kind = .horizonUpdated(Int32(frameIndex))
@@ -725,6 +734,9 @@ actor Session {
         }
         await flushSaves()
         await configManager.flush()
+        // This sequence's cached reference statistics must not outlive it (another session may
+        // open a sequence whose frames share these indices).
+        await ReferenceHorizonStatsRegistry.shared.removeAll()
         let subscribers = progressSubscribers.values
         progressSubscribers.removeAll()
         for cont in subscribers { cont.finish() }
@@ -748,6 +760,8 @@ actor Session {
     /// way is let finish first, since it may have begun before the latest edit.  False if the frame could
     /// not be saved, or the save did not end within `timeout`.
     func renderNow(_ frame: FrameAirplaneRemover, timeout: Duration = .seconds(600)) async -> Bool {
+        // A closed session has no save queue worth feeding, and a cancelled caller no longer wants this.
+        if closed || Task.isCancelled { return false }
         let deadline = ContinuousClock.now + timeout
         guard await waitForSave(of: frame, until: deadline) else { return false }
         guard await beginSave(frame) else { return false }
@@ -816,7 +830,10 @@ actor Session {
             case .savePending, .saving: break
             }
             if ContinuousClock.now > deadline { return false }
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            // `try?` here turned a cancelled caller into a busy loop: sleep throws at once when the
+            // task is cancelled, the error was dropped, and the loop spun on `savingState()` with no
+            // pause until the deadline. A cancelled wait is over.
+            do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return false }
         }
     }
 

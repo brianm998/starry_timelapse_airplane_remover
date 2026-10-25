@@ -104,7 +104,7 @@ final class MergeCoveragePlaneTests: XCTestCase {
               withFilenames: (0..<16).map { "n\($0)" },
               outlierThreshold: 1.2,
               includeAll: false
-            )
+            )!
             for c in 0..<3 {
                 XCTAssertEqual(channel(merged, 30, 20, c), 0,
                                "a light two of seventeen sources saw must not " +
@@ -133,7 +133,7 @@ final class MergeCoveragePlaneTests: XCTestCase {
               withFilenames: (0..<8).map { "n\($0)" },
               outlierThreshold: 1.2,
               includeAll: false
-            )
+            )!
             XCTAssertEqual(channel(merged, 30, 20, 0), 1000)
             XCTAssertEqual(channel(merged, 30, 20, 1), 1200)
             XCTAssertEqual(channel(merged, 30, 20, 2), 1400)
@@ -152,7 +152,7 @@ final class MergeCoveragePlaneTests: XCTestCase {
               black, withFilenames: ["n0", "n1"],
               outlierThreshold: 1.2,
               includeAll: true
-            )
+            )!
             XCTAssertEqual(channel(merged, 30, 20, 0), 0)
             XCTAssertEqual(channel(merged, 60, 39, 2), 0)
         }

@@ -174,6 +174,27 @@ public enum PixelatedImageBridge {
                                            searchTopFraction, searchBottomFraction) else { return nil }
         return MatWrapper(ref: r)
     }
+    /// The weight-independent half of the DP horizon (grey, Sobel, Canny), done once so a grid
+    /// search can `solve` it for many weights. See `pib_dp_prepare`.
+    public final class DPHorizonPrepared: @unchecked Sendable {
+        fileprivate let ref: DPPreparedRef
+        fileprivate init(ref: DPPreparedRef) { self.ref = ref }
+        deinit { pib_dp_prepared_release(ref) }
+
+        public func solve(smoothnessLambda: Double, sobelWeight: Double, cannyWeight: Double,
+                          searchTopFraction: Double, searchBottomFraction: Double) -> MatWrapper? {
+            guard let r = pib_dp_solve(ref, smoothnessLambda, sobelWeight, cannyWeight,
+                                       searchTopFraction, searchBottomFraction) else { return nil }
+            return MatWrapper(ref: r)
+        }
+    }
+
+    public static func dpHorizonPrepare(_ img: MatWrapper, cannyMin: Double, cannyMax: Double,
+                                        useL2Gradient: Bool) -> DPHorizonPrepared? {
+        guard let r = pib_dp_prepare(img.ref, cannyMin, cannyMax, useL2Gradient) else { return nil }
+        return DPHorizonPrepared(ref: r)
+    }
+
     /// GrabCut horizon detection. Uses OpenCV's GrabCut with an initial
     /// horizon estimate to segment sky from ground.
     public static func grabCutHorizon(

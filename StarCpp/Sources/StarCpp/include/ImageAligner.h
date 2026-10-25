@@ -149,12 +149,17 @@ OCVFeatureSetRef ia_debug_akaze_opencv(MatWrapperRef img, MatWrapperRef mask,
 // Compute homography for each neighbor. Returns count of warp infos written.
 // outWarpInfos must point to an array of at least neighborCount elements.
 // On error, returns 0 and sets errorMsg.
+//
+// imageWidth/imageHeight are the full-resolution frame's, which the keypoints are in.  The
+// ground is fitted as a camera rotation about the frame's centre, so earth alignment
+// needs them and fails without; the sky does not read them.
 int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                           int frameIndex,
                           const AlignmentNeighborData *neighbors, int neighborCount,
                           FeatureMatchMethod matchMethod,
                           AlignmentType alignmentType,
                           int maxKeypoints, bool writeDebugImages,
+                          int imageWidth, int imageHeight,
                           AlignmentUpdateFunc updateHandler, void *updateContext,
                           AlignmentWarpInfoData *outWarpInfos,
                           const char **errorMsg);
@@ -252,13 +257,19 @@ MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count);
 
 // Add a single in-memory horizon mask to a running CV_32S pixel-count accumulator.
 // Pass NULL for `accum` on the first call; pass the previous result on subsequent calls.
-// Caller must release the returned ref (and the old accum if replacing it).
+// `accum` is updated IN PLACE (no copy of the running total) and the returned ref shares its
+// buffer, so the caller must not use `accum` concurrently with this call. If the call fails
+// (NULL result, e.g. a size mismatch) `accum` is unchanged. Caller must release the returned
+// ref (and the old accum if replacing it).
 MatWrapperRef ia_accumulate_one_horizon_mask(MatWrapperRef accum, MatWrapperRef mask);
 
 // Load horizon masks from files and add them to an existing CV_32S accumulator.
 // Pass NULL for `accum` to start a fresh accumulation from files only.
 // Caller must release the returned ref.
-MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum, const char **filenames, int count);
+// `outLoaded`, if non-NULL, is `count` bytes: 1 for each file that actually loaded and was added,
+// 0 for each that was missing. The vote has to be against the masks that are really in the total.
+MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum, const char **filenames, int count,
+                                       uint8_t *outLoaded);
 
 // Apply majority-vote threshold to a CV_32S accumulator and return a binary mask.
 // Pixels seen in more than half of `total_count` frames become white (255), rest black (0).

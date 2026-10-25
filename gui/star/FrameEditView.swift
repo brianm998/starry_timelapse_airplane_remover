@@ -253,29 +253,14 @@ struct FrameEditView: View {
             // Uses full-frame-resolution yPerColumn so coordinates map 1:1 to
             // frame pixels. lineWidth is scaled by 1/zoom so the stroke stays
             // a constant visual thickness regardless of zoom level.
-            if viewModel.userPreferences.showHorizonOnMainView ?? false,
-               let overlay = viewModel.frames[viewModel.currentIndex].frameHorizonOverlay
-            {
+            if viewModel.userPreferences.showHorizonOnMainView ?? false {
                 let frameView = viewModel.frames[viewModel.currentIndex]
-                let strokeColor: Color = if frameView.isPendingHorizonRefinement { .orange }
-                else { switch overlay.kind {
-                    case .initial:   .white
-                    case .merged:    .blue
-                    case .reference: .green
-                }}
-                let zoom = viewModel.currentZoomScale
-                Canvas { ctx, size in
-                    guard !overlay.yPerColumn.isEmpty else { return }
-                    var path = Path()
-                    for (col, y) in overlay.yPerColumn.enumerated() {
-                        let pt = CGPoint(x: CGFloat(col), y: CGFloat(y))
-                        if col == 0 { path.move(to: pt) }
-                        else        { path.addLine(to: pt) }
-                    }
-                    ctx.stroke(path, with: .color(strokeColor), lineWidth: 4 / zoom)
-                }
+                HorizonLinesCanvas(
+                  overlays: frameView.frameHorizonOverlays,
+                  visibleKinds: viewModel.userPreferences.visibleHorizonLineKinds,
+                  isPendingRefinement: frameView.isPendingHorizonRefinement,
+                  lineWidth: 4 / viewModel.currentZoomScale)
                 .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
-                .allowsHitTesting(false)
             }
 
             // Horizon painter canvas — overlaid at image coordinates so that

@@ -1,4 +1,5 @@
 import XCTest
+import StarCppBridge
 @testable import StarCore
 
 /// File scope rather than an instance property: the timeout helper below takes a @Sendable
@@ -906,6 +907,107 @@ final class MemoryMonitorTests: XCTestCase {
 
     /// Runs `work`, returning false if it did not finish within the timeout.  Used to assert that
     /// a reservation is *admitted* rather than queued, without hanging the suite if it is not.
+    // MARK: - queue order and booking
+
+    /// A request that would fit the headroom must still queue behind one that does not, or a
+    /// stream of small requests starves the large one.
+    func testARequestThatFitsDoesNotJumpAQueuedWaiter() async {
+        let m = await monitor()
+        await m.configure(budgetFraction: 0.1, maxWaitTime: 600)
+        let budget = await m.snapshot().admissionBudgetBytes
+        let big = budget * 6 / 10, small = budget * 2 / 10
+
+        await m.reserve(bytes: big)                   // A: 60%
+        let b = Task { await m.reserve(bytes: big) }  // B: needs 60%, must wait
+        while await m.snapshot().waiting < 1 { try? await Task.sleep(nanoseconds: 5_000_000) }
+
+        let c = Task { await m.reserve(bytes: small) } // C: 20% fits the headroom, but B is first
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        let snap = await m.snapshot()
+        XCTAssertEqual(snap.waiting, 2, "C was admitted ahead of the queued B")
+        XCTAssertEqual(snap.reservedBytes, big)
+
+        await m.release(bytes: big)
+        await b.value
+        await c.value
+        let end = await m.snapshot().reservedBytes
+        XCTAssertEqual(end, big + small)
+    }
+
+    /// The grant is on the ledger the moment `release` returns, before the waiter has run.
+    /// Booking after the resume left a window where another reserve saw the headroom free.
+    func testAGrantIsBookedByTheDrainNotByTheWaiter() async {
+        let m = await monitor()
+        await m.configure(budgetFraction: 0.1, maxWaitTime: 600)
+        let budget = await m.snapshot().admissionBudgetBytes
+        let big = budget * 6 / 10
+
+        await m.reserve(bytes: big)
+        let b = Task { await m.reserve(bytes: big) }
+        while await m.snapshot().waiting < 1 { try? await Task.sleep(nanoseconds: 5_000_000) }
+
+        await m.release(bytes: big)
+        // No suspension between the release and this read other than the actor hop itself.
+        let booked = await m.snapshot().reservedBytes
+        XCTAssertEqual(booked, big, "the released waiter's bytes were not on the ledger yet")
+        await b.value
+        let after = await m.snapshot().reservedBytes
+        XCTAssertEqual(after, big, "the grant was counted twice")
+    }
+
+    /// Releases and reserves interleaved on the actor never push the ledger over budget.
+    func testInterleavedReservesAndReleasesNeverExceedTheBudget() async {
+        let m = await monitor()
+        await m.configure(budgetFraction: 0.1, maxWaitTime: 600)
+        let budget = await m.snapshot().admissionBudgetBytes
+        let chunk = budget / 4 + 1   // three fit, four do not
+
+        let peak = Peak()
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<40 {
+                group.addTask {
+                    await m.reserve(bytes: chunk)
+                    await peak.note(await m.snapshot().reservedBytes)
+                    try? await Task.sleep(nanoseconds: 2_000_000)
+                    await m.release(bytes: chunk)
+                }
+            }
+        }
+        let high = await peak.value
+        XCTAssertLessThanOrEqual(high, budget)
+        let end = await m.snapshot().reservedBytes
+        XCTAssertEqual(end, 0)
+    }
+
+    /// Work waiting for memory turns the GPU pools off, and the queue emptying turns them back
+    /// on: an idle pool is footprint no reservation covers, and on a 7GB machine it helped hold
+    /// the budget below one keypoint op.
+    func testAWaitingReservationTurnsGPUPoolingOffUntilTheQueueEmpties() async {
+        let m = await monitor()
+        await m.configure(budgetFraction: 0.1, maxWaitTime: 600)
+        let budget = await m.snapshot().admissionBudgetBytes
+        let big = budget * 6 / 10
+        // The flag is process-wide, and earlier tests here leave monitors with waiters queued.
+        GPUOps.setPoolingAllowed(true)
+
+        await m.reserve(bytes: big)
+        XCTAssertTrue(GPUOps.poolingAllowed, "an admitted reservation turned pooling off")
+
+        let b = Task { await m.reserve(bytes: big) }
+        while await m.snapshot().waiting < 1 { try? await Task.sleep(nanoseconds: 5_000_000) }
+        XCTAssertFalse(GPUOps.poolingAllowed, "pooling stayed on while a reservation waited")
+
+        await m.release(bytes: big)
+        await b.value
+        XCTAssertTrue(GPUOps.poolingAllowed, "pooling stayed off after the queue emptied")
+        await m.release(bytes: big)
+    }
+
+    private actor Peak {
+        var value: UInt64 = 0
+        func note(_ v: UInt64) { value = max(value, v) }
+    }
+
     private func withTimeout(seconds: Double,
                              _ work: @escaping @Sendable () async -> Void) async -> Bool
     {

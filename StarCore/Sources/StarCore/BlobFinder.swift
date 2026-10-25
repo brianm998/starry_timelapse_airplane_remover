@@ -172,7 +172,6 @@ public class BlobFinder {
 
     public func process(_ args: Args,
                         subtractionArray: [UInt16],
-                        originalImage: PixelatedImage,
                         frame: FrameAirplaneRemover,
                         within bounds: BoundingBox? = nil,
                         startingBlobID: UInt16 = 1
@@ -189,7 +188,6 @@ public class BlobFinder {
           imageHeight: frame.height,
           within: bounds,
           subtractionPixelData: subtractionArray,
-          originalImage: originalImage,
           frameIndex: frame.frameIndex,
           neighborType: .eight,//.fourCardinal
           startingBlobID: startingBlobID

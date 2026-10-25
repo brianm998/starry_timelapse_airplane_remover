@@ -14,6 +14,8 @@ void             ocv_feature_set_release(OCVFeatureSetRef ref);
 
 // --- Properties ---
 int64_t ocv_feature_set_keypoint_count(OCVFeatureSetRef ref);
+// Star centroids found alongside a sky feature set's keypoints; 0 for earth sets.
+int64_t ocv_feature_set_star_count(OCVFeatureSetRef ref);
 int64_t ocv_feature_set_descriptor_rows(OCVFeatureSetRef ref);
 int64_t ocv_feature_set_descriptor_cols(OCVFeatureSetRef ref);
 int     ocv_feature_set_descriptor_type(OCVFeatureSetRef ref);

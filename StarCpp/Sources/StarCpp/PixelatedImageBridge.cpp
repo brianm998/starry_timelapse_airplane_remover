@@ -119,16 +119,19 @@ MatWrapperRef pib_filter_connected_components(MatWrapperRef image, int64_t n) {
         }
         std::sort(areas.begin(), areas.end(), std::greater<>());
 
-        std::set<int> keep;
+        // A per-label lookup table: one array read per pixel instead of a std::set search.
+        std::vector<uint8_t> keep((size_t)nLabels, 0);
         for (int i = 0; i < std::min<int>((int)n, (int)areas.size()); i++) {
-            keep.insert(areas[i].second);
+            keep[(size_t)areas[i].second] = 1;
         }
 
         cv::Mat filtered = cv::Mat::zeros(owned.size(), CV_8UC1);
-        for (int y = 0; y < labels.rows; y++)
+        for (int y = 0; y < labels.rows; y++) {
+            const int *labelRow = labels.ptr<int>(y);
+            uchar *outRow = filtered.ptr<uchar>(y);
             for (int x = 0; x < labels.cols; x++)
-                if (keep.count(labels.at<int>(y, x)))
-                    filtered.at<uchar>(y, x) = 255;
+                if (keep[(size_t)labelRow[x]]) outRow[x] = 255;
+        }
 
         return wrap(filtered);
     } catch (const cv::Exception &e) {
@@ -174,20 +177,22 @@ MatWrapperRef pib_ground_only(MatWrapperRef image) {
         cv::bitwise_not(bin, inv);
 
         cv::Mat labels, stats, centroids;
-        cv::connectedComponentsWithStats(inv, labels, stats, centroids, 8, CV_32S);
+        int nLabels = cv::connectedComponentsWithStats(inv, labels, stats, centroids, 8, CV_32S);
 
-        std::set<int> bottomLabels;
+        std::vector<uint8_t> bottomLabels((size_t)nLabels, 0);
         int bottomY = inv.rows - 1;
         for (int x = 0; x < labels.cols; x++) {
             int lbl = labels.at<int>(bottomY, x);
-            if (lbl > 0) bottomLabels.insert(lbl);
+            if (lbl > 0) bottomLabels[(size_t)lbl] = 1;
         }
 
         cv::Mat groundMask = cv::Mat::zeros(inv.size(), CV_8UC1);
-        for (int y = 0; y < labels.rows; y++)
+        for (int y = 0; y < labels.rows; y++) {
+            const int *labelRow = labels.ptr<int>(y);
+            uchar *outRow = groundMask.ptr<uchar>(y);
             for (int x = 0; x < labels.cols; x++)
-                if (bottomLabels.count(labels.at<int>(y, x)))
-                    groundMask.at<uchar>(y, x) = 255;
+                if (bottomLabels[(size_t)labelRow[x]]) outRow[x] = 255;
+        }
 
         cv::Mat finalMask;
         cv::bitwise_not(groundMask, finalMask);
@@ -212,19 +217,21 @@ MatWrapperRef pib_sky_only(MatWrapperRef image) {
         cv::threshold(owned, bin, 127, 255, cv::THRESH_BINARY);
 
         cv::Mat labels, stats, centroids;
-        cv::connectedComponentsWithStats(bin, labels, stats, centroids, 8, CV_32S);
+        int nLabels = cv::connectedComponentsWithStats(bin, labels, stats, centroids, 8, CV_32S);
 
-        std::set<int> topLabels;
+        std::vector<uint8_t> topLabels((size_t)nLabels, 0);
         for (int x = 0; x < labels.cols; x++) {
             int lbl = labels.at<int>(0, x);
-            if (lbl > 0) topLabels.insert(lbl);
+            if (lbl > 0) topLabels[(size_t)lbl] = 1;
         }
 
         cv::Mat skyMask = cv::Mat::zeros(bin.size(), CV_8UC1);
-        for (int y = 0; y < labels.rows; y++)
+        for (int y = 0; y < labels.rows; y++) {
+            const int *labelRow = labels.ptr<int>(y);
+            uchar *outRow = skyMask.ptr<uchar>(y);
             for (int x = 0; x < labels.cols; x++)
-                if (topLabels.count(labels.at<int>(y, x)))
-                    skyMask.at<uchar>(y, x) = 255;
+                if (topLabels[(size_t)labelRow[x]]) outRow[x] = 255;
+        }
 
         return wrap(skyMask);
     } catch (const cv::Exception &e) {
@@ -768,13 +775,16 @@ MatWrapperRef pib_binary_horizon_mask(int width, int height, const int *horizonY
     return nullptr;
 }
 
-MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
-                                  double cannyMin, double cannyMax,
-                                  bool useL2Gradient,
-                                  double smoothnessLambda,
-                                  double sobelWeight, double cannyWeight,
-                                  double searchTopFraction,
-                                  double searchBottomFraction) {
+// The weight-independent part of the DP horizon: grey / 8-bit conversion, Sobel and Canny.
+// A grid search solves the same image with many (lambda, sobel, canny) weights, and these
+// steps dominated each of those calls, so they are done once per image.
+struct DPPrepared {
+    cv::Mat sobelNorm, cannyNorm;
+    int rows = 0, cols = 0;
+};
+
+DPPreparedRef pib_dp_prepare(MatWrapperRef img, double cannyMin, double cannyMax,
+                             bool useL2Gradient) {
     if (!img) return nullptr;
     try {
         cv::Mat input = img->mat;
@@ -787,21 +797,44 @@ MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
         int rows = gray.rows, cols = gray.cols;
         if (rows < 2 || cols < 2) return nullptr;
 
+        auto *prepared = new DPPrepared();
+        prepared->rows = rows;
+        prepared->cols = cols;
+
+        // Sobel vertical gradient
+        cv::Mat sobelY, absSobelY;
+        cv::Sobel(gray, sobelY, CV_32F, 0, 1, 3);
+        cv::convertScaleAbs(sobelY, absSobelY);
+        absSobelY.convertTo(prepared->sobelNorm, CV_32F, 1.0 / 255.0);
+
+        // Canny edges
+        cv::Mat edges;
+        cv::Canny(gray, edges, cannyMin, cannyMax, 3, useL2Gradient);
+        edges.convertTo(prepared->cannyNorm, CV_32F, 1.0 / 255.0);
+        return prepared;
+    } catch (const cv::Exception &e) {
+        Log_e("OpenCV Exception in dpPrepare: %s", e.what());
+    }
+    return nullptr;
+}
+
+void pib_dp_prepared_release(DPPreparedRef prepared) { delete prepared; }
+
+MatWrapperRef pib_dp_solve(DPPreparedRef prepared,
+                           double smoothnessLambda,
+                           double sobelWeight, double cannyWeight,
+                           double searchTopFraction,
+                           double searchBottomFraction) {
+    if (!prepared) return nullptr;
+    try {
+        const int rows = prepared->rows, cols = prepared->cols;
+        const cv::Mat &sobelNorm = prepared->sobelNorm;
+        const cv::Mat &cannyNorm = prepared->cannyNorm;
+
         int searchTop = std::max(0, (int)(rows * searchTopFraction));
         int searchBottom = std::min(rows - 1, (int)(rows * searchBottomFraction));
         int bandHeight = searchBottom - searchTop + 1;
         if (bandHeight < 2) return nullptr;
-
-        // Sobel vertical gradient
-        cv::Mat sobelY, absSobelY, sobelNorm;
-        cv::Sobel(gray, sobelY, CV_32F, 0, 1, 3);
-        cv::convertScaleAbs(sobelY, absSobelY);
-        absSobelY.convertTo(sobelNorm, CV_32F, 1.0 / 255.0);
-
-        // Canny edges
-        cv::Mat edges, cannyNorm;
-        cv::Canny(gray, edges, cannyMin, cannyMax, 3, useL2Gradient);
-        edges.convertTo(cannyNorm, CV_32F, 1.0 / 255.0);
 
         // Cost image
         double baseCost = 1.0;
@@ -883,6 +916,21 @@ MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
         Log_e("OpenCV Exception in dpHorizonMask: %s", e.what());
     }
     return nullptr;
+}
+
+MatWrapperRef pib_dp_horizon_mask(MatWrapperRef img,
+                                  double cannyMin, double cannyMax,
+                                  bool useL2Gradient,
+                                  double smoothnessLambda,
+                                  double sobelWeight, double cannyWeight,
+                                  double searchTopFraction,
+                                  double searchBottomFraction) {
+    DPPreparedRef prepared = pib_dp_prepare(img, cannyMin, cannyMax, useL2Gradient);
+    if (!prepared) return nullptr;
+    MatWrapperRef result = pib_dp_solve(prepared, smoothnessLambda, sobelWeight, cannyWeight,
+                                        searchTopFraction, searchBottomFraction);
+    pib_dp_prepared_release(prepared);
+    return result;
 }
 
 void pib_grabcut_horizon(MatWrapperRef img,
