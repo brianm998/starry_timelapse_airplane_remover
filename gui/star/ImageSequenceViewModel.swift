@@ -2712,6 +2712,7 @@ public final class ImageSequenceViewModel {
     }
 
     private func handleProcessingDone() {
+        Log.i("processing done: render after = \(autoRenderAfterProcessing), skip prompts = \(userPreferences.skipRenderPromptAfterProcessing == true)")
         if autoRenderAfterProcessing {
             // user already said yes in the pre-prompt — render directly
             autoRenderAfterProcessing = false

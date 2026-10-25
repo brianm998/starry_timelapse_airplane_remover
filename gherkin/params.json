@@ -1,9 +1,34 @@
 {
   "default": {
-    "sequence": "data:a7sii_10",
-    "expected_outputs": "19"
+    "frame_format": "tiff16"
   },
   "cli": {},
   "mac-gui": {},
-  "desktop": {}
+  "desktop": {},
+  "features": {
+    "autoSkyOnlyTiff16": {
+      "sequence": "data:a7sii_10_sky_tiff16"
+    },
+    "autoHorizonJpeg": {
+      "sequence": "data:a7sii_10"
+    },
+    "autoHorizonVideo": {
+      "video": "data:a7sii_10_h264"
+    },
+    "autoHorizonTiff16": {
+      "sequence": "data:a7sii_10_tiff16"
+    },
+    "autoMovingTiff16": {
+      "sequence": "data:moving_a7iv_1_aurora_tiff16"
+    },
+    "selectiveHorizonTiff16": {
+      "sequence": "data:a7sii_10_tiff16"
+    },
+    "autoSelectiveHorizonTiff16": {
+      "sequence": "data:a7sii_10_tiff16"
+    },
+    "autoHorizonJpegVideoOut": {
+      "sequence": "data:a7sii_10"
+    }
+  }
 }

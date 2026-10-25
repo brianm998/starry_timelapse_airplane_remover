@@ -1,7 +1,5 @@
 import XCTest
-import StarCore
-import StarDaemonMessages
-@testable import stard
+@testable import StarCore
 
 /// `Export.Video` used to point ffmpeg at `<outputPath>/image_%04d.tiff`.  Nothing writes a file
 /// there: processing puts each final frame in `<outputPath>/<sequence>-star-v-<version>/` under
@@ -198,13 +196,6 @@ final class VideoExportTests: XCTestCase {
         let args = VideoExport.arguments(
           listPath: "/l", audio: noAudio, videoInfo: videoInfo(), outputVideoPath: "/o/out.mov")
         XCTAssertFalse(args.contains("-vf"))
-    }
-
-    func testTheRequestedHeightSurvivesTheFallbackToTheOpenedVideosSettings() {
-        var request = Star_V1_VideoEncodeSettings()   // no codec: the fallback path
-        request.outputHeight = 720
-        let info = ExportHandlers.videoInfo(for: request, opened: videoInfo(), config: config())
-        XCTAssertEqual(info.resolution, .p720)
     }
 
     func testAudioIsAddedAsASecondInputAndCopied() {

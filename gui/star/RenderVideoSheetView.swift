@@ -152,6 +152,7 @@ struct RenderVideoSheetView: View {
                 VStack {
                     Space(height: 20)
                     Text(localized("ui.rendering_error", renderingError))
+                      .accessibilityIdentifier("render.error")
                       .font(.title)
                     Button(localized("ui.dismiss")) {
                         self.isVisible = false
@@ -171,6 +172,7 @@ struct RenderVideoSheetView: View {
                 Space(height: 20)
                 Text(localized("ui.successfully_rendered", videoFilename))
                   .font(.title)
+                  .accessibilityIdentifier("render.done")
                 Button(localized("ui.reveal_in_finder")) {
                     let configManager = viewModel.config 
                     revealInFinder(path: "\(configManager.config().outputPath)/\(videoFilename)")

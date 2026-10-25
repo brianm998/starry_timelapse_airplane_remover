@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -90,8 +91,8 @@ private fun StartupCard(content: @Composable () -> Unit) {
 private fun HorizonPrompt(app: AppViewModel) {
     Title(localized("ui.does_this_video_include_a_horizon"))
     AnswerRow(advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton(localized("ui.no")) { app.startupAnswerHorizon(false) }
-        PrimaryButton(localized("ui.yes")) { app.startupAnswerHorizon(true) }
+        SecondaryButton(localized("ui.no"), "startup.horizon.no") { app.startupAnswerHorizon(false) }
+        PrimaryButton(localized("ui.yes"), "startup.horizon.yes") { app.startupAnswerHorizon(true) }
     }
 }
 
@@ -101,8 +102,8 @@ private fun MovingPrompt(app: AppViewModel) {
     Title(localized("ui.or"), small = true)
     Title(localized("ui.was_it_stationary_on_a_tripod_the_entire"))
     AnswerRow(back = { app.startupGoBack(StartupStep.MOVING) }, advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton(localized("ui.static")) { app.startupAnswerMoving(false) }
-        PrimaryButton(localized("ui.moving")) { app.startupAnswerMoving(true) }
+        SecondaryButton(localized("ui.static"), "startup.moving.static") { app.startupAnswerMoving(false) }
+        PrimaryButton(localized("ui.moving"), "startup.moving.moving") { app.startupAnswerMoving(true) }
     }
 }
 
@@ -111,8 +112,8 @@ private fun SelectHorizonPrompt(app: AppViewModel) {
     Title(localized("ui.do_you_want_to_select_the_horizon_yourself"))
     Body(localized("ui.star_allows_you_to_tell_it_where_the_horizon"))
     AnswerRow(back = { app.startupGoBack(StartupStep.SELECT_HORIZON) }) {
-        SecondaryButton(localized("ui.no")) { app.startupAnswerSelectHorizon(false) }
-        PrimaryButton(localized("ui.yes")) { app.startupAnswerSelectHorizon(true) }
+        SecondaryButton(localized("ui.no"), "startup.selecthorizon.no") { app.startupAnswerSelectHorizon(false) }
+        PrimaryButton(localized("ui.yes"), "startup.selecthorizon.yes") { app.startupAnswerSelectHorizon(true) }
     }
 }
 
@@ -130,7 +131,7 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         BackButton { app.startupGoBack(StartupStep.SELECT_MOVING_HORIZONS) }
         Spacer(Modifier.weight(1f))
-        SecondaryButton(localized("ui.no")) { app.startupAnswerSelectHorizon(false) }
+        SecondaryButton(localized("ui.no"), "startup.selectmovinghorizons.no") { app.startupAnswerSelectHorizon(false) }
         Spacer(Modifier.width(28.dp))
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // every step records the preference: only a user change reaches this callback
@@ -162,10 +163,10 @@ private fun RemovalPrompt(app: AppViewModel) {
     ) {
         Text(localized("ui.star_should_remove"), color = StarColors.textPrimary, fontSize = 15.sp)
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            ToggleRow(localized("ui.airplanes"), airplanes) { airplanes = it }
-            ToggleRow(localized("ui.satellites"), satellites) { satellites = it }
-            ToggleRow(localized("ui.meteors"), meteors) { meteors = it }
-            ToggleRow(localized("ui.cars"), cars) { cars = it }
+            ToggleRow(localized("ui.airplanes"), airplanes, "startup.removal.airplanes") { airplanes = it }
+            ToggleRow(localized("ui.satellites"), satellites, "startup.removal.satellites") { satellites = it }
+            ToggleRow(localized("ui.meteors"), meteors, "startup.removal.meteors") { meteors = it }
+            ToggleRow(localized("ui.cars"), cars, "startup.removal.cars") { cars = it }
         }
     }
     HorizontalDivider(color = StarColors.cellDefault)
@@ -175,7 +176,7 @@ private fun RemovalPrompt(app: AppViewModel) {
     HorizontalDivider(color = StarColors.cellDefault)
     AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
         SecondaryButton(localized("ui.close")) { app.dismissStartup() }
-        PrimaryButton(localized("ui.start_processing")) { app.startupStartProcessing(cleanMethod, allowEarthAlignment = cars) }
+        PrimaryButton(localized("ui.start_processing"), "startup.removal.start") { app.startupStartProcessing(cleanMethod, allowEarthAlignment = cars) }
     }
 }
 
@@ -317,15 +318,15 @@ private fun BackButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun PrimaryButton(text: String, onClick: () -> Unit) {
-    Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
+private fun PrimaryButton(text: String, tag: String? = null, onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = tag?.let { Modifier.testTag(it) } ?: Modifier, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
         Text(text, color = Color.White)
     }
 }
 
 @Composable
-private fun SecondaryButton(text: String, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick) { Text(text) }
+private fun SecondaryButton(text: String, tag: String? = null, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = tag?.let { Modifier.testTag(it) } ?: Modifier) { Text(text) }
 }
 
 @Composable
@@ -352,9 +353,9 @@ private fun Stepper(label: String, value: Int, min: Int, max: Int, onChange: (In
 }
 
 @Composable
-private fun ToggleRow(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
+private fun ToggleRow(label: String, value: Boolean, tag: String, onChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Switch(checked = value, onCheckedChange = onChange)
+        Switch(checked = value, onCheckedChange = onChange, modifier = Modifier.testTag(tag))
         Text(label, color = StarColors.textPrimary, fontSize = 14.sp)
     }
 }
