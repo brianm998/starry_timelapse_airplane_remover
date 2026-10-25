@@ -23,9 +23,9 @@ struct RightPanel: View {
 
     @FocusState private var focusedField: FocusedField?
 
-    // which sections are open; all start collapsed.  Kept here rather than in the
+    // which sections are open; all start open.  Kept here rather than in the
     // view model: this view stays alive while the panel is hidden, so it survives that
-    @State private var expandedSections: Set<RightPanelSectionKind> = []
+    @State private var expandedSections = Set(RightPanelSectionKind.allCases)
 
     private func isExpanded(_ kind: RightPanelSectionKind) -> Binding<Bool> {
         Binding(
@@ -534,7 +534,7 @@ struct RightPanel: View {
     }
 }
 
-enum RightPanelSectionKind: Hashable {
+enum RightPanelSectionKind: Hashable, CaseIterable {
     case selectiveTools
     case display
     case processing
