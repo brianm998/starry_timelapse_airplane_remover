@@ -298,60 +298,6 @@ struct RightPanel: View {
 
                             ResourceProfileView(textColor: .white)
 
-                            Picker(localized("ui.redo"), selection: $viewModel.reprocessingType) {
-                                ForEach(FrameReprocessingType.allCases, id: \.self) { value in
-                                    Text(value.rawValue).tag(value)
-                                }
-                            }
-                              .foregroundColor(.white)
-                              .frame(maxWidth: 120)
-                                            
-                            Button() {
-                                Task {
-                                    if let frame = viewModel.currentFrame {
-                                        // XXX reprocess
-                                        viewModel.processFrames(
-                                          from: frame.frameIndex,
-                                          to: frame.frameIndex+viewModel.numberOfFramesToProcess-1,
-                                          performClean: true // uses viewModel.reprocessingType
-                                        )
-                                    }
-                                }
-                            } label: {
-                                switch viewModel.reprocessingType {
-                                case .none:
-                                    Text(localized("ui.process_the_next"))
-                                case .allHorizons:
-                                    Text(localized("ui.re_process_all_horizons"))
-                                default:
-                                    Text(localized("ui.re_process_the_next"))
-                                }
-                            }
-                              .disabled(viewModel.renderingCurrentFrame)
-
-                            if viewModel.reprocessingType != .allHorizons {
-                                EditableNumberOfFramesToProcessView(
-                                  focusedField: $focusedField,
-                                  textColor: .white,
-                                  alwaysOpen: false
-                                )
-
-                                Picker("", selection: $viewModel.detectionType) {
-                                    ForEach(DetectionType.allCases, id: \.self) { value in
-                                        Text(value.rawValue).tag(value)
-                                    }
-                                }
-                                  .frame(maxWidth: 120)
-                                  .onChange(of: viewModel.detectionType) {
-                                      Task {
-                                          await constants.set(detectionType: viewModel.detectionType)
-
-                                          // stick it in user preferences
-                                          self.viewModel.userPreferences.processingType = viewModel.detectionType
-                                      }
-                                  }
-                            }
-
                             Button() {
                                 Task {
                                     do {
