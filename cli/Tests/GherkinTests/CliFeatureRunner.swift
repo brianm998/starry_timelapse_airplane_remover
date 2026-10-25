@@ -308,7 +308,13 @@ final class CliFeatureRunner {
     /// Exit 0 was already required by `processEveryFrame`.  The warnings star shows its user are the lines beginning with
     /// the warning sign and two spaces; detector chatter logged at `warn` level (`⚠️ WARN`) is not one of them.
     private func noProblems() throws {
-        let warnings = runLog.split(whereSeparator: \.isNewline).filter { $0.hasPrefix("⚠️  ") }
+        // The warnings about a state that passes by itself (memory is low and star is waiting for it to free up) say something about the
+        // machine, not about the run: a hosted macOS runner raises them. They are recognised by their English text (the run is `--language en`);
+        // `StarWarning.describesAPassingCondition` is the same set: memoryPressure, lowSystemMemory, footprintOverBudget.
+        let passing = ["of memory is free on this machine", "so it is waiting before it starts anything new", "The system is low on memory and may stop star"]
+        let warnings = runLog.split(whereSeparator: \.isNewline).filter { line in
+            line.hasPrefix("⚠️  ") && !passing.contains { line.contains($0) }
+        }
         XCTAssertTrue(warnings.isEmpty, "star reported \(warnings.count) warning(s):\n" + warnings.prefix(10).joined(separator: "\n"))
     }
 
