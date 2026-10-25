@@ -133,6 +133,13 @@ class SequenceViewModel(
     val rightPanelShowing: StateFlow<Boolean> = _rightPanelShowing.asStateFlow()
     fun setLeftPanel(showing: Boolean) { _leftPanelShowing.value = showing }
     fun setRightPanel(showing: Boolean) { _rightPanelShowing.value = showing }
+    /** Which right panel sections are open; all start collapsed. Here, not in the panel, because the panel is dropped while hidden. */
+    private val _expandedRightPanelSections = MutableStateFlow(emptySet<RightPanelSection>())
+    val expandedRightPanelSections: StateFlow<Set<RightPanelSection>> = _expandedRightPanelSections.asStateFlow()
+    fun toggleRightPanelSection(section: RightPanelSection) {
+        val open = _expandedRightPanelSections.value
+        _expandedRightPanelSections.value = if (section in open) open - section else open + section
+    }
     /** macOS `toggleSidePanels` (Tab): both shown → both hide; otherwise → both show. */
     fun toggleSidePanels() {
         val hide = _leftPanelShowing.value && _rightPanelShowing.value
