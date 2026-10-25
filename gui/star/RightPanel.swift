@@ -41,6 +41,9 @@ struct RightPanel: View {
                             Divider()
                             self.debugSection
                         }
+                          // as wide as its widest control, and no wider: the dividers
+                          // would otherwise stretch the panel across the window
+                          .fixedSize(horizontal: true, vertical: false)
                     }
                       .defaultScrollAnchor(.bottom)
                       .focusable(false)
