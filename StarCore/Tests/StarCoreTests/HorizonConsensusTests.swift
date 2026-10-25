@@ -280,6 +280,54 @@ final class HorizonConsensusTests: XCTestCase {
         }
     }
 
+    /// Detections that wander a few rows from frame to frame make the vote's answer change as
+    /// its members do; averaging each line with its neighbours', carried into it, steadies it
+    /// without making it any less right.
+    func testNeighbouringLinesAreAveragedSoTheLineDoesNotFlicker() throws {
+        let pan = SyntheticPan()
+        var lines = pan.detectedLines(cloudy: nil)
+        var generator = SeededGenerator(state: 7)
+        for frame in lines.keys {
+            lines[frame] = lines[frame]?.map { $0 + Float(Int.random(in: -8...8, using: &generator)) }
+        }
+        let records = pan.storedRecords()
+        let targets = Array(140...170)
+        func outcome(radius: Int) throws -> [Int: [Float]] {
+            var parameters = HorizonConsensus.Parameters()
+            parameters.gridWidth = pan.gridWidth
+            parameters.focalLengthCandidates = [0.61, 0.70, 0.81]
+            parameters.temporalSmoothingRadius = radius
+            return try XCTUnwrap(HorizonConsensus.run(
+              lines: lines, similarityRecords: records, targets: targets,
+              width: pan.width, height: pan.height, voterOrigin: 0,
+              parameters: parameters)).lines
+        }
+        func jitter(_ result: [Int: [Float]]) -> Double {
+            var total = 0.0, count = 0
+            for frame in targets.dropFirst() {
+                guard let line = result[frame], let previous = result[frame - 1] else { continue }
+                var moved = [Float](repeating: .nan, count: line.count)
+                HorizonConsensus.carry(previous, by: pan.trueHomography(from: frame - 1, into: frame),
+                                       width: pan.width, height: pan.height, into: &moved)
+                for (a, b) in zip(line, moved) where !b.isNaN {
+                    total += Double(abs(a - b))
+                    count += 1
+                }
+            }
+            return total / Double(max(1, count))
+        }
+        func error(_ result: [Int: [Float]]) -> Double {
+            targets.map { pan.meanError(result[$0] ?? [], pan.trueLine(frame: $0)) }
+              .reduce(0, +) / Double(targets.count)
+        }
+        let raw = try outcome(radius: 0)
+        let smoothed = try outcome(radius: 16)
+        XCTAssertEqual(Set(smoothed.keys), Set(targets))
+        XCTAssertLessThan(jitter(smoothed), 0.5 * jitter(raw),
+                          "raw \(jitter(raw)) px, smoothed \(jitter(smoothed)) px")
+        XCTAssertLessThanOrEqual(error(smoothed), error(raw) + 0.0002)
+    }
+
     /// The same pan composed from the stored similarities drifts, which is the failure the
     /// rotations are there to remove.
     func testRotationChainsDriftLessThanTheStoredSimilarities() {
@@ -694,5 +742,18 @@ struct SyntheticPan {
             }
         }
         return (0..<4).map { v[$0] / m[$0 * 4 + $0] }
+    }
+}
+
+/// A small seeded generator, so a test's noise is the same every run.
+private struct SeededGenerator: RandomNumberGenerator {
+    var state: UInt64
+    mutating func next() -> UInt64 {
+        // SplitMix64
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
     }
 }

@@ -296,6 +296,14 @@ leaving each painted frame out in turn, it took the snow sequence from 0.41% to
 reference rebuilds the consensus lines of the frames it affects before they are
 merged again.
 
+Last, each frame's line is averaged with its neighbours' within ±16 frames,
+carried into it along the ground. The vote changes its members every fourth
+frame, and a column sitting between two clusters (trees against the slope behind
+them) flips between them as it does; played as a video, those were short lines
+dancing along the horizon. The average removed nearly all of them (frames with a
+jump of more than 0.4% of the height: 65-100% → 0-11% on four sequences) without
+costing any accuracy against the painted horizons.
+
 It runs as a processing step of its own, with its own row in the progress
 display, and draws each frame's line as a mask beside the detected and merged
 ones, so the "horizon consensus" view mode shows it. The horizon line overlay

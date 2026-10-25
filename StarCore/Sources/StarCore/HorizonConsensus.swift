@@ -64,6 +64,8 @@ You should have received a copy of the GNU General Public License along with sta
 ///    the distance to the nearest (`referenceCorrectionDistance`); a painted frame's line is
 ///    its painting.  So the user can paint where the consensus goes wrong and keep it
 ///    everywhere else.
+/// 6. Each line is replaced by the mean of its neighbours' within `temporalSmoothingRadius`,
+///    carried into it, so it does not flicker as the voters change.
 ///
 /// ## Measured
 ///
@@ -93,7 +95,9 @@ public enum HorizonConsensus {
     ///      consensus, long-span override past 2% of the height.
     /// - 2: painted references anchor it (`referenceCorrectionDistance`) instead of switching
     ///      it off.
-    public static let algorithmVersion = 2
+    /// - 3: each line is the mean of its neighbours' within `temporalSmoothingRadius`, carried
+    ///      into it.
+    public static let algorithmVersion = 3
 
     public struct Parameters: Sendable, Equatable {
         /// Columns a line is kept at, spread evenly across the frame.  The detections this
@@ -152,6 +156,21 @@ public enum HorizonConsensus {
         /// 0.34%), and applying it undiminished hurt next to frames painted because the
         /// consensus was locally wrong there.
         public var referenceCorrectionDistance = 128.0
+
+        /// Frames either side whose lines, carried into a frame, are averaged into its own.
+        ///
+        /// The vote changes its members every `neighbourStride` frames, and a column whose
+        /// densest window sits between two clusters (a ridge's trees against the slope behind
+        /// them) flips between them as it does: narrow spikes a few columns wide, 16-64 px on a
+        /// 4000 px frame, most gone again within four frames, which play as lines dancing along
+        /// the horizon.  The mean over ±16 removed them — frames with a jump past 16 px went
+        /// 65% → 11% (a9-1 01_18), 72% → 0% (a7iv), 32% → 0% (a9-1 10_17), 100% → 0% (a9-2) —
+        /// and moved accuracy against the painted horizons by no more than 0.006% of the
+        /// height, all of it better.  ±8 left more of them; a median or a trimmed mean left
+        /// more still, since which member is in the middle is exactly what changes.  The
+        /// ground does not move, so averaging the carried lines blurs nothing real.  0 turns
+        /// it off.
+        public var temporalSmoothingRadius = 16
 
         /// Focal lengths tried, as multiples of the frame width: 14 mm to 100 mm on a
         /// full-frame sensor.  The best one is then refined 6% either way.
@@ -842,19 +861,31 @@ public enum HorizonConsensus {
             return found
         }()
 
-        let wanted = targets.filter { lines[$0] != nil || references[$0] != nil }
-        let results = Results<(line: [Float], overridden: Int, corrected: Bool)?>(nil, count: wanted.count)
-        DispatchQueue.concurrentPerform(iterations: wanted.count) { index in
-            let target = wanted[index]
+        // Every frame a target's smoothed line is averaged from, and the targets themselves.
+        let radius = max(0, parameters.temporalSmoothingRadius)
+        let hasLine = { (frame: Int) in lines[frame] != nil || references[frame] != nil }
+        let targetSet = Set(targets.filter(hasLine))
+        var neededSet = targetSet
+        if radius > 0 {
+            for target in targetSet {
+                for frame in (target - radius)...(target + radius) where hasLine(frame) {
+                    neededSet.insert(frame)
+                }
+            }
+        }
+        let needed = neededSet.sorted()
+        let results = Results<(line: [Float], overridden: Int, corrected: Bool)?>(nil, count: needed.count)
+        DispatchQueue.concurrentPerform(iterations: needed.count) { index in
+            let frame = needed[index]
             // A painted frame's horizon is its painting.
-            if let painting = references[target] {
+            if let painting = references[frame] {
                 results.set(index, (painting, 0, false))
                 return
             }
-            let chain = chains(into: target, span: parameters.longSpan,
+            let chain = chains(into: frame, span: parameters.longSpan,
                                records: records, maxHop: hop)
-            guard let (line, overridden) = consensus(of: target, chain: chain) else { return }
-            if let corrected = referenceCorrected(line, at: target, chain: chain,
+            guard let (line, overridden) = consensus(of: frame, chain: chain) else { return }
+            if let corrected = referenceCorrected(line, at: frame, chain: chain,
                                                   references: references,
                                                   anchorConsensus: anchorConsensus,
                                                   width: width, height: height,
@@ -864,15 +895,35 @@ public enum HorizonConsensus {
                 results.set(index, (line, overridden, false))
             }
         }
-        var outcome: [Int: [Float]] = [:]
+        var unsmoothed: [Int: [Float]] = [:]
         var overridden = 0
         var corrected = 0
         let finished = results.all
-        for (index, target) in wanted.enumerated() {
+        for (index, frame) in needed.enumerated() {
             guard let result = finished[index] else { continue }
-            outcome[target] = result.line
+            unsmoothed[frame] = result.line
+            guard targetSet.contains(frame) else { continue }
             overridden += result.overridden
             if result.corrected { corrected += 1 }
+        }
+
+        let wanted = targetSet.sorted().filter { unsmoothed[$0] != nil }
+        let smoothed = Results<[Float]?>(nil, count: wanted.count)
+        DispatchQueue.concurrentPerform(iterations: wanted.count) { index in
+            let target = wanted[index]
+            guard let own = unsmoothed[target] else { return }
+            // a painting is the truth, and nothing is averaged into it
+            if radius == 0 || references[target] != nil {
+                smoothed.set(index, own)
+                return
+            }
+            let chain = chains(into: target, span: radius, records: records, maxHop: hop)
+            smoothed.set(index, temporalMean(of: unsmoothed, around: target, radius: radius,
+                                             chain: chain, width: width, height: height))
+        }
+        var outcome: [Int: [Float]] = [:]
+        for (index, line) in smoothed.all.enumerated() {
+            if let line { outcome[wanted[index]] = line }
         }
         var result = Outcome(lines: outcome, calibration: calibration,
                              overriddenColumns: overridden,
@@ -880,6 +931,40 @@ public enum HorizonConsensus {
         result.correctedTargets = corrected
         result.paintedTargets = wanted.filter { references[$0] != nil }.count
         return result
+    }
+
+    /// `target`'s line as the per-column mean of `lines` within `radius` frames of it, each
+    /// carried into `target` by `chain`; a column no neighbour reaches keeps `target`'s own.
+    static func temporalMean(
+      of lines: [Int: [Float]],
+      around target: Int,
+      radius: Int,
+      chain: [Int: [Double]],
+      width: Int,
+      height: Int
+    ) -> [Float] {
+        guard let own = lines[target] else { return [] }
+        var sum = [Double](repeating: 0, count: own.count)
+        var count = [Int](repeating: 0, count: own.count)
+        var moved = [Float](repeating: .nan, count: own.count)
+        for frame in (target - radius)...(target + radius) {
+            guard let line = lines[frame] else { continue }
+            let carried: [Float]
+            if frame == target {
+                carried = line
+            } else {
+                guard let homography = chain[frame] else { continue }
+                carry(line, by: homography, width: width, height: height, into: &moved)
+                carried = moved
+            }
+            for x in 0..<own.count where !carried[x].isNaN {
+                sum[x] += Double(carried[x])
+                count[x] += 1
+            }
+        }
+        return (0..<own.count).map { x in
+            count[x] > 0 ? Float(sum[x] / Double(count[x])) : own[x]
+        }
     }
 
     /// `line`, `target`'s consensus, corrected by the painted frames either side of it.
