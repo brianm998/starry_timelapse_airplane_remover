@@ -804,7 +804,7 @@ public enum HorizonConsensus {
         let wantedReferences = Set(references.keys.filter { painted in
             targets.contains { abs($0 - painted) <= reach }
         }).sorted()
-        func consensus(of target: Int, chain: [Int: [Double]],
+        @Sendable func consensus(of target: Int, chain: [Int: [Double]],
                        withoutOwn: Bool = false) -> (line: [Float], overridden: Int)? {
             // NaN rows do not vote; a column no neighbour reaches stays NaN, and corrects nothing
             let own = withoutOwn ? [Float](repeating: .nan, count: parameters.gridWidth)
@@ -834,10 +834,13 @@ public enum HorizonConsensus {
             anchorResults.set(index, consensus(of: painted, chain: chain,
                                                withoutOwn: lines[painted] == nil)?.line)
         }
-        var anchorConsensus: [Int: [Float]] = [:]
-        for (index, line) in anchorResults.all.enumerated() {
-            if let line { anchorConsensus[wantedReferences[index]] = line }
-        }
+        let anchorConsensus: [Int: [Float]] = {
+            var found: [Int: [Float]] = [:]
+            for (index, line) in anchorResults.all.enumerated() {
+                if let line { found[wantedReferences[index]] = line }
+            }
+            return found
+        }()
 
         let wanted = targets.filter { lines[$0] != nil || references[$0] != nil }
         let results = Results<(line: [Float], overridden: Int, corrected: Bool)?>(nil, count: wanted.count)
