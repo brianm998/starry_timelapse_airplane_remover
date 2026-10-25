@@ -1,7 +1,7 @@
 {
   "_measured": "2026-10-15, star 0.12.4 release, cli on the iMac Pro, 19 frames of 4240x2832 per feature (video, sky-only, JPEG, TIFF16, selective, auto selective). Not yet measured on the other legs (ubuntu, windows, the GUIs): re-run with STAR_GHERKIN_REPORT_ONLY=1 and widen only with evidence.",
   "auto": {
-    "_measured": "changedFraction 0.9537-0.9951 (min 0.9537, JPEG/video-tiff8; sky-only 0.983-0.995); meanRatio 0.9816-0.9960; black 0; saturated 0. A selective run changes at most 0.0033, so 0.5 separates the two by two orders of magnitude.",
+    "_measured": "changedFraction 0.9537-0.9971 (min 0.9537, JPEG/video-tiff8; sky-only 0.983-0.995; moving a7iv pan 0.9864-0.9971); meanRatio 0.9713-1.0062 (moving pan included); black 0; saturated 0. A selective run changes at most 0.0033, so 0.5 separates the two by two orders of magnitude.",
     "minChangedFraction": 0.5,
     "minMeanRatio": 0.9,
     "maxMeanRatio": 1.1,

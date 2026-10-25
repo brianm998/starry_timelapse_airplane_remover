@@ -38,10 +38,10 @@
       "provenance": "Brian Martin, own photographs."
     },
     "moving_a7iv_1_aurora_tiff16": {
-      "asset": "PENDING-not-yet-built-or-uploaded",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "bytes": 0,
-      "description": "PENDING: a 15-20 frame panning window of the a7 IV aurora sequence, 16-bit TIFF, ~12 MP. Frames to be confirmed by Brian; archive not built.",
+      "asset": "moving_a7iv_1_aurora_tiff16-eb3730b2bcdc.tar.gz",
+      "sha256": "eb3730b2bcdc1926f45aae4159a0a66b9bf0563dc5d772303ba9b6a8ff2e7a75",
+      "bytes": 1348712358,
+      "description": "19 frames (LRT_00085-LRT_00103) of the a7 IV aurora pan, camera moving with the horizon in frame: 4240x2827 16-bit LZW TIFF, downscaled from 7008x4672.",
       "provenance": "Brian Martin, own photographs."
     }
   }
