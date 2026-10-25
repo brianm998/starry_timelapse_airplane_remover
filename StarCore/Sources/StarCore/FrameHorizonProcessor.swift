@@ -575,6 +575,9 @@ final public actor FrameHorizonProcessor {
                                           to: toName
                                         )
                                     }
+                                    if size == .original {
+                                        imageAccessor.horizonLinesChanged(frameIndex: neighborIndex)
+                                    }
                                 } else {
                                     Log.w("unable to get name for merged horizon for frameIndex \(neighborIndex)")
                                 }
@@ -2766,6 +2769,7 @@ final public actor FrameHorizonProcessor {
         // The star-aligned intersection is built from the reference mask: a repaint ends it.
         await starAlignedHorizonMaskCache.invalidateAll()
         ReferenceMaskIndex.shared.invalidate(directory: referenceDir)
+        imageAccessor.horizonLinesChanged(frameIndex: frameIndex)
         Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved \(savePath)")
 
         // For static sequences, also write a per-frame marker so this specific frame

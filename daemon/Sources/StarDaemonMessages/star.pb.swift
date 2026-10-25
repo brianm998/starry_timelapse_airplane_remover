@@ -3212,7 +3212,7 @@ public struct Star_V1_ProgressEvent: Sendable {
     set {kind = .imageSaved(newValue)}
   }
 
-  /// frame index: a horizon refinement operation finished for this frame
+  /// frame index: its horizon lines changed (a mask written or deleted, a reference painted or cleared, a refinement finished)
   public var horizonUpdated: Int32 {
     get {
       if case .horizonUpdated(let v)? = kind {return v}
@@ -3240,7 +3240,7 @@ public struct Star_V1_ProgressEvent: Sendable {
     case sequenceState(Star_V1_SequenceStateEvent)
     case videoExported(Star_V1_VideoExportedEvent)
     case imageSaved(Star_V1_ImageSaved)
-    /// frame index: a horizon refinement operation finished for this frame
+    /// frame index: its horizon lines changed (a mask written or deleted, a reference painted or cleared, a refinement finished)
     case horizonUpdated(Int32)
     case stepProgress(Star_V1_StepProgress)
 
