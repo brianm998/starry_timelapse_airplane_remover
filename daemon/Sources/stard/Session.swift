@@ -89,13 +89,17 @@ actor Session {
 
         let weakSelf = WeakSessionRef(self)
         // Told whenever a preview is written, which is how a client learns that the picture it has is old.
-        let imageAccessor = ImageAccessor(
+        var imageAccessor = ImageAccessor(
             config: config,
             imageSequence: imageSequence,
             frameIndexToBaseNameMap: frameIndexToBaseNameMap
         ) { _, frameIndex, type, size in
             guard size == .preview else { return }
             Task { await weakSelf.session?.onImageSaved(frameIndex: frameIndex, type: type) }
+        }
+        // Told whenever a frame's horizon lines change, so the client draws them again.
+        imageAccessor.horizonChangedClosure = { frameIndex in
+            Task { await weakSelf.session?.horizonRefined(frameIndex: frameIndex) }
         }
 
         var callbacks = Callbacks()
@@ -697,7 +701,8 @@ actor Session {
         return true
     }
 
-    /// One frame's merged horizon was recomputed: tell the client to draw its horizon again.
+    /// One frame's horizon lines changed — a mask of any kind written or deleted, a reference painted or cleared, a refinement
+    /// finished: tell the client to draw them again.
     private func horizonRefined(frameIndex: Int) {
         var prog = Star_V1_ProgressEvent()
         prog.kind = .horizonUpdated(Int32(frameIndex))

@@ -531,6 +531,29 @@ public class FrameViewModel {
         }
     }
 
+    /// This frame's horizon lines changed on disk (`ImageAccessor.horizonChangedClosure`): draw
+    /// them again, wherever they are drawn.  A burst — a mask written at two sizes, a consensus
+    /// line and its image — is one reload, a quarter of a second after it starts; each reload
+    /// decodes the frame's masks, so a frame-size or grid set nothing has asked for stays unmade.
+    func horizonLinesChanged() {
+        guard !horizonReloadScheduled else { return }
+        horizonReloadScheduled = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            horizonReloadScheduled = false
+            refreshHorizonOverlay()
+            if isCurrentFrame || !frameHorizonOverlays.isEmpty { refreshFrameHorizonOverlay() }
+            if let gridOverlaySize {
+                refreshGridHorizonOverlay(width: gridOverlaySize.width, height: gridOverlaySize.height)
+            }
+        }
+    }
+
+    private var horizonReloadScheduled = false
+
+    /// The size `gridHorizonOverlays` was last made at, to remake them at when the lines change.
+    private var gridOverlaySize: (width: Int, height: Int)? = nil
+
     func refreshFrameHorizonOverlay() {
         guard let frame else {
             frameHorizonOverlays = []
@@ -555,6 +578,7 @@ public class FrameViewModel {
     /// Regenerate the horizon overlay at the given pixel dimensions for accurate
     /// grid-cell display. Does NOT bump reloadID so the preview image is not re-fetched.
     func refreshGridHorizonOverlay(width: Int, height: Int) {
+        gridOverlaySize = (width, height)
         guard let frame else {
             gridHorizonOverlays = []
             return

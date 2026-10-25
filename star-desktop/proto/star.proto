@@ -755,7 +755,7 @@ message ProgressEvent {
     SequenceStateEvent sequence_state      = 6;
     VideoExportedEvent video_exported      = 7;
     ImageSaved         image_saved         = 8;
-    int32              horizon_updated     = 9;   // frame index: a horizon refinement operation finished for this frame
+    int32              horizon_updated     = 9;   // frame index: its horizon lines changed (a mask written or deleted, a reference painted or cleared, a refinement finished)
     StepProgress       step_progress       = 10;
   }
 }

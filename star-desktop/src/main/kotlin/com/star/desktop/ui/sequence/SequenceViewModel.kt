@@ -393,10 +393,12 @@ class SequenceViewModel(
             .onEach { if (it != null) { refreshRefinementStatus(); horizonChanged() } }
             .launchIn(scope)
 
-        // Refinement operations finish by the hundred; redraw the horizons at most a few times a second while they do.
+        // A frame's horizon lines changed (a mask written or deleted, a reference painted or cleared, a refinement finished).
+        // They change by the thousand while a run writes the horizon consensus, so the horizons are redrawn at most twice a second
+        // while they do — sampled rather than debounced, which would wait for the whole burst to end.
         @OptIn(kotlinx.coroutines.FlowPreview::class)
         processing.horizonUpdated
-            .debounce(300)
+            .sample(500)
             .onEach { horizonChanged() }
             .launchIn(scope)
 

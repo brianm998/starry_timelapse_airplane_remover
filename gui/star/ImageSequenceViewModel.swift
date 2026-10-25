@@ -2102,7 +2102,7 @@ public final class ImageSequenceViewModel {
         }
 
         
-        let imageAccessor = ImageAccessor(
+        var accessor = ImageAccessor(
           config: config,
           imageSequence: imageSequence,
           frameIndexToBaseNameMap: frameIndexToBaseNameMap
@@ -2112,6 +2112,14 @@ public final class ImageSequenceViewModel {
                 self?.frames[frameIndex].saved(image: image, ofType: type, atSize: size)
             }
         }
+        accessor.horizonChangedClosure = { [weak self] frameIndex in
+            Task { @MainActor in
+                guard let self, frameIndex < self.frames.count else { return }
+                self.frames[frameIndex].horizonLinesChanged()
+            }
+        }
+        // the frames' worker tasks take it, so it is not left mutable
+        let imageAccessor = accessor
 
 
         let imageInfo = try await imageSequence.getImageInfo()

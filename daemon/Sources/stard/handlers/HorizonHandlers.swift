@@ -145,6 +145,7 @@ enum HorizonHandlers {
                 try? FileManager.default.removeItem(atPath: "\(config.tempOutputPath)/horizonReference/reference.tiff")
                 if config.hasStaticReferenceHorizon { await session.setStaticReferenceHorizon(false) }
             }
+            frame.imageAccessor.horizonLinesChanged(frameIndex: Int(req.frameIndex))
             try await transport.respond(id: id, payload: Star_V1_ClearReferenceHorizonResponse().serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")

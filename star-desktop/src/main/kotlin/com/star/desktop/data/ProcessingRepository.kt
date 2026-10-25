@@ -180,7 +180,7 @@ class ProcessingRepository(
         if (!started) _processing.value = false
     }
 
-    /** A frame's horizon was recomputed by a refinement operation (`horizon_updated`). */
+    /** A frame's horizon lines changed: a mask written or deleted, a reference painted or cleared, a refinement finished (`horizon_updated`). */
     private val _horizonUpdated = MutableSharedFlow<Int>(extraBufferCapacity = 512)
     val horizonUpdated: SharedFlow<Int> = _horizonUpdated.asSharedFlow()
 
