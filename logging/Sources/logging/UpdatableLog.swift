@@ -95,11 +95,41 @@ public actor UpdatableLog {
 
     var list: [UpdatableLogLine] = []
 
+    /// Where drawn text goes. Standard output; replaceable so a test can see what was drawn.
+    let output: @Sendable (String) -> Void
+
+    /// How often the display is redrawn at most. A redraw rewrites every row on a terminal, and
+    /// callers update many rows in a burst (every state change of every frame), so drawing on every
+    /// update made the terminal the bottleneck of the run it was reporting on.
+    public static let defaultRedrawInterval: TimeInterval = 0.25
+
+    /// The most event rows (log messages, as opposed to named progress rows) kept on screen. Each
+    /// distinct message used to be a row for good, so a run with many errors redrew a longer and
+    /// longer list every time.
+    public static let defaultMaxEventRows = 20
+
+    private let redrawInterval: TimeInterval
+    private let maxEventRows: Int
+    private var eventRowNames: [String] = []
+    private var lastDraw: Date?
+    private var dirty = false
+    private var trailingDrawScheduled = false
+    private var batchDepth = 0
+
+    /// How many times the display has been drawn, for tests.
+    public private(set) var drawCount = 0
+
     func setScreenWidth(_ width: UInt16) {
         screen_width = width
     }
-    
-    public init() {
+
+    public init(redrawInterval: TimeInterval = UpdatableLog.defaultRedrawInterval,
+                maxEventRows: Int = UpdatableLog.defaultMaxEventRows,
+                output: @escaping @Sendable (String) -> Void = { print($0, terminator: "") })
+    {
+        self.redrawInterval = redrawInterval
+        self.maxEventRows = maxEventRows
+        self.output = output
         #if !os(Windows)
         // POSIX: query the real terminal width via TIOCGWINSZ.
         // On Windows the equivalent is GetConsoleScreenBufferInfo from the
@@ -111,45 +141,8 @@ public actor UpdatableLog {
             screen_width = w.ws_col
         }
         #endif
-        /*
-         XXX attempt to get sigwinch signals to alert us to changes in the console size
-         
-        Task(priority: .userInitiated) {
-            await MainActor.run { subscribe() }
-        }
-
-         */
     }
 
-    @MainActor
-    func subscribe() {
-        // POSIX-only: SIGWINCH + TIOCGWINSZ ioctl. Windows has neither
-        // (terminal resize is delivered via console events, not signals),
-        // so we no-op there. Currently the call site in init() is commented
-        // out everywhere, but we still need this to type-check on Windows.
-        #if !os(Windows)
-        var w = winsize()
-        let sigwinchSrc = DispatchSource.makeSignalSource(signal: SIGWINCH, queue: .main)
-        sigwinchSrc.setEventHandler {
-            if ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &w) == 0 {
-                Task {
-                    await self.setScreenWidth(w.ws_col)
-                }
-                /*
-                if let updatable = updatable {
-                    Task(priority: .userInitiated) {
-                        await updatable.redraw()
-                    }
-                }*/
-//                print("rows:", w.ws_row, "cols", w.ws_col)
-            }
-        }
-//        sigwinchSrc.resume()
-
-//        dispatchMain()
-        #endif
-    }
-    
     func sort() {
         let sorted_logs = self.list.sorted() { a, b in
             if a.value == b.value,
@@ -162,25 +155,85 @@ public actor UpdatableLog {
             }
         }
         self.list = sorted_logs
-        self.redraw()
+    }
+
+    /// The whole display as one string: every row in turn, each reached by moving the cursor up
+    /// from the bottom and padded to the screen width. Built first and written once, so a redraw is
+    /// one write rather than five per row.
+    func render() -> String {
+        var frame = ""
+        var index = self.list.count
+        for line in self.list {
+            frame += "\u{001b}[\(index)A"                    // move cursor up index lines
+            let num_extra_spaces = Int(screen_width) - line.printableLength - 1
+            frame += line.message
+            if num_extra_spaces > 0 { frame += String(repeating: " ", count: num_extra_spaces) }
+            frame += "\n"
+            frame += "\u{001b}[\(index)B"                    // move cursor down index lines
+            index -= 1
+        }
+        return frame
     }
 
     func redraw() {
-        var index = self.list.count
-        for line in self.list {
-            print("\u{001b}[\(index)A", terminator:"") // move cursor up index lines 
-            let num_extra_spaces = Int(screen_width)-line.printableLength-1
+        output(render())
+        drawCount += 1
+        lastDraw = Date()
+        dirty = false
+    }
 
-            //Log.i("num_extra_spaces \(num_extra_spaces)")
-            
-            var extra_spaces: String = ""
-            
-            if num_extra_spaces > 0 { for _ in 0 ..< num_extra_spaces { extra_spaces += " " } }
+    /// Draws now if it has been long enough since the last draw, else makes sure one happens when
+    /// it has (so the final state is always shown, not just the last one that was due).
+    private func requestRedraw() {
+        dirty = true
+        guard batchDepth == 0 else { return }
+        let since = lastDraw.map { Date().timeIntervalSince($0) } ?? .infinity
+        if since >= redrawInterval {
+            redraw()
+        } else if !trailingDrawScheduled {
+            trailingDrawScheduled = true
+            let wait = redrawInterval - since
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                await self.trailingDraw()
+            }
+        }
+    }
 
-            print(line.message + extra_spaces, terminator:"")
-            print("\n", terminator:"")
-            print("\u{001b}[\(index)B", terminator:"") // move cursor down index lines
-            index -= 1
+    private func trailingDraw() {
+        trailingDrawScheduled = false
+        if dirty && batchDepth == 0 { redraw() }
+    }
+
+    /// Updates made between `beginBatch()` and `endBatch()` are drawn together, once, when the batch
+    /// ends: a caller refreshing twenty rows is one draw, not twenty.
+    public func beginBatch() { batchDepth += 1 }
+
+    public func endBatch() {
+        batchDepth = max(0, batchDepth - 1)
+        if batchDepth == 0 && dirty {
+            sort()
+            // an explicit end of batch is the caller saying "now", so it is not throttled; the
+            // caller (the progress monitor) is itself paced
+            let since = lastDraw.map { Date().timeIntervalSince($0) } ?? .infinity
+            if since >= redrawInterval { redraw() } else { requestRedraw() }
+        }
+    }
+
+    /// Draw whatever is pending right now, ignoring the throttle. For the end of a run.
+    public func flush() {
+        sort()
+        if dirty || lastDraw == nil { redraw() }
+    }
+
+    private func upsert(name: String, message: String, value: Double, value2: Double?) {
+        let new_logline = UpdatableLogLine(name: name, message: message, value: value, value2: value2)
+        if let existing = list.first(where: { $0.name == name }) {
+            existing.copyFrom(other: new_logline)
+        } else {
+            // add to end of list by printing a blank line here
+            list.append(new_logline)
+            output("\n")
         }
     }
 
@@ -189,26 +242,31 @@ public actor UpdatableLog {
                     value: Double,
                     value2: Double? = nil)
     {
-        var found = false
-        let new_logline = UpdatableLogLine(name: name,
-                                           message: message,
-                                           value: value,
-                                           value2: value2);
-        // first look at is it in the list
-        for line in self.list {
-            if line.name == name {
-                found = true
-                line.copyFrom(other: new_logline);
+        upsert(name: name, message: message, value: value, value2: value2)
+        if batchDepth == 0 { sort() }
+        requestRedraw()
+    }
+
+    /// A one-off message row, as opposed to a progress row that is updated in place. Only the most
+    /// recent `maxEventRows` of these are kept.
+    public func logEvent(name: String,
+                         message: String,
+                         value: Double,
+                         value2: Double? = nil)
+    {
+        let isNew = !eventRowNames.contains(name)
+        upsert(name: name, message: message, value: value, value2: value2)
+        if isNew {
+            eventRowNames.append(name)
+            while eventRowNames.count > maxEventRows {
+                let oldest = eventRowNames.removeFirst()
+                list.removeAll { $0.name == oldest }
             }
         }
-
-        if !found {
-            // add to end of list by printing a blank line here
-            self.list.append(new_logline)
-            print("")
-        }
-
-        // lastly sort and redisplay
-        self.sort()
+        if batchDepth == 0 { sort() }
+        requestRedraw()
     }
+
+    /// Rows currently held, for tests.
+    public var rowCount: Int { list.count }
 }

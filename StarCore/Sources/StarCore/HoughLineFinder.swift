@@ -128,17 +128,24 @@ public struct HoughLineFinder: Sendable {
 
     let _imageDataBorderSize: Int?
 
+    /// Whether `lineData` fills in each line's `pixelScore`. It is a full pass over the pixels
+    /// per line, and a caller that only ranks lines by `intensityScore` (the matrix blob
+    /// connector) has no use for it; it comes back 0 when off.
+    let computePixelScore: Bool
+
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
                 args: Args,
                 frameIndex: Int,
-                imageDataBorderSize: Int? = nil) 
+                imageDataBorderSize: Int? = nil,
+                computePixelScore: Bool = true)
     {
         self.data = pixels
         self.args = args
         self.bounds = bounds
         self.frameIndex = frameIndex
         self._imageDataBorderSize = imageDataBorderSize
+        self.computePixelScore = computePixelScore
     }
 
     public struct Args: Sendable, Hashable, Equatable, Argable, Codable, Identifiable {
@@ -347,7 +354,7 @@ public struct HoughLineFinder: Sendable {
                 
                 ret.append(LineInfo(line: lines[i],
                                     intensityScore: intensityScore(for: originZeroLine),
-                                    pixelScore: pixelScore(for: originZeroLine),
+                                    pixelScore: computePixelScore ? pixelScore(for: originZeroLine) : 0,
                                     border: self.imageDataBorderSize))
             }
         } else {

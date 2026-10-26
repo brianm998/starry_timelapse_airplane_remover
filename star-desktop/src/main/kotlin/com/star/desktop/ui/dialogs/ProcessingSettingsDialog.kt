@@ -235,6 +235,9 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             // Not an expert setting: GPU acceleration is one most people care about, so it is here without "Show Expert Settings" and open.
             GpuGroup(cfg, edit, boolEdits, info, app.engineStatus.value.let { (it as? EngineStatus.Connected)?.daemonVersion })
 
+            // Nor is this: the cloud-aware merge, which anyone shooting a moving sky may want.
+            ExpertGroup(localized("ui.merge_settings"), MERGE_FIELDS, cfg, edit, boolEdits, textEdits, info, frameCount, app.engineStatus.value.let { (it as? EngineStatus.Connected)?.daemonVersion })
+
             ToggleRow(localized(if (showExpert) "ui.hide_expert_settings" else "ui.show_expert_settings"), showExpert) { app.setShowExpertSettings(it) }
             if (showExpert) {
                 // Only to word the "needs a newer engine" note; whether a field is supported
@@ -285,15 +288,19 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             }
             var askUpdate by remember { mutableStateOf(false) }
 
-            // Save the settings and close; with [processNow] go on to start processing (macOS "Process Now"). A save the daemon refuses is
-            // said, and the sheet stays up with the edits in it.
-            val save: (Boolean) -> Unit = { processNow ->
+            // Save the settings and close; with [goOn] go on, which is to start processing (macOS "Process Now") or, over a run that is going and
+            // has nothing here to change in, to put its status back up (the button is Show Progress then). A save the daemon refuses is said, and
+            // the sheet stays up with the edits in it.
+            val showsProgress = change.showsProgress(processing)
+            val save: (Boolean) -> Unit = { goOn ->
                 scope.launch {
                     val saved = runCatching { app.updateSessionConfig(proposed) }
                     saved.onFailure { app.report(it.message ?: it.toString()) }
                     if (saved.isSuccess) {
                         app.closeSettings()
-                        if (processNow) app.requestProcessAll()
+                        if (goOn) {
+                            if (showsProgress) svm?.reopenProcessingModal() else app.requestProcessAll()
+                        }
                     }
                 }
             }
@@ -304,10 +311,10 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                     // Update, over frames this change contradicts, asks before it acts: it does not start a run over an untouched sequence, it
                     // changes one that is part done.
                     onClick = { if (change.contradictsFinishedWork) askUpdate = true else save(true) },
-                    enabled = change.canProcess(processing) && problems.isEmpty(),
+                    enabled = problems.isEmpty(),
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     modifier = Modifier.testTag("settings.process"),
-                ) { Text(localized(change.processKey)) }
+                ) { Text(localized(change.buttonKey(processing))) }
             }
             if (askUpdate) {
                 // The whole question as the title. No is first and Esc, and does the safe thing: nothing is deleted, and the new settings
@@ -480,6 +487,7 @@ internal val FIELD_HELP: Map<String, List<String>> = mapOf(
     "Max keypoint ops" to listOf("setting_help.max_keypoint_ops"),
     "Merge streaming MB" to listOf("setting_help.merge_streaming_mb"),
     "Memory budget" to listOf("setting_help.memory_budget"),
+    "Cloud-aware merge" to listOf("setting_help.cloud_aware_merge"),
     "Use GPU for Align & Merge" to listOf("setting_help.gpu_merge"),
     "Use GPU for SIFT" to listOf("setting_help.gpu_sift"),
     "Use GPU for AKAZE" to listOf("setting_help.gpu_akaze"),
@@ -644,13 +652,20 @@ internal val GPU_FIELD_LABELS = setOf(GPU_FOR_MERGE_LABEL, GPU_FOR_SIFT_LABEL, G
 /** Greyed and forced off on a machine with no GPU star can use: a toggle that could be turned on there would be a lie. */
 private val NEEDS_GPU: (SettingsEdit) -> Boolean = { !it.gpuUnavailable }
 
+// Not an expert setting either: whether fast-moving clouds come out banded is something anyone shooting a moving sky wants to be able to turn on.
+// Off unless asked for (StarCore Config.cloudAwareMerge); turning it on or off makes the daemon redo the alignment of frames already processed,
+// which the sheet's contradiction check already says through the preview of the proposed config.
+internal val MERGE_FIELDS: List<ExpertField> = listOf(
+    BoolField("Cloud-aware merge", "ui.cloud_aware_merge", { it.cloudAwareMerge }, { b, v -> b.setCloudAwareMerge(v) }, { it.hasCloudAwareMerge() }),
+)
+
 internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
     BoolField(GPU_FOR_MERGE_LABEL, "ui.use_gpu_for_merge", { it.useGpuAcceleration }, { b, v -> b.setUseGpuAcceleration(v) }, { it.hasUseGpuAcceleration() }, enabled = NEEDS_GPU),
     BoolField(GPU_FOR_SIFT_LABEL, "ui.use_gpu_for_sift", { it.useGpuForSift }, { b, v -> b.setUseGpuForSift(v) }, { it.hasUseGpuForSift() }, enabled = NEEDS_GPU),
     BoolField(GPU_FOR_AKAZE_LABEL, "ui.use_gpu_for_akaze", { it.useGpuForAkaze }, { b, v -> b.setUseGpuForAkaze(v) }, { it.hasUseGpuForAkaze() }, enabled = NEEDS_GPU),
 )
 
-private val ALL_FIELDS: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + PERFORMANCE_FIELDS
+private val ALL_FIELDS: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + MERGE_FIELDS + PERFORMANCE_FIELDS
 
 /** Every row that has an explanation, which Show Info opens: the pickers and each field with help text. */
 private val ALL_INFO_IDS: List<String> = listOf("clean", "detection", "scene", "camera") + ALL_FIELDS.filter { it.helpKeys.isNotEmpty() }.map { it.label }

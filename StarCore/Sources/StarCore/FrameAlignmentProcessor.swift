@@ -134,7 +134,22 @@ final public actor FrameAlignmentProcessor {
 
     /// Hold the decoded neighbours of this frame's merges, so the star and earth builds of
     /// one op decode each file once between them. Release it when the op's merges are done.
-    func pinNeighborDecodes() -> DecodedFrameStore.Pin {
+    ///
+    /// A static (non-moving) earth also merges `staticNeighborFrames` -- up to 16 sources, only
+    /// some of them the aligned neighbours -- so those are held too, unless that merge streams
+    /// its sources one at a time (then holding them would defeat the streaming).
+    func pinNeighborDecodes() async -> DecodedFrameStore.Pin {
+        var paths = pinnedAlignmentPaths()
+        let config = await configManager.config()
+        if !config.tripodHeadWasMoving,
+           !config.mergeStreams(sourceCount: staticNeighborFrames.count + 1)
+        {
+            paths += getStaticNeighborFilenames()
+        }
+        return DecodedFrameStore.shared.pin(paths)
+    }
+
+    func pinnedAlignmentPaths() -> [String] {
         var paths: [String] = []
         for neighborIndex in alignmentFilenames.keys {
             if let filename = imageAccessor.nameForImage(frameIndex: neighborIndex,
@@ -143,7 +158,7 @@ final public actor FrameAlignmentProcessor {
                 paths.append(filename)
             }
         }
-        return DecodedFrameStore.shared.pin(paths)
+        return paths
     }
 
     public func getStaticNeighborFilenames() -> [String] {
@@ -458,6 +473,8 @@ final public actor FrameAlignmentProcessor {
         let homographyConfig = config
         let homographyIndex = self.frameIndex
         let homographyAlignmentType = alignmentType
+        let homographyWidth = Int32(self.width)
+        let homographyHeight = Int32(self.height)
         let result = await NativeWork.run { [self] in
             ImageAligner.computeHomography(
              baseKeypoints: homographyKeypoints,
@@ -473,6 +490,9 @@ final public actor FrameAlignmentProcessor {
              alignmentType: homographyAlignmentType,
              maxKeypoints: Int32(homographyConfig.alignmentMaxKeypoints),
              writeDebugImages: homographyConfig.alignmentWriteDebugImages,
+             // The ground is fitted as a camera turning about the frame's centre.
+             imageWidth: homographyWidth,
+             imageHeight: homographyHeight,
              handler: { frameIndex,
                         alignmentType,
                         alignmentStep,
@@ -697,7 +717,9 @@ final public actor FrameAlignmentProcessor {
         if let results {
             Log.d("frame \(frameIndex) got \(results.keypointCount) keypoints")
 
-            if results.write(toFilename: fullPath) {
+            // Blocking file write of the whole feature set: off the cooperative pool.
+            let wrote = await NativeWork.run { results.write(toFilename: fullPath) }
+            if wrote {
                 Log.d("frame \(frameIndex) wrote results to \(fullPath)")
             } else {
                 Log.w("frame \(frameIndex) failed to write results to \(fullPath)")
@@ -791,9 +813,11 @@ final public actor FrameAlignmentProcessor {
 
             // Only with horizon detection on: FrameGraphBuilder builds no horizon ops
             // without it, so asking here detects and merges a horizon nothing reads.
+            // The final mask, as the freshly merged path below hands back: it is the
+            // horizon consensus where one applies, and the merged mask otherwise.
             var horizonMask: HorizonMask? = nil
             if config.horizonDetectionEnabled {
-                horizonMask = try await frame?.loadOrCreateMergedHorizonMask()
+                horizonMask = try await frame?.loadOrCreateFinalHorizonMask()
             }
             var results: HomographyResultsCodable? = nil
             switch alignmentType {
@@ -844,7 +868,7 @@ final public actor FrameAlignmentProcessor {
                     Log.d("frame \(frameIndex) trying to load image of type \(failedType) because we were unable to load image of type \(type)")
                     var horizonMask: HorizonMask? = nil
                     if config.horizonDetectionEnabled {
-                        horizonMask = try await frame?.loadOrCreateMergedHorizonMask()
+                        horizonMask = try await frame?.loadOrCreateFinalHorizonMask()
                     }
                     var results: HomographyResultsCodable? = nil
                     switch alignmentType {
@@ -1048,6 +1072,16 @@ final public actor FrameAlignmentProcessor {
                 let mergeNeighbors = neighbors
                 let mergeConfig = config
                 let mergeIndex = frameIndex
+                // The cloud-aware stage belongs to the star aligned merge alone: this
+                // branch also builds the moving-camera earth merge, which must never
+                // run it, so the alignment type is checked and not just the flag.
+                // It is kept off the ground by the final horizon mask loaded above,
+                // nil when horizon detection is off, which makes the whole frame sky.
+                let mergeCloudAware = type == .starAligned && mergeConfig.cloudAwareMerge
+                let mergeSkyMask = mergeCloudAware ? horizonMask?.image.mat : nil
+                let mergeCloudDebugDir: String? =
+                  mergeCloudAware && mergeConfig.alignmentWriteDebugImages
+                  ? mergeConfig.tempOutputPath + "/cloud-debug" : nil
                 let result = await NativeWork.run {
                     ImageAligner.alignAndMedianMerge(
                       baseImage: mergeBase,
@@ -1060,7 +1094,10 @@ final public actor FrameAlignmentProcessor {
                       streamingThresholdBytes:
                         Int64(mergeConfig.mergeStreamingThresholdMB) * 1024 * 1024,
                       loadConcurrency: mergeConfig.mergeLoadConcurrency,
-                      useGPU: mergeConfig.useGPUForMerge
+                      useGPU: mergeConfig.useGPUForMerge,
+                      cloudAware: mergeCloudAware,
+                      skyMask: mergeSkyMask,
+                      cloudDebugDir: mergeCloudDebugDir
                     )
                 }
 

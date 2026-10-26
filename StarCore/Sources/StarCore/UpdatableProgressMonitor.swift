@@ -28,9 +28,9 @@ public final class UpdatableLogHandler: LogHandler {
                 logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
             }        
 
-            await self.updatable.log(name: "\(logTime)",
-                                     message: logMessage,
-                                     value: logTime) // XXX fix this, lots of errors at the bottom obscure the other data, better to have errors and warnings above the other data
+            await self.updatable.logEvent(name: "\(logTime)",
+                                          message: logMessage,
+                                          value: logTime) // XXX fix this, lots of errors at the bottom obscure the other data, better to have errors and warnings above the other data
         }
     }
     
@@ -193,6 +193,9 @@ public actor UpdatableProgressMonitor {
         if let update = progressLine(for: .earthHomography) {
             updates.append(update)
         }
+        if let update = progressLine(for: .horizonConsensus) {
+            updates.append(update)
+        }
         if let update = progressLine(for: .outliers) {
             updates.append(update)
         }
@@ -320,7 +323,11 @@ public actor UpdatableProgressMonitor {
 
         let _updates = updates
 
+        // All the rows are refreshed under one batch and drawn once. Each `log` used to sort and
+        // redraw the entire display, so refreshing n rows drew it n times.
+        await updatable.beginBatch()
         for update in _updates { await update() }
+        await updatable.endBatch()
     }
 }
 
@@ -349,6 +356,8 @@ extension OperationType {
             localized("operation.earth_homography")
         case .alignmentValidation:
             ""
+        case .horizonConsensus:
+            localized("operation.horizon_consensus")
         case .outliers:
             localized("operation.outliers")
         case .merge:

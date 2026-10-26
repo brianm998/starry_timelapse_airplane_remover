@@ -268,6 +268,9 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
   case viewAutoProcessed // = 13
   case viewAutoSelectiveProcessed // = 14
   case viewSelectiveProcessed // = 15
+
+  /// a moving sequence's horizon consensus, drawn as a mask
+  case viewConsensusHorizon // = 16
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -292,6 +295,7 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 13: self = .viewAutoProcessed
     case 14: self = .viewAutoSelectiveProcessed
     case 15: self = .viewSelectiveProcessed
+    case 16: self = .viewConsensusHorizon
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -314,6 +318,7 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .viewAutoProcessed: return 13
     case .viewAutoSelectiveProcessed: return 14
     case .viewSelectiveProcessed: return 15
+    case .viewConsensusHorizon: return 16
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -336,6 +341,7 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     .viewAutoProcessed,
     .viewAutoSelectiveProcessed,
     .viewSelectiveProcessed,
+    .viewConsensusHorizon,
   ]
 
 }
@@ -808,7 +814,9 @@ public enum Star_V1_AlignmentState: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
-/// Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green).
+/// Per-frame horizon overlay for the grid (kind drives color: initial=white, merged=blue, reference=green,
+/// consensus=purple).  A frame has up to one line of each kind, all in `lines`; the single line in `kind`/`y_per_column` is the one
+/// the final composite reads, so a client that draws one line draws that.
 /// `isPendingHorizonRefinement` is NOT engine-derived — the client tracks it from edited reference frames.
 public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
@@ -818,6 +826,9 @@ public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   case initial // = 1
   case merged // = 2
   case reference // = 3
+
+  /// a moving sequence's horizon consensus, which the composite uses
+  case consensus // = 4
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -830,6 +841,7 @@ public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 1: self = .initial
     case 2: self = .merged
     case 3: self = .reference
+    case 4: self = .consensus
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -840,6 +852,7 @@ public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .initial: return 1
     case .merged: return 2
     case .reference: return 3
+    case .consensus: return 4
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -850,6 +863,7 @@ public enum Star_V1_HorizonOverlayKind: SwiftProtobuf.Enum, Swift.CaseIterable {
     .initial,
     .merged,
     .reference,
+    .consensus,
   ]
 
 }
@@ -1330,6 +1344,9 @@ public struct Star_V1_VideoEncodeSettings: Sendable {
 
   /// FFmpegMuxer.rawValue — also the output container extension
   public var muxer: String = String()
+
+  /// scale the video to this height in pixels, width following the aspect ratio; 0 = as the frames are
+  public var outputHeight: Int32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2034,6 +2051,18 @@ public struct Star_V1_Config: @unchecked Sendable {
     get {_storage._imageSequenceDirname}
     set {_uniqueStorage()._imageSequenceDirname = newValue}
   }
+
+  /// Whether the star aligned merge also runs its cloud-aware stage: a second merge aligned to the motion of the clouds, blended in where it
+  /// explains the frame better, with the stars put back, so fast-moving clouds are not banded and repeated. StarCore Config.cloudAwareMerge, off
+  /// unless asked for. Changing it throws away the alignment stage's results for frames already processed (see Sequence.PreviewConfigChange).
+  public var cloudAwareMerge: Bool {
+    get {_storage._cloudAwareMerge ?? false}
+    set {_uniqueStorage()._cloudAwareMerge = newValue}
+  }
+  /// Returns true if `cloudAwareMerge` has been explicitly set.
+  public var hasCloudAwareMerge: Bool {_storage._cloudAwareMerge != nil}
+  /// Clears the value of `cloudAwareMerge`. Subsequent reads from it will return its default value.
+  public mutating func clearCloudAwareMerge() {_uniqueStorage()._cloudAwareMerge = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3183,7 +3212,7 @@ public struct Star_V1_ProgressEvent: Sendable {
     set {kind = .imageSaved(newValue)}
   }
 
-  /// frame index: a horizon refinement operation finished for this frame
+  /// frame index: its horizon lines changed (a mask written or deleted, a reference painted or cleared, a refinement finished)
   public var horizonUpdated: Int32 {
     get {
       if case .horizonUpdated(let v)? = kind {return v}
@@ -3211,7 +3240,7 @@ public struct Star_V1_ProgressEvent: Sendable {
     case sequenceState(Star_V1_SequenceStateEvent)
     case videoExported(Star_V1_VideoExportedEvent)
     case imageSaved(Star_V1_ImageSaved)
-    /// frame index: a horizon refinement operation finished for this frame
+    /// frame index: its horizon lines changed (a mask written or deleted, a reference painted or cleared, a refinement finished)
     case horizonUpdated(Int32)
     case stepProgress(Star_V1_StepProgress)
 
@@ -3228,7 +3257,7 @@ public struct Star_V1_StepCount: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// OperationType's case: horizon, mergedHorizon, starKeypoints, earthKeypoints, starHomography, earthHomography, outliers, merge
+  /// OperationType's case: horizon, mergedHorizon, starKeypoints, earthKeypoints, starHomography, earthHomography, horizonConsensus, outliers, merge
   public var type: String = String()
 
   public var queued: Int32 = 0
@@ -3287,6 +3316,10 @@ public struct Star_V1_SequenceProgress: Sendable {
 
   /// every frame has its output written, so a run would have nothing to merge
   public var isComplete: Bool = false
+
+  /// Work on disk was made by other settings or an older version of star's code, so the next run makes it again (and the output with it):
+  /// those steps are counted as not done, and the panel says why.
+  public var needsRebuild: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -4097,6 +4130,27 @@ public struct Star_V1_GetHorizonOverlayResponse: Sendable {
   /// see FrameInfo.refinement_pending
   public var refinementPending: Bool = false
 
+  /// every horizon line the frame has, one per kind, in drawing order (the composite's on top)
+  public var lines: [Star_V1_HorizonOverlayLine] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_HorizonOverlayLine: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var kind: Star_V1_HorizonOverlayKind = .unspecified
+
+  /// draw-space Y, length == width
+  public var yPerColumn: [Int32] = []
+
+  /// height the line was computed at (scaleY divisor)
+  public var height: Int32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -4229,7 +4283,7 @@ extension Star_V1_PreviewSize: SwiftProtobuf._ProtoNameProviding {
 }
 
 extension Star_V1_FrameViewMode: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0\u{1}VIEW_HORIZON\0\u{1}VIEW_MERGED_HORIZON\0\u{1}VIEW_USER_HORIZON\0\u{1}VIEW_STAR_ALIGNED\0\u{1}VIEW_FAILED_STAR_ALIGNED\0\u{1}VIEW_EARTH_ALIGNED\0\u{1}VIEW_FAILED_EARTH_ALIGNED\0\u{1}VIEW_BLOBS\0\u{1}VIEW_REMOVE_MASK\0\u{1}VIEW_AUTO_PROCESSED\0\u{1}VIEW_AUTO_SELECTIVE_PROCESSED\0\u{1}VIEW_SELECTIVE_PROCESSED\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0\u{1}VIEW_HORIZON\0\u{1}VIEW_MERGED_HORIZON\0\u{1}VIEW_USER_HORIZON\0\u{1}VIEW_STAR_ALIGNED\0\u{1}VIEW_FAILED_STAR_ALIGNED\0\u{1}VIEW_EARTH_ALIGNED\0\u{1}VIEW_FAILED_EARTH_ALIGNED\0\u{1}VIEW_BLOBS\0\u{1}VIEW_REMOVE_MASK\0\u{1}VIEW_AUTO_PROCESSED\0\u{1}VIEW_AUTO_SELECTIVE_PROCESSED\0\u{1}VIEW_SELECTIVE_PROCESSED\0\u{1}VIEW_CONSENSUS_HORIZON\0")
 }
 
 extension Star_V1_NeighborKind: SwiftProtobuf._ProtoNameProviding {
@@ -4257,7 +4311,7 @@ extension Star_V1_AlignmentState: SwiftProtobuf._ProtoNameProviding {
 }
 
 extension Star_V1_HorizonOverlayKind: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HORIZON_OVERLAY_KIND_UNSPECIFIED\0\u{1}HORIZON_OVERLAY_KIND_INITIAL\0\u{1}HORIZON_OVERLAY_KIND_MERGED\0\u{1}HORIZON_OVERLAY_KIND_REFERENCE\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HORIZON_OVERLAY_KIND_UNSPECIFIED\0\u{1}HORIZON_OVERLAY_KIND_INITIAL\0\u{1}HORIZON_OVERLAY_KIND_MERGED\0\u{1}HORIZON_OVERLAY_KIND_REFERENCE\0\u{1}HORIZON_OVERLAY_KIND_CONSENSUS\0")
 }
 
 extension Star_V1_HorizonBandMethod: SwiftProtobuf._ProtoNameProviding {
@@ -4966,7 +5020,7 @@ extension Star_V1_OpenProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
 
 extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VideoEncodeSettings"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rate\0\u{1}codec\0\u{1}encoder\0\u{3}pixel_format\0\u{1}muxer\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}frame_rate\0\u{1}codec\0\u{1}encoder\0\u{3}pixel_format\0\u{1}muxer\0\u{3}output_height\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4979,6 +5033,7 @@ extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._Mes
       case 3: try { try decoder.decodeSingularStringField(value: &self.encoder) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.pixelFormat) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.muxer) }()
+      case 6: try { try decoder.decodeSingularInt32Field(value: &self.outputHeight) }()
       default: break
       }
     }
@@ -5000,6 +5055,9 @@ extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if !self.muxer.isEmpty {
       try visitor.visitSingularStringField(value: self.muxer, fieldNumber: 5)
     }
+    if self.outputHeight != 0 {
+      try visitor.visitSingularInt32Field(value: self.outputHeight, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -5009,6 +5067,7 @@ extension Star_V1_VideoEncodeSettings: SwiftProtobuf.Message, SwiftProtobuf._Mes
     if lhs.encoder != rhs.encoder {return false}
     if lhs.pixelFormat != rhs.pixelFormat {return false}
     if lhs.muxer != rhs.muxer {return false}
+    if lhs.outputHeight != rhs.outputHeight {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -5331,7 +5390,7 @@ extension Star_V1_ConfigChangePreview: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{3}resource_profile\0\u{3}reprocess_on_settings_change\0\u{3}max_mat_memory_fraction\0\u{3}gpu_device_name\0\u{3}image_sequence_dirname\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{3}resource_profile\0\u{3}reprocess_on_settings_change\0\u{3}max_mat_memory_fraction\0\u{3}gpu_device_name\0\u{3}image_sequence_dirname\0\u{3}cloud_aware_merge\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -5392,6 +5451,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _maxMatMemoryFraction: Double? = nil
     var _gpuDeviceName: String? = nil
     var _imageSequenceDirname: String = String()
+    var _cloudAwareMerge: Bool? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -5460,6 +5520,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _maxMatMemoryFraction = source._maxMatMemoryFraction
       _gpuDeviceName = source._gpuDeviceName
       _imageSequenceDirname = source._imageSequenceDirname
+      _cloudAwareMerge = source._cloudAwareMerge
     }
   }
 
@@ -5536,6 +5597,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 59: try { try decoder.decodeSingularDoubleField(value: &_storage._maxMatMemoryFraction) }()
         case 60: try { try decoder.decodeSingularStringField(value: &_storage._gpuDeviceName) }()
         case 61: try { try decoder.decodeSingularStringField(value: &_storage._imageSequenceDirname) }()
+        case 62: try { try decoder.decodeSingularBoolField(value: &_storage._cloudAwareMerge) }()
         default: break
         }
       }
@@ -5722,6 +5784,9 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       if !_storage._imageSequenceDirname.isEmpty {
         try visitor.visitSingularStringField(value: _storage._imageSequenceDirname, fieldNumber: 61)
       }
+      try { if let v = _storage._cloudAwareMerge {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 62)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -5789,6 +5854,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._maxMatMemoryFraction != rhs_storage._maxMatMemoryFraction {return false}
         if _storage._gpuDeviceName != rhs_storage._gpuDeviceName {return false}
         if _storage._imageSequenceDirname != rhs_storage._imageSequenceDirname {return false}
+        if _storage._cloudAwareMerge != rhs_storage._cloudAwareMerge {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -8367,7 +8433,7 @@ extension Star_V1_StepProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
 
 extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SequenceProgress"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sequence_name\0\u{3}frame_count\0\u{3}frames_complete\0\u{1}steps\0\u{3}is_untouched\0\u{3}is_complete\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sequence_name\0\u{3}frame_count\0\u{3}frames_complete\0\u{1}steps\0\u{3}is_untouched\0\u{3}is_complete\0\u{3}needs_rebuild\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8381,6 +8447,7 @@ extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._Messag
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.steps) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.isUntouched) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.isComplete) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.needsRebuild) }()
       default: break
       }
     }
@@ -8405,6 +8472,9 @@ extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if self.isComplete != false {
       try visitor.visitSingularBoolField(value: self.isComplete, fieldNumber: 6)
     }
+    if self.needsRebuild != false {
+      try visitor.visitSingularBoolField(value: self.needsRebuild, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8415,6 +8485,7 @@ extension Star_V1_SequenceProgress: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if lhs.steps != rhs.steps {return false}
     if lhs.isUntouched != rhs.isUntouched {return false}
     if lhs.isComplete != rhs.isComplete {return false}
+    if lhs.needsRebuild != rhs.needsRebuild {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -10011,7 +10082,7 @@ extension Star_V1_GetHorizonOverlayRequest: SwiftProtobuf.Message, SwiftProtobuf
 
 extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetHorizonOverlayResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}exists\0\u{1}kind\0\u{3}y_per_column\0\u{1}height\0\u{3}refinement_pending\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}exists\0\u{1}kind\0\u{3}y_per_column\0\u{1}height\0\u{3}refinement_pending\0\u{1}lines\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -10024,6 +10095,7 @@ extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobu
       case 3: try { try decoder.decodeRepeatedInt32Field(value: &self.yPerColumn) }()
       case 4: try { try decoder.decodeSingularInt32Field(value: &self.height) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.refinementPending) }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.lines) }()
       default: break
       }
     }
@@ -10045,6 +10117,9 @@ extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobu
     if self.refinementPending != false {
       try visitor.visitSingularBoolField(value: self.refinementPending, fieldNumber: 5)
     }
+    if !self.lines.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.lines, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -10054,6 +10129,47 @@ extension Star_V1_GetHorizonOverlayResponse: SwiftProtobuf.Message, SwiftProtobu
     if lhs.yPerColumn != rhs.yPerColumn {return false}
     if lhs.height != rhs.height {return false}
     if lhs.refinementPending != rhs.refinementPending {return false}
+    if lhs.lines != rhs.lines {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_HorizonOverlayLine: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".HorizonOverlayLine"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{3}y_per_column\0\u{1}height\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 2: try { try decoder.decodeRepeatedInt32Field(value: &self.yPerColumn) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.height) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.kind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.yPerColumn.isEmpty {
+      try visitor.visitPackedInt32Field(value: self.yPerColumn, fieldNumber: 2)
+    }
+    if self.height != 0 {
+      try visitor.visitSingularInt32Field(value: self.height, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_HorizonOverlayLine, rhs: Star_V1_HorizonOverlayLine) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.yPerColumn != rhs.yPerColumn {return false}
+    if lhs.height != rhs.height {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

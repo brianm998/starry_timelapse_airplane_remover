@@ -8,6 +8,7 @@ object ViewModes {
     /** Every mode, in macOS's order. */
     val all: List<FrameViewMode> = listOf(
         FrameViewMode.VIEW_ORIGINAL, FrameViewMode.VIEW_HORIZON, FrameViewMode.VIEW_MERGED_HORIZON, FrameViewMode.VIEW_USER_HORIZON,
+        FrameViewMode.VIEW_CONSENSUS_HORIZON,
         FrameViewMode.VIEW_STAR_ALIGNED, FrameViewMode.VIEW_FAILED_STAR_ALIGNED, FrameViewMode.VIEW_EARTH_ALIGNED, FrameViewMode.VIEW_FAILED_EARTH_ALIGNED,
         FrameViewMode.VIEW_SUBTRACTION, FrameViewMode.VIEW_BLOBS, FrameViewMode.VIEW_VALIDATION, FrameViewMode.VIEW_REMOVE_MASK,
         FrameViewMode.VIEW_AUTO_PROCESSED, FrameViewMode.VIEW_AUTO_SELECTIVE_PROCESSED, FrameViewMode.VIEW_SELECTIVE_PROCESSED,
@@ -27,6 +28,7 @@ object ViewModes {
         FrameViewMode.VIEW_HORIZON -> "horizon"
         FrameViewMode.VIEW_MERGED_HORIZON -> "mergedHorizon"
         FrameViewMode.VIEW_USER_HORIZON -> "userHorizon"
+        FrameViewMode.VIEW_CONSENSUS_HORIZON -> "consensusHorizon"
         FrameViewMode.VIEW_STAR_ALIGNED -> "starAligned"
         FrameViewMode.VIEW_FAILED_STAR_ALIGNED -> "failedStarAligned"
         FrameViewMode.VIEW_EARTH_ALIGNED -> "earthAligned"

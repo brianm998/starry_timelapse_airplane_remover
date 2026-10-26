@@ -12,6 +12,7 @@ public enum OperationType: String, CaseIterable, Sendable {
     case starHomography = "star align"
     case earthHomography = "earth align"
     case alignmentValidation
+    case horizonConsensus
     case outliers
     case merge
 }
@@ -51,12 +52,16 @@ extension OperationType {
         case .starHomography:      return 0
         case .earthHomography:     return 0
         case .alignmentValidation: return 0
+        // Fallback only — `HorizonConsensusOp` passes its own: the masks it decodes at once.
+        case .horizonConsensus:    return 2
         // Fallbacks only — FrameGraphBuilder passes config.effective*MemoryMultiplier
         // explicitly, with the frame's actual neighbour counts.  These are the config
         // defaults (9 and 6) plus the largest residentBuildExtraMultiplier those defaults
         // can produce (numberStaticNeighborFrames - 1 = 15): a fallback can see neither
         // the frame size nor the neighbour counts, so it assumes the worst of both — no
-        // merge inside the op streams, and every neighbour is present.
+        // merge inside the op streams, and every neighbour is present.  Not counting the
+        // cloud-aware stage's one extra frame (Config.residentBuildExtraMultiplier): that
+        // is a margin on the explicit figure, which is always what is passed.
         case .outliers:            return 24
         case .merge:               return 21
         }
@@ -90,13 +95,25 @@ public final actor FrameGraphBuilder {
     var configManager: ConfigManager? = nil
 
     public func set(configManager: ConfigManager) async {
+        // Called again for every session opened, run started and sequence loaded, usually with the
+        // manager it already has. Each call used to add another update callback to that manager,
+        // so a long-lived one ended up applying every config change to this builder once per call
+        // so far, and a manager the builder had moved on from kept applying ITS config to it.
+        let alreadyRegistered = self.configManager === configManager
         self.configManager = configManager
         self.update(from: await configManager.config())
-        await configManager.onUpdate { [weak self] config in
+        guard !alreadyRegistered else { return }
+        await configManager.onUpdate { [weak self, weak configManager] config in
             Task {
-                await self?.update(from: config)
+                await self?.apply(config, from: configManager)
             }
         }
+    }
+
+    /// An update from `manager`, applied only while it is still the builder's own.
+    private func apply(_ config: Config, from manager: ConfigManager?) {
+        guard let manager, manager === configManager else { return }
+        update(from: config)
     }
 
     public func update(from config: Config) {
@@ -190,6 +207,36 @@ public final actor FrameGraphBuilder {
         }
     }
     
+    /// Delete `horizonReference/reference.tiff` when it is the one a previous static merge
+    /// wrote rather than one the user painted.  True when it deleted it.
+    ///
+    /// The merge writes that file and nothing else into the directory.  A painted static
+    /// reference also writes a marker named after the frame it was painted on beside it
+    /// (`saveHorizonReferenceMask`), and the startup painter sets
+    /// `hasStaticReferenceHorizon` — either one means the user made it, and it stays.
+    static func removeAutomaticStaticReference(config: Config) async -> Bool {
+        guard !config.hasStaticReferenceHorizon,
+              let directory = config.dirForImage(ofType: .userHorizon, atSize: .original)
+        else { return false }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? []
+        guard names.contains("reference.tiff"),
+              names.allSatisfy({ $0 == "reference.tiff" || $0.hasPrefix(".") })
+        else { return false }
+        let path = "\(directory)/reference.tiff"
+        do {
+            try FileManager.default.removeItem(atPath: path)
+        } catch {
+            Log.w("could not delete stale \(path): \(error)")
+            return false
+        }
+        // The same three caches its writer drops, for the same reason: each would otherwise
+        // keep serving the mask just deleted.
+        await horizonReferenceMaskCache.invalidate(path: path)
+        await starAlignedHorizonMaskCache.invalidateAll()
+        ReferenceMaskIndex.shared.invalidate(directory: URL(fileURLWithPath: directory))
+        return true
+    }
+
     /// Decide which cached stages this run may no longer reuse, and undo the work that
     /// depended on them.
     ///
@@ -337,6 +384,16 @@ public final actor FrameGraphBuilder {
                 deleted += 1
             }
             Log.i("deleted \(deleted) stale merged horizon mask(s)")
+
+            // A static sequence's merge also leaves its mask behind as
+            // `horizonReference/reference.tiff`, and every later load serves that ahead of
+            // the merged file — so deleting only the merged masks would rebuild nothing: the
+            // merge would come straight back with the old mask.
+            if !config.tripodHeadWasMoving,
+               await Self.removeAutomaticStaticReference(config: config)
+            {
+                Log.i("deleted the static reference horizon the previous merge left behind")
+            }
         }
         if stale.contains(.keypoints) {
             // Both alignment types, whether or not this run uses earth alignment: an
@@ -394,6 +451,21 @@ public final actor FrameGraphBuilder {
                   suggestion: localized("warning.artifacts_invalidated.suggestion")
                 ))
             }
+        }
+
+        if stale.contains(.horizonConsensus) {
+            var deleted = 0
+            for frame in frames where range.output.contains(frame.frameIndex) {
+                if HorizonConsensusStore.exists(frameIndex: frame.frameIndex, config: config) {
+                    deleted += 1
+                }
+                // the line and its image together, and in a long-lived session the final
+                // mask the old line gave the frame
+                await frame.horizonProcessor.discardHorizonConsensus()
+                await frame.horizonProcessor.releaseCachedFinalHorizonMask()
+            }
+            HorizonConsensusStore.deleteCalibration(config: config)
+            Log.i("deleted \(deleted) stale horizon consensus line(s)")
         }
 
         if stale.contains(.outliers) {
@@ -462,6 +534,13 @@ public final actor FrameGraphBuilder {
         }
     }
 
+    /// Bumped by every cancel. `build` is long and suspends many times before it enqueues
+    /// anything, so a cancel that lands in the middle finds nothing in the queue to cancel;
+    /// the build compares this against the value it saw on entry before it enqueues.
+    private var cancelGeneration = 0
+    /// Builds currently between entry and enqueue, so a cancel-and-wait can wait for them.
+    var buildsInProgress = 0
+
     public func build(
       frames: [FrameAirplaneRemover],
       startIndex: Int = 0,
@@ -469,11 +548,20 @@ public final actor FrameGraphBuilder {
       closure: @escaping ([String]) -> Void,
       errorClosure: @escaping @Sendable (String) -> Void
     ) async {
+        let generationOnEntry = cancelGeneration
+        buildsInProgress += 1
+        defer { buildsInProgress -= 1 }
         guard let configManager else {
             errorClosure("cannot build without config manager")
             closure(["cannot build without config manager"])
             return
         }
+
+        // Temp files an earlier run died in the middle of writing (see StaleTempFiles). Off the
+        // cooperative pool: it walks the temp and output directories.
+        let cleanupConfig = await configManager.config()
+        let cleanupDirectories = [cleanupConfig.tempOutputPath, cleanupConfig.outputPath]
+        _ = await NativeWork.run { StaleTempFiles.clean(in: cleanupDirectories) }
 
         let errors = ArrayActor<String>([])
 
@@ -493,6 +581,11 @@ public final actor FrameGraphBuilder {
         // reference horizon for a static sequence — the reference.tiff will be
         // loaded directly by each operation that needs the horizon mask.
         let hasStaticReferenceHorizon = config.hasStaticReferenceHorizon && !config.tripodHeadWasMoving
+        // A static sequence without one finds its horizon once, in its single merge op, from
+        // the median of frames sampled across it (`TemporalHorizonDetector`) — so it has no
+        // per-frame detection and nothing to accumulate.
+        let temporalStaticHorizon = hasHorizon && !hasStaticReferenceHorizon
+          && !config.tripodHeadWasMoving && config.useTemporalStaticHorizon
         let processEarth = config.allowEarthAlignment &&
           config.tripodHeadWasMoving // keypoints not used when stationary
 
@@ -692,6 +785,7 @@ public final actor FrameGraphBuilder {
         let horizonAccumulatorInUse = hasHorizon
           && !hasStaticReferenceHorizon
           && !config.tripodHeadWasMoving
+          && !temporalStaticHorizon
           && staticMergeNeeded
 
         if horizonAccumulatorInUse {
@@ -724,7 +818,7 @@ public final actor FrameGraphBuilder {
                 if haveHorizon.contains(frameIndex), !horizonAccumulatorInUse { continue }
                 taskGroup.addTask() {
                     // 1. Horizon
-                    if hasHorizon && !hasStaticReferenceHorizon {
+                    if hasHorizon && !hasStaticReferenceHorizon && !temporalStaticHorizon {
                         let horizonOp = HorizonDetectionOp(
                           frame: frame,
                           rawImageBytes: rawImageBytes,
@@ -755,7 +849,7 @@ public final actor FrameGraphBuilder {
             .sorted { $0.key < $1.key }
             .map { $0.value }
         )
-        if hasHorizon && !hasStaticReferenceHorizon {
+        if hasHorizon && !hasStaticReferenceHorizon && !temporalStaticHorizon {
             recordAlreadyDone(.horizon,
                               consideredFrames: range.horizon,
                               builtOps: horizonOps.count)
@@ -831,10 +925,13 @@ public final actor FrameGraphBuilder {
                     // One op is the whole of this step on a static tripod, and it is done.
                     alreadyDone[.mergedHorizon] = 1
                 } else if let frame = staticMergeAnchor {
+                    let multiplier = temporalStaticHorizon
+                      ? config.effectiveTemporalHorizonMemoryMultiplier()
+                      : config.effectiveHorizonMemoryMultiplier()
                     let horizonOp = HorizonMergeOp(
                       frame: frame,
                       rawImageBytes: rawImageBytes,
-                      memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier())
+                      memoryMultiplier: UInt64(multiplier)
                     ) { errorString in
                         Task { await errors.append(errorString) }
                         errorClosure(errorString)
@@ -1085,6 +1182,56 @@ public final actor FrameGraphBuilder {
         homographyOps.forEach { validationOp.addDependency($0) }
         allOps.append(validationOp)
 
+        // A moving sequence's horizons from the consensus of every frame's detection,
+        // carried along the ground that validation has just settled (`HorizonConsensus`).
+        // Before the outlier ops and the merges, since both composite the two aligned
+        // layers across the horizon.  Built only for frames that still have that work ahead
+        // of them and no line yet: a frame whose output is written has nothing left to
+        // composite.
+        var consensusOp: HorizonConsensusOp? = nil
+        if HorizonConsensus.applies(to: config) {
+            var targets: [Int] = []
+            // A line an earlier run wrote without its image — any run before the view mode
+            // existed — is drawn, whatever state its frame is in: drawing it costs nothing like
+            // building it, and it is what the view mode shows.
+            var imageTargets: [Int] = []
+            for frame in outputFrames {
+                if HorizonConsensusStore.exists(frameIndex: frame.frameIndex, config: config) {
+                    if !frame.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                        ofType: .consensusHorizon,
+                                                        atSize: .original) {
+                        imageTargets.append(frame.frameIndex)
+                    }
+                } else if await frame.processingState() != .complete {
+                    targets.append(frame.frameIndex)
+                }
+            }
+            if targets.isEmpty && imageTargets.isEmpty {
+                // The whole of this step is one op, and what it makes is already written.
+                alreadyDone[.horizonConsensus] = 1
+            }
+            if !targets.isEmpty || !imageTargets.isEmpty {
+                let op = HorizonConsensusOp(
+                  frames: frames,
+                  targets: targets,
+                  imageTargets: imageTargets,
+                  configManager: configManager,
+                  rawImageBytes: rawImageBytes
+                ) { errorString in
+                    Task { await errors.append(errorString) }
+                    errorClosure(errorString)
+                }
+                op.qualityOfService = .userInteractive
+                op.addDependency(validationOp)
+                // Every detection is a vote, including those of frames no merge waits on.
+                horizonOps.values.forEach { op.addDependency($0) }
+                allOps.append(op)
+                consensusOp = op
+                Log.i("horizon consensus will be built for \(targets.count) frame(s) and drawn " +
+                      "for \(imageTargets.count) more")
+            }
+        }
+
         // how many in each direction for final outlier classification.  Clamped at 0:
         // it is a radius, and a negative one would invert the neighbour range below.
         let numOutlierNeighbors = max(0, config.numberFinalProcessingNeighborsNeeded)
@@ -1112,6 +1259,7 @@ public final actor FrameGraphBuilder {
                 }
 
                 outlierOp.addDependency(validationOp)
+                if let consensusOp { outlierOp.addDependency(consensusOp) }
                 allOps.append(outlierOp)
                 outlierOps[frame.frameIndex] = outlierOp
             }
@@ -1145,6 +1293,7 @@ public final actor FrameGraphBuilder {
 
             mergeOp.qualityOfService = .userInteractive
             mergeOp.addDependency(validationOp)
+            if let consensusOp { mergeOp.addDependency(consensusOp) }
 
 
             // add outlier dependencies for neighbor frames; will be a nop
@@ -1175,9 +1324,14 @@ public final actor FrameGraphBuilder {
         // Its dependencies are the merge ops, which now exist only for the requested
         // range, so a partial run reports completion when that range is written rather
         // than waiting on frames it never built an op for.
+        let outputFrameCount = range.output.count
         let completionOp = GraphCompletionOp {
             Log.i("Frame graph fully finished")
-            Log.i(await MemoryMonitor.shared.stats())
+            if Log.isEnabled(.info) {
+                let memoryStats = await MemoryMonitor.shared.stats()
+                Log.i(memoryStats)
+            }
+            Log.i(DecodedFrameStore.shared.statsLine(frames: outputFrameCount))
             closure(await errors.elements())
         }
         Log.d("\(mergeOps.count) mergeOps")
@@ -1192,8 +1346,17 @@ public final actor FrameGraphBuilder {
         // and one of them is already an ancestor of every merge, so this only ever
         // removes a way to report done early.
         completionOp.addDependency(validationOp)
+        if let consensusOp { completionOp.addDependency(consensusOp) }
         outlierOps.values.forEach { completionOp.addDependency($0) }
         allOps.append(completionOp)
+
+        // A cancel arrived while this build was still constructing its graph. There was
+        // nothing queued for it to cancel, so enqueueing now would run the very work the
+        // caller asked to stop.
+        guard cancelGeneration == generationOnEntry else {
+            Log.i("FrameGraphBuilder: build cancelled before it enqueued; dropping its \(allOps.count) operations")
+            return
+        }
 
         await withCheckedContinuation { continuation in
             queue.addOperations(allOps, waitUntilFinished: false)
@@ -1222,6 +1385,10 @@ public final actor FrameGraphBuilder {
     /// - `mergeFrames`: frames with existing output that need re-compositing
     ///   with the updated horizon (each gets a `MergeOp` depending on the
     ///   matching refinement op when one exists).
+    /// - `sequenceFrames`: every frame of the sequence.  Where the horizon consensus
+    ///   applies, the refined and re-merged frames' consensus lines are built again from
+    ///   them, between the refinements and the merges; without them, those frames
+    ///   composite with their merged masks until a full run rebuilds the lines.
     /// - `refinementCompletion`: per-frame callback fired when each refinement
     ///   op finishes — used by callers to refresh overlays.
     ///
@@ -1232,6 +1399,7 @@ public final actor FrameGraphBuilder {
     public func enqueueHorizonRefinement(
       refinementFrames: [FrameAirplaneRemover],
       mergeFrames: [FrameAirplaneRemover],
+      sequenceFrames: [FrameAirplaneRemover] = [],
       refinementCompletion: @escaping @Sendable (FrameAirplaneRemover) async -> Void = { _ in },
       errorClosure: @escaping @Sendable (String) -> Void,
       completion: @escaping @Sendable ([String]) -> Void
@@ -1307,15 +1475,40 @@ public final actor FrameGraphBuilder {
             mergeOps.append(mergeOp)
         }
 
+        // The horizon consensus is anchored on the references that were just edited, so the
+        // lines of every frame being refined or re-merged are built again — after the
+        // refinements, whose detections vote, and before the merges that composite with them.
+        var consensusOps: [Operation] = []
+        if HorizonConsensus.applies(to: config), !sequenceFrames.isEmpty {
+            let targets = Set(refinementFrames.map(\.frameIndex))
+              .union(mergeFrames.map(\.frameIndex)).sorted()
+            if !targets.isEmpty {
+                let consensusOp = HorizonConsensusOp(
+                  frames: sequenceFrames,
+                  targets: targets,
+                  configManager: configManager,
+                  rawImageBytes: rawImageBytes
+                ) { errorString in
+                    Task { await errors.append(errorString) }
+                    errorClosure(errorString)
+                }
+                consensusOp.qualityOfService = .userInteractive
+                refinementOps.values.forEach { consensusOp.addDependency($0) }
+                mergeOps.forEach { $0.addDependency(consensusOp) }
+                consensusOps.append(consensusOp)
+            }
+        }
+
         let completionOp = GraphCompletionOp {
             completion(await errors.elements())
         }
         refinementOps.values.forEach { completionOp.addDependency($0) }
         mergeOps.forEach { completionOp.addDependency($0) }
+        consensusOps.forEach { completionOp.addDependency($0) }
 
         let sortedRefinements = refinementOps.values
             .sorted { $0.frame.frameIndex < $1.frame.frameIndex }
-        let allOps: [Operation] = sortedRefinements + mergeOps + [completionOp]
+        let allOps: [Operation] = sortedRefinements + consensusOps + mergeOps + [completionOp]
         await withCheckedContinuation { continuation in
             queue.addOperations(allOps, waitUntilFinished: false)
             continuation.resume()
@@ -1330,6 +1523,7 @@ public final actor FrameGraphBuilder {
     /// so callers that track processing state (e.g. `isProcessingFrames`)
     /// must reset that state themselves after calling this method.
     public func cancelAllOperations() {
+        cancelGeneration += 1
         queue.cancelAllOperations()
         previewQueue.cancelAllOperations()
         Log.i("FrameGraphBuilder: all operations cancelled")
@@ -1359,7 +1553,7 @@ public final actor FrameGraphBuilder {
     ) async -> Bool {
         cancelAllOperations()
         let deadline = ContinuousClock.now.advanced(by: timeout)
-        while queue.operationCount > 0 {
+        while queue.operationCount > 0 || buildsInProgress > 0 {
             guard ContinuousClock.now < deadline else {
                 Log.w("FrameGraphBuilder: \(queue.operationCount) operation(s) still " +
                       "running \(timeout) after being cancelled; going ahead anyway")

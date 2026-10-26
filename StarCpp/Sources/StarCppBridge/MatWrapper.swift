@@ -114,8 +114,9 @@ public final class MatWrapper: @unchecked Sendable {
     public var is16Bits: Bool { mat_wrapper_is_16_bits(ref) }
     public var is8Bits: Bool { mat_wrapper_is_8_bits(ref) }
 
-    public func ensure16Bits() -> MatWrapper {
-        MatWrapper(ref: mat_wrapper_ensure_16_bits(ref))
+    public func ensure16Bits() -> MatWrapper? {
+        let r: MatWrapperRef? = mat_wrapper_ensure_16_bits(ref)
+        return r.map { MatWrapper(ref: $0) }
     }
 
     public func ensure8Bits() -> MatWrapper {

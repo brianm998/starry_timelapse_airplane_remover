@@ -23,6 +23,9 @@ final class CliFeatureRunner {
     let testCase: XCTestCase
     private var feature: Feature?
     private var settings = Settings()
+    /// star's `-c` spelling of the clean method the setup steps asked for (the trail checks judge a run by the method it used).
+    private var cleanMethod: String { ["auto": "automatic:false", "selective": "selective", "autoSelective": "automatic:true"][settings.clean ?? "auto"] ?? "automatic:false" }
+    private var featureName: String { feature?.id ?? "feature" }
     private(set) var sequenceCopy: URL?          // what star was given: a sequence directory, or a video file
     private var sourceVideo: URL?
     private var inputFramesDir: URL?             // the frames star processes (the decoded frames, for a video)
@@ -338,16 +341,6 @@ final class CliFeatureRunner {
             throw RunnerError("no validator at \(exe.path): run `swift build -c release --package-path removal_tools`, or set STAR_OUTPUT_VERIFY_PATH")
         }
         return exe
-    }
-
-    /// The clean method the feature asked for, in the removal verifier's (and star's `-c`) spelling.
-    private var cleanMethod: String? {
-        switch settings.clean {
-        case "auto": return "automatic:false"
-        case "autoSelective": return "automatic:true"
-        case "selective": return "selective"
-        default: return nil
-        }
     }
 
     // MARK: removal checks (star-removal-verify)

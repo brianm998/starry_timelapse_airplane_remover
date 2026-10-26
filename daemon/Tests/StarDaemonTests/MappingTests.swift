@@ -58,6 +58,18 @@ final class MappingTests: XCTestCase {
                              "a wide box came out tall")
     }
 
+    // MARK: - HorizonThumbnailOverlay.Kind
+
+    /// The client colours a frame's horizon line by where it came from, so each source keeps a
+    /// wire value of its own — the consensus line most of all, since it is the one the output
+    /// uses in place of the merged mask.
+    func testEachHorizonOverlayKindMapsToItsNamesake() {
+        XCTAssertEqual(Mapping.horizonOverlayKind(.initial), .initial)
+        XCTAssertEqual(Mapping.horizonOverlayKind(.merged), .merged)
+        XCTAssertEqual(Mapping.horizonOverlayKind(.reference), .reference)
+        XCTAssertEqual(Mapping.horizonOverlayKind(.consensus), .consensus)
+    }
+
     // MARK: - AlignmentState
 
     /// Every alignment outcome needs its own wire value: the client shows a different thing for
@@ -158,6 +170,8 @@ final class MappingTests: XCTestCase {
         XCTAssertEqual(Mapping.protoFrameViewMode(.starAligned), .viewStarAligned)
         XCTAssertEqual(Mapping.protoFrameViewMode(.horizon), .viewHorizon)
         XCTAssertEqual(Mapping.protoFrameViewMode(.userHorizon), .viewUserHorizon)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.consensusHorizon), .viewConsensusHorizon)
+        XCTAssertEqual(Mapping.frameViewMode(from: .viewConsensusHorizon), .consensusHorizon)
     }
 
     /// And going back out gets the same view: announcing a save and asking for the preview agree, for every image.
@@ -371,6 +385,31 @@ final class MappingTests: XCTestCase {
         untouched.useGPUForMerge = true
         Mapping.applyExpertConfig(&untouched, from: Star_V1_Config())
         XCTAssertTrue(untouched.useGPUForMerge, "an absent field must not overwrite the existing value")
+    }
+
+    /// The cloud-aware merge is off unless a client asks for it, and a client's choice goes both ways: on reaches the config, and an explicit
+    /// off turns it back off.  A client that says nothing leaves the setting alone.
+    func testCloudAwareMergeIsSentAndAppliedBothWays() {
+        XCTAssertFalse(Mapping.protoConfig(Config()).cloudAwareMerge, "off by default")
+        var enabled = Config()
+        enabled.cloudAwareMerge = true
+        XCTAssertTrue(Mapping.protoConfig(enabled).cloudAwareMerge)
+        XCTAssertTrue(Mapping.protoConfig(enabled).hasCloudAwareMerge, "always sent, so a client can show the real value")
+
+        var target = Config()
+        var on = Star_V1_Config()
+        on.cloudAwareMerge = true
+        Mapping.applyExpertConfig(&target, from: on)
+        XCTAssertTrue(target.cloudAwareMerge, "an explicit true from the client must apply")
+        var off = Star_V1_Config()
+        off.cloudAwareMerge = false
+        Mapping.applyExpertConfig(&target, from: off)
+        XCTAssertFalse(target.cloudAwareMerge, "and an explicit false must turn it back off")
+
+        var untouched = Config()
+        untouched.cloudAwareMerge = true
+        Mapping.applyExpertConfig(&untouched, from: Star_V1_Config())
+        XCTAssertTrue(untouched.cloudAwareMerge, "an absent field must not overwrite the existing value")
     }
 
     /// The device a GPU toggle would use is named whenever there is one, so the sheet can say which; absent where there is none.  Read-only like

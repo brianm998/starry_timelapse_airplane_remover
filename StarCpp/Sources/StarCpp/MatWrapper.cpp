@@ -381,7 +381,7 @@ MatWrapperRef mat_wrapper_clone(MatWrapperRef ref) {
 MatWrapperRef mat_wrapper_alias(MatWrapperRef ref) {
     if (!ref) return nullptr;
     try {
-        return new MatWrapperImpl(MatWrapperImpl::Adopt{}, ref->mat);
+        return new MatWrapperImpl(MatWrapperImpl::Alias{}, ref->mat);
     } KHT_CATCH_LOG("mat_wrapper_alias")
     return nullptr;
 }
@@ -401,6 +401,16 @@ MatWrapperRef mat_wrapper_create(int64_t width, int64_t height, int cvType,
             return new MatWrapperImpl((int)height, (int)width, cvType, data, bytesPerRow);
         }
     } KHT_CATCH_LOG("mat_wrapper_create")
+    return nullptr;
+}
+
+// An owned, continuous, uninitialised Mat the caller fills through mat_wrapper_data_ptr.
+MatWrapperRef mat_wrapper_new(int64_t width, int64_t height, int cvType) {
+    try {
+        cv::Mat mat((int)height, (int)width, cvType);
+        if (mat.empty()) return nullptr;
+        return new MatWrapperImpl(MatWrapperImpl::Adopt{}, mat); // fresh, refcount 1: shared, not copied
+    } KHT_CATCH_LOG("mat_wrapper_new")
     return nullptr;
 }
 

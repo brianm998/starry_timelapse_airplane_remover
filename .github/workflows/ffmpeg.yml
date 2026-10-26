@@ -63,7 +63,7 @@ jobs:
           install: >-
             git make diffutils
             mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-x264 mingw-w64-x86_64-x265 mingw-w64-x86_64-libvpx
+            mingw-w64-x86_64-libx264 mingw-w64-x86_64-x265 mingw-w64-x86_64-libvpx
             mingw-w64-x86_64-lame mingw-w64-x86_64-opus
       - name: Build ffmpeg + ffprobe
         if: steps.cache.outputs.cache-hit != 'true'

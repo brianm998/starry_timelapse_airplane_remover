@@ -3,6 +3,7 @@ package com.star.desktop.data
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.star.desktop.domain.FrameRatePref
+import com.star.desktop.domain.GpuToggle
 import com.star.desktop.util.Log
 import java.io.File
 
@@ -98,6 +99,14 @@ class LocalPreferences {
         get() = bool("showHorizonPainterInstructions") ?: true
         set(value) = setBool("showHorizonPainterInstructions", value)
 
+    /**
+     * macOS `hiddenHorizonLineKinds`: the kinds of horizon line (initial, merged, consensus, reference) the user has switched
+     * off; empty draws every kind a frame has.  The hidden ones rather than the shown ones, so a kind added later is drawn.
+     */
+    var hiddenHorizonLineKinds: List<String>
+        get() = strings("hiddenHorizonLineKinds") ?: emptyList()
+        set(value) = setStrings("hiddenHorizonLineKinds", value.distinct().sorted())
+
     /** macOS `showHorizonOnMainView`: whether the horizon line is drawn on the frame, the filmstrip and the grid. Off until turned on. */
     var showHorizonOnMainView: Boolean
         get() = bool("showHorizonOnMainView") ?: false
@@ -138,6 +147,14 @@ class LocalPreferences {
     var videoMuxer: String?
         get() = string("muxer")?.takeIf { it.isNotEmpty() }
         set(value) = setString("muxer", value)
+
+    /**
+     * One of the three GPU toggles as the user last set it (macOS `useGPUForMerge` / `useGPUForSIFT` / `useGPUForAKAZE`, same keys, same file),
+     * or null when they have never chosen, which leaves a sequence's own config in charge.
+     */
+    fun gpu(toggle: GpuToggle): Boolean? = bool(toggle.key)
+
+    fun setGpu(toggle: GpuToggle, value: Boolean) = setBool(toggle.key, value)
 
     fun setSkipRenderPrompt(value: Boolean) = edit { it["skipRenderPromptAfterProcessing"] = value }
 

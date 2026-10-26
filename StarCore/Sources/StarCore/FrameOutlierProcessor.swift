@@ -174,7 +174,7 @@ final public actor FrameOutlierProcessor {
         let newBlobMap = try await blobProcessor.process(
           frame: frame,
           within: bounds,
-          startingBlobID: currentMaxID + 1
+          startingBlobID: currentMaxID < UInt16.max ? currentMaxID + 1 : currentMaxID
         )
 
         // add new blobs to outlier groups, fore-going any classification for now
@@ -252,7 +252,10 @@ final public actor FrameOutlierProcessor {
                 // frames are linked with their neighbors and outlier
                 // groups can use these links for decision tree values
                 outliersLoadedFromFile = true
-                Log.i("loaded \(String(describing: await outlierGroups.getMembers().count)) outlier groups for frame \(frameIndex)")
+                if Log.isEnabled(.info) {
+                    let groupCount = await outlierGroups.getMembers().count
+                    Log.i("loaded \(groupCount) outlier groups for frame \(frameIndex)")
+                }
                 await frame?.updateCombineSubjects()
                 
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
@@ -674,7 +677,10 @@ final public actor FrameOutlierProcessor {
       keepingUserDecisions: Bool = false,
       minimumSize: Int? = nil
     ) async {
-      Log.d("frame \(frameIndex) applyDecisionTreeToAll \(await outlierGroups?.members.count ?? 0) Outliers")
+      if Log.isEnabled(.debug) {
+          let groupCount = await outlierGroups?.members.count ?? 0
+          Log.d("frame \(frameIndex) applyDecisionTreeToAll \(groupCount) Outliers")
+      }
         let startTime = Date().timeIntervalSince1970
         if let outlierGroups {
             let groups = await outlierGroups.getMembers()
@@ -909,11 +915,23 @@ fileprivate class OutlierClassifier {
         self.frame = frame
     }
 
+    /// The frame's original, loaded once and held for a whole classification pass.
+    ///
+    /// `borderBrightness` reads the original for every group it scores, through a cache that
+    /// holds images weakly: with nothing else holding the decoded frame, each group's read
+    /// decoded it again. A strong reference held across the pass keeps the cache entry alive,
+    /// so every group after the first is a cache hit.
+    func holdOriginal() async -> PixelatedImage? {
+        try? await frame.imageAccessor.loadFinal(frameIndex: frameIndex, type: .original, atSize: .original)
+    }
+
     // classifies OutlierGroup actors in OutlierGroups, marking them as removable or not
     // uses the .all classifier, which digs into neighboring frames for more data
     func classifyAll(_ outliers: [OutlierGroup], overwrite: Bool = false, keepingUserDecisions: Bool = false) async {
 //        await Task.detached(priority: .userInitiated) {
         //let dataHarvester = await FrameDataHarvester(for: self.frame)
+            let heldOriginal = outliers.isEmpty ? nil : await holdOriginal()
+            defer { withExtendedLifetime(heldOriginal) {} }
             await withTaskGroup(of: Void.self) { taskGroup in
                 guard let classifier = await currentClassifier.get(for: .all) else { return }
 
@@ -955,6 +973,9 @@ fileprivate class OutlierClassifier {
         let imageWidth = Double(frame.width)
         let imageHeight = Double(frame.height)
         
+        let heldOriginal = blobs.isEmpty ? nil : await holdOriginal()
+        defer { withExtendedLifetime(heldOriginal) {} }
+
         return await Task.detached(priority: .userInitiated) {
             return await withTaskGroup(of: ([OutlierSorter], TimeInterval, TimeInterval, Int).self) { taskGroup in
 

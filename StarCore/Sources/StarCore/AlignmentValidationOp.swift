@@ -199,9 +199,12 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                     inFlight -= 1
                 }
                 taskGroup.addTask {
-                    guard let features = OCVFeatureSet.load(fromFilename: path)
-                    else { return nil }
-                    return (frameIndex, features.keypointPositions())
+                    // A YAML parse is blocking native work: not for a cooperative-pool thread.
+                    await NativeWork.run {
+                        guard let features = OCVFeatureSet.load(fromFilename: path)
+                        else { return nil }
+                        return (frameIndex, features.keypointPositions())
+                    }
                 }
                 inFlight += 1
             }

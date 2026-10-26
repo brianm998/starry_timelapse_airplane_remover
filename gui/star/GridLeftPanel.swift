@@ -94,7 +94,7 @@ struct GridLeftPanel: View {
         for mode in FrameViewMode.allCases {
             if alwaysShow.contains(mode) {
                 modes.append(mode)
-            } else if viewModel.frames.contains(where: { $0.hasImage(type: mode) }) {
+            } else if viewModel.availableModes.contains(mode) {
                 modes.append(mode)
             }
         }

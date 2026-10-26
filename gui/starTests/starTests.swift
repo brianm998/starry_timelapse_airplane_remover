@@ -1491,14 +1491,15 @@ final class ProcessingStepsTests: XCTestCase {
 
     // MARK: - which steps are listed
 
-    /// Everything on: a moving camera with earth alignment, horizon detection and a clean
-    /// method that reviews outliers.
+    /// Everything on: a moving camera with earth alignment, horizon detection, the horizon
+    /// consensus and a clean method that reviews outliers.
     private func allSteps() -> [OperationType] {
         ProcessingSteps.types(horizonDetectionEnabled: true,
                               hasStaticReferenceHorizon: false,
                               cameraWasMoving: true,
                               allowEarthAlignment: true,
-                              usesOutliers: true)
+                              usesOutliers: true,
+                              usesHorizonConsensus: true)
     }
 
     func testTheStepsAreInTheOrderTheModalStacksThem() {
@@ -1506,7 +1507,31 @@ final class ProcessingStepsTests: XCTestCase {
                        [.horizon, .mergedHorizon,
                         .starKeypoints, .earthKeypoints,
                         .starHomography, .earthHomography,
+                        .horizonConsensus,
                         .outliers, .merge])
+    }
+
+    /// The horizon consensus is carried along the aligned ground, so it has a row only where
+    /// the ground is aligned — and only with its own setting on.
+    func testTheHorizonConsensusIsListedOnlyWhereTheGroundIsAligned() {
+        func types(moving: Bool, earth: Bool, consensus: Bool) -> [OperationType] {
+            ProcessingSteps.types(horizonDetectionEnabled: true,
+                                  hasStaticReferenceHorizon: false,
+                                  cameraWasMoving: moving,
+                                  allowEarthAlignment: earth,
+                                  usesOutliers: true,
+                                  usesHorizonConsensus: consensus)
+        }
+        XCTAssertTrue(types(moving: true, earth: true, consensus: true).contains(.horizonConsensus))
+        XCTAssertFalse(types(moving: true, earth: true, consensus: false).contains(.horizonConsensus))
+        XCTAssertFalse(types(moving: false, earth: true, consensus: true).contains(.horizonConsensus))
+        XCTAssertFalse(types(moving: true, earth: false, consensus: true).contains(.horizonConsensus))
+
+        var config = Config()
+        config.tripodHeadWasMoving = true
+        config.allowEarthAlignment = true
+        XCTAssertTrue(ProcessingSteps.types(for: config).contains(.horizonConsensus),
+                      "on by default for a moving camera")
     }
 
     func testEarthStepsAreNotListedWhenEarthAlignmentIsOff() {
@@ -2134,6 +2159,41 @@ final class RememberedHorizonCountTests: XCTestCase {
         XCTAssertNil(prefs.movingHorizonCountMultiplier)
         XCTAssertEqual(preferred(1450, prefs.movingHorizonCountMultiplier), 12)
     }
+
+    /// The three GPU toggles are the same hand-written keys on the Kotlin side, so the property
+    /// names are the wire format here too.  A file with none of them is the common case and has
+    /// to read as "never chosen" — that is what leaves the sequence's own config in charge —
+    /// and an explicit false has to survive as false, not collapse into that.
+    func testTheGPUTogglesUseTheKeysTheKotlinClientWrites() throws {
+        // exactly what the Kotlin client's Gson writes for a user who turned two of them off
+        let json = #"{"recentlyOpenedSequencelist":{},"useGPUForMerge":false,"useGPUForAKAZE":false,"useGPUForSIFT":true}"#
+        let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+        XCTAssertEqual(prefs.useGPUForMerge, false)
+        XCTAssertEqual(prefs.useGPUForSIFT, true)
+        XCTAssertEqual(prefs.useGPUForAKAZE, false)
+
+        let round = try JSONEncoder().encode(prefs)
+        let text = String(decoding: round, as: UTF8.self)
+        for key in ["useGPUForMerge", "useGPUForSIFT", "useGPUForAKAZE"] {
+            XCTAssertTrue(text.contains("\"\(key)\""), "\(key) not encoded as \(key): \(text)")
+        }
+        let back = try JSONDecoder().decode(UserPreferences.self, from: round)
+        XCTAssertEqual(back.useGPUForMerge, false)
+        XCTAssertEqual(back.useGPUForSIFT, true)
+        XCTAssertEqual(back.useGPUForAKAZE, false)
+    }
+
+    func testPreferencesWithNoGPUChoiceLeaveItToTheSequence() throws {
+        let json = #"{"recentlyOpenedSequencelist":{}}"#
+        let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+        XCTAssertNil(prefs.useGPUForMerge)
+        XCTAssertNil(prefs.useGPUForSIFT)
+        XCTAssertNil(prefs.useGPUForAKAZE)
+
+        // and unset stays out of the file, so the Kotlin client sees no key rather than a null
+        let text = String(decoding: try JSONEncoder().encode(prefs), as: UTF8.self)
+        XCTAssertFalse(text.contains("useGPU"), "an unchosen toggle was written: \(text)")
+    }
 }
 
 /// `UserPreferences` is a value type whose every field writes the *whole* file on change, so a
@@ -2255,6 +2315,24 @@ final class UserPreferencesStoreTests: XCTestCase {
         for setting in ["detectionType", "frameRate", "codec", "encoder", "pixelFormat", "muxer"] {
             XCTAssertTrue(src.contains("self.\(setting) = \(setting)"),
                           "applyUserPreferences no longer seeds \(setting)")
+        }
+    }
+
+    /// The GPU toggles are remembered across sequences by two halves that have to stay in step,
+    /// and neither can be run here (a sequence's view model cannot be stood up in a test): a
+    /// toggle changed in the settings sheet is written to the preferences, and a sequence being
+    /// opened is seeded from them.  Lose the first and a choice is forgotten the moment the
+    /// sequence closes; lose the second and it is remembered but never used.
+    func testTheGPUTogglesAreRememberedAndSeededBack() throws {
+        let src = try source("star/ImageSequenceViewModel.swift")
+        let flat = src.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        for name in ["Merge", "SIFT", "AKAZE"] {
+            // written when the toggle changes …
+            XCTAssertTrue(flat.contains("userPreferences.useGPUFor\(name) = useGPUFor\(name)"),
+                          "changing useGPUFor\(name) no longer reaches the preferences")
+            // … and put back on a sequence when it is opened, or the preferences are written
+            XCTAssertTrue(flat.contains("if let useGPUFor\(name) = userPreferences.useGPUFor\(name)"),
+                          "applyUserPreferences no longer seeds useGPUFor\(name)")
         }
     }
 

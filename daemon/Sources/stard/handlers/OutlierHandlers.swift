@@ -160,8 +160,12 @@ enum OutlierHandlers {
                 await transport.sendError(id: id, message: "reference frame out of range", code: 404); return
             }
             await ensureOutliersLoaded(refFrame)
+            // a group id is 16 bits on disk; the wire field is 32, so a larger one cannot name a group
+            guard let refGroupID = UInt16(exactly: req.referenceGroupID) else {
+                await transport.sendError(id: id, message: "reference outlier group id out of range", code: 400); return
+            }
             guard let refGroups = await refFrame.getOutlierGroups(),
-                  let refGroup = await refGroups.get(with: UInt16(req.referenceGroupID)) else {
+                  let refGroup = await refGroups.get(with: refGroupID) else {
                 await transport.sendError(id: id, message: "reference outlier group not found", code: 404); return
             }
             let count = await session.frameCount
@@ -220,7 +224,9 @@ enum OutlierHandlers {
                         // Single-tap: dump exactly the tapped group by id. Use the array overload — the single
                         // dumpInTrash(_:) only adds to trash without removing from members. macOS likewise passes
                         // a 1-element array (FrameViewModel.dumpInTrash(_ badGroup:) → OutlierGroups.dumpInTrash([…])).
-                        if let g = await groups.get(with: UInt16(req.groupID)) { await groups.dumpInTrash([g]) }
+                        // an id that does not fit in 16 bits names no group (and must not trap)
+                        if let tappedID = UInt16(exactly: req.groupID),
+                           let g = await groups.get(with: tappedID) { await groups.dumpInTrash([g]) }
                     } else {
                         // Drag: dump every member group whose bounding box is fully inside the rectangle (macOS dumpInTrash(between:and:)).
                         let inside = await groups.getMembers().values.filter { bounds.contains(other: $0.bounds) }
@@ -360,7 +366,8 @@ enum OutlierHandlers {
             let membersDict = await groups.members
 
             for decision in req.decisions {
-                if let group = membersDict[UInt16(decision.groupID)],
+                if let groupID = UInt16(exactly: decision.groupID),
+                   let group = membersDict[groupID],
                    let reason = Mapping.removeReason(from: decision.decision) {
                     _ = await group.shouldRemove(reason)
                 }

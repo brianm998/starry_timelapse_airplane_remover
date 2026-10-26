@@ -125,6 +125,8 @@ struct SequenceProgressPanel: View {
     private var statusText: String {
         if progress.isComplete {
             localized("ui.processing_complete")
+        } else if progress.needsRebuild {
+            localized("ui.this_sequence_needs_rebuilding")
         } else if progress.isUntouched {
             localized("ui.this_sequence_has_not_been_processed_yet")
         } else {

@@ -23,6 +23,53 @@ You should have received a copy of the GNU General Public License along with sta
 // HorizonStats) and extensions on PixelatedImage; those stay in Horizon.swift
 // and are not moved here.
 
+/// Which frames of a sequence have a painted reference mask, kept per `horizonReference/`
+/// directory and revalidated by the directory's modification time (adding or removing a
+/// reference changes it; overwriting one does not change which frames have one).
+final class ReferenceMaskIndex: @unchecked Sendable {
+    static let shared = ReferenceMaskIndex()
+
+    private let lock = NSLock()
+    private var entries: [String: (stamp: Date?, index: [Int: String])] = [:]
+    private(set) var builds = 0
+
+    /// Frame index -> reference mask path for every frame that has one. `build` receives the
+    /// file names present in the directory and maps them to frames; it runs only when the
+    /// directory is new or has changed.
+    func index(of directory: URL,
+               build: (Set<String>) -> [Int: String]) -> [Int: String]
+    {
+        let path = directory.path
+        let stamp = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+        lock.lock()
+        if let entry = entries[path], entry.stamp == stamp, stamp != nil {
+            lock.unlock()
+            return entry.index
+        }
+        lock.unlock()
+
+        let names = Set((try? FileManager.default.contentsOfDirectory(atPath: path)) ?? [])
+        let built = build(names)
+        lock.lock()
+        entries[path] = (stamp, built)
+        builds += 1
+        lock.unlock()
+        return built
+    }
+
+    func invalidate(directory: URL) {
+        lock.lock()
+        entries[directory.path] = nil
+        lock.unlock()
+    }
+
+    func invalidateAll() {
+        lock.lock()
+        entries.removeAll()
+        lock.unlock()
+    }
+}
+
 final public actor FrameHorizonProcessor {
 
     nonisolated public let frameIndex: Int
@@ -138,6 +185,9 @@ final public actor FrameHorizonProcessor {
           ofTypes: [.mergedHorizon],
           atSizes: [.original, .preview]
         )
+        // The line was anchored on the references that just changed, and built from the
+        // detection being thrown away next.
+        await discardHorizonConsensus()
         await discardPriorGuidedDetection()
     }
 
@@ -173,6 +223,9 @@ final public actor FrameHorizonProcessor {
         // Reference frames serve their painted mask directly; nothing to recompute.
         if (try await loadHorizonReferenceMask()) != nil { return }
         await releaseCachedFinalHorizonMask()
+        // As in `discardMergedHorizon`: this frame's line was anchored on the references that
+        // changed, and built from the detection about to be discarded.
+        await discardHorizonConsensus()
         // The only caller is `HorizonRefinementOp`, which exists for exactly one reason — a
         // reference was edited — so the detection those references guided is stale too and
         // has to go before the merge asks for it.  This is what makes the recompute cost a
@@ -223,7 +276,9 @@ final public actor FrameHorizonProcessor {
             return cached
         }
         let mask: HorizonMask?
-        if let merged = try await loadOrCreateMergedHorizonMask() {
+        if let consensus = await loadHorizonConsensusMask() {
+            mask = consensus
+        } else if let merged = try await loadOrCreateMergedHorizonMask() {
             mask = merged
         } else {
             // fall back to non-merged horizon mask
@@ -233,6 +288,71 @@ final public actor FrameHorizonProcessor {
         return mask
     }
     
+    /// Delete this frame's consensus line and the image drawn from it.  They go together: the
+    /// view modes would otherwise show a horizon the composite no longer uses.
+    func discardHorizonConsensus() async {
+        HorizonConsensusStore.delete(frameIndex: frameIndex, config: await configManager.config())
+        imageAccessor.deleteImages(frameIndex: frameIndex, ofTypes: [.consensusHorizon],
+                                   atSizes: [.original, .preview])
+    }
+
+    /// Draw this frame's consensus line as a `.consensusHorizon` mask, at the sizes the
+    /// other horizon masks are written at, so the view modes can show it.  The line on disk
+    /// stays what the composite reads; this is only its picture.
+    ///
+    /// - Returns: whether there was a line to draw, and it was written.
+    func saveHorizonConsensusImage() async -> Bool {
+        guard let mask = await horizonConsensusMask() else { return false }
+        do {
+            try await imageAccessor.save(mask.image, frameIndex: frameIndex,
+                                         as: .consensusHorizon, atSizes: await outputSizes,
+                                         overwrite: true)
+            return true
+        } catch {
+            Log.w("frame \(frameIndex) could not save its horizon consensus image: \(error)")
+            return false
+        }
+    }
+
+    /// The consensus line as a full-size mask, under `horizonConsensusRecord`'s conditions.
+    private func horizonConsensusMask() async -> HorizonMask? {
+        guard let frame, let record = await horizonConsensusRecord() else { return nil }
+        let rows = HorizonConsensus.columnRows(record.line, width: frame.width,
+                                               height: frame.height)
+        guard let image = PixelatedImage(mat: PixelatedImageBridge.binaryHorizonMask(
+                width: Int32(frame.width), height: Int32(frame.height),
+                horizonY: rows.map { Optional($0) })),
+              let mask = HorizonMask(image)
+        else {
+            Log.w("frame \(frameIndex) could not build a mask from its horizon consensus line")
+            return nil
+        }
+        return mask
+    }
+
+    /// This frame's horizon from `HorizonConsensus`, when a run has written one and it
+    /// applies — anchored on the user's painted references where there are any.  Nil
+    /// otherwise, and the merged mask is used as before.
+    ///
+    /// Only the final mask reads it.  Keypoint detection, which runs before the consensus
+    /// can exist, keeps reading the merged mask, so what a stage is built from does not
+    /// depend on whether an earlier run got as far as this.
+    private func loadHorizonConsensusMask() async -> HorizonMask? {
+        guard let mask = await horizonConsensusMask() else { return nil }
+        Log.i("frame \(frameIndex) composites with its horizon consensus line")
+        return mask
+    }
+
+    /// The consensus line the final mask and the overlay read, or nil where neither should:
+    /// the setting is off, or it cannot run here.  Painted references do not switch it off;
+    /// they anchor it, and a painted frame's line is its painting.
+    private func horizonConsensusRecord() async -> HorizonConsensusStore.Record? {
+        let config = await configManager.config()
+        guard HorizonConsensus.applies(to: config), let frame else { return nil }
+        return HorizonConsensusStore.read(frameIndex: frameIndex, width: frame.width,
+                                          height: frame.height, config: config)
+    }
+
     // this horizon mask has been calculated by a median merge of
     // possibly aligned horizon masks from neighbor frames.
     public func loadOrCreateMergedHorizonMask() async throws -> HorizonMask? {
@@ -274,11 +394,20 @@ final public actor FrameHorizonProcessor {
 
         await frame?.set(state: .mergingHorizon)
 
-        // get original horizon mask for this frame
-        Log.d("frame \(frameIndex) calling loadOrCreateHorizonMask()")
-        let mask = try await loadOrCreateHorizonMask()
-
         let config = await configManager.config()
+
+        // A static sequence's temporal horizon needs no per-frame detection at all, not even
+        // this frame's: the median it is found in is built from the sampled frames directly.
+        let temporalStatic = !config.tripodHeadWasMoving && config.useTemporalStaticHorizon
+
+        // get original horizon mask for this frame
+        let mask: HorizonMask?
+        if temporalStatic {
+            mask = nil
+        } else {
+            Log.d("frame \(frameIndex) calling loadOrCreateHorizonMask()")
+            mask = try await loadOrCreateHorizonMask()
+        }
 
         // Reference-horizon smoothing pass (moving sequences only).
         // When user-defined reference horizons are near enough to say something about this
@@ -291,7 +420,7 @@ final public actor FrameHorizonProcessor {
         // holding it to the same 30-frame leash would throw away references that predict
         // this frame's horizon to within a few pixels across the whole sequence — which, on
         // a sparsely painted moving sequence, is most of them.
-        if config.useReferenceHorizonSmoothing, config.tripodHeadWasMoving {
+        if config.useReferenceHorizonSmoothing, config.tripodHeadWasMoving, let mask {
             let allStats = try await referenceHorizonsWithStats(
               maxCount: 2,
               numBuckets: config.referenceHorizonBrightnessRefinementHistogramBuckets,
@@ -352,7 +481,7 @@ final public actor FrameHorizonProcessor {
         Log.i("frame \(frameIndex) making merged horizon \(neighboringHorizons.count) neighboringHorizons")
         
         let mergedHorizonImage: PixelatedImage?
-        if config.tripodHeadWasMoving {
+        if config.tripodHeadWasMoving, let mask {
             // Off the cooperative pool; the threshold is read first because the
             // closure cannot await.
             let mergeThreshold = await configManager.config().pixelThreshold
@@ -366,6 +495,8 @@ final public actor FrameHorizonProcessor {
                   includeAll: true,
                   config: mergeConfig)
             }
+        } else if temporalStatic {
+            mergedHorizonImage = try await temporalStaticHorizonImage(config: config)
         } else if let accumulator = horizonAccumulator {
             // Use the running accumulator that was populated by HorizonDetectionOps.
             // Any frames not yet accumulated will be loaded from disk here.
@@ -406,7 +537,16 @@ final public actor FrameHorizonProcessor {
               atSizes: await outputSizes,
               overwrite: true
             )
-            if !config.tripodHeadWasMoving {
+            // A static sequence shares this one mask with every frame and persists it as the
+            // sequence's reference, so an all-ground or all-sky result (which is what a vote
+            // over too few masks, or a failed detection, produces) must not be spread: it would
+            // be reloaded as the truth by every later run. Better to keep it to this run.
+            let uniformMerged = !config.tripodHeadWasMoving && Self.maskIsUniform(cleanedToSave)
+            if uniformMerged {
+                Log.w("frame \(frameIndex) merged horizon is all one value (all ground or all sky); " +
+                      "not linking it to other frames and not saving it as the reference")
+            }
+            if !config.tripodHeadWasMoving, !uniformMerged {
                 // for static videos link all the merged horizons together here
                 for size in await outputSizes {
                     if let fromName = imageAccessor.nameForImage(
@@ -435,6 +575,9 @@ final public actor FrameHorizonProcessor {
                                           to: toName
                                         )
                                     }
+                                    if size == .original {
+                                        imageAccessor.horizonLinesChanged(frameIndex: neighborIndex)
+                                    }
                                 } else {
                                     Log.w("unable to get name for merged horizon for frameIndex \(neighborIndex)")
                                 }
@@ -448,7 +591,7 @@ final public actor FrameHorizonProcessor {
                 // Also persist the median as the global reference horizon for the
                 // whole sequence so loadHorizonReferenceMask() picks it up on
                 // subsequent loads and re-runs can skip horizon detection entirely.
-                if let mergedPath = imageAccessor.nameForImage(
+                if !uniformMerged, let mergedPath = imageAccessor.nameForImage(
                      frameIndex: frameIndex,
                      ofType: .mergedHorizon,
                      atSize: .original
@@ -467,6 +610,7 @@ final public actor FrameHorizonProcessor {
                             .appendingPathComponent("reference.tiff").path
                         cleanedToSave.writeTIFFEncoding(toFilename: referencePath)
                         await horizonReferenceMaskCache.invalidate(path: referencePath)
+                        await starAlignedHorizonMaskCache.invalidateAll()
                         Log.i("frame \(frameIndex) saved median horizon as global reference \(referencePath)")
                     } catch {
                         Log.w("frame \(frameIndex) could not save global reference horizon: \(error)")
@@ -487,6 +631,75 @@ final public actor FrameHorizonProcessor {
         Log.w("frame \(frameIndex) unable to calculate merged horizon")
         
         return nil
+    }
+
+    // MARK: - Static sequences: the temporal median
+
+    /// A static sequence's horizon mask, found once in the per-pixel median of frames sampled
+    /// from first to last (see `TemporalHorizonDetector`), at full size.  Nil when no frame
+    /// could be read.
+    ///
+    /// Frames are decoded a few at a time and shrunk as they arrive, so what is held is the
+    /// shrunk copies — a few percent of a frame each — plus the decodes in flight, which is
+    /// what `Config.effectiveTemporalHorizonMemoryMultiplier` reserves for.  Every decode is
+    /// one the keypoint stage repeats shortly after, through the same image cache.
+    private func temporalStaticHorizonImage(config: Config) async throws -> PixelatedImage? {
+        guard let imageSequence else {
+            Log.w("frame \(frameIndex) cannot sample a static horizon without an image sequence")
+            return nil
+        }
+        let indices = TemporalHorizonDetector.sampleIndices(
+          frameCount: imageSequence.filenames.count,
+          count: config.temporalHorizonSampleCount)
+        let imageAccessor = self.imageAccessor
+        let startTime = Date()
+
+        var working: [Int: PixelatedImage] = [:]
+        var fullSize: (width: Int, height: Int)? = nil
+        try await withThrowingTaskGroup(of: (Int, PixelatedImage?, Int, Int).self) { group in
+            var pending = indices[...]
+            func addNext() {
+                guard let index = pending.popFirst() else { return }
+                group.addTask {
+                    guard let original = try await imageAccessor.load(
+                            frameIndex: index, type: .original, atSize: .original)
+                    else { return (index, nil, 0, 0) }
+                    let small = await NativeWork.run {
+                        TemporalHorizonDetector.workingImage(of: original)
+                    }
+                    return (index, small, original.width, original.height)
+                }
+            }
+            for _ in 0..<TemporalHorizonDetector.concurrentDecodes { addNext() }
+            while let (index, small, width, height) = try await group.next() {
+                try Task.checkCancellation()
+                if let small {
+                    working[index] = small
+                    if fullSize == nil { fullSize = (width, height) }
+                } else {
+                    Log.w("frame \(frameIndex) static horizon: could not read frame \(index)")
+                }
+                addNext()
+            }
+        }
+
+        let images = indices.compactMap { working[$0] }
+        guard let fullSize, !images.isEmpty else {
+            Log.w("frame \(frameIndex) static horizon: no frame could be read")
+            return nil
+        }
+        guard let clean = await NativeWork.run({ TemporalHorizonDetector.median(of: images) }) else {
+            Log.w("frame \(frameIndex) static horizon: sampled frames differ in size or depth")
+            return nil
+        }
+        let horizonY = try await TemporalHorizonDetector.horizon(
+          inClean: clean, outputWidth: fullSize.width, outputHeight: fullSize.height)
+        let seconds = String(format: "%.1f", Date().timeIntervalSince(startTime))
+        Log.i("frame \(frameIndex) static horizon from the median of \(images.count) frames "
+                + "in \(seconds)s")
+        return PixelatedImage(mat: PixelatedImageBridge.binaryHorizonMask(
+          width: Int32(fullSize.width), height: Int32(fullSize.height),
+          horizonY: horizonY.map { Optional($0) }))
     }
 
     // MARK: - Reference horizon smoothing helpers
@@ -571,6 +784,37 @@ final public actor FrameHorizonProcessor {
 
     // MARK: - Reference stats brightness refinement
 
+    /// True when every pixel of a horizon mask has the same value: all ground or all sky, so no
+    /// horizon at all. Such a mask is never a real result for a sequence that has one.
+    static func maskIsUniform(_ image: PixelatedImage) -> Bool {
+        switch image.imageData {
+        case .eightBit(let buffer):
+            guard let first = buffer.first else { return true }
+            return !buffer.contains { $0 != first }
+        case .sixteenBit(let buffer):
+            guard let first = buffer.first else { return true }
+            return !buffer.contains { $0 != first }
+        case .thirtyTwoBit(let buffer):
+            guard let first = buffer.first else { return true }
+            return !buffer.contains { $0 != first }
+        }
+    }
+
+    /// The stats cache for this sequence at these settings: the sequence is identified by its
+    /// `horizonReference/` directory, which every frame of it computes the same way.
+    func referenceStatsCache(neighborhoodSize: Int, bucketCount: Int) async -> ReferenceHorizonStatsCache {
+        let sequenceKey: String
+        if let mergedPath = imageAccessor.nameForImage(frameIndex: frameIndex, ofType: .mergedHorizon, atSize: .original) {
+            sequenceKey = URL(fileURLWithPath: mergedPath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("horizonReference").path
+        } else {
+            sequenceKey = "unknown-sequence"
+        }
+        return await ReferenceHorizonStatsRegistry.shared.cache(
+          sequence: sequenceKey, neighborhoodSize: neighborhoodSize, bucketCount: bucketCount)
+    }
+
     /// The painted reference masks nearest this frame, preferring a bracketing pair.
     ///
     /// Split out from `referenceHorizonsWithStats` because detection wants the same
@@ -591,24 +835,38 @@ final public actor FrameHorizonProcessor {
             .deletingLastPathComponent()
             .appendingPathComponent("horizonReference")
 
-        let fm = FileManager.default
-        var candidates: [(distance: Int, index: Int, maskURL: URL)] = []
+        // Which frames have a painted reference is a property of the sequence's
+        // `horizonReference/` directory, not of this frame. It used to be rediscovered per
+        // frame by statting a candidate file for every frame of the sequence (three times a
+        // frame on a moving sequence), so the cost grew with frames squared. It is now listed
+        // once and kept until the directory changes.
+        let accessor = imageAccessor
+        let frameCount = imageSequence.filenames.count
+        let references = ReferenceMaskIndex.shared.index(of: referenceDir) {
+            existingNames in
+            var found: [Int: String] = [:]
+            for candidateIndex in 0..<frameCount {
+                guard let candidatePath = accessor.nameForImage(
+                        frameIndex: candidateIndex,
+                        ofType: .mergedHorizon,
+                        atSize: .original
+                      )
+                else { continue }
+                let candidateFileName = URL(fileURLWithPath: candidatePath).lastPathComponent
+                if existingNames.contains(candidateFileName) {
+                    found[candidateIndex] = referenceDir.appendingPathComponent(candidateFileName).path
+                }
+            }
+            return found
+        }
 
-        for candidateIndex in 0..<imageSequence.filenames.count {
-            guard candidateIndex != frameIndex else { continue }
-            guard let candidatePath = imageAccessor.nameForImage(
-                    frameIndex: candidateIndex,
-                    ofType: .mergedHorizon,
-                    atSize: .original
-                  )
-            else { continue }
-            let candidateFileName = URL(fileURLWithPath: candidatePath).lastPathComponent
-            let candidateURL = referenceDir.appendingPathComponent(candidateFileName)
-            guard fm.fileExists(atPath: candidateURL.path) else { continue }
+        var candidates: [(distance: Int, index: Int, maskURL: URL)] = []
+        for candidateIndex in references.keys.sorted() where candidateIndex != frameIndex {
+            guard candidateIndex < frameCount, let path = references[candidateIndex] else { continue }
             candidates.append((
                 distance: abs(candidateIndex - frameIndex),
                 index: candidateIndex,
-                maskURL: candidateURL
+                maskURL: URL(fileURLWithPath: path)
             ))
         }
 
@@ -639,9 +897,13 @@ final public actor FrameHorizonProcessor {
     /// the same one or two references at the same moment — decode each mask once.
     func referenceHorizonCurves(maxCount: Int = 2) async -> [ReferenceHorizonCurve] {
         var result: [ReferenceHorizonCurve] = []
+        let config = await configManager.config()
+        let cache = await referenceStatsCache(
+          neighborhoodSize: config.referenceHorizonNeighborhoodSize,
+          bucketCount: config.referenceHorizonBrightnessRefinementHistogramBuckets)
         for candidate in nearestReferenceMasks(maxCount: maxCount) {
             let maskPath = candidate.maskPath
-            let curve = await referenceHorizonStatsCache.curve(for: candidate.index) {
+            let curve = await cache.curve(for: candidate.index) {
                 guard let maskImage = PixelatedImage(filename: maskPath)?.asHorizonMask
                 else { return nil }
                 return ReferenceHorizonCurve(
@@ -665,11 +927,12 @@ final public actor FrameHorizonProcessor {
         // computations of one reference, each loading that frame's full-resolution original.
         let accessor = imageAccessor
         let owningFrameIndex = frameIndex
+        let cache = await referenceStatsCache(neighborhoodSize: neighborhoodSize, bucketCount: numBuckets)
         var result: [ReferenceHorizonFrameStats] = []
         for candidate in ordered {
             let candidateIndex = candidate.index
             let maskPath = candidate.maskPath
-            let stats = await referenceHorizonStatsCache.stats(for: candidateIndex) {
+            let stats = await cache.stats(for: candidateIndex) {
                 guard let maskImage = PixelatedImage(filename: maskPath)?.asHorizonMask,
                       let mask = HorizonMask(maskImage),
                       let original = try? await accessor.load(
@@ -875,7 +1138,7 @@ final public actor FrameHorizonProcessor {
     /// The bound is one-sided on purpose — capping upward movement as well measured worse,
     /// because moving the line *up* is the direction that recovers a ridge the references
     /// bracket badly, and it is not the direction that runs away.
-    private func referenceStatsBrightnessRefinedHorizonMask(
+    nonisolated func referenceStatsBrightnessRefinedHorizonMask(
       detected: HorizonMask,
       original: PixelatedImage,
       stats: [ReferenceHorizonFrameStats],
@@ -930,10 +1193,18 @@ final public actor FrameHorizonProcessor {
         // Gaussian likelihoods in log space.
         let logWeights: [Double] = normWeights.map { Foundation.log(max(1e-12, $0)) }
 
+        // Scratch for the per-pixel mixture below, allocated once rather than twice per pixel
+        // (two 3-element heap arrays per pixel measured at 2.9 s -> 0.88 s hoisted, identical).
+        var skyLLs    = [Double](repeating: -Double.infinity, count: stats.count)
+        var groundLLs = [Double](repeating: -Double.infinity, count: stats.count)
+
         for x in 0..<w {
             guard let expY = expectedYPerColumn[x] else { continue }
             let bandTop    = max(0,     expY - searchRadius)
             let bandBottom = min(h - 1, expY + searchRadius)
+            // An expected Y far outside the frame leaves an empty band; `bandTop...bandBottom`
+            // would trap on it.  Nothing to refine in that column.
+            if bandTop > bandBottom { continue }
             if bandTop < minBandTop { minBandTop = bandTop }
             if bandBottom > maxBandBottom { maxBandBottom = bandBottom }
 
@@ -948,8 +1219,10 @@ final public actor FrameHorizonProcessor {
                 // (numerically stable mixture) and turn into a sky probability.
                 var maxSky    = -Double.infinity
                 var maxGround = -Double.infinity
-                var skyLLs    = [Double](repeating: -Double.infinity, count: stats.count)
-                var groundLLs = [Double](repeating: -Double.infinity, count: stats.count)
+                for i in 0..<stats.count {
+                    skyLLs[i] = -Double.infinity
+                    groundLLs[i] = -Double.infinity
+                }
                 for i in 0..<stats.count {
                     if let sky = stats[i].skyGaussian {
                         let ll = logWeights[i] + sky.logLikelihood(lab.L, lab.a, lab.b)
@@ -1067,7 +1340,7 @@ final public actor FrameHorizonProcessor {
     /// the corrected horizon Y is set to sky (255), everything at or below is ground (0).
     ///
     /// Returns `nil` if nothing changed.
-    func despikeHorizonY(
+    nonisolated func despikeHorizonY(
       _ bytes: [UInt8],
       width w: Int,
       height h: Int,
@@ -1218,19 +1491,29 @@ final public actor FrameHorizonProcessor {
         // anything at all.
         let tuned = loadTunedHorizonParameters()
 
-        return referenceStatsBrightnessRefinedHorizonMask(
-          detected: mask,
-          original: original,
-          stats: stats,
-          expectedYPerColumn: expectedY,
-          searchRadius: config.referenceHorizonBrightnessRefinementSearchRadius,
-          maxDownwardExtension: tuned.maxDownwardExtension,
-          spikeRemovalEnabled: config.horizonSpikeRemovalEnabled,
-          spikeMaxWidth: config.horizonSpikeMaxWidth,
-          spikeMaxDeviationFraction: config.horizonSpikeMaxDeviationFraction,
-          spikeWindowHalf: config.horizonSpikeWindowHalf,
-          neighborhoodSize: config.referenceHorizonNeighborhoodSize
-        ) ?? mask
+        // A full-resolution per-pixel pass: native work, off the cooperative pool.
+        let searchRadius = config.referenceHorizonBrightnessRefinementSearchRadius
+        let maxDownward = tuned.maxDownwardExtension
+        let spikeEnabled = config.horizonSpikeRemovalEnabled
+        let spikeWidth = config.horizonSpikeMaxWidth
+        let spikeDeviation = config.horizonSpikeMaxDeviationFraction
+        let spikeHalf = config.horizonSpikeWindowHalf
+        let neighborhood = config.referenceHorizonNeighborhoodSize
+        return await NativeWork.run {
+            self.referenceStatsBrightnessRefinedHorizonMask(
+              detected: mask,
+              original: original,
+              stats: stats,
+              expectedYPerColumn: expectedY,
+              searchRadius: searchRadius,
+              maxDownwardExtension: maxDownward,
+              spikeRemovalEnabled: spikeEnabled,
+              spikeMaxWidth: spikeWidth,
+              spikeMaxDeviationFraction: spikeDeviation,
+              spikeWindowHalf: spikeHalf,
+              neighborhoodSize: neighborhood
+            )
+        } ?? mask
     }
 
     /// Look for a user-painted reference horizon mask on disk and return it if found.
@@ -1259,6 +1542,13 @@ final public actor FrameHorizonProcessor {
         else { return nil }
 
         return HorizonMask(refImage)
+    }
+
+    /// This frame's own painted horizon — never the sequence-wide one — as the first ground
+    /// row of each column, for `HorizonConsensus` to anchor on.  Nil when it has none.
+    func paintedReferenceColumns() async -> [Int?]? {
+        guard let mask = try? await loadPerFrameHorizonReferenceMask() else { return nil }
+        return CombinedHorizonDetector.extractHorizonY(from: mask.image)
     }
 
     /// 1. `{horizonReference}/{frameFileName}` — per-frame reference (moving sequences)
@@ -2290,58 +2580,67 @@ final public actor FrameHorizonProcessor {
         return nil
     }
 
-    /// Load the best-available horizon for this frame and scale it to thumbnail
-    /// dimensions, returning a `HorizonThumbnailOverlay` suitable for drawing
-    /// directly on a filmstrip cell.
+    /// Every horizon line this frame has, one per kind, scaled to thumbnail dimensions for
+    /// drawing directly over a filmstrip cell, a grid cell or the frame.
     ///
-    /// Priority: **reference** (green) › **merged** (blue) › **initial** (white).
-    /// Returns `nil` when no horizon of any kind has been computed yet.
+    /// Each kind is the line of its view mode (`HorizonThumbnailOverlay.Kind.viewMode`):
+    /// **initial** (white) the raw detection, **merged** (blue) the merged mask, **consensus**
+    /// (purple) the moving-sequence consensus where the composite would use it, and
+    /// **reference** (green) the horizon the user painted on this frame.  A frame that only
+    /// inherits a sequence-wide reference shows it as its merged line.  Which of them the
+    /// composite reads is `compositeLine`.
     ///
+    /// Each load is guarded on its own, so that a failure for one kind (a corrupt file, say)
+    /// costs that line and not the others.  Empty when no horizon of any kind exists yet.
     ///
     /// - Parameters:
     ///   - thumbnailWidth:  Width of the thumbnail in pixels.
     ///   - thumbnailHeight: Height of the thumbnail in pixels.
-    public func loadHorizonThumbnailOverlay(
+    public func loadHorizonThumbnailOverlays(
         thumbnailWidth:  Int,
         thumbnailHeight: Int
-    ) async throws -> HorizonThumbnailOverlay? {
+    ) async -> [HorizonThumbnailOverlay] {
+        // The first ground row of every image column, nil where it has none, per kind.
+        var sources: [(HorizonThumbnailOverlay.Kind, ([Int?], Int, Int))] = []
 
-        // ── Choose the best available source ────────────────────────────────
-        // Each load is individually guarded with try? so that a failure for
-        // one type (e.g., a corrupt file) falls through to the next rather
-        // than aborting the whole chain and leaving the overlay nil/stale.
-        let pixImage: PixelatedImage
-        let kind: HorizonThumbnailOverlay.Kind
-
-        // Per-frame reference (the actual painted frame) → green.
-        // Global-only reference (static timelapse, not the painted frame) → blue.
-        if let refMask = try? await loadPerFrameHorizonReferenceMask() {
-            pixImage = refMask.image
-            kind     = .reference
-        } else if let refMask = try? await loadHorizonReferenceMask() {
-            pixImage = refMask.image
-            kind     = .merged
+        if let initialImage = try? await imageAccessor.load(
+               frameIndex: frameIndex, type: .horizon, atSize: .original) {
+            sources.append((.initial, Self.horizonColumns(of: initialImage)))
+        }
+        // A frame inheriting the sequence's one painted reference was not painted itself:
+        // that reference is its merged horizon (`loadOrCreateMergedHorizonMask` serves it as
+        // such), drawn blue, and green is kept for the frames the user actually painted.
+        let perFrameReference = try? await loadPerFrameHorizonReferenceMask()
+        if perFrameReference == nil, let globalReference = try? await loadHorizonReferenceMask() {
+            sources.append((.merged, Self.horizonColumns(of: globalReference.image)))
         } else if let mergedImage = await loadMergedHorizonForOverlayWithRetry() {
-            pixImage = mergedImage
-            kind     = .merged
-        } else if let initialImage = try? await imageAccessor.load(
-                      frameIndex: frameIndex,
-                      type: .horizon,
-                      atSize: .original)
-        {
-            pixImage = initialImage
-            kind     = .initial
-        } else {
-            return nil
+            sources.append((.merged, Self.horizonColumns(of: mergedImage)))
+        }
+        // Read as the line it is stored as, not built into a full-size mask first.
+        if let consensus = await horizonConsensusColumns() {
+            sources.append((.consensus, consensus))
+        }
+        if let perFrameReference {
+            sources.append((.reference, Self.horizonColumns(of: perFrameReference.image)))
         }
 
-        // ── Scale image-space horizon Y → thumbnail Y ────────────────────
-        let imgW   = pixImage.width
-        let imgH   = pixImage.height
+        return sources.map { kind, columns in
+            Self.thumbnailOverlay(kind: kind, columns: columns,
+                                  thumbnailWidth: thumbnailWidth,
+                                  thumbnailHeight: thumbnailHeight)
+        }
+    }
+
+    /// Scale image-space horizon rows to a thumbnail's.
+    private static func thumbnailOverlay(
+        kind: HorizonThumbnailOverlay.Kind,
+        columns: ([Int?], Int, Int),
+        thumbnailWidth: Int,
+        thumbnailHeight: Int
+    ) -> HorizonThumbnailOverlay {
+        let (imgY, imgW, imgH) = columns
         let scaleX = Double(imgW) / Double(thumbnailWidth)
         let scaleY = Double(imgH) / Double(thumbnailHeight)
-
-        let imgY   = CombinedHorizonDetector.extractHorizonY(from: pixImage)
 
         var thumbY = [Int](repeating: thumbnailHeight / 2, count: thumbnailWidth)
         for tx in 0..<thumbnailWidth {
@@ -2351,8 +2650,22 @@ final public actor FrameHorizonProcessor {
                                  max(0, Int((Double(iy) / scaleY).rounded())))
             }
         }
-
         return HorizonThumbnailOverlay(kind: kind, yPerColumn: thumbY, height: thumbnailHeight)
+    }
+
+    private static func horizonColumns(of mask: PixelatedImage) -> ([Int?], Int, Int) {
+        (CombinedHorizonDetector.extractHorizonY(from: mask), mask.width, mask.height)
+    }
+
+    /// This frame's horizon consensus line at full width, under the conditions
+    /// `loadHorizonConsensusMask` uses it for the composite; nil where it would not be used.
+    private func horizonConsensusColumns() async -> ([Int?], Int, Int)? {
+        guard let frame, let record = await horizonConsensusRecord() else { return nil }
+        let rows = HorizonConsensus.columnRows(record.line, width: frame.width,
+                                               height: frame.height)
+        // `height` is a column with no ground, which a mask would read back as nil
+        let columns = rows.map { $0 < frame.height ? Optional($0) : nil }
+        return (columns, frame.width, frame.height)
     }
 
     // MARK: - Save user-painted reference horizon mask
@@ -2453,6 +2766,10 @@ final public actor FrameHorizonProcessor {
         // file stamp regardless; dropping it here means no frame can read the old mask
         // in the window before that check.
         await horizonReferenceMaskCache.invalidate(path: savePath)
+        // The star-aligned intersection is built from the reference mask: a repaint ends it.
+        await starAlignedHorizonMaskCache.invalidateAll()
+        ReferenceMaskIndex.shared.invalidate(directory: referenceDir)
+        imageAccessor.horizonLinesChanged(frameIndex: frameIndex)
         Log.i("frame \(frameIndex) saveHorizonReferenceMask: saved \(savePath)")
 
         // For static sequences, also write a per-frame marker so this specific frame
@@ -2558,10 +2875,13 @@ final public actor FrameHorizonProcessor {
             // Combined+RW pipeline: run Otsu, DP, SIOX in parallel, median-combine,
             // then refine with Random Walker. Best-performing method as of 2026-03.
             Log.i("frame \(frameIndex) using combined+RW horizon detection")
-            horizonMask = try await CombinedHorizonDetector.detect(
-              image: original,
-              prior: await detectionPrior(width: original.width, config: config)
-            )
+            if let prior = await detectionPrior(width: original.width, config: config) {
+                // Guided by the user's references: unchanged, at full size, where the prior's
+                // band and the ridge detail it is there to recover are both in full-size rows.
+                horizonMask = try await CombinedHorizonDetector.detect(image: original, prior: prior)
+            } else {
+                horizonMask = try await workingSizeCombinedDetection(of: original)
+            }
         } else {
             // Legacy adaptive search: Otsu multi-crop + DP grid search
             let useAdaptiveSearch = config.horizonSearchCropBounds.count >= 2
@@ -2600,6 +2920,43 @@ final public actor FrameHorizonProcessor {
         )
 
         await frame?.set(state: .horizonDetected)
+        return horizonMask
+    }
+
+    /// `CombinedHorizonDetector` on a copy of `original` shrunk to
+    /// `TemporalHorizonDetector.workingWidth`, answered at full size.
+    ///
+    /// Smaller is better here, not just cheaper.  The detector's base methods already work at
+    /// 512 px whatever they are given, but its Random Walker refines in bands whose brush radii
+    /// are fixed pixel counts — 40, 80 and 160 — so at 6000 px wide they are a sliver of the
+    /// frame and at 1600 a useful search.  Over 106 painted frames of six moving sequences,
+    /// with no references to guide it and the same search band either way, the mean error per
+    /// sequence went 1.23% → 0.38%, 1.65% → 0.60%, 1.11% → 0.35%, 0.84% → 0.62% and
+    /// 0.90% → 0.87%, and the worst single frame 7.7% → 2.5%.  The one sequence it made worse
+    /// moved 0.05% → 0.10%: two pixels to four.
+    ///
+    /// The answer is scaled straight back up.  Unlike `HorizonBoundaryRefiner`'s, the
+    /// detector's rows measured unbiased: moving them up a working row only added error.
+    private func workingSizeCombinedDetection(of original: PixelatedImage) async throws -> HorizonMask {
+        guard let working = await NativeWork.run({ TemporalHorizonDetector.workingImage(of: original) }),
+              working.width < original.width
+        else {
+            return try await CombinedHorizonDetector.detect(image: original)
+        }
+        let mask = try await CombinedHorizonDetector.detect(image: working)
+        let rows = CombinedHorizonDetector.extractHorizonY(from: mask.image)
+        let fullWidth = original.width, fullHeight = original.height
+        let scaleY = Double(fullHeight) / Double(working.height)
+        let full: [Int?] = (0..<fullWidth).map { x in
+            let source = min(working.width - 1, x * working.width / fullWidth)
+            return rows[source].map { min(fullHeight, Int((Double($0) * scaleY).rounded())) }
+        }
+        guard let fullMask = PixelatedImage(mat: PixelatedImageBridge.binaryHorizonMask(
+                width: Int32(fullWidth), height: Int32(fullHeight), horizonY: full)),
+              let horizonMask = HorizonMask(fullMask)
+        else {
+            throw "frame \(frameIndex) cannot build a full-size mask from the working-size detection"
+        }
         return horizonMask
     }
 

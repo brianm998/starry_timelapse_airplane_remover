@@ -71,3 +71,21 @@ final class DecodedFrameStoreTests: XCTestCase {
         pin.release()
     }
 }
+
+final class DecodedFrameStoreStatsTests: XCTestCase {
+    func testCountersSeparateDecodesFromPinnedHits() {
+        let store = DecodedFrameStore()
+        let mat = MatWrapper(width: 2, height: 2,
+                             cvType: MatWrapper.cvType(forBitsPerComponent: 16, componentsPerPixel: 1),
+                             bytesPerRow: 4, data: UnsafeMutableRawPointer(UnsafeMutablePointer<UInt16>.allocate(capacity: 4)),
+                             takeOwnership: true)
+        store.decoder = { _ in mat }
+        let pin = store.pin(["a"])
+        _ = store.load("a"); _ = store.load("a"); _ = store.load("b")
+        XCTAssertEqual(store.loadCount, 3)
+        XCTAssertEqual(store.cacheHitCount, 1)
+        XCTAssertEqual(store.decodeCount, 2)   // "a" once, "b" uncached
+        XCTAssertTrue(store.statsLine(frames: 2).contains("1.00 per frame"))
+        pin.release()
+    }
+}

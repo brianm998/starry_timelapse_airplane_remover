@@ -53,3 +53,55 @@ struct RemoveMask {
     }
 }
 
+
+
+/// Per-pixel alpha for the whole frame, stored as a 16-bit index into a table of the values the
+/// mask can produce instead of a `Double` per pixel (8 bytes a pixel, 337MB at 42MP, against 2).
+///
+/// A pixel's alpha is always one of the `RemoveMask`'s own values, so nothing is rounded: the
+/// subscript returns exactly the `Double` that was stored, and the "keep the larger" update the
+/// mask is convolved with can compare indices because the table is sorted ascending. A circular
+/// mask has at most about size^2 / 8 distinct values, far under the 65,535 an index holds.
+struct RemovalAlphaLevels {
+    /// Ascending; entry 0 is 0.0, meaning "not touched".
+    let table: [Double]
+    private(set) var indices: [UInt16]
+
+    init(mask: RemoveMask, pixelCount: Int) {
+        var distinct = Set<Double>(mask.pixels)
+        distinct.insert(0)
+        self.table = distinct.sorted()
+        self.indices = [UInt16](repeating: 0, count: pixelCount)
+    }
+
+    /// Nothing to remove: no table, no pixels.
+    init() {
+        table = [0]
+        indices = []
+    }
+
+    var isEmpty: Bool { indices.isEmpty }
+    var count: Int { indices.count }
+
+    subscript(pixel: Int) -> Double { table[Int(indices[pixel])] }
+
+    /// The table index of `value`, which must be one of the mask's values.
+    func level(of value: Double) -> UInt16 {
+        // binary search of the sorted table
+        var low = 0, high = table.count - 1
+        while low < high {
+            let mid = (low + high) / 2
+            if table[mid] < value { low = mid + 1 } else { high = mid }
+        }
+        return UInt16(clamping: low)
+    }
+
+    /// Raise a pixel to `level` if that is higher than what it has. True when it changed.
+    mutating func raise(_ pixel: Int, to level: UInt16) -> Bool {
+        if level > indices[pixel] {
+            indices[pixel] = level
+            return true
+        }
+        return false
+    }
+}

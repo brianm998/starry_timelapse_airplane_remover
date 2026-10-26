@@ -12,10 +12,15 @@ data class SettingsChange(val staleStages: List<String>, val contradictsFinished
     val processKey: String get() = if (contradictsFinishedWork) "ui.update" else "ui.process_now"
 
     /**
-     * Whether the button works. Not while a run is going, unless the change contradicts finished work: over a live run the button is the
-     * one thing that makes a change reach the frames the run has not got to.
+     * Whether the button reports on the run that is going rather than starting one. Over a live run a change that does not contradict finished
+     * work leaves Process Now nothing to do (a second run over the same frames is exactly what it must not start), so it takes the user to the
+     * processing status instead; one that does contradict keeps the button as Update, the one thing that makes a change reach the frames the
+     * run has not got to.
      */
-    fun canProcess(isProcessing: Boolean): Boolean = !isProcessing || contradictsFinishedWork
+    fun showsProgress(isProcessing: Boolean): Boolean = isProcessing && !contradictsFinishedWork
+
+    /** The catalogue key of the button's label: [processKey], or Show Progress over a live run it has nothing to change in. */
+    fun buttonKey(isProcessing: Boolean): String = if (showsProgress(isProcessing)) "ui.show_progress" else processKey
 
     companion object {
         /** Nothing to warn about: what the sheet shows until the daemon has answered, and when it cannot. */

@@ -8,8 +8,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ReopenVerdictTest {
-    private fun progress(complete: Boolean = false, untouched: Boolean = false) =
-        SequenceProgress.newBuilder().setFrameCount(10).setIsComplete(complete).setIsUntouched(untouched).build()
+    private fun progress(complete: Boolean = false, untouched: Boolean = false, rebuild: Boolean = false) =
+        SequenceProgress.newBuilder().setFrameCount(10).setIsComplete(complete).setIsUntouched(untouched).setNeedsRebuild(rebuild).build()
 
     @Test fun aSequenceWithEveryFrameWrittenOffersTheVideo() {
         val verdict = ReopenVerdict.of(progress(complete = true))
@@ -30,6 +30,15 @@ class ReopenVerdictTest {
         assertEquals(ReopenVerdict.PARTIAL, verdict)
         assertFalse(verdict.rendersVideo)
         assertEquals("ui.finish_processing", verdict.actionKey)
+    }
+
+    /** Every frame written, but made by an older star or other settings: the daemon reports it not complete, and the panel offers the run, saying why. */
+    @Test fun aSequenceToBeRebuiltOffersToFinishAndSaysWhy() {
+        val verdict = ReopenVerdict.of(progress(rebuild = true))
+        assertEquals(ReopenVerdict.REBUILD, verdict)
+        assertFalse(verdict.rendersVideo)
+        assertEquals("ui.finish_processing", verdict.actionKey)
+        assertEquals("ui.this_sequence_needs_rebuilding", verdict.statusKey)
     }
 
     /** Complete wins: the daemon never says both, but a finished sequence must not be offered a start whichever way the flags fall. */

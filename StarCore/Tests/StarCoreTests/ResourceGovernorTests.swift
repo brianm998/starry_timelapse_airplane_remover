@@ -41,7 +41,35 @@ final class ResourceGovernorTests: XCTestCase {
         s.cpuWaiting = 5; s.cpuRunning = 18
         XCTAssertEqual(ResourceReport.make(from: s).limitedBy, .cpu)
         s.gpuWaiting = 2
+        s.gpuPercent = 60   // callers queued and the device genuinely busy
         XCTAssertEqual(ResourceReport.make(from: s).limitedBy, .gpu, "GPU outranks CPU")
+    }
+
+    /// Callers queued for a slot while the device is nearly idle are waiting on something that
+    /// is not the GPU (staging copies hold slots), so the GPU is not blamed.
+    func testAQueueForAnIdleGPUIsNotBlamedOnTheGPU() {
+        var s = referenceMergePhase()
+        s.volumes = []
+        s.memoryWaiting = 0
+        s.cpuWaiting = 0
+        s.gpuWaiting = 9
+        s.gpuPercent = 3
+        s.gpuSlotPercent = 90
+        XCTAssertNotEqual(ResourceReport.make(from: s).limitedBy, .gpu)
+    }
+
+    func testADeviceBusyOverEightyFivePercentIsTheGPUsDoingWithNoQueue() {
+        var s = referenceMergePhase()
+        s.volumes = []
+        s.memoryWaiting = 0
+        s.gpuPercent = 92
+        XCTAssertEqual(ResourceReport.make(from: s).limitedBy, .gpu)
+    }
+
+    func testTheStatusLineShowsBothGPUNumbers() {
+        var s = referenceMergePhase()
+        s.gpuPercent = 12; s.gpuSlotPercent = 70
+        XCTAssertTrue(ResourceReport.make(from: s).line.contains("GPU 12% (slots 70%)"))
     }
 
     func testNothingIsBlamedWhenNothingIsSaturated() {
@@ -96,5 +124,27 @@ final class ResourceGovernorTests: XCTestCase {
         var t = AutoTuner()
         for _ in 0..<10 { t.step(throughput: 100, diskSaturated: false, memoryPressure: false) }
         XCTAssertEqual(t.extraStreams, 0)
+    }
+
+    // MARK: - volumes that share a name
+
+    /// Two gates reporting one mount name used to trap the governor's tick
+    /// (`Dictionary(uniqueKeysWithValues:)` on the names).  They are separate volumes and keep
+    /// separate counters.
+    func testTwoVolumesWithOneNameDoNotTrapAndKeepTheirOwnBytes() {
+        let a = IOWork.VolumeStatus(volume: "dev1", name: "/", bytes: 100, inFlight: 0, waiting: 0, width: 2)
+        let b = IOWork.VolumeStatus(volume: "dev2", name: "/", bytes: 40, inFlight: 0, waiting: 0, width: 2)
+        let bytes = ResourceGovernor.bytesByVolume([a, b])
+        XCTAssertEqual(bytes["dev1"], 100)
+        XCTAssertEqual(bytes["dev2"], 40)
+    }
+
+    /// A symlinked directory and its target are the same volume.
+    func testASymlinkedPathResolvesToTheSameVolumeAsItsTarget() throws {
+        let base = NSTemporaryDirectory() + "iowork-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: base + "/real", withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(atPath: base + "/link", withDestinationPath: base + "/real")
+        defer { try? FileManager.default.removeItem(atPath: base) }
+        XCTAssertEqual(IOWork.volume(of: base + "/link/file.tif"), IOWork.volume(of: base + "/real/file.tif"))
     }
 }

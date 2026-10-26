@@ -31,8 +31,11 @@ struct VideoImportSheetView: View {
 
             Picker(localized("ui.video_frame_format"), selection: $kind) {
                 Text(localized("ui.frame_format_tiff16")).tag(FrameDecodeFormat.Kind.tiff16)
+                  .accessibilityIdentifier("videoimport.format.tiff16")
                 Text(localized("ui.frame_format_tiff8")).tag(FrameDecodeFormat.Kind.tiff8)
+                  .accessibilityIdentifier("videoimport.format.tiff8")
                 Text(localized("ui.frame_format_jpeg")).tag(FrameDecodeFormat.Kind.jpeg)
+                  .accessibilityIdentifier("videoimport.format.jpeg")
             }
               .pickerStyle(.radioGroup)
 
@@ -54,6 +57,7 @@ struct VideoImportSheetView: View {
                   .keyboardShortcut(.cancelAction)
                 Button(localized("ui.video_import_start")) { onImport(format) }
                   .keyboardShortcut(.defaultAction)
+                  .accessibilityIdentifier("videoimport.import")
             }
         }
           .padding(24)

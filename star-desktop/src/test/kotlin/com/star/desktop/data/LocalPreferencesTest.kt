@@ -1,5 +1,6 @@
 package com.star.desktop.data
 
+import com.star.desktop.domain.GpuToggle
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -87,6 +88,43 @@ class LocalPreferencesTest {
         prefsFile.writeText("""{"recentlyOpenedSequencelist":{},"frameRate":"fps_24"}""")
         LocalPreferences().setMovingHorizonCountMultiplier(2.0)
         assertTrue(prefsFile.readText().contains("frameRate"), prefsFile.readText())
+    }
+
+    /** The GPU toggles are the macOS app's `useGPUForMerge` / `useGPUForSIFT` / `useGPUForAKAZE`: same keys, nothing until the user chooses. */
+    @Test fun gpuChoicesAreUnsetUntilTheUserMakesOne() {
+        val prefs = LocalPreferences()
+        GpuToggle.entries.forEach { assertNull(prefs.gpu(it), "$it") }
+        // an old file with none of them reads the same, and reading it writes nothing
+        prefsFile.writeText("""{"recentlyOpenedSequencelist":{}}""")
+        GpuToggle.entries.forEach { assertNull(LocalPreferences().gpu(it), "$it") }
+        assertTrue(!prefsFile.readText().contains("useGPU"), prefsFile.readText())
+    }
+
+    /** Turned off has to survive as off: it is the one value that looks like "absent" to a careless reader. */
+    @Test fun aGpuChoiceOfOffRoundTripsAsOff() {
+        LocalPreferences().apply { setGpu(GpuToggle.SIFT, false); setGpu(GpuToggle.MERGE, true) }
+        assertTrue(prefsFile.readText().contains("\"useGPUForSIFT\":false"), prefsFile.readText())
+        val reloaded = LocalPreferences()
+        assertEquals(false, reloaded.gpu(GpuToggle.SIFT))
+        assertEquals(true, reloaded.gpu(GpuToggle.MERGE))
+        assertNull(reloaded.gpu(GpuToggle.AKAZE))
+    }
+
+    @Test fun gpuChoicesTheSwiftAppWroteAreRead() {
+        prefsFile.writeText("""{"recentlyOpenedSequencelist":{},"useGPUForMerge":false,"useGPUForSIFT":true}""")
+        val prefs = LocalPreferences()
+        assertEquals(false, prefs.gpu(GpuToggle.MERGE))
+        assertEquals(true, prefs.gpu(GpuToggle.SIFT))
+        assertNull(prefs.gpu(GpuToggle.AKAZE))
+    }
+
+    /** A choice made here must not cost the other client its own keys, nor an unrelated save this one's choice. */
+    @Test fun gpuChoicesAndOtherKeysSurviveEachOthersSaves() {
+        prefsFile.writeText("""{"recentlyOpenedSequencelist":{},"frameRate":"fps_24"}""")
+        LocalPreferences().setGpu(GpuToggle.AKAZE, false)
+        assertTrue(prefsFile.readText().contains("frameRate"), prefsFile.readText())
+        LocalPreferences().setSkipRenderPrompt(true)
+        assertEquals(false, LocalPreferences().gpu(GpuToggle.AKAZE))
     }
 
     /** A hand-edited or future-written file must not be able to produce a nonsense suggestion. */
@@ -178,6 +216,14 @@ class LocalPreferencesBooleansTest {
         LocalPreferences().showHorizonPainterInstructions = false
         assertTrue(prefsFile.readText().contains("\"showHorizonPainterInstructions\":false"), prefsFile.readText())
         assertEquals(false, LocalPreferences().showHorizonPainterInstructions)
+    }
+
+    /** Every kind of horizon line is drawn until the user hides one, and the choice is the macOS app's key and raw values. */
+    @Test fun hiddenHorizonLineKindsRoundTripUnderTheMacOSKey() {
+        assertEquals(emptyList(), LocalPreferences().hiddenHorizonLineKinds)
+        LocalPreferences().hiddenHorizonLineKinds = listOf("merged", "initial", "merged")
+        assertTrue(prefsFile.readText().contains("\"hiddenHorizonLineKinds\":[\"initial\",\"merged\"]"), prefsFile.readText())
+        assertEquals(listOf("initial", "merged"), LocalPreferences().hiddenHorizonLineKinds)
     }
 
     /** The processing screen's charts: on until turned off, under the macOS app's own key so the two clients share the choice. */

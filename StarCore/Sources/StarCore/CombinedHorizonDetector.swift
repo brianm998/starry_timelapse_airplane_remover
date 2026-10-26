@@ -37,8 +37,24 @@ public enum CombinedHorizonDetector {
         public var outlierThreshold: Int = 80
 
         /// SIOX band search range (fractions of image height).
+        ///
+        /// The bottom used to be 0.85, and DP's, the gradient profile's and the texture
+        /// method's 0.95: a horizon lower in the frame than that could not be found by them at
+        /// all, so they returned the best line *inside* their band — somewhere in the sky —
+        /// with full confidence.  Night timelapse is shot with the camera aimed up, and lower
+        /// horizons are common: on the a9 01_18 aurora sequence the ground is a strip in the
+        /// bottom 3-6% of the frame for at least 180 consecutive frames, and every one of them
+        /// was detected 30-60% of the frame too high.  At 0.99 all 180 come out right, and over
+        /// 106 painted frames of six moving sequences the mean error falls 8.25% → 0.60% on
+        /// that sequence and moves by no more than 0.02% on the other five.  A line pressed
+        /// against the bottom edge is still caught, by `horizonConfidence`'s edge term.
         public var sioxBandTopFraction: Double = 0.15
-        public var sioxBandBottomFraction: Double = 0.85
+        public var sioxBandBottomFraction: Double = 0.99
+
+        /// The band DP, the gradient profile and the texture method search when there is no
+        /// prior (fractions of image height).  See `sioxBandBottomFraction` for the bottom.
+        public var searchTopFraction: Double = 0.05
+        public var searchBottomFraction: Double = 0.99
 
         /// DP grid search parameters.
         public var dpLambdas: [Double] = [1.0, 1.5, 2.0, 3.0]
@@ -113,8 +129,8 @@ public enum CombinedHorizonDetector {
         // Whole-image defaults unless a prior says otherwise.  These are the values each
         // base method already had baked in as its own default.
         let band = prior?.searchFractions(imageHeight: imgH)
-        let searchTop = band?.top ?? 0.05
-        let searchBottom = band?.bottom ?? 0.95
+        let searchTop = band?.top ?? params.searchTopFraction
+        let searchBottom = band?.bottom ?? params.searchBottomFraction
         var bandedParams = params
         if let band {
             bandedParams.sioxBandTopFraction = band.top
@@ -294,7 +310,9 @@ public enum CombinedHorizonDetector {
         let rwBeta = params.rwBeta
         let rwWidth = params.rwMaxWorkingWidth
         let seedY = combinedY
-        let masks: [PixelatedImage] = await withTaskGroup(of: (Int, PixelatedImage).self) { group in
+        // Each brush yields its per-column horizon; the full-resolution mask is built only for the
+        // winner, since scoring reads nothing but those columns.
+        let horizons: [[Int?]] = await withTaskGroup(of: (Int, [Int?]).self) { group in
             for (index, brush) in radii.enumerated() {
                 group.addTask {
                     (index, await NativeWork.run {
@@ -303,21 +321,26 @@ public enum CombinedHorizonDetector {
                     })
                 }
             }
-            var collected: [(Int, PixelatedImage)] = []
+            var collected: [(Int, [Int?])] = []
             for await item in group { collected.append(item) }
             return collected.sorted { $0.0 < $1.0 }.map { $0.1 }
         }
 
-        for (index, mask) in masks.enumerated() {
+        var bestHorizon: [Int?]? = nil
+        for (index, horizonY) in horizons.enumerated() {
             let brush = radii[index]
             // Score by horizon quality: smoothness + coverage
-            let score = selfScore(mask: mask, imageHeight: imgH)
+            let score = selfScore(horizonY: horizonY, imageHeight: imgH)
             Log.d("CombinedHorizonDetector: brush=\(brush) selfScore=\(String(format: "%.4f", score))")
 
             if score > bestScore {
                 bestScore = score
-                bestMask = mask
+                bestHorizon = horizonY
             }
+        }
+        if let bestHorizon {
+            bestMask = PixelatedImage(mat: PixelatedImageBridge.binaryHorizonMask(
+              width: Int32(imgW), height: Int32(imgH), horizonY: bestHorizon))
         }
 
         guard let finalMask = bestMask else {
@@ -389,18 +412,14 @@ public enum CombinedHorizonDetector {
         // Scale to original resolution
         let origW = image.width
         let origH = image.height
-        let fullMask: PixelatedImage
-        if mask.width != origW || mask.height != origH {
-            if let upscaled = mask.mat.upScale(to: UInt(origW), height: UInt(origH)),
-               let pi = PixelatedImage(mat: upscaled) {
-                fullMask = thresholdToBinary(pi)
-            } else {
-                fullMask = mask
-            }
-        } else {
-            fullMask = mask
+        // The old tail thresholded the upscaled mask to a binary image and then read the horizon
+        // from that, but a binary mask built from a column's first dark row has that same first
+        // dark row, so reading it straight off the upscaled mask gives the identical answer
+        // without building a full-resolution image to read. Off the cooperative pool: it is
+        // full-resolution native work.
+        return await NativeWork.run {
+            fullResolutionHorizonY(of: mask, toWidth: origW, height: origH)
         }
-        return extractHorizonY(from: fullMask)
     }
 
     /// Run DP with grid search and return per-column horizon Y at full resolution.
@@ -414,10 +433,13 @@ public enum CombinedHorizonDetector {
         var bestMask: PixelatedImage? = nil
         var bestScore = -1.0
 
+        // grey / Sobel / Canny do not depend on the weights below: once, not per combination
+        guard let prepared = scaled.dpHorizonPrepare() else { return nil }
+
         for lambda in params.dpLambdas {
             for sobelW in params.dpSobelWeights {
                 for cannyW in params.dpCannyWeights {
-                    guard let mask = try? scaled.dpHorizonDetect(
+                    guard let mask = try? prepared.detect(
                         smoothnessLambda: lambda,
                         sobelWeight: sobelW,
                         cannyWeight: cannyW,
@@ -447,18 +469,7 @@ public enum CombinedHorizonDetector {
 
         let origW = image.width
         let origH = image.height
-        let fullMask: PixelatedImage
-        if mask.width != origW || mask.height != origH {
-            if let up = mask.mat.upScale(to: UInt(origW), height: UInt(origH)),
-               let pi = PixelatedImage(mat: up) {
-                fullMask = thresholdToBinary(pi)
-            } else {
-                fullMask = mask
-            }
-        } else {
-            fullMask = mask
-        }
-        return extractHorizonY(from: fullMask)
+        return fullResolutionHorizonY(of: mask, toWidth: origW, height: origH)
     }
 
     /// Run standalone SIOX horizon detection and return per-column horizon Y at full resolution.
@@ -827,6 +838,14 @@ public enum CombinedHorizonDetector {
         let searchTop = max(0, Int(Double(sH) * searchTopFraction))
         let searchBot = min(sH - 1, Int(Double(sH) * searchBottomFraction))
 
+        // The derivative below reads `derivR` rows either side of every row it scores, so the
+        // band needs 2 * derivR + 1 rows or its range is inverted, which traps.  A band that
+        // narrow has no variance transition to find: report no horizon from this method.
+        let derivR = 3
+        guard searchBot - searchTop >= 2 * derivR else {
+            return [Int?](repeating: nil, count: imgW)
+        }
+
         let img8 = PixelatedImage(mat: scaled.mat.ensureEightBit()) ?? scaled
         let pixelData: [UInt8]
         let cpp: Int
@@ -884,7 +903,6 @@ public enum CombinedHorizonDetector {
 
             // Derivative of variance: find max increase (low→high transition)
             var varDeriv = [Float](repeating: 0, count: sH)
-            let derivR = 3
             for y in (searchTop + derivR)...(searchBot - derivR) {
                 varDeriv[y] = smoothVar[y + derivR] - smoothVar[y - derivR]
             }
@@ -1128,7 +1146,7 @@ public enum CombinedHorizonDetector {
         brushRadius: Int,
         beta: Double,
         maxWorkingWidth: Int32
-    ) -> PixelatedImage {
+    ) -> [Int?] {
         let imgW = image.width
         let imgH = image.height
 
@@ -1157,11 +1175,9 @@ public enum CombinedHorizonDetector {
             maxWorkingWidth: maxWorkingWidth
         )
 
-        let yArray: [Int?] = resultY.map { $0 < 0 ? nil : Int($0) }
-        let maskMat = PixelatedImageBridge.binaryHorizonMask(
-            width: Int32(imgW), height: Int32(imgH), horizonY: yArray
-        )
-        return PixelatedImage(mat: maskMat)!
+        // What `extractHorizonY` reads back from the binary mask built from these: a row in
+        // [0, H) is itself, and anything else (all sky, or at/below the last row) is no horizon.
+        return resultY.map { $0 >= 0 && Int($0) < imgH ? Int($0) : nil }
     }
 
     // MARK: - Helpers
@@ -1436,6 +1452,17 @@ public enum CombinedHorizonDetector {
     }
 
     /// Extract per-column horizon Y (topmost ground pixel) from a mask.
+    /// Per-column horizon of `mask` at the full image size: upscale when the working mask is
+    /// smaller, then read the first dark row of each column. Unscaled masks are read as they are.
+    static func fullResolutionHorizonY(of mask: PixelatedImage, toWidth width: Int, height: Int) -> [Int?] {
+        if mask.width != width || mask.height != height,
+           let up = mask.mat.upScale(to: UInt(width), height: UInt(height)),
+           let upscaled = PixelatedImage(mat: up) {
+            return extractHorizonY(from: upscaled)
+        }
+        return extractHorizonY(from: mask)
+    }
+
     static func extractHorizonY(from mask: PixelatedImage) -> [Int?] {
         let w = mask.width
         let h = mask.height
@@ -1451,12 +1478,17 @@ public enum CombinedHorizonDetector {
         switch mask.imageData {
         case .eightBit:
             let ptr = rawPtr.assumingMemoryBound(to: UInt8.self)
-            for x in 0..<w {
-                for y in 0..<h {
+            // Row by row: the first row at or below the threshold in each column. Walking a
+            // full-resolution mask column by column strides a whole row per step and misses the
+            // cache on every read; this reads memory in order and stops once every column has
+            // an answer. The answer for each column is the same.
+            var remaining = w
+            for y in 0..<h where remaining > 0 {
+                for x in 0..<w where result[x] == nil {
                     let offset = y * rowBytes + x * cpp
                     if offset < totalBytes && ptr[offset] <= 127 {
                         result[x] = y
-                        break
+                        remaining -= 1
                     }
                 }
             }
@@ -1464,12 +1496,13 @@ public enum CombinedHorizonDetector {
             let ptr = rawPtr.assumingMemoryBound(to: UInt16.self)
             let rowElems = rowBytes / MemoryLayout<UInt16>.stride
             let totalElems = h * rowElems
-            for x in 0..<w {
-                for y in 0..<h {
+            var remaining = w
+            for y in 0..<h where remaining > 0 {
+                for x in 0..<w where result[x] == nil {
                     let offset = y * rowElems + x * cpp
                     if offset < totalElems && ptr[offset] <= 32767 {
                         result[x] = y
-                        break
+                        remaining -= 1
                     }
                 }
             }
@@ -1518,7 +1551,10 @@ public enum CombinedHorizonDetector {
 
     /// Self-score a mask without a reference: smoothness + coverage + plausibility.
     static func selfScore(mask: PixelatedImage, imageHeight: Int) -> Double {
-        let horizonY = extractHorizonY(from: mask)
+        selfScore(horizonY: extractHorizonY(from: mask), imageHeight: imageHeight)
+    }
+
+    static func selfScore(horizonY: [Int?], imageHeight: Int) -> Double {
         let defined = horizonY.compactMap { $0 }
         guard !defined.isEmpty else { return 0 }
 

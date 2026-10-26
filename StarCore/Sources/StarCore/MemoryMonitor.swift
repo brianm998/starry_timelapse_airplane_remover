@@ -1,5 +1,6 @@
 import Foundation
 import StarCoreC
+import StarCppBridge
 import logging
 
 /*
@@ -423,12 +424,12 @@ public actor MemoryMonitor {
 
         // The ledger says there is room. Check reality agrees before believing it.
         let admissionBudget = effectiveBudget()
-        if reservedBytes + bytes <= admissionBudget {
+        //
+        // Never ahead of anyone already queued: a request that arrives while others wait
+        // joins the back of the queue, and the drain admits them in order.
+        if waiters.isEmpty, reservedBytes + bytes <= admissionBudget {
             if let blocked = realityBlock() {
-                // Not ahead of anyone already queued: they are admitted from the drain, in
-                // order, the moment this rule allows it.
-                if waiters.isEmpty,
-                   admitsDespiteRealityHold(bytes, alreadyAdmitted: reservedBytes)
+                if admitsDespiteRealityHold(bytes, alreadyAdmitted: reservedBytes)
                 {
                     reservedBytes += bytes
                     noteSerialAdmission(bytes, heldBecause: blocked)
@@ -495,6 +496,16 @@ public actor MemoryMonitor {
         }
         Log.i(message)
 
+        // Memory is what this waits for, so the GPU pools give theirs back and stop keeping
+        // any until the queue empties (see `drainReadyWaiters`). On unified memory an idle pool
+        // is the process's own footprint, which narrows the budget and inflates the realized
+        // ratio by the same bytes no reservation covers.
+        let pooled = GPUOps.texturePoolStats.heldBytes
+        if GPUOps.setPoolingAllowed(false) {
+            Log.i("MemoryMonitor: GPU resource pools off while reservations wait — released " +
+                  "\(pooled / (1024*1024))MB of pooled textures")
+        }
+
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let id = nextWaiterId
             nextWaiterId += 1
@@ -507,7 +518,8 @@ public actor MemoryMonitor {
             startPollingIfNeeded()
         }
 
-        reservedBytes += bytes
+        // The drain booked this grant before it resumed us (see `drainReadyWaiters`), so a
+        // release or reserve that ran between the resume and this line saw it.
 
         let elapsed = Date().timeIntervalSince(startTime)
         totalWaits += 1
@@ -749,6 +761,10 @@ public actor MemoryMonitor {
                   "\(reality.processFootprint() / (1024*1024))MB)")
         }
 
+        // The GPU pyramid builders keep textures between builds; give that memory back the
+        // moment the OS asks for any.
+        if level != .normal { GPUOps.trimTexturePool() }
+
         switch level {
         case .normal:
             Log.i("MemoryMonitor: memory pressure cleared, resuming admissions")
@@ -949,11 +965,18 @@ public actor MemoryMonitor {
         }
 
         waiters = remaining
+        // Book the grants now, on the actor, before any waiter runs again. Booking after the
+        // resume left a window in which other reservations saw the headroom as free and the
+        // ledger went over budget.
+        reservedBytes = speculativeReserved
         for waiter in released { waiter.continuation.resume() }
 
         if waiters.isEmpty {
             pollTask?.cancel()
             pollTask = nil
+            if GPUOps.setPoolingAllowed(true) {
+                Log.i("MemoryMonitor: no reservations waiting — GPU resource pools back on")
+            }
         }
     }
 }

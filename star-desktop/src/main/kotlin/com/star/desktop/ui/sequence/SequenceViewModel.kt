@@ -26,6 +26,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import com.star.desktop.ui.components.HorizonLineKinds
+import com.star.proto.HorizonOverlayKind
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -115,12 +117,29 @@ class SequenceViewModel(
         prefs?.showHorizonOnMainView = show
     }
 
+    // Which kinds of horizon line are drawn when they are shown (macOS hiddenHorizonLineKinds, stored in the same file).
+    private val _visibleHorizonLineKinds =
+        MutableStateFlow(HorizonLineKinds.visible(prefs?.hiddenHorizonLineKinds ?: emptyList()))
+    val visibleHorizonLineKinds: StateFlow<Set<HorizonOverlayKind>> = _visibleHorizonLineKinds.asStateFlow()
+    fun setHorizonLineKindVisible(kind: HorizonOverlayKind, visible: Boolean) {
+        val shown = if (visible) _visibleHorizonLineKinds.value + kind else _visibleHorizonLineKinds.value - kind
+        _visibleHorizonLineKinds.value = shown
+        prefs?.hiddenHorizonLineKinds = HorizonLineKinds.all.filter { it !in shown }.mapNotNull { HorizonLineKinds.key(it) }
+    }
+
     private val _leftPanelShowing = MutableStateFlow(true)
     val leftPanelShowing: StateFlow<Boolean> = _leftPanelShowing.asStateFlow()
     private val _rightPanelShowing = MutableStateFlow(true)
     val rightPanelShowing: StateFlow<Boolean> = _rightPanelShowing.asStateFlow()
     fun setLeftPanel(showing: Boolean) { _leftPanelShowing.value = showing }
     fun setRightPanel(showing: Boolean) { _rightPanelShowing.value = showing }
+    /** Which right panel sections are open; all start open. Here, not in the panel, because the panel is dropped while hidden. */
+    private val _expandedRightPanelSections = MutableStateFlow(RightPanelSection.entries.toSet())
+    val expandedRightPanelSections: StateFlow<Set<RightPanelSection>> = _expandedRightPanelSections.asStateFlow()
+    fun toggleRightPanelSection(section: RightPanelSection) {
+        val open = _expandedRightPanelSections.value
+        _expandedRightPanelSections.value = if (section in open) open - section else open + section
+    }
     /** macOS `toggleSidePanels` (Tab): both shown → both hide; otherwise → both show. */
     fun toggleSidePanels() {
         val hide = _leftPanelShowing.value && _rightPanelShowing.value
@@ -381,10 +400,12 @@ class SequenceViewModel(
             .onEach { if (it != null) { refreshRefinementStatus(); horizonChanged() } }
             .launchIn(scope)
 
-        // Refinement operations finish by the hundred; redraw the horizons at most a few times a second while they do.
+        // A frame's horizon lines changed (a mask written or deleted, a reference painted or cleared, a refinement finished).
+        // They change by the thousand while a run writes the horizon consensus, so the horizons are redrawn at most twice a second
+        // while they do — sampled rather than debounced, which would wait for the whole burst to end.
         @OptIn(kotlinx.coroutines.FlowPreview::class)
         processing.horizonUpdated
-            .debounce(300)
+            .sample(500)
             .onEach { horizonChanged() }
             .launchIn(scope)
 

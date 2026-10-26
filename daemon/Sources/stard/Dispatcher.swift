@@ -12,6 +12,14 @@ typealias Handler = @Sendable (UInt64, Data, StdioTransport) async -> Void
 actor Dispatcher {
     private var handlers: [String: Handler] = [:]
     private var activeTasks: [UInt64: Task<Void, Never>] = [:]
+
+    /// Cancels that arrived before their request. The reader hands requests and cancels to the
+    /// dispatcher as separate tasks, so a cancel can run first; with nothing registered under its
+    /// id it used to do nothing, and the request then ran to completion. Remembered here and
+    /// applied when the request shows up. Bounded: a cancel for a request that already finished
+    /// also lands here, and ids are never reused, so the oldest are simply forgotten.
+    private var earlyCancels: [UInt64] = []
+    private static let earlyCancelLimit = 256
     private let transport: StdioTransport
     private let sessions: SessionManager
 
@@ -41,13 +49,29 @@ actor Dispatcher {
             await handler(id, payload, transport)
         }
         activeTasks[id] = t
+        if let early = earlyCancels.firstIndex(of: id) {
+            earlyCancels.remove(at: early)
+            t.cancel()
+            activeTasks.removeValue(forKey: id)
+        }
     }
 
     // Cancel the Task servicing the given request id.
     func cancel(id: UInt64) {
-        activeTasks[id]?.cancel()
-        activeTasks.removeValue(forKey: id)
+        if let task = activeTasks[id] {
+            task.cancel()
+            activeTasks.removeValue(forKey: id)
+        } else {
+            // not registered (yet): remember it for when the request arrives
+            earlyCancels.append(id)
+            if earlyCancels.count > Self.earlyCancelLimit {
+                earlyCancels.removeFirst(earlyCancels.count - Self.earlyCancelLimit)
+            }
+        }
     }
+
+    /// For tests: how many cancels are waiting for a request that has not arrived.
+    var pendingEarlyCancelCount: Int { earlyCancels.count }
 
     // Remove completed task from registry (called by handlers on completion).
     func taskCompleted(id: UInt64) {

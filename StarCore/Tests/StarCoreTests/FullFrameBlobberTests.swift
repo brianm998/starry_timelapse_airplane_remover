@@ -33,23 +33,11 @@ final class FullFrameBlobberTests: XCTestCase {
             for x in 0..<width { subtraction[y * width + x] = value(x, y) }
         }
 
-        // the blobber keeps the original image only to read brightnesses from, so a matching
-        // single channel image is enough
-        let data = UnsafeMutablePointer<UInt16>.allocate(capacity: width * height)
-        for i in 0..<(width * height) { data[i] = subtraction[i] }
-        let mat = MatWrapper(width: width, height: height,
-                             cvType: MatWrapper.cvType(forBitsPerComponent: 16,
-                                                       componentsPerPixel: 1),
-                             bytesPerRow: width * 2,
-                             data: UnsafeMutableRawPointer(data),
-                             takeOwnership: true)
-
         return await FullFrameBlobber(config: Config(),
                                       args: args ?? strongArgs(),
                                       imageWidth: width,
                                       imageHeight: height,
                                       subtractionPixelData: subtraction,
-                                      originalImage: PixelatedImage(mat: mat)!,
                                       frameIndex: 0,
                                       neighborType: neighborType)
     }
@@ -162,19 +150,11 @@ final class FullFrameBlobberTests: XCTestCase {
         var subtraction = [UInt16](repeating: 0, count: 32 * 32)
         subtraction[10 * 32 + 10] = 30000
 
-        let data = UnsafeMutablePointer<UInt16>.allocate(capacity: 32 * 32)
-        for i in 0..<(32 * 32) { data[i] = subtraction[i] }
-        let mat = MatWrapper(width: 32, height: 32,
-                             cvType: MatWrapper.cvType(forBitsPerComponent: 16,
-                                                       componentsPerPixel: 1),
-                             bytesPerRow: 32 * 2,
-                             data: UnsafeMutableRawPointer(data), takeOwnership: true)
 
         let blobber = await FullFrameBlobber(config: Config(), args: strongArgs(),
                                             imageWidth: 32, imageHeight: 32,
                                             subtractionPixelData: subtraction,
-                                            originalImage: PixelatedImage(mat: mat)!,
-                                            frameIndex: 0, neighborType: .eight,
+                                                  frameIndex: 0, neighborType: .eight,
                                             startingBlobID: 500)
         let blobs = await run(blobber)
 
@@ -239,20 +219,12 @@ final class FullFrameBlobberTests: XCTestCase {
         subtraction[10 * 64 + 10] = 30000
         subtraction[50 * 64 + 50] = 30000
 
-        let data = UnsafeMutablePointer<UInt16>.allocate(capacity: 64 * 64)
-        for i in 0..<(64 * 64) { data[i] = subtraction[i] }
-        let mat = MatWrapper(width: 64, height: 64,
-                             cvType: MatWrapper.cvType(forBitsPerComponent: 16,
-                                                       componentsPerPixel: 1),
-                             bytesPerRow: 64 * 2,
-                             data: UnsafeMutableRawPointer(data), takeOwnership: true)
 
         let blobber = await FullFrameBlobber(
           config: Config(), args: strongArgs(),
           imageWidth: 64, imageHeight: 64,
           within: BoundingBox(min: Coord(x: 0, y: 0), max: Coord(x: 31, y: 31)),
           subtractionPixelData: subtraction,
-          originalImage: PixelatedImage(mat: mat)!,
           frameIndex: 0, neighborType: .eight)
 
         let blobs = await run(blobber)

@@ -266,7 +266,7 @@ public actor LinearBlobConnector {
         }
     }
 
-    public func process(_ args: Args) async {
+    public func process(_ args: Args, seedConcurrency: Int = 4, neighborHops: Int? = 2) async {
 
         Log.d("frame \(frameIndex) starting")
         internalBlobMap = await analyzer.mapOfBlobs()
@@ -287,7 +287,12 @@ public actor LinearBlobConnector {
             blobSizes.append(BlobSize(id: id, size: await blob.size(), blob: blob))
         }
 
-        var sortedBlobs = blobSizes.sorted { $0.size > $1.size }
+        // Largest first, and among equal sizes lowest id first. Sorting by size alone left ties in
+        // dictionary order, which varies from run to run, and the cut below keeps only the first
+        // `maxBlobsProcessed`: which tied blobs made it in was luck.
+        var sortedBlobs = blobSizes.sorted {
+            $0.size != $1.size ? $0.size > $1.size : $0.id < $1.id
+        }
 
         let originalNumber = sortedBlobs.count
         
@@ -295,9 +300,22 @@ public actor LinearBlobConnector {
             sortedBlobs = Array(sortedBlobs[0..<args.maxBlobsProcessed])
         }
         
-        Log.d("frame \(frameIndex) processing \(sortedBlobs.count) blobs out of a total of \(originalNumber)")
+        let seedCount = sortedBlobs.count
+        Log.d("frame \(frameIndex) processing \(seedCount) blobs out of a total of \(originalNumber)")
         
         let mappings = await withTaskGroup(of: Set<BlobMapping>.self) { taskGroup in
+            // Sliding window: at most `window` seeds in flight. Each seed builds a neighbour
+            // cloud that can be most of the frame in a dense field, so one child per seed
+            // (up to maxBlobsProcessed) held every cloud at once. Results are unioned into a
+            // set, so completion order does not matter.
+            let window = max(1, seedConcurrency)
+            var inFlight = 0
+            var ret = Set<BlobMapping>()
+            func collect(_ blobMapping: Set<BlobMapping>) {
+                Log.d("frame \(frameIndex) ret \(ret.count) adding \(blobMapping.count) mappings")
+                ret.formUnion(blobMapping)
+            }
+
             for sortedBlob in sortedBlobs {
                 let blob = sortedBlob.blob
 
@@ -313,6 +331,11 @@ public actor LinearBlobConnector {
                     continue
                 }
 
+                if inFlight >= window, let done = await taskGroup.next() {
+                    collect(done)
+                    inFlight -= 1
+                }
+                inFlight += 1
                 taskGroup.addTask {
                     // find a cloud of neighbors
                     let neighborCloud =
@@ -320,7 +343,8 @@ public actor LinearBlobConnector {
                         of: blob,
                         blobRefs: data.blobRefs,
                         blobMap: data.blobMap,
-                        scanSize: data.args.scanSize
+                        scanSize: data.args.scanSize,
+                        maxHops: neighborHops
                       )
                     
                     if neighborCloud.count != 0 { 
@@ -335,12 +359,7 @@ public actor LinearBlobConnector {
                 }
             }
 
-            var ret = Set<BlobMapping>()
-            for await blobMapping in taskGroup {
-                Log.d("frame \(frameIndex) ret \(ret.count) adding \(blobMapping.count) mappings")
-                ret = ret.union(blobMapping) // XXX Crashed here :(
-                Log.d("frame \(frameIndex) ret \(ret.count) after adding \(blobMapping.count) mappings")
-            }
+            for await blobMapping in taskGroup { collect(blobMapping) }
             Log.d("frame \(frameIndex) returning set")
             return ret
         }
@@ -354,7 +373,7 @@ public actor LinearBlobConnector {
 
 
         Log.d("frame \(frameIndex) combining blobs into \(mappingLists.count) merged blobs")
-        await withTaskGroup(of: Optional<Blob>.self) { taskGroup in
+        await withTaskGroup(of: [Blob].self) { taskGroup in
             for mappingList in mappingLists {
                 // a list of blobs that should all be removed
                 //Log.d("mappingList.list.count \(mappingList.list.count)")
@@ -369,10 +388,9 @@ public actor LinearBlobConnector {
                 taskGroup.addTask {
                     return await StarCore.combine(blobList)
                 }
-                for await blob in taskGroup {
-                    if let blob {
-                        internalBlobMap[blob.id] = blob
-                    }
+                for await blobs in taskGroup {
+                    // the merged blob, and any blob it refused (see `combine`): none may be lost
+                    for blob in blobs { internalBlobMap[blob.id] = blob }
                 }
             }
         }
@@ -396,12 +414,17 @@ fileprivate func processBlob(
     
     //Log.d("blob \(id) has \(neighborCloud.count) neighbors")
 
-    let frameIndex = neighborCloud.first?.frameIndex ?? -1
-    let id = neighborCloud.first?.id ?? 0
-    
+    // The cloud is a Set, so its iteration order differs from run to run. Absorbing in that
+    // order mattered twice: `absorb` refuses a blob that would take the total past 65,535
+    // pixels, so which blobs fit under that cap depended on the order, and the temporary blob's
+    // id came from whichever element happened to be first. Ascending id fixes both.
+    let orderedCloud = neighborCloud.sorted { $0.id < $1.id }
+    let frameIndex = orderedCloud.first?.frameIndex ?? -1
+    let id = orderedCloud.first?.id ?? 0
+
     // then create a temporary blob that combines all of the nearby blobs
     let fullBlob = Blob(id: id, frameIndex: frameIndex) // values not used
-    for blob in neighborCloud { _ = await fullBlob.absorb(blob, always: true) }
+    for blob in orderedCloud { _ = await fullBlob.absorb(blob, always: true) }
 
     // here we have combined all of the nearby blobs within our given scanSize
     // to eachother.  This may be enormous, if we have lots of small blobs close together.
@@ -541,7 +564,10 @@ fileprivate func iterate(on blobLine: Line,
 
             let firstBlob = linearBlobSet.removeFirst()
             
-            Log.d("frame \(data.analyzer.frameIndex) blob \(fullBlob.id) found \(await linearBlobIds.count) linear blobs")
+            if Log.isEnabled(.debug) {
+                let linearCount = await linearBlobIds.count
+                Log.d("frame \(data.analyzer.frameIndex) blob \(fullBlob.id) found \(linearCount) linear blobs")
+            }
             
             // we found more than one blob along the line
             // record a mapping between them 
@@ -550,7 +576,10 @@ fileprivate func iterate(on blobLine: Line,
                 ret.insert(BlobMapping(firstBlob.id, otherBlob.id))
             }
 
-            Log.d("frame \(data.analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count)")
+            if Log.isEnabled(.debug) {
+                let pixelCount = await fullBlob.pixels.count
+                Log.d("frame \(data.analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(pixelCount)")
+            }
             
         } else {
             Log.d("frame \(data.analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")

@@ -86,6 +86,7 @@ struct HorizonView: View {
                 }
                   .fixedSize(horizontal: true, vertical: true)
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.horizon.no")
 
                 Space(width: 20)
                 
@@ -193,6 +194,7 @@ struct MovingView: View {
                       )
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.moving.moving")
                   .fixedSize(horizontal: true, vertical: true)
                 Spacer()
                 
@@ -255,6 +257,7 @@ struct SelectMovingHorizonsView: View {
                 }
                   .fixedSize(horizontal: true, vertical: true)
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.selectmovinghorizons.no")
 
                 Space(width: 30)
 
@@ -451,15 +454,19 @@ struct RemovalView: View {
                 
                 VStack(alignment: .leading) {
                     Toggle(localized("ui.airplanes"), isOn: $removeAirplanes)
+                      .accessibilityIdentifier("startup.removal.airplanes")
                       .font(.title)
                       .foregroundColor(.white)
                     Toggle(localized("ui.satellites"), isOn: $removeSatellites)
+                      .accessibilityIdentifier("startup.removal.satellites")
                       .font(.title)
                       .foregroundColor(.white)
                     Toggle(localized("ui.meteors"), isOn: $removeMeteors)
+                      .accessibilityIdentifier("startup.removal.meteors")
                       .font(.title)
                       .foregroundColor(.white)
                     Toggle(localized("ui.cars"), isOn: $removeCars)
+                      .accessibilityIdentifier("startup.removal.cars")
                       .font(.title)
                       .foregroundColor(.white)
                 }

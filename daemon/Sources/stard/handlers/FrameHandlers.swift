@@ -85,9 +85,26 @@ enum FrameHandlers {
             let labelPath = "\(labelsDir)/frame_\(req.frameIndex)_label.png"
 
             let w = frame.width, h = frame.height
+
+            // The label image only changes when the set of groups does (their pixels never change
+            // once found), so a click-heavy session asked for the same image over and over and
+            // each time rebuilt and rewrote a frame-sized PNG. Keyed by what the groups are.
+            let members = await groups.members
+            let version = LabelImageCache.version(of: members.values.map { ($0.id, $0.bounds, $0.pixelSet.count) },
+                                                  width: w, height: h)
+            let cacheKey = "\(req.sessionID)/\(req.frameIndex)"
+            if LabelImageCache.shared.isCurrent(key: cacheKey, version: version, path: labelPath) {
+                var ref = Star_V1_ImageRef()
+                ref.path = labelPath
+                ref.width = Int32(w)
+                ref.height = Int32(h)
+                ref.format = "png"
+                try await transport.respond(id: id, payload: ref.serializedData()); return
+            }
+
             var buf = [UInt16](repeating: 0, count: w * h)
 
-            for group in await groups.members.values {
+            for group in members.values {
                 let gid = UInt16(group.id)
                 let bb = group.bounds
                 let pixels = group.pixels
@@ -105,7 +122,9 @@ enum FrameHandlers {
 
             // Write via MatWrapper — headless, no AppKit needed.
             // CV_16UC1 = 2 in OpenCV type constants.
-            buf.withUnsafeMutableBytes { raw in
+            // Atomically: the client reads this path as soon as the response arrives, and with
+            // two requests for one frame in flight a plain write let it read a half-written file.
+            let written = buf.withUnsafeMutableBytes { raw -> Bool in
                 let mat = MatWrapper(
                     width: w, height: h,
                     cvType: 2, // CV_16UC1
@@ -113,8 +132,9 @@ enum FrameHandlers {
                     data: raw.baseAddress!,
                     takeOwnership: false
                 )
-                mat.write(to: labelPath)
+                return LabelImageCache.writeAtomically(mat, to: labelPath)
             }
+            if written { LabelImageCache.shared.record(key: cacheKey, version: version) }
 
             var ref = Star_V1_ImageRef()
             ref.path = labelPath
@@ -236,5 +256,58 @@ enum FrameHandlers {
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }
+    }
+}
+
+
+/// The label image for a frame, kept as long as the frame's groups are the same ones.
+final class LabelImageCache: @unchecked Sendable {
+    static let shared = LabelImageCache()
+
+    private let lock = NSLock()
+    private var versions: [String: UInt64] = [:]
+
+    /// A digest of the groups that decide the image: which ones exist, where they are and how big,
+    /// and the frame's size. Their pixels never change after detection, so this is the image.
+    static func version(of groups: [(UInt16, BoundingBox, Int)], width: Int, height: Int) -> UInt64 {
+        var hash: UInt64 = 0xcbf29ce484222325
+        func mix(_ value: Int) { hash ^= UInt64(truncatingIfNeeded: value); hash = hash &* 0x100000001b3 }
+        mix(width); mix(height); mix(groups.count)
+        // order-independent: members come out of a dictionary
+        var sum: UInt64 = 0
+        for (id, bounds, size) in groups {
+            var h: UInt64 = 0x9e3779b97f4a7c15
+            for value in [Int(id), bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y, size] {
+                h ^= UInt64(truncatingIfNeeded: value); h = h &* 0x100000001b3
+            }
+            sum &+= h
+        }
+        mix(Int(truncatingIfNeeded: sum))
+        return hash
+    }
+
+    func isCurrent(key: String, version: UInt64, path: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return versions[key] == version && FileManager.default.fileExists(atPath: path)
+    }
+
+    func record(key: String, version: UInt64) {
+        lock.lock(); versions[key] = version; lock.unlock()
+    }
+
+    /// Writes the image beside its destination, under a name the extension of which still says what
+    /// format it is (OpenCV picks the encoder from it), then renames it into place.
+    static func writeAtomically(_ mat: MatWrapper, to path: String) -> Bool {
+        let url = URL(fileURLWithPath: path)
+        let temp = url.deletingLastPathComponent()
+            .appendingPathComponent(".\(url.deletingPathExtension().lastPathComponent).tmp-\(UUID().uuidString).\(url.pathExtension)")
+            .path
+        mat.write(to: temp)
+        guard FileManager.default.fileExists(atPath: temp) else { return false }
+        if rename(temp, path) != 0 {
+            try? FileManager.default.removeItem(atPath: temp)
+            return false
+        }
+        return true
     }
 }

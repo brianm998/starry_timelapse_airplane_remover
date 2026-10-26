@@ -163,16 +163,17 @@ struct InitialView: View {
                                 }
                             } else if url.path.hasSuffix(".json") {
                                 // try to parse out a config file
-                                do {
-                                    Task { @MainActor in
+                                // The do/catch is INSIDE the task: it used to wrap the creation of
+                                // the task, which throws nothing, so an error thrown by the work
+                                // (an unreadable config, a failed load) was not caught anywhere and
+                                // left the loading view up forever.
+                                Task { @MainActor in
+                                    do {
                                         let config = try ConfigManager(configFilename: url.path)
                                         try await self.viewModel.startup(withConfig: config)
-                                        self.viewModel.userPreferences.justOpened(filename: url.path) 
-                                    }
-                                } catch {
-                                    Log.e("cannot load \(url.path): \(error)")
-                                    // XXX show view error
-                                    Task { @MainActor in
+                                        self.viewModel.userPreferences.justOpened(filename: url.path)
+                                    } catch {
+                                        Log.e("cannot load \(url.path): \(error)")
                                         self.handle(error: "\(error)")
                                     }
                                 }

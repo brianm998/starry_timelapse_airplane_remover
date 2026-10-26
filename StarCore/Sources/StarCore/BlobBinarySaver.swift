@@ -53,6 +53,7 @@ public struct BlobBinaryLoader {
         let (data, _) = try await URLSession.shared.data(for: request)
         let blobDataArray = data.uInt16Array
         var index = 0
+        guard !blobDataArray.isEmpty else { return [:] }
         let numberOfBlobs = blobDataArray[index]
         index += 1
         var blobMap: [Int32:Blob] = [:]
@@ -61,10 +62,13 @@ public struct BlobBinaryLoader {
                                with: blobDataArray,
                                atIndex: index)
             {
-                index += await blob.persistentDataSizeBytes() / 2
+                // advance by the count the file records, not by what loaded: a duplicate
+                // pixel in the file would otherwise shift every later blob.
+                index += 2 + Int(blobDataArray[index + 1]) * 3
                 blobMap[blob.id] = blob
             } else {
                 Log.d("unable to load blob")
+                break  // the data ran out; there is nothing further to read
             }
         }
         return blobMap
@@ -88,12 +92,22 @@ public actor BlobBinarySaver {
     public func save(to filename: String) async {
         // save the blob refs as an image here
 
-        let blobCount = UInt16(blobMap.count)
-        var buffer = [blobCount].data
-
+        // Blobs the format cannot hold (id past 16 bits) come back empty and are skipped; the
+        // count written is the number actually written, and at most UInt16.max.
+        var body = Data()
+        var written = 0
         for (_, blob) in blobMap {
-            buffer.append(await blob.persistentDataArray().data)
+            if written == Int(UInt16.max) {
+                Log.e("too many blobs to save in \(filename): dropping the rest")
+                break
+            }
+            let words = await blob.persistentDataArray()
+            if words.isEmpty { continue }
+            body.append(words.data)
+            written += 1
         }
+        var buffer = [UInt16(written)].data
+        buffer.append(body)
         
         do {
             if FileManager.default.fileExists(atPath: filename) {

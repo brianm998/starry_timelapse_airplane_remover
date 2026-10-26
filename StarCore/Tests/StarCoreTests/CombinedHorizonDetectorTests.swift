@@ -133,10 +133,25 @@ final class CombinedHorizonDetectorTests: XCTestCase {
         XCTAssertEqual(params.rwMaxWorkingWidth, 4096)
         XCTAssertEqual(params.outlierThreshold, 80)
         XCTAssertEqual(params.sioxBandTopFraction, 0.15)
-        XCTAssertEqual(params.sioxBandBottomFraction, 0.85)
+        // Was 0.85, and the others' bottom 0.95: low horizons could not be found at all.
+        XCTAssertEqual(params.sioxBandBottomFraction, 0.99)
+        XCTAssertEqual(params.searchTopFraction, 0.05)
+        XCTAssertEqual(params.searchBottomFraction, 0.99)
         XCTAssertEqual(params.dpLambdas, [1.0, 1.5, 2.0, 3.0])
         XCTAssertEqual(params.dpSobelWeights, [0.2, 0.6, 1.0])
         XCTAssertEqual(params.dpCannyWeights, [0.2, 0.6, 1.0])
+    }
+
+    /// A horizon in the bottom few percent of the frame — a camera aimed well up — must be found,
+    /// not traded for the best line inside a band that stops above it.  With the old 0.85 / 0.95
+    /// band bottoms, every base method searched only above this ground and answered in the sky.
+    func testAHorizonInTheBottomFewPercentOfTheFrameIsFound() async throws {
+        let image = FrameHarness.syntheticFrame(width: 256, height: 200, horizonRow: 192)
+        let mask = try await CombinedHorizonDetector.detect(image: image)
+        let rows = CombinedHorizonDetector.extractHorizonY(from: mask.image).compactMap { $0 }
+        XCTAssertFalse(rows.isEmpty)
+        let median = rows.sorted()[rows.count / 2]
+        XCTAssertEqual(median, 192, accuracy: 3, "rows: \(rows)")
     }
 
     /// More than one brush radius is essential: the pipeline picks the best-scoring one, so a single

@@ -49,6 +49,17 @@ object RenderVideo {
     /** A frame rate as it is read aloud and typed: 29.97, 24, 12.5 (macOS `%g`). */
     fun rateText(rate: Double): String = String.format(Locale.ROOT, "%g", rate).let { if ('.' in it) it.trimEnd('0').trimEnd('.') else it }
 
+    /** The heights a render can be scaled to, in pixels; 0 is the frames' own size. Matches StarCore's `OutputResolution`. */
+    val RESOLUTIONS = listOf(0, 2160, 1440, 1080, 720, 480)
+
+    /** A resolution as the pickers name it: Original, 4k, 2k, 1080p. */
+    fun resolutionText(height: Int): String = when (height) {
+        0 -> localized("ui.resolution_original")
+        2160 -> "4k"
+        1440 -> "2k"
+        else -> "${height}p"
+    }
+
     /** The file a path names. */
     fun fileName(path: String): String = File(path).name
 
@@ -66,4 +77,11 @@ object RenderVideo {
         val entries = caps.frameRateCapsList
         return entries.firstOrNull { !it.custom && abs(it.value - rate) < 1e-9 } ?: entries.firstOrNull { it.custom }
     }
+
+    /**
+     * The entry the picker shows: Custom whenever the user picked it, whatever rate it holds ([rateEntry] alone would read a Custom still at a
+     * standard rate, which is where it starts, as that standard entry and never show the field), else [rateEntry].
+     */
+    fun shownRateEntry(caps: VideoCapabilities, rate: Double, customPicked: Boolean): com.star.proto.FrameRateCaps? =
+        if (customPicked) caps.frameRateCapsList.firstOrNull { it.custom } else rateEntry(caps, rate)
 }

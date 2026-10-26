@@ -529,6 +529,8 @@ tasks.register<Test>("gherkinTest") {
     System.getenv("STAR_TEST_DATA")?.takeIf { it.isNotEmpty() }?.let { systemProperty("star.test.data", it) }
     (findProperty("star.stard.path") as String? ?: System.getProperty("star.stard.path"))?.let { systemProperty("star.stard.path", it) }
     environment("STAR_RUN_MARKER_DIR", layout.buildDirectory.dir("run-markers").get().asFile.absolutePath)
+    // A marker left by an interrupted run makes the next stard raise a "previous run crashed" alert over the UI, which swallows every click.
+    doFirst { layout.buildDirectory.dir("run-markers").get().asFile.deleteRecursively() }
     // Placeholder overrides (STAR_GHERKIN_<NAME>) pass through the environment as they are.
     // Never up to date: the point is to run the real engine again.
     outputs.upToDateWhen { false }

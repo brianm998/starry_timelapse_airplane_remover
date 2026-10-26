@@ -147,6 +147,18 @@ public final class ImageSequenceViewModel {
         if let muxer = userPreferences.muxer {
             self.muxer = muxer
         }
+        // The GPU toggles belong to the machine, not to a sequence, so what the user chose
+        // wins over whatever the sequence's own config.json was last saved with.  Compared
+        // first so seeding what already matches does not rewrite the config.
+        if let useGPUForMerge = userPreferences.useGPUForMerge, useGPUForMerge != self.useGPUForMerge {
+            self.useGPUForMerge = useGPUForMerge
+        }
+        if let useGPUForSIFT = userPreferences.useGPUForSIFT, useGPUForSIFT != self.useGPUForSIFT {
+            self.useGPUForSIFT = useGPUForSIFT
+        }
+        if let useGPUForAKAZE = userPreferences.useGPUForAKAZE, useGPUForAKAZE != self.useGPUForAKAZE {
+            self.useGPUForAKAZE = useGPUForAKAZE
+        }
     }
 
     // how far zoomed in the edit view is.
@@ -317,7 +329,7 @@ public final class ImageSequenceViewModel {
     // Scale factor for grid-mode cells relative to the preview image size
     var gridThumbnailScale: CGFloat = 0.3
 
-    // The scale at which gridHorizonOverlay was last generated on each frame.
+    // The scale at which gridHorizonOverlays were last generated on each frame.
     // Zero means it has never been generated.
     var gridHorizonRenderedScale: CGFloat = 0
 
@@ -327,7 +339,7 @@ public final class ImageSequenceViewModel {
         gridHorizonRenderedScale = scale
         let w = max(1, Int(CGFloat(config.config().previewWidth)  * scale))
         let h = max(1, Int(CGFloat(config.config().previewHeight) * scale))
-        for frameView in frames where frameView.horizonOverlay != nil {
+        for frameView in frames where !frameView.horizonOverlays.isEmpty {
             frameView.refreshGridHorizonOverlay(width: w, height: h)
         }
     }
@@ -965,6 +977,12 @@ public final class ImageSequenceViewModel {
             var realConfig = config.config()
             realConfig.useGPUForMerge = useGPUForMerge
             config.update(realConfig)
+            // Remembered for every other sequence too — see `UserPreferences.useGPUForMerge`.
+            // Not written back when it already matches, which is the case when this change
+            // was `applyUserPreferences` seeding the sequence from the preference.
+            if userPreferences.useGPUForMerge != useGPUForMerge {
+                userPreferences.useGPUForMerge = useGPUForMerge
+            }
         }
     }
 
@@ -973,6 +991,12 @@ public final class ImageSequenceViewModel {
             var realConfig = config.config()
             realConfig.useGPUForSIFT = useGPUForSIFT
             config.update(realConfig)
+            // Remembered for every other sequence too — see `UserPreferences.useGPUForSIFT`.
+            // Not written back when it already matches, which is the case when this change
+            // was `applyUserPreferences` seeding the sequence from the preference.
+            if userPreferences.useGPUForSIFT != useGPUForSIFT {
+                userPreferences.useGPUForSIFT = useGPUForSIFT
+            }
         }
     }
 
@@ -980,6 +1004,21 @@ public final class ImageSequenceViewModel {
         didSet {
             var realConfig = config.config()
             realConfig.useGPUForAKAZE = useGPUForAKAZE
+            config.update(realConfig)
+            // Remembered for every other sequence too — see `UserPreferences.useGPUForAKAZE`.
+            // Not written back when it already matches, which is the case when this change
+            // was `applyUserPreferences` seeding the sequence from the preference.
+            if userPreferences.useGPUForAKAZE != useGPUForAKAZE {
+                userPreferences.useGPUForAKAZE = useGPUForAKAZE
+            }
+        }
+    }
+
+    /// `Config.cloudAwareMerge`: off unless the user asks for it.
+    var cloudAwareMerge: Bool {
+        didSet {
+            var realConfig = config.config()
+            realConfig.cloudAwareMerge = cloudAwareMerge
             config.update(realConfig)
         }
     }
@@ -1326,7 +1365,11 @@ public final class ImageSequenceViewModel {
         // none.
         var steps: [OperationType] = []
         if !refinementFrames.isEmpty { steps.append(.mergedHorizon) }
+        let rebuildsConsensus = HorizonConsensus.applies(to: config.config())
+          && !(refinementFrames.isEmpty && framesToMerge.isEmpty)
+        if rebuildsConsensus { steps.append(.horizonConsensus) }
         if !framesToMerge.isEmpty { steps.append(.merge) }
+        let sequenceFrames = frames.compactMap(\.frame)
 
         // Raising the modal re-takes the progress baseline, so it is skipped while another
         // run is going — that run's bars would otherwise measure from the wrong place.
@@ -1372,6 +1415,7 @@ public final class ImageSequenceViewModel {
             await frameGraphBuilder.enqueueHorizonRefinement(
               refinementFrames: refinementFrames,
               mergeFrames: framesToMerge,
+              sequenceFrames: sequenceFrames,
               refinementCompletion: { [weak self] frame in
                   guard let self else { return }
                   await MainActor.run {
@@ -1931,6 +1975,7 @@ public final class ImageSequenceViewModel {
         self.useGPUForMerge = config.useGPUForMerge
         self.useGPUForSIFT = config.useGPUForSIFT
         self.useGPUForAKAZE = config.useGPUForAKAZE
+        self.cloudAwareMerge = config.cloudAwareMerge
         self.referenceHorizonSmoothingMaxDistance = config.referenceHorizonSmoothingMaxDistance
         self.useReferenceHorizonBrightnessRefinement = config.useReferenceHorizonBrightnessRefinement
         self.referenceHorizonBrightnessRefinementSearchRadius = config.referenceHorizonBrightnessRefinementSearchRadius
@@ -2057,7 +2102,7 @@ public final class ImageSequenceViewModel {
         }
 
         
-        let imageAccessor = ImageAccessor(
+        var accessor = ImageAccessor(
           config: config,
           imageSequence: imageSequence,
           frameIndexToBaseNameMap: frameIndexToBaseNameMap
@@ -2067,6 +2112,14 @@ public final class ImageSequenceViewModel {
                 self?.frames[frameIndex].saved(image: image, ofType: type, atSize: size)
             }
         }
+        accessor.horizonChangedClosure = { [weak self] frameIndex in
+            Task { @MainActor in
+                guard let self, frameIndex < self.frames.count else { return }
+                self.frames[frameIndex].horizonLinesChanged()
+            }
+        }
+        // the frames' worker tasks take it, so it is not left mutable
+        let imageAccessor = accessor
 
 
         let imageInfo = try await imageSequence.getImageInfo()
@@ -2297,6 +2350,14 @@ public final class ImageSequenceViewModel {
                     if previousState == .mergingHorizon {
                         self.frames[frame.frameIndex].refreshHorizonOverlay()
                         self.frames[frame.frameIndex].refreshFrameHorizonOverlay()
+                    } else if newState == .complete,
+                              HorizonConsensus.applies(to: self.config.config())
+                    {
+                        // A moving sequence's horizon consensus is written after alignment,
+                        // long after the merged mask the overlay was last read from, and it
+                        // is what this frame was just composited with.
+                        self.frames[frame.frameIndex].refreshHorizonOverlay()
+                        self.frames[frame.frameIndex].refreshFrameHorizonOverlay()
                     }
                 }
 
@@ -2467,6 +2528,24 @@ public final class ImageSequenceViewModel {
         self.frames = [FrameViewModel](count: numberOfFrames) {
             i in FrameViewModel(config, i)
         }
+        for frame in frames {
+            frame.onImageAvailabilityChange = { [weak self] added, removed in
+                guard let self else { return }
+                if removed { self.recomputeAvailableModes() } else { self.availableModes.formUnion(added) }
+            }
+        }
+        recomputeAvailableModes()
+    }
+
+    /// The image types at least one frame has (or can produce): what the grid's mode picker offers.
+    /// Kept up to date as frames report changes, so drawing the picker does not walk every frame (and
+    /// stat a file per frame for the horizon mode) on every redraw.
+    var availableModes: Set<FrameViewMode> = []
+
+    func recomputeAvailableModes() {
+        var modes = Set<FrameViewMode>()
+        for frame in frames { modes.formUnion(frame.existingImages); modes.formUnion(frame.producibleImages) }
+        availableModes = modes
     }
 
     func cancelProcessing() {
@@ -2633,6 +2712,7 @@ public final class ImageSequenceViewModel {
     }
 
     private func handleProcessingDone() {
+        Log.i("processing done: render after = \(autoRenderAfterProcessing), skip prompts = \(userPreferences.skipRenderPromptAfterProcessing == true)")
         if autoRenderAfterProcessing {
             // user already said yes in the pre-prompt — render directly
             autoRenderAfterProcessing = false
@@ -2937,12 +3017,27 @@ public final class ImageSequenceViewModel {
     ) {
         Log.d("processing frames from \(startIndex) to \(endIndex)")
         //if isProcessingFrames { return }
+        // A re-process asked for while a run is in flight (the menu items stay enabled) used to
+        // start a second graph over the same frames: the old run's operations were still queued and
+        // writing, and when EITHER run finished it cleared `isProcessingFrames`, dropping the modal
+        // over a run that was still going. This run takes the next generation number so the old
+        // run's completion is ignored, and waits for the old operations to stop before building.
+        let supersedingARun = isProcessingFrames
+        processingGeneration += 1
+        let runGeneration = processingGeneration
         isProcessingFrames = true
         startProcessingModal()
 
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
 
         Task.detached(priority: .medium) { [self] in
+            if supersedingARun {
+                await frameGraphBuilder.cancelAllOperationsAndWait()
+            }
+            // The shared builder is pointed at THIS sequence's config as its run starts (idempotent:
+            // it registers its callback once per manager), so a sequence that was loaded and then
+            // cancelled, or one that is only being looked at, has not taken it over.
+            await frameGraphBuilder.set(configManager: self.config)
             let frameCount = await self.frames.count
             guard let range = Self.processingRange(from: startIndex,
                                                    to: endIndex,
@@ -2993,7 +3088,11 @@ public final class ImageSequenceViewModel {
                   endIndex: clampedEndIndex
                 ) { processingState in
                     Task { @MainActor in
-                        self.isProcessingFrames = false
+                        // only the current run's end ends the run state: a superseded run finishing
+                        // (or being cancelled) must not clear it under the one that replaced it
+                        if self.processingGeneration == runGeneration {
+                            self.isProcessingFrames = false
+                        }
                     }
                 }
             } else {
@@ -3387,6 +3486,7 @@ public final class ImageSequenceViewModel {
                      encoder: FFmpegEncoder,
                      pixelFormat: FFmpegPixelFormat,
                      muxer: FFmpegMuxer,
+                     resolution: OutputResolution = .original,
                      progress: @escaping ProgressCallback,
                      completion: @escaping @Sendable () -> Void,
                      errorCallback: @escaping @Sendable (Error) -> Void)
@@ -3422,6 +3522,7 @@ public final class ImageSequenceViewModel {
                     "\(outputPath)/\(basename)/*.\(realConfig.fileExtension)",        // input images
                 ]
                 arguments += audio.inputArguments
+                arguments += resolution.ffmpegArguments // scale, if asked to
                 arguments += [
                     "-c:v", encoder.rawValue,         // encoder
                     "-pix_fmt", pixelFormat.rawValue, // pixel format

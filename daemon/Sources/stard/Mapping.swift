@@ -23,6 +23,7 @@ enum Mapping {
         case .viewHorizon:               return .horizon
         case .viewMergedHorizon:         return .mergedHorizon
         case .viewUserHorizon:           return .userHorizon
+        case .viewConsensusHorizon:      return .consensusHorizon
         case .viewStarAligned:           return .starAligned
         case .viewFailedStarAligned:     return .failedStarAligned
         case .viewEarthAligned:          return .earthAligned
@@ -46,6 +47,7 @@ enum Mapping {
         case .horizon:                return .viewHorizon
         case .mergedHorizon:          return .viewMergedHorizon
         case .userHorizon:            return .viewUserHorizon
+        case .consensusHorizon:       return .viewConsensusHorizon
         case .starAligned:            return .viewStarAligned
         case .failedStarAligned:      return .viewFailedStarAligned
         case .earthAligned:           return .viewEarthAligned
@@ -348,6 +350,7 @@ enum Mapping {
         out.maxConcurrentKeypointOps = Int32(c.maxConcurrentKeypointOps)
         out.mergeStreamingThresholdMb = Int32(c.mergeStreamingThresholdMB)
         out.useGpuAcceleration = c.useGPUForMerge
+        out.cloudAwareMerge = c.cloudAwareMerge
         // Read-only: not a Config field, so there is nothing for applyExpertConfig to
         // apply it back onto — computed fresh on every outgoing Config so a client
         // always shows the daemon's own machine's hardware, not a stale answer from
@@ -423,6 +426,7 @@ enum Mapping {
             c.maxMatMemoryFraction = min(max(p.maxMatMemoryFraction, Mapping.memoryBudgetFractionRange.lowerBound), Mapping.memoryBudgetFractionRange.upperBound)
         }
         if p.hasUseGpuAcceleration { c.useGPUForMerge = p.useGpuAcceleration }
+        if p.hasCloudAwareMerge { c.cloudAwareMerge = p.cloudAwareMerge }
         // Unknown names are ignored rather than rejected: a newer client may know profiles
         // this daemon does not, and keeping the config's own is the safe answer.
         if p.hasResourceProfile, let profile = ResourceProfile(rawValue: p.resourceProfile) {
@@ -464,6 +468,7 @@ enum Mapping {
         out.muxer        = vi.muxer.rawValue
         out.frameRate    = vi.frameRate.rawValue
         out.encoder      = vi.encoder?.rawValue ?? ""
+        out.outputHeight = Int32(vi.resolution.height)
         return out
     }
 
@@ -489,7 +494,8 @@ enum Mapping {
             encoder: encoder ?? codec.encoder(for: pixFmt),
             pixelFormat: pixFmt,
             muxer: muxer,
-            hasAudio: hasAudio
+            hasAudio: hasAudio,
+            resolution: OutputResolution(height: Int(proto.outputHeight))
         )
     }
 
@@ -566,6 +572,7 @@ enum Mapping {
         case .initial:   return .initial
         case .merged:    return .merged
         case .reference: return .reference
+        case .consensus: return .consensus
         }
     }
 }

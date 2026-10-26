@@ -190,6 +190,19 @@ CI: `gherkin.yml` cli legs build `trail_tools`, run all five tests, the guard gr
 report JSON to exist, and upload `removal-reports` with `if: always()`. **Not run on CI yet**; the first push will show whether the removal steps behave
 on hosted runners (Linux and macOS times are expected at roughly 10 to 15 minutes more per leg, about 9 minutes locally for the five).
 
+## Merge with develop's scenario matrix (2026-10-25)
+
+develop gained the scenario-matrix work (its own `removal_tools` with `star-output-verify`, per-feature params, one CI job per feature, setting steps and the
+ordering rule). This branch's package moved to `trail_tools/` (it is `star-removal-verify` and `star-trail-inject`) and develop was merged in keeping both.
+What changed here: the four removal features use develop's vocabulary (horizon, camera, clean method, open, process, `the run used the requested settings`,
+then the removal Thens) with their `sequence` under `features` in `params.json`; `openSequence16`, `outputFramesWritten` and this branch's three clean-method
+steps are gone (`openAndProcess.feature` went with develop's matrix); the runners are develop's with the removal steps added and the verifier mode taken from
+the run's own clean step. **So the GUI clients now run `removeAirplanes` in automatic mode through the startup prompts, and the desktop special case below
+(selective default, pins only) no longer applies to that feature**; the desktop runner still seeds DETECTION_STRONG for removal features. `gherkin.yml` is
+develop's matrix workflow plus a gated "trail verifier" build step. Local checks after the merge: generate.sh leaves no diff; the Kotlin gherkinTest sources, the
+Xcode UI-test target and the cli test target compile; `swift test` in `trail_tools` passes (23 tests). **Not run:** any scenario, and nothing on CI after the merge.
+The sections below describe the state before it.
+
 ## GUI clients (`@mac-gui`, `@desktop`), 2026-10-16
 
 `removeAirplanes` is now tagged `@cli @mac-gui @desktop`. `GuiFeatureRunner.swift` and `DesktopFeatureRunner.kt` implement `airplanesRemoved`, `satellitesRemoved` and `starsPreserved`, with the cli runner's verifier flags

@@ -266,7 +266,7 @@ public enum HorizonRefinementEffects {
         // In memory and cheap, and the merged masks about to be rebuilt are computed from it -- a run
         // that read the old numbers would rebuild the old horizon.
         for idx in references {
-            await referenceHorizonStatsCache.clearStats(for: idx)
+            await ReferenceHorizonStatsRegistry.shared.clearStats(for: idx)
         }
         await withTaskGroup(of: Void.self) { group in
             for frame in maskFrames { group.addTask { await frame.discardMergedHorizon() } }
@@ -279,7 +279,7 @@ public enum HorizonRefinementEffects {
     /// preserved.  The frames do not have to wait for each other to do it.
     public static func prepareRerun(references: Set<Int>, mergeFrames: [FrameAirplaneRemover]) async {
         for idx in references {
-            await referenceHorizonStatsCache.clearStats(for: idx)
+            await ReferenceHorizonStatsRegistry.shared.clearStats(for: idx)
         }
         await withTaskGroup(of: Void.self) { group in
             for frame in mergeFrames {

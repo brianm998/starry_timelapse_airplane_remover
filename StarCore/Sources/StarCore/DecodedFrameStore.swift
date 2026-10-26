@@ -32,6 +32,18 @@ public final class DecodedFrameStore: @unchecked Sendable {
 
     /// Distinct decodes performed through `load`, for tests and diagnostics.
     public private(set) var decodeCount = 0
+    /// Every `load` call, and how many were answered from a pinned, already-decoded entry.
+    public private(set) var loadCount = 0
+    public private(set) var cacheHitCount = 0
+
+    /// One line for the run's end-of-run log: how much decoding the merges did per frame.
+    public func statsLine(frames: Int) -> String {
+        condition.lock()
+        defer { condition.unlock() }
+        let perFrame = frames > 0 ? String(format: "%.2f", Double(decodeCount) / Double(frames)) : "n/a"
+        return "DecodedFrameStore: \(loadCount) loads, \(cacheHitCount) served from pinned decodes, " +
+               "\(decodeCount) decodes (\(perFrame) per frame over \(frames) frames)"
+    }
 
     /// The actual decode. Replaceable so tests can count calls without real files.
     ///
@@ -102,6 +114,7 @@ public final class DecodedFrameStore: @unchecked Sendable {
     /// The loader behind `image_cache_load`. Synchronous, on the calling native thread.
     public func load(_ filename: String) -> MatWrapper? {
         condition.lock()
+        loadCount += 1
         guard let entry = entries[filename] else {
             // Not pinned: decode uncached.
             condition.unlock()
@@ -110,6 +123,7 @@ public final class DecodedFrameStore: @unchecked Sendable {
         }
         while entry.loading { condition.wait() }
         if let mat = entry.mat {
+            cacheHitCount += 1
             condition.unlock()
             return mat
         }

@@ -31,6 +31,11 @@ enum ExportHandlers {
             let concurrency = config.frameConcurrency
             let total = Int32(frames.count)
 
+            // The state string that marks THIS render's end. The progress stream carries every
+            // sequence-state event the session produces, and the forwarding loop below used to stop
+            // at the first one of any kind, which could end the render's stream early.
+            let doneSentinel = "export-render-done-\(UUID().uuidString)"
+
             // Finish all frames concurrently, respecting the configured limit.
             let finishTask = Task {
                 var done: Int32 = 0
@@ -45,6 +50,8 @@ enum ExportHandlers {
                 await withTaskGroup(of: Void.self) { group in
                     var inFlight = 0
                     for frame in frames {
+                        // A cancelled render must not start more frames.
+                        if Task.isCancelled { break }
                         if inFlight >= concurrency {
                             await group.next()
                             inFlight -= 1
@@ -69,7 +76,7 @@ enum ExportHandlers {
                 }
                 // Signal sequence completion so the stream can end.
                 var ev = Star_V1_SequenceStateEvent()
-                ev.state = "done"
+                ev.state = doneSentinel
                 var prog = Star_V1_ProgressEvent()
                 prog.kind = .sequenceState(ev)
                 cont.yield(prog)
@@ -80,11 +87,19 @@ enum ExportHandlers {
             do {
                 for await event in stream {
                     try Task.checkCancellation()
-                    if let data = try? event.serializedData() {
+                    var outgoing = event
+                    var isTheEnd = false
+                    // This render's own sentinel is what ends the loop, and no other sequence-state
+                    // event. The client still sees the "done" it has always seen.
+                    if case .sequenceState(var state) = event.kind, state.state == doneSentinel {
+                        state.state = "done"
+                        outgoing.kind = .sequenceState(state)
+                        isTheEnd = true
+                    }
+                    if let data = try? outgoing.serializedData() {
                         await transport.sendStreamItem(id: id, payload: data)
                     }
-                    // Stop after the sequence_state "done" sentinel.
-                    if case .sequenceState(_) = event.kind { break }
+                    if isTheEnd { break }
                 }
             } catch is CancellationError {
                 finishTask.cancel()
@@ -209,7 +224,12 @@ enum ExportHandlers {
         if let fromRequest = Mapping.videoInfo(from: request, hasAudio: hasAudio) {
             return fromRequest
         }
-        return opened ?? Mapping.videoInfoFromConfig(config)
+        // the resolution is a choice of this render, so it is kept when the rest is not the request's
+        var base = opened ?? Mapping.videoInfoFromConfig(config)
+        base = VideoInfo(frameRate: base.frameRate, codec: base.codec, encoder: base.encoder,
+                         pixelFormat: base.pixelFormat, muxer: base.muxer, hasAudio: base.hasAudio,
+                         resolution: OutputResolution(height: Int(request.outputHeight)))
+        return base
     }
 
     // Where an export writes its video: the request's path, or if it left that empty (the

@@ -77,6 +77,19 @@ final class StepProgressReportTests: XCTestCase {
         XCTAssertFalse(sent.isComplete)
     }
 
+    /// Work the next run will make again goes to the client flagged, so its panel can say why a sequence that looks finished is not.
+    func testASequenceToBeRebuiltIsSentFlagged() {
+        let progress = SequenceProgress(
+            sequenceName: "older", frameCount: 3, framesComplete: 0,
+            steps: SequenceProgressSurvey.steps(for: [.merge], frameCount: 3, framesOnDisk: [:]),
+            staleStages: [.horizonConsensus, .outliers, .output])
+        let sent = StepProgressReport.proto(progress)
+        XCTAssertTrue(sent.needsRebuild)
+        XCTAssertFalse(sent.isComplete)
+        XCTAssertFalse(StepProgressReport.proto(SequenceProgress(
+            sequenceName: "current", frameCount: 3, framesComplete: 3, steps: [])).needsRebuild)
+    }
+
     func testASequenceWithEveryFrameWrittenIsComplete() {
         let progress = SequenceProgress(
             sequenceName: "done", frameCount: 3, framesComplete: 3,

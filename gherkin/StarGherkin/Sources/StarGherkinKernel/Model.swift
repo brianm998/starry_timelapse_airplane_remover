@@ -25,12 +25,15 @@ public struct Step: Sendable {
 }
 
 public struct Feature: Sendable {
+    /// The feature file's basename, which keys its per-feature params.
+    public let id: String
     public let name: String
     public let tags: [String]
     public let scenario: String
     public let steps: [Step]
 
-    public init(name: String, tags: [String], scenario: String, steps: [Step]) {
+    public init(id: String, name: String, tags: [String], scenario: String, steps: [Step]) {
+        self.id = id
         self.name = name
         self.tags = tags
         self.scenario = scenario
@@ -40,10 +43,11 @@ public struct Feature: Sendable {
 
 /// Placeholder values. `Params.defaults` and `Params.overrides` are generated from `params.json`.
 public enum Params {
-    /// Resolves `{name}`: env var `STAR_GHERKIN_<UPPER_NAME>`, then the client's override, then the default.
-    public static func resolve(_ name: String, client: String, environment: [String: String]) -> String? {
+    /// Resolves `{name}`: env var `STAR_GHERKIN_<UPPER_NAME>`, then the feature's value, then the client's override, then the default.
+    public static func resolve(_ name: String, client: String, feature: String? = nil, environment: [String: String]) -> String? {
         let envName = "STAR_GHERKIN_" + name.uppercased().map { $0.isLetter || $0.isNumber ? $0 : "_" }.map(String.init).joined()
         if let v = environment[envName], !v.isEmpty { return v }
+        if let f = feature, let v = features[f]?[name] { return v }
         if let v = overrides[client]?[name] { return v }
         return defaults[name]
     }
@@ -61,10 +65,10 @@ public enum Params {
     }
 
     /// `text` with every `{placeholder}` replaced; nil if one has no value.
-    public static func substitute(_ text: String, client: String, environment: [String: String]) -> String? {
+    public static func substitute(_ text: String, client: String, feature: String? = nil, environment: [String: String]) -> String? {
         var out = text
         for p in placeholders(in: text) {
-            guard let v = resolve(p, client: client, environment: environment) else { return nil }
+            guard let v = resolve(p, client: client, feature: feature, environment: environment) else { return nil }
             out = out.replacingOccurrences(of: "{\(p)}", with: v)
         }
         return out

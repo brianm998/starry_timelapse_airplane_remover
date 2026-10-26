@@ -3,7 +3,7 @@ name: Removal measurements
 # Phase 4 of the removal-validation work: run `star` on a7sii_10 (JPEG) and a7sii_10_crop16 (16-bit TIFF) with every
 # clean method, check the output with `star-removal-verify --report-only`, and publish the numbers (job summary +
 # artifacts) so the thresholds in gherkin/removal-thresholds.json can be set from real Linux and macOS distributions.
-# Manual only: it is a measurement, not a gate. See GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md and gherkin/README.md.
+# Manual only: it is a measurement, not a gate. See plans/GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md and gherkin/README.md.
 #
 # Windows has no `star` cli build in this repo (only stard, via the desktop leg), so it is not measured here; its CPU
 # path is the same as Linux's. The verifier itself is plain Swift on top of StarCore.

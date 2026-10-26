@@ -102,7 +102,7 @@ struct StarRemovalVerify: ParsableCommand {
         try enc.encode(rep).write(to: URL(fileURLWithPath: report))
 
         printSummary(rep)
-        if let temp { print("note: --temp \(temp) decision diagnostics are not implemented yet (see GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md)") }
+        if let temp { print("note: --temp \(temp) decision diagnostics are not implemented yet (see plans/GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md)") }
         print("report: \(report)\ncrops: \(crops)")
         if !reportOnly && !rep.summary.ok { throw ExitCode(rep.summary.labelErrors > 0 && rep.summary.failed == 0 ? 2 : 1) }
     }

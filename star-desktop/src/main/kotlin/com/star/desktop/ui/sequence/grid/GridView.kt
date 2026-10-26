@@ -51,8 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameState
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.ui.sequence.SequenceViewModel
-import com.star.desktop.ui.components.drawHorizonLine
-import com.star.desktop.ui.components.horizonLineColor
+import com.star.desktop.ui.components.drawHorizonLines
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.FrameInfo
@@ -127,6 +126,7 @@ private fun GridCell(
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
     var overlay by remember(index) { mutableStateOf<GetHorizonOverlayResponse?>(null) }
+    val visibleHorizonKinds by vm.visibleHorizonLineKinds.collectAsState()
     LaunchedEffect(index, viewMode, state, revision) { thumb = vm.loadThumb(index, viewMode) }
     LaunchedEffect(index, state, horizonVersion) { info = vm.frameInfo(index) }
     LaunchedEffect(index, showHorizon, state, horizonVersion) {
@@ -180,12 +180,11 @@ private fun GridCell(
             if (t != null) {
                 Image(bitmap = t, contentDescription = localized("ui.frame_n", index), modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
-            // Per-cell horizon line (orange while pending, else by kind), scaled from the overlay's draw space.
+            // Per-cell horizon lines of the kinds switched on (the composite's orange while pending), scaled from the overlay's draw space.
             val ov = overlay
             if (ov != null && ov.exists) {
-                val lineColor = horizonLineColor(ov.kind, ov.refinementPending)
                 Canvas(Modifier.fillMaxSize()) {
-                    drawHorizonLine(ov, size.width, size.height, lineColor, 1.5.dp.toPx()) { it }
+                    drawHorizonLines(ov, visibleHorizonKinds, size.width, size.height, 1.5.dp.toPx()) { it }
                 }
             }
             if (state != null) {

@@ -149,12 +149,17 @@ OCVFeatureSetRef ia_debug_akaze_opencv(MatWrapperRef img, MatWrapperRef mask,
 // Compute homography for each neighbor. Returns count of warp infos written.
 // outWarpInfos must point to an array of at least neighborCount elements.
 // On error, returns 0 and sets errorMsg.
+//
+// imageWidth/imageHeight are the full-resolution frame's, which the keypoints are in.  The
+// ground is fitted as a camera rotation about the frame's centre, so earth alignment
+// needs them and fails without; the sky does not read them.
 int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                           int frameIndex,
                           const AlignmentNeighborData *neighbors, int neighborCount,
                           FeatureMatchMethod matchMethod,
                           AlignmentType alignmentType,
                           int maxKeypoints, bool writeDebugImages,
+                          int imageWidth, int imageHeight,
                           AlignmentUpdateFunc updateHandler, void *updateContext,
                           AlignmentWarpInfoData *outWarpInfos,
                           const char **errorMsg);
@@ -191,6 +196,40 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 // GPUAlignedMergeFunc and GPU_MERGE_BATCHING_FIX.md) — rather than warping
 // each neighbour with its own separate GPU round-trip; on any failure the
 // whole frame's neighbours are re-warped on the CPU, no partial fallback.
+//
+// cloudAware turns on a second stage after the merge above, for clouds that move
+// against the stars (see CLOUD_AWARE_MERGE_IMPLEMENTATION.md, and the "Cloud-aware
+// merge" section of ImageAligner.cpp).  The star aligned merge takes each pixel of a
+// moving cloud from a different one of its nine sources, which bands and repeats the
+// cloud.  The stage measures how the cloud moves relative to the stars, merges the
+// neighbours a second time aligned to the cloud, and uses that merge wherever it
+// explains the base frame better than the star merge does, with the stars put back
+// from the star merge.  Trails are still single-frame outliers in the cloud aligned
+// stack, so they are still removed.  Wherever there is no moving cloud the result is
+// the star merge, byte for byte.
+//
+// Applies to every path (batched GPU, resident CPU, streaming); on the GPU path the
+// stage itself runs on the CPU afterwards.  Ignored under includeAll.  false behaves
+// exactly as this function did before the flag existed, and ignores skyMask and
+// cloudDebugDir.
+//
+// skyMask (nullable, CV_8UC1, non-zero = sky) keeps the stage off the ground: the
+// star aligned neighbours' ground moves by the star motion, the motion search locks
+// onto it, and it would cost time for an effect the composite then discards.  Null
+// means the whole frame is sky.  The stage works only where the star merge can be
+// trusted, which is less than the mask says: the mask intersected with itself warped
+// by each neighbour's homography (the neighbours' lifted ground contaminates the merge
+// above the horizon, and the composite replaces it), pulled in by the reach of the
+// error filters.
+//
+// The stage also stops, leaving the star merge as it was, when too few tiles of
+// trusted sky show cloud moving against the stars.  That is nearly every clear frame,
+// and costs a fraction of a CPU-second.
+//
+// cloudDebugDir (nullable) is where the stage writes cloud-alpha-<baseFrameIndex>.tif
+// (8-bit, the blend weight times 255) and cloud-velocity-<baseFrameIndex>.txt (the
+// per-tile cloud velocity in full resolution pixels per frame), for checking what it
+// decided.  Nothing is written when it is null.
 MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIndex,
                                         const AlignmentNeighborData *neighbors,
                                         int neighborCount,
@@ -202,6 +241,9 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                         int64_t streamingThresholdBytes,
                                         int loadConcurrency,
                                         bool useGPU,
+                                        bool cloudAware,
+                                        MatWrapperRef skyMask,
+                                        const char *cloudDebugDir,
                                         int *outWarpCount,
                                         const char **errorMsg);
 
@@ -215,13 +257,19 @@ MatWrapperRef ia_accumulate_horizon_masks(const char **filenames, int count);
 
 // Add a single in-memory horizon mask to a running CV_32S pixel-count accumulator.
 // Pass NULL for `accum` on the first call; pass the previous result on subsequent calls.
-// Caller must release the returned ref (and the old accum if replacing it).
+// `accum` is updated IN PLACE (no copy of the running total) and the returned ref shares its
+// buffer, so the caller must not use `accum` concurrently with this call. If the call fails
+// (NULL result, e.g. a size mismatch) `accum` is unchanged. Caller must release the returned
+// ref (and the old accum if replacing it).
 MatWrapperRef ia_accumulate_one_horizon_mask(MatWrapperRef accum, MatWrapperRef mask);
 
 // Load horizon masks from files and add them to an existing CV_32S accumulator.
 // Pass NULL for `accum` to start a fresh accumulation from files only.
 // Caller must release the returned ref.
-MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum, const char **filenames, int count);
+// `outLoaded`, if non-NULL, is `count` bytes: 1 for each file that actually loaded and was added,
+// 0 for each that was missing. The vote has to be against the masks that are really in the total.
+MatWrapperRef ia_accumulate_from_files(MatWrapperRef accum, const char **filenames, int count,
+                                       uint8_t *outLoaded);
 
 // Apply majority-vote threshold to a CV_32S accumulator and return a binary mask.
 // Pixels seen in more than half of `total_count` frames become white (255), rest black (0).
@@ -271,6 +319,16 @@ MatWrapperRef ia_debug_warp(MatWrapperRef src, MatWrapperRef homography, bool us
 // release the result.
 MatWrapperRef ia_debug_median_merge(MatWrapperRef *sources, int count, MatWrapperRef misses,
                                     double outlierThreshold, bool includeAll, bool useGPU);
+
+// --- Test-only: whether the cloud-aware stage works on a region or the whole frame ---
+
+// The cloud-aware stage (see ia_align_and_median_merge) computes only inside the region
+// its blend weight can reach, which is what makes it nearly free on a clear frame.  The
+// region is derived from an upper bound on the weight and the stage is built so that
+// restricting it changes nothing; this switches the restriction off so a test can hold
+// the one to the other.  Process-wide, and on by default: restore it when done.  Not
+// meant to be a stable part of the C API otherwise.
+void ia_debug_set_cloud_region_restriction(bool restrictToRegion);
 
 #ifdef __cplusplus
 }

@@ -111,11 +111,12 @@ struct Stard: AsyncParsableCommand {
         // client quits. Handling it stops each of those normal shutdowns leaving a run marker
         // for the next daemon to report as a crash, and gives in-flight sessions a chance to
         // stop rather than being cut off mid-frame.
-        StarShutdown.install(clientName: "stard") {
+        @Sendable func closeAllSessions() async {
             for session in await sessions.all {
                 await session.close()   // stops the run and writes out pending edits
             }
         }
+        StarShutdown.install(clientName: "stard") { await closeAllSessions() }
 
         Log.i("stard: ready (scratch=\(scratchDir)) pid=\(ProcessInfo.processInfo.processIdentifier)")
 
@@ -151,8 +152,12 @@ struct Stard: AsyncParsableCommand {
             reader.start()
         }
 
-        // stdin EOF is the daemon's normal exit — the client closed the pipe.  Clearing the
-        // marker here is what makes a *missing* clean exit meaningful.
+        // stdin EOF is the daemon's normal exit — the client closed the pipe. The same close
+        // `Daemon.Shutdown` and SIGTERM run: stop the run in flight and write out pending edits,
+        // rather than exiting with a session's last edits unsaved.
+        await closeAllSessions()
+
+        // Clearing the marker here is what makes a *missing* clean exit meaningful.
         await RunMarkerStore.shared.finish()
 
         await TaskWaiter.shared.finish()

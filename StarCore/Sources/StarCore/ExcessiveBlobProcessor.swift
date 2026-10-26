@@ -57,12 +57,12 @@ public class ExcessiveBlobProcessor: AbstractBlobProcessor {
           .frameState(.filter3),
 
           // try to combine lines in another way
-          .linearBlobExtender(.init(minBlobSize: 30,
-                                    lineExtension: 25,
-                                    innerSearch: 15,
-                                    maxIterationCount: 4,
-                                    scoreMultiplier: 8.1,
-                                    sideIterationPixels: 5)),
+          // `.linearBlobExtender` used to run here and is deliberately gone: it cannot absorb
+          // anything. Its `iterationBlob` starts out nil and is only ever set inside the branch
+          // that already requires it to be non-nil (LinearBlobExtender.swift, maybeAbsorb), so
+          // every blob falls out of handleIteration untouched and the blob map comes back as it
+          // went in. Output is identical without it. The step type stays in the enum for saved
+          // configs and CustomBlobProcessor.
 
           .frameState(.filter4),
 

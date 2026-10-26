@@ -43,7 +43,7 @@ final class ArtifactInputsTests: XCTestCase {
     func testStagesAreDeclaredInDependencyOrder() {
         XCTAssertEqual(ArtifactStage.allCases,
                        [.horizon, .mergedHorizon, .keypoints,
-                        .alignment, .outliers, .output],
+                        .alignment, .horizonConsensus, .outliers, .output],
                        "andDownstream slices allCases, so the declaration order IS the " +
                        "dependency order — reordering these silently breaks the cascade")
     }
@@ -51,13 +51,16 @@ final class ArtifactInputsTests: XCTestCase {
     func testDownstreamOfAStageIncludesItselfAndEverythingAfter() {
         XCTAssertEqual(ArtifactStage.horizon.andDownstream,
                        [.horizon, .mergedHorizon, .keypoints,
-                        .alignment, .outliers, .output])
+                        .alignment, .horizonConsensus, .outliers, .output])
         XCTAssertEqual(ArtifactStage.mergedHorizon.andDownstream,
-                       [.mergedHorizon, .keypoints, .alignment, .outliers, .output])
+                       [.mergedHorizon, .keypoints, .alignment, .horizonConsensus,
+                        .outliers, .output])
         XCTAssertEqual(ArtifactStage.keypoints.andDownstream,
-                       [.keypoints, .alignment, .outliers, .output])
+                       [.keypoints, .alignment, .horizonConsensus, .outliers, .output])
         XCTAssertEqual(ArtifactStage.alignment.andDownstream,
-                       [.alignment, .outliers, .output])
+                       [.alignment, .horizonConsensus, .outliers, .output])
+        XCTAssertEqual(ArtifactStage.horizonConsensus.andDownstream,
+                       [.horizonConsensus, .outliers, .output])
         XCTAssertEqual(ArtifactStage.outliers.andDownstream, [.outliers, .output])
         XCTAssertEqual(ArtifactStage.output.andDownstream, [.output])
     }
@@ -95,7 +98,26 @@ final class ArtifactInputsTests: XCTestCase {
             .staleStages(comparedTo: ArtifactInputs.current(from: before))
 
         XCTAssertEqual(stale, [.horizon, .mergedHorizon, .keypoints,
-                               .alignment, .outliers, .output])
+                               .alignment, .horizonConsensus, .outliers, .output])
+    }
+
+    /// The connector's neighbour bound decides which blobs join, so moving it off the default
+    /// (or to 0, unbounded) invalidates the outliers and the output; leaving it at the default
+    /// must leave a record exactly as it was before the setting existed.
+    func testTheLineConnectorHopBoundInvalidatesOutliersOnlyOffTheDefault() {
+        var base = config()
+        base.cleanMethod = .selective
+        var unbounded = base
+        unbounded.linearConnectorNeighborHops = 0
+        var wider = base
+        wider.linearConnectorNeighborHops = 5
+
+        let current = ArtifactInputs.current(from: base)
+        XCTAssertNil(current.stages[ArtifactStage.outliers.rawValue]?["linearConnectorNeighborHops"],
+                     "the default must not add a key an existing record lacks")
+        XCTAssertEqual(ArtifactInputs.current(from: unbounded).staleStages(comparedTo: current), [.outliers, .output])
+        XCTAssertEqual(ArtifactInputs.current(from: wider).staleStages(comparedTo: current), [.outliers, .output])
+        XCTAssertEqual(ArtifactInputs.current(from: base).staleStages(comparedTo: current), [])
     }
 
     func testAKeypointChangeInvalidatesTheKeypointsAndWhatConsumesThem() {
@@ -107,7 +129,7 @@ final class ArtifactInputsTests: XCTestCase {
         let stale = ArtifactInputs.current(from: after)
             .staleStages(comparedTo: ArtifactInputs.current(from: before))
 
-        XCTAssertEqual(stale, [.keypoints, .alignment, .outliers, .output],
+        XCTAssertEqual(stale, [.keypoints, .alignment, .horizonConsensus, .outliers, .output],
                        "nothing recorded here feeds back into the horizon masks, but " +
                        "everything after the keypoints was built from them")
     }
@@ -142,13 +164,32 @@ final class ArtifactInputsTests: XCTestCase {
 
         let stale = current.staleStages(comparedTo: builtByAnEarlierStar)
 
-        XCTAssertEqual(stale, [.keypoints, .alignment, .outliers, .output],
+        XCTAssertEqual(stale, [.keypoints, .alignment, .horizonConsensus, .outliers, .output],
                        "a detection-code change cannot have moved a horizon mask, and " +
                        "rebuilding those would cost the whole sequence (got \(stale))")
         XCTAssertEqual(current.differences(from: builtByAnEarlierStar)[.keypoints],
                        ["detectionAlgorithmVersion 1 -> " +
                           "\(ArtifactInputs.detectionAlgorithmVersion)"],
                        "and the log has to be able to name the reason")
+    }
+
+    /// The fitting code gets its own lever, so a change to it re-fits the homographies
+    /// without throwing away the keypoints they are fitted from, which cost far more.
+    func testBumpingTheAlignmentVersionLeavesTheKeypointsAlone() {
+        let alignment = ArtifactStage.alignment.rawValue
+        let current = ArtifactInputs.current(from: config())
+        XCTAssertEqual(current.stages[alignment]?["alignmentAlgorithmVersion"],
+                       "\(ArtifactInputs.alignmentAlgorithmVersion)")
+
+        var stages = current.stages
+        stages[alignment]?["alignmentAlgorithmVersion"] = "1"
+        let fittedByAnEarlierStar = ArtifactInputs(version: current.version, stages: stages)
+
+        XCTAssertEqual(current.staleStages(comparedTo: fittedByAnEarlierStar),
+                       [.alignment, .horizonConsensus, .outliers, .output])
+        XCTAssertEqual(current.differences(from: fittedByAnEarlierStar)[.alignment],
+                       ["alignmentAlgorithmVersion 1 -> " +
+                          "\(ArtifactInputs.alignmentAlgorithmVersion)"])
     }
 
     /// Every temp directory written by 0.11.4 or 0.11.5 is in this state: a record at the
@@ -169,7 +210,7 @@ final class ArtifactInputsTests: XCTestCase {
                        "waved through as an unreadable format")
 
         XCTAssertEqual(current.staleStages(comparedTo: pre),
-                       [.keypoints, .alignment, .outliers, .output],
+                       [.keypoints, .alignment, .horizonConsensus, .outliers, .output],
                        "the key appearing at all is what invalidates these — its value " +
                        "is never compared against anything, because they have none")
 
@@ -180,20 +221,140 @@ final class ArtifactInputsTests: XCTestCase {
         XCTAssertTrue(ArtifactInputs.current(from: c).staleStages(comparedTo: stored).isEmpty)
     }
 
-    /// The horizon stages deliberately have no equivalent, and adding one is not a
-    /// like-for-like decision: `horizon` leads the dependency order, so a version there
-    /// takes the merged masks, every keypoint set and every homography with it — a full
-    /// reprocess, against the keypoint lever's re-alignment. Change this test when a
-    /// horizon change actually moves a mask, and not before.
-    func testOnlyTheKeypointStageRecordsACodeVersion() {
-        let inputs = ArtifactInputs.current(from: config())
-        for stage in [ArtifactStage.horizon, .mergedHorizon] {
-            let versionKeys = (inputs.stages[stage.rawValue] ?? [:]).keys
-              .filter { $0.lowercased().contains("algorithmversion") }
-            XCTAssertTrue(versionKeys.isEmpty,
-                          "\(stage) records \(versionKeys), which invalidates it and " +
-                          "everything downstream on any star upgrade that bumps it")
+    /// The horizon stages record a code version only where the code behind it builds
+    /// something, because `horizon` leads the dependency order: a version there takes the
+    /// merged masks, every keypoint set and every homography with it — a full reprocess,
+    /// against the keypoint lever's re-alignment.
+    ///
+    /// A static sequence's merged mask comes from the temporal median
+    /// (`TemporalHorizonDetector`), so the merged stage records that method's version — but
+    /// only where the merge runs, a static sequence with no painted reference.  A moving
+    /// sequence's per-frame masks come from `CombinedHorizonDetector`, so the horizon stage
+    /// records its version there and nowhere else.
+    func testTheHorizonStagesRecordACodeVersionOnlyWhereItBuildsSomething() {
+        var moving = config()
+        moving.tripodHeadWasMoving = true
+        let movingInputs = ArtifactInputs.current(from: moving)
+        XCTAssertEqual(movingInputs.stages[ArtifactStage.horizon.rawValue]?["movingHorizonDetectionAlgorithmVersion"],
+                       String(ArtifactInputs.movingHorizonDetectionAlgorithmVersion))
+        let movingMergedVersions = (movingInputs.stages[ArtifactStage.mergedHorizon.rawValue] ?? [:]).keys
+          .filter { $0.lowercased().contains("algorithmversion") }
+        XCTAssertTrue(movingMergedVersions.isEmpty, "got \(movingMergedVersions)")
+
+        var painted = config()
+        painted.tripodHeadWasMoving = false
+        painted.hasStaticReferenceHorizon = true
+        var legacy = moving
+        legacy.useCombinedHorizonDetection = false
+        var noHorizon = moving
+        noHorizon.horizonDetectionEnabled = false
+        for (name, c) in [("a painted static sequence", painted),
+                          ("the legacy detector", legacy),
+                          ("horizon detection off", noHorizon)] {
+            let inputs = ArtifactInputs.current(from: c)
+            for stage in [ArtifactStage.horizon, .mergedHorizon] {
+                let versionKeys = (inputs.stages[stage.rawValue] ?? [:]).keys
+                  .filter { $0.lowercased().contains("algorithmversion") }
+                XCTAssertTrue(versionKeys.isEmpty,
+                              "\(name): \(stage) records \(versionKeys), which invalidates it and " +
+                              "everything downstream on any star upgrade that bumps it")
+            }
         }
+
+        var unpainted = config()
+        unpainted.tripodHeadWasMoving = false
+        let inputs = ArtifactInputs.current(from: unpainted)
+        let horizonVersions = (inputs.stages[ArtifactStage.horizon.rawValue] ?? [:]).keys
+          .filter { $0.lowercased().contains("algorithmversion") }
+        XCTAssertTrue(horizonVersions.isEmpty,
+                      "a static sequence detects no per-frame masks; got \(horizonVersions)")
+        XCTAssertEqual(inputs.stages[ArtifactStage.mergedHorizon.rawValue]?["temporalHorizonAlgorithmVersion"],
+                       String(TemporalHorizonDetector.algorithmVersion))
+    }
+
+    /// A moving run whose masks predate the detector version — the band and working-size
+    /// change of 6804f8f3 — rebuilds from its first-round masks down, once; a static run
+    /// recorded before the key is left as it was.
+    func testAMovingRunFromBeforeTheDetectorVersionRebuildsOnce() throws {
+        let key = "movingHorizonDetectionAlgorithmVersion"
+        var moving = config()
+        moving.tripodHeadWasMoving = true
+        defer { tearDownPath(moving.tempOutputPath) }
+        let current = ArtifactInputs.current(from: moving)
+
+        var stages = current.stages
+        stages[ArtifactStage.horizon.rawValue]?.removeValue(forKey: key)
+        let detectedBeforeTheKey = ArtifactInputs(version: current.version, stages: stages)
+        XCTAssertEqual(current.staleStages(comparedTo: detectedBeforeTheKey),
+                       Set(ArtifactStage.horizon.andDownstream))
+        XCTAssertEqual(current.differences(from: detectedBeforeTheKey)[.horizon]?.count, 1)
+
+        try current.save(toTempOutputPath: moving.tempOutputPath)
+        let stored = try XCTUnwrap(ArtifactInputs.load(fromTempOutputPath: moving.tempOutputPath))
+        XCTAssertTrue(ArtifactInputs.current(from: moving).staleStages(comparedTo: stored).isEmpty)
+
+        var fixed = config()
+        fixed.tripodHeadWasMoving = false
+        let fixedInputs = ArtifactInputs.current(from: fixed)
+        XCTAssertNil(fixedInputs.stages[ArtifactStage.horizon.rawValue]?[key])
+    }
+
+    // MARK: - the horizon consensus
+
+    /// The consensus runs only on a moving camera with its ground aligned, so only there do
+    /// its switch and its code version say anything about what was built.
+    func testTheHorizonConsensusIsRecordedOnlyWhereItCanRun() {
+        var moving = config()
+        moving.tripodHeadWasMoving = true
+        moving.allowEarthAlignment = true
+        let recorded = ArtifactInputs.current(from: moving).stages[ArtifactStage.horizonConsensus.rawValue]
+        XCTAssertEqual(recorded?["useHorizonConsensus"], "true")
+        XCTAssertEqual(recorded?["horizonConsensusAlgorithmVersion"],
+                       String(HorizonConsensus.algorithmVersion))
+
+        var fixed = moving
+        fixed.tripodHeadWasMoving = false
+        var noGround = moving
+        noGround.allowEarthAlignment = false
+        for c in [fixed, noGround] {
+            let stage = ArtifactInputs.current(from: c).stages[ArtifactStage.horizonConsensus.rawValue]
+            XCTAssertNil(stage?["useHorizonConsensus"])
+            XCTAssertNil(stage?["horizonConsensusAlgorithmVersion"])
+        }
+    }
+
+    /// Switching it changes the horizon the outlier subtraction and the merge composite with,
+    /// so both are rebuilt — and nothing the alignment depends on is.
+    func testSwitchingTheHorizonConsensusRebuildsWhatCompositesWithIt() {
+        var on = config()
+        on.tripodHeadWasMoving = true
+        on.allowEarthAlignment = true
+        var off = on
+        off.useHorizonConsensus = false
+        XCTAssertEqual(ArtifactInputs.current(from: off)
+                         .staleStages(comparedTo: ArtifactInputs.current(from: on)),
+                       [.horizonConsensus, .outliers, .output])
+
+        var fixedOn = config()
+        fixedOn.tripodHeadWasMoving = false
+        var fixedOff = fixedOn
+        fixedOff.useHorizonConsensus = false
+        XCTAssertEqual(ArtifactInputs.current(from: fixedOff)
+                         .staleStages(comparedTo: ArtifactInputs.current(from: fixedOn)),
+                       [], "a fixed camera never had a consensus to rebuild")
+    }
+
+    /// Every sequence processed before the consensus existed has no record of it, and keeps
+    /// the output it has.
+    func testARecordFromBeforeTheHorizonConsensusRebuildsNothing() {
+        var moving = config()
+        moving.tripodHeadWasMoving = true
+        moving.allowEarthAlignment = true
+        let current = ArtifactInputs.current(from: moving)
+        var stages = current.stages
+        stages[ArtifactStage.horizonConsensus.rawValue] = nil
+        let before = ArtifactInputs(version: current.version, stages: stages)
+        XCTAssertEqual(current.staleStages(comparedTo: before), [])
     }
 
     // MARK: - settings that must invalidate
@@ -263,6 +424,8 @@ final class ArtifactInputsTests: XCTestCase {
             ("pixelThreshold",             { $0.pixelThreshold = 2.5 }),
             ("numberAlignedNeighborFrames", { $0.numberAlignedNeighborFrames = 12 }),
             ("horizonDetectionEnabled",    { $0.horizonDetectionEnabled = false }),
+            // It changes the star aligned image this stage writes.
+            ("cloudAwareMerge",            { $0.cloudAwareMerge = true }),
         ]
         for (name, mutate) in mutations {
             var after = base
@@ -277,6 +440,40 @@ final class ArtifactInputsTests: XCTestCase {
         }
     }
 
+    /// The cloud-aware merge is recorded only while it is on, so that a record written
+    /// before the setting existed — which is what every existing temp dir holds — is the
+    /// record a flag-off run still computes.  Recording it unconditionally would make an
+    /// absent key count as a change and discard every sequence's alignment, outliers and
+    /// output on the first run after upgrading.
+    func testCloudAwareMergeIsRecordedOnlyWhileItIsOn() {
+        let alignment = ArtifactStage.alignment.rawValue
+
+        let off = ArtifactInputs.current(from: config())
+        XCTAssertNil(off.stages[alignment]?["cloudAwareMerge"],
+                     "a flag-off record must not mention the setting")
+
+        var onConfig = config()
+        onConfig.cloudAwareMerge = true
+        let on = ArtifactInputs.current(from: onConfig)
+        XCTAssertEqual(on.stages[alignment]?["cloudAwareMerge"], "true")
+
+        // Everything else the record holds is what a flag-off run records: the setting
+        // is the only thing that distinguishes the two, and only in the alignment stage.
+        var stages = on.stages
+        stages[alignment]?.removeValue(forKey: "cloudAwareMerge")
+        XCTAssertEqual(ArtifactInputs(version: on.version, stages: stages), off)
+
+        // On to off invalidates as well, since the record that had the key differs.
+        let turnedOff = off.staleStages(comparedTo: on)
+        XCTAssertTrue(turnedOff.contains(.alignment), "got \(turnedOff)")
+        XCTAssertTrue(turnedOff.contains(.output), "got \(turnedOff)")
+
+        // And nothing upstream of alignment is touched either way.
+        let turnedOn = on.staleStages(comparedTo: off)
+        XCTAssertFalse(turnedOn.contains(.keypoints), "got \(turnedOn)")
+        XCTAssertFalse(turnedOn.contains(.horizon), "got \(turnedOn)")
+    }
+
     /// A fixed camera has no ground to align — the earth branch median merges the static
     /// neighbours and reads none of the earth settings — so the toggle cannot have changed
     /// anything that is on disk.
@@ -289,6 +486,41 @@ final class ArtifactInputsTests: XCTestCase {
         let stale = ArtifactInputs.current(from: after)
             .staleStages(comparedTo: ArtifactInputs.current(from: base))
         XCTAssertTrue(stale.isEmpty, "got \(stale)")
+    }
+
+    /// The ground fit's lever is recorded only where a ground is fitted, so a bump — or
+    /// the key first appearing, which is what every existing moving-camera record sees,
+    /// once — re-aligns exactly those sequences, keeps their keypoints, and leaves every
+    /// other sequence's alignment where it was.
+    func testTheGroundFitVersionReachesOnlySequencesThatFitTheirGround() {
+        let alignment = ArtifactStage.alignment.rawValue
+        let key = "earthAlignmentAlgorithmVersion"
+
+        var moving = config()
+        moving.tripodHeadWasMoving = true
+        let current = ArtifactInputs.current(from: moving)
+        XCTAssertEqual(current.stages[alignment]?[key],
+                       "\(ArtifactInputs.earthAlignmentAlgorithmVersion)")
+
+        var stages = current.stages
+        stages[alignment]?.removeValue(forKey: key)
+        let fittedBeforeTheKey = ArtifactInputs(version: current.version, stages: stages)
+        // the horizon consensus is carried along the ground those fits describe
+        XCTAssertEqual(current.staleStages(comparedTo: fittedBeforeTheKey),
+                       [.alignment, .horizonConsensus, .outliers, .output])
+
+        var fixed = config()
+        fixed.tripodHeadWasMoving = false
+        var earthOff = moving
+        earthOff.allowEarthAlignment = false
+        var noHorizon = moving
+        noHorizon.horizonDetectionEnabled = false
+        for (name, other) in [("a fixed camera", fixed),
+                              ("earth alignment off", earthOff),
+                              ("horizon detection off", noHorizon)] {
+            XCTAssertNil(ArtifactInputs.current(from: other).stages[alignment]?[key],
+                         "\(name) fits no ground, so must not record the ground fit's version")
+        }
     }
 
     func testSettingsFedToOutlierDetectionInvalidateIt() {
@@ -438,6 +670,65 @@ final class ArtifactInputsTests: XCTestCase {
         let stale = ArtifactInputs.current(from: after)
             .staleStages(comparedTo: ArtifactInputs.current(from: base))
         XCTAssertTrue(stale.isEmpty, "got \(stale)")
+    }
+
+    /// A static sequence's merged mask comes from the temporal median or from the per-frame
+    /// vote, and the two give different masks, so switching between them — or changing how
+    /// many frames the median is taken over — rebuilds it.
+    func testTheStaticHorizonMethodInvalidatesTheMergedHorizon() {
+        var base = config()
+        base.tripodHeadWasMoving = false
+        base.useTemporalStaticHorizon = true
+
+        var voted = base
+        voted.useTemporalStaticHorizon = false
+        XCTAssertTrue(ArtifactInputs.current(from: voted)
+                        .staleStages(comparedTo: ArtifactInputs.current(from: base))
+                        .contains(.mergedHorizon))
+
+        var fewer = base
+        fewer.temporalHorizonSampleCount = 12
+        let stale = ArtifactInputs.current(from: fewer)
+            .staleStages(comparedTo: ArtifactInputs.current(from: base))
+        XCTAssertTrue(stale.contains(.mergedHorizon))
+        XCTAssertFalse(stale.contains(.horizon), "no per-frame mask is involved either way")
+    }
+
+    /// Where the merge never runs — a moving sequence, or a static one with a painted
+    /// reference — the method is not an input, and recording it there would throw away a
+    /// sequence's alignment over a mask nothing reads.
+    func testTheStaticHorizonMethodIsNotAnInputWhereTheMergeDoesNotUseIt() {
+        for moving in [true, false] {
+            var base = config()
+            base.tripodHeadWasMoving = moving
+            base.hasStaticReferenceHorizon = !moving
+            var after = base
+            after.useTemporalStaticHorizon.toggle()
+            after.temporalHorizonSampleCount = 7
+            let stale = ArtifactInputs.current(from: after)
+                .staleStages(comparedTo: ArtifactInputs.current(from: base))
+            XCTAssertTrue(stale.isEmpty, "moving \(moving): got \(stale)")
+        }
+    }
+
+    /// A record written before the temporal method existed has no key for it, so the one
+    /// static merged mask it describes — the per-frame vote's — is rebuilt once, by the method
+    /// that replaced it.
+    func testAStaticRecordFromBeforeTheTemporalMethodRebuildsItsMergedHorizon() {
+        var c = config()
+        c.tripodHeadWasMoving = false
+        let current = ArtifactInputs.current(from: c)
+        var stages = current.stages
+        var merged = stages[ArtifactStage.mergedHorizon.rawValue] ?? [:]
+        merged["useTemporalStaticHorizon"] = nil
+        merged["temporalHorizonSampleCount"] = nil
+        merged["temporalHorizonAlgorithmVersion"] = nil
+        stages[ArtifactStage.mergedHorizon.rawValue] = merged
+        let older = ArtifactInputs(version: current.version, stages: stages)
+
+        let stale = current.staleStages(comparedTo: older)
+        XCTAssertTrue(stale.contains(.mergedHorizon))
+        XCTAssertFalse(stale.contains(.horizon))
     }
 
     // MARK: - what a missing or foreign record means

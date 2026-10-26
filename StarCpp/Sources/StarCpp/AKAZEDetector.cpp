@@ -799,10 +799,14 @@ bool detectAndComputeImpl(const cv::Mat &img8u, const cv::Mat &mask, int maxKeyp
     keypoints.clear();
     doSubpixelRefinement(evolution, keypointsByLayer, keypoints);
 
-    for (auto &kp : keypoints) computeMainOrientation(kp, evolution);
-
     if (!mask.empty()) cv::KeyPointsFilter::runByPixelsMask(keypoints, mask);
     if (maxKeypoints > 0) cv::KeyPointsFilter::retainBest(keypoints, maxKeypoints);
+
+    // Orientation is computed for the keypoints that survive the two filters above, not for
+    // every candidate before them: neither filter reads the angle (the mask test uses the
+    // position, the cap ranks by response), so this gives the same keypoints with the same
+    // angles for the cost of only the survivors.
+    for (auto &kp : keypoints) computeMainOrientation(kp, evolution);
 
     keypoints.shrink_to_fit();
     computeDescriptors(evolution, keypoints, descriptors);

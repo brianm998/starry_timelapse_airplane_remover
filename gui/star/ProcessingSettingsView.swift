@@ -225,6 +225,7 @@ struct ProcessingSettingsView: View {
     @State private var showMergeMultiplierInfo = false
     @State private var showHorizonMultiplierInfo = false
     @State private var showHorizonFloorInfo = false
+    @State private var showCloudAwareMergeInfo = false
     @State private var showUseGPUForMergeInfo = false
     @State private var showUseGPUForSIFTInfo = false
     @State private var showUseGPUForAKAZEInfo = false
@@ -273,6 +274,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo ||
         showHorizonMultiplierInfo ||
         showHorizonFloorInfo ||
+        showCloudAwareMergeInfo ||
         showUseGPUForMergeInfo ||
         showUseGPUForSIFTInfo ||
         showUseGPUForAKAZEInfo
@@ -323,6 +325,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo = true
         showHorizonMultiplierInfo = true
         showHorizonFloorInfo = true
+        showCloudAwareMergeInfo = true
         showUseGPUForMergeInfo = true
         showUseGPUForSIFTInfo = true
         showUseGPUForAKAZEInfo = true
@@ -373,6 +376,7 @@ struct ProcessingSettingsView: View {
         showMergeMultiplierInfo = false
         showHorizonMultiplierInfo = false
         showHorizonFloorInfo = false
+        showCloudAwareMergeInfo = false
         showUseGPUForMergeInfo = false
         showUseGPUForSIFTInfo = false
         showUseGPUForAKAZEInfo = false
@@ -461,6 +465,11 @@ struct ProcessingSettingsView: View {
                       self.cameraMotionGridRow
                       Divider()
                       self.processingMethodGridRow
+
+                      // Not an expert setting: whether clouds come out banded is something
+                      // anyone shooting a moving sky wants to be able to turn on.
+                      Divider()
+                      self.cloudAwareMergeView
 
                       Divider()
                       DisclosureGroup(isExpanded: $showGPUSettingsExpanded) {
@@ -627,8 +636,13 @@ struct ProcessingSettingsView: View {
 
                   HStack {
                       Button {
-                          Log.d("processAll")
-                          startProcessing()
+                          if showsProgress {
+                              Log.d("show progress")
+                              showProgress()
+                          } else {
+                              Log.d("processAll")
+                              startProcessing()
+                          }
                       } label: {
                           ZStack {
                               Color.blue
@@ -637,10 +651,14 @@ struct ProcessingSettingsView: View {
                               // "Update" rather than "Process Now" once there is finished
                               // work this change contradicts, because that is what the
                               // button does then: it does not start a run over an untouched
-                              // sequence, it changes one that is already part done.
-                              Text(viewModel.settingsContradictFinishedWork
-                                     ? localized("ui.update")
-                                     : localized("ui.process_now"))
+                              // sequence, it changes one that is already part done.  And
+                              // "Show Progress" over a live run it has nothing to change
+                              // in, since a second run is exactly what it must not start.
+                              Text(showsProgress
+                                     ? localized("ui.show_progress")
+                                     : viewModel.settingsContradictFinishedWork
+                                       ? localized("ui.update")
+                                       : localized("ui.process_now"))
                                 .font(.title2)
                                 .padding(20)
                                 .foregroundColor(.white)
@@ -648,11 +666,6 @@ struct ProcessingSettingsView: View {
                       }
                         .buttonStyle(PlainButtonStyle()) // XXX these styles suck
                         .fixedSize(horizontal: true, vertical: true)
-                        // Not disabled while a run is going any more: over a live run this
-                        // button is the one thing that makes a settings change reach the
-                        // frames the run has not got to yet.
-                        .disabled(viewModel.isProcessingFrames
-                                    && !viewModel.settingsContradictFinishedWork)
 
                       Spacer()
                       Button() {
@@ -1213,6 +1226,35 @@ struct ProcessingSettingsView: View {
         .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
     }
 
+    /// `Config.cloudAwareMerge`: a second merge aligned to the motion of the clouds, blended in
+    /// where it explains the frame better. Off by default; see the property's doc comment for
+    /// what it does, what it costs, and why changing it re-does the alignment stage.
+    private var cloudAwareMergeView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showCloudAwareMergeInfo,
+          addSpacer: { addSpacer },
+          infoText: localized("setting_help.cloud_aware_merge")
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text(localized("ui.cloud_aware_merge"))
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: $viewModel.cloudAwareMerge) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
     /// This whole group is disabled (and each toggle forced to display off, not merely
     /// dimmed-while-still-checked) whenever `Config.isGPUHardwareAvailable` is false, so "off"
     /// and "on but this Mac has no supported GPU" never look the same as "genuinely on." The
@@ -1711,6 +1753,26 @@ struct ProcessingSettingsView: View {
         }
     }
     
+    /// Whether the button reports on the run that is going rather than starting one.
+    ///
+    /// While a run is going and nothing here contradicts what it has done, there is nothing
+    /// for Process Now to do — starting a second run over the same frames is exactly what it
+    /// must not do — so it takes the user to the processing status instead, as the left
+    /// panel's Status button does.  A change that does contradict finished work keeps the
+    /// button as Update: over a live run that is the one thing that makes the change reach
+    /// the frames the run has not got to yet.
+    private var showsProgress: Bool {
+        viewModel.isProcessingFrames && !viewModel.settingsContradictFinishedWork
+    }
+
+    /// Close the sheet and put `ProcessingModalView` back over the window.  The sheet goes
+    /// first because it sits above the overlay and would hide it.
+    private func showProgress() {
+        self.applySettings()
+        viewModel.shouldShowProcessingSettings = false
+        viewModel.processingModalShowing = true
+    }
+
     private func startProcessing() {
         Log.d("processAll Starting processing")
         self.applySettings()

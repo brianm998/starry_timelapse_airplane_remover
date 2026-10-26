@@ -24,6 +24,9 @@ public final class OCVFeatureSet: @unchecked Sendable {
 
     public var keypointCount: Int { Int(ocv_feature_set_keypoint_count(ref)) }
 
+    /// Star centroids kept with a sky feature set; 0 for an earth one.
+    public var starCount: Int { Int(ocv_feature_set_star_count(ref)) }
+
     /// Keypoint positions in full-resolution image coordinates.
     public func keypointPositions() -> [(x: Double, y: Double)] {
         let count = keypointCount
