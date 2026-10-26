@@ -16,12 +16,13 @@ import StarCpp
 /// about a tenth of a percent of samples, which is closer to either than OpenCV's own CPU warp is.
 ///
 /// Skipped, not failed, when the build has no wgpu-native (run wgpu/fetch.sh, then touch
-/// StarCpp/Package.swift) or the machine has no usable adapter.
+/// StarCpp/Package.swift), STAR_WGPU is not set, or the machine has no usable adapter.
 final class WGPUOpsTests: XCTestCase {
 
     override func setUpWithError() throws {
-        setenv("STAR_WGPU", "1", 1)
+        // No setenv here (it is not in scope on Windows): wgpu.yml sets STAR_WGPU, and a local run does too.
         try XCTSkipUnless(wgpu_ops_compiled_in(), "built without wgpu-native (wgpu/fetch.sh)")
+        try XCTSkipUnless(wgpu_ops_opted_in(), "the wgpu backend is opt-in: run with STAR_WGPU=1")
         try XCTSkipUnless(wgpu_ops_available(), "no usable wgpu adapter on this machine")
         ImageCache.setLoader { MatWrapper.load(fromFilename: $0) }
     }
