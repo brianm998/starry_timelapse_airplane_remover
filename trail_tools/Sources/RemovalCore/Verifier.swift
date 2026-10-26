@@ -59,6 +59,8 @@ public struct ObjectReport: Codable, Sendable {
     public var baseline: Baseline.Outcome?
     public var detail: String?
     public var crop: String?
+    /// Why Star left this object in (only with `--temp`: a `-w --keep-temp-files` run's decision data). Diagnosis only: never changes pass/fail.
+    public var diagnosis: String?
 }
 
 public struct Summary: Codable, Sendable {
@@ -147,7 +149,7 @@ public enum Verifier {
             for o in checked {
                 let exp = options.expect[o.class]!
                 var rep = ObjectReport(frame: f.name, id: o.id, class: o.class, expectation: exp.rawValue,
-                                       measurement: nil, status: "reported", baseline: nil, detail: nil, crop: nil)
+                                       measurement: nil, status: "reported", baseline: nil, detail: nil, crop: nil, diagnosis: nil)
                 // differential mode compares output with the base output; the injected contrast is the input's.
                 let m = TrailCheck.measure(input: inB, output: baseB.map { outB.minus($0) } ?? outB, object: o)
                 rep.measurement = m

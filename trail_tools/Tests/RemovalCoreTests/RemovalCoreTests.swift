@@ -325,6 +325,26 @@ final class VerifierTests: XCTestCase {
     }
 }
 
+final class DiagnosisTests: XCTestCase {
+    func g(_ id: UInt16, _ decision: String, _ remove: Bool?, trash: Bool = false) -> GroupTouch {
+        GroupTouch(id: id, pixels: 120, decision: decision, willRemove: remove, trash: trash)
+    }
+
+    func testTheFourCases() {
+        XCTAssertTrue(Diagnosis.classify([], totalGroups: 40).hasPrefix("not detected"))
+        XCTAssertTrue(Diagnosis.classify([g(3, "dust", nil, trash: true)], totalGroups: 40).hasPrefix("detected but discarded as dust"))
+        let kept = Diagnosis.classify([g(7, "classifier -0.40", false), g(9, "classifier -0.10", false)], totalGroups: 40)
+        XCTAssertTrue(kept.hasPrefix("misclassified"))
+        XCTAssertTrue(kept.contains("#7") && kept.contains("-0.40"))
+        let paint = Diagnosis.classify([g(7, "classifier +0.50", true), g(9, "classifier -0.10", false)], totalGroups: 40)
+        XCTAssertTrue(paint.hasPrefix("painting/merge problem: 1 of 2"))
+    }
+
+    func testAGroupWithNoDecisionIsNotCountedAsRemoved() {
+        XCTAssertTrue(Diagnosis.classify([g(1, "no decision", nil)], totalGroups: 5).hasPrefix("misclassified"))
+    }
+}
+
 final class PNGTests: XCTestCase {
     func testSignatureAndChunks() {
         let d = PNG.encode(rgb: [UInt8](repeating: 128, count: 4 * 3 * 3), width: 4, height: 3)

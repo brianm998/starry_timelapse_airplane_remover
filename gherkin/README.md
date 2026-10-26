@@ -225,6 +225,11 @@ Exit 0 = pass, 1 = failure, 2 = bad input (bad label, missing frame, wrong mode 
   median ratio and the fraction below 0.5 are judged as a distribution, inside `sky`, ≥ 40 px from any labelled object.
 * **Unchanged outside (`--unchanged-outside`):** selective + lossless input + `complete` labels only (refused otherwise).
   Every connected component of changed pixels outside the footprint is reported, with a crop.
+* **Why it was left in (`--temp <star_temp dir>`):** for every failing object, reads the run's outlier data (a `star -w --keep-temp-files` run;
+  `selective` and `auto selective` keep it, `automatic` does not) and says which case it is: *not detected* (no outlier group touches the trail),
+  *detected but discarded as dust*, *misclassified* (every touching group decided keep, with the classifier's score), or *painting/merge problem*
+  (decided remove, yet still in the output). Diagnosis only: it never changes pass or fail, is skipped when nothing failed, and an error in it is a
+  note in the report. The cli runner passes it whenever the run kept its temp directory.
 * **Differential (`--base-output`):** for synthetic datasets, compares with Star's output on the un-injected base.
 * Whole-frame golden images and PSNR/SSIM cannot be the check: the default mode recomputes every pixel and Metal vs CPU
   differ.

@@ -396,6 +396,8 @@ final class CliFeatureRunner {
                     "--clean-method", method, "--dataset", input.lastPathComponent,
                     "--skip-unmeasurable", "--report", report.path, "--crops", crops.path]
         args += extra
+        // the run kept its temp directory (--keep-temp-files): on a failure the verifier says why Star left each trail in (--temp, diagnosis only)
+        if let t = tempDir { args += ["--temp", t.path] }
 
         let p = Process()
         p.executableURL = try verifierBinary()
