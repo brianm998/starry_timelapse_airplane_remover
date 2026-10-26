@@ -195,9 +195,9 @@ final class GuiFeatureRunner {
 
     private func verifierBinary() throws -> URL {
         let path = ProcessInfo.processInfo.environment["STAR_REMOVAL_VERIFY"].flatMap { $0.isEmpty ? nil : $0 }
-            ?? Self.repoRoot.appendingPathComponent("removal_tools/.build/release/star-removal-verify").path
+            ?? Self.repoRoot.appendingPathComponent("trail_tools/.build/release/star-removal-verify").path
         guard FileManager.default.isExecutableFile(atPath: path) else {
-            throw RunnerError("no star-removal-verify at \(path): run `swift build -c release --package-path removal_tools`, or set TEST_RUNNER_STAR_REMOVAL_VERIFY")
+            throw RunnerError("no star-removal-verify at \(path): run `swift build -c release --package-path trail_tools`, or set TEST_RUNNER_STAR_REMOVAL_VERIFY")
         }
         return URL(fileURLWithPath: path)
     }

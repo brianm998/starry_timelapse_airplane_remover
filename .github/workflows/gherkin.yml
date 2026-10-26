@@ -5,8 +5,8 @@ name: Gherkin
 #   mac-gui                       XCUITest against Star.app (hosted macOS runners ship with UI automation
 #                                 mode enabled: no `automationmodetool` step here)
 #   desktop-linux/-windows/-macos runComposeUiTest against a real stard, offscreen (no Xvfb)
-# removeAirplanes (@cli @mac-gui @desktop) also runs removal_tools' `star-removal-verify` as a subprocess on every client leg, so
-# every leg builds removal_tools in release first (the Windows desktop leg too: unverified there until its first run).
+# removeAirplanes (@cli @mac-gui @desktop) also runs trail_tools' `star-removal-verify` as a subprocess on every client leg, so
+# every leg builds trail_tools in release first (the Windows desktop leg too: unverified there until its first run).
 # plus generate-check, which regenerates every generated file and fails on a diff.
 #
 # Test data is fetched from the `test-data` release (test_data/datasets.json) into .test-data and cached with actions/cache.
@@ -32,7 +32,7 @@ on:
       - 'daemon/**'
       - 'StarCore/**'
       - 'StarCpp/**'
-      - 'removal_tools/**'
+      - 'trail_tools/**'
       - '.github/workflows/gherkin.yml'
   pull_request:
     branches: [main, develop]
@@ -45,7 +45,7 @@ on:
       - 'daemon/**'
       - 'StarCore/**'
       - 'StarCpp/**'
-      - 'removal_tools/**'
+      - 'trail_tools/**'
       - '.github/workflows/gherkin.yml'
   workflow_dispatch:
 
@@ -146,7 +146,7 @@ jobs:
 
       - name: Build the removal verifier (release)
         # Used by the removal features' Then steps (star-removal-verify, run as a subprocess).
-        run: swift build -c release --package-path removal_tools
+        run: swift build -c release --package-path trail_tools
 
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
@@ -319,8 +319,8 @@ jobs:
         # star-removal-verify is run as a subprocess by the removal features' Then steps. SwiftPM's Windows build dir is
         # .build/<triple>/release, so the runner is told where the .exe is.
         run: |
-          swift build -c release --package-path removal_tools
-          BIN="$(swift build -c release --package-path removal_tools --show-bin-path)"
+          swift build -c release --package-path trail_tools
+          BIN="$(swift build -c release --package-path trail_tools --show-bin-path)"
           ls "$BIN"/star-removal-verify.exe
           echo "STAR_REMOVAL_VERIFY=$(cygpath -w "$BIN/star-removal-verify.exe")" >> "$GITHUB_ENV"
           echo "STAR_REMOVAL_REPORTS=$(cygpath -w "$GITHUB_WORKSPACE/removal-reports")" >> "$GITHUB_ENV"
@@ -414,7 +414,7 @@ jobs:
 
       - name: Build the removal verifier (release)
         # Used by the removal features' Then steps (star-removal-verify, run as a subprocess).
-        run: swift build -c release --package-path removal_tools
+        run: swift build -c release --package-path trail_tools
 
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
@@ -509,7 +509,7 @@ jobs:
 
       - name: Build the removal verifier (release)
         # Run as a subprocess by the removeAirplanes Then steps (star-removal-verify).
-        working-directory: removal_tools
+        working-directory: trail_tools
         run: swift build -c release
 
       # The GUI's Xcode project bundles gui/videos/*.mp4 (too big for git). The splash video comes from the same
@@ -631,7 +631,7 @@ jobs:
 
       - name: Build the removal verifier (release)
         # Run as a subprocess by the removeAirplanes Then steps (star-removal-verify).
-        working-directory: removal_tools
+        working-directory: trail_tools
         run: swift build -c release
 
       - name: Set up JDK 21
@@ -818,7 +818,7 @@ jobs:
 
       - name: Build the removal verifier (release)
         # Run as a subprocess by the removeAirplanes Then steps (star-removal-verify).
-        working-directory: removal_tools
+        working-directory: trail_tools
         run: swift build -c release
 
       - name: Set up JDK 21
@@ -929,7 +929,7 @@ jobs:
 
       - name: Build the removal verifier (release)
         # Run as a subprocess by the removeAirplanes Then steps (star-removal-verify).
-        working-directory: removal_tools
+        working-directory: trail_tools
         run: swift build -c release
 
       - name: Set up JDK 21

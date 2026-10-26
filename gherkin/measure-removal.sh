@@ -3,13 +3,13 @@
 # (dataset x clean method) and collects the reports. Never fails the build on a measurement; it fails only when
 # something could not run at all. Usage: gherkin/measure-removal.sh <os-label> <out-dir>
 #
-# Needs: cli built (cli/.build/release/star), removal_tools built (removal_tools/.build/release/star-removal-verify),
+# Needs: cli built (cli/.build/release/star), trail_tools built (trail_tools/.build/release/star-removal-verify),
 # test data fetched (test_data/fetch.sh a7sii_10 a7sii_10_crop16).
 set -uo pipefail
 os="${1:?os label}"; out="$(mkdir -p "$2" && cd "$2" && pwd)"
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 star="$repo/cli/.build/release/star"
-verify="$repo/removal_tools/.build/release/star-removal-verify"
+verify="$repo/trail_tools/.build/release/star-removal-verify"
 cache="${STAR_TEST_DATA:-$repo/.test-data}"
 [ -x "$star" ] && [ -x "$verify" ] || { echo "star or star-removal-verify is not built" >&2; exit 2; }
 

@@ -5,7 +5,7 @@ Brian's decisions were built. Nothing is committed.
 
 ## What was built
 
-**`removal_tools/`** (standalone SwiftPM package, swift-tools-version 6.0):
+**`trail_tools/`** (standalone SwiftPM package, swift-tools-version 6.0):
 - `RemovalCore`: pure Swift with no OpenCV, so its tests build anywhere. It holds the trail-contrast check (50 px stretches,
   on-line vs background bands, 5σ measurability, >20% unmeasurable = label error), the star-flux distribution check, the
   `--unchanged-outside` connected-component report, differential mode, the thresholds model, the baseline ratchet
@@ -16,7 +16,7 @@ Brian's decisions were built. Nothing is committed.
 - `star-trail-inject`: seeded and deterministic. It writes `base/` (byte copy), `injected/` (16-bit TIFF) and `labels.json`
   (confirmed). It builds satellites (SNR sweep, FWHM 1.5–3, some collinear continuations into the next frame), airplanes
   (twin lines, strobe dots, red/green/white tint, some running off the edge) and meteors (tapered).
-- 17 XCTests (`swift test` in `removal_tools/`) pass: known line ratios, partial removal, the worst stretch, faint trails,
+- 17 XCTests (`swift test` in `trail_tools/`) pass: known line ratios, partial removal, the worst stretch, faint trails,
   star flux scale and lost stars, an unlabelled blob reported as one component with the right area, the refusal rules for
   `--unchanged-outside`, the baseline ratchet, and label errors.
 
@@ -124,7 +124,7 @@ Brian uploaded both archives; `gh release view` shows sizes and sha256 equal to 
 tested from my sandbox: it rejects GitHub's certificate, so run `test_data/fetch.sh a7sii_10 a7sii_10_crop16` once.)
 
 `.github/workflows/removal-measure.yml` (manual `workflow_dispatch` only; a measurement, not a gate) has a job on `ubuntu-24.04`
-and one on `macos-15`. Each fetches the datasets, builds `star` and `removal_tools` in release, runs the verifier's unit
+and one on `macos-15`. Each fetches the datasets, builds `star` and `trail_tools` in release, runs the verifier's unit
 tests, then `gherkin/measure-removal.sh` runs `a7sii_10` (JPEG) and `a7sii_10_crop16` (16-bit) with `selective`,
 `automatic:false` and `automatic:true` through `star-removal-verify --report-only --stars` (plus `--unchanged-outside` for
 selective on the crop set; on macOS also a CPU-forced repeat with `--no-use-gpu*`). `gherkin/measure-removal-summary.py`
@@ -138,7 +138,7 @@ not been run by Actions, so expect to fix a step on the first run.
 
 **Windows is not measured.** There is no `star` cli build for Windows in this repo (only `stard`, in the desktop leg), so the
 cli-based suite cannot run there. The plan scopes the removal suite to the cli on Linux and macOS. Windows uses the CPU path like
-Linux, so Linux numbers should represent it, but that is unproven. Phase 5 should still build `removal_tools` on the Windows
+Linux, so Linux numbers should represent it, but that is unproven. Phase 5 should still build `trail_tools` on the Windows
 leg (cheap compile check) if that leg can run the verifier at all.
 
 ## Phase 4 results (CI runs 38798344452 macos-15 and 38801175389 ubuntu-24.04, 2026-10-15) and what they changed
@@ -186,7 +186,7 @@ Why pins: the removed fraction cannot tell the pre-`1b2cb327` build (0.78) from 
 - `selective` with the selection inverted (`!reason.willRemove` in `computeRemovalMask`): `selectiveRemovesOnlyTrails` red, 43 of 43 pins failed, with the per-object lines and crops.
 - The pre-fix build passes `selectiveRemovesOnlyTrails`, correctly: the bug is only in `automatic:true`.
 
-CI: `gherkin.yml` cli legs build `removal_tools`, run all five tests, the guard greps each test name and `Executed 5 tests, with 0 failures`, require the
+CI: `gherkin.yml` cli legs build `trail_tools`, run all five tests, the guard greps each test name and `Executed 5 tests, with 0 failures`, require the
 report JSON to exist, and upload `removal-reports` with `if: always()`. **Not run on CI yet**; the first push will show whether the removal steps behave
 on hosted runners (Linux and macOS times are expected at roughly 10 to 15 minutes more per leg, about 9 minutes locally for the five).
 
@@ -195,7 +195,7 @@ on hosted runners (Linux and macOS times are expected at roughly 10 to 15 minute
 `removeAirplanes` is now tagged `@cli @mac-gui @desktop`. `GuiFeatureRunner.swift` and `DesktopFeatureRunner.kt` implement `airplanesRemoved`, `satellitesRemoved` and `starsPreserved`, with the cli runner's verifier flags
 (`--skip-unmeasurable`, `gherkin/removal-thresholds.json`; `--clean-method automatic:false` on the mac GUI, `selective --pins-only` on the desktop client) and guards (objects == confirmed labels, > 0 measurable, star
 frames == output frames). XCUITest can launch a subprocess, but I was wrong that its runner is unsandboxed: CI showed it cannot write into the repo ("Operation not permitted" creating `removal-reports`), so the mac GUI's reports go to a temp directory and are attached to the xcresult. No
-separate CI step was needed. `gherkin.yml`: every GUI leg builds `removal_tools`, the guards now expect two tests (`Executed 2 tests` / `tests="2"`), name
+separate CI step was needed. `gherkin.yml`: every GUI leg builds `trail_tools`, the guards now expect two tests (`Executed 2 tests` / `tests="2"`), name
 `testRemoveAirplanesFeature` / `removeAirplanesFeature`, require the report JSON (the mac GUI: its summary line in the log) and upload `removal-reports-desktop-<os>`.
 
 What was verified: generated files regenerated; the Kotlin `gherkinTest` source set compiles (`./gradlew compileGherkinTestKotlin`); see below for the Xcode build.
@@ -210,7 +210,7 @@ and judging the desktop run with the selective mode (pins only). The mac GUI's d
 
 - **cli (ubuntu-24.04): all five features passed.**
 - **cli (macos-15): four passed** (removeAirplanes 226/226, automatic:true fractions 0.823 and 0.832 with 43/43 pins, open-and-process), **one failed because `star` crashed**: `selectiveRemovesOnlyTrails`, SIGSEGV 47 s in during horizon merging. Intermittent (same binary, dataset and runner type passed in three earlier runs). Recorded as BUGS.md BUG-005. Not a defect of the check.
-- **cli (windows-2022): `removal_tools` builds and the verifier runs on Windows.** removeAirplanes passed (226/226), the JPEG automatic:true feature passed, the open-and-process feature passed; the two 16-bit features failed on one pinned object, `00091-5` (median ratio 1.0, not removed on Windows CPU). Fix: that pin was dropped (42 pins now). Thresholds otherwise hold on Windows: stars passed, fractions 0.836.
+- **cli (windows-2022): `trail_tools` builds and the verifier runs on Windows.** removeAirplanes passed (226/226), the JPEG automatic:true feature passed, the open-and-process feature passed; the two 16-bit features failed on one pinned object, `00091-5` (median ratio 1.0, not removed on Windows CPU). Fix: that pin was dropped (42 pins now). Thresholds otherwise hold on Windows: stars passed, fractions 0.836.
 - **desktop (ubuntu-24.04): `removeAirplanes` failed** (48 of 226 removed, the selective profile): the desktop client's default clean method is selective, not automatic:false, so the GUI runner's hardcoded method was wrong. Fixed in 1ea45863 (the desktop is judged with the selective pins-only check; the mac GUI's default really is automatic:false). The fix and the pin change are not yet on CI.
 - Still pending on that run when this was written: desktop (windows-2022), desktop (macos-15), mac gui.
 
@@ -229,7 +229,7 @@ On 43939fe6 the desktop STRONG fix worked on all three desktop legs (so MILD vs 
 
 - **Synthetic datasets**: `star-trail-inject` exists and was smoke-tested, but no synthetic dataset has been built, proven clean with Star, uploaded or measured, so there is no `processWithBase` step and no `syntheticSatellites` / `syntheticAirplanes` feature, no differential threshold, and the plan's realism comparison (synthetic vs real detection rate) was not done. There is also no satellite feature (no object is labelled `satellite`).
 - **`--temp` decision diagnostics** are not implemented (the option is accepted and prints a note). The cli runner does not pass `-w --keep-temp-files`.
-- **Windows**: no `star` cli there. The desktop-windows leg now runs `swift build -c release` in `removal_tools` (StarCore builds there as part of stard, but `removal_tools` itself has never been built on Windows) and `removeAirplanes` runs there through the Kotlin runner. **Not run.** If that build fails, that leg fails at the new step.
+- **Windows**: no `star` cli there. The desktop-windows leg now runs `swift build -c release` in `trail_tools` (StarCore builds there as part of stard, but `trail_tools` itself has never been built on Windows) and `removeAirplanes` runs there through the Kotlin runner. **Not run.** If that build fails, that leg fails at the new step.
 - **BUGS.md** BUG-001 to BUG-004 are open and unassigned: `selective` is non-deterministic on the cropped set, stars are dimmed on it, it takes 25-35 minutes, and per-object verdicts differ between platforms. `a7sii_10_crop16` stays in the manifest but nothing uses it.
-- `removal_tools/Package.resolved` is committed as generated and was not reviewed. The `removal-measure.yml` workflow still has a temporary `push` trigger and a `[skip macos]` switch to delete when it is merged.
+- `trail_tools/Package.resolved` is committed as generated and was not reviewed. The `removal-measure.yml` workflow still has a temporary `push` trigger and a `[skip macos]` switch to delete when it is merged.
 - The pins and thresholds come from one day of runs (one CI run per OS plus local runs): re-measure if a platform or a Star change moves them.

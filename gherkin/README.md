@@ -131,7 +131,7 @@ and `tests="1"` / `skipped="0"` in `build/test-results/gherkinTest/*.xml` for Gr
 
 ## Checking airplane and satellite removal
 
-Features that must prove trails are actually gone use `removal_tools/` (a standalone SwiftPM package: `RemovalCore`,
+Features that must prove trails are actually gone use `trail_tools/` (a standalone SwiftPM package: `RemovalCore`,
 the pure-Swift measurements, plus the `star-removal-verify` and `star-trail-inject` executables). **Status: five
 cli features use the verifier (below); the thresholds are measured except the synthetic-data ones; the GUI clients and the synthetic
 features do not use it yet**; see `GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md`.
@@ -198,7 +198,7 @@ Steps: `I open the 16-bit sequence {sequence16}`, `the clean method is automatic
 preserved`, `nothing outside the labelled trails changed`. Each `Then` runs `star-removal-verify` as a subprocess, fails with its
 summary plus the report and crop paths, and refuses to pass if the report did not check every labelled object of the class (or every
 pin, or every frame). Reports and crops go to `removal-reports/<feature>/` (git-ignored; CI uploads it with `if: always()`; `STAR_REMOVAL_REPORTS`
-overrides it). The runner finds the verifier at `removal_tools/.build/release/star-removal-verify` (`STAR_REMOVAL_VERIFY` overrides).
+overrides it). The runner finds the verifier at `trail_tools/.build/release/star-removal-verify` (`STAR_REMOVAL_VERIFY` overrides).
 
 `removeAirplanes` also runs on the GUIs: `GuiFeatureRunner.swift` (XCUITest; the runner is sandboxed, which can launch the verifier and read the output but not write into the repo) and
 `DesktopFeatureRunner.kt` launch `star-removal-verify` as a subprocess with the same flags and the same vacuous-green guards as the cli runner
@@ -208,13 +208,13 @@ The cli's default (no `-c`) is `automatic:false`, judged per object. The mac GUI
 `StartupView.cleanMethod`) is also `automatic:false`. The desktop client's auto-open path keeps `initialConfigBeside`'s `CLEAN_SELECTIVE`
 (`InitialConfigBesideTest`), so `DesktopFeatureRunner.kt` passes `--clean-method selective --pins-only --pins gherkin/removal-pins.json` and
 opens the session at STRONG by seeding the remembered detection type before the view model starts (an unset one is MILD, Star's own default is STRONG, and the pins were measured at STRONG) and fails if it did not and requires `pinsChecked` to equal the pin count, as the cli runner does for selective (selective leaves most faint labelled streaks alone by
-design: BUG-004). The GUI method maps hold no clean-method steps, so a feature that asks for one fails naming what is implemented. Each GUI leg of `gherkin.yml` builds `removal_tools` in release first; the desktop reports land in `removal-reports/desktop-removeAirplanes/` (uploaded as artifacts), the mac GUI's are attachments in the uploaded xcresult (its sandboxed runner cannot write into the repo, found on CI) and its summary is in the log.
+design: BUG-004). The GUI method maps hold no clean-method steps, so a feature that asks for one fails naming what is implemented. Each GUI leg of `gherkin.yml` builds `trail_tools` in release first; the desktop reports land in `removal-reports/desktop-removeAirplanes/` (uploaded as artifacts), the mac GUI's are attachments in the uploaded xcresult (its sandboxed runner cannot write into the repo, found on CI) and its summary is in the log.
 
 Why pins: per-object verdicts differ between platforms and the fraction removed cannot tell the pre-`1b2cb327` build (0.78) from the
 fixed one (0.83), so the objects every healthy run removes are pinned (derived from Star's own output, not ground truth). Why the pass
 rule is the median stretch ratio, why `selective` is not judged per object, and every threshold's evidence: `gherkin/removal-thresholds.json`
 and `BUGS.md`. Local run: `swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests`
-after `swift build -c release --package-path removal_tools` and `test_data/fetch.sh a7sii_10 a7sii_10_16bit`.
+after `swift build -c release --package-path trail_tools` and `test_data/fetch.sh a7sii_10 a7sii_10_16bit`.
 
 To add one: put the dataset (with `labels.json`) in `test_data/datasets.json`, add a `{placeholder}` and `data:` default to `params.json`, an `openSequence…`
 step if it is a new placeholder, write the `.feature`, `gherkin/generate.sh`, and add its generated test name to the guard loop in `gherkin.yml`.

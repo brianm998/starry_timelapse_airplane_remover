@@ -75,11 +75,11 @@ jobs:
         run: swift build -c release
 
       - name: Build the removal verifier (release)
-        working-directory: removal_tools
+        working-directory: trail_tools
         run: swift build -c release
 
       - name: Unit-test the verifier
-        working-directory: removal_tools
+        working-directory: trail_tools
         run: swift test
 
       - name: Measure every dataset x clean method
@@ -159,11 +159,11 @@ jobs:
         run: swift build -c release
 
       - name: Build the removal verifier (release)
-        working-directory: removal_tools
+        working-directory: trail_tools
         run: swift build -c release
 
       - name: Unit-test the verifier
-        working-directory: removal_tools
+        working-directory: trail_tools
         run: swift test
 
       - name: Measure every dataset x clean method

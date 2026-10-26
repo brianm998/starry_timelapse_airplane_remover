@@ -3,7 +3,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "removal_tools",
+    name: "trail_tools",
     platforms: [
         .macOS(.v14)
     ],

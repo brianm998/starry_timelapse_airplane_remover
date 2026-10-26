@@ -221,8 +221,8 @@ class DesktopFeatureRunner {
     private fun verifierBinary(): File {
         val exe = if (System.getProperty("os.name").startsWith("Windows")) "star-removal-verify.exe" else "star-removal-verify"
         val f = System.getenv("STAR_REMOVAL_VERIFY")?.takeIf { it.isNotEmpty() }?.let { File(it) }
-            ?: File(repoRoot(), "removal_tools/.build/release/$exe")
-        if (!f.isFile) throw RunnerError("no star-removal-verify at $f: run `swift build -c release --package-path removal_tools`, or set STAR_REMOVAL_VERIFY")
+            ?: File(repoRoot(), "trail_tools/.build/release/$exe")
+        if (!f.isFile) throw RunnerError("no star-removal-verify at $f: run `swift build -c release --package-path trail_tools`, or set STAR_REMOVAL_VERIFY")
         return f
     }
 

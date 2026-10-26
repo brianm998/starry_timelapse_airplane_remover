@@ -16,7 +16,7 @@ conversation can pick one up.
 
 ## BUG-001: `selective` is not deterministic: large stretches of sky are removed in different frames on every run
 
-Found 2026-10-15 while checking Brian's labels with `removal_tools/` (the "nothing else changed" check), then re-measured on CI.
+Found 2026-10-15 while checking Brian's labels with `trail_tools/` (the "nothing else changed" check), then re-measured on CI.
 It started as "frame 90 is damaged"; repeating the run showed that frame 90 was not special.
 
 ### What was observed
@@ -66,7 +66,7 @@ Do not "fix" it by loosening the check or by changing what `selective` is suppos
 test_data/fetch.sh a7sii_10_crop16
 mkdir /tmp/c16 && cp -R .test-data/a7sii_10_crop16/*.tif /tmp/c16/        # a fresh copy each run: Star derives paths from the dir name
 cli/.build/release/star -l info -c selective -o /tmp/c16-out /tmp/c16     # about 25-35 min, see BUG-003
-cd removal_tools && swift build -c release --product star-removal-verify
+cd trail_tools && swift build -c release --product star-removal-verify
 .build/release/star-removal-verify --input ../.test-data/a7sii_10_crop16 --output /tmp/c16-out/<the *star-v-* dir> \
     --labels ../.test-data/a7sii_10_crop16/labels.json --unchanged-outside --clean-method selective \
     --report /tmp/rep.json --crops /tmp/crops --report-only
