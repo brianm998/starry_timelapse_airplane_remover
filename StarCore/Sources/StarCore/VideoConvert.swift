@@ -96,7 +96,7 @@ public func decodeVideo(
     do {
         return try await withTaskCancellationHandler {
             let hasAudioTask = Task {
-                (try? shellOut(
+                (try? await shellOutOffPool(
                    to: ffprobePath,
                    arguments: [
                      "-v", "error", "-select_streams", "a:0",
@@ -108,7 +108,7 @@ public func decodeVideo(
             }
 
             let frameRateTask = Task {
-                try shellOut(
+                try await shellOutOffPool(
                   to: ffprobePath,
                   arguments: [
                     "-v", "error", "-select_streams", "v:0",
@@ -120,7 +120,7 @@ public func decodeVideo(
             }
 
             let codecTask = Task {
-                try shellOut(
+                try await shellOutOffPool(
                   to: ffprobePath,
                   arguments: [
                     "-v", "error", "-select_streams", "v:0",
@@ -132,7 +132,7 @@ public func decodeVideo(
             }
 
             let pixFmtTask = Task {
-                try shellOut(
+                try await shellOutOffPool(
                   to: ffprobePath,
                   arguments:
                     [
@@ -298,7 +298,11 @@ private final class FFmpegRun: @unchecked Sendable {
         // non-sendable function value.  Newer compilers accept either.
         let onReadable: @Sendable (FileHandle) -> Void = { fileHandle in
             let data = fileHandle.availableData
-            guard !data.isEmpty else { return }
+            // Empty data is end of file: ffmpeg has closed its end.  A pipe at end of file stays readable for ever, so a handler that
+            // merely returns is called again at once, in a loop, until someone removes it.  That someone is `finish()`, which only runs
+            // once `exit()` has been resumed on the cooperative pool; if the pool is busy (see `shellOutOffPool`) the loop starves the
+            // dispatch workers the probes need and the whole import stops, with a core at 100% (hosted 3-CPU macOS runners, BUG-006).
+            guard !data.isEmpty else { fileHandle.readabilityHandler = nil; return }
             handle(data)
         }
         pipe.fileHandleForReading.readabilityHandler = onReadable
@@ -390,6 +394,18 @@ final class StderrCollector: @unchecked Sendable {
     }
 }
 
+
+/// `shellOut` without holding a thread of Swift's cooperative pool while the child runs.  The pool is as wide as the machine has cores,
+/// and `shellOut` blocks its thread until the child exits; a few of those at once on a 3-CPU machine take the whole pool, so nothing
+/// that has to be resumed on it (the end of an ffmpeg run, say) can run, and a probe that is waiting for that blocks for ever.
+func shellOutOffPool(to executable: String, arguments: [String]) async throws -> String {
+    try await withCheckedThrowingContinuation { continuation in
+        DispatchQueue.global(qos: .userInitiated).async {
+            do { continuation.resume(returning: try shellOut(to: executable, arguments: arguments)) }
+            catch { continuation.resume(throwing: error) }
+        }
+    }
+}
 
 /// How many frames the first video stream has, or 0 if it cannot be told.  Tries the header first (instant; an estimate from duration
 /// and rate when the container has no count), then counts packets (no decoding), and only then decodes the whole video.
