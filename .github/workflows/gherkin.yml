@@ -550,7 +550,11 @@ jobs:
         # is `@testable import star` and --filter still compiles every test target. One release compile.
         # --disable-swift-testing: without it, swift test runs a second (Swift Testing) pass that starts the `star` executable
         # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
-        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
+        run: |
+          # TEMPORARY diagnostic: cli (macos-15) autoHorizonVideo hung (PR 14, run 40259054830); star sat idle with no child process.
+          # Prints a process list and a stack sample of the stuck star into this log, the only thing that survives the timeout.
+          if [ "${{ matrix.feature }}" = "autoHorizonVideo" ]; then gherkin/hang-watchdog.sh 420 '^star$' & fi
+          swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
 
       - name: Prove the scenario ran (not a vacuous green)
         run: |
@@ -1214,7 +1218,8 @@ jobs:
           # A 7GB VM with ~2-3GB free: at full resolution one frame's keypoint reservation (2.2GB) exceeds stard's narrowed memory budget, so
           # frames wait minutes each. stard itself defaults to 1.5 on such a machine; pin it so a roomier moment on the VM cannot pick 1.
           # Not coarser: 1.8 and 2 find no usable star alignment on this runner. The cli, gui and other desktop legs run the default.
-          command: cd star-desktop && STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
+          # TEMPORARY diagnostic for the autoHorizonVideo hang (PR 14, run 40259054830): a stack sample of the stuck stard, in this log.
+          command: if [ "${{ matrix.feature }}" = "autoHorizonVideo" ]; then (gherkin/hang-watchdog.sh 420 '^stard$' &); fi; cd star-desktop && STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
 
       - name: Prove the scenario ran (not a vacuous green)
         working-directory: star-desktop

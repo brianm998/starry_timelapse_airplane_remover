@@ -264,6 +264,52 @@ Open. Seen once.
 
 ---
 
+## BUG-006: importing a video hangs `star` and `stard` on hosted macos-15 (cli and desktop), not the GUI
+
+Found 2026-10-26 in the first full Gherkin matrix run of PR 14 (run 40259054830), feature `autoHorizonVideo`.
+
+### What was observed
+
+`autoHorizonVideo` (import `a7sii_10.mp4`, 19 frames, as 16-bit TIFF frames, then process) fails on **`desktop (macos-15)`** on every attempt: 3 of 3
+runs in two attempts of the retry wrapper, always `timed out after 600s waiting for the sequence to open (... stage=EXAMINING, current=0, total=0)`.
+**`cli (macos-15)`** hung until the 60-minute job timeout (`The operation was canceled`). The same feature passes on cli and desktop on ubuntu-24.04 and
+windows-2022, and on **`mac gui (macos-15)`** (which downloads the same `ffmpeg-macos-universal` artifact). It passed locally on the iMac Pro (cli 96 s).
+
+### Measured
+
+* The stard log reaches `VideoConvert.swift: decoding <video> with ffmpeg at .../external_binaries/bin/ffmpeg`, `FFmpegCapabilities: hardware encoders that start here:
+  h264_videotoolbox, hevc_videotoolbox` and `frame count from header: 19` within 1.2 s, then **nothing for 10 minutes**.
+* In the cancelled cli job, the runner's orphan-process cleanup listed `star`, `xctest` and `swift-package` and **no `ffmpeg` or `ffprobe`**: `star` was alive and idle,
+  waiting on something that is not a child process.
+* The hosted macos-15 VM has 3 CPUs and about 7 GB RAM; ubuntu and windows runners have 4 CPUs.
+
+### What it means (hypotheses, not yet separated)
+
+1. A deadlock or starvation in `downloadVideo`'s decode path (`StarCore/Sources/StarCore/VideoConvert.swift`): after the frame count it starts the ffmpeg run and four
+   `Task { shellOut(...) }` closures (`hasAudio`, frame rate, codec, pixel format) at once. `shellOut` blocks its thread in `waitUntilExit()` and parks two more GCD
+   blocks in `readDataToEndOfFile()`; with a 3-wide cooperative pool and a headless process this could starve something that has to run before ffmpeg is started. Not proven.
+2. Something specific to a process with no UI run loop on macOS (the GUI works): `Process` termination or `FileHandle.readabilityHandler` delivery.
+3. A problem in `FFmpegHardware`/`FFmpegCapabilities` probing on the paravirtual-GPU VM, which runs just before this point.
+
+### How to reproduce
+
+`gh workflow run Gherkin --ref <branch> -f features=autoHorizonVideo`. The `cli (macos-15)` and `desktop (macos-15)` legs of that feature now run `gherkin/hang-watchdog.sh`, which prints a process
+list and a `sample` stack dump of the stuck `star` / `stard` into the job log after 7, 14 and 21 minutes: read the `hang watchdog round` groups. (The watchdog is temporary.)
+
+### Where to look
+
+`StarCore/Sources/StarCore/VideoConvert.swift` (`decodeVideo`, `FFmpegRun`), `ShellOut.swift`, `FFmpegHardware`/`FFmpegCapabilities`, `VideoProbe`.
+
+### Referenced from
+
+`.github/workflows/gherkin.yml` (the watchdog lines in `cli-macos` and `desktop-macos`; remove them with this bug) and `gherkin/hang-watchdog.sh`.
+
+### Status
+
+Open. Cause not found; the next run should capture a stack sample.
+
+---
+
 ## Template
 
 ```markdown
