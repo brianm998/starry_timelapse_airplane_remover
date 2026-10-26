@@ -83,11 +83,17 @@ Same 226 measurable labelled objects, same source. Counting an object removed wh
   `00088-12`, `00092-6`, `00094-7`, `00096-5`).
 * `selective`: 47 removed on both, **2 objects differ** (`00084-12`, `00092-6`).
 
+### Measured 2026-10-26: not run-to-run, and not GPU versus CPU
+
+On the iMac Pro (Vega GPU), `a7sii_10` JPEG, `-c automatic:true`, three runs: **two GPU runs are byte-identical on all 19 output frames**; a **CPU-only run
+(`--no-use-gpu --no-use-gpu-for-sift --no-use-gpu-for-akaze`) agrees with the GPU run on every one of the 226 objects (0 verdict differences, largest median-ratio difference 0.004)**.
+So the 7 objects that differ between hosted macos-15 and ubuntu-24.04 come from the platforms: different CPU architecture (arm64 against x86-64), different OpenCV builds and SIMD paths, floating-point
+differences in alignment and in the decision-tree features. Within one platform the result is stable (that is what the pins rely on).
+
 ### What it means (hypotheses, not yet separated)
 
-The classifier's remove/keep decision depends on the platform (GPU versus CPU keypoints and alignment feed it) or is itself not
-deterministic (the blob pipeline is deterministic since the C3 fix; see BUG-007 for the crop). Whether the differences are platform or run-to-run was not measured for this dataset: only one run per platform.
-This is why the real-data `automatic:true` check judges the fraction removed (`removed_fraction_min`) and not each object.
+Cross-platform floating-point sensitivity in the keypoint/alignment stage or in the classifier's features; a borderline classifier score near the decision threshold for those 7 objects flips with a tiny numeric difference.
+To separate: dump the classifier scores of the 7 objects on both platforms (`-w --keep-temp-files`, then `star-removal-verify --temp`, which prints the scores) and see how close to 0 they are.
 
 ### How to reproduce
 
@@ -104,7 +110,7 @@ Run the measurement workflow (`.github/workflows/removal-measure.yml`) and compa
 
 ### Status
 
-Open. Needs a same-platform repeat to separate platform from run-to-run non-determinism.
+Open, low priority: the pins and the aggregate check already tolerate it. Narrowed to a cross-platform numeric difference; next step is comparing the 7 objects' classifier scores on macOS and Linux CI.
 
 ---
 
