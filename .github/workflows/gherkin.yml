@@ -185,11 +185,11 @@ jobs:
         run: |
           if [ ! -f StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
-      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg.yml artifact of this OS.
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-linux
+          name: ffmpeg-linux-x64
           path: external_binaries/bin
 
       - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
@@ -379,11 +379,11 @@ jobs:
           echo "STAR_CLI_PATH=$(cygpath -w "$BIN/star.exe")" >> "$GITHUB_ENV"
           echo "STAR_TEST_DATA=$(cygpath -w "$GITHUB_WORKSPACE/.test-data")" >> "$GITHUB_ENV"
 
-      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg.yml artifact of this OS.
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-windows
+          name: ffmpeg-windows-x64
           path: external_binaries/bin
 
       - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
@@ -494,11 +494,11 @@ jobs:
         run: |
           if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
-      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg.yml artifact of this OS.
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-macos
+          name: ffmpeg-macos-universal
           path: external_binaries/bin
 
       - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
@@ -538,7 +538,7 @@ jobs:
           if-no-files-found: warn
 
   ffmpeg:
-    uses: ./.github/workflows/ffmpeg.yml
+    uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
       platforms: linux windows macos
 
@@ -619,11 +619,11 @@ jobs:
           cp .test-data/gui_splash_video/*.mp4 gui/videos/
           ls -lh gui/videos
 
-      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg.yml artifact of this OS.
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-macos
+          name: ffmpeg-macos-universal
           path: external_binaries/bin
 
       - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
@@ -757,11 +757,11 @@ jobs:
         working-directory: daemon
         run: swift build -c release -Xswiftc -static-stdlib
 
-      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg.yml artifact of this OS.
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-linux
+          name: ffmpeg-linux-x64
           path: external_binaries/bin
 
       - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
@@ -969,11 +969,11 @@ jobs:
         # Do not set CL=/D... globally, it breaks OpenCV's CMake compiler probe (see release_windows.sh).
         run: swift build -c release
 
-      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg.yml artifact of this OS.
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-windows
+          name: ffmpeg-windows-x64
           path: external_binaries/bin
 
       - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
@@ -1105,11 +1105,11 @@ jobs:
         working-directory: daemon
         run: swift build -c release
 
-      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg.yml artifact of this OS.
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-macos
+          name: ffmpeg-macos-universal
           path: external_binaries/bin
 
       - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them

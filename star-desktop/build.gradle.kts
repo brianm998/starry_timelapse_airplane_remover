@@ -213,9 +213,8 @@ fun executableArchitectures(file: File): List<String>? {
 
 // Stage the native daemon + ffmpeg/ffprobe into app-resources/<os-arch>/ for the bundle.
 //   stard:   -Pstard=<path>, else daemon/.build/release/stard, else daemon/.build/debug/stard
-//   ffmpeg:  -Pffmpegdir=<dir>, else repo-root external_binaries/bin (git-ignored): `ffmpeg/build_ci.sh
-//            external_binaries/bin` is what CI ships; `ffmpeg/build.sh --install` leaves this machine's own
-//            GPU-enabled build there instead. See ffmpeg/README.md.
+//   ffmpeg:  -Pffmpegdir=<dir>, else repo-root external_binaries/bin (git-ignored): `ffmpeg/build.sh --install`
+//            leaves this machine's build of what CI ships (GPU encoders included) there. See ffmpeg/README.md.
 // The staged ffmpeg and ffprobe must be built for the architecture this bundle is for.
 tasks.register("stageAppResources") {
     group = "star"
@@ -328,7 +327,7 @@ tasks.register("stageAppResources") {
             val archs = executableArchitectures(staged)
             if (archs != null && hostArch !in archs) {
                 val msg = "stageAppResources: $name is built for ${archs.joinToString()}, but this bundle is for $hostArch " +
-                    "(app-resources/$hostResourceDir). Build the right one with ffmpeg/build_ci.sh or ffmpeg/build.sh --install, or point -Pffmpegdir at it."
+                    "(app-resources/$hostResourceDir). Build the right one with ffmpeg/build.sh --install, or point -Pffmpegdir at it."
                 if (packagingRequested) throw GradleException(msg)
                 logger.warn("$msg (not packaging, so continuing)")
             }

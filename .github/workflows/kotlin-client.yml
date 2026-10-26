@@ -8,13 +8,13 @@ name: Kotlin Client
 on:
   push:
     branches: [main, develop]
-    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml', '.github/workflows/ffmpeg.yml']
+    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml', '.github/workflows/ffmpeg-gpu.yml']
     # release/* tags build the installers and attach them to the release (see release-upload).
     # No paths filter applies to tag pushes.
     tags: ['release/*']
   pull_request:
     branches: [main, develop]
-    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml', '.github/workflows/ffmpeg.yml']
+    paths: ['star-desktop/**', 'daemon/proto/**', 'ffmpeg/**', '.github/workflows/kotlin-client.yml', '.github/workflows/ffmpeg-gpu.yml']
   workflow_dispatch:
 
 concurrency:
@@ -51,11 +51,11 @@ jobs:
         run: ./gradlew test --no-daemon --stacktrace
 
   # ─── ffmpeg / ffprobe ─────────────────────────────────────────────────────────
-  # Built from source by ffmpeg/build_ci.sh, for every platform, in the shared ffmpeg.yml (cli.yml
-  # reuses it for the macOS GUI). Artifacts: ffmpeg-linux, ffmpeg-windows, ffmpeg-macos (universal).
+  # Built from source by ffmpeg/build.sh, for every platform, in the shared ffmpeg-gpu.yml (cli.yml
+  # reuses it for the macOS GUI). Artifacts: ffmpeg-linux-x64, ffmpeg-windows-x64, ffmpeg-macos-universal.
   ffmpeg:
     if: github.event_name != 'pull_request'
-    uses: ./.github/workflows/ffmpeg.yml
+    uses: ./.github/workflows/ffmpeg-gpu.yml
 
   # ─── Linux installer (.deb) ───────────────────────────────────────────────────
   # Builds stard for Linux (same OpenCV/StarDecisionTrees caches as cli.yml's
@@ -136,13 +136,13 @@ jobs:
       - name: Download source-built ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-linux
+          name: ffmpeg-linux-x64
           path: ffmpeg-bin
 
       - name: Build .deb
         working-directory: star-desktop
         # stageAppResources picks up ../daemon/.build/release/stard automatically;
-        # packageDeb depends on it. ffmpeg/ffprobe come from the ffmpeg-linux job.
+        # packageDeb depends on it. ffmpeg/ffprobe come from the ffmpeg-linux-x64 artifact.
         run: |
           chmod +x ../ffmpeg-bin/*
           ./gradlew packageDeb -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
@@ -309,7 +309,7 @@ jobs:
       - name: Download source-built ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-windows
+          name: ffmpeg-windows-x64
           path: ffmpeg-bin
 
       - name: Build .exe
@@ -372,7 +372,7 @@ jobs:
   # reusing the same Apple secrets as cli.yml. Apple Silicon runner (macos-14) with
   # Xcode's Swift 6 (the proven cli.yml toolchain); the app + stard are arm64. Intel
   # is built/tested locally and is not produced here. The ffmpeg/ffprobe come from the
-  # ffmpeg job (ffmpeg/build_ci.sh) and are universal, so video import and export run natively
+  # ffmpeg job (ffmpeg/build.sh) and are universal, so video import and export run natively
   # on both architectures with no Rosetta.
   #
   # Runs on push (to develop/main) and manual dispatch, but NOT on pull_request —
@@ -392,7 +392,7 @@ jobs:
       # Silicon without Rosetta.
       - uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-macos
+          name: ffmpeg-macos-universal
           path: ffmpeg-bin
       - name: Check ffmpeg/ffprobe are universal
         run: |
@@ -592,8 +592,8 @@ jobs:
         # windows-e2e): every DLL each of them needs must be in the app image or be part of Windows.
         # The self-test below cannot prove the Visual C++ runtime is bundled, because this runner
         # has it installed and a user's machine may not, and it names only the first missing DLL.
-        # (ffmpeg/build_ci.sh checks the ffmpeg binaries' imports against an allow-list when it builds
-        # them; this checks what actually ships.) All three run, so one run reports every problem.
+        # (ffmpeg/smoke_test.sh rejects non-system library imports when the ffmpeg binaries are built;
+        # this checks what actually ships.) All three run, so one run reports every problem.
         run: |
           status=0
           for exe in stard ffmpeg ffprobe; do
