@@ -264,56 +264,6 @@ Open. Seen once.
 
 ---
 
-## BUG-006: importing a video hangs `star` and `stard` on hosted macos-15 (cli and desktop), not the GUI
-
-Found 2026-10-26 in the first full Gherkin matrix run of PR 14 (run 40259054830), feature `autoHorizonVideo`.
-
-### What was observed
-
-`autoHorizonVideo` (import `a7sii_10.mp4`, 19 frames, as 16-bit TIFF frames, then process) fails on **`desktop (macos-15)`** on every attempt: 3 of 3
-runs in two attempts of the retry wrapper, always `timed out after 600s waiting for the sequence to open (... stage=EXAMINING, current=0, total=0)`.
-**`cli (macos-15)`** hung until the 60-minute job timeout (`The operation was canceled`). The same feature passes on cli and desktop on ubuntu-24.04 and
-windows-2022, and on **`mac gui (macos-15)`** (which downloads the same `ffmpeg-macos-universal` artifact). It passed locally on the iMac Pro (cli 96 s).
-
-### Measured
-
-* The stard log reaches `VideoConvert.swift: decoding <video> with ffmpeg at .../external_binaries/bin/ffmpeg`, `FFmpegCapabilities: hardware encoders that start here:
-  h264_videotoolbox, hevc_videotoolbox` and `frame count from header: 19` within 1.2 s, then **nothing for 10 minutes**.
-* In the cancelled cli job, the runner's orphan-process cleanup listed `star`, `xctest` and `swift-package` and **no `ffmpeg` or `ffprobe`**: `star` was alive and idle,
-  waiting on something that is not a child process.
-* The hosted macos-15 VM has 3 CPUs and about 7 GB RAM; ubuntu and windows runners have 4 CPUs.
-
-### Diagnosis (measured, from the watchdog's `sample` of the stuck stard, run 40331590434, desktop macos-15)
-
-* `stard` was **not idle: `R<` at 99.5% CPU** for 7+ minutes. The busiest thread was the `NSFileHandle.fd_monitoring` queue running `FFmpegRun`'s
-  `readabilityHandler` (`VideoConvert.swift:300`, `fileHandle.availableData`), over and over.
-* Three Swift-concurrency pool threads were blocked in `shellOut` (`ShellOut.swift:51`, `_dispatch_group_wait_slow`), from `decodeVideo`'s `hasAudio` (line 99),
-  frame-rate (111) and codec (123) probes. A hosted macos-15 VM has 3 CPUs, so the cooperative pool is 3 threads wide: **all of it**. The 4th probe (pixel format) was queued behind them.
-* The mechanism: ffmpeg finishes quickly and closes its stderr pipe. A pipe at end of file stays readable, and the readability handler returned on empty data without
-  removing itself, so it fires again at once, in a loop. `finish()` (which removes it) only runs after `await run.exit()` is resumed, and resuming it needs a free pool thread, but
-  the pool is held by the three blocked `shellOut` probes, whose pipe readers are GCD blocks that the spinning handler starves. A cycle: nothing can finish.
-* 4-CPU runners (ubuntu, windows) and a many-core Mac have a pool that the four probes cannot fill, so the import completes there. That fits the measured pattern exactly.
-
-### Fix (in StarCore/Sources/StarCore/VideoConvert.swift, not yet proven on CI)
-
-1. The readability handler removes itself on empty data (end of file), so it cannot spin.
-2. The four short `ffprobe` calls in `decodeVideo` go through `shellOutOffPool`, which blocks a dispatch thread instead of a pool thread.
-Verify by dispatching `Gherkin` for `autoHorizonVideo` on the branch with the fix: `cli (macos-15)` and `desktop (macos-15)` should pass, and the watchdog (below) prints nothing.
-
-### Where to look
-
-`StarCore/Sources/StarCore/VideoConvert.swift` (`decodeVideo`, `FFmpegRun`), `ShellOut.swift`, `FFmpegHardware`/`FFmpegCapabilities`, `VideoProbe`.
-
-### Referenced from
-
-`.github/workflows/gherkin.yml` (the watchdog lines in `cli-macos` and `desktop-macos`; remove them with this bug) and `gherkin/hang-watchdog.sh`.
-
-### Status
-
-Diagnosed, fix written (see above); open until a macOS CI run passes. Then remove the watchdog lines from `gherkin.yml` and `gherkin/hang-watchdog.sh`, and delete this entry.
-
----
-
 ## Template
 
 ```markdown
