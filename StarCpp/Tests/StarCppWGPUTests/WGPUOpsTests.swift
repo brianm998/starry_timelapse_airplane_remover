@@ -310,6 +310,85 @@ final class WGPUOpsTests: XCTestCase {
         }
     }
 
+    // MARK: - standalone median merge
+
+    /// A one-byte-per-pixel plane of coverage-miss counts, 0...3, in a pattern that changes across the frame.
+    private func missesPlane(width: Int, height: Int) -> MatWrapper {
+        var bytes = [UInt8](repeating: 0, count: width * height)
+        for y in 0..<height { for x in 0..<width { bytes[y * width + x] = UInt8((x / 7 + y / 5) % 4) } }
+        return bytes.withUnsafeMutableBytes { raw in
+            MatWrapper(width: width, height: height,
+                       cvType: MatWrapper.cvType(forBitsPerComponent: 8, componentsPerPixel: 1),
+                       bytesPerRow: width, data: raw.baseAddress!, takeOwnership: true)
+        }
+    }
+
+    private func wgpuMedian(_ sources: [MatWrapper], misses: MatWrapper?, includeAll: Bool) -> MatWrapper {
+        var refs: [MatWrapperRef?] = sources.map { $0.ref }
+        let dst = zeros(like: sources[0])
+        XCTAssertTrue(refs.withUnsafeMutableBufferPointer {
+            wgpu_ops_median_merge($0.baseAddress, Int32(sources.count), misses?.ref, 1.2, includeAll, dst.ref)
+        })
+        return dst
+    }
+
+    /// The standalone merge (what the streaming merge and every un-fused caller uses) against the CPU's
+    /// double-precision one. It keeps the Metal kernel's float arithmetic, so a sample can differ where the
+    /// sigma clip lands on a tie; measured below.
+    func testMedianMergeAgreesWithTheCPUMerge() throws {
+        XCTAssertTrue(wgpu_ops_median_merge_supported(), "this adapter cannot run the standalone merge")
+        for bits in [16, 8] {
+            let width = 301, height = 203
+            let sources = (0..<9).map { frame(width: width, height: height, channels: 3, bits: bits, seed: $0 + 10) }
+            let misses = missesPlane(width: width, height: height)
+            for includeAll in [false, true] {
+                let gpu = wgpuMedian(sources, misses: includeAll ? nil : misses, includeAll: includeAll)
+                let cpu = try XCTUnwrap(ImageAligner.debugMedianMerge(
+                  sources, misses: includeAll ? nil : misses, outlierThreshold: 1.2,
+                  includeAll: includeAll, useGPU: false))
+                let r = try compare(gpu, cpu)
+                let fraction = Double(r.differing) / Double(r.total)
+                print("wgpu median merge \(bits)-bit includeAll=\(includeAll): \(r.differing) of \(r.total) differ "
+                      + "(\(fraction * 100)%), max delta \(r.maxDelta)")
+                XCTAssertLessThan(fraction, 0.001, "\(bits)-bit includeAll=\(includeAll)")
+            }
+        }
+    }
+
+    /// Metal's median kernel is the same selection in float; where Metal exists they should agree to the
+    /// last sample or very nearly.
+    func testMedianMergeMatchesTheMetalKernelClosely() throws {
+        try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
+        GPUOps.registerIfAvailable()
+        for bits in [16, 8] {
+            let sources = (0..<9).map { frame(width: 301, height: 203, channels: 3, bits: bits, seed: $0 + 10) }
+            let misses = missesPlane(width: 301, height: 203)
+            for includeAll in [false, true] {
+                let gpu = wgpuMedian(sources, misses: includeAll ? nil : misses, includeAll: includeAll)
+                let metal = try XCTUnwrap(ImageAligner.debugMedianMerge(
+                  sources, misses: includeAll ? nil : misses, outlierThreshold: 1.2,
+                  includeAll: includeAll, useGPU: true))
+                let r = try compare(gpu, metal)
+                XCTAssertLessThan(Double(r.differing) / Double(r.total), 0.0005,
+                                  "\(bits)-bit includeAll=\(includeAll): \(r.differing) of \(r.total) differ from Metal")
+            }
+        }
+    }
+
+    func testMedianMergeRefusesWhatItCannotDo() throws {
+        let sources = (0..<3).map { frame(width: 64, height: 48, channels: 3, bits: 16, seed: $0) }
+        var refs: [MatWrapperRef?] = sources.map { $0.ref }
+        let dst = zeros(like: sources[0])
+        XCTAssertFalse(wgpu_ops_median_merge(&refs, 0, nil, 1.2, false, dst.ref), "no sources")
+        // a misses plane of the wrong size
+        let wrong = missesPlane(width: 63, height: 48)
+        XCTAssertFalse(wgpu_ops_median_merge(&refs, 3, wrong.ref, 1.2, false, dst.ref))
+        // a source of a different size
+        let odd = frame(width: 63, height: 48, channels: 3, bits: 16, seed: 9)
+        var mixed: [MatWrapperRef?] = [sources[0].ref, odd.ref]
+        XCTAssertFalse(wgpu_ops_median_merge(&mixed, 2, nil, 1.2, false, dst.ref))
+    }
+
     func testAlignedMergeRefusesWhatItCannotDo() throws {
         let f = fixture(bits: 16, width: 64, height: 48)
         var refs: [MatWrapperRef?] = f.neighbours.map { $0.ref }
