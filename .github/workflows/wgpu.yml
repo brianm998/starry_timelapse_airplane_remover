@@ -1,0 +1,359 @@
+name: wgpu GPU backend
+
+# Runs the wgpu-native backend's tests (StarCpp/Tests/StarCppBridgeTests/WGPUOpsTests.swift) on the three
+# platforms it targets: Vulkan on Linux, Direct3D 12 on Windows, Metal on macOS.
+#
+# A hosted runner has no GPU, so Linux and Windows run on a SOFTWARE adapter (Mesa's lavapipe, and
+# Microsoft's WARP), which the backend refuses unless STAR_WGPU_ALLOW_CPU_ADAPTER=1. That proves the
+# kernels compile and give the right answer through each platform's real driver stack; it says nothing
+# about speed. macOS runners do expose a Metal device, so that leg also holds the port byte-for-byte to
+# the existing Metal kernels (the tests skip that comparison where there is no Metal backend).
+#
+# The build setup is cli.yml's, deliberately the same (toolchain pins, OpenCV cache keys) so the caches
+# are shared; only StarCpp is built, not the whole CLI. wgpu-native itself comes from wgpu/fetch.sh.
+#
+# Opt-in at run time: nothing touches a GPU driver unless STAR_WGPU is set, and these jobs set it.
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'StarCpp/**'
+      - 'wgpu/**'
+      - '.github/workflows/wgpu.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'StarCpp/**'
+      - 'wgpu/**'
+      - '.github/workflows/wgpu.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: wgpu-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  STAR_WGPU: '1'
+  STAR_WGPU_ALLOW_CPU_ADAPTER: '1'
+
+jobs:
+  # ─── Linux: Vulkan on lavapipe ───────────────────────────────────────────────
+  linux:
+    name: Linux · Vulkan (lavapipe)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install apt prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake make git pkg-config perl \
+            libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
+            libcurl4-openssl-dev \
+            mesa-vulkan-drivers libvulkan1 vulkan-tools
+
+      - name: Show the Vulkan device
+        run: vulkaninfo --summary || true
+
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: '6.0'
+
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/linux
+            opencv/include
+          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/linux/libopencv2.a ]; then
+            cd opencv && ./release.sh
+          else
+            echo "OpenCV: restored from cache"
+          fi
+
+      - name: Fetch wgpu-native
+        run: wgpu/fetch.sh
+
+      - name: Test the wgpu backend
+        run: swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wgpu-linux-log
+          path: wgpu-test.log
+          if-no-files-found: ignore
+
+  # ─── macOS: Metal, and the byte-for-byte comparison with the Metal kernels ───
+  macos:
+    name: macOS · Metal
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install Eigen3 via Homebrew
+        run: brew install eigen
+
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/macos
+            opencv/include
+          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/macos/libopencv2.a ]; then
+            cd opencv && ./release.sh
+          else
+            echo "OpenCV: restored from cache"
+          fi
+
+      - name: Fetch wgpu-native
+        run: wgpu/fetch.sh
+
+      - name: Test the wgpu backend
+        run: swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wgpu-macos-log
+          path: wgpu-test.log
+          if-no-files-found: ignore
+
+  # ─── Windows: Direct3D 12 on WARP ────────────────────────────────────────────
+  windows:
+    name: Windows · Direct3D 12 (WARP)
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash  # Git Bash; the release scripts and wgpu/fetch.sh need it
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          # Bumped from 6.0 to 6.1: Swift 6.0 on Windows has a swift-driver
+          # bug that deterministically aborts the StarCore module compile
+          # with
+          #   <unknown>:0: error: supplementary output file map
+          #   '…\supplementaryOutputs-N' is missing an entry for
+          #   '…\StarCore\Sources\StarCore\AbstractBlobProcessor.swift'
+          # No build-config flag (-wmo, -disable-batch-mode, -j 1,
+          # SWIFTPM_USE_INTEGRATED_DRIVER=0) avoided it on 6.0. Hoping the
+          # newer driver in 6.1 has the fix.
+          #
+          # Watch for two earlier-known 6.1 gotchas:
+          #   1. The 6.1 installer no longer leaves an MSVC dev env that
+          #      OpenCV's CMake can auto-discover. The "Pin MSVC dev env"
+          #      step below explicitly runs vcvars64.bat afterwards and
+          #      exports INCLUDE/LIB/PATH to GITHUB_ENV, which should
+          #      satisfy CMake — but if CMake still says "No CMAKE_CXX_COMPILER
+          #      could be found" we'll need to also force the Visual Studio
+          #      generator with -G "Visual Studio 17 2022" -A x64 in
+          #      opencv/build.sh.
+          #   2. The 6.1 Clang version may not trip the MSVC 14.44 STL
+          #      static_assert the way 6.0's Clang 17 did. If StarCpp now
+          #      compiles cleanly we can drop the
+          #      _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH workaround in
+          #      StarCpp/Package.swift later.
+          swift-version: swift-6.1-release
+          swift-build: 6.1-RELEASE
+
+      - name: Install Eigen3 to C:/eigen3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest `
+            -Uri 'https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip' `
+            -OutFile "$env:RUNNER_TEMP\eigen.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\eigen.zip" -DestinationPath C:\
+          Move-Item C:\eigen-3.4.0 C:\eigen3
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          cmake --version
+          perl --version | head -2
+
+      - name: Install MSVC 14.40 toolset
+        # The windows-2022 runner only ships the latest MSVC toolset, which is
+        # 14.44 as of image 20260518. Swift 6.0's bundled Clang 17 has two
+        # incompatibilities with the 14.44 headers:
+        #   1. <wchar.h> now #includes <intrin.h>, creating a Clang module
+        #      cycle (ucrt -> _visualc_intrinsics -> ucrt via <malloc.h> in
+        #      <xmmintrin.h>). Breaks every Swift compile, including
+        #      third-party packages like Semaphore.
+        #   2. The STL static_asserts on Clang version >= 19 (the
+        #      _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH workaround in
+        #      StarCpp/Package.swift covers this for the C++ compile, but not
+        #      for the Swift Clang importer).
+        # The 14.40 LTSC toolset predates both regressions. Installing it here
+        # so the "Pin MSVC dev env" step below can switch vcvars to it.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          $vsPath    = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
+          Write-Host "Adding MSVC 14.40 toolset to $vsPath"
+          # The path contains spaces ("Program Files", "Visual Studio").
+          # PowerShell's Start-Process -ArgumentList does NOT auto-quote array
+          # elements that contain spaces — passing $vsPath bare results in the
+          # installer parsing --installPath as just "C:\Program" and silently
+          # ignoring the rest. Wrap in literal double quotes so the path stays
+          # intact across the process boundary.
+          $proc = Start-Process -FilePath $installer -ArgumentList @(
+              'modify',
+              '--installPath', "`"$vsPath`"",
+              '--add', 'Microsoft.VisualStudio.Component.VC.14.40.17.10.x86.x64',
+              '--quiet', '--norestart', '--nocache'
+          ) -Wait -PassThru -NoNewWindow
+          if ($proc.ExitCode -notin 0,3010) {
+              throw "VS Installer failed (exit code $($proc.ExitCode))"
+          }
+          # Verify the toolset is actually present so we fail fast if the
+          # component ID drifts.
+          $toolsetDir = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Directory `
+              | Where-Object { $_.Name -like '14.40.*' } | Select-Object -First 1
+          if (-not $toolsetDir) {
+              throw "MSVC 14.40 toolset not found under $vsPath\VC\Tools\MSVC after install"
+          }
+          Write-Host "Installed: $($toolsetDir.Name)"
+
+      - name: Pin MSVC dev env to 14.40 + Windows SDK 10.0.22621.0
+        # gha-setup-swift activates the latest toolset + SDK via vcvars64. We
+        # need to override BOTH:
+        #
+        #   * MSVC 14.40 (not 14.44) — see install step above.
+        #
+        #   * Windows SDK 10.0.22621.0 (not the current default 10.0.26100.0).
+        #     The 26100 ucrt's <wchar.h> unconditionally `#include <intrin.h>`,
+        #     which makes Clang build the _visualc_intrinsics module while
+        #     building the ucrt module — and _visualc_intrinsics transitively
+        #     includes <malloc.h> from ucrt, producing
+        #         cyclic dependency in module 'ucrt':
+        #             ucrt -> _visualc_intrinsics -> ucrt
+        #     The cycle kills every Swift compile. SDK 22621 predates that
+        #     wchar.h change. windows-2022 has it preinstalled alongside 26100.
+        #
+        # vcvars64.bat positional arg #1 is the SDK version; -vcvars_ver=
+        # pins the MSVC toolset. Capture the resulting env and push it through
+        # GITHUB_ENV so subsequent steps inherit it.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vsPath = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
+          $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+          $output = & cmd /c "`"$vcvars`" 10.0.22621.0 -vcvars_ver=14.40 && set"
+          $wanted = @(
+              'INCLUDE','LIB','LIBPATH','PATH',
+              'VCINSTALLDIR','VCToolsInstallDir','VCToolsVersion',
+              'VSINSTALLDIR','WindowsSdkDir','WindowsSDKVersion','UCRTVersion'
+          )
+          foreach ($line in $output) {
+              if ($line -match '^([A-Za-z_][A-Za-z0-9_(\)]*)=(.*)$') {
+                  $name = $matches[1]; $value = $matches[2]
+                  if ($wanted -contains $name) {
+                      "$name=$value" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                  }
+              }
+          }
+          $ver    = ($output | Where-Object { $_ -match '^VCToolsVersion='     }) -replace '^VCToolsVersion=', ''
+          $sdkVer = ($output | Where-Object { $_ -match '^WindowsSDKVersion='  }) -replace '^WindowsSDKVersion=', ''
+          $ucrt   = ($output | Where-Object { $_ -match '^UCRTVersion='        }) -replace '^UCRTVersion=', ''
+          Write-Host "Active VCToolsVersion:    $ver"
+          Write-Host "Active WindowsSDKVersion: $sdkVer"
+          Write-Host "Active UCRTVersion:       $ucrt"
+
+      - name: Install Swift modulemaps into the pinned SDK and MSVC toolset
+        # Swift's Windows installer copies four modulemap/apinotes files from
+        # $SDKROOT\usr\share\ into the Windows SDK and the MSVC toolset it
+        # detected at install time. Since we just switched both SDK and MSVC
+        # to non-default versions, the active include directories don't have
+        # those files — which makes Swift's Clang importer fail with
+        #     <unknown>:0: error: missing required module 'ucrt'
+        # the moment any Swift file imports anything that pulls in ucrt.
+        #
+        # Replicate the installer's copy step for the active SDK + toolset.
+        # Files are tolerant: if a source is missing on this Swift version,
+        # we skip it rather than fail.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $share = Join-Path $env:SDKROOT 'usr\share'
+          if (-not (Test-Path $share)) {
+              throw "Swift SDK share dir not found at $share (SDKROOT=$env:SDKROOT)"
+          }
+
+          # Normalise WindowsSDKVersion (vcvars emits it with a trailing '\').
+          $sdkVer = $env:WindowsSDKVersion.TrimEnd('\')
+          $sdkInc = Join-Path $env:WindowsSdkDir "Include\$sdkVer"
+          $vcInc  = Join-Path $env:VCToolsInstallDir 'include'
+
+          $copies = @(
+              @{ src='ucrt.modulemap';     dst=(Join-Path $sdkInc 'ucrt\module.modulemap') },
+              @{ src='winsdk.modulemap';   dst=(Join-Path $sdkInc 'um\module.modulemap')   },
+              @{ src='visualc.modulemap';  dst=(Join-Path $vcInc  'module.modulemap')      },
+              @{ src='visualc.apinotes';   dst=(Join-Path $vcInc  'visualc.apinotes')      }
+          )
+          foreach ($c in $copies) {
+              $src = Join-Path $share $c.src
+              if (Test-Path $src) {
+                  $dstDir = Split-Path $c.dst -Parent
+                  New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+                  Copy-Item -Force $src $c.dst
+                  Write-Host "Copied $($c.src) -> $($c.dst)"
+              } else {
+                  Write-Host "Skipped (missing in this Swift toolchain): $src"
+              }
+          }
+
+      # NOTE: cache keys include "msvc14.40" so changing the toolset pin
+      # above invalidates these caches automatically (otherwise an older
+      # toolset's libs could get linked against a newer toolset's code).
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/windows
+            opencv/include
+          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/windows/opencv2.lib ]; then
+            cd opencv && bash build.sh
+          else
+            echo "OpenCV: restored from cache"
+          fi
+
+      - name: Fetch wgpu-native
+        run: wgpu/fetch.sh
+
+      - name: Test the wgpu backend
+        run: swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wgpu-windows-log
+          path: wgpu-test.log
+          if-no-files-found: ignore

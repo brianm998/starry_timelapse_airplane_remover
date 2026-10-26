@@ -8,6 +8,7 @@
 #if canImport(Metal)
 import Metal
 #endif
+import StarCpp
 
 public enum GPUCapability: Sendable {
 
@@ -22,9 +23,23 @@ public enum GPUCapability: Sendable {
         #if canImport(Metal) && os(macOS)
         return MTLCreateSystemDefaultDevice() != nil
         #else
-        // No Metal backend on this platform yet. CUDA/Vulkan are future tiers
-        // (see GPU_ACCELERATION_PROPOSAL.md ยง6) — until one lands, GPU ops are
-        // macOS-only and this is the single place that says so.
+        // The wgpu-native backend (Vulkan / Direct3D 12): opt-in via STAR_WGPU, and false unless the
+        // build has the library (wgpu/fetch.sh) and the machine has a real adapter. It starts the
+        // device the first time it is asked, so only callers that need the answer pay for it.
+        return wgpu_ops_available()
+        #endif
+    }
+
+    /// Whether the GPU backend here accelerates everything `useGPUForMerge`, `useGPUForSIFT` and
+    /// `useGPUForAKAZE` stand for, and has been measured well enough to be on by default. That is the
+    /// Metal backend and only that: the wgpu-native one does the warp and the aligned merge, not the
+    /// keypoint pyramids, and is opt-in until it has been timed on real hardware. `Config` defaults
+    /// the three flags, and sizes its keypoint memory estimates, from this rather than from
+    /// `isAvailable()`, so a merge-only backend cannot make it believe the keypoints are on the GPU too.
+    public static func hasFullAcceleration() -> Bool {
+        #if canImport(Metal) && os(macOS)
+        return MTLCreateSystemDefaultDevice() != nil
+        #else
         return false
         #endif
     }
@@ -42,7 +57,8 @@ public enum GPUCapability: Sendable {
         #if canImport(Metal) && os(macOS)
         return MTLCreateSystemDefaultDevice()?.name
         #else
-        return nil
+        guard let description = wgpu_ops_device_description() else { return nil }
+        return String(cString: description)
         #endif
     }
 }
