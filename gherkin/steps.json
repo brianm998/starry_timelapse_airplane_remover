@@ -1,6 +1,7 @@
 [
   { "case": "openSequence"          , "text": "I open the sequence {sequence}" },
   { "case": "processEveryFrame"     , "text": "I process every frame" },
+  { "case": "processWithBase"       , "text": "I process the injected sequence and its base" },
   { "case": "horizonYes"            , "text": "the frames have a horizon" },
   { "case": "horizonNo"             , "text": "the frames have no horizon" },
   { "case": "cameraStatic"          , "text": "the camera is static" },

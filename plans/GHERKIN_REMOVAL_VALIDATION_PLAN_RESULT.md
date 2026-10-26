@@ -237,11 +237,30 @@ and judging the desktop run with the selective mode (pins only). The mac GUI's d
 
 On 43939fe6 the desktop STRONG fix worked on all three desktop legs (so MILD vs STRONG was the real cause, not brightness), and every leg was green except `mac gui`: the sandboxed XCUITest runner could not create `removal-reports/` in the repo (Cocoa error 513). On 8cb892c8 (reports and crops written to the sandbox temp dir and attached to the xcresult) **`mac gui` passed: the verifier launches from inside the sandboxed UI test and `removeAirplanes` removed 226 of 226 measurable airplanes there.** Also green on 8cb892c8: cli on Linux, macOS and Windows, desktop on Linux and Windows. **`desktop (macos-15)` failed** on a "detection type not written to the session config" check that races a starved daemon (2.7 GB free, keypoint-slot timeouts); it had passed on 43939fe6. The GUI session reworked it (bd7dc48b: seed STRONG through the remembered-preference file, only verify it), unpushed and unproven when this was written.
 
+## `--temp` decision diagnostics (2026-10-26)
+
+Implemented (`trail_tools/Sources/star-removal-verify/TrailDiagnostics.swift`, classifier unit-tested in `RemovalCore/Diagnosis.swift`) and passed by the cli runner. On a local
+`selective` run of `a7sii_10` (JPEG, `-w --keep-temp-files`) the 174 labelled airplanes still in the output split as: **77 not detected** (44%: no outlier group
+touches the trail), **60 detected but discarded as dust** (34%: faint), **36 misclassified** (21%: every touching group decided keep, classifier scores about -0.1 to -0.9) and
+**1 painting/merge problem** (decided remove, still there). So `selective`'s misses are overwhelmingly a detection and classification matter, not a paint step one.
+
+## Synthetic features, consolidation and the crop mystery (2026-10-26)
+
+- **`syntheticSatellites` and `syntheticAirplanes` (`@cli`)** exist and pass locally (15/15 satellites, 4/4 airplanes, 12-14 s each) on `trails_synth_sky500`
+  (17 MB, built by `star-trail-inject`, in `.test-data/upload/`, manifest entry added, **not uploaded**; the two features fail on CI until Brian uploads it). New step `I process the injected sequence and its base`.
+  The negative control (unprocessed injected frames as the "output") fails all 15 and exits 1. `differential_outside_max` = 0.10 (measured 0.034-0.050).
+- **Realism check, as the plan asked: the synthetic trails are not realistic for the classifier.** In `selective` and `auto selective` Star removes none of the injected trails (SNR 3 to 100, airplanes at SNR 40);
+  `--temp` shows they are detected but decided keep (scores -0.0 to -0.94). Real trails on `a7sii_10` are removed by `selective` about 20% of the time. The classifier's features are fractions of the frame, so the 500x400 base
+  is out of distribution; a larger trail-free base does not exist (the largest region with no labelled trail in all 19 frames is 500x400). So the synthetic features use `automatic`, where there is no classifier. Meteors (never must-pass) are removed by `automatic:false`
+  (ratio about 0.01-0.02) and kept by both selective modes.
+- **The crop-fixture bugs had one cause** (BUGS.md BUG-007, replacing BUG-001 to BUG-003): the automatic horizon detector invents a horizon in the sky-only crop, so the stars below it are erased and the blob pipeline drowns in them.
+  With `--no-horizon` the crop's `selective` run takes 32-35 s at 2.9 GB, is byte-identical across runs and changes 2,899 px outside the labels (80,939 with the default detection).
+- **`--temp` diagnostics** implemented (above). **Duplicate dataset** `a7sii_10_tiff16` dropped: develop's three 16-bit features now use `a7sii_10_16bit`.
+
 ## Not done (leftover)
 
 
 - **Synthetic datasets**: `star-trail-inject` exists and was smoke-tested, but no synthetic dataset has been built, proven clean with Star, uploaded or measured, so there is no `processWithBase` step and no `syntheticSatellites` / `syntheticAirplanes` feature, no differential threshold, and the plan's realism comparison (synthetic vs real detection rate) was not done. There is also no satellite feature (no object is labelled `satellite`).
-- **`--temp` decision diagnostics** are not implemented (the option is accepted and prints a note). The cli runner does not pass `-w --keep-temp-files`.
 - **Windows**: no `star` cli there. The desktop-windows leg now runs `swift build -c release` in `trail_tools` (StarCore builds there as part of stard, but `trail_tools` itself has never been built on Windows) and `removeAirplanes` runs there through the Kotlin runner. **Not run.** If that build fails, that leg fails at the new step.
 - **BUGS.md** BUG-001 to BUG-004 are open and unassigned: `selective` is non-deterministic on the cropped set, stars are dimmed on it, it takes 25-35 minutes, and per-object verdicts differ between platforms. `a7sii_10_crop16` stays in the manifest but nothing uses it.
 - `trail_tools/Package.resolved` is committed as generated and was not reviewed. The `removal-measure.yml` workflow still has a temporary `push` trigger and a `[skip macos]` switch to delete when it is merged.

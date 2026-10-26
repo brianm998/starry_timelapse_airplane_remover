@@ -1,11 +1,11 @@
 {
   "autoHorizonJpeg": ["a7sii_10"],
   "autoHorizonJpegVideoOut": ["a7sii_10"],
-  "autoHorizonTiff16": ["a7sii_10_tiff16"],
+  "autoHorizonTiff16": ["a7sii_10_16bit"],
   "autoHorizonVideo": ["a7sii_10_h264"],
   "autoMovingTiff16": ["moving_a7iv_1_aurora_tiff16"],
-  "autoSelectiveHorizonTiff16": ["a7sii_10_tiff16"],
+  "autoSelectiveHorizonTiff16": ["a7sii_10_16bit"],
   "autoSkyOnlyTiff16": ["a7sii_10_sky_tiff16"],
   "removeAirplanes": ["a7sii_10"],
-  "selectiveHorizonTiff16": ["a7sii_10_tiff16"]
+  "selectiveHorizonTiff16": ["a7sii_10_16bit"]
 }

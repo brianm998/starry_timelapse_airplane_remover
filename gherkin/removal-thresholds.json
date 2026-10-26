@@ -9,7 +9,7 @@
   },
   "stars_median_min": {
     "value": 0.9,
-    "measured": "per-frame star flux ratio medians on a7sii_10 (about 28,000 peaks per frame), both OS: 0.933-0.994 for automatic:false/true, 1.002-1.004 for selective, 2026-10-15. Margin to 0.9 is 0.033; NOT valid for a7sii_10_crop16 (0.28-0.74, see BUGS.md BUG-002)."
+    "measured": "per-frame star flux ratio medians on a7sii_10 (about 28,000 peaks per frame), both OS: 0.933-0.994 for automatic:false/true, 1.002-1.004 for selective, 2026-10-15. Margin to 0.9 is 0.033; not valid for a7sii_10_crop16 with the default horizon detection (0.28-0.74: the detector invents a horizon, BUGS.md BUG-007); with --no-horizon the crop gives 0.95-1.00."
   },
   "stars_median_max": {
     "value": 1.05,
@@ -21,11 +21,11 @@
   },
   "unchanged_outside_max_area": {
     "value": 25000,
-    "measured": "a7sii_10_16bit, selective, release cli, 2026-10-15: total changed px outside the labelled trails over 19 frames (228 million px) is deterministic per platform (identical frame by frame on repeat runs, macos GPU 10,989 twice, linux CPU 15,172 twice) and varies between platforms: 6,723 local Vega GPU, 8,264 macos-15 CPU, 10,989 macos-15 GPU (Paravirtual), 15,172 ubuntu-24.04 CPU; at most 7,774 in one frame (linux frame 96). 25,000 is 1.65x the worst platform. A broken selection or paint step changes orders of magnitude more. NOT valid for a7sii_10_crop16 (BUG-001)."
+    "measured": "a7sii_10_16bit, selective, release cli, 2026-10-15: total changed px outside the labelled trails over 19 frames (228 million px) is deterministic per platform (identical frame by frame on repeat runs, macos GPU 10,989 twice, linux CPU 15,172 twice) and varies between platforms: 6,723 local Vega GPU, 8,264 macos-15 CPU, 10,989 macos-15 GPU (Paravirtual), 15,172 ubuntu-24.04 CPU; at most 7,774 in one frame (linux frame 96). 25,000 is 1.65x the worst platform. A broken selection or paint step changes orders of magnitude more. for a7sii_10_crop16 use --no-horizon (BUG-007)."
   },
   "differential_outside_max": {
-    "value": null,
-    "measured": "unmeasured: no synthetic dataset has been run through Star yet"
+    "value": 0.1,
+    "measured": "trails_synth_sky500 (500x400 sky crop with injected satellites/airplanes/meteors, seed 7), automatic:false --no-horizon, Star's output on the injected frames vs on the base, release cli on the iMac Pro, 2026-10-26: the fraction of pixels outside every injected footprint where |output - base output| > 6 sigma (sigma = MAD of the difference) is 0.034-0.050 over 13 frames (median 0.042); 0.10 is twice the worst frame. Not yet measured on CI. It catches gross collateral only: even with nothing injected the two outputs differ by alignment noise."
   },
   "min_required_contrast": {
     "value": null,

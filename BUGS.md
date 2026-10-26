@@ -14,165 +14,60 @@ conversation can pick one up.
 
 ---
 
-## BUG-001: `selective` is not deterministic: large stretches of sky are removed in different frames on every run
+## BUG-007: the automatic horizon detector invents a horizon on a sky-only sequence, and everything below it is treated as unaligned ground
 
-Found 2026-10-15 while checking Brian's labels with `trail_tools/` (the "nothing else changed" check), then re-measured on CI.
-It started as "frame 90 is damaged"; repeating the run showed that frame 90 was not special.
+Found 2026-10-26 chasing the crop-fixture failures that BUG-001 to BUG-003 used to describe (those entries are deleted: BUG-001's non-determinism and
+BUG-003's 25 to 35 minutes were fixed by the blob-pipeline work, C3 and S14; what was left of all three was this).
 
 ### What was observed
 
-`star -c selective` on `a7sii_10_crop16` (the first 19 frames of the `a7sii_10` sequence, Sony a7S II, cropped to x=1500 y=600
-w=2300 h=1450, 16-bit LZW TIFF, see `test_data/datasets.json`). In selective mode every pixel outside the removal masks must be
-bit-identical to the input (lossless input), so `star-removal-verify --unchanged-outside` counts pixels Star changed outside any
-labelled trail. Result per run (total changed px outside labels; hand labels are the 122 objects in `a7sii_10_crop16/labels.json`):
+`a7sii_10_crop16` is the first 19 frames cropped to x=1500 y=600 w=2300 h=1450: all sky, no ground (`test_data/README`, `datasets.json`). Run with star's default
+horizon detection, the detector reports a horizon anyway (`CombinedHorizonDetector: done, horizon Y range [141..492]` in the 1009 px working image, with the
+`dp` method at confidence 1.00). Star then treats the part of the frame below it as ground: not star-aligned, merged from neighbours that do not move. Stars do move
+between frames, so the median of the unaligned frames erases them there.
 
-| run | total px | where the bulk is |
+### Measured (iMac Pro, release cli, current develop, the 19-frame crop)
+
+| | default horizon detection | `--no-horizon` |
 |---|---|---|
-| iMac Pro, Vega GPU path, first run | 44,022 | frame 90: 28,655 |
-| iMac Pro, Vega GPU path, **same machine, same files, same binary, second run** | 80,826 | frame 97: 64,135 (frame 90 is now 903) |
-| macos-15 CI, GPU path (Apple Paravirtual) | 45,771 | frame 86: 21,434, frame 92: 13,344 |
-| macos-15 CI, CPU path (`--no-use-gpu*`) | 14,419 | frame 92: 6,247 |
-| ubuntu-24.04 CI, CPU | 62,543 | frame 97: 31,579, frame 96: 13,233, frame 90: 7,035 |
+| star flux ratio, `automatic:false`, top band (crop y 0-450) | 0.94-0.98 | 0.96-1.00 |
+| ... middle band (y 500-950) | **0.05-0.10** | 0.95-1.00 |
+| ... bottom band (y 1000-1450) | **0.01-0.05** | 0.95-1.00 |
+| `selective` wall time (`-n 3`) | 206 s and 247 s, peak 10.5 GB | **32 s and 35 s, peak 2.9 GB** |
+| `selective` changed px outside the labelled trails (122 labels) | **80,939** | **2,899** |
+| `selective` determinism, two runs | byte-identical on 19 of 19 frames | byte-identical on 19 of 19 frames |
 
-Across the two local runs only 4 of the 11 affected frames had identical areas, and 3 objects' removed-or-not verdict also
-changed (`00082-13`, `00097-4`, `00097-5`).
-
-### Measured
-
-* The big changed regions are not scattered. In the first local run frame 90's components lie on one straight line,
-  y = 0.0987·x + 469.8 (crop coordinates), residual 1.9 px, x≈934 to 2265, holding 97% of the 28,655 px. On CI frames 86 and 92
-  (GPU path) the large components also lie on straight lines (residuals 2.7 and 5.3 px over about 1,000 px).
-* Peak per-pixel change inside them is 0.3 to 0.5 of full scale, and in the output the Milky Way stars along the line are
-  replaced by faint diagonal smears (compare the input and output of frame 90 high-passed with a 0x12 blur).
-* In the input, no trail is visible by eye along those lines (Brian looked; the high-passed 89/90/91 do not show one).
+Before the pipeline work the same default-horizon `selective` run took 25 to 35 minutes on CI and was not deterministic (BUG-001: 44,022 then 80,826 px on one machine),
+which is why the crop was written off as a bad fixture. With `--no-horizon` it is a good one: fast, deterministic and calm.
 
 ### What it means (hypotheses, not yet separated)
 
-1. Star detects very faint straight linear features in dense star fields (real faint airplanes/satellites, or a
-   linear artifact such as sensor banding or a long satellite flare) and removes them, but whether a given one is detected
-   differs run to run, so the unlabelled changes land in different frames. Then the "labels are incomplete" part is real
-   but cannot be fixed by labelling, because the set of detections moves.
-2. The detection or its classification involves non-determinism. The project memory note `star-test-suite-findings` records
-   that `BunchCalculator` has non-determinism (and that polarCoords mirroring and `ImageMatrixElement.contains` changed decision
-   tree features), which is a lead, not a confirmed cause.
-3. Independently of 1 and 2, the repaint of a removed faint line in a dense star field looks bad (smeared streaks). This
-   is a removal-quality defect.
-
-Do not "fix" it by loosening the check or by changing what `selective` is supposed to do.
+The detector has no "there is no horizon" outcome: on a frame that is stars all the way down, the `dp` and `tex` methods still find an edge in the gradient of the Milky Way and
+agree on it. The consequences are all the same mechanism: stars in the false ground are outliers against the neighbours (a flood of blobs: the old minutes and gigabytes),
+the merge erases them (the star loss), and the selective check changes pixels no label explains.
 
 ### How to reproduce
 
 ```bash
-test_data/fetch.sh a7sii_10_crop16
-mkdir /tmp/c16 && cp -R .test-data/a7sii_10_crop16/*.tif /tmp/c16/        # a fresh copy each run: Star derives paths from the dir name
-cli/.build/release/star -l info -c selective -o /tmp/c16-out /tmp/c16     # about 25-35 min, see BUG-003
-cd trail_tools && swift build -c release --product star-removal-verify
-.build/release/star-removal-verify --input ../.test-data/a7sii_10_crop16 --output /tmp/c16-out/<the *star-v-* dir> \
-    --labels ../.test-data/a7sii_10_crop16/labels.json --unchanged-outside --clean-method selective \
-    --report /tmp/rep.json --crops /tmp/crops --report-only
-# repeat with a second fresh copy and compare the per-frame "collateral" areas in the two reports
+for f in test_data/test_a7sii_10/*.jpg; do magick $f -crop 2300x1450+1500+600 +repage -depth 16 -compress lzw /tmp/crop/$(basename ${f%.jpg}).tif; done
+cli/.build/release/star -c automatic:false /tmp/crop /tmp/out            # stars lost below crop y ~500
+cli/.build/release/star -c automatic:false --no-horizon /tmp/crop /tmp/out2   # stars kept
+# measure with: star-removal-verify ... --stars, with a "sky" polygon in labels.json limited to a band
 ```
-`gherkin/measure-removal.sh macos <out>` with `MEASURE_FILTER=a7sii_10_crop16-selective` does the same thing.
 
 ### Where to look
 
-* `StarCore/Sources/StarCore/FrameAirplaneRemover.swift` (selective branch, `computeRemovalMask`); outlier-group detection and
-  `BunchCalculator`; a run with `-w --keep-temp-files` to see which group was decided remove (`OutlierGroupPaintData.json`).
-* **Control measured:** the full-frame 16-bit conversion of the same frames (`a7sii_10_16bit`), `selective`, on the iMac Pro, run twice:
-  all 19 frames identical between the two runs, 6,723 changed px in total (39 to 1,073 per frame, 4 frames at 0). So the
-  non-determinism is specific to the cropped frames (no ground, dense Milky Way only), not to lossless 16-bit input or to `selective` in general.
-* The CI artifacts of the 2026-10-15 runs (`removal-measurements-{linux,macos}`, workflow run ids 38801175389 and 38798344452).
+`StarCore/Sources/StarCore/CombinedHorizonDetector.swift` and the methods it combines (`dp`, `tex`, `grad`, `siox`, Otsu): a confidence for "no horizon", or a check that the
+proposed ground differs from the sky (stars move between frames, the ground does not: the per-pixel temporal variance across the neighbours separates them without any image model).
 
 ### Referenced from
 
-* `gherkin/removal-thresholds.json`, `unchanged_outside_max_area` (left unset because of this bug).
+* `gherkin/removal-thresholds.json` (the star thresholds are only valid for sequences with a real horizon, or with `the frames have no horizon`).
+* `gherkin/measure-removal.sh` (`MEASURE_CROP=1` runs the crop with `--no-horizon`).
 
 ### Status
 
-Open. Not a regression test yet. Owner: unassigned. The crop is the trigger; the full-frame 16-bit control is reproducible. No same-platform repeat has been done for the full-frame JPEG dataset or on CI.
-
----
-
-## BUG-002: cropped, sky-only 16-bit frames lose 30 to 70% of their star flux in `automatic:false` and `automatic:true`
-
-Found 2026-10-15 in the CI measurement run (identical on macOS and Linux).
-
-### What was observed
-
-`a7sii_10_crop16` (see BUG-001 for what it is), `-c automatic:false`: the star check (peaks over 10σ in the input, flux compared with the output
-at the same pixel) gives a per-frame median ratio of **0.282 to 0.738** (overall 0.585, ubuntu and macos alike) and 47 to 52%
-of the peaks below half their input flux. `automatic:true` gives 0.80 to 0.95 and 44 to 45% lost. The same frames at full
-size (`a7sii_10`, `automatic:false`) give 0.933 to 0.993 and 1.4% lost; the full-frame 16-bit conversion run locally gives about 0.97.
-`selective` on the crop gives exactly 1.000 (it does not touch those pixels).
-
-### Measured
-
-* ~8,600 to 9,600 peaks per frame in the crop, p5 of the ratio is about -0.03 (some stars come back as nothing), p95 about 1.14.
-* The ratio is not uniform: frames 88 to 91 are worst (0.28 to 0.37).
-
-### What it means (hypotheses, not yet separated)
-
-Not investigated. Candidates: the crop has no ground, so horizon detection/earth alignment takes a different path; the star-aligned
-median of neighbours is mis-aligned by a fraction of a pixel in a very dense star field, which dims every star at its original
-position; or the aligned frames are displaced. The verifier's star check compares at fixed pixel positions, so a uniform
-sub-pixel shift would show up exactly like this.
-
-### How to reproduce
-
-As BUG-001 but with `-c automatic:false` (about 40 s), then run `star-removal-verify ... --stars` and read `stars` in the report.
-
-### Where to look
-
-Star's alignment for sequences with no horizon (`--no-horizon` and the no-ground path), `homography.db` replay (project
-memory `merge-replay-verification`), and a visual flicker of input vs output stars.
-
-### Referenced from
-
-* `gherkin/removal-thresholds.json` `stars_*` notes (they are only valid for `a7sii_10`, not the crop).
-
-### Status
-
-Open. Until understood, do not use the crop set for a "stars are preserved" expectation.
-
----
-
-## BUG-003: `selective` and `automatic:true` take 25 to 35 minutes on the cropped 16-bit set, against about 2 to 4 minutes at full size
-
-Found 2026-10-15 in the CI measurement run.
-
-### What was observed
-
-| run | a7sii_10 (4240x2832 JPEG) | a7sii_10_crop16 (2300x1450 16-bit TIFF) |
-|---|---|---|
-| macos-15 selective | 135 s | 1,471 s |
-| macos-15 automatic:true | 123 s | 1,517 s |
-| macos-15 automatic:false | 79 s | 39 s |
-| ubuntu-24.04 selective | 205 s | 2,090 s |
-| ubuntu-24.04 automatic:true | 207 s | 2,077 s |
-| ubuntu-24.04 automatic:false | 116 s | 47 s |
-
-`automatic:false` (no outlier groups) is fast on the crop, so the slow part is the outlier-group stage (detection or classification). The
-crop frames are smaller but denser in stars (the Milky Way) and are 16-bit. It also took 30 minutes on the iMac Pro locally, so it is not a runner artifact.
-
-### What it means (hypotheses, not yet separated)
-
-Not investigated: a very large number of outlier candidates in a dense field is the obvious suspect; 16-bit versus 8-bit input is another.
-
-### How to reproduce
-
-`MEASURE_FILTER=a7sii_10_crop16-selective gherkin/measure-removal.sh macos <out>` and read `star.status` and `star.log`.
-
-### Where to look
-
-A sample of the running `star` (project memory `main-thread-stall-diagnosis` describes sampling), and `star.log` with `-l verbose`.
-
-### Referenced from
-
-None yet. It makes the crop set unattractive as a CI fixture (a feature on it would take 35 minutes per leg).
-
-### Status
-
-Open.
+Open. Workaround: tell Star there is no horizon (`--no-horizon`, or the Gherkin step `the frames have no horizon`).
 
 ---
 
@@ -188,11 +83,17 @@ Same 226 measurable labelled objects, same source. Counting an object removed wh
   `00088-12`, `00092-6`, `00094-7`, `00096-5`).
 * `selective`: 47 removed on both, **2 objects differ** (`00084-12`, `00092-6`).
 
+### Measured 2026-10-26: not run-to-run, and not GPU versus CPU
+
+On the iMac Pro (Vega GPU), `a7sii_10` JPEG, `-c automatic:true`, three runs: **two GPU runs are byte-identical on all 19 output frames**; a **CPU-only run
+(`--no-use-gpu --no-use-gpu-for-sift --no-use-gpu-for-akaze`) agrees with the GPU run on every one of the 226 objects (0 verdict differences, largest median-ratio difference 0.004)**.
+So the 7 objects that differ between hosted macos-15 and ubuntu-24.04 come from the platforms: different CPU architecture (arm64 against x86-64), different OpenCV builds and SIMD paths, floating-point
+differences in alignment and in the decision-tree features. Within one platform the result is stable (that is what the pins rely on).
+
 ### What it means (hypotheses, not yet separated)
 
-The classifier's remove/keep decision depends on the platform (GPU versus CPU keypoints and alignment feed it) or is itself not
-deterministic (see BUG-001). Whether the differences are platform or run-to-run was not measured for this dataset: only one run per platform.
-This is why the real-data `automatic:true` check judges the fraction removed (`removed_fraction_min`) and not each object.
+Cross-platform floating-point sensitivity in the keypoint/alignment stage or in the classifier's features; a borderline classifier score near the decision threshold for those 7 objects flips with a tiny numeric difference.
+To separate: dump the classifier scores of the 7 objects on both platforms (`-w --keep-temp-files`, then `star-removal-verify --temp`, which prints the scores) and see how close to 0 they are.
 
 ### How to reproduce
 
@@ -209,7 +110,7 @@ Run the measurement workflow (`.github/workflows/removal-measure.yml`) and compa
 
 ### Status
 
-Open. Needs a same-platform repeat to separate platform from run-to-run non-determinism.
+Open, low priority: the pins and the aggregate check already tolerate it. Narrowed to a cross-platform numeric difference; next step is comparing the 7 objects' classifier scores on macOS and Linux CI.
 
 ---
 
@@ -260,7 +161,7 @@ None. It makes `selectiveRemovesOnlyTrails` flaky on macos-15 until understood.
 
 ### Status
 
-Open. Seen once.
+Open. Seen once in three macos-15 runs of that feature (run 38832664368 failed; the same job passed in 38838922701 and 40259054830); not reproduced locally.
 
 ---
 

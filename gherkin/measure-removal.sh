@@ -24,11 +24,11 @@ runs=(
   "a7sii_10_16bit:automatic:false"
   "a7sii_10_16bit:automatic:true"
 )
-# a7sii_10_crop16 is a hard case (BUGS.md BUG-001 to BUG-003: 25-35 min per run, stars dimmed, unstable collateral); only with MEASURE_CROP=1.
+# a7sii_10_crop16 is sky only, so it is run with --no-horizon (BUGS.md BUG-007: with the default horizon detection the detector invents a horizon there); only with MEASURE_CROP=1.
 if [ "${MEASURE_CROP:-}" = "1" ]; then
   runs+=("a7sii_10_crop16:selective:--unchanged-outside" "a7sii_10_crop16:automatic:false" "a7sii_10_crop16:automatic:true")
 fi
-# "repeat" is an identical second run on the same runner: how much do two runs of the same thing differ? (BUG-001)
+# "repeat" is an identical second run on the same runner: how much do two runs of the same thing differ? 
 # On macOS also repeat one run with the GPU off, to see how far Metal and the CPU path differ on the same runner.
 if [ "$os" = "macos" ]; then runs+=("a7sii_10_16bit:selective:--unchanged-outside:cpu"); fi
 
@@ -46,6 +46,7 @@ for spec in "${runs[@]}"; do
   mkdir "$work/seq"; cp "$cache/$ds"/*.jp*g "$cache/$ds"/*.tif "$work/seq/" 2>/dev/null
   flags=()
   [ "$tag" = "cpu" ] && flags+=(--no-use-gpu --no-use-gpu-for-sift --no-use-gpu-for-akaze)
+  [ "$ds" = "a7sii_10_crop16" ] && flags+=(--no-horizon)   # sky only: BUG-007
   start=$(date +%s)
   "$star" -l info -c "$method" ${flags[@]+"${flags[@]}"} -o "$work/out" "$work/seq" > "$run/star.log" 2>&1
   rc=$?

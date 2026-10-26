@@ -78,10 +78,10 @@ Each combines horizon / camera motion / input type / clean method / output video
 | `autoSkyOnlyTiff16` | no | static | 16-bit TIFF | auto | no | `a7sii_10_sky_tiff16` |
 | `autoHorizonJpeg` | yes | static | JPEG | auto | no | `a7sii_10` |
 | `autoHorizonVideo` | yes | static | video (`frame_format`, default `tiff16`) | auto | no | `a7sii_10_h264` |
-| `autoHorizonTiff16` | yes | static | 16-bit TIFF | auto | no | `a7sii_10_tiff16` |
+| `autoHorizonTiff16` | yes | static | 16-bit TIFF | auto | no | `a7sii_10_16bit` |
 | `autoMovingTiff16` | yes | moving | 16-bit TIFF | auto | no | `moving_a7iv_1_aurora_tiff16` |
-| `selectiveHorizonTiff16` | yes | static | 16-bit TIFF | selective | no | `a7sii_10_tiff16` |
-| `autoSelectiveHorizonTiff16` | yes | static | 16-bit TIFF | auto selective | no | `a7sii_10_tiff16` |
+| `selectiveHorizonTiff16` | yes | static | 16-bit TIFF | selective | no | `a7sii_10_16bit` |
+| `autoSelectiveHorizonTiff16` | yes | static | 16-bit TIFF | auto selective | no | `a7sii_10_16bit` |
 | `autoHorizonJpegVideoOut` | yes | static | JPEG | auto | yes | `a7sii_10` |
 
 Clean method names: *auto* is `-c automatic` / `.automatic(false)`; *selective* is `-c selective` / `.selective`;
@@ -225,6 +225,11 @@ Exit 0 = pass, 1 = failure, 2 = bad input (bad label, missing frame, wrong mode 
   median ratio and the fraction below 0.5 are judged as a distribution, inside `sky`, ≥ 40 px from any labelled object.
 * **Unchanged outside (`--unchanged-outside`):** selective + lossless input + `complete` labels only (refused otherwise).
   Every connected component of changed pixels outside the footprint is reported, with a crop.
+* **Why it was left in (`--temp <star_temp dir>`):** for every failing object, reads the run's outlier data (a `star -w --keep-temp-files` run;
+  `selective` and `auto selective` keep it, `automatic` does not) and says which case it is: *not detected* (no outlier group touches the trail),
+  *detected but discarded as dust*, *misclassified* (every touching group decided keep, with the classifier's score), or *painting/merge problem*
+  (decided remove, yet still in the output). Diagnosis only: it never changes pass or fail, is skipped when nothing failed, and an error in it is a
+  note in the report. The cli runner passes it whenever the run kept its temp directory.
 * **Differential (`--base-output`):** for synthetic datasets, compares with Star's output on the un-injected base.
 * Whole-frame golden images and PSNR/SSIM cannot be the check: the default mode recomputes every pixel and Metal vs CPU
   differ.
@@ -242,7 +247,21 @@ method): still failing = pass and say so; failing but not listed = regression (f
 
 `star-trail-inject --base <clean 16-bit sequence> --out <dir> [--spec spec.json]` writes `base/`, `injected/` and a
 `labels.json` (`confirmed: true`, exact by construction). Seeded and deterministic; run once to build a dataset, never at
-test time. Satellites sweep SNR 3–100, airplanes are twin lines with strobe dots, meteors are measured only.
+test time. Satellites sweep SNR 3-100 (a Gaussian line, FWHM 1.5-3 px, constant along its length, some continuing collinearly into the next frame),
+airplanes are twin lines with strobe dots tinted red/green/white (some run off the frame edge by 15% of their length), meteors are tapered and measured only.
+`lengthScale` in the spec shrinks the trails to fit a small base (0.4 for 500x400).
+
+`trails_synth_sky500`: a 500x400 sky-only region (x=0 y=425 of `a7sii_10_crop16`: the largest region with no labelled trail in any of the 19 frames) as `base/` and `injected/`, with
+15 satellites, 4 airplanes and 2 meteors. Features `syntheticSatellites` and `syntheticAirplanes` (`@cli`) run Star on both with `the frames have no horizon`, `the clean method is automatic`
+(`I process the injected sequence and its base`) and check that every injected trail is removed in the differential sense: the trail's contrast in (Star's output on `injected`) minus
+(Star's output on `base`) is at most `removed_max` of its input contrast, and fewer than `differential_outside_max` of the pixels outside every footprint differ from the base output by more than 6 sigma.
+Measured 2026-10-26: all 19 objects removed with a worst median ratio of 0.045; 3.4-5.0% of the outside pixels differ (the two outputs differ by alignment noise even with nothing injected);
+12-14 s per feature.
+
+**Why only `automatic`:** the same data in `selective` and `auto selective` leaves every injected trail in. `--temp` says why: the trails are *detected* (outlier groups of 200-1,500 px sit on them) but the classifier
+decides keep, with scores of -0.0 to -0.94. The classifier's features are fractions of the frame, so a 150-350 px trail in a 500 px frame is far outside what it was trained on; cropping to keep pixel scale does not keep
+the features in distribution (the plan assumed it would). A synthetic dataset for the classifier needs frames the size of real ones. Synthetic trails also have no real airplane's
+brightness profile, so this is not a measure of the classifier's recall on real trails.
 
 ### Removal features (`removeAirplanes` on all three clients, the rest cli only)
 

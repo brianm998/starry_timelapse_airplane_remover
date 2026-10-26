@@ -4,7 +4,7 @@ import RemovalCore
 import RemovalIO
 
 @main
-struct StarRemovalVerify: ParsableCommand {
+struct StarRemovalVerify: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "star-removal-verify",
         abstract: "Checks that labelled airplanes/satellites are gone from Star's output, and nothing else was damaged.",
@@ -36,12 +36,12 @@ struct StarRemovalVerify: ParsableCommand {
     @Flag(help: "Always exit 0 and print the numbers. The only mode usable until thresholds are measured.")
     var reportOnly = false
 
-    func run() throws {
-        do { try execute() }
+    func run() async throws {
+        do { try await execute() }
         catch let e as VerifyError { FileHandle.standardError.write(Data("star-removal-verify: \(e)\n".utf8)); throw ExitCode(2) }
     }
 
-    func execute() throws {
+    func execute() async throws {
         var opts = VerifyOptions()
         opts.expect = try VerifyOptions.parseExpect(expect)
         opts.stars = stars
@@ -93,16 +93,25 @@ struct StarRemovalVerify: ParsableCommand {
         if frames.isEmpty { throw VerifyError.badInput("no labelled frames matched the input directory") }
         opts.inputIsLossless = lossless
 
-        let (rep, cropData) = try Verifier.verify(frames: frames, labels: labelSet, options: opts, thresholds: th, baseline: bl)
+        var (rep, cropData) = try Verifier.verify(frames: frames, labels: labelSet, options: opts, thresholds: th, baseline: bl)
 
+        // Diagnosis only: it never changes pass or fail, so it is skipped when nothing failed and an error in it is a note, not a failure.
+        if let temp, rep.objects.contains(where: { $0.status == "fail" }) {
+            do {
+                try await TrailDiagnostics.annotate(&rep, frameNames: try ImageIO.imageFiles(in: input), labels: labelSet, temp: temp)
+            } catch {
+                rep.messages.append("--temp diagnostics unavailable: \(error)")
+            }
+        }
         try FileManager.default.createDirectory(atPath: crops, withIntermediateDirectories: true)
         for (name, data) in cropData { try data.write(to: URL(fileURLWithPath: (crops as NSString).appendingPathComponent(name))) }
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        // a stretch outside the frame has no contrast to measure: NaN, which JSON cannot hold
+        enc.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
         try enc.encode(rep).write(to: URL(fileURLWithPath: report))
 
         printSummary(rep)
-        if let temp { print("note: --temp \(temp) decision diagnostics are not implemented yet (see plans/GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md)") }
         print("report: \(report)\ncrops: \(crops)")
         if !reportOnly && !rep.summary.ok { throw ExitCode(rep.summary.labelErrors > 0 && rep.summary.failed == 0 ? 2 : 1) }
     }
@@ -115,6 +124,7 @@ struct StarRemovalVerify: ParsableCommand {
                   + " median=\(f(m?.medianRatio)) worst=\(f(m?.worstRatio)) best=\(f(m?.bestRatio))"
                   + " removed=\(f(m?.fractionRemoved)) measurable=\(f(m?.measurableFraction))"
                   + (o.detail.map { " — \($0)" } ?? ""))
+            if let why = o.diagnosis { print("    why: \(why)") }
         }
         for (frame, s) in r.stars.sorted(by: { $0.key < $1.key }) {
             print("\(frame) stars: n=\(s.peaks) median=\(f(s.medianRatio)) p5=\(f(s.p5)) p95=\(f(s.p95)) <0.5=\(f(s.fractionBelowHalf))")
