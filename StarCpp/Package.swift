@@ -248,6 +248,56 @@ let wgpuLinkerSettings: [LinkerSetting] = haveWGPU ? [
 let wgpuLinkerSettings: [LinkerSetting] = []
 #endif
 
+// Each piece is declared and typed on its own: one big array literal with a closure in it was more than
+// the manifest's type-checker would take.
+let libraryTargets: [Target] = [
+    .target(name: "kht",             // C++ Hough Transform implementation
+            path: "Sources/kht",
+            cxxSettings: starcppCXXSettings,
+            linkerSettings: platformLinkerSettings + wgpuLinkerSettings
+    ),
+    .target(name: "StarCpp",         // C++ OpenCV / StarCpp bridge (all .cpp)
+            dependencies: ["kht"],
+            path: "Sources/StarCpp",
+            publicHeadersPath: "include",
+            cxxSettings: bridgeCXXSettings + wgpuCXXSettings
+    ),
+    .target(name: "StarCppBridge",   // Swift wrapper
+            dependencies: [
+                "StarCpp",
+                .product(name: "logging", package: "logging"),
+            ],
+            path: "Sources/StarCppBridge",
+            linkerSettings: bridgeSwiftLinkerSettings
+    ),
+]
+
+// The geometry in StarCppBridge (Line, StandardLine, DoubleCoord) is pure Swift
+// and every horizon/blob decision downstream is built on it, so it is worth
+// pinning independently of the OpenCV code it sits next to.  platformLinkerSettings
+// is repeated here because the test bundle links OpenCV itself: `kht` carries
+// those settings for the library link, but a test target gets its own link step.
+let bridgeTests: Target = .testTarget(
+    name: "StarCppBridgeTests",
+    dependencies: ["StarCppBridge"],
+    path: "Tests/StarCppBridgeTests",
+    linkerSettings: platformLinkerSettings + wgpuLinkerSettings
+)
+
+// The wgpu backend's tests, in a target of their own. StarCppBridgeTests is written for the Mac it is
+// developed on (Darwin, mach_task_self_, Metal) and does not compile on Linux, on Windows, or with the
+// newer toolchain a CI macOS runner has, and SwiftPM compiles a whole test target even for `--filter`.
+// wgpu.yml sets STAR_ONLY_WGPU_TESTS to build just this one; a plain `swift test` is unchanged.
+let wgpuTests: Target = .testTarget(
+    name: "StarCppWGPUTests",
+    dependencies: ["StarCppBridge"],
+    path: "Tests/StarCppWGPUTests",
+    linkerSettings: platformLinkerSettings + wgpuLinkerSettings
+)
+
+let onlyWGPUTests = ProcessInfo.processInfo.environment["STAR_ONLY_WGPU_TESTS"] != nil
+let testTargets: [Target] = onlyWGPUTests ? [wgpuTests] : [bridgeTests, wgpuTests]
+
 let package = Package(
     name: "StarCpp",
     platforms: [
@@ -261,36 +311,6 @@ let package = Package(
     dependencies: [
         .package(name: "logging", path: "../logging"),
     ],
-    targets: [
-        .target(name: "kht",             // C++ Hough Transform implementation
-                path: "Sources/kht",
-                cxxSettings: starcppCXXSettings,
-                linkerSettings: platformLinkerSettings + wgpuLinkerSettings
-        ),
-        .target(name: "StarCpp",         // C++ OpenCV / StarCpp bridge (all .cpp)
-                dependencies: ["kht"],
-                path: "Sources/StarCpp",
-                publicHeadersPath: "include",
-                cxxSettings: bridgeCXXSettings + wgpuCXXSettings
-        ),
-        .target(name: "StarCppBridge",   // Swift wrapper
-                dependencies: [
-                    "StarCpp",
-                    .product(name: "logging", package: "logging"),
-                ],
-                path: "Sources/StarCppBridge",
-                linkerSettings: bridgeSwiftLinkerSettings
-        ),
-        // The geometry in StarCppBridge (Line, StandardLine, DoubleCoord) is pure Swift
-        // and every horizon/blob decision downstream is built on it, so it is worth
-        // pinning independently of the OpenCV code it sits next to.  platformLinkerSettings
-        // is repeated here because the test bundle links OpenCV itself: `kht` carries
-        // those settings for the library link, but a test target gets its own link step.
-        .testTarget(name: "StarCppBridgeTests",
-                    dependencies: ["StarCppBridge"],
-                    path: "Tests/StarCppBridgeTests",
-                    linkerSettings: platformLinkerSettings + wgpuLinkerSettings
-        ),
-    ],
+    targets: libraryTargets + testTargets,
     cxxLanguageStandard: .cxx2b
 )

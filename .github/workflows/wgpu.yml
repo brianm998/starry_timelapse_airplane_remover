@@ -36,6 +36,9 @@ concurrency:
 env:
   STAR_WGPU: '1'
   STAR_WGPU_ALLOW_CPU_ADAPTER: '1'
+  # build only the wgpu test target: StarCppBridgeTests does not compile off the developer's Mac
+  # (see StarCpp/Package.swift)
+  STAR_ONLY_WGPU_TESTS: '1'
 
 jobs:
   # ─── Linux: Vulkan on lavapipe ───────────────────────────────────────────────
@@ -82,7 +85,13 @@ jobs:
         run: wgpu/fetch.sh
 
       - name: Test the wgpu backend
-        run: swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+        # explicit shell: bash runs with -o pipefail, so the exit status of swift test survives `| tee`
+        shell: bash
+        run: |
+          swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+          # a skipped suite is a pass to XCTest; say so loudly, and fail if nothing ran at all
+          grep -E "Executed [0-9]+ tests?, with 0 failures" wgpu-test.log
+          grep -E "wgpu backend ready on" wgpu-test.log
 
       - name: Keep the log
         if: always()
@@ -127,7 +136,13 @@ jobs:
         run: wgpu/fetch.sh
 
       - name: Test the wgpu backend
-        run: swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+        # explicit shell: bash runs with -o pipefail, so the exit status of swift test survives `| tee`
+        shell: bash
+        run: |
+          swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+          # a skipped suite is a pass to XCTest; say so loudly, and fail if nothing ran at all
+          grep -E "Executed [0-9]+ tests?, with 0 failures" wgpu-test.log
+          grep -E "wgpu backend ready on" wgpu-test.log
 
       - name: Keep the log
         if: always()
@@ -348,7 +363,13 @@ jobs:
         run: wgpu/fetch.sh
 
       - name: Test the wgpu backend
-        run: swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+        # explicit shell: bash runs with -o pipefail, so the exit status of swift test survives `| tee`
+        shell: bash
+        run: |
+          swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+          # a skipped suite is a pass to XCTest; say so loudly, and fail if nothing ran at all
+          grep -E "Executed [0-9]+ tests?, with 0 failures" wgpu-test.log
+          grep -E "wgpu backend ready on" wgpu-test.log
 
       - name: Keep the log
         if: always()
