@@ -200,3 +200,36 @@ the Metal paths run there in the Gherkin legs today.
    merge first (bit-identical warp gives a hard pass/fail), then the two
    pyramids; run its tests on lavapipe and WARP in `cli.yml`.
 4. Horizon-stage ops only after measuring them at the 1600 px working size.
+
+## 6. Status: the wgpu-native backend, first results (2026-10-25)
+
+Built and run, on this Mac's Vega 64 through wgpu's Metal backend: `StarCpp/Sources/StarCpp/WGPUBackend.cpp`
+with WGSL kernels in `WGPUShaders.h`, the warp and the fused aligned merge, behind `GPUOps_C.h`'s seam.
+It is opt-in (`STAR_WGPU=1`), fetched by `wgpu/fetch.sh`, and covered by `WGPUOpsTests` (8 tests, passing)
+and `.github/workflows/wgpu.yml` (Linux/lavapipe, Windows/WARP, macOS/Metal; **not yet run in CI**).
+
+What measuring found, which the plan above did not predict:
+
+- **The Metal kernel's float-float projection does not survive wgpu.** Against an exact double-precision
+  model, the straight port put 2,015 of 502,992 pixels on the wrong 1/32 step (0.40%, the rate of a plain
+  float projection); Metal's own kernel gets 0. The shader compiler is free to re-associate, and wgpu
+  compiles Metal with fast math settings it does not let the caller change. Vulkan and D3D compilers are
+  no more controllable, so the kernel was redesigned instead: the CPU gives each 16x16 tile its origin's
+  projected position exactly (integer 1/32 steps plus a fraction) and the shader adds a small offset in
+  plain float, `q0 + (dN - q0 dW) / (W0 + dW)`. Result: 1 wrong in 502,992, nothing ordering-sensitive.
+- **Not byte-identical to Metal, by design.** It differs from Metal's kernel at about 0.13% of warp samples
+  and under 0.01% of merged samples, and from OpenCV's CPU path by about what Metal does. Tests bound these
+  rather than demanding equality.
+- **A wgpu validation error aborts the process.** `wgpuQueueSubmit` panics inside Rust on an invalid command
+  buffer, which cannot unwind through C. The backend wraps recording in a validation error scope and refuses
+  to submit anything that failed it, so a fault is a `false` return and a CPU fallback.
+- **An entry point's auto-derived bind group layout holds every binding its call graph can reach.** A shared
+  helper with a runtime flag made the warp need all 17 source buffers; the two entry points have separate
+  helpers now.
+- **The aligned module needs 19 storage buffers in one stage** (17 sources, the output, the tile table);
+  the backend registers the merge only when the adapter allows that.
+
+Not done: timing (nothing here says whether it is faster than the CPU path on any machine), buffer and pipeline
+pooling, the standalone median merge, the SIFT and AKAZE pyramids, and any run on a real Vulkan or D3D12
+driver. The CI jobs are the first chance at the last one.
+

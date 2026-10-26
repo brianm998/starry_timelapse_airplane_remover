@@ -384,7 +384,7 @@ public struct Config: Codable, Sendable {
     /// this setting. See `GPUCapability` for how a client shows the user which case
     /// they are in — this flag alone cannot tell them, because "off" and "on but
     /// unsupported" both end up running on the CPU.
-    public var useGPUForMerge: Bool = GPUCapability.isAvailable()
+    public var useGPUForMerge: Bool = GPUCapability.hasFullAcceleration()
 
     /// Whether to use a from-scratch, GPU-accelerated reimplementation of SIFT's
     /// Gaussian scale-space pyramid for sky (star) keypoint detection, in place of
@@ -403,7 +403,7 @@ public struct Config: Codable, Sendable {
     /// not silently opt a sequence into a still-young keypoint detector.
     ///
     /// Still requires `GPUCapability.isAvailable()`, same as `useGPUForMerge`.
-    public var useGPUForSIFT: Bool = GPUCapability.isAvailable()
+    public var useGPUForSIFT: Bool = GPUCapability.hasFullAcceleration()
 
     /// Whether to use a from-scratch, GPU-accelerated reimplementation of
     /// AKAZE's nonlinear diffusion scale-space pyramid for earth (ground)
@@ -418,7 +418,7 @@ public struct Config: Codable, Sendable {
     /// alone must not silently opt a sequence into.
     ///
     /// Still requires `GPUCapability.isAvailable()`, same as `useGPUForMerge`.
-    public var useGPUForAKAZE: Bool = GPUCapability.isAvailable()
+    public var useGPUForAKAZE: Bool = GPUCapability.hasFullAcceleration()
 
     /// A localized, user-facing sentence describing whether this machine has GPU
     /// hardware any of the `useGPUFor*` flags can actually use — independent of
@@ -575,11 +575,11 @@ public struct Config: Codable, Sendable {
         let factor: Double
         switch detector {
         case .sky:
-            gpu = useGPUForSIFT && GPUCapability.isAvailable()
+            gpu = useGPUForSIFT && GPUCapability.hasFullAcceleration()
             fixed = gpu ? 12 : 4
             factor = gpu ? 1.16 : 1.0
         case .earth:
-            gpu = useGPUForAKAZE && GPUCapability.isAvailable()
+            gpu = useGPUForAKAZE && GPUCapability.hasFullAcceleration()
             fixed = gpu ? 8 : 7
             factor = gpu ? 0.87 : 0.61
         }

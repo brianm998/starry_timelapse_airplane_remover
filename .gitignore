@@ -47,3 +47,6 @@ small_horizon_test_data
 
 # Out-of-repo test datasets fetched by test_data/fetch.sh (see test_data/README.md)
 /.test-data
+
+# wgpu-native release artifacts: fetched by wgpu/fetch.sh, never committed
+/wgpu/*/
