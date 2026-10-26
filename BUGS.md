@@ -161,7 +161,7 @@ None. It makes `selectiveRemovesOnlyTrails` flaky on macos-15 until understood.
 
 ### Status
 
-Open. Seen once.
+Open. Seen once in three macos-15 runs of that feature (run 38832664368 failed; the same job passed in 38838922701 and 40259054830); not reproduced locally.
 
 ---
 
