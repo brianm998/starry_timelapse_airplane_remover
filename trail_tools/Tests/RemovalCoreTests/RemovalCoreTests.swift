@@ -340,8 +340,12 @@ final class DiagnosisTests: XCTestCase {
         XCTAssertTrue(paint.hasPrefix("painting/merge problem: 1 of 2"))
     }
 
-    func testAGroupWithNoDecisionIsNotCountedAsRemoved() {
-        XCTAssertTrue(Diagnosis.classify([g(1, "no decision", nil)], totalGroups: 5).hasPrefix("misclassified"))
+    func testAGroupWithNoDecisionIsNotCalledKept() {
+        let text = Diagnosis.classify([g(1, "no decision", nil)], totalGroups: 5)
+        XCTAssertTrue(text.hasPrefix("no decision data"), text)
+        XCTAssertTrue(text.contains("-w"))
+        // a mix: one decided keep, one with none: the decided one is what is reported
+        XCTAssertTrue(Diagnosis.classify([g(1, "no decision", nil), g(2, "classifier -0.3", false)], totalGroups: 5).hasPrefix("misclassified"))
     }
 }
 

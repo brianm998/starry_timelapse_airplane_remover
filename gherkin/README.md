@@ -247,7 +247,21 @@ method): still failing = pass and say so; failing but not listed = regression (f
 
 `star-trail-inject --base <clean 16-bit sequence> --out <dir> [--spec spec.json]` writes `base/`, `injected/` and a
 `labels.json` (`confirmed: true`, exact by construction). Seeded and deterministic; run once to build a dataset, never at
-test time. Satellites sweep SNR 3–100, airplanes are twin lines with strobe dots, meteors are measured only.
+test time. Satellites sweep SNR 3-100 (a Gaussian line, FWHM 1.5-3 px, constant along its length, some continuing collinearly into the next frame),
+airplanes are twin lines with strobe dots tinted red/green/white (some run off the frame edge by 15% of their length), meteors are tapered and measured only.
+`lengthScale` in the spec shrinks the trails to fit a small base (0.4 for 500x400).
+
+`trails_synth_sky500`: a 500x400 sky-only region (x=0 y=425 of `a7sii_10_crop16`: the largest region with no labelled trail in any of the 19 frames) as `base/` and `injected/`, with
+15 satellites, 4 airplanes and 2 meteors. Features `syntheticSatellites` and `syntheticAirplanes` (`@cli`) run Star on both with `the frames have no horizon`, `the clean method is automatic`
+(`I process the injected sequence and its base`) and check that every injected trail is removed in the differential sense: the trail's contrast in (Star's output on `injected`) minus
+(Star's output on `base`) is at most `removed_max` of its input contrast, and fewer than `differential_outside_max` of the pixels outside every footprint differ from the base output by more than 6 sigma.
+Measured 2026-10-26: all 19 objects removed with a worst median ratio of 0.045; 3.4-5.0% of the outside pixels differ (the two outputs differ by alignment noise even with nothing injected);
+12-14 s per feature.
+
+**Why only `automatic`:** the same data in `selective` and `auto selective` leaves every injected trail in. `--temp` says why: the trails are *detected* (outlier groups of 200-1,500 px sit on them) but the classifier
+decides keep, with scores of -0.0 to -0.94. The classifier's features are fractions of the frame, so a 150-350 px trail in a 500 px frame is far outside what it was trained on; cropping to keep pixel scale does not keep
+the features in distribution (the plan assumed it would). A synthetic dataset for the classifier needs frames the size of real ones. Synthetic trails also have no real airplane's
+brightness profile, so this is not a measure of the classifier's recall on real trails.
 
 ### Removal features (`removeAirplanes` on all three clients, the rest cli only)
 

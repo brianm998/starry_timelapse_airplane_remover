@@ -30,6 +30,7 @@ final class CliFeatureRunner {
     private var sourceVideo: URL?
     private var inputFramesDir: URL?             // the frames star processes (the decoded frames, for a video)
     private(set) var outputDir: URL?
+    private var baseOutputDir: URL?              // star's output on the un-injected base (synthetic datasets)
     private var rendersVideo = false
     private var renderedVideo: String?
     private var runLog = ""
@@ -56,6 +57,7 @@ final class CliFeatureRunner {
             .openSequence: { try $0.openSequence() },
             .importVideo: { try $0.importVideo() },
             .processEveryFrame: { try $0.processEveryFrame() },
+            .processWithBase: { try $0.processWithBase() },
             .renderOutputVideo: { try $0.renderOutputVideoStep() },
             .usedRequestedSettings: { try $0.usedRequestedSettings() },
             .everyFrameOutput: { try $0.everyFrameOutput() },
@@ -181,15 +183,39 @@ final class CliFeatureRunner {
 
     private func processEveryFrame() throws {
         guard let input = sequenceCopy else { throw RunnerError("neither \"I open the sequence\" nor \"I import the video\" has run") }
-        let s = try requireSettings()
         if inputFramesDir == nil { inputFramesDir = input }
-        let out = scratch.appendingPathComponent("output")
-        let log = scratch.appendingPathComponent("star.log")
+        try runStar(on: input, to: scratch.appendingPathComponent("output"), logName: "star.log")
+    }
+
+    /// A synthetic dataset holds `injected/` (the real frames with trails drawn in) and `base/` (the same frames without them), and `labels.json`
+    /// for the injected trails. Star runs over both, base first; the removal check then compares the two outputs (the trail's contrast in
+    /// output minus base output), because Star's output on the base, not the input, is the oracle (the median composite recomputes every pixel).
+    private func processWithBase() throws {
+        guard let dataset = sequenceCopy else { throw RunnerError("\"I open the sequence\" has not run") }
+        let injected = dataset.appendingPathComponent("injected"), base = dataset.appendingPathComponent("base")
+        for d in [injected, base] {
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: d.path, isDirectory: &isDir), isDir.boolValue else {
+                throw RunnerError("the dataset has no \(d.lastPathComponent)/ directory: \(dataset.path)")
+            }
+        }
+        try runStar(on: base, to: scratch.appendingPathComponent("output-base"), logName: "star-base.log")
+        baseOutputDir = outputDir
+        inputFramesDir = injected
+        try runStar(on: injected, to: scratch.appendingPathComponent("output"), logName: "star.log")
+    }
+
+    /// One star run over `input`, written to `out`, with the settings the setup steps asked for.
+    private func runStar(on input: URL, to out: URL, logName: String) throws {
+        let s = try requireSettings()
+        let log = scratch.appendingPathComponent(logName)
         FileManager.default.createFile(atPath: log.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: log)
 
         // --keep-temp-files: the validator reads the run's config.json and outlier data from the temp directory.
         var args = ["--language", "en", "-l", "info", "--keep-temp-files"]
+        // -w writes the outlier groups' keep/remove decisions, which star-removal-verify --temp needs to say why a trail was left in
+        if feature?.steps.contains(where: { [.airplanesRemoved, .satellitesRemoved, .nothingElseChanged].contains($0.action) }) == true { args.append("-w") }
         if !s.horizon { args.append("--no-horizon") }
         if s.moving { args.append("--moving-camera") }
         args += ["-c", ["auto": "automatic", "selective": "selective", "autoSelective": "automatic:true"][s.clean]!]
@@ -214,8 +240,8 @@ final class CliFeatureRunner {
         outputDir = out
         // star_temp_<sequence name> beside the input: the run's config.json lives there.
         let parent = input.deletingLastPathComponent()
-        tempDir = try FileManager.default.contentsOfDirectory(atPath: parent.path)
-            .first { $0.hasPrefix("star_temp_") }.map { parent.appendingPathComponent($0) }
+        let temps = try FileManager.default.contentsOfDirectory(atPath: parent.path).filter { $0.hasPrefix("star_temp_") }
+        tempDir = (temps.first { $0 == "star_temp_\(input.lastPathComponent)" } ?? temps.first).map { parent.appendingPathComponent($0) }
         renderedVideo = runLog.split(whereSeparator: \.isNewline).first { $0.hasPrefix("Rendered video: ") }
             .map { String($0.dropFirst("Rendered video: ".count)) }
     }
@@ -391,10 +417,16 @@ final class CliFeatureRunner {
         try FileManager.default.createDirectory(at: reports, withIntermediateDirectories: true)
         let method = cleanMethod
 
-        var args = ["--input", input.path, "--output", try framesDirectory(out).path, "--labels", try labelsFile().path,
+        var args = ["--input", (inputFramesDir ?? input).path, "--output", try framesDirectory(out).path, "--labels", try labelsFile().path,
                     "--thresholds", Self.repoRoot.appendingPathComponent("gherkin/removal-thresholds.json").path,
                     "--clean-method", method, "--dataset", input.lastPathComponent,
-                    "--skip-unmeasurable", "--report", report.path, "--crops", crops.path]
+                    "--report", report.path, "--crops", crops.path]
+        if let base = baseOutputDir {
+            // synthetic data: the labels are exact, so an object too faint to measure is a label error and fails
+            args += ["--base-output", try framesDirectory(base).path]
+        } else {
+            args.append("--skip-unmeasurable")   // hand labels include faint streaks on purpose
+        }
         args += extra
         // the run kept its temp directory (--keep-temp-files): on a failure the verifier says why Star left each trail in (--temp, diagnosis only)
         if let t = tempDir { args += ["--temp", t.path] }

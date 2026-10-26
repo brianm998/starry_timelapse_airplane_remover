@@ -107,6 +107,8 @@ struct StarRemovalVerify: AsyncParsableCommand {
         for (name, data) in cropData { try data.write(to: URL(fileURLWithPath: (crops as NSString).appendingPathComponent(name))) }
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        // a stretch outside the frame has no contrast to measure: NaN, which JSON cannot hold
+        enc.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
         try enc.encode(rep).write(to: URL(fileURLWithPath: report))
 
         printSummary(rep)

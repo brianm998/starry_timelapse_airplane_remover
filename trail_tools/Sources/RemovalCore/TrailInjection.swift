@@ -29,12 +29,15 @@ public struct InjectionSpec: Codable, Sendable {
     public var airplaneSNR: Double
     public var meteors: Int
     public var meteorSNR: Double
+    /// Scales every trail's length: 1 for a full-size frame (satellites 300-700 px, airplanes 350-900 px), less for a small base.
+    public var lengthScale: Double
     public init(seed: UInt64 = 1, satelliteSNRs: [Double] = [3, 5, 10, 30, 100], satellitesPerSNR: Int = 2,
                 satelliteFWHM: [Double] = [1.5, 3], satelliteContinueFraction: Double = 0.4,
-                airplanes: Int = 4, airplaneSNR: Double = 40, meteors: Int = 2, meteorSNR: Double = 30) {
+                airplanes: Int = 4, airplaneSNR: Double = 40, meteors: Int = 2, meteorSNR: Double = 30,
+                lengthScale: Double = 1) {
         self.seed = seed; self.satelliteSNRs = satelliteSNRs; self.satellitesPerSNR = satellitesPerSNR
         self.satelliteFWHM = satelliteFWHM; self.satelliteContinueFraction = satelliteContinueFraction
-        self.airplanes = airplanes; self.airplaneSNR = airplaneSNR; self.meteors = meteors; self.meteorSNR = meteorSNR
+        self.airplanes = airplanes; self.airplaneSNR = airplaneSNR; self.meteors = meteors; self.meteorSNR = meteorSNR; self.lengthScale = lengthScale
     }
 }
 
@@ -112,7 +115,7 @@ public enum TrailInjection {
             for _ in 0..<spec.satellitesPerSNR {
                 n += 1
                 let f = Int(rng.nextUInt64() % UInt64(max(1, frames - 1)))
-                let (a, b) = randomLine(minLen: 300, maxLen: 700)
+                let (a, b) = randomLine(minLen: 300 * spec.lengthScale, maxLen: 700 * spec.lengthScale)
                 let fwhm = rng.uniform(spec.satelliteFWHM[0], spec.satelliteFWHM[1])
                 out.append(PlannedObject(id: "sat\(n)", kind: .satellite, frame: f, a: a, b: b, snr: snr, fwhm: fwhm, separation: 0, tint: [1, 1, 1]))
                 if rng.uniform(0, 1) < spec.satelliteContinueFraction {
@@ -130,17 +133,17 @@ public enum TrailInjection {
         }
         for k in 0..<spec.airplanes {
             let f = Int(rng.nextUInt64() % UInt64(frames))
-            var (a, b) = randomLine(minLen: 350, maxLen: 900)
-            if k % 3 == 2 {   // some run off the frame edge
+            var (a, b) = randomLine(minLen: 350 * spec.lengthScale, maxLen: 900 * spec.lengthScale)
+            if k % 3 == 2 {   // some run off the frame edge (by 15% of their length, so most of the trail stays measurable)
                 let dx = b.x - a.x, dy = b.y - a.y
-                b = Point(x: b.x + dx * 0.6, y: b.y + dy * 0.6)
+                b = Point(x: b.x + dx * 0.15, y: b.y + dy * 0.15)
             }
             out.append(PlannedObject(id: "air\(k + 1)", kind: .airplane, frame: f, a: a, b: b, snr: spec.airplaneSNR,
                                      fwhm: 2.5, separation: rng.uniform(3, 6), tint: rng.pick(tints)))
         }
         for k in 0..<spec.meteors {
             let f = Int(rng.nextUInt64() % UInt64(frames))
-            let (a, b) = randomLine(minLen: 60, maxLen: 200)
+            let (a, b) = randomLine(minLen: 60 * spec.lengthScale, maxLen: 200 * spec.lengthScale)
             out.append(PlannedObject(id: "met\(k + 1)", kind: .meteor, frame: f, a: a, b: b, snr: spec.meteorSNR,
                                      fwhm: 3, separation: 0, tint: [1, 1, 1]))
         }

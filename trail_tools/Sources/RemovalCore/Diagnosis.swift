@@ -21,6 +21,10 @@ public enum Diagnosis {
             return "detected but discarded as dust: \(touches.count) dust group(s) touch it (ids \(touches.map { String($0.id) }.joined(separator: ",")))"
         }
         func list(_ g: [GroupTouch]) -> String { g.map { "#\($0.id) \($0.pixels)px \($0.decision)" }.joined(separator: "; ") }
+        // Without `-w` star does not write the keep/remove decisions, and a group with no decision was not decided keep.
+        if real.allSatisfy({ $0.willRemove == nil }) {
+            return "no decision data: \(real.count) group(s) touch it (\(list(real).replacingOccurrences(of: " no decision", with: ""))) but the run has no OutlierGroupPaintData.json: run star with -w --keep-temp-files"
+        }
         let removing = real.filter { $0.willRemove == true }
         if removing.isEmpty {
             return "misclassified: \(real.count) group(s) touch it and all were decided keep: \(list(real))"

@@ -41,6 +41,12 @@
     },
     "selectiveRemovesOnlyTrails": {
       "sequence": "data:a7sii_10_16bit"
+    },
+    "syntheticSatellites": {
+      "sequence": "data:trails_synth_sky500"
+    },
+    "syntheticAirplanes": {
+      "sequence": "data:trails_synth_sky500"
     }
   }
 }

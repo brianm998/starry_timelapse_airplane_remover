@@ -211,7 +211,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -413,7 +413,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -539,7 +539,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -672,7 +672,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -817,7 +817,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -1036,7 +1036,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -1179,7 +1179,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
