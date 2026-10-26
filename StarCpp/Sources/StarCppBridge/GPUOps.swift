@@ -90,6 +90,8 @@ public enum GPUOps {
         activeBackend?.trimOutputPool()
         activeBackend?.trimReadbackPool()
         #endif
+        // the wgpu backend's buffer pool, when it has been started (a no-op otherwise)
+        wgpu_ops_trim_pool()
     }
 
     /// Pool hits and misses so far, and the bytes it is holding. Diagnostics and tests.

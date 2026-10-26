@@ -229,7 +229,28 @@ What measuring found, which the plan above did not predict:
 - **The aligned module needs 19 storage buffers in one stage** (17 sources, the output, the tile table);
   the backend registers the merge only when the adapter allows that.
 
-Not done: timing (nothing here says whether it is faster than the CPU path on any machine), buffer and pipeline
-pooling, the standalone median merge, the SIFT and AKAZE pyramids, and any run on a real Vulkan or D3D12
-driver. The CI jobs are the first chance at the last one.
+That was the state of §6. Everything on its "not done" list except real hardware is now done: see §7.
 
+## 7. Status: what was added after the first results (2026-10-26)
+
+Done since §6, all on `claude/gpu-support-expansion-1329dd`:
+
+- **Timing and a benchmark** (`WGPUBenchmarkTests`, `wgpu_ops_last_timing`). First numbers showed the wgpu
+  aligned merge *slower than the CPU* (1157 ms against 646 ms at 12 MP): 848 ms of it was upload.
+- **Buffer pool and a staging upload.** `wgpuQueueWriteBuffer` is as slow as creating fresh buffers (815 ms
+  for 648 MB); a persistent `MapWrite` staging pair, ping-ponging 8 MB chunks, takes 80 ms. The merge is now
+  ~200 ms (CPU 642, the Metal backend 128), the warp 29 ms (was 126). The pool is exact-size, capped, trimmed
+  by the memory-pressure hook, and a failed operation discards its buffers rather than pooling a mapped one.
+- **Standalone median merge:** identical to the CPU on every sample (0 of 183,309, four combinations).
+- **SIFT pyramid** (float buffers, no textures): against real cv::SIFT on a night sky 678 of 678 keypoints
+  match, max delta 0.0002 px; at 12 MP the whole detector takes ~1030 ms against 2379 for OpenCV and 1599 for
+  the Metal pyramid.
+- **AKAZE pyramid:** against real cv::AKAZE on ground texture 1909 of 1909 match, max delta 0.0008 px. It
+  does not make the detector faster on this machine (2018 ms against 2014): the CPU tail dominates, same as
+  with Metal, so `useGPUForAKAZE` stays off by default for this backend.
+
+Still not done: any run on a real Vulkan or Direct3D 12 driver (and so no timing there, where the discrete-GPU
+staging cost the Vega showed is the common case), the Metal backend's unified-memory in-place trick (WebGPU
+has no way to import a host pointer), reusing an uploaded neighbour across the merges that share it (needs a
+safe frame identity), and moving the SIFT/AKAZE detectors' CPU tails (extrema, descriptors) onto the GPU,
+which is now where their time goes.

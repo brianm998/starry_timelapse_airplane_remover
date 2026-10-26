@@ -88,7 +88,7 @@ jobs:
         # explicit shell: bash runs with -o pipefail, so the exit status of swift test survives `| tee`
         shell: bash
         run: |
-          swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+          swift test --package-path StarCpp --filter StarCppWGPUTests 2>&1 | tee wgpu-test.log
           # a skipped suite is a pass to XCTest; say so loudly, and fail if nothing ran at all
           grep -E "Executed [0-9]+ tests?, with ([0-9]+ tests? skipped and )?0 failures" wgpu-test.log
           grep -E "wgpu backend ready on" wgpu-test.log
@@ -139,7 +139,7 @@ jobs:
         # explicit shell: bash runs with -o pipefail, so the exit status of swift test survives `| tee`
         shell: bash
         run: |
-          swift test --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+          swift test --package-path StarCpp --filter StarCppWGPUTests 2>&1 | tee wgpu-test.log
           # a skipped suite is a pass to XCTest; say so loudly, and fail if nothing ran at all
           grep -E "Executed [0-9]+ tests?, with ([0-9]+ tests? skipped and )?0 failures" wgpu-test.log
           grep -E "wgpu backend ready on" wgpu-test.log
@@ -369,7 +369,7 @@ jobs:
           # release, like every other Windows build here: in a debug build OpenCV's headers put the cv::
           # types in an inline namespace (debug_build_guard) that the vendored release library does not
           # have, and every cv:: symbol is undefined at link time. -enable-testing keeps @testable working.
-          swift test -c release -Xswiftc -enable-testing --package-path StarCpp --filter WGPUOpsTests 2>&1 | tee wgpu-test.log
+          swift test -c release -Xswiftc -enable-testing --package-path StarCpp --filter StarCppWGPUTests 2>&1 | tee wgpu-test.log
           # a skipped suite is a pass to XCTest; say so loudly, and fail if nothing ran at all
           grep -E "Executed [0-9]+ tests?, with ([0-9]+ tests? skipped and )?0 failures" wgpu-test.log
           grep -E "wgpu backend ready on" wgpu-test.log

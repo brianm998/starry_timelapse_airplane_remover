@@ -44,8 +44,8 @@ struct Params {
     out_words_per_row: u32,
     tiles_x: u32,                // tiles across: ceil(width / TS)
     tiles_per_neighbour: u32,    // tiles_x * ceil(height / TS)
-    pad0: u32,
-    pad1: u32,
+    has_misses: u32,             // median merge: a misses plane is bound
+    miss_step: u32,              // median merge: that plane's row step in bytes
     pad2: u32,
     steps: array<vec4<u32>, 5>,  // row step in BYTES of source i (0 = base / warp source, 1... = neighbours)
     hinv: array<vec4<f32>, 36>,  // per neighbour nine floats: the INVERSE homography, row-major
@@ -73,6 +73,8 @@ struct Params {
 // Per neighbour, per 16x16 tile, five floats: the tile origin's projected column and row as
 // (integer step count, fraction of a step) each, then W at the origin. W0 == 0 marks "uncovered".
 @group(0) @binding(19) var<storage, read> TILES: array<f32>;
+// The standalone median merge's coverage-misses plane: one byte a pixel, `miss_step` bytes a row.
+@group(0) @binding(20) var<storage, read> MISS: array<u32>;
 
 const TS: u32 = 16u;
 
@@ -274,6 +276,23 @@ fn aligned_component(x: u32, y: u32, c: u32) -> u32 {
     return u32(clamp(picked, 0.0, MAXV));
 }
 
+// The standalone merge: `count + 1` same-shaped sources (0 is the base) and, unless include_all, the plane
+// of per-pixel counts of how many of the FIRST misses[...] sources have no sample there (the CoverageMisses
+// contract of medianMergeTyped, which is what stops black borders on edge frames).
+fn median_component(x: u32, y: u32, c: u32) -> u32 {
+    let n = P.count + 1u;
+    let include_all = P.include_all != 0u;
+    var v: array<f32, 17>;
+    for (var i = 0u; i < n; i++) { v[i] = f32(ld(i, addr_of(step_of(i), x, y, c))); }
+    var miss = 0u;
+    if (!include_all && P.has_misses != 0u) {
+        let a = y * P.miss_step + x;
+        miss = (MISS[a >> 2u] >> ((a & 3u) * 8u)) & 0xffu;
+    }
+    let picked = sigma_clipped_median(&v, n, miss, include_all, P.outlier);
+    return u32(clamp(picked, 0.0, MAXV));
+}
+
 fn warp_component(x: u32, y: u32, c: u32) -> u32 {
     let t = warp_tap(0u, i32(x), i32(y));
     if (!t.covered) { return 0u; }
@@ -295,6 +314,18 @@ fn pack_word_aligned(word: u32, y: u32) -> u32 {
     return out;
 }
 
+fn pack_word_median(word: u32, y: u32) -> u32 {
+    let per_word = 4u / BPC;
+    let total = P.width * P.channels;
+    var out = 0u;
+    for (var j = 0u; j < per_word; j++) {
+        let k = word * per_word + j;
+        if (k >= total) { break; }
+        out |= median_component(k / P.channels, y, k % P.channels) << (j * 8u * BPC);
+    }
+    return out;
+}
+
 fn pack_word_warp(word: u32, y: u32) -> u32 {
     let per_word = 4u / BPC;
     let total = P.width * P.channels;
@@ -311,6 +342,12 @@ fn pack_word_warp(word: u32, y: u32) -> u32 {
 fn aligned_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (gid.x >= P.out_words_per_row || gid.y >= P.height) { return; }
     OUT[gid.y * P.out_words_per_row + gid.x] = pack_word_aligned(gid.x, gid.y);
+}
+
+@compute @workgroup_size(8, 8)
+fn median_main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    if (gid.x >= P.out_words_per_row || gid.y >= P.height) { return; }
+    OUT[gid.y * P.out_words_per_row + gid.x] = pack_word_median(gid.x, gid.y);
 }
 
 @compute @workgroup_size(8, 8)
