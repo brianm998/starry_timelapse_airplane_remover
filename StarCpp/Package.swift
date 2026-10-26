@@ -288,11 +288,20 @@ let bridgeTests: Target = .testTarget(
 // developed on (Darwin, mach_task_self_, Metal) and does not compile on Linux, on Windows, or with the
 // newer toolchain a CI macOS runner has, and SwiftPM compiles a whole test target even for `--filter`.
 // wgpu.yml sets STAR_ONLY_WGPU_TESTS to build just this one; a plain `swift test` is unchanged.
+#if os(macOS)
+let wgpuTestLinkerSettings: [LinkerSetting] = platformLinkerSettings + wgpuLinkerSettings
+#else
+// On Linux and Windows `kht` already carries OpenCV's whole-archive link (and wgpu's), and a test bundle
+// inherits it through its dependencies; repeating it here made every OpenCV member defined twice
+// ("multiple definition of 'zlibVersion'" from ld.gold). macOS links archives lazily, so the repeat is harmless there.
+let wgpuTestLinkerSettings: [LinkerSetting] = []
+#endif
+
 let wgpuTests: Target = .testTarget(
     name: "StarCppWGPUTests",
     dependencies: ["StarCppBridge"],
     path: "Tests/StarCppWGPUTests",
-    linkerSettings: platformLinkerSettings + wgpuLinkerSettings
+    linkerSettings: wgpuTestLinkerSettings
 )
 
 let onlyWGPUTests = ProcessInfo.processInfo.environment["STAR_ONLY_WGPU_TESTS"] != nil
