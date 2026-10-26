@@ -47,6 +47,8 @@ release="$(manifest_field - release)"; repo_slug="$(manifest_field - repo)"
 [ -n "$release" ] && [ -n "$repo_slug" ] || die "$manifest has no release/repo"
 
 for name in "$@"; do
+  name="${name%$'\r'}"   # a CRLF checkout of gherkin/generated/datasets-*.txt (Windows) leaves a trailing CR on each name
+  [ -n "$name" ] || continue
   asset="$(manifest_field "$name" asset)"
   want="$(manifest_field "$name" sha256)"
   [ -n "$asset" ] && [ -n "$want" ] || die "unknown dataset '$name' (known: $(names | tr '\n' ' '))"

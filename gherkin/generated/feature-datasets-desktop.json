@@ -6,5 +6,6 @@
   "autoMovingTiff16": ["moving_a7iv_1_aurora_tiff16"],
   "autoSelectiveHorizonTiff16": ["a7sii_10_tiff16"],
   "autoSkyOnlyTiff16": ["a7sii_10_sky_tiff16"],
+  "removeAirplanes": ["a7sii_10"],
   "selectiveHorizonTiff16": ["a7sii_10_tiff16"]
 }

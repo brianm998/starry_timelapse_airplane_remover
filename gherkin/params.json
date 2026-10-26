@@ -29,6 +29,18 @@
     },
     "autoHorizonJpegVideoOut": {
       "sequence": "data:a7sii_10"
+    },
+    "removeAirplanes": {
+      "sequence": "data:a7sii_10"
+    },
+    "autoPreservationKeepsAirplanesOutJpeg": {
+      "sequence": "data:a7sii_10"
+    },
+    "autoPreservationKeepsAirplanesOutBit16": {
+      "sequence": "data:a7sii_10_16bit"
+    },
+    "selectiveRemovesOnlyTrails": {
+      "sequence": "data:a7sii_10_16bit"
     }
   }
 }

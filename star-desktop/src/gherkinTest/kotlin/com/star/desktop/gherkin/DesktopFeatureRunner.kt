@@ -12,6 +12,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.star.desktop.gherkin.generated.StepAction
 import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
@@ -72,6 +74,10 @@ class DesktopFeatureRunner {
         StepAction.PROCESSED_AUTO_SELECTIVE to { processedIn("autoSelective") },
         StepAction.OUTPUT_VIDEO_MATCHES to ::outputVideoMatches,
         StepAction.NO_PROBLEMS to ::noProblems,
+        StepAction.AIRPLANES_REMOVED to { trailsRemoved("airplane") },
+        StepAction.SATELLITES_REMOVED to { trailsRemoved("satellite") },
+        StepAction.STARS_PRESERVED to { starsPreserved() },
+        StepAction.NOTHING_ELSE_CHANGED to { nothingElseChanged() },
     )
 
     fun run(feature: Feature) {
@@ -154,6 +160,13 @@ class DesktopFeatureRunner {
     }
 
     private fun newModel(): AppViewModel {
+        // The removal pins were measured at DETECTION_STRONG (Star's own default, the cli's). A session opens at the user's remembered type, and
+        // with none remembered the proto's zero value, DETECTION_MILD, so a removal feature seeds the remembered type before the view model
+        // reads its preferences (user.home is the scratch home, see run()), and finishOpening only checks it. Patching the session afterwards
+        // raced the daemon on a starved VM. Other features keep the client's own default.
+        if (feature.steps.any { it.action in REMOVAL_ACTIONS }) {
+            File(System.getProperty("user.home"), ".star.userprefs.json").writeText("""{"processingType":"strong"}""")
+        }
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         scope = appScope
         // No auto-open hook and no autoMode: either one suppresses the startup prompts, and the prompts are how a user sets the
@@ -208,6 +221,10 @@ class DesktopFeatureRunner {
             if (System.nanoTime() > deadline) throw RunnerError(
                 "timed out after ${OPEN_TIMEOUT_MS / 1000}s waiting for the sequence to open (screen: ${model.screen.value})\n" + processSnapshot())
             Thread.sleep(50)
+        }
+        if (feature.steps.any { it.action in REMOVAL_ACTIONS }) {
+            val detection = model.sessions.session.value?.config?.detectionType
+            if (detection != com.star.proto.DetectionType.DETECTION_STRONG) throw RunnerError("the session opened at detection type $detection, not DETECTION_STRONG")
         }
         t.setContent { StarApp(model) }
         answerStartupPrompts(t, model)
@@ -306,6 +323,102 @@ class DesktopFeatureRunner {
         }
     }
 
+    // ---- removal checks (star-removal-verify) ----
+    // Same verifier, flags and vacuous-green guards as cli/Tests/GherkinTests/CliFeatureRunner.swift, run as a subprocess.
+
+    /** The clean method the feature asked for, in the removal verifier's spelling. */
+    private fun removalMethod(): String = when (clean) {
+        "auto" -> "automatic:false"
+        "autoSelective" -> "automatic:true"
+        "selective" -> "selective"
+        else -> throw RunnerError("no clean method step ran before the open step")
+    }
+
+    private fun removalVerifierBinary(): File {
+        val exe = if (System.getProperty("os.name").startsWith("Windows")) "star-removal-verify.exe" else "star-removal-verify"
+        val f = System.getenv("STAR_REMOVAL_VERIFY")?.takeIf { it.isNotEmpty() }?.let { File(it) }
+            ?: File(repoRoot(), "trail_tools/.build/release/$exe")
+        if (!f.isFile) throw RunnerError("no star-removal-verify at $f: run `swift build -c release --package-path trail_tools`, or set STAR_REMOVAL_VERIFY")
+        return f
+    }
+
+    private fun labelsJson(): JsonObject {
+        val labels = File(sequenceCopy, "labels.json")
+        if (!labels.isFile) throw RunnerError("no labels.json in the sequence: $labels")
+        return JsonParser.parseString(labels.readText()).asJsonObject
+    }
+
+    /** Runs the verifier. Reports go in the scratch directory as `report-removal-*`, which `saveArtifacts` copies out for CI. */
+    private fun runRemovalVerifier(extra: List<String>, reportName: String): JsonObject {
+        if (completeFrames < 0) throw RunnerError("\"I process every frame\" has not run")
+        val report = File(scratch, "report-removal-$reportName.json")
+        val crops = File(scratch, "report-removal-$reportName-crops")
+        val args = listOf(
+            removalVerifierBinary().absolutePath,
+            "--input", sequenceCopy.absolutePath, "--output", outputFrames().absolutePath,
+            "--labels", File(sequenceCopy, "labels.json").absolutePath,
+            "--thresholds", File(repoRoot(), "gherkin/removal-thresholds.json").absolutePath,
+            "--clean-method", removalMethod(), "--dataset", sequenceCopy.name,
+            "--skip-unmeasurable", "--report", report.absolutePath, "--crops", crops.absolutePath,
+        ) + extra
+        val p = ProcessBuilder(args).redirectErrorStream(true).start()
+        val text = p.inputStream.bufferedReader().readText()
+        val status = p.waitFor()
+        println(text.lines().takeLast(12).joinToString("\n"))
+        if (status != 0) {
+            throw RunnerError("star-removal-verify exited $status for \"${feature.id}\"\n" + text.lines().takeLast(30).joinToString("\n") +
+                "\nreport: $report\ncrops: $crops")
+        }
+        return JsonParser.parseString(report.readText()).asJsonObject
+    }
+
+    private fun trailsRemoved(trailClass: String) {
+        val expected = labelsJson().getAsJsonObject("frames").entrySet().sumOf { (_, objs) ->
+            objs.asJsonArray.count {
+                val o = it.asJsonObject
+                o.get("class")?.asString == trailClass && o.get("confirmed")?.asBoolean == true
+            }
+        }
+        // Per-object verdicts differ between platforms, and selective leaves most faint labelled streaks alone by design (BUGS.md BUG-004);
+        // automatic:true is judged by the fraction removed plus pinned objects. See the cli runner.
+        val pinsFile = File(repoRoot(), "gherkin/removal-pins.json")
+        val pinned = JsonParser.parseString(pinsFile.readText()).asJsonObject.getAsJsonArray("pins").size()
+        val extra = mutableListOf("--expect", "$trailClass=removed")
+        val method = removalMethod()
+        when (method) {
+            "selective" -> extra += listOf("--pins-only", "--pins", pinsFile.absolutePath)
+            "automatic:true" -> extra += listOf("--aggregate", "--pins", pinsFile.absolutePath)
+        }
+        val report = runRemovalVerifier(extra, "${trailClass}s-removed")
+        // not vacuous: the verifier must have looked at every confirmed object of this class
+        val summary = report.getAsJsonObject("summary")
+        val objects = summary?.get("objects")?.asInt ?: -1
+        if (expected <= 0) throw RunnerError("labels.json has no confirmed $trailClass objects: the step would check nothing")
+        if (objects != expected) throw RunnerError("the verifier checked $objects $trailClass objects, labels.json has $expected confirmed: refusing to pass")
+        if (method != "automatic:false") {
+            val checked = summary.get("pinsChecked")?.asInt ?: -1
+            if (checked != pinned) throw RunnerError("the verifier checked $checked pinned objects, removal-pins.json has $pinned: refusing to pass")
+        }
+        val measured = (summary.get("passed")?.asInt ?: 0) + (summary.get("failed")?.asInt ?: 0)
+        if (measured <= 0) throw RunnerError("no $trailClass object was measurable: refusing to pass")
+    }
+
+    private fun nothingElseChanged() {
+        if (removalMethod() != "selective") throw RunnerError("\"nothing outside the labelled trails changed\" is only valid with the selective clean method")
+        val report = runRemovalVerifier(listOf("--unchanged-outside"), "unchanged-outside")
+        val frames = outputFrames().listFiles { f -> f.isFile && !f.name.startsWith(".") }.orEmpty().size
+        val covered = report.getAsJsonObject("collateral")?.size() ?: 0
+        if (frames <= 0 || covered != frames) throw RunnerError("the unchanged-outside check covered $covered frames, Star wrote $frames: refusing to pass")
+        if (report.get("collateralStatus")?.asString != "pass") throw RunnerError("the unchanged-outside check did not pass (status ${report.get("collateralStatus")})")
+    }
+
+    private fun starsPreserved() {
+        val report = runRemovalVerifier(listOf("--stars"), "stars")
+        val frames = outputFrames().listFiles { f -> f.isFile && !f.name.startsWith(".") }.orEmpty().size
+        val stars = report.getAsJsonObject("stars")?.size() ?: 0
+        if (frames <= 0 || stars != frames) throw RunnerError("the star check covered $stars frames, Star wrote $frames: refusing to pass")
+    }
+
     // ---- validation: removal_tools/star-output-verify, the one tool every client uses ----
 
     private fun verifyBinary(): File {
@@ -397,7 +510,7 @@ class DesktopFeatureRunner {
     private fun saveArtifacts(feature: Feature) {
         val dir = System.getenv("STAR_GHERKIN_ARTIFACTS")?.takeIf { it.isNotEmpty() } ?: return
         val dest = File(dir, feature.id).apply { mkdirs() }
-        scratch.listFiles { f -> f.isFile && f.name.startsWith("report-") }.orEmpty().forEach { it.copyTo(File(dest, it.name), overwrite = true) }
+        scratch.listFiles { f -> f.name.startsWith("report-") }.orEmpty().forEach { it.copyRecursively(File(dest, it.name), overwrite = true) }
         runCatching {
             val info = vm?.sessions?.session?.value
             val config = File(info?.configJsonPath?.ifEmpty { "${info.scratchSessionDir}/config.json" } ?: return@runCatching)
@@ -434,6 +547,7 @@ class DesktopFeatureRunner {
         const val UI_TIMEOUT_MS = 90_000L
         const val PROCESS_TIMEOUT_MS = 50L * 60_000   // auto selective on a 4-core runner took over 25 minutes
         const val RENDER_TIMEOUT_MS = 10L * 60_000
+        val REMOVAL_ACTIONS = setOf(StepAction.AIRPLANES_REMOVED, StepAction.SATELLITES_REMOVED, StepAction.STARS_PRESERVED, StepAction.NOTHING_ELSE_CHANGED)
         val VIDEO_EXTS = setOf("mov", "mp4", "m4v", "avi", "mkv", "mpg", "mpeg")
     }
 }

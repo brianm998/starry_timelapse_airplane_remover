@@ -187,3 +187,97 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
 log: `Executed 1 test, with 0 failures` for xcodebuild, `test<Name>Feature` passed for swift test,
 and `tests="1"` / `skipped="0"` in `build/test-results/gherkinTest/*.xml` for Gradle. Each CI job runs exactly one
 feature, so the guard checks that exactly that test ran.
+
+## Checking airplane and satellite removal
+
+Features that must prove trails are actually gone use `trail_tools/` (a standalone SwiftPM package: `RemovalCore`,
+the pure-Swift measurements, plus the `star-removal-verify` and `star-trail-inject` executables). **Status: four
+features use the verifier (below; `removeAirplanes` on all three clients, the others on the cli); the thresholds are measured except the synthetic-data ones;
+the synthetic features do not exist yet**; see `plans/GHERKIN_REMOVAL_VALIDATION_PLAN_RESULT.md`.
+
+### Labels (`labels.json`)
+
+Shipped inside each dataset archive. One polyline per trail, per frame, in full-resolution input pixels:
+`{ "id", "class": airplane|satellite|meteor|other, "points": [[x,y],…], "width", "confirmed", "note" }`, plus an optional
+`sky` polygon and `complete` (true = every trail in every frame is labelled). **Only `confirmed: true` objects are
+checked, and only a person sets that.** Never mark an object confirmed from Star's own output.
+
+* `tools/label-trails/index.html` is the labelling page: open it in a browser, pick a frame directory (browsers other than
+  Safari can't show TIFF, so use same-named JPEG/PNG previews), click polyline points, set class/width/note, tick confirmed,
+  export. It can load an existing `labels.json`; drafts are drawn orange, confirmed green.
+* Labels must be drawn independently of Star. `OutlierGroupPaintData.json` is not ground truth.
+
+### The verifier
+
+```
+star-removal-verify --input <dir> --output <dir> --labels labels.json \
+    --expect "airplane=removed,satellite=removed" [--stars] [--unchanged-outside] [--base-output <dir>] \
+    --thresholds gherkin/removal-thresholds.json [--baseline gherkin/removal-baseline.json --dataset <name> --clean-method <m>] \
+    --report report.json --crops <dir> [--report-only]
+```
+
+Exit 0 = pass, 1 = failure, 2 = bad input (bad label, missing frame, wrong mode for `--unchanged-outside`).
+
+* **Trail check:** per 50 px stretch, contrast = median(on-line, ≤ width/2) − median(two background bands, width/2+8 …
+  width/2+26), reported as output/input. A stretch whose input contrast is under 5σ of its background is unmeasurable;
+  over 20% unmeasurable length is a *label error*, neither pass nor fail.
+* **Stars (`--stars`):** peaks > 10σ over a 32 px block-median background, flux = 7×7 sum − 49 × the 17×17 median; the
+  median ratio and the fraction below 0.5 are judged as a distribution, inside `sky`, ≥ 40 px from any labelled object.
+* **Unchanged outside (`--unchanged-outside`):** selective + lossless input + `complete` labels only (refused otherwise).
+  Every connected component of changed pixels outside the footprint is reported, with a crop.
+* **Differential (`--base-output`):** for synthetic datasets, compares with Star's output on the un-injected base.
+* Whole-frame golden images and PSNR/SSIM cannot be the check: the default mode recomputes every pixel and Metal vs CPU
+  differ.
+
+### Thresholds and the baseline
+
+`gherkin/removal-thresholds.json`: each entry is `{ "value", "measured" }`; `value: null` means unmeasured, and the
+verifier refuses to enforce until it is set (use `--report-only`). Never guess one; set it from measured distributions.
+
+`gherkin/removal-baseline.json` ratchets known failures on **real** data, one entry per (dataset, frame, object, clean
+method): still failing = pass and say so; failing but not listed = regression (fail); listed but now passing = **fail**
+("remove it from removal-baseline.json"). Synthetic datasets get no baseline entries.
+
+### Synthetic datasets
+
+`star-trail-inject --base <clean 16-bit sequence> --out <dir> [--spec spec.json]` writes `base/`, `injected/` and a
+`labels.json` (`confirmed: true`, exact by construction). Seeded and deterministic; run once to build a dataset, never at
+test time. Satellites sweep SNR 3–100, airplanes are twin lines with strobe dots, meteors are measured only.
+
+### Removal features (`removeAirplanes` on all three clients, the rest cli only)
+
+| feature | clients | clean step | dataset | what it proves |
+|---|---|---|---|---|
+| `removeAirplanes` | cli, mac GUI, desktop | auto (`automatic:false`) | `a7sii_10` (JPEG) | every measurable labelled airplane is removed (median stretch ratio <= `removed_max`), stars preserved |
+| `autoPreservationKeepsAirplanesOutJpeg` / `...Bit16` | cli | auto selective (`automatic:true`) | `a7sii_10` / `a7sii_10_16bit` | at least `removed_fraction_min` of the measurable airplanes are removed **and** the 42 pinned objects (`gherkin/removal-pins.json`) are; regression test for `1b2cb327` |
+| `selectiveRemovesOnlyTrails` | cli | selective | `a7sii_10_16bit` | the pinned objects are removed, nothing outside the labelled trails changed (<= `unchanged_outside_max_area`), stars preserved |
+
+These features use the scenario vocabulary: horizon, camera and clean-method steps before the open step (the ordering rule above), the dataset
+from the feature's own entry in `params.json`, and `the run used the requested settings`. The removal-only steps are `the labelled airplanes|satellites
+are removed`, `the stars are preserved` and `nothing outside the labelled trails changed`. Each `Then` runs `star-removal-verify` (from `trail_tools/`;
+`removal_tools/`'s `star-output-verify` is the other, unrelated validator) as a subprocess with `--clean-method` taken from the run's own clean step,
+fails with its summary plus the report and crop paths, and refuses to pass if the report did not check every labelled object of the class (or every
+pin, or every frame). Selective is judged on the pinned objects only (`--pins-only`, BUG-004), automatic:true by the fraction removed plus the pins.
+Reports and crops: the cli runner writes them to `removal-reports/<feature>/` (git-ignored; `STAR_REMOVAL_REPORTS` overrides, and CI points it into the
+uploaded `gherkin-artifacts`); the GUI and desktop runners write `report-removal-*` beside the run, and `saveArtifacts` copies them out like the
+validator's reports (the XCUITest runner is sandboxed: it can launch the verifier and read the output, but not write into the repo). The runners find the
+verifier at `trail_tools/.build/release/star-removal-verify` (`STAR_REMOVAL_VERIFY` overrides; the Windows cli leg sets it).
+
+The desktop runner opens a removal feature's session at DETECTION_STRONG by seeding the remembered detection type before the view model starts (an
+unset one is MILD, Star's own default and the pins' is STRONG) and fails if it did not; other features keep the client's default. CI legs build
+`trail_tools` only for these four features (the `if:` list on the "trail verifier" steps of `gherkin.yml`).
+
+Why pins: per-object verdicts differ between platforms and the fraction removed cannot tell the pre-`1b2cb327` build (0.78) from the
+fixed one (0.83), so the objects every healthy run removes are pinned (derived from Star's own output, not ground truth). Why the pass
+rule is the median stretch ratio, why `selective` is not judged per object, and every threshold's evidence: `gherkin/removal-thresholds.json`
+and `BUGS.md`. Local run: `swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests`
+after `swift build -c release --package-path trail_tools` and `test_data/fetch.sh a7sii_10 a7sii_10_16bit`.
+
+To add one: put the dataset (with `labels.json`) in `test_data/datasets.json`, give the feature its `sequence` under `features` in `params.json`, write the
+`.feature` (setting steps, open, process, removal steps), run `gherkin/generate.sh`, and add the feature name to the `if:` list of the trail-verifier steps in `gherkin.yml`.
+
+### Measuring (Phase 4)
+
+`.github/workflows/removal-measure.yml` (manual) measures every dataset x clean method on ubuntu-24.04 and macos-15 and publishes a table plus
+artifacts; `gherkin/measure-removal.sh <os> <out>` does the same locally (`MEASURE_FILTER=<substring>` runs a subset,
+`STAR_TEST_DATA` points at the dataset cache). Thresholds in `removal-thresholds.json` must come from those tables.

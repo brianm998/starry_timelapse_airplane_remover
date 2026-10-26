@@ -1,0 +1,38 @@
+{
+  "removed_max": {
+    "value": 0.6,
+    "measured": "measured 2026-10-15 on a7sii_10 (240 hand labels, 226 measurable), release cli, macos-15 (Apple Paravirtual GPU path) run 38798344452 and ubuntu-24.04 (CPU) run 38801175389; per-object MEDIAN stretch ratio: removed objects max 0.312 (automatic:false, identical on both OS), 0.478/0.466 (automatic:true), 0.065 (selective); objects left in place min 0.812 (automatic:true), 0.911 (selective). 0.6 sits in the 0.48-0.81 gap. The worst-stretch distributions overlap (removed max 0.48, kept min 0.52 for automatic:false) and are not used."
+  },
+  "kept_min": {
+    "value": 0.7,
+    "measured": "measured 2026-10-15 on a7sii_10 (240 hand labels, 226 measurable), release cli, macos-15 (Apple Paravirtual GPU path) run 38798344452 and ubuntu-24.04 (CPU) run 38801175389; per-object MEDIAN stretch ratio: same gap as removed_max (removed max 0.478, left-in-place min 0.812). No planned feature uses it yet."
+  },
+  "stars_median_min": {
+    "value": 0.9,
+    "measured": "per-frame star flux ratio medians on a7sii_10 (about 28,000 peaks per frame), both OS: 0.933-0.994 for automatic:false/true, 1.002-1.004 for selective, 2026-10-15. Margin to 0.9 is 0.033; NOT valid for a7sii_10_crop16 (0.28-0.74, see BUGS.md BUG-002)."
+  },
+  "stars_median_max": {
+    "value": 1.05,
+    "measured": "same data: highest per-frame median 1.004."
+  },
+  "stars_lost_max": {
+    "value": 0.04,
+    "measured": "same data: highest per-frame fraction of peaks below 0.5 is 0.014 (automatic), 0.001 (selective)."
+  },
+  "unchanged_outside_max_area": {
+    "value": 25000,
+    "measured": "a7sii_10_16bit, selective, release cli, 2026-10-15: total changed px outside the labelled trails over 19 frames (228 million px) is deterministic per platform (identical frame by frame on repeat runs, macos GPU 10,989 twice, linux CPU 15,172 twice) and varies between platforms: 6,723 local Vega GPU, 8,264 macos-15 CPU, 10,989 macos-15 GPU (Paravirtual), 15,172 ubuntu-24.04 CPU; at most 7,774 in one frame (linux frame 96). 25,000 is 1.65x the worst platform. A broken selection or paint step changes orders of magnitude more. NOT valid for a7sii_10_crop16 (BUG-001)."
+  },
+  "differential_outside_max": {
+    "value": null,
+    "measured": "unmeasured: no synthetic dataset has been run through Star yet"
+  },
+  "min_required_contrast": {
+    "value": null,
+    "measured": "not usable: brightness does not predict selective removal. Objects with input contrast >= 0.30: 12 of 19 removed, >= 0.15: 22 of 47, >= 0.05: 44 of 133 (both OS, 2026-10-15)."
+  },
+  "removed_fraction_min": {
+    "value": 0.7,
+    "measured": "aggregate mode for automatic:true on a7sii_10: fraction of measurable objects with median ratio <= removed_max is 188/226 = 0.832 (macos) and 189/226 = 0.836 (linux); individual verdicts differ for 7 objects between the OS while the totals are within one (188 vs 189). The margin on the regression side is not measured: the pre-1b2cb327 build was only measured on one object (frame 92, ratio 1.03)."
+  }
+}

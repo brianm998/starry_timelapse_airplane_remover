@@ -15,6 +15,10 @@ name: Gherkin
 # exactly one test that ran, passed and was not skipped. Exit codes alone are not proof: xcodebuild
 # -only-testing matching nothing exits 0 having run nothing.
 #
+# The trail-removal features (removeAirplanes, autoPreservation…, selectiveRemovesOnlyTrails) also run trail_tools'
+# `star-removal-verify` as a subprocess, so those jobs (and only those: the list is the `if:` of the "trail verifier" steps) build
+# trail_tools in release first. Its reports and crops ride on each job's gherkin-artifacts upload. See gherkin/README.md.
+#
 # DUPLICATED ON PURPOSE (collapse into reusable workflows later, see gherkin/README.md): the apt/Eigen/
 # Swift/MSVC/OpenCV/StarDecisionTrees setup of cli.yml's `linux`/`macos`/`windows` jobs, the stard build
 # steps of kotlin-client.yml's linux-package/windows-package/macos-signed jobs, and cli.yml's
@@ -32,6 +36,7 @@ on:
       - 'daemon/**'
       - 'StarCore/**'
       - 'StarCpp/**'
+      - 'trail_tools/**'
       - '.github/workflows/gherkin.yml'
   pull_request:
     branches: [main, develop]
@@ -44,6 +49,7 @@ on:
       - 'daemon/**'
       - 'StarCore/**'
       - 'StarCpp/**'
+      - 'trail_tools/**'
       - '.github/workflows/gherkin.yml'
   workflow_dispatch:
     inputs:
@@ -202,6 +208,14 @@ jobs:
       - name: Build the output validator
         shell: bash
         run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+          echo "STAR_REMOVAL_REPORTS=${{ runner.temp }}/gherkin-artifacts/removal" >> "$GITHUB_ENV"
 
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
@@ -397,6 +411,17 @@ jobs:
         shell: bash
         run: swift build -c release --package-path removal_tools
 
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+          BIN="$(swift build -c release --package-path trail_tools --show-bin-path)"
+          ls "$BIN"/star-removal-verify.exe
+          echo "STAR_REMOVAL_VERIFY=$(cygpath -w "$BIN/star-removal-verify.exe")" >> "$GITHUB_ENV"
+          echo "STAR_REMOVAL_REPORTS=$(cygpath -w "$RUNNER_TEMP/gherkin-artifacts/removal")" >> "$GITHUB_ENV"
+
       - name: Run the Gherkin features against the built star
         # Flags as in cli-linux (release, -enable-testing for the other test target, --disable-swift-testing).
         run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
@@ -512,12 +537,24 @@ jobs:
         shell: bash
         run: swift build -c release --package-path removal_tools
 
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+          echo "STAR_REMOVAL_REPORTS=${{ runner.temp }}/gherkin-artifacts/removal" >> "$GITHUB_ENV"
+
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
         # is `@testable import star` and --filter still compiles every test target. One release compile.
         # --disable-swift-testing: without it, swift test runs a second (Swift Testing) pass that starts the `star` executable
         # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
-        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
+        run: |
+          # TEMPORARY diagnostic: cli (macos-15) autoHorizonVideo hung (PR 14, run 40259054830); star sat idle with no child process.
+          # Prints a process list and a stack sample of the stuck star into this log, the only thing that survives the timeout.
+          if [ "${{ matrix.feature }}" = "autoHorizonVideo" ]; then gherkin/hang-watchdog.sh 420 '^star$' & fi
+          swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
 
       - name: Prove the scenario ran (not a vacuous green)
         run: |
@@ -636,6 +673,13 @@ jobs:
       - name: Build the output validator
         shell: bash
         run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
 
       # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release
       # builds every test target even under -only-testing.
@@ -774,6 +818,13 @@ jobs:
       - name: Build the output validator
         shell: bash
         run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -987,6 +1038,13 @@ jobs:
         shell: bash
         run: swift build -c release --package-path removal_tools
 
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -1123,6 +1181,13 @@ jobs:
         shell: bash
         run: swift build -c release --package-path removal_tools
 
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -1153,7 +1218,8 @@ jobs:
           # A 7GB VM with ~2-3GB free: at full resolution one frame's keypoint reservation (2.2GB) exceeds stard's narrowed memory budget, so
           # frames wait minutes each. stard itself defaults to 1.5 on such a machine; pin it so a roomier moment on the VM cannot pick 1.
           # Not coarser: 1.8 and 2 find no usable star alignment on this runner. The cli, gui and other desktop legs run the default.
-          command: cd star-desktop && STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
+          # TEMPORARY diagnostic for the autoHorizonVideo hang (PR 14, run 40259054830): a stack sample of the stuck stard, in this log.
+          command: if [ "${{ matrix.feature }}" = "autoHorizonVideo" ]; then (gherkin/hang-watchdog.sh 420 '^stard$' &); fi; cd star-desktop && STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
 
       - name: Prove the scenario ran (not a vacuous green)
         working-directory: star-desktop
