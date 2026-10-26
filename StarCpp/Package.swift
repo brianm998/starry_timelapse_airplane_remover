@@ -2,6 +2,7 @@
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
+import Foundation
 
 // this package (StarCpp) exposes the kernel hough transform to swift, which needs the c++ opencv2 lib
 
@@ -177,6 +178,76 @@ let bridgeCXXSettings: [CXXSetting] = [
 ]
 #endif
 
+// ---------------------------------------------------------------------------
+// wgpu-native (the Vulkan / Direct3D 12 / Metal GPU backend, WGPUBackend.cpp)
+//
+// Provided before the build by `wgpu/fetch.sh`, the way opencv/ is, and git-ignored. When the
+// platform's directory is there the backend is compiled and linked; when it is not, WGPUBackend.cpp
+// builds as stubs that say "not available" and nothing else changes. It also stays dormant at run
+// time unless STAR_WGPU is set (see WGPUOps_C.h).
+//
+// The manifest does not re-run when that directory appears: after fetching, touch this file (or
+// `swift package reset`) so the next build notices.
+// ---------------------------------------------------------------------------
+#if os(macOS)
+  #if arch(arm64)
+let wgpuPlatform = "macos-aarch64"
+  #else
+let wgpuPlatform = "macos-x86_64"
+  #endif
+#elseif os(Linux)
+  #if arch(arm64)
+let wgpuPlatform = "linux-aarch64"
+  #else
+let wgpuPlatform = "linux-x86_64"
+  #endif
+#elseif os(Windows)
+let wgpuPlatform = "windows-x86_64-msvc"
+#else
+let wgpuPlatform = ""
+#endif
+
+let wgpuRoot = URL(fileURLWithPath: Context.packageDirectory)
+    .deletingLastPathComponent()
+    .appendingPathComponent("wgpu/\(wgpuPlatform)").path
+let haveWGPU = !wgpuPlatform.isEmpty
+    && FileManager.default.fileExists(atPath: wgpuRoot + "/include/webgpu/webgpu.h")
+
+// unsafeFlags, not .define: a plain .define did not reach the C++ compile on Windows (see the Eigen
+// note above), while unsafeFlags in the same block does.
+let wgpuCXXSettings: [CXXSetting] = haveWGPU
+    ? [.unsafeFlags(["-DSTAR_HAVE_WGPU", "-I\(wgpuRoot)/include"])]
+    : []
+
+#if os(macOS)
+let wgpuLinkerSettings: [LinkerSetting] = haveWGPU ? [
+    .unsafeFlags(["-Xlinker", "\(wgpuRoot)/lib/libwgpu_native.a"]),
+    .linkedFramework("Metal"),
+    .linkedFramework("QuartzCore"),
+    .linkedFramework("Foundation"),
+    .linkedFramework("IOKit"),
+    .linkedLibrary("c++"),
+] : []
+#elseif os(Linux)
+let wgpuLinkerSettings: [LinkerSetting] = haveWGPU ? [
+    .unsafeFlags(["-Xlinker", "\(wgpuRoot)/lib/libwgpu_native.a"]),
+    .linkedLibrary("dl"),
+    .linkedLibrary("m"),
+    .linkedLibrary("pthread"),
+] : []
+#elseif os(Windows)
+let wgpuLinkerSettings: [LinkerSetting] = haveWGPU ? [
+    .unsafeFlags(["-Xlinker", "\(wgpuRoot)/lib/wgpu_native.lib"]),
+    .linkedLibrary("d3d12"), .linkedLibrary("dxgi"), .linkedLibrary("d3dcompiler"),
+    .linkedLibrary("userenv"), .linkedLibrary("ws2_32"), .linkedLibrary("ntdll"),
+    .linkedLibrary("bcrypt"), .linkedLibrary("advapi32"), .linkedLibrary("ole32"),
+    .linkedLibrary("oleaut32"), .linkedLibrary("user32"), .linkedLibrary("gdi32"),
+    .linkedLibrary("opengl32"), .linkedLibrary("propsys"), .linkedLibrary("runtimeobject"),
+] : []
+#else
+let wgpuLinkerSettings: [LinkerSetting] = []
+#endif
+
 let package = Package(
     name: "StarCpp",
     platforms: [
@@ -194,13 +265,13 @@ let package = Package(
         .target(name: "kht",             // C++ Hough Transform implementation
                 path: "Sources/kht",
                 cxxSettings: starcppCXXSettings,
-                linkerSettings: platformLinkerSettings
+                linkerSettings: platformLinkerSettings + wgpuLinkerSettings
         ),
         .target(name: "StarCpp",         // C++ OpenCV / StarCpp bridge (all .cpp)
                 dependencies: ["kht"],
                 path: "Sources/StarCpp",
                 publicHeadersPath: "include",
-                cxxSettings: bridgeCXXSettings
+                cxxSettings: bridgeCXXSettings + wgpuCXXSettings
         ),
         .target(name: "StarCppBridge",   // Swift wrapper
                 dependencies: [
@@ -218,7 +289,7 @@ let package = Package(
         .testTarget(name: "StarCppBridgeTests",
                     dependencies: ["StarCppBridge"],
                     path: "Tests/StarCppBridgeTests",
-                    linkerSettings: platformLinkerSettings
+                    linkerSettings: platformLinkerSettings + wgpuLinkerSettings
         ),
     ],
     cxxLanguageStandard: .cxx2b
