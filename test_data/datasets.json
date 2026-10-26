@@ -30,13 +30,6 @@
       "description": "The gui's splash video (11_30_2024-fx3-aurora-topaz-star.mp4). A build input of Star.app, not test data.",
       "provenance": "Brian Martin, own footage."
     },
-    "a7sii_10_tiff16": {
-      "asset": "a7sii_10_tiff16-d26419dbf633.tar.gz",
-      "sha256": "d26419dbf633d95c6b2fb44129b2392448744818ce6ec443ca31fb027831742b",
-      "bytes": 411338773,
-      "description": "The a7sii_10 frames as 19 LZW-compressed 16-bit TIFFs (4240x2832), converted from the JPEGs with ImageMagick. The content has only 8-bit precision: it tests the 16-bit TIFF format path.",
-      "provenance": "Brian Martin, own photographs."
-    },
     "a7sii_10_sky_tiff16": {
       "asset": "a7sii_10_sky_tiff16-02e70bc0184f.tar.gz",
       "sha256": "02e70bc0184f4daea7baf123f6252b9c403c15db612e6f76b7a1c39b1c39e44c",

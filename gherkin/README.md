@@ -78,10 +78,10 @@ Each combines horizon / camera motion / input type / clean method / output video
 | `autoSkyOnlyTiff16` | no | static | 16-bit TIFF | auto | no | `a7sii_10_sky_tiff16` |
 | `autoHorizonJpeg` | yes | static | JPEG | auto | no | `a7sii_10` |
 | `autoHorizonVideo` | yes | static | video (`frame_format`, default `tiff16`) | auto | no | `a7sii_10_h264` |
-| `autoHorizonTiff16` | yes | static | 16-bit TIFF | auto | no | `a7sii_10_tiff16` |
+| `autoHorizonTiff16` | yes | static | 16-bit TIFF | auto | no | `a7sii_10_16bit` |
 | `autoMovingTiff16` | yes | moving | 16-bit TIFF | auto | no | `moving_a7iv_1_aurora_tiff16` |
-| `selectiveHorizonTiff16` | yes | static | 16-bit TIFF | selective | no | `a7sii_10_tiff16` |
-| `autoSelectiveHorizonTiff16` | yes | static | 16-bit TIFF | auto selective | no | `a7sii_10_tiff16` |
+| `selectiveHorizonTiff16` | yes | static | 16-bit TIFF | selective | no | `a7sii_10_16bit` |
+| `autoSelectiveHorizonTiff16` | yes | static | 16-bit TIFF | auto selective | no | `a7sii_10_16bit` |
 | `autoHorizonJpegVideoOut` | yes | static | JPEG | auto | yes | `a7sii_10` |
 
 Clean method names: *auto* is `-c automatic` / `.automatic(false)`; *selective* is `-c selective` / `.selective`;

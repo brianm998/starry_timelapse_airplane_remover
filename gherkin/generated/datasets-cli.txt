@@ -2,5 +2,4 @@ a7sii_10
 a7sii_10_16bit
 a7sii_10_h264
 a7sii_10_sky_tiff16
-a7sii_10_tiff16
 moving_a7iv_1_aurora_tiff16

@@ -16,16 +16,16 @@
       "video": "data:a7sii_10_h264"
     },
     "autoHorizonTiff16": {
-      "sequence": "data:a7sii_10_tiff16"
+      "sequence": "data:a7sii_10_16bit"
     },
     "autoMovingTiff16": {
       "sequence": "data:moving_a7iv_1_aurora_tiff16"
     },
     "selectiveHorizonTiff16": {
-      "sequence": "data:a7sii_10_tiff16"
+      "sequence": "data:a7sii_10_16bit"
     },
     "autoSelectiveHorizonTiff16": {
-      "sequence": "data:a7sii_10_tiff16"
+      "sequence": "data:a7sii_10_16bit"
     },
     "autoHorizonJpegVideoOut": {
       "sequence": "data:a7sii_10"
