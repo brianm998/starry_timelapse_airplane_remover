@@ -46,6 +46,21 @@ The detector has no "there is no horizon" outcome: on a frame that is stars all 
 agree on it. The consequences are all the same mechanism: stars in the false ground are outliers against the neighbours (a flood of blobs: the old minutes and gigabytes),
 the merge erases them (the star loss), and the selective check changes pixels no label explains.
 
+### Measured 2026-10-26: the frames themselves can say "this is not ground"
+
+Per-row star residual of the 19 JPEG frames against their temporal median (frame minus median, minus a 7x7 box blur, positive part, mean over frames; frames at 1/4 size; numpy, no star run):
+
+| rows (fraction of height) | full `a7sii_10` (real horizon at ~0.80) | `a7sii_10_crop16` (sky only) |
+|---|---|---|
+| 0.00-0.50 | 2.2-2.5 | 2.6-2.8 |
+| 0.50-0.75 | 1.9 falling to 1.2 | 2.5 falling to 2.0 |
+| 0.80-1.00 (ground / "ground") | **0.29-0.46** | **1.5-1.8** |
+
+Below the real ground edge the residual is 12-19% of the sky's; in the crop it never falls below ~55% of the sky's, including in the region the detector calls ground (its fake line sits at 14-49% of the height). A rule
+"mean residual below the detected line / mean residual above it > ~0.5 means the line is not a horizon" has a margin of about 0.19 against 0.85 on these two. **Not yet measured**: a moonlit or lit ground (noise-limited
+residual could be a sizeable fraction of the sky's), a windy foreground, and the other static sequences; a heavy-tail (star-like) statistic rather than a mean would be the safer form. The check belongs in `FrameHorizonProcessor.temporalStaticHorizonImage`,
+which already holds the sampled `images` and the median `clean`; the outcome it needs is "no horizon" (all sky), which the pipeline already supports through `--no-horizon`.
+
 ### How to reproduce
 
 ```bash
@@ -89,6 +104,13 @@ On the iMac Pro (Vega GPU), `a7sii_10` JPEG, `-c automatic:true`, three runs: **
 (`--no-use-gpu --no-use-gpu-for-sift --no-use-gpu-for-akaze`) agrees with the GPU run on every one of the 226 objects (0 verdict differences, largest median-ratio difference 0.004)**.
 So the 7 objects that differ between hosted macos-15 and ubuntu-24.04 come from the platforms: different CPU architecture (arm64 against x86-64), different OpenCV builds and SIMD paths, floating-point
 differences in alignment and in the decision-tree features. Within one platform the result is stable (that is what the pins rely on).
+
+### Measured 2026-10-26: the differences are whole-group flips, not small numeric drift
+
+Develop run 40400376618, `autoPreservationKeepsAirplanesOutJpeg` (`automatic:true`), macos-15 against ubuntu-24.04, per-object median stretch ratio over the 234 objects both runs could measure:
+median absolute difference 0.006, 229 objects within 0.08, and **5 objects that differ by 0.8 to 1.03**: `00095-5` (mac 1.03 / linux 0.00), `00091-5` (mac 0.00 / linux 1.03), `00091-4` (1.02 / 0.01), `00088-12` (0.98 / -0.02),
+`00093-6` (1.02 / 0.22). Each flips between "removed" and "left in", in both directions (not one platform always removing more). So what differs is a group's keep/remove decision (a classifier score near its threshold, or a group split or merged
+differently by the blob stage), not the pixel arithmetic after that decision. The artifacts hold only the verifier reports, not `OutlierGroupPaintData.json`, so the scores themselves are still unseen.
 
 ### What it means (hypotheses, not yet separated)
 
@@ -138,7 +160,9 @@ locally. So it is not deterministic.
 
 ### Measured
 
-Only the log above. No crash report or `star_temp` directory was captured (the runner deletes it). Hosted macos-15 VMs have little RAM
+2026-10-26: **not reproduced locally in 12 of 12 runs** (iMac Pro, release cli built that morning, `-l info -c selective` on a 16-bit TIFF copy of the 19 `test_a7sii_10` frames made with
+`magick -depth 16 -compress lzw`, a fresh copy each run, each run left going for 25 s past the "saved median horizon as global reference" line or until it exited; none crashed). That leaves the memory-pressure and
+paravirtual-GPU hypotheses (a 7 GB / 3-core VM) as the live ones, and a hosted-runner-only race that a 36-thread machine does not hit. Only the log above. No crash report or `star_temp` directory was captured (the runner deletes it). Hosted macos-15 VMs have little RAM
 (see the memory-gate comments in `.github/workflows/gherkin.yml` for the desktop leg) and expose a paravirtual GPU.
 
 ### What it means (hypotheses, not yet separated)
