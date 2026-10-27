@@ -558,7 +558,8 @@ public final class ViewModel {
     }
 
     func startup(withNewImageSequence imageSequenceDirname: String,
-                 and videoInfo: VideoInfo? = nil) async throws
+                 and videoInfo: VideoInfo? = nil,
+                 frameSource: FrameSource? = nil) async throws
     {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = imageSequenceDirname
@@ -572,7 +573,8 @@ public final class ViewModel {
           try await ImageSequenceViewModel(
             viewModel: self, 
             withNewImageSequence: imageSequenceDirname,
-            and: videoInfo
+            and: videoInfo,
+            frameSource: frameSource
           ) { numberLoaded, amountLoaded in
             Task { @MainActor in
                 if amountLoaded != 0 {
@@ -595,11 +597,24 @@ public final class ViewModel {
         }
     }
 
-    func startup(withVideoToProcess path: String, format: FrameDecodeFormat = .tiff16) async throws {
+    func startup(withVideoToProcess path: String, format: FrameDecodeFormat = .tiff16, extractInBackground: Bool = false) async throws {
         isLoadingImageSequence = true
         let generation = beginLoad()
 
         isProbingImageSequence = true
+
+        if extractInBackground {
+            // Go to the main screen once the first frame is out; the rest are extracted while the sequence is open.  Extraction
+            // belongs to the source, which the sequence's view model holds and stops when it closes.
+            let (source, videoInfo) = try await Task.detached() {
+                try await startVideoExtraction(named: path, format: format)
+            }.value
+            isProbingImageSequence = false
+            guard generation == loadGeneration else { source.stop(); return }
+            try await startup(withNewImageSequence: source.outputFolder, and: videoInfo, frameSource: source)
+            return
+        }
+
         let (outputDir, videoInfo) = try await Task.detached() {
             try await decodeVideo(named: path, format: format) { currentFrame, totalFrames, outputDir in
                 Task { @MainActor in

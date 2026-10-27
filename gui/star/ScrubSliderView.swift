@@ -14,7 +14,11 @@ struct ScrubSliderView: View {
         }
         let start = 0.0
         let end = Double(viewModel.imageSequenceSize)
-        return Slider(value: $sliderValue, in : start...end)
+        return VStack(spacing: 2) {
+            // which frames are extracted yet, while a video is still being taken apart
+            if viewModel.isExtractingFrames { ExtractedRangesBand() }
+            Slider(value: $sliderValue, in : start...end)
+        }
           .frame(maxWidth: .infinity, alignment: .bottom)
           .disabled(viewModel.videoPlaying)
           .onChange(of: viewModel.currentIndex) { 

@@ -640,9 +640,106 @@ public final class ImageSequenceViewModel {
     
     var number_of_frames: Int = 50
 
+    // MARK: frames that are still being extracted
+
+    /// Where this sequence's frames come from; for a video that is still being extracted, which of them are there yet.
+    var frameSource: FrameSource?
+    /// The frames that are extracted.  Everything, for an image sequence.
+    var extractedFrames = IndexSet()
+    /// How far the extraction has got; nil for an image sequence.
+    var extractionProgress: FrameExtractionProgress?
+    /// Why the extraction failed, when it did.
+    var extractionError: String?
+    @ObservationIgnored private var extractionWatch: Task<Void, Never>?
+
+    /// Whether a video is still being extracted (the progress strip is up, and frames may be missing).
+    var isExtractingFrames: Bool {
+        guard let progress = extractionProgress else { return false }
+        return !progress.isComplete || extractionError != nil
+    }
+
+    func isExtracted(_ frameIndex: Int) -> Bool {
+        !isExtractingFrames || extractedFrames.contains(frameIndex)
+    }
+
+    var isCurrentFrameExtracted: Bool { isExtracted(currentIndex) }
+
+    /// Subscribes to the source's events, if frames are still arriving.  Frames the video has not given up yet are marked on their view
+    /// models; as they arrive they are marked back, and their previews and thumbnails are queued.
+    func startWatchingExtraction() {
+        guard let source = frameSource, !source.progress.isComplete, extractionWatch == nil else { return }
+        extractedFrames = source.availableFrames
+        extractionProgress = source.progress
+        for index in 0..<frames.count where !extractedFrames.contains(index) { frames[index].isExtracted = false }
+        // The frames the video already had when it was opened never had previews made for them as they arrived.
+        queueMissingPreviews(for: extractedFrames)
+        prioritizeForUser()
+        extractionWatch = Task { [weak self] in
+            for await event in source.events() {
+                guard let self else { return }
+                switch event {
+                case .snapshot: break
+                case .framesAvailable(let set):
+                    self.extractedFrames.formUnion(set)
+                    for index in set where index < self.frames.count { self.frames[index].isExtracted = true }
+                    self.queueMissingPreviews(for: set)
+                case .progress(let progress):
+                    self.extractionProgress = progress
+                case .frameCountSettled, .frameFailed: break
+                case .failed(let message):
+                    self.extractionError = message
+                    self.extractionProgress = source.progress
+                case .finished:
+                    self.extractionProgress = source.progress
+                    self.extractionWatch = nil
+                }
+            }
+        }
+    }
+
+    /// Asks the source for the frame on screen and the ones around it first.  A no-op unless frames are still arriving.
+    func prioritizeForUser() {
+        guard let source = frameSource, isExtractingFrames else { return }
+        let reach = max(8, min(frames.count, 24))
+        let near = Array(max(0, currentIndex - reach)...min(frames.count - 1, currentIndex + reach))
+        source.prioritize([currentIndex], reason: .userViewing)
+        source.prioritize(near.filter { $0 != currentIndex && !extractedFrames.contains($0) }, reason: .userNearby)
+    }
+
+    /// Preview and thumbnail operations for frames that have just been extracted, at the back of the queue like the ones made at open.
+    private func queueMissingPreviews(for indices: IndexSet) {
+        let wanted = indices.filter { $0 < frames.count }.map { frames[$0] }
+        guard !wanted.isEmpty else { return }
+        Task.detached(priority: .utility) { [wanted] in
+            for frameView in wanted {
+                guard let frame = await frameView.frame else { continue }
+                let imageAccessor = frame.imageAccessor
+                let previewUnit = await frame.configManager.config().workingFrameBytes
+                for (mode, size) in [(FrameViewMode.original, ImageDisplaySize.preview), (.original, .thumbnail)]
+                where imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: mode, atSize: .original) != nil
+                        && imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: mode, atSize: size) == nil
+                {
+                    let op = PreviewOp(
+                      frameView: frameView,
+                      imageAccessor: imageAccessor,
+                      frameIndex: frame.frameIndex,
+                      type: mode,
+                      size: size,
+                      rawImageBytes: previewUnit
+                    ) { errorString in
+                        Log.e("frame \(frame.frameIndex) unable to create preview: \(errorString)")
+                    }
+                    op.queuePriority = .veryLow
+                    await frameGraphBuilder.add(operation: op)
+                }
+            }
+        }
+    }
+
     // the frame number of the frame we're currently showing
     var currentIndex = 0 {
         didSet {
+            if oldValue != currentIndex { prioritizeForUser() }
             if currentIndex >= 0,
                currentIndex < self.frames.count
             {
@@ -1830,6 +1927,7 @@ public final class ImageSequenceViewModel {
       viewModel: ViewModel,
       withNewImageSequence imageSequenceDirname: String,
       and videoInfo: VideoInfo? = nil,
+      frameSource: FrameSource? = nil,
       closure: @Sendable @escaping (Int, Double) -> Void) async throws
     {
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
@@ -1887,6 +1985,7 @@ public final class ImageSequenceViewModel {
         try await self.init(
           viewModel: viewModel,
           with: configManager,
+          frameSource: frameSource,
           closure: closure
         )
 
@@ -1911,6 +2010,10 @@ public final class ImageSequenceViewModel {
 
     public func disable() {
         self.appNapDisabler.end()
+        // What is extracted stays, and the folder says it is not complete, so reopening carries on.
+        extractionWatch?.cancel()
+        extractionWatch = nil
+        frameSource?.stop()
     }
     
     deinit {
@@ -1924,6 +2027,7 @@ public final class ImageSequenceViewModel {
     init(
       viewModel: ViewModel,
       with configManager: ConfigManager,
+      frameSource: FrameSource? = nil,
       closure: @Sendable @escaping (Int, Double) -> Void
     ) async throws {
         self.topViewModel = viewModel
@@ -2008,8 +2112,18 @@ public final class ImageSequenceViewModel {
         // per alignment type from every sequence opened this session.
         await keypointCache.clear()
 
-        let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
-                                              supportedImageFileTypes: config.supportedImageFileTypes)
+        // The frames of a video that is still being extracted come from the source the import started; a folder is an image
+        // sequence, or the frames of a video whose extraction was interrupted, which carries on.
+        let source: FrameSource
+        if let frameSource {
+            source = frameSource
+        } else {
+            source = try await FrameSourceFactory.open(
+              directory: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
+              supportedImageFileTypes: config.supportedImageFileTypes)
+        }
+        self.frameSource = source
+        let imageSequence = ImageSequence(source: source)
 
         Log.d("loaded image sequence")
         let imageInfo = try await imageSequence.getImageInfo()
@@ -2082,6 +2196,8 @@ public final class ImageSequenceViewModel {
                 Log.e("startup error: \(error)")
             }
         }.value
+        // Frames that are still arriving: say which are there, and mark the ones that are not.
+        self.startWatchingExtraction()
     }
 
     nonisolated private func setup(

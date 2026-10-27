@@ -36,6 +36,14 @@ enum FrameHandlers {
             let frameIdx = Int(req.frameIndex)
             let starViewMode = Mapping.frameViewMode(from: req.viewMode)
 
+            // A frame of a video that is still being extracted has nothing to show yet.  That is an answer, not a failure: the client
+            // draws its placeholder and asks Frame.GetEta how long it will be.
+            if !frame.imageAccessor.imageSequence.source.isAvailable(frameIdx) {
+                var notYet = Star_V1_ImageRef()
+                notYet.notExtracted = true
+                try await transport.respond(id: id, payload: notYet.serializedData()); return
+            }
+
             // Generated on demand, like the macOS GUI, which never pre-generates previews on open
             // (it makes them via PreviewOp / ImageAccessor.makeMissingImage as views appear): a
             // freshly opened sequence has none on disk, and without this every Frame.GetPreview
@@ -58,6 +66,38 @@ enum FrameHandlers {
             }
             Log.d("Frame.GetPreview: frame \(frameIdx) mode \(starViewMode) serving \(ref.path)")
             try await transport.respond(id: id, payload: ref.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    /// `Frame.Prioritize`: the frame the user is looking at and the ones around it, so the extractor fetches them first.  Answers at once.
+    static func prioritize(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_PrioritizeFramesRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            var nearby: [Int] = []
+            for range in req.nearby where range.end > range.start {
+                // A range is a neighbourhood, not a list of frames to extract one by one: bound it.
+                nearby += Array(Int(range.start)..<min(Int(range.end), Int(range.start) + 256))
+            }
+            await session.prioritizeFrames(viewing: Int(req.viewing), nearby: nearby)
+            try await transport.respond(id: id, payload: Star_V1_PrioritizeFramesResponse().serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
+    /// `Frame.GetEta`: how long until a frame that is not extracted yet is.
+    static func eta(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_FrameEtaRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            try await transport.respond(id: id, payload: await session.frameEta(Int(req.frameIndex)).serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
         }

@@ -8,19 +8,31 @@ struct PendingVideoImport: Identifiable {
     var id: String { path }
 }
 
+/// What the import sheet answers: how the frames are written, and whether the main screen opens
+/// while they are still being extracted.
+struct VideoImportOptions {
+    var format: FrameDecodeFormat
+    var extractInBackground: Bool
+}
+
 /// Asks how the frames of a video are to be written (16 bit or 8 bit tiff, or jpeg and how good),
 /// and how much disk that will take when the video's size is known, before any of it is decoded.
+/// Also whether to go on to the main screen while the frames are still being extracted.
 struct VideoImportSheetView: View {
     let pending: PendingVideoImport
-    let onImport: (FrameDecodeFormat) -> Void
+    let onImport: (VideoImportOptions) -> Void
     let onCancel: () -> Void
 
     @State private var kind: FrameDecodeFormat.Kind = .tiff16
     @State private var jpegQuality: Double = Double(FrameDecodeFormat.defaultJPEGQuality)
+    @State private var tiffCompression: FrameDecodeFormat.TIFFCompression = FrameDecodeFormat.defaultTIFFCompression
     @State private var probe: VideoProbe? = nil
+    @State private var extractInBackground = false
+    /// Once the user has touched the checkbox, what the probe finds no longer changes it.
+    @State private var extractInBackgroundChosen = false
 
     private var format: FrameDecodeFormat {
-        FrameDecodeFormat(kind: kind, jpegQuality: Int(jpegQuality.rounded()))
+        FrameDecodeFormat(kind: kind, jpegQuality: Int(jpegQuality.rounded()), tiffCompression: tiffCompression)
     }
 
     var body: some View {
@@ -49,23 +61,56 @@ struct VideoImportSheetView: View {
                 }
             }
 
+            if kind != .jpeg {
+                VStack(alignment: .leading, spacing: 4) {
+                    Picker(localized("ui.tiff_compression"), selection: $tiffCompression) {
+                        Text(localized("ui.tiff_compression_none")).tag(FrameDecodeFormat.TIFFCompression.none)
+                          .accessibilityIdentifier("videoimport.compression.none")
+                        Text(localized("ui.tiff_compression_packbits")).tag(FrameDecodeFormat.TIFFCompression.packBits)
+                          .accessibilityIdentifier("videoimport.compression.packbits")
+                    }
+                      .pickerStyle(.radioGroup)
+                    Text(localized("ui.tiff_compression_help"))
+                      .font(.caption)
+                      .foregroundStyle(.secondary)
+                      .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             diskUsage
+
+            // On by default where any frame can be had cheaply (ProRes and other intra-only formats); the help text says why
+            // it is off for H.264 and the like.
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(localized("ui.video_import_background"), isOn: Binding(
+                  get: { extractInBackground },
+                  set: { extractInBackground = $0; extractInBackgroundChosen = true }))
+                  .accessibilityIdentifier("videoimport.background")
+                  .help(localized("ui.video_import_background_help"))
+                Text(localized("ui.video_import_background_help"))
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+                  .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack {
                 Spacer()
                 Button(localized("ui.cancel"), action: onCancel)
                   .keyboardShortcut(.cancelAction)
-                Button(localized("ui.video_import_start")) { onImport(format) }
+                Button(localized("ui.video_import_start")) {
+                    onImport(VideoImportOptions(format: format, extractInBackground: extractInBackground))
+                }
                   .keyboardShortcut(.defaultAction)
                   .accessibilityIdentifier("videoimport.import")
             }
         }
           .padding(24)
-          .frame(width: 460)
+          .frame(width: 500)
           .task {
-              // a quick read of the header; the sheet is usable while it runs
+              // The codec's name settles the checkbox's default at once; the quick read of the packets then makes it exact.
               let path = pending.path
               probe = await Task.detached { VideoProbe.probe(videoAt: path) }.value
+              if !extractInBackgroundChosen, let probe { extractInBackground = probe.extractInBackgroundByDefault }
           }
     }
 

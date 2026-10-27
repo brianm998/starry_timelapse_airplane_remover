@@ -111,6 +111,18 @@ struct FilmstripImageView: View {
 
                     frameView.thumbnailImage
 
+                    // not extracted from the video yet: dimmed, with a mark, and no thumbnail to show
+                    if !frameView.isExtracted {
+                        Rectangle().fill(.black.opacity(0.55))
+                        if viewModel.frameSource?.isBeingJumpedTo(frameIndex) ?? false {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "hourglass")
+                              .foregroundColor(.white.opacity(0.8))
+                              .help(localized("ui.frame_not_extracted_short"))
+                        }
+                    }
+
                     // Horizon lines — one coloured polyline per kind the user has switched on.
                     if viewModel.userPreferences.showHorizonOnMainView ?? false {
                         HorizonLinesCanvas(

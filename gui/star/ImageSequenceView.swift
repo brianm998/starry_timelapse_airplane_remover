@@ -79,6 +79,9 @@ struct ImageSequenceView: View {
                     Spacer().frame(minHeight: 15, maxHeight: 25)
                 }
 
+                // how far extracting the video has got, while it is
+                ExtractionProgressStripView()
+
                 // scrub slider at the bottom (not needed in grid mode)
                 if viewModel.imageSequenceSize > 0,
                    viewModel.interactionMode != .grid
