@@ -28,6 +28,8 @@ final class GuiFeatureRunner {
     private var rendersVideo = false
     private var finishedReview = false
     private var settledOnce = false
+    /// The video's frames are extracted while the run is going, not before it.
+    private var backgroundImport = false
 
     // The setting steps, applied as the startup prompts when the sequence opens (the generator makes them precede the open step).
     private var horizon: Bool?
@@ -51,6 +53,7 @@ final class GuiFeatureRunner {
         .cleanAutoSelective: { $0.clean = "autoSelective" },
         .openSequence: { try $0.openSequence() },
         .importVideo: { try $0.importVideo() },
+        .importVideoBackground: { try $0.importVideo(inBackground: true) },
         .processEveryFrame: { try $0.processEveryFrame() },
         .renderOutputVideo: { try $0.renderOutputVideoStep() },
         .usedRequestedSettings: { try $0.usedRequestedSettings() },
@@ -195,7 +198,8 @@ final class GuiFeatureRunner {
 
     /// Opens the video through the import sheet (`-StarUITestOpenVideo` raises it as the open panel would), choosing the
     /// frame format the feature asks for.
-    private func importVideo() throws {
+    private func importVideo(inBackground: Bool = false) throws {
+        backgroundImport = inBackground
         _ = try requireSettings()
         let given = try param("video")
         let source = try TestData.resolve(given, cache: dataCache())
@@ -230,6 +234,13 @@ final class GuiFeatureRunner {
         // A radio group's items do not always expose the identifier of the Text they were made from, so fall back to position.
         let radio = element("videoimport.format.\(format)")
         if radio.exists { radio.click() } else { app.radioGroups.firstMatch.radioButtons.element(boundBy: index).click() }
+        // "Extract video in background": on by default for a video any frame of which is cheap to reach (the probe decides), so it is
+        // put the way the step asks rather than clicked blindly.
+        let background = element("videoimport.background")
+        if background.waitForExistence(timeout: 30) {
+            let isOn = (background.value as? String) == "1" || (background.value as? Int) == 1
+            if isOn != inBackground { background.click() }
+        }
         try tap("videoimport.import")
         try answerStartupPrompts()
     }
@@ -264,6 +275,9 @@ final class GuiFeatureRunner {
         // measured, the runner's polling was about half of it, and a query that waits too long fails the test. So the long waits watch the
         // disk, and the UI is asked once the disk says the run is over. Auto selective has no such file to watch (its frames wait for
         // review), so it asks the UI, slowly.
+        // A video extracted in the background is still arriving: the count to wait for is the whole video's, which its extraction.json
+        // says is complete once every frame is out.
+        if backgroundImport { try waitForExtraction() }
         let expected = try frameFiles(in: inputFrames).count
         if clean == "autoSelective" { try finishAutoSelective(expected: expected); return }
 
@@ -306,6 +320,20 @@ final class GuiFeatureRunner {
         // let the last frame's write land
         _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 10)
         completeFrames = expected
+    }
+
+    /// Waits until the video's frames are all extracted: the folder's `extraction.json` says `"complete" : true`.
+    private func waitForExtraction() throws {
+        guard let dir = inputFrames else { return }
+        let sidecar = dir.appendingPathComponent("extraction.json")
+        let deadline = Date().addingTimeInterval(600)
+        while Date() < deadline {
+            if let data = try? Data(contentsOf: sidecar),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               json["complete"] as? Bool == true { return }
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        throw RunnerError("the video's frames were still being extracted after 10 minutes: \(sidecar.path)")
     }
 
     private func frameFiles(in dir: URL?) throws -> [String] {

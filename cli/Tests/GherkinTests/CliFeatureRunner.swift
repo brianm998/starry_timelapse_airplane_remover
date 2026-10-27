@@ -32,6 +32,8 @@ final class CliFeatureRunner {
     private(set) var outputDir: URL?
     private var baseOutputDir: URL?              // star's output on the un-injected base (synthetic datasets)
     private var rendersVideo = false
+    /// The video's frames are extracted while the run is going (`--extract-in-background`), not before it.
+    private var backgroundImport = false
     private var renderedVideo: String?
     private var runLog = ""
     private var tempDir: URL?
@@ -56,6 +58,8 @@ final class CliFeatureRunner {
             .cleanAutoSelective: { $0.settings.clean = "autoSelective" },
             .openSequence: { try $0.openSequence() },
             .importVideo: { try $0.importVideo() },
+            .importVideoBackground: { try $0.importVideo(inBackground: true) },
+            .outputMatchesFirst: { try $0.outputMatchesFirst() },
             .processEveryFrame: { try $0.processEveryFrame() },
             .processWithBase: { try $0.processWithBase() },
             .renderOutputVideo: { try $0.renderOutputVideoStep() },
@@ -149,7 +153,8 @@ final class CliFeatureRunner {
 
     /// The video inside a `data:` dataset directory (or the file itself), copied into the scratch directory: star decodes next
     /// to the video and derives its temp paths from the name, so it must not touch the cache.
-    private func importVideo() throws {
+    private func importVideo(inBackground: Bool = false) throws {
+        backgroundImport = inBackground
         let given = try param("video")
         let source = try TestData.resolve(given, cache: dataCache())
             ?? (Self.isAbsolutePath(given) ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given))
@@ -206,7 +211,7 @@ final class CliFeatureRunner {
     }
 
     /// One star run over `input`, written to `out`, with the settings the setup steps asked for.
-    private func runStar(on input: URL, to out: URL, logName: String) throws {
+    private func runStar(on input: URL, to out: URL, logName: String, extractInBackground: Bool? = nil) throws {
         let s = try requireSettings()
         let log = scratch.appendingPathComponent(logName)
         FileManager.default.createFile(atPath: log.path, contents: nil)
@@ -220,6 +225,10 @@ final class CliFeatureRunner {
         if s.moving { args.append("--moving-camera") }
         args += ["-c", ["auto": "automatic", "selective": "selective", "autoSelective": "automatic:true"][s.clean]!]
         if sourceVideo != nil { args += ["--frame-format", try param("frame_format")] }
+        // Said only where a step asked: otherwise star's own default for the video's format stands.
+        if sourceVideo != nil, let background = extractInBackground ?? (backgroundImport ? true : nil) {
+            args.append(background ? "--extract-in-background" : "--no-extract-in-background")
+        }
         if rendersVideo { args.append("--render-video") }
         args += [input.path, out.path]
 
@@ -244,6 +253,38 @@ final class CliFeatureRunner {
         tempDir = (temps.first { $0 == "star_temp_\(input.lastPathComponent)" } ?? temps.first).map { parent.appendingPathComponent($0) }
         renderedVideo = runLog.split(whereSeparator: \.isNewline).first { $0.hasPrefix("Rendered video: ") }
             .map { String($0.dropFirst("Rendered video: ".count)) }
+    }
+
+    /// The same video, extracted in full before processing begins (`--no-extract-in-background`), in a copy of its own, run with the same
+    /// settings: every output frame must be byte for byte the one the streaming run wrote.  Streaming may change when work happens, never what it
+    /// produces.
+    private func outputMatchesFirst() throws {
+        guard backgroundImport, let video = sourceVideo, let streamed = outputDir else {
+            throw RunnerError("\"I import the video ... extracting it in the background\" and \"I process every frame\" have to come first")
+        }
+        let streamedTemp = tempDir
+        let other = scratch.appendingPathComponent("first")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        let copy = other.appendingPathComponent(video.lastPathComponent)
+        try FileManager.default.copyItem(at: video, to: copy)
+        try runStar(on: copy, to: other.appendingPathComponent("output"), logName: "star-first.log", extractInBackground: false)
+        guard let first = outputDir else { throw RunnerError("the comparison run wrote no output") }
+        outputDir = streamed
+        tempDir = streamedTemp
+
+        let streamedFrames = try framesDirectory(streamed), firstFrames = try framesDirectory(first)
+        let fm = FileManager.default
+        let names = try fm.contentsOfDirectory(atPath: streamedFrames.path).filter { !$0.hasPrefix(".") }.sorted()
+        let expected = try fm.contentsOfDirectory(atPath: firstFrames.path).filter { !$0.hasPrefix(".") }.sorted()
+        XCTAssertEqual(names, expected, "the two runs wrote different sets of frames")
+        XCTAssertFalse(names.isEmpty, "no output frames to compare")
+        var different: [String] = []
+        for name in names where name != "audio.aac" {
+            if fm.contents(atPath: streamedFrames.appendingPathComponent(name).path) != fm.contents(atPath: firstFrames.appendingPathComponent(name).path) {
+                different.append(name)
+            }
+        }
+        XCTAssertTrue(different.isEmpty, "\(different.count) of \(names.count) output frames differ between the streaming run and the run that extracted first: \(different.prefix(5))")
     }
 
     private func renderOutputVideoStep() throws {

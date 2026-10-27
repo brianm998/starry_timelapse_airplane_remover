@@ -10,7 +10,9 @@ public struct FrameDecodeFormat: Sendable, Equatable, Codable {
 
     /// How the tiff frames are compressed.  Both are lossless and decode to identical pixels.
     public enum TIFFCompression: String, Sendable, Codable, CaseIterable {
-        /// Read about twice as fast while star processes the frames (`MatWrapper` has a fast path for it), for roughly 10% more disk.
+        /// Read about 1.5 to 2 times as fast while star processes the frames (`MatWrapper` has a fast path for it).  On a noisy night sky it
+        /// is also no bigger than PackBits (measured: PackBits is 0.8% larger); PackBits only wins where there are large flat areas, such
+        /// as a black ground, where it takes about half the space (see `TiffCompressionMeasurement`).
         case none
         /// What ffmpeg's tiff encoder does by default, and what every import before the choice existed wrote.
         case packBits

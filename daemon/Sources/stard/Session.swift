@@ -550,12 +550,20 @@ actor Session {
     private func reportSteps(generation: Int) async {
         guard let context = stepReports, context.generation == generation, activeRun == generation, !closed else { return }
         let report = StepProgressReport.make(types: context.types, now: await StepProgressReport.sample(),
-                                             baseline: context.baseline, status: context.status)
+                                             baseline: context.baseline, status: context.status ?? waitingForFramesStatus())
         guard report != lastStepReport else { return }
         lastStepReport = report
         var prog = Star_V1_ProgressEvent()
         prog.kind = .stepProgress(report)
         emit(prog)
+    }
+
+    /// What a run that is waiting on a video's frames says, so that it is not taken for a hang: nil once they are all out.
+    private func waitingForFramesStatus() -> String? {
+        guard let source = extractionSource else { return nil }
+        let progress = source.progress
+        guard !progress.isComplete, progress.error == nil, progress.total > 0 else { return nil }
+        return localized("ui.processing_waiting_for_frames", progress.extracted * 100 / progress.total)
     }
 
     /// The run is over: one last report, so the bars end where the run did, and no more.

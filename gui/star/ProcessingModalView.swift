@@ -67,7 +67,7 @@ struct ProcessingModalView: View {
           framesComplete: viewModel.count(for: .complete),
           frameCount: viewModel.frames.count,
           steps: steps,
-          statusText: viewModel.processingStatusText,
+          statusText: viewModel.processingStatusText ?? viewModel.waitingForFramesText,
           showAlignment: showAlignment,
           stop: { viewModel.stopProcessing() },
           dismiss: { viewModel.processingModalShowing = false },

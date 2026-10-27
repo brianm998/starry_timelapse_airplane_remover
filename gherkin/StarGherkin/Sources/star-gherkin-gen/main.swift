@@ -237,7 +237,7 @@ let settingGroups: [(name: String, cases: Set<String>)] = [
     ("camera", ["cameraStatic", "cameraMoving"]),
     ("clean method", ["cleanAuto", "cleanSelective", "cleanAutoSelective"]),
 ]
-let openCases: Set<String> = ["openSequence", "importVideo"]
+let openCases: Set<String> = ["openSequence", "importVideo", "importVideoBackground"]
 
 func validateSettings(_ f: ParsedFeature, steps: [StepDef]) throws {
     let defs = Dictionary(uniqueKeysWithValues: steps.map { ($0.text, $0.caseName) })

@@ -47,6 +47,12 @@
     },
     "syntheticAirplanes": {
       "sequence": "data:trails_synth_sky500"
+    },
+    "autoHorizonVideoBackground": {
+      "video": "data:a7sii_10_h264"
+    },
+    "videoBackgroundIdentical": {
+      "video": "data:a7sii_10_h264"
     }
   }
 }

@@ -78,6 +78,8 @@ Each combines horizon / camera motion / input type / clean method / output video
 | `autoSkyOnlyTiff16` | no | static | 16-bit TIFF | auto | no | `a7sii_10_sky_tiff16` |
 | `autoHorizonJpeg` | yes | static | JPEG | auto | no | `a7sii_10` |
 | `autoHorizonVideo` | yes | static | video (`frame_format`, default `tiff16`) | auto | no | `a7sii_10_h264` |
+| `autoHorizonVideoBackground` | yes | static | the same video, extracted in the background while it is processed | auto | no | `a7sii_10_h264` |
+| `videoBackgroundIdentical` (cli only) | yes | static | the same, and then the video again extracted first | auto | no | `a7sii_10_h264` |
 | `autoHorizonTiff16` | yes | static | 16-bit TIFF | auto | no | `a7sii_10_16bit` |
 | `autoMovingTiff16` | yes | moving | 16-bit TIFF | auto | no | `moving_a7iv_1_aurora_tiff16` |
 | `selectiveHorizonTiff16` | yes | static | 16-bit TIFF | selective | no | `a7sii_10_16bit` |

@@ -658,6 +658,12 @@ public final class ImageSequenceViewModel {
         return !progress.isComplete || extractionError != nil
     }
 
+    /// What a run says while the video it works on is still being extracted, so that it is not taken for a hang; nil otherwise.
+    var waitingForFramesText: String? {
+        guard isExtractingFrames, let progress = extractionProgress, progress.total > 0 else { return nil }
+        return localized("ui.processing_waiting_for_frames", progress.extracted * 100 / progress.total)
+    }
+
     func isExtracted(_ frameIndex: Int) -> Bool {
         !isExtractingFrames || extractedFrames.contains(frameIndex)
     }
