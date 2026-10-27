@@ -178,11 +178,21 @@ class StarClient(private val conn: StdioConnection) {
         initialConfig: Config = Config.getDefaultInstance(),
         frameFormat: FrameFormat = FrameFormat.FRAME_FORMAT_TIFF16,
         jpegQuality: Int = 0,
+        tiffCompression: com.star.proto.TiffCompression = com.star.proto.TiffCompression.TIFF_COMPRESSION_PACKBITS,
+        extractInBackground: Boolean = false,
+        /** The most ffmpeg processes that extract ahead of the in-order one; 0 leaves it to the engine's default. */
+        maxJumpWorkers: Int = 0,
+        maxLongGopJumpWorkers: Int = 0,
     ): Flow<OpenProgress> =
         serverStream(
             "Session.OpenVideo",
             OpenVideoRequest.newBuilder().setVideoPath(videoPath).setInitialConfig(initialConfig)
-                .setFrameFormat(frameFormat).setJpegQuality(jpegQuality).build(),
+                .setFrameFormat(frameFormat).setJpegQuality(jpegQuality)
+                .setTiffCompression(tiffCompression).setExtractInBackground(extractInBackground)
+                .setExtractionSettings(
+                    com.star.proto.ExtractionSettings.newBuilder()
+                        .setMaxJumpWorkers(maxJumpWorkers).setMaxLongGopJumpWorkers(maxLongGopJumpWorkers),
+                ).build(),
             OpenProgress.parser(),
         )
 
@@ -249,6 +259,24 @@ class StarClient(private val conn: StdioConnection) {
 
     suspend fun getFrame(sessionId: String, frameIndex: Int): FrameInfo =
         call("Frame.Get", frameRef(sessionId, frameIndex), FrameInfo.parser())
+
+    /**
+     * What the user is looking at, so a video that is still being extracted fetches [viewing] and the frames in [nearby] first, where its
+     * format allows. Cheap to call at every move: the engine collapses a scrub that is still going.
+     */
+    suspend fun prioritizeFrames(sessionId: String, viewing: Int, nearby: List<IntRange>) {
+        val request = com.star.proto.PrioritizeFramesRequest.newBuilder().setSessionId(sessionId).setViewing(viewing)
+        for (r in nearby) request.addNearby(com.star.proto.FrameRange.newBuilder().setStart(r.first).setEnd(r.last + 1))
+        call("Frame.Prioritize", request.build(), com.star.proto.PrioritizeFramesResponse.parser())
+    }
+
+    /** How long until a frame that is not extracted yet is, for the wait panel. */
+    suspend fun getFrameEta(sessionId: String, frameIndex: Int): com.star.proto.FrameEtaResponse =
+        call(
+            "Frame.GetEta",
+            com.star.proto.FrameEtaRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).build(),
+            com.star.proto.FrameEtaResponse.parser(),
+        )
 
     /** The frame's image for [viewMode] at [size]: the preview by default, the filmstrip's thumbnail, or an 8-bit copy of the full-size image. */
     suspend fun getFramePreview(

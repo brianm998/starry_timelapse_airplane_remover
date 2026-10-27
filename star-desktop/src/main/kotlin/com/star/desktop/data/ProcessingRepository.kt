@@ -83,6 +83,38 @@ class ProcessingRepository(
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val errors: SharedFlow<String> = _errors.asSharedFlow()
 
+    /**
+     * How far the extraction of the video's frames has got, as the daemon last said (`frame_extraction`); null for an image sequence.
+     * Complete when everything is out, which is when the progress bar goes away.
+     */
+    private val _extraction = MutableStateFlow<com.star.proto.FrameExtraction?>(null)
+    val extraction: StateFlow<com.star.proto.FrameExtraction?> = _extraction.asStateFlow()
+
+    /**
+     * The frames that are extracted, while a video is still being extracted; null when every frame is there (an image sequence, or a video
+     * that is done), so nothing has to be asked of a set that would be everything.
+     */
+    private val _extractedFrames = MutableStateFlow<com.star.desktop.domain.ExtractedFrames?>(null)
+    val extractedFrames: StateFlow<com.star.desktop.domain.ExtractedFrames?> = _extractedFrames.asStateFlow()
+
+    /** Start from what `SessionInfo.extraction` said at open: the live events carry on from it. */
+    fun seedExtraction(initial: com.star.proto.FrameExtraction?) {
+        if (initial == null || !initial.active || initial.complete) return
+        applyExtraction(initial)
+    }
+
+    private fun applyExtraction(e: com.star.proto.FrameExtraction) {
+        _extraction.value = e
+        if (e.complete) {
+            _extractedFrames.value = null
+        } else if (e.availableCount > 0) {
+            // a snapshot lists every range: it replaces what there was
+            _extractedFrames.value = com.star.desktop.domain.ExtractedFrames.fromProto(e.availableList)
+        } else if (_extractedFrames.value == null) {
+            _extractedFrames.value = com.star.desktop.domain.ExtractedFrames.NONE
+        }
+    }
+
     private var subJob: Job? = null
 
     /**
@@ -215,6 +247,13 @@ class ProcessingRepository(
             }
             ProgressEvent.KindCase.HORIZON_UPDATED -> _horizonUpdated.tryEmit(ev.horizonUpdated)
             ProgressEvent.KindCase.STEP_PROGRESS -> _stepProgress.value = ev.stepProgress
+            ProgressEvent.KindCase.FRAME_EXTRACTION -> applyExtraction(ev.frameExtraction)
+            ProgressEvent.KindCase.FRAMES_AVAILABLE -> {
+                val now = _extractedFrames.value
+                if (now != null) {
+                    _extractedFrames.value = now + ev.framesAvailable.rangesList.map { it.start until it.end }
+                }
+            }
             ProgressEvent.KindCase.IMAGE_SAVED ->
                 _imageSaved.tryEmit(ImageSaved(ev.imageSaved.frameIndex, ev.imageSaved.viewMode))
             ProgressEvent.KindCase.FRAME_EXISTING ->

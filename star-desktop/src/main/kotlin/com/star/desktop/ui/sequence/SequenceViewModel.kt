@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
@@ -334,9 +335,47 @@ class SequenceViewModel(
      */
     private val _horizonVersion = MutableStateFlow(0)
     val horizonVersion: StateFlow<Int> = _horizonVersion.asStateFlow()
+    // ---- frames that are still being extracted from a video ----
+
+    /** How far the extraction has got; null for an image sequence. Complete when every frame is there. */
+    val extraction: StateFlow<com.star.proto.FrameExtraction?> = processing.extraction
+
+    /** The frames that are extracted, while the video is still being extracted; null when every frame is there. */
+    val extractedFrames: StateFlow<com.star.desktop.domain.ExtractedFrames?> = processing.extractedFrames
+
+    /** Whether frame [index] is extracted (an image sequence's frames all are). */
+    fun isFrameExtracted(index: Int): Boolean = processing.extractedFrames.value?.contains(index) ?: true
+
+    /** Whether the video is still being extracted (the progress bar is up, and frames may be missing). */
+    val isExtracting: StateFlow<Boolean> = combine(processing.extraction, processing.extractedFrames) { e, frames ->
+        e != null && (!e.complete && frames != null || e.error.isNotEmpty())
+    }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** How long until [index] is extracted, for the wait panel; null when the engine could not say. */
+    suspend fun frameEta(index: Int): com.star.proto.FrameEtaResponse? = frames.eta(sessionId, index)
+
     init {
         // Subscribe to progress BEFORE any Processing.Start (the daemon attaches its continuation lazily).
         processing.subscribe(sessionId)
+        processing.seedExtraction(info.extraction)
+
+        // The frame on screen, and the ones around it, are what a video that is still being extracted fetches first (where its format
+        // allows it). Settled for a moment first, so a scrub that is moving does not ask for every frame it passes over.
+        scope.launch {
+            _currentIndex.collectLatest { idx ->
+                delay(PRIORITIZE_DEBOUNCE_MS)   // a newer frame cancels this one before it asks
+                if (processing.extractedFrames.value == null) return@collectLatest
+                val reach = PRIORITIZE_REACH
+                frames.prioritize(sessionId, idx, listOf((idx - reach).coerceAtLeast(0)..(idx + reach).coerceAtMost(frameCount - 1)))
+            }
+        }
+
+        // The frame on screen was not there and now is: show it.
+        processing.extractedFrames
+            .map { it?.contains(_currentIndex.value) ?: true }
+            .distinctUntilChanged()
+            .onEach { here -> if (here) loadPreview(_currentIndex.value, _viewMode.value) }
+            .launchIn(scope)
 
         // (Re)load the current preview whenever the index or view mode changes.
         combine(_currentIndex, _viewMode) { idx, mode -> idx to mode }
@@ -1109,6 +1148,12 @@ class SequenceViewModel(
     }
 
     companion object {
+        /** A scrub that has not moved for this long (milliseconds) has stopped: that frame is the one the extractor is asked for. */
+        private const val PRIORITIZE_DEBOUNCE_MS = 80L
+
+        /** How many frames either side of the one on screen are asked for as its neighbourhood. */
+        private const val PRIORITIZE_REACH = 24
+
         /** How often at most the alignment results are fetched again while they are showing and the frames are changing. */
         private const val ALIGNMENT_REFRESH_MS = 1000L
 

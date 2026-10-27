@@ -10,14 +10,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +36,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameFormatChoice
+import com.star.desktop.domain.TiffCompressionChoice
 import com.star.desktop.domain.VideoImport
+import com.star.desktop.domain.VideoImportOptions
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -48,12 +54,17 @@ import java.io.File
 fun VideoImportDialog(
     videoPath: String,
     probe: suspend (String) -> ProbeVideoResponse?,
-    onImport: (FrameFormatChoice, Int) -> Unit,
+    onImport: (VideoImportOptions) -> Unit,
     onCancel: () -> Unit,
 ) {
     var format by remember { mutableStateOf(FrameFormatChoice.TIFF16) }
     var quality by remember { mutableFloatStateOf(VideoImport.DEFAULT_JPEG_QUALITY.toFloat()) }
+    var compression by remember { mutableStateOf(TiffCompressionChoice.PACKBITS) }
     val info by produceState<ProbeVideoResponse?>(null, videoPath) { value = runCatching { probe(videoPath) }.getOrNull() }
+    // On by default where any frame can be had cheaply; once the user has touched the box, what the probe finds no longer changes it.
+    var background by remember { mutableStateOf(false) }
+    var backgroundChosen by remember { mutableStateOf(false) }
+    LaunchedEffect(info) { if (!backgroundChosen) background = VideoImport.extractInBackgroundByDefault(info) }
 
     Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = onCancel), contentAlignment = Alignment.Center) {
         Column(
@@ -62,6 +73,7 @@ fun VideoImportDialog(
                 .clip(StarShapes.card)
                 .background(StarColors.prefsCard)
                 .clickable(enabled = false) {}
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -92,9 +104,25 @@ fun VideoImportDialog(
                 )
             }
 
+            // Both tiffs say how they are compressed; jpeg has no such choice.
+            if (format != FrameFormatChoice.JPEG) {
+                Text(localized("ui.tiff_compression"), color = StarColors.textSecondary, fontSize = 12.sp)
+                TiffCompressionChoice.entries.forEach { choice ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp))
+                            .testTag("videoimport.compression.${choice.name.lowercase()}").clickable { compression = choice },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = compression == choice, onClick = { compression = choice })
+                        Text(localized(choice.labelKey), color = StarColors.textPrimary, fontSize = 13.sp)
+                    }
+                }
+                Text(localized("ui.tiff_compression_help"), color = StarColors.textSecondary, fontSize = 11.sp)
+            }
+
             // Nothing until the header has been read; then the estimate, or why there is none.
             info?.let { p ->
-                val bytes = VideoImport.estimatedBytes(p, format, q)
+                val bytes = VideoImport.estimatedBytes(p, format, q, compression)
                 if (bytes != null) {
                     Text(
                         localized("ui.video_import_disk_usage", VideoImport.formatBytes(bytes), p.frameCount, p.width, p.height),
@@ -105,10 +133,21 @@ fun VideoImportDialog(
                 }
             }
 
+            // Start working while the frames are still being extracted. The help says why this is off for H.264 and the like.
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).testTag("videoimport.background")
+                    .clickable { background = !background; backgroundChosen = true },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = background, onCheckedChange = { background = it; backgroundChosen = true })
+                Text(localized("ui.video_import_background"), color = StarColors.textPrimary, fontSize = 13.sp)
+            }
+            Text(localized("ui.video_import_background_help"), color = StarColors.textSecondary, fontSize = 11.sp)
+
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
                 Button(
-                    onClick = { onImport(format, q) },
+                    onClick = { onImport(VideoImportOptions(format, q, compression, background)) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     modifier = Modifier.testTag("videoimport.import"),
                 ) { Text(localized("ui.video_import_start")) }
