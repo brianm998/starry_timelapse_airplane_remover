@@ -8,7 +8,7 @@ dialog as a starting point — say it in your own words, it will sound better.
 
 Button and dialog names below are taken from the gui's English string catalogue, so
 they should match what is on screen. Rehearse once anyway: anything marked
-**(check)** is a spot I could not confirm from the code alone.
+**(check)** is a spot that could not be confirmed from the code alone.
 
 ---
 
@@ -132,9 +132,9 @@ right. Star then auto-fills the sky down to the horizon it finds.
 > thinks the ground begins.
 
 **ON SCREEN:** Zoom in on a tricky part (tree tops, a gap between hills). Fix it with
-the brush: **P** paints sky (adds to the selection), and the remove/erase brush
-takes it away **(check the key for removing — the instructions say "add or remove")**.
-Use **[** and **]** to shrink and grow the brush.
+the brush: **P** paints sky (adds to the selection), **E** erases sky (removes from
+the selection). Use **[** and **]** to shrink and grow the brush, and **R** to reset
+and start over if it goes badly.
 
 **SAY:**
 > If it's not quite right somewhere — like these tree tops — I just touch it up.
