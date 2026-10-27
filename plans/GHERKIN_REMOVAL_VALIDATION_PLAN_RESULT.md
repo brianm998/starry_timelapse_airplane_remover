@@ -253,7 +253,7 @@ touches the trail), **60 detected but discarded as dust** (34%: faint), **36 mis
   `--temp` shows they are detected but decided keep (scores -0.0 to -0.94). Real trails on `a7sii_10` are removed by `selective` about 20% of the time. The classifier's features are fractions of the frame, so the 500x400 base
   is out of distribution; a larger trail-free base does not exist (the largest region with no labelled trail in all 19 frames is 500x400). So the synthetic features use `automatic`, where there is no classifier. Meteors (never must-pass) are removed by `automatic:false`
   (ratio about 0.01-0.02) and kept by both selective modes.
-- **The crop-fixture bugs had one cause** (BUGS.md BUG-007, replacing BUG-001 to BUG-003): the automatic horizon detector invents a horizon in the sky-only crop, so the stars below it are erased and the blob pipeline drowns in them.
+- **The crop-fixture bugs had one cause** (BUG-007, replacing BUG-001 to BUG-003; fixed 2026-10-26 by the ground-star-activity check in `TemporalHorizonDetector`, so the default detection now finds no horizon in the crop): the automatic horizon detector invented a horizon in the sky-only crop, so the stars below it are erased and the blob pipeline drowns in them.
   With `--no-horizon` the crop's `selective` run takes 32-35 s at 2.9 GB, is byte-identical across runs and changes 2,899 px outside the labels (80,939 with the default detection).
 - **`--temp` diagnostics** implemented (above). **Duplicate dataset** `a7sii_10_tiff16` dropped: develop's three 16-bit features now use `a7sii_10_16bit`.
 

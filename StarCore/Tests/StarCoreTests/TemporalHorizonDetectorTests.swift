@@ -34,6 +34,118 @@ final class TemporalHorizonDetectorTests: XCTestCase {
         XCTAssertEqual(Set(indices).count, indices.count, "no frame twice")
     }
 
+    // MARK: - is there a ground at all?
+
+    /// `frames` frames of `w` x `h` luminance: a static background with a little noise, and
+    /// `starsPerFrame` stars that land somewhere new each frame, but only on rows
+    /// `starRows` (so the rest never changes).  Returns the frames and their per-pixel median.
+    private func starFrames(width w: Int, height h: Int, frames: Int, starsPerFrame: Int,
+                            starRows: Range<Int>,
+                            noiseFrom noisyRow: Int = Int.max,
+                            noise: Double = 0) -> (frames: [[Float]], median: [Float]) {
+        var state: UInt64 = 0x9E3779B97F4A7C15
+        func next() -> Double {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return Double(state >> 11) / Double(1 << 53)
+        }
+        let background = (0..<w * h).map { Float(0.30 + 0.20 * Double($0 / w) / Double(h)) }
+        var all: [[Float]] = []
+        for _ in 0..<frames {
+            var f = background.map { $0 + Float((next() - 0.5) * 0.08) }   // noise enough that a star's dark ring is below four sigma
+            // rows from `noisyRow` down get symmetric extra noise that changes every frame
+            if noisyRow < h {
+                for i in (noisyRow * w)..<(h * w) { f[i] += Float((next() - 0.5) * 2 * noise) }
+            }
+            if starRows.count > 0 {
+                for _ in 0..<starsPerFrame {
+                    // a 5 x 5 blob, as a star has a profile: a single bright pixel leaves a ring
+                    // of dark ones when the slow part is taken out, which is not what a star does
+                    let cx = 2 + Int(next() * Double(w - 4))
+                    let cy = starRows.lowerBound + 2 + Int(next() * Double(max(1, starRows.count - 4)))
+                    for dy in -2...2 { for dx in -2...2 {
+                        f[(cy + dy) * w + cx + dx] += Float(0.35 * exp(-Double(dx * dx + dy * dy) / 2.5))
+                    } }
+                }
+            }
+            all.append(f)
+        }
+        let median = (0..<w * h).map { i -> Float in
+            let v = all.map { $0[i] }.sorted()
+            return v[v.count / 2]
+        }
+        return (all, median)
+    }
+
+    func testAGroundThatNeverChangesHasNoStarActivity() throws {
+        let w = 160, h = 100, edge = 60
+        let (frames, median) = starFrames(width: w, height: h, frames: 12, starsPerFrame: 60,
+                                          starRows: 0..<edge)
+        let activity = try XCTUnwrap(TemporalHorizonDetector.groundStarActivity(
+          lumas: frames, median: median, width: w, height: h,
+          line: Array(repeating: edge, count: w)))
+        XCTAssertLessThan(activity, 0.1, "stars only above the line: nothing moves below it")
+    }
+
+    func testAGroundFullOfMovingStarsIsAsActiveAsTheSky() throws {
+        let w = 160, h = 100
+        let (frames, median) = starFrames(width: w, height: h, frames: 12, starsPerFrame: 100,
+                                          starRows: 0..<h)
+        let activity = try XCTUnwrap(TemporalHorizonDetector.groundStarActivity(
+          lumas: frames, median: median, width: w, height: h,
+          line: Array(repeating: 60, count: w)))
+        XCTAssertGreaterThan(activity, TemporalHorizonDetector.maxGroundStarActivity,
+                             "a line through a sky that is stars all the way down is not a horizon")
+        XCTAssertEqual(activity, 1, accuracy: 0.35)
+    }
+
+    func testTheActivityNeedsGroundAndSkyAndStarsToCompare() {
+        let w = 160, h = 100
+        let (frames, median) = starFrames(width: w, height: h, frames: 12, starsPerFrame: 60,
+                                          starRows: 0..<h)
+        XCTAssertNil(TemporalHorizonDetector.groundStarActivity(
+          lumas: frames, median: median, width: w, height: h,
+          line: Array(repeating: 99, count: w)), "no ground to speak of")
+        XCTAssertNil(TemporalHorizonDetector.groundStarActivity(
+          lumas: frames, median: median, width: w, height: h,
+          line: Array(repeating: 2, count: w)), "no sky to speak of")
+        let (quiet, quietMedian) = starFrames(width: w, height: h, frames: 12, starsPerFrame: 0,
+                                              starRows: 0..<0)
+        XCTAssertNil(TemporalHorizonDetector.groundStarActivity(
+          lumas: quiet, median: quietMedian, width: w, height: h,
+          line: Array(repeating: 60, count: w)), "no stars in the sky: nothing to measure against")
+        // a handful of stars is not a sky to compare a ground with either
+        let (sparse, sparseMedian) = starFrames(width: w, height: h, frames: 12, starsPerFrame: 3,
+                                                starRows: 0..<h)
+        XCTAssertNil(TemporalHorizonDetector.groundStarActivity(
+          lumas: sparse, median: sparseMedian, width: w, height: h,
+          line: Array(repeating: 60, count: w)), "too few stars to measure against")
+    }
+
+    func testANoisyGroundIsNotAGroundFullOfStars() throws {
+        // a dark treeline at high ISO: far more noise than the sky's, none of it a star,
+        // because noise is as often dark as bright and stars are only ever bright
+        let w = 160, h = 100, edge = 60
+        let (frames, median) = starFrames(width: w, height: h, frames: 12, starsPerFrame: 60,
+                                          starRows: 0..<edge, noiseFrom: edge, noise: 0.08)
+        let activity = try XCTUnwrap(TemporalHorizonDetector.groundStarActivity(
+          lumas: frames, median: median, width: w, height: h,
+          line: Array(repeating: edge, count: w)))
+        XCTAssertLessThan(activity, TemporalHorizonDetector.maxGroundStarActivity)
+        XCTAssertLessThan(activity, 0.2)
+    }
+
+    func testAnErrorInTheLineWithinTheMarginDoesNotCountGroundAsSky() throws {
+        // stars up to row 60, the line says 62: the two rows of sky below the real edge sit
+        // inside the margin and must not be read as ground full of stars
+        let w = 160, h = 100
+        let (frames, median) = starFrames(width: w, height: h, frames: 12, starsPerFrame: 60,
+                                          starRows: 0..<60)
+        let activity = try XCTUnwrap(TemporalHorizonDetector.groundStarActivity(
+          lumas: frames, median: median, width: w, height: h,
+          line: Array(repeating: 62, count: w)))
+        XCTAssertLessThan(activity, 0.1)
+    }
+
     // MARK: - the median
 
     func testTheMedianIsTakenPerPixelAndPerChannel() throws {
