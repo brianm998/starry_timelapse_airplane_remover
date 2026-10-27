@@ -25,7 +25,17 @@ class FrameRepository(private val clientProvider: () -> StarClient?) {
     suspend fun previewPath(
         sessionId: String, frameIndex: Int, viewMode: FrameViewMode, size: PreviewSize = PreviewSize.PREVIEW_SIZE_PREVIEW,
     ): ImageRef? =
-        notReadyToNull { c().getFramePreview(sessionId, frameIndex, viewMode, size) }
+        // A frame that is not extracted from its video yet is an answer, not a failure: it has no picture, and the placeholder says why.
+        notReadyToNull { c().getFramePreview(sessionId, frameIndex, viewMode, size) }?.takeUnless { it.notExtracted }
+
+    /** Ask for [viewing] and the frames in [nearby] to be extracted first; a failure is not worth telling anyone (the frames come in order anyway). */
+    suspend fun prioritize(sessionId: String, viewing: Int, nearby: List<IntRange>) {
+        runCatching { c().prioritizeFrames(sessionId, viewing, nearby) }
+    }
+
+    /** How long until [frameIndex] is extracted; null when the engine could not say. */
+    suspend fun eta(sessionId: String, frameIndex: Int): com.star.proto.FrameEtaResponse? =
+        runCatching { c().getFrameEta(sessionId, frameIndex) }.getOrNull()
 
     /** 16-bit outlier-id label image path, or null if outliers aren't loaded yet. */
     suspend fun labelImage(sessionId: String, frameIndex: Int): ImageRef? =

@@ -20,6 +20,10 @@ actor Session {
     private(set) var imageInfo: ImageInfo
     private(set) var videoInfo: VideoInfo?     // set for sessions opened from a video file
 
+    /// The source of this session's frames when they are still being extracted from a video; nil for an image sequence and for a video that
+    /// was fully extracted before the session opened.
+    nonisolated let extractionSource: FrameSource?
+
     /// Every open progress stream, keyed by a token its handler holds.  `Processing.StreamProgress`
     /// is the long-lived one; `Export.RenderSequence` and `Horizon.Reprocess` add a short-lived
     /// one for their own duration.  Each handler removes only its own token when its stream ends,
@@ -75,6 +79,8 @@ actor Session {
         self.imageSequence = imageSequence
         self.imageInfo = imageInfo
         self.videoInfo = videoInfo
+        let source = imageSequence.source
+        self.extractionSource = source.progress.isComplete ? nil : source
     }
 
     // Build FrameAirplaneRemover graph (does not start processing).  `report` is told how many frames have been loaded (a screen is
@@ -275,6 +281,85 @@ actor Session {
     func didOpen() async {
         openedSequenceWasUntouched = await surveyProgress().isUntouched
         startPreviewPrewarm()
+        startExtractionForwarding()
+    }
+
+    // MARK: - Frames that are still being extracted
+
+    private var extractionForwarding: Task<Void, Never>?
+    private var previewWriter: FramePreviewWriter?
+
+    /// Tell every progress subscriber how the extraction of the video's frames is going (throttled to about four a second, with the
+    /// frames that arrived batched into ranges), and write each frame's previews as it lands.  A session whose frames are all there has
+    /// nothing to forward.
+    private func startExtractionForwarding() {
+        guard let source = extractionSource, extractionForwarding == nil, !closed else { return }
+        if let first = frames.first {
+            let weakSelf = WeakSessionRef(self)
+            let writer = FramePreviewWriter(source: source, imageAccessor: first.imageAccessor) { frameIndex in
+                await weakSelf.session?.onImageSaved(frameIndex: frameIndex, type: .original)
+            }
+            writer.start()
+            previewWriter = writer
+        }
+        extractionForwarding = Task.detached(priority: .utility) { [weak self] in
+            var pending = IndexSet()
+            var lastSent = Date.distantPast
+            var finished = false
+            for await event in source.events() {
+                switch event {
+                case .snapshot, .progress: break
+                case .framesAvailable(let set): pending.formUnion(set)
+                case .frameCountSettled, .frameFailed, .failed, .finished: finished = true
+                }
+                let now = Date()
+                // One update per quarter second, and always the last word.
+                guard finished || now.timeIntervalSince(lastSent) >= 0.25 else { continue }
+                lastSent = now
+                await self?.sendExtraction(source: source, newlyAvailable: pending)
+                pending = IndexSet()
+            }
+            await self?.sendExtraction(source: source, newlyAvailable: pending)
+        }
+    }
+
+    private func sendExtraction(source: FrameSource, newlyAvailable: IndexSet) {
+        if !newlyAvailable.isEmpty {
+            var available = Star_V1_FramesAvailable()
+            available.ranges = Mapping.frameRanges(newlyAvailable)
+            var prog = Star_V1_ProgressEvent()
+            prog.kind = .framesAvailable(available)
+            emit(prog)
+        }
+        var prog = Star_V1_ProgressEvent()
+        prog.kind = .frameExtraction(Mapping.frameExtraction(of: source, snapshot: false))
+        emit(prog)
+    }
+
+    /// `Frame.Prioritize`: what the user is looking at, so the extractor fetches it first where the video allows.
+    func prioritizeFrames(viewing: Int, nearby: [Int]) {
+        guard let source = extractionSource, !closed else { return }
+        source.prioritize([viewing], reason: .userViewing)
+        if !nearby.isEmpty { source.prioritize(nearby, reason: .userNearby) }
+    }
+
+    /// `Frame.GetEta`: how long until a frame that is not extracted yet is, for the wait panel.
+    func frameEta(_ index: Int) -> Star_V1_FrameEtaResponse {
+        var out = Star_V1_FrameEtaResponse()
+        let source = imageSequence.source
+        if source.isAvailable(index) { out.available = true; out.fraction = 1; return out }
+        if case .failed(let message) = source.availability(index) { out.error = message; return out }
+        out.sweepHead = Int32(source.sweepHead ?? 0)
+        out.jump = source.isBeingJumpedTo(index)
+        if let seconds = source.estimatedSecondsUntilAvailable(index) {
+            out.known = true
+            out.seconds = seconds
+        }
+        // How far along: for the in-order extraction, the head's share of the way to this frame; for a jump the estimate itself is the best
+        // there is, so the bar follows the time left against the time it was first thought to take.
+        let head = Int(out.sweepHead)
+        if !out.jump, index > 0 { out.fraction = min(1, Double(head) / Double(index)) }
+        return out
     }
 
     // Set/clear the static reference-horizon flag and persist config.json (resume/interop).
@@ -465,12 +550,20 @@ actor Session {
     private func reportSteps(generation: Int) async {
         guard let context = stepReports, context.generation == generation, activeRun == generation, !closed else { return }
         let report = StepProgressReport.make(types: context.types, now: await StepProgressReport.sample(),
-                                             baseline: context.baseline, status: context.status)
+                                             baseline: context.baseline, status: context.status ?? waitingForFramesStatus())
         guard report != lastStepReport else { return }
         lastStepReport = report
         var prog = Star_V1_ProgressEvent()
         prog.kind = .stepProgress(report)
         emit(prog)
+    }
+
+    /// What a run that is waiting on a video's frames says, so that it is not taken for a hang: nil once they are all out.
+    private func waitingForFramesStatus() -> String? {
+        guard let source = extractionSource else { return nil }
+        let progress = source.progress
+        guard !progress.isComplete, progress.error == nil, progress.total > 0 else { return nil }
+        return localized("ui.processing_waiting_for_frames", progress.extracted * 100 / progress.total)
     }
 
     /// The run is over: one last report, so the bars end where the run did, and no more.
@@ -727,6 +820,12 @@ actor Session {
         closed = true
         previewPrewarm?.cancel()
         previewPrewarm = nil
+        // What is extracted stays, and the folder says it is not complete, so a reopen carries on.
+        extractionSource?.stop()
+        extractionForwarding?.cancel()
+        extractionForwarding = nil
+        previewWriter?.stop()
+        previewWriter = nil
         // Only a session with a run of its own has anything to stop: the frame-graph builder is
         // shared, and stopping it would also stop a run that belongs to another session.
         if activeRun != nil || stopTask != nil {
@@ -866,6 +965,12 @@ actor Session {
     /// attaches after the open starts out knowing nothing about frames a resumed run already
     /// finished.  The live events that follow supersede it.
     func seedFrameStates(to cont: AsyncStream<Star_V1_ProgressEvent>.Continuation) async {
+        // A video whose frames are still arriving: which are there, in full, before the deltas that follow.
+        if let source = extractionSource {
+            var prog = Star_V1_ProgressEvent()
+            prog.kind = .frameExtraction(Mapping.frameExtraction(of: source, snapshot: true))
+            cont.yield(prog)
+        }
         // Where the run in progress has got, which would otherwise not be heard until its next change.
         if let report = lastStepReport {
             var prog = Star_V1_ProgressEvent()
@@ -1016,9 +1121,9 @@ extension Session {
         await configManager.save()   // the initial file; nothing has updated the manager yet
         await constants.set(detectionType: config.detectionType)
 
-        let imageSequence = try ImageSequence(
-            dirname: sequenceDir,
-            supportedImageFileTypes: config.supportedImageFileTypes,
+        // A folder of a video that was not fully extracted carries on from the frames that are there.
+        let imageSequence = ImageSequence(
+            source: try await FrameSourceFactory.open(directory: sequenceDir, supportedImageFileTypes: config.supportedImageFileTypes),
             maxImages: 40
         )
         let imageInfo = try await imageSequence.getImageInfo()
@@ -1054,22 +1159,40 @@ extension Session {
         videoPath: String,
         protoConfig: Star_V1_Config,
         frameFormat: FrameDecodeFormat = .tiff16,
+        extractInBackground: Bool = false,
+        extractionSettings: FrameExtractionSettings = .default,
         report: @escaping OpenReport = { _ in }
     ) async throws -> Session {
         try FileManager.default.createDirectory(atPath: scratchSessionDir, withIntermediateDirectories: true)
 
         let videoName = (videoPath as NSString).lastPathComponent
         report(OpenEvents.stage(.examiningVideo, name: videoName))
-        let extracting = OnceFlag()
-        let (sequenceDir, vi) = try await decodeVideo(named: videoPath, format: frameFormat) { current, total, outputDir in
-            if extracting.setOnce() { report(OpenEvents.stage(.extractingFrames)) }
-            var io = Star_V1_IoProgress()
-            io.current   = Int32(current)
-            io.total     = Int32(total)
-            io.outputDir = outputDir
-            var progress = Star_V1_OpenProgress()
-            progress.kind = .progress(io)
-            report(progress)
+        let sequenceDir: String
+        let vi: VideoInfo
+        let frameSource: FrameSource?
+        if extractInBackground {
+            // Answer once the first frame is out: the rest arrive while the session is open, and extraction belongs to the session
+            // (it outlives this call), which stops it when it closes.  Cancelling the open still stops it and takes the folder back.
+            report(OpenEvents.stage(.extractingFrames))
+            let (source, info) = try await startVideoExtraction(named: videoPath, format: frameFormat, settings: extractionSettings)
+            sequenceDir = source.outputFolder
+            vi = info
+            frameSource = source
+        } else {
+            let extracting = OnceFlag()
+            let (dir, info) = try await decodeVideo(named: videoPath, format: frameFormat) { current, total, outputDir in
+                if extracting.setOnce() { report(OpenEvents.stage(.extractingFrames)) }
+                var io = Star_V1_IoProgress()
+                io.current   = Int32(current)
+                io.total     = Int32(total)
+                io.outputDir = outputDir
+                var progress = Star_V1_OpenProgress()
+                progress.kind = .progress(io)
+                report(progress)
+            }
+            sequenceDir = dir
+            vi = info
+            frameSource = nil
         }
         report(OpenEvents.stage(.loadingFrames))
 
@@ -1103,11 +1226,13 @@ extension Session {
         await configManager.save()   // the initial file; nothing has updated the manager yet
         await constants.set(detectionType: config.detectionType)
 
-        let imageSequence = try ImageSequence(
-            dirname: sequenceDir,
-            supportedImageFileTypes: config.supportedImageFileTypes,
-            maxImages: 40
-        )
+        let source: FrameSource
+        if let frameSource {
+            source = frameSource
+        } else {
+            source = try await FrameSourceFactory.open(directory: sequenceDir, supportedImageFileTypes: config.supportedImageFileTypes)
+        }
+        let imageSequence = ImageSequence(source: source, maxImages: 40)
         let imageInfo = try await imageSequence.getImageInfo()
 
         // Propagate the dimensions into the config too. FrameGraphBuilder.build derives
@@ -1149,9 +1274,9 @@ extension Session {
         await constants.set(detectionType: config.detectionType)
 
         let sequenceDir = "\(config.imageSequencePath)/\(config.imageSequenceDirname)"
-        let imageSequence = try ImageSequence(
-            dirname: sequenceDir,
-            supportedImageFileTypes: config.supportedImageFileTypes,
+        // A folder of a video that was not fully extracted carries on from the frames that are there.
+        let imageSequence = ImageSequence(
+            source: try await FrameSourceFactory.open(directory: sequenceDir, supportedImageFileTypes: config.supportedImageFileTypes),
             maxImages: 40
         )
         let imageInfo = try await imageSequence.getImageInfo()

@@ -23,7 +23,8 @@ public class Processor {
     
     public init(with configManager: ConfigManager,
                 callbacks: Callbacks,
-                maxResidentImages: Int? = nil
+                maxResidentImages: Int? = nil,
+                frameSource: FrameSource? = nil
     ) async throws {
         self.configManager = configManager
         self.callbacks = callbacks
@@ -32,11 +33,17 @@ public class Processor {
 
         let imageSequenceDirname = "\(config.imageSequencePath)/\(config.imageSequenceDirname)"
         //self.outputDirname = "\(config.outputPath)/\(basename)"
-        self.imageSequence = try ImageSequence(
-          dirname: imageSequenceDirname,
-          supportedImageFileTypes: config.supportedImageFileTypes,
-          maxImages: maxResidentImages
-        )
+        // A folder of a video that was not fully extracted (an `extraction.json` that is not complete) is carried on from; the
+        // caller that is extracting a video now hands its source in.
+        let source: FrameSource
+        if let frameSource {
+            source = frameSource
+        } else {
+            source = try await FrameSourceFactory.open(
+              directory: imageSequenceDirname,
+              supportedImageFileTypes: config.supportedImageFileTypes)
+        }
+        self.imageSequence = ImageSequence(source: source, maxImages: maxResidentImages)
 
         let imageInfo = try await imageSequence.getImageInfo()
 

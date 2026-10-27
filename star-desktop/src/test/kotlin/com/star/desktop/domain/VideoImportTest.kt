@@ -4,6 +4,7 @@ import com.star.proto.FrameFormat
 import com.star.proto.ProbeVideoResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -41,5 +42,34 @@ class VideoImportTest {
         assertEquals("512 bytes", VideoImport.formatBytes(512))
         assertEquals("1.5 KB", VideoImport.formatBytes(1500))
         assertTrue(VideoImport.formatBytes(2_300_000_000).startsWith("2.3 GB"))
+    }
+
+    @Test fun `uncompressed tiffs are priced from the exact bytes and packbits from the old numbers`() {
+        val p = ProbeVideoResponse.newBuilder()
+            .setKnown(true).setWidth(1000).setHeight(1000).setFrameCount(10)
+            .setTiff16BytesPerPixel(6.1).setTiff8BytesPerPixel(3.1)
+            .setTiff16RawBytesPerPixel(6.0).setTiff8RawBytesPerPixel(3.0).build()
+        assertEquals(60_000_000L, VideoImport.estimatedBytes(p, FrameFormatChoice.TIFF16, 80, TiffCompressionChoice.NONE))
+        assertEquals(61_000_000L, VideoImport.estimatedBytes(p, FrameFormatChoice.TIFF16, 80, TiffCompressionChoice.PACKBITS))
+        assertEquals(30_000_000L, VideoImport.estimatedBytes(p, FrameFormatChoice.TIFF8, 80, TiffCompressionChoice.NONE))
+        // an engine that sends no raw numbers (an older one) is priced as packbits rather than as nothing
+        val old = ProbeVideoResponse.newBuilder().setKnown(true).setWidth(1000).setHeight(1000).setFrameCount(10).setTiff16BytesPerPixel(6.1).build()
+        assertEquals(61_000_000L, VideoImport.estimatedBytes(old, FrameFormatChoice.TIFF16, 80, TiffCompressionChoice.NONE))
+    }
+
+    @Test fun `the compression defaults to what every earlier import wrote and maps onto the protocol`() {
+        assertEquals(TiffCompressionChoice.PACKBITS, VideoImportOptions().tiffCompression)
+        assertEquals(com.star.proto.TiffCompression.TIFF_COMPRESSION_PACKBITS, com.star.proto.TiffCompression.forNumber(0))
+        assertEquals(com.star.proto.TiffCompression.TIFF_COMPRESSION_NONE, TiffCompressionChoice.NONE.proto)
+        assertFalse(VideoImportOptions().extractInBackground)
+    }
+
+    @Test fun `extracting in the background starts on for a video any frame of which is cheap to reach`() {
+        val seekable = ProbeVideoResponse.newBuilder().setKnown(true).setSeekable(true).setSeekableKnown(true).build()
+        val longGop = ProbeVideoResponse.newBuilder().setKnown(true).setSeekable(false).setSeekableKnown(true).build()
+        assertTrue(VideoImport.extractInBackgroundByDefault(seekable))
+        assertFalse(VideoImport.extractInBackgroundByDefault(longGop))
+        assertFalse(VideoImport.extractInBackgroundByDefault(null))
+        assertFalse(VideoImport.extractInBackgroundByDefault(ProbeVideoResponse.getDefaultInstance()))
     }
 }

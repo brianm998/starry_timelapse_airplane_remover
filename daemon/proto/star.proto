@@ -87,11 +87,29 @@ enum FrameFormat {
   FRAME_FORMAT_JPEG   = 2;
 }
 
+// How the tiff frames of an imported video are compressed.  Both are lossless and give the same picture; uncompressed is read about twice
+// as fast while star processes the frames, for roughly 10% more disk.  The default (0) is what every import before the choice wrote.
+enum TiffCompression {
+  TIFF_COMPRESSION_PACKBITS = 0;
+  TIFF_COMPRESSION_NONE     = 1;
+}
+
+// How many ffmpeg processes may extract ahead of the in-order extraction.  0 in either field means StarCore's default.
+message ExtractionSettings {
+  int32 max_jump_workers          = 1;   // on a video that can give up any frame quickly (ProRes and other intra-only formats)
+  int32 max_long_gop_jump_workers = 2;   // on H.264, H.265 and the like, where only the frame the user is looking at starts one
+}
+
 message OpenVideoRequest {
   string      video_path     = 1;
   Config      initial_config = 2;
   FrameFormat frame_format   = 3;   // default TIFF16
   int32       jpeg_quality   = 4;   // 1..100, only for JPEG; 0 (unset) → 80
+  // Answer once the first frame is out instead of the last: the rest are extracted while the session is open (SessionInfo.extraction, and
+  // the ProgressEvents frame_extraction / frames_available say how far).
+  bool            extract_in_background = 5;
+  TiffCompression tiff_compression      = 6;
+  ExtractionSettings extraction_settings = 7;
 }
 
 // Session.ProbeVideo: what the video's header says, without decoding it, so a dialog can tell the user how much disk the frames will take.
@@ -106,6 +124,15 @@ message ProbeVideoResponse {
   double          tiff16_bytes_per_pixel = 5;
   double          tiff8_bytes_per_pixel  = 6;
   repeated double jpeg_bytes_per_pixel   = 7;   // [i] is quality i + 1, so 100 entries
+  // Whether every frame is a keyframe, so that any one can be extracted on its own (ProRes, DNxHD, MJPEG, intra-only H.264...).  The default for
+  // "extract in background" is on for these and off for the rest.  seekable_known is false when the packets could not be examined.
+  bool   seekable       = 8;
+  bool   seekable_known = 9;
+  // The same estimate for uncompressed tiff, which is exact.  The tiff16/tiff8 fields above stay PackBits, so an older client reads what it did.
+  double tiff16_raw_bytes_per_pixel = 10;
+  double tiff8_raw_bytes_per_pixel  = 11;
+  // Whether frame_count is the video's own count rather than an estimate from its duration.
+  bool   frame_count_exact = 12;
 }
 message OpenSequenceRequest { string sequence_dir = 1; Config initial_config = 2; }
 message OpenConfigRequest   { string config_json_path = 1; }
@@ -170,6 +197,44 @@ message SessionInfo {
   // different on every open. Clients used to build the scratch path themselves, which named a file
   // nothing ever wrote.
   string    config_json_path      = 9;
+  // How far extracting the video's frames has got, for a session whose frames are still arriving; absent (or complete) otherwise.
+  FrameExtraction extraction      = 10;
+}
+
+message FrameRange { int32 start = 1; int32 end = 2; }   // [start, end)
+
+// Where the extraction of a video's frames has got to.  `available` is the full coalesced list when this is a snapshot (SessionInfo, and the first
+// ProgressEvent a Processing.StreamProgress subscriber gets), and empty in the throttled updates, which are followed by FramesAvailable.
+message FrameExtraction {
+  int32  extracted         = 1;
+  int32  total             = 2;
+  double frames_per_second = 3;   // 0 = not known yet
+  bool   complete          = 4;
+  bool   seekable          = 5;   // any frame can be had cheaply: a request for one moves the extractor, at any priority
+  repeated FrameRange available = 6;
+  string error             = 7;   // non-empty: extraction failed, and the frames that are not there will not come
+  double eta_seconds       = 8;   // for the rest; 0 with eta_known false when there is no rate yet
+  bool   eta_known         = 9;
+  bool   active            = 10;  // true while frames are still being extracted (false for a sequence that was never extracting)
+}
+
+message FramesAvailable { repeated FrameRange ranges = 1; }
+
+// Frame.Prioritize: what the user is looking at, so the extractor fetches it first (where the video allows it).  Cheap to call on every
+// move; the daemon collapses a scrub that is still moving.
+message PrioritizeFramesRequest  { string session_id = 1; int32 viewing = 2; repeated FrameRange nearby = 3; }
+message PrioritizeFramesResponse {}
+
+// Frame.GetEta: how long until a frame that is not extracted yet is, for the wait panel.
+message FrameEtaRequest  { string session_id = 1; int32 frame_index = 2; }
+message FrameEtaResponse {
+  bool   available = 1;   // the frame is there already
+  double seconds   = 2;
+  bool   known     = 3;   // false: no estimate yet (show an indeterminate indicator)
+  double fraction  = 4;   // 0..1 of the way there, for a determinate bar
+  bool   jump      = 5;   // a jump to this frame is running (so "extracting it now"), rather than waiting for the in-order extraction
+  int32  sweep_head = 6;  // where the in-order extraction is
+  string error     = 7;   // non-empty: it will not come
 }
 
 message CloseSessionRequest  { string session_id = 1; }
@@ -426,6 +491,8 @@ message FrameInfo {
   bool                 aligned_neighbor_overridden   = 14;
   int32                static_neighbor_count         = 15;
   bool                 static_neighbor_overridden    = 16;
+  // This frame's original has not been extracted from the video yet (so there is nothing to show for it, and tools that need it are off).
+  bool                 not_extracted                 = 17;
 }
 
 message GetFramePreviewRequest {
@@ -465,7 +532,9 @@ enum FrameViewMode {
   VIEW_CONSENSUS_HORIZON       = 16;   // a moving sequence's horizon consensus, drawn as a mask
 }
 
-message ImageRef { string path = 1; int32 width = 2; int32 height = 3; string format = 4; }
+// not_extracted: the frame's original is not extracted from its video yet, so there is no image (path is empty).  A result, not an error: the
+// client shows its "not extracted" placeholder, and asks Frame.GetEta how long it will be.
+message ImageRef { string path = 1; int32 width = 2; int32 height = 3; string format = 4; bool not_extracted = 5; }
 
 enum NeighborKind {
   NEIGHBOR_ALIGNED = 0;   // how many neighbours the frame is star aligned against
@@ -755,6 +824,8 @@ message ProgressEvent {
     ImageSaved         image_saved         = 8;
     int32              horizon_updated     = 9;   // frame index: its horizon lines changed (a mask written or deleted, a reference painted or cleared, a refinement finished)
     StepProgress       step_progress       = 10;
+    FrameExtraction    frame_extraction    = 11;   // throttled to about four a second; the first one a subscriber gets is a full snapshot
+    FramesAvailable    frames_available    = 12;   // batched
   }
 }
 

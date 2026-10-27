@@ -64,6 +64,7 @@ class DesktopFeatureRunner {
         StepAction.CLEAN_AUTO_SELECTIVE to { clean = "autoSelective" },
         StepAction.OPEN_SEQUENCE to ::openSequence,
         StepAction.IMPORT_VIDEO to ::importVideo,
+        StepAction.IMPORT_VIDEO_BACKGROUND to { t -> importVideo(t, inBackground = true) },
         StepAction.PROCESS_EVERY_FRAME to ::processEveryFrame,
         StepAction.RENDER_OUTPUT_VIDEO to ::renderOutputVideo,
         StepAction.USED_REQUESTED_SETTINGS to ::usedRequestedSettings,
@@ -191,7 +192,7 @@ class DesktopFeatureRunner {
     }
 
     /** Opens the video through the import dialog (auto-open skips it and picks TIFF16), choosing the format the feature asks for. */
-    private fun importVideo(t: ComposeUiTest) {
+    private fun importVideo(t: ComposeUiTest, inBackground: Boolean = false) {
         requireSettings()
         val source = resolveVideo(param("video"))
         sequenceCopy = File(scratch, source.name)
@@ -207,6 +208,9 @@ class DesktopFeatureRunner {
         val format = FrameFormatChoice.valueOf(param("frame_format").uppercase())
         waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
         t.onNodeWithTag("videoimport.format.${format.name.lowercase()}").performClick()
+        // The box starts off for H.264 (the probe is not run here, so for every video): once, to go to the main screen while the frames
+        // are still being extracted, and the run then waits for them as it goes.
+        if (inBackground) t.onNodeWithTag("videoimport.background").performClick()
         t.onNodeWithTag("videoimport.import").performClick()
         finishOpening(t, model)
     }

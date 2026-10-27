@@ -39,10 +39,12 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
     fun openVideo(
         videoPath: String,
         initialConfig: Config = defaultInitialConfig(),
-        frameFormat: com.star.desktop.domain.FrameFormatChoice = com.star.desktop.domain.FrameFormatChoice.TIFF16,
-        jpegQuality: Int = com.star.desktop.domain.VideoImport.DEFAULT_JPEG_QUALITY,
+        options: com.star.desktop.domain.VideoImportOptions = com.star.desktop.domain.VideoImportOptions(),
     ): Flow<OpenProgress> =
-        client().openVideo(videoPath, initialConfig, frameFormat.proto, jpegQuality)
+        client().openVideo(
+            videoPath, initialConfig, options.format.proto, options.jpegQuality,
+            tiffCompression = options.tiffCompression.proto, extractInBackground = options.extractInBackground,
+        )
 
     /** What the video's header says, for the import dialog's disk estimate. */
     suspend fun probeVideo(videoPath: String): com.star.proto.ProbeVideoResponse = client().probeVideo(videoPath)

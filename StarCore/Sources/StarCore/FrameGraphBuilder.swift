@@ -84,12 +84,17 @@ public final actor FrameGraphBuilder {
     // behind heavy frame-processing operations that fill the main queue slots.
     let previewQueue = OperationQueue()
 
+    // Where `FrameAvailableOp`s wait for a video's frames to be extracted.  Its own, unbounded queue: a wait on ffmpeg must not
+    // take one of the frame queue's slots.
+    let frameAvailabilityQueue = OperationQueue()
+
     let keypointLimiter = KeypointLimiter(max: max(1, ProcessInfo.processInfo.processorCount / 2))
 
     public init() {
         queue.name = "operations"
         previewQueue.name = "previews"
         previewQueue.maxConcurrentOperationCount = 3
+        frameAvailabilityQueue.name = "frame availability"
     }
 
     var configManager: ConfigManager? = nil
@@ -1358,7 +1363,28 @@ public final actor FrameGraphBuilder {
             return
         }
 
+        // Ops that read a frame of a video that is still being extracted wait for it.  Nothing is added for an image sequence.
+        var frameGates: [FrameAvailableOp] = []
+        if let source = frames.first?.imageAccessor.imageSequence.source {
+            var neighbours = alignmentNeighbours
+            for frame in frames {
+                neighbours[frame.frameIndex, default: []] += await frame.getStaticNeighborFrames()
+            }
+            let sampled = temporalStaticHorizon
+              ? TemporalHorizonDetector.sampleIndices(frameCount: source.frameCount, count: config.temporalHorizonSampleCount)
+              : []
+            frameGates = addFrameAvailabilityDependencies(
+              to: allOps, source: source, neighbours: neighbours,
+              sampledFrames: sampled, sampledBy: staticMergedHorizonOp)
+            // The frames the static horizon samples are spread over the whole video, so they are what a seekable one extracts
+            // first: it is the one step every keypoint op waits on.
+            if staticMergedHorizonOp != nil, !sampled.isEmpty {
+                source.prioritize(sampled, reason: .pipelineSample)
+            }
+        }
+
         await withCheckedContinuation { continuation in
+            frameAvailabilityQueue.addOperations(frameGates, waitUntilFinished: false)
             queue.addOperations(allOps, waitUntilFinished: false)
             continuation.resume()
         }
@@ -1526,6 +1552,7 @@ public final actor FrameGraphBuilder {
         cancelGeneration += 1
         queue.cancelAllOperations()
         previewQueue.cancelAllOperations()
+        frameAvailabilityQueue.cancelAllOperations()
         Log.i("FrameGraphBuilder: all operations cancelled")
     }
 

@@ -18,6 +18,10 @@ fun ScrubSlider(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     if (vm.frameCount <= 1) return
     val idx by vm.currentIndex.collectAsState()
     val playing by vm.isPlaying.collectAsState()
+    val extracting by vm.isExtracting.collectAsState()
+    androidx.compose.foundation.layout.Column(modifier.fillMaxWidth()) {
+    // which frames are extracted yet, while a video is still being taken apart
+    if (extracting) ExtractedRangesBand(vm, Modifier.padding(horizontal = 16.dp))
     Slider(
         value = idx.toFloat(),
         onValueChange = { vm.setCurrentIndex(it.roundToInt()) },
@@ -28,6 +32,7 @@ fun ScrubSlider(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             activeTrackColor = StarColors.accent,
             inactiveTrackColor = StarColors.pickerTrack,
         ),
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
     )
+    }
 }

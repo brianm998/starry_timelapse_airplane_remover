@@ -72,7 +72,15 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
                     else com.star.desktop.ui.components.CollapsedPanelRail({ vm.setRightPanel(true) }, pointLeft = true)
                 }
             }
+            // A frame that is not extracted yet has nothing to show: say how long it will be. Over the frame, so the tools that need the
+            // original cannot be used on it; it goes when the frame lands.
+            val extracted by vm.extractedFrames.collectAsState()
+            val current by vm.currentIndex.collectAsState()
+            if (mode != InteractionMode.GRID && extracted?.contains(current) == false) FrameWaitPanel(vm)
         }
+
+        // how far extracting the video has got, while it is
+        ExtractionStrip(vm)
 
         BottomControls(app, vm)
 

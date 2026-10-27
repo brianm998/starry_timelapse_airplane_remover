@@ -144,7 +144,50 @@ enum Mapping {
         default:     kind = .tiff16
         }
         let quality = request.jpegQuality == 0 ? FrameDecodeFormat.defaultJPEGQuality : Int(request.jpegQuality)
-        return FrameDecodeFormat(kind: kind, jpegQuality: quality)
+        let compression: FrameDecodeFormat.TIFFCompression = request.tiffCompression == .none ? .none : .packBits
+        return FrameDecodeFormat(kind: kind, jpegQuality: quality, tiffCompression: compression)
+    }
+
+    /// The worker limits an `OpenVideoRequest` asks for; 0 (unset) is StarCore's default.
+    static func extractionSettings(from request: Star_V1_OpenVideoRequest) -> FrameExtractionSettings {
+        FrameExtractionSettings(jumpWorkers: Int(request.extractionSettings.maxJumpWorkers),
+                                longGOPJumpWorkers: Int(request.extractionSettings.maxLongGopJumpWorkers))
+    }
+
+    /// Frame ranges as the wire carries them: coalesced, end exclusive.
+    static func frameRanges(_ set: IndexSet) -> [Star_V1_FrameRange] {
+        set.rangeView.map {
+            var range = Star_V1_FrameRange()
+            range.start = Int32($0.lowerBound)
+            range.end = Int32($0.upperBound)
+            return range
+        }
+    }
+
+    static func indexSet(_ ranges: [Star_V1_FrameRange]) -> IndexSet {
+        var set = IndexSet()
+        for range in ranges where range.end > range.start { set.insert(integersIn: Int(range.start)..<Int(range.end)) }
+        return set
+    }
+
+    /// Where the extraction of a video's frames has got to.  `snapshot` lists every available range; an update leaves them out (a
+    /// FramesAvailable follows).
+    static func frameExtraction(of source: FrameSource, snapshot: Bool) -> Star_V1_FrameExtraction {
+        let progress = source.progress
+        var out = Star_V1_FrameExtraction()
+        out.extracted = Int32(progress.extracted)
+        out.total = Int32(progress.total)
+        out.framesPerSecond = progress.framesPerSecond ?? 0
+        out.complete = progress.isComplete
+        out.seekable = progress.accessKind == .seekable
+        out.active = progress.accessKind != nil
+        if let error = progress.error { out.error = error }
+        if let eta = progress.estimatedSecondsRemaining {
+            out.etaSeconds = eta
+            out.etaKnown = true
+        }
+        if snapshot { out.available = frameRanges(source.availableFrames) }
+        return out
     }
 
     /// The answer to `Session.ProbeVideo`.
@@ -155,6 +198,16 @@ enum Mapping {
         response.width = Int32(probe.width)
         response.height = Int32(probe.height)
         response.frameCount = Int32(probe.frameCount ?? 0)
+        response.frameCountExact = probe.frameCountIsExact
+        if let seekable = probe.seekable {
+            response.seekable = seekable
+            response.seekableKnown = true
+        } else {
+            // The packets could not be examined: the codec's name is the best there is, but it is a guess, so it is not "known".
+            response.seekable = probe.extractInBackgroundByDefault
+        }
+        response.tiff16RawBytesPerPixel = FrameDecodeFormat(kind: .tiff16, tiffCompression: .none).estimatedBytesPerPixel
+        response.tiff8RawBytesPerPixel = FrameDecodeFormat(kind: .tiff8, tiffCompression: .none).estimatedBytesPerPixel
         response.tiff16BytesPerPixel = FrameDecodeFormat.tiff16.estimatedBytesPerPixel
         response.tiff8BytesPerPixel = FrameDecodeFormat.tiff8.estimatedBytesPerPixel
         response.jpegBytesPerPixel = FrameDecodeFormat.jpegQualityRange.map {
@@ -513,6 +566,8 @@ enum Mapping {
         info.scratchSessionDir = session.scratchSessionDir
         info.configJsonPath = session.configJsonPath
         if let vi { info.sourceVideoInfo = videoInfo(vi) }
+        let source = session.extractionSource
+        if let source, !source.progress.isComplete { info.extraction = frameExtraction(of: source, snapshot: true) }
         return info
     }
 
@@ -547,6 +602,7 @@ enum Mapping {
             fi.numTrashOutliers     = Int32(await groups.getTrash().count)
             fi.outliersLoaded       = true
         }
+        fi.notExtracted = !frame.imageAccessor.imageSequence.source.isAvailable(frame.frameIndex)
         fi.availableModes = availableModes(of: frame)
         if let path = frame.imageAccessor.nameForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original) {
             fi.filename = (path as NSString).lastPathComponent

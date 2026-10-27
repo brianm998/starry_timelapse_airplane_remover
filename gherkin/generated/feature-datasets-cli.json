@@ -3,6 +3,7 @@
   "autoHorizonJpegVideoOut": ["a7sii_10"],
   "autoHorizonTiff16": ["a7sii_10_16bit"],
   "autoHorizonVideo": ["a7sii_10_h264"],
+  "autoHorizonVideoBackground": ["a7sii_10_h264"],
   "autoMovingTiff16": ["moving_a7iv_1_aurora_tiff16"],
   "autoPreservationKeepsAirplanesOutBit16": ["a7sii_10_16bit"],
   "autoPreservationKeepsAirplanesOutJpeg": ["a7sii_10"],
@@ -12,5 +13,6 @@
   "selectiveHorizonTiff16": ["a7sii_10_16bit"],
   "selectiveRemovesOnlyTrails": ["a7sii_10_16bit"],
   "syntheticAirplanes": ["trails_synth_sky500"],
-  "syntheticSatellites": ["trails_synth_sky500"]
+  "syntheticSatellites": ["trails_synth_sky500"],
+  "videoBackgroundIdentical": ["a7sii_10_h264"]
 }

@@ -874,7 +874,7 @@ class AppViewModel(
         if (autoOpenPath != null) {
             when (com.star.desktop.ui.initial.inferOpenKind(autoOpenPath)) {
                 com.star.desktop.ui.initial.OpenKind.SEQUENCE -> openSequence(autoOpenPath)
-                com.star.desktop.ui.initial.OpenKind.VIDEO -> openVideo(autoOpenPath, com.star.desktop.domain.FrameFormatChoice.TIFF16)
+                com.star.desktop.ui.initial.OpenKind.VIDEO -> openVideo(autoOpenPath, com.star.desktop.domain.VideoImportOptions())
                 com.star.desktop.ui.initial.OpenKind.CONFIG -> openConfig(autoOpenPath)
             }
         }
@@ -919,19 +919,25 @@ class AppViewModel(
     val pendingVideo: StateFlow<String?> = _pendingVideo.asStateFlow()
     fun cancelVideoImport() { _pendingVideo.value = null }
 
-    /** The import dialog's answer: decode the pending video to frames in [format] (at [jpegQuality], for JPEG) and open it. */
-    fun confirmVideoImport(format: com.star.desktop.domain.FrameFormatChoice, jpegQuality: Int) {
+    /**
+     * The import dialog's answer: extract the pending video to frames as [options] say (in the format and compression chosen, and in the
+     * background or not) and open it.
+     */
+    fun confirmVideoImport(options: com.star.desktop.domain.VideoImportOptions) {
         val path = _pendingVideo.value ?: return
         _pendingVideo.value = null
-        openVideo(path, format, jpegQuality)
+        openVideo(path, options)
     }
 
+    /**
+     * Open a video. With [com.star.desktop.domain.VideoImportOptions.extractInBackground] the engine answers once the first frame is out, so the
+     * sequence screen comes up while the rest are still being extracted (it marks the frames that are not there yet).
+     */
     fun openVideo(
         path: String,
-        format: com.star.desktop.domain.FrameFormatChoice,
-        jpegQuality: Int = com.star.desktop.domain.VideoImport.DEFAULT_JPEG_QUALITY,
+        options: com.star.desktop.domain.VideoImportOptions = com.star.desktop.domain.VideoImportOptions(),
     ) = launchOpen(path, video = true, promptStartup = true) {
-        sessions.openVideo(path, initialConfigBeside(path, savedDetectionType()), format, jpegQuality)
+        sessions.openVideo(path, initialConfigBeside(path, savedDetectionType()), options)
     }
 
     private var openJob: Job? = null

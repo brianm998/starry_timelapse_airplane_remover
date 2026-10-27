@@ -46,6 +46,16 @@ public enum ImageDisplaySize: Sendable {
     case thumbnail
 }
 
+/// An op that reads an original before it is extracted has no `FrameAvailableOp` in front of it: said once per frame.
+enum OriginalWaitWarnings {
+    private static let seen = LockedBox(Set<Int>())
+
+    static func warnOnce(frameIndex: Int) {
+        let first = seen.withValue { $0.insert(frameIndex).inserted }
+        if first { Log.w("frame \(frameIndex) was read before it was extracted; an op is missing its frame dependency") }
+    }
+}
+
 // read and write access to different image types for a given frame
 public struct ImageAccessor: Sendable {
     let config: Config
@@ -273,6 +283,18 @@ public struct ImageAccessor: Sendable {
                         // to load the original and rescale it 
                         switch size {
                         case .original:
+                            // An original of a video that is still being extracted: wait for it.  Every op that reads one
+                            // depends on a `FrameAvailableOp`, so reaching this means a dependency was missed, which the log says.
+                            let source = imageSequence.source
+                            if imageType == .original, frameIndex >= 0, frameIndex < source.frameCount,
+                               source.availability(frameIndex) == .pending
+                            {
+                                OriginalWaitWarnings.warnOnce(frameIndex: frameIndex)
+                                source.prioritize([frameIndex], reason: .pipeline)
+                                do { try await source.waitUntilAvailable(frameIndex) } catch { return nil }
+                                numRetries -= 1
+                                continue
+                            }
                             Log.i("file at \(filename) does not exist :(")
                             return nil  // original does not exist, nothing to return
                         default:
@@ -820,6 +842,8 @@ public struct ImageAccessor: Sendable {
         } else {
             try await withThrowingTaskGroup(of: Void.self) { taskGroup in
             for frameIndex in farthestFirstOrder(range: 0..<imageSequenceSize) {
+                    // A frame of a video that is still being extracted gets its previews when it arrives (`FramePreviewWriter`).
+                    if !imageSequence.source.isAvailable(frameIndex) { continue }
                     Log.d("frame \(frameIndex) checking for missing images")
                     guard let filename = self.nameForImage(
                             frameIndex: frameIndex,
@@ -863,6 +887,20 @@ public struct ImageAccessor: Sendable {
                 try await taskGroup.waitForAll()
             }
         }
+    }
+
+    /// The preview and the thumbnail of one frame, if either is missing.  For a frame that is on disk: it does not wait for one.
+    public func writeMissingImages(forFrame frameIndex: Int) async throws {
+        guard let filename = nameForImage(frameIndex: frameIndex, ofType: .original, atSize: .original),
+              let previewFilename = nameForImage(frameIndex: frameIndex, ofType: .original, atSize: .preview),
+              let thumbnailFilename = nameForImage(frameIndex: frameIndex, ofType: .original, atSize: .thumbnail)
+        else { return }
+        let previewExists = FileManager.default.fileExists(atPath: previewFilename)
+        let thumbnailExists = FileManager.default.fileExists(atPath: thumbnailFilename)
+        guard !previewExists || !thumbnailExists else { return }
+        try await writeMissingImages(frameIndex: frameIndex, filename: filename,
+                                     previewFilename: previewFilename, thumbnailFilename: thumbnailFilename,
+                                     previewExists: previewExists, thumbnailExists: thumbnailExists)
     }
 
     public func writeMissingImages(
