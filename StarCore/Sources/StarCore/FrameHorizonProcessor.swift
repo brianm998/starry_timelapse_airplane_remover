@@ -481,6 +481,9 @@ final public actor FrameHorizonProcessor {
         Log.i("frame \(frameIndex) making merged horizon \(neighboringHorizons.count) neighboringHorizons")
         
         let mergedHorizonImage: PixelatedImage?
+        // Set when the frames showed there is no ground: the all-sky mask below is a decision,
+        // not a failed detection.
+        var noHorizonDecided = false
         if config.tripodHeadWasMoving, let mask {
             // Off the cooperative pool; the threshold is read first because the
             // closure cannot await.
@@ -496,7 +499,9 @@ final public actor FrameHorizonProcessor {
                   config: mergeConfig)
             }
         } else if temporalStatic {
-            mergedHorizonImage = try await temporalStaticHorizonImage(config: config)
+            let temporal = try await temporalStaticHorizonImage(config: config)
+            mergedHorizonImage = temporal?.image
+            noHorizonDecided = temporal?.noHorizon ?? false
         } else if let accumulator = horizonAccumulator {
             // Use the running accumulator that was populated by HorizonDetectionOps.
             // Any frames not yet accumulated will be loaded from disk here.
@@ -542,11 +547,14 @@ final public actor FrameHorizonProcessor {
             // over too few masks, or a failed detection, produces) must not be spread: it would
             // be reloaded as the truth by every later run. Better to keep it to this run.
             let uniformMerged = !config.tripodHeadWasMoving && Self.maskIsUniform(cleanedToSave)
-            if uniformMerged {
+            if uniformMerged && !noHorizonDecided {
                 Log.w("frame \(frameIndex) merged horizon is all one value (all ground or all sky); " +
                       "not linking it to other frames and not saving it as the reference")
             }
-            if !config.tripodHeadWasMoving, !uniformMerged {
+            // A deliberate no-horizon is linked to every frame (or each would sample and
+            // decide it again) but, like any uniform mask, is not kept as the reference: a
+            // later run decides afresh, and a painted horizon overrides it.
+            if !config.tripodHeadWasMoving, !uniformMerged || noHorizonDecided {
                 // for static videos link all the merged horizons together here
                 for size in await outputSizes {
                     if let fromName = imageAccessor.nameForImage(
@@ -643,7 +651,9 @@ final public actor FrameHorizonProcessor {
     /// shrunk copies — a few percent of a frame each — plus the decodes in flight, which is
     /// what `Config.effectiveTemporalHorizonMemoryMultiplier` reserves for.  Every decode is
     /// one the keypoint stage repeats shortly after, through the same image cache.
-    private func temporalStaticHorizonImage(config: Config) async throws -> PixelatedImage? {
+    private func temporalStaticHorizonImage(
+      config: Config
+    ) async throws -> (image: PixelatedImage, noHorizon: Bool)? {
         guard let imageSequence else {
             Log.w("frame \(frameIndex) cannot sample a static horizon without an image sequence")
             return nil
@@ -692,14 +702,21 @@ final public actor FrameHorizonProcessor {
             Log.w("frame \(frameIndex) static horizon: sampled frames differ in size or depth")
             return nil
         }
-        let horizonY = try await TemporalHorizonDetector.horizon(
-          inClean: clean, outputWidth: fullSize.width, outputHeight: fullSize.height)
+        let found = try await TemporalHorizonDetector.horizon(
+          inClean: clean, sampled: images,
+          outputWidth: fullSize.width, outputHeight: fullSize.height)
         let seconds = String(format: "%.1f", Date().timeIntervalSince(startTime))
+        let activity = found.activity.map { String(format: "%.3f", $0) } ?? "not measurable"
         Log.i("frame \(frameIndex) static horizon from the median of \(images.count) frames "
-                + "in \(seconds)s")
+                + "in \(seconds)s, ground star activity \(activity) "
+                + "(no horizon above \(TemporalHorizonDetector.maxGroundStarActivity))")
+        if found.noHorizon {
+            Log.w("frame \(frameIndex) the supposed ground is as full of moving stars as the sky "
+                    + "(\(activity)): this sequence has no horizon, using none")
+        }
         return PixelatedImage(mat: PixelatedImageBridge.binaryHorizonMask(
           width: Int32(fullSize.width), height: Int32(fullSize.height),
-          horizonY: horizonY.map { Optional($0) }))
+          horizonY: found.line.map { Optional($0) })).map { ($0, found.noHorizon) }
     }
 
     // MARK: - Reference horizon smoothing helpers

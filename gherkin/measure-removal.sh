@@ -24,7 +24,7 @@ runs=(
   "a7sii_10_16bit:automatic:false"
   "a7sii_10_16bit:automatic:true"
 )
-# a7sii_10_crop16 is sky only, so it is run with --no-horizon (BUGS.md BUG-007: with the default horizon detection the detector invents a horizon there); only with MEASURE_CROP=1.
+# a7sii_10_crop16 is sky only, so it is run with --no-horizon (the thresholds were measured that way; the default horizon detection now also finds no horizon there); only with MEASURE_CROP=1.
 if [ "${MEASURE_CROP:-}" = "1" ]; then
   runs+=("a7sii_10_crop16:selective:--unchanged-outside" "a7sii_10_crop16:automatic:false" "a7sii_10_crop16:automatic:true")
 fi
@@ -46,7 +46,7 @@ for spec in "${runs[@]}"; do
   mkdir "$work/seq"; cp "$cache/$ds"/*.jp*g "$cache/$ds"/*.tif "$work/seq/" 2>/dev/null
   flags=()
   [ "$tag" = "cpu" ] && flags+=(--no-use-gpu --no-use-gpu-for-sift --no-use-gpu-for-akaze)
-  [ "$ds" = "a7sii_10_crop16" ] && flags+=(--no-horizon)   # sky only: BUG-007
+  [ "$ds" = "a7sii_10_crop16" ] && flags+=(--no-horizon)   # sky only
   start=$(date +%s)
   "$star" -l info -c "$method" ${flags[@]+"${flags[@]}"} -o "$work/out" "$work/seq" > "$run/star.log" 2>&1
   rc=$?
