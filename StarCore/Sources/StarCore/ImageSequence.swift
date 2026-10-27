@@ -69,6 +69,11 @@ public actor ImageSequence {
         self.maxImages = maxImages
         self.source = source
         self.filenames = (0..<source.frameCount).map { source.path(forFrame: $0) }
+        // The C++ merge reads neighbours by filename through a loader that cannot be given a frame to wait for, so a video that
+        // is still arriving is registered with it by folder.
+        if !source.progress.isComplete, let first = filenames.first {
+            DecodedFrameStore.shared.register(source: source, folder: (first as NSString).deletingLastPathComponent)
+        }
     }
 
     /// Whether each frame is there yet; image sequences have every frame from the start.

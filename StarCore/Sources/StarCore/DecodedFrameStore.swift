@@ -113,6 +113,7 @@ public final class DecodedFrameStore: @unchecked Sendable {
 
     /// The loader behind `image_cache_load`. Synchronous, on the calling native thread.
     public func load(_ filename: String) -> MatWrapper? {
+        waitForFrameIfExtracting(filename)
         condition.lock()
         loadCount += 1
         guard let entry = entries[filename] else {
@@ -140,6 +141,51 @@ public final class DecodedFrameStore: @unchecked Sendable {
         condition.broadcast()
         condition.unlock()
         return mat
+    }
+
+    // MARK: frames that are still being extracted
+
+    /// The sources whose frames the loader may be asked for before they exist (videos being extracted), by their folder.
+    private let sourcesLock = NSLock()
+    private var extractingSources: [String: FrameSource] = [:]
+
+    /// Registers a source for the backstop below; `ImageSequence` does it for a source that is still extracting.
+    public func register(source: FrameSource, folder: String) {
+        sourcesLock.lock()
+        extractingSources[folder] = source
+        sourcesLock.unlock()
+    }
+
+    public func unregisterSource(folder: String) {
+        sourcesLock.lock()
+        extractingSources[folder] = nil
+        sourcesLock.unlock()
+    }
+
+    /// The loader is called by the C++ merge on a native thread, by filename.  A frame of a video that is still being extracted is
+    /// waited for there (blocking, which is safe because this thread is never one of the cooperative pool's: see
+    /// `waitUntilAvailableBlocking`).  The merge ops depend on `FrameAvailableOp`s, so this is a backstop for one that was missed.
+    private func waitForFrameIfExtracting(_ filename: String) {
+        sourcesLock.lock()
+        let folder = (filename as NSString).deletingLastPathComponent
+        let source = extractingSources[folder]
+        sourcesLock.unlock()
+        guard let source else { return }
+        // The name says which frame: look it up rather than parse it.
+        let count = source.frameCount
+        guard let index = frameIndex(of: filename, in: source, count: count), !source.isAvailable(index) else { return }
+        OriginalWaitWarnings.warnOnce(frameIndex: index)
+        source.prioritize([index], reason: .pipeline)
+        try? source.waitUntilAvailableBlocking(index)
+    }
+
+    private func frameIndex(of filename: String, in source: FrameSource, count: Int) -> Int? {
+        // Binary search is not possible on names; the number is in the name after "image_" for a video's frames.
+        let base = ((filename as NSString).lastPathComponent as NSString).deletingPathExtension
+        guard base.hasPrefix("image_"), let number = Int(base.dropFirst("image_".count)) else { return nil }
+        let index = number - 1
+        guard index >= 0, index < count, source.path(forFrame: index) == filename else { return nil }
+        return index
     }
 
     /// Paths currently held, for tests.
