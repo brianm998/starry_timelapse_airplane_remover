@@ -43,6 +43,8 @@ public actor ImageSequence {
     public func getImageInfo() async throws -> ImageInfo {
         if self.filenames.count == 0 { throw "no images found"}
         let filename = self.filenames[0]
+        // Frame 0 of a video that is being extracted may not be there yet.
+        try await source.waitUntilAvailable(0)
         let fileExtension = filename.components(separatedBy: ".").last ?? ".tiff" // XXX
         let testImage = try await self.getImage(withName: filename).image()
         return ImageInfo(imageWidth: testImage.width,
@@ -57,30 +59,20 @@ public actor ImageSequence {
                 supportedImageFileTypes: [String],
                 maxImages: Int? = nil) throws
     {
-        self.maxImages = maxImages
-        var imageFiles: [String] = []
-        if !FileManager.default.fileExists(atPath: dirname) {
-            throw "\(dirname) does not exist"
-        }
-      
-        // runs on the main thread and blocks when the SAN is starting
-        let contents = try FileManager.default.contentsOfDirectory(atPath: dirname)
-        contents.forEach { file in
-            supportedImageFileTypes.forEach { type in
-                if file.hasSuffix(type) {
-                    imageFiles.append("\(dirname)/\(file)")
-                } 
-            }
-        }
-        
-        imageFiles.sort { (lhs: String, rhs: String) -> Bool in
-            let lh = removePathAndSuffix(fromString: lhs)
-            let rh = removePathAndSuffix(fromString: rhs)
-            return lh < rh
-        }
-        
-        self.filenames = imageFiles
+        try self.init(source: DirectoryFrameSource(dirname: dirname, supportedImageFileTypes: supportedImageFileTypes),
+                      maxImages: maxImages)
     }
+
+    /// A sequence whose frames come from `source`: a folder (`DirectoryFrameSource`) or a video that is still being
+    /// extracted (`VideoFrameSource`).  `filenames` is the source's names for frames 0..<frameCount, taken now.
+    public init(source: FrameSource, maxImages: Int? = nil) {
+        self.maxImages = maxImages
+        self.source = source
+        self.filenames = (0..<source.frameCount).map { source.path(forFrame: $0) }
+    }
+
+    /// Whether each frame is there yet; image sequences have every frame from the start.
+    public nonisolated let source: FrameSource
 
     public let filenames: [String]
 
