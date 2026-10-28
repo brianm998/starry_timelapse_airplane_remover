@@ -1890,11 +1890,13 @@ public struct Config: Codable, Sendable {
     // 0.12.4 better ffmpeg support (missing arm arch on macos)
     // 0.12.5 better alignment
     //        cloud merge option
+    // 0.12.6 video decode in background
+    //        UI improvements
 
 
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.12.5"
+    public static let latestVersion = "0.12.6"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
