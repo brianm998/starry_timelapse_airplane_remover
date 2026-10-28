@@ -37,6 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// and the app is already on its way out, so there is no async context to await from and
     /// blocking the main thread here risks the work not completing at all.
     func applicationWillTerminate(_ notification: Notification) {
+        // The ffmpegs extracting a video are this process's children: left alone they carry on decoding, writing frames nobody
+        // collects, after it has gone.
+        VideoFrameSource.terminateAllNow()
         RunMarkerStore.finishWithoutWaiting()
         // `ConfigManager.update` writes asynchronously so the settings sheet does
         // not block the main thread on every keystroke, which leaves the last

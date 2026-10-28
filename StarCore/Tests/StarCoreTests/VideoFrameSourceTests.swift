@@ -296,8 +296,8 @@ final class VideoFrameSourceTests: XCTestCase {
         let video = try h264("replace", frames: 480, size: "1280x720")
         let source = try await VideoFrameSource.make(videoPath: video, settings: .default)
         source.prioritize([470], reason: .userViewing)
-        try await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertTrue(source.isBeingJumpedTo(470))
+        let started = await waitUntil(10) { source.isBeingJumpedTo(470) }
+        XCTAssertTrue(started)
         try await Task.sleep(nanoseconds: 200_000_000)
         source.prioritize([300], reason: .userViewing)
         let moved = await waitUntil(10) { source.isBeingJumpedTo(300) || source.isAvailable(300) }
@@ -427,5 +427,23 @@ final class VideoFrameSourceTests: XCTestCase {
         XCTAssertLessThan(sizes[.none]! - 640 * 360 * 6, 4096)
         XCTAssertLessThanOrEqual(sizes[.packBits]!, sizes[.none]! + sizes[.none]! / 50)
         XCTAssertEqual(pixels[.none], pixels[.packBits], "both decode to identical pixels")
+    }
+
+    /// A user who scrolls about while the video is extracted must not wedge it: whatever was asked for first, the rest still arrives.
+    func testScrollingAboutDoesNotStopTheRestOfTheExtraction() async throws {
+        let video = try proRes("scroll", frames: 600, size: "1280x720")
+        let source = try await VideoFrameSource.make(videoPath: video, settings: .default)
+        var generator = SystemRandomNumberGenerator()
+        let start = Date()
+        while Date().timeIntervalSince(start) < 6 {
+            let viewing = Int.random(in: 0..<600, using: &generator)
+            source.prioritize([viewing], reason: .userViewing)
+            source.prioritize(Array(max(0, viewing - 8)...min(599, viewing + 8)), reason: .userNearby)
+            if Bool.random() { source.prioritize([Int.random(in: 0..<600)], reason: .pipeline) }
+            try await Task.sleep(nanoseconds: UInt64.random(in: 20_000_000...400_000_000))
+        }
+        // now the user stops: everything has to come
+        let finished = await waitUntil(120) { source.progress.isComplete }
+        XCTAssertTrue(finished, "extraction stuck at \(source.progress.extracted) of 600 (sweep head \(String(describing: source.sweepHead)), ffmpeg processes: \(processCount(containing: source.outputFolder)))")
     }
 }

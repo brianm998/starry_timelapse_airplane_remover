@@ -335,11 +335,38 @@ final class FFmpegRun: @unchecked Sendable {
     }
 
     /// Stop ffmpeg now.  It finishes the file it was writing and exits.
+    ///
+    /// Asked politely first (SIGTERM), then not: measured, a decode of a big ProRes file that has been told to stop this way goes
+    /// on decoding and writing frames for as long as it is left (a stopped sweep kept running for 37 minutes, writing frames nobody
+    /// collected), where the short runs a jump makes do exit on it.  So a process that is still there `killGrace` seconds later is
+    /// killed.
     func cancel() {
         lock.lock()
         cancelled = true
         lock.unlock()
+        guard process.isRunning else { return }
+        process.terminate()
+        #if !os(Windows)
+        let process = self.process
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + Self.killGrace) {
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+        }
+        #endif
+    }
+
+    /// Seconds a stopped ffmpeg is given to exit by itself.
+    static let killGrace: TimeInterval = 2
+
+    /// Kill ffmpeg now, without asking: for a process that is exiting and cannot wait.
+    func killNow() {
+        lock.lock()
+        cancelled = true
+        lock.unlock()
+        #if !os(Windows)
+        if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+        #else
         if process.isRunning { process.terminate() }
+        #endif
     }
 
     func stopListening() {

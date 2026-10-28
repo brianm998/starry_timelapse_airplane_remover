@@ -149,6 +149,8 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
         queue.async {
             guard !self.started, !self.stopped else { return }
             self.started = true
+            self.register()
+            self.killOrphanedWorkers()
             self.writeSidecar(complete: false)
             self.clearStaging()
             self.reschedule()
@@ -221,6 +223,7 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
         queue.async {
             guard !self.stopped else { return }
             self.stopped = true
+            self.unregister()
             self.pendingUserWork?.cancel()
             for worker in self.allWorkers { self.stop(worker) }
             self.writeSidecar(complete: false)
@@ -341,8 +344,54 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
 
     private var stagingRoot: String { "\(outputFolder)/.extracting" }
 
+    /// Names this source's staging folders apart from any other's, so that an ffmpeg left behind by an earlier run (or another source over
+    /// the same folder) can never write into one of them.
+    private let runToken = String(UUID().uuidString.prefix(8))
+
     private func clearStaging() {
         try? FileManager.default.removeItem(atPath: stagingRoot)
+    }
+
+    /// An ffmpeg that an earlier run of star left behind (the app was killed or crashed, so nobody stopped it) is still decoding into this
+    /// folder, writing frames nobody collects and competing with this run for the disk and the memory.  Found by the staging folder in
+    /// its command line, and killed.
+    private func killOrphanedWorkers() {
+        #if !os(Windows)
+        guard let listing = try? shellOut(to: "/bin/ps", arguments: ["-axo", "pid=,command="]) else { return }
+        let marker = "\(stagingRoot)/"
+        for line in listing.split(separator: "\n") where line.contains("ffmpeg") && line.contains(marker) {
+            let fields = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard let first = fields.first, let pid = Int32(first), pid != getpid() else { continue }
+            Log.w("killing ffmpeg \(pid) left behind by an earlier run in \(outputFolder)")
+            kill(pid, SIGKILL)
+        }
+        #endif
+    }
+
+    // MARK: every source still running
+
+    private static let running = LockedBox<[ObjectIdentifier: Weak]>([:])
+    private struct Weak { weak var source: VideoFrameSource? }
+
+    /// Kills every ffmpeg any source has running, now, and stops the sources: for a process that is quitting, which cannot wait for the
+    /// politer stop (and whose children would otherwise be left decoding after it).
+    public static func terminateAllNow() {
+        let sources = running.get().values.compactMap(\.source)
+        for source in sources { source.killEverythingNow() }
+    }
+
+    private func killEverythingNow() {
+        stopped = true
+        for worker in allWorkers { worker.stopRequested = true; worker.run?.killNow() }
+        writeSidecar(complete: false)
+    }
+
+    private func register() {
+        Self.running.withValue { $0[ObjectIdentifier(self)] = Weak(source: self) }
+    }
+
+    private func unregister() {
+        Self.running.withValue { _ = $0.removeValue(forKey: ObjectIdentifier(self)) }
     }
 
     private func stop(_ worker: Worker) {
@@ -354,7 +403,7 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
     private func launch(kind: WorkerKind, start: Int, limit: Int?, priority: FramePriorityReason) {
         let id = nextWorkerID
         nextWorkerID += 1
-        let staging = "\(stagingRoot)/\(id)"
+        let staging = "\(stagingRoot)/\(runToken)-\(id)"
         let worker = Worker(id: id, kind: kind, start: start, limit: limit, priority: priority, stagingFolder: staging)
         try? FileManager.default.createDirectory(atPath: staging, withIntermediateDirectories: true)
 
@@ -619,6 +668,7 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
         // An estimated count is not known to be the whole video until a sweep has run off the end of it.
         guard countIsExact || endOfVideoSeen else { return }
         completionRecorded = true
+        unregister()
         for worker in allWorkers { stop(worker) }
         clearStaging()
         writeSidecar(complete: true)
