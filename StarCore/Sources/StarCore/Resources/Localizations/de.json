@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Richtet das Video anhand Ihrer Bilder in voller Größe aus. Das schärfste Ergebnis, am langsamsten fertig und am fordernsten für Ihren Rechner.",
   "ui.preset_fastest": "Am schnellsten",
   "ui.preset_fastest_blurb": "Richtet das Video anhand halb so großer Kopien aus. Senkt den langsamsten Schritt auf ein Viertel und ist für Ihren Rechner deutlich schonender. Feine Details können etwas weich wirken.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "Fehler beim Erstellen der Vorschau für Bild {0}: {1}",
   "ui.preview_first": "Erst Vorschau",
   "ui.process": "Verarbeiten",

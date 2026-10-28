@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Aligne la vidéo à partir de vos images en taille réelle. Le résultat le plus net, le plus long à finir et le plus exigeant pour votre ordinateur.",
   "ui.preset_fastest": "Le plus rapide",
   "ui.preset_fastest_blurb": "Aligne la vidéo à partir de copies de moitié. Réduit l'étape la plus lente au quart et ménage bien davantage votre ordinateur. Les détails fins peuvent paraître un peu doux.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "erreur lors de la création de l'aperçu de l'image {0} : {1}",
   "ui.preview_first": "Aperçu d'abord",
   "ui.process": "Traiter",

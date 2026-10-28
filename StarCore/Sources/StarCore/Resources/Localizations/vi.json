@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Căn video từ các khung của bạn ở kích thước đầy đủ. Kết quả nét nhất, lâu xong nhất và nặng nhất với máy tính.",
   "ui.preset_fastest": "Nhanh nhất",
   "ui.preset_fastest_blurb": "Căn video từ các bản sao một nửa kích thước. Rút bước chậm nhất xuống còn một phần tư và nhẹ nhàng hơn nhiều với máy tính. Chi tiết nhỏ có thể trông hơi mềm.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "lỗi khi tạo bản xem trước cho khung {0}: {1}",
   "ui.preview_first": "Xem trước đã",
   "ui.process": "Xử lý",

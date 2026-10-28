@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "يحاذي الفيديو انطلاقًا من إطاراتك بحجمها الكامل. أحدّ نتيجة، وأبطأها إنجازًا، وأثقلها على حاسوبك.",
   "ui.preset_fastest": "الأسرع",
   "ui.preset_fastest_blurb": "يحاذي الفيديو انطلاقًا من نسخ بنصف الحجم. يخفّض أبطأ خطوة إلى الربع وهو أرفق بحاسوبك بكثير. وقد تبدو التفاصيل الدقيقة أقل حدة قليلًا.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "خطأ في إنشاء معاينة الإطار {0}: {1}",
   "ui.preview_first": "المعاينة أولًا",
   "ui.process": "معالجة",

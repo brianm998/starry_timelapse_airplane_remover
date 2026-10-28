@@ -80,7 +80,7 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
                     onClick = { vm.reopenProcessingModal() },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(localized("ui.status")) }
+                ) { Text(localized("ui.show_progress")) }
             }
             is ProcessingButtonRole.Process -> HoverTip(localized("ui.choose_settings_and_process_these_frames")) {
                 Button(

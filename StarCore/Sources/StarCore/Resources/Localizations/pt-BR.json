@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Alinha o vídeo a partir dos seus quadros em tamanho pleno. O resultado mais nítido, o mais demorado e o mais pesado para o seu computador.",
   "ui.preset_fastest": "Mais rápido",
   "ui.preset_fastest_blurb": "Alinha o vídeo a partir de cópias com metade do tamanho. Reduz a etapa mais lenta a um quarto e é bem mais leve para o seu computador. Detalhes finos podem ficar um pouco suaves.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "erro ao criar a pré-visualização do quadro {0}: {1}",
   "ui.preview_first": "Pré-visualizar primeiro",
   "ui.process": "Processar",

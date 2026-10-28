@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "আপনার ফ্রেমগুলির পূর্ণ আকার থেকে ভিডিওটি সাজায়। সবচেয়ে তীক্ষ্ণ ফল, শেষ হতে সবচেয়ে ধীর, আর আপনার কম্পিউটারের উপর সবচেয়ে চাপ।",
   "ui.preset_fastest": "সবচেয়ে দ্রুত",
   "ui.preset_fastest_blurb": "অর্ধেক আকারের কপি থেকে ভিডিওটি সাজায়। সবচেয়ে ধীর ধাপটিকে এক-চতুর্থাংশে নামায় এবং আপনার কম্পিউটারের উপর অনেক কম চাপ ফেলে। সূক্ষ্ম বিবরণ কিছুটা কোমল দেখাতে পারে।",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "ফ্রেম {0}-এর প্রিভিউ তৈরিতে ত্রুটি: {1}",
   "ui.preview_first": "আগে প্রিভিউ",
   "ui.process": "প্রক্রিয়া",

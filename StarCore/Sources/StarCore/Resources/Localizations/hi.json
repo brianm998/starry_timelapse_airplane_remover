@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "वीडियो को आपके फ़्रेमों के पूर्ण आकार से मिलाता है। सबसे तीक्ष्ण परिणाम, पूरा होने में सबसे धीमा और आपके कंप्यूटर पर सबसे भारी।",
   "ui.preset_fastest": "सबसे तेज़",
   "ui.preset_fastest_blurb": "वीडियो को आधे आकार की प्रतियों से मिलाता है। सबसे धीमे चरण को एक-चौथाई कर देता है और आपके कंप्यूटर पर कहीं कम बोझ डालता है। बारीक विवरण थोड़ा नरम दिख सकता है।",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "फ़्रेम {0} का प्रीव्यू बनाने में त्रुटि: {1}",
   "ui.preview_first": "पहले प्रीव्यू",
   "ui.process": "प्रसंस्करण",

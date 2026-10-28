@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Menyelaraskan video dari bingkaimu pada ukuran penuh. Hasil paling tajam, paling lama selesai, dan paling berat bagi komputermu.",
   "ui.preset_fastest": "Tercepat",
   "ui.preset_fastest_blurb": "Menyelaraskan video dari salinan berukuran setengah. Memangkas tahap paling lambat menjadi seperempat dan jauh lebih ringan bagi komputermu. Detail halus bisa tampak agak lembut.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "galat saat membuat pratinjau bingkai {0}: {1}",
   "ui.preview_first": "Pratinjau dulu",
   "ui.process": "Proses",

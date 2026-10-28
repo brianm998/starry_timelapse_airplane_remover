@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "프레임을 원래 크기 그대로 사용해 영상을 맞춥니다. 가장 선명한 결과이지만 가장 오래 걸리고 컴퓨터에 부담도 가장 큽니다.",
   "ui.preset_fastest": "가장 빠름",
   "ui.preset_fastest_blurb": "절반 크기 사본으로 영상을 맞춥니다. 가장 느린 단계를 4분의 1로 줄이고 컴퓨터 부담도 훨씬 적습니다. 미세한 디테일은 다소 무르게 보일 수 있습니다.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "프레임 {0}의 미리보기 생성 오류: {1}",
   "ui.preview_first": "미리보기 먼저",
   "ui.process": "처리",

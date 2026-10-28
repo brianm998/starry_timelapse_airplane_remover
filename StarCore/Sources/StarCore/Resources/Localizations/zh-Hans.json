@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "用原始大小的帧对齐视频。结果最锐利，耗时最长，对电脑的压力也最大。",
   "ui.preset_fastest": "最快",
   "ui.preset_fastest_blurb": "用一半大小的副本对齐视频。把最慢的一步缩短到四分之一，对电脑也轻松得多。细节可能显得略微发虚。",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "创建第 {0} 帧预览时出错：{1}",
   "ui.preview_first": "先预览",
   "ui.process": "处理",
