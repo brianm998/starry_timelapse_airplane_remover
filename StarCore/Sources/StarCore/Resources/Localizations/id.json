@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "Berapa banyak proses ffmpeg tambahan yang boleh mengekstrak bingkai mendahului ekstraksi berurutan, pada video yang dapat memberikan bingkai mana pun dengan cepat (bawaan 1).",
   "cli.help.extraction_long_gop_jump_workers": "Hal yang sama untuk video H.264, H.265, dan sejenisnya, di mana hanya bingkai yang diminta pengguna yang memulai satu (bawaan 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background, dan --extraction-*-workers hanya berlaku jika masukannya berkas video.",
-  "cli.waited_for_frames": "Ekstraksi video memakan {0}; proses selesai {1} setelah bingkai terakhir diekstrak."
+  "cli.waited_for_frames": "Ekstraksi video memakan {0}; proses selesai {1} setelah bingkai terakhir diekstrak.",
+  "ui.processing_step_extracting_video": "Mengekstrak bingkai video"
 }

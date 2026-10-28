@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "Ile dodatkowych procesów ffmpeg może wyodrębniać klatki przed wyodrębnianiem po kolei, w wideo, które szybko podaje dowolną klatkę (domyślnie 1).",
   "cli.help.extraction_long_gop_jump_workers": "To samo dla H.264, H.265 i podobnych wideo, gdzie uruchamia je tylko klatka zażądana przez użytkownika (domyślnie 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background i --extraction-*-workers dotyczą tylko wejścia będącego plikiem wideo.",
-  "cli.waited_for_frames": "Wyodrębnianie wideo trwało {0}; przebieg zakończył się {1} po wyodrębnieniu ostatniej klatki."
+  "cli.waited_for_frames": "Wyodrębnianie wideo trwało {0}; przebieg zakończył się {1} po wyodrębnieniu ostatniej klatki.",
+  "ui.processing_step_extracting_video": "Wyodrębnianie klatek wideo"
 }

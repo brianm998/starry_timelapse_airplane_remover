@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "任意のフレームをすばやく取得できるビデオで、順番の抽出より先にフレームを抽出できる追加の ffmpeg プロセス数 (既定 1)。",
   "cli.help.extraction_long_gop_jump_workers": "H.264、H.265 などのビデオでの同じ設定。ユーザーが求めたフレームだけが 1 つ開始します (既定 1)。",
   "cli.errors.extraction_option_needs_video": "--tiff-compression、--extract-in-background、--extraction-*-workers は入力がビデオファイルの場合にのみ有効です。",
-  "cli.waited_for_frames": "ビデオの抽出に {0} かかりました。実行は最後のフレームの抽出の {1} 後に終了しました。"
+  "cli.waited_for_frames": "ビデオの抽出に {0} かかりました。実行は最後のフレームの抽出の {1} 後に終了しました。",
+  "ui.processing_step_extracting_video": "ビデオのフレームを抽出"
 }

@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "어떤 프레임이든 빠르게 줄 수 있는 비디오에서 순서대로 추출하는 것보다 앞서 프레임을 추출할 수 있는 추가 ffmpeg 프로세스 수(기본값 1).",
   "cli.help.extraction_long_gop_jump_workers": "H.264, H.265 등의 비디오에 대한 같은 설정으로, 사용자가 요청한 프레임만 하나를 시작합니다(기본값 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background, --extraction-*-workers는 입력이 비디오 파일일 때만 적용됩니다.",
-  "cli.waited_for_frames": "비디오 추출에 {0}이(가) 걸렸습니다. 실행은 마지막 프레임을 추출하고 {1} 후에 끝났습니다."
+  "cli.waited_for_frames": "비디오 추출에 {0}이(가) 걸렸습니다. 실행은 마지막 프레임을 추출하고 {1} 후에 끝났습니다.",
+  "ui.processing_step_extracting_video": "비디오 프레임 추출"
 }

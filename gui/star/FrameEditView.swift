@@ -201,7 +201,17 @@ struct FrameEditView: View {
         let h = Int(viewModel.frameHeight)
         let session = ps.sessionGeneration
 
+        let frameIndex = frameView.frameIndex
+        let source = viewModel.frameSource
+
         Task { @MainActor in
+            // A frame the video has not given up yet has nothing to paint on or to load a horizon for: wait for it, still "computing"
+            // and out of reach (the wait panel is over it), rather than starting a session on a blank frame that the frame's arrival
+            // would then run detection into.
+            if let source, !source.isAvailable(frameIndex) {
+                try? await source.waitUntilAvailable(frameIndex)
+                guard ps.isCurrentSession(session) else { return }
+            }
             guard let frame = frameView.frame else {
                 if ps.isCurrentSession(session) { ps.setPhase(.bandSelection) }
                 return

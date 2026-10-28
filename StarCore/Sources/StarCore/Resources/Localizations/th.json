@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "จำนวนโปรเซส ffmpeg เพิ่มเติมที่แยกเฟรมนำหน้าการแยกตามลำดับได้ สำหรับวิดีโอที่ให้เฟรมใดก็ได้อย่างรวดเร็ว (ค่าเริ่มต้น 1)",
   "cli.help.extraction_long_gop_jump_workers": "เช่นเดียวกันสำหรับวิดีโอ H.264, H.265 และที่คล้ายกัน ซึ่งมีเพียงเฟรมที่ผู้ใช้ขอเท่านั้นที่เริ่มหนึ่งโปรเซส (ค่าเริ่มต้น 1)",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background และ --extraction-*-workers ใช้ได้เฉพาะเมื่ออินพุตเป็นไฟล์วิดีโอ",
-  "cli.waited_for_frames": "การแยกวิดีโอใช้เวลา {0} การรันเสร็จสิ้นหลังจากแยกเฟรมสุดท้ายแล้ว {1}"
+  "cli.waited_for_frames": "การแยกวิดีโอใช้เวลา {0} การรันเสร็จสิ้นหลังจากแยกเฟรมสุดท้ายแล้ว {1}",
+  "ui.processing_step_extracting_video": "แยกเฟรมวิดีโอ"
 }

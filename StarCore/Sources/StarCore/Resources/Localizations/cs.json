@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "Kolik dalších procesů ffmpeg smí extrahovat snímky před extrakcí popořadě u videa, které umí rychle poskytnout libovolný snímek (výchozí 1).",
   "cli.help.extraction_long_gop_jump_workers": "Totéž pro H.264, H.265 a podobná videa, kde jeden spustí jen snímek vyžádaný uživatelem (výchozí 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background a --extraction-*-workers platí jen tehdy, když je vstupem videosoubor.",
-  "cli.waited_for_frames": "Extrakce videa trvala {0}; běh skončil {1} po extrakci posledního snímku."
+  "cli.waited_for_frames": "Extrakce videa trvala {0}; běh skončil {1} po extrakci posledního snímku.",
+  "ui.processing_step_extracting_video": "Extrakce snímků videa"
 }

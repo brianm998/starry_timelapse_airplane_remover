@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "Hoeveel extra ffmpeg-processen beelden mogen uitpakken vóór het uitpakken op volgorde, bij een video die elk beeld snel kan leveren (standaard 1).",
   "cli.help.extraction_long_gop_jump_workers": "Hetzelfde voor H.264, H.265 en vergelijkbare video's, waar alleen een door de gebruiker gevraagd beeld er een start (standaard 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background en --extraction-*-workers gelden alleen als de invoer een videobestand is.",
-  "cli.waited_for_frames": "Het uitpakken van de video duurde {0}; de run was {1} na het uitpakken van het laatste beeld klaar."
+  "cli.waited_for_frames": "Het uitpakken van de video duurde {0}; de run was {1} na het uitpakken van het laatste beeld klaar.",
+  "ui.processing_step_extracting_video": "Videobeelden uitpakken"
 }

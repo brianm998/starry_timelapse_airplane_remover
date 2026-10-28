@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "जो वीडियो कोई भी फ़्रेम तेज़ी से दे सकता है, उसमें क्रमिक निष्कर्षण से आगे फ़्रेम निकालने वाली अतिरिक्त ffmpeg प्रक्रियाओं की संख्या (डिफ़ॉल्ट 1)।",
   "cli.help.extraction_long_gop_jump_workers": "H.264, H.265 और ऐसे अन्य वीडियो के लिए वही, जहाँ केवल उपयोगकर्ता द्वारा माँगा गया फ़्रेम एक शुरू करता है (डिफ़ॉल्ट 1)।",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background और --extraction-*-workers केवल तब लागू होते हैं जब इनपुट वीडियो फ़ाइल हो।",
-  "cli.waited_for_frames": "वीडियो निकालने में {0} लगे; रन आख़िरी फ़्रेम निकलने के {1} बाद पूरा हुआ।"
+  "cli.waited_for_frames": "वीडियो निकालने में {0} लगे; रन आख़िरी फ़्रेम निकलने के {1} बाद पूरा हुआ।",
+  "ui.processing_step_extracting_video": "वीडियो फ़्रेम निकालना"
 }

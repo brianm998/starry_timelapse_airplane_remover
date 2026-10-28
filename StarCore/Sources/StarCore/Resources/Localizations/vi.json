@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "Số tiến trình ffmpeg bổ sung được trích xuất khung hình trước quá trình trích xuất theo thứ tự, với video có thể đưa ra bất kỳ khung hình nào nhanh chóng (mặc định 1).",
   "cli.help.extraction_long_gop_jump_workers": "Tương tự cho video H.264, H.265 và tương tự, nơi chỉ một khung hình do người dùng yêu cầu mới khởi động một tiến trình (mặc định 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background và --extraction-*-workers chỉ áp dụng khi đầu vào là tệp video.",
-  "cli.waited_for_frames": "Trích xuất video mất {0}; lần chạy kết thúc {1} sau khi trích xuất khung hình cuối cùng."
+  "cli.waited_for_frames": "Trích xuất video mất {0}; lần chạy kết thúc {1} sau khi trích xuất khung hình cuối cùng.",
+  "ui.processing_step_extracting_video": "Trích xuất khung hình video"
 }

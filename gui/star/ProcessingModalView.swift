@@ -67,6 +67,7 @@ struct ProcessingModalView: View {
           framesComplete: viewModel.count(for: .complete),
           frameCount: viewModel.frames.count,
           steps: steps,
+          extraction: viewModel.extractionProgress,
           statusText: viewModel.processingStatusText ?? viewModel.waitingForFramesText,
           showAlignment: showAlignment,
           stop: { viewModel.stopProcessing() },
@@ -132,6 +133,10 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     let frameCount: Int
     let steps: [ProcessingStepProgress]
 
+    /// How far extracting the video's frames has got; nil when the frames did not come from a video being extracted,
+    /// which is when the extraction row is not shown.
+    var extraction: FrameExtractionProgress? = nil
+
     /// What the run is doing, for a run that cannot yet be counted in operations — shown
     /// under the title in place of the frames-complete line.  Normally `nil`: a run that
     /// builds a frame graph has operations to count from the start, and the frames-complete
@@ -193,7 +198,7 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ProcessingStepsView(steps: steps)
+            ProcessingStepsView(steps: steps, extraction: extraction)
             Divider()
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -268,6 +273,8 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
 /// One bar per processing step, stacked in the order `ProcessingSteps.types` gives them.
 struct ProcessingStepsView: View {
     let steps: [ProcessingStepProgress]
+    /// The video extraction, shown as the first row, above the horizon; nil for frames that are not being extracted from a video.
+    var extraction: FrameExtractionProgress? = nil
 
     private let doneColor: Color = .green
     private let runningColor: Color = .yellow
@@ -284,7 +291,11 @@ struct ProcessingStepsView: View {
               .font(.headline)
               .foregroundColor(.white)
 
-            if steps.isEmpty {
+            if let extraction {
+                extractionRow(extraction)
+            }
+
+            if steps.isEmpty && extraction == nil {
                 // Every step this configuration takes turned out to have nothing left to
                 // do — a re-run over a sequence that is already finished.  Rare, and over
                 // quickly, but a lone heading with nothing under it looks broken.
@@ -296,6 +307,39 @@ struct ProcessingStepsView: View {
                 stepRow(step)
             }
         }
+    }
+
+    /// The frames the video has given up so far, in the same bar and count as the steps below.
+    private func extractionRow(_ progress: FrameExtractionProgress) -> some View {
+        let total = max(1, progress.total)
+        let name = localized("ui.processing_step_extracting_video")
+        return HStack(spacing: 12) {
+            Text(name)
+              .font(.callout)
+              .foregroundColor(.white)
+              .lineLimit(2)
+              .fixedSize(horizontal: false, vertical: true)
+              .frame(width: labelWidth, alignment: .leading)
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(queuedColor)
+                    Rectangle().fill(doneColor)
+                      .frame(width: geometry.size.width * CGFloat(progress.extracted) / CGFloat(total))
+                }
+                  .cornerRadius(4)
+            }
+              .frame(height: 14)
+            Text(localized("ui.n_of_m_complete", progress.extracted, progress.total))
+              .font(.caption)
+              .monospacedDigit()
+              .foregroundColor(.white)
+              .lineLimit(2)
+              .fixedSize(horizontal: false, vertical: true)
+              .frame(width: countWidth, alignment: .trailing)
+        }
+          .contentShape(Rectangle())
+          .help(name)
+          .accessibilityIdentifier("processing.extraction")
     }
 
     private func stepRow(_ step: ProcessingStepProgress) -> some View {

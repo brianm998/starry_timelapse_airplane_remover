@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "Herhangi bir kareyi hızla verebilen bir videoda, sıralı çıkarmanın önüne geçerek kare çıkarabilecek ek ffmpeg işlemi sayısı (varsayılan 1).",
   "cli.help.extraction_long_gop_jump_workers": "H.264, H.265 ve benzeri videolar için aynısı; yalnızca kullanıcının istediği kare bir tane başlatır (varsayılan 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background ve --extraction-*-workers yalnızca girdi bir video dosyası olduğunda geçerlidir.",
-  "cli.waited_for_frames": "Video çıkarma {0} sürdü; çalıştırma son kare çıkarıldıktan {1} sonra bitti."
+  "cli.waited_for_frames": "Video çıkarma {0} sürdü; çalıştırma son kare çıkarıldıktan {1} sonra bitti.",
+  "ui.processing_step_extracting_video": "Video kareleri çıkarılıyor"
 }
