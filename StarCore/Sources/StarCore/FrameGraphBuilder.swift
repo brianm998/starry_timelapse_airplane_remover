@@ -52,7 +52,8 @@ extension OperationType {
         case .starHomography:      return 0
         case .earthHomography:     return 0
         case .alignmentValidation: return 0
-        // Fallback only — `HorizonConsensusOp` passes its own: the masks it decodes at once.
+        // Unused — `HorizonConsensusOp` reserves nothing as an op, and its shared build and
+        // its drawing reserve what they decode while they decode it.
         case .horizonConsensus:    return 2
         // Fallbacks only — FrameGraphBuilder passes config.effective*MemoryMultiplier
         // explicitly, with the frame's actual neighbour counts.  These are the config
@@ -1193,7 +1194,11 @@ public final actor FrameGraphBuilder {
         // layers across the horizon.  Built only for frames that still have that work ahead
         // of them and no line yet: a frame whose output is written has nothing left to
         // composite.
-        var consensusOp: HorizonConsensusOp? = nil
+        //
+        // One op per frame, and a frame's outliers and merge wait on its own op alone: no
+        // frame composites with another's consensus line, so the merges start as the lines
+        // come in rather than after the last of them.
+        var consensusOps: [Int: HorizonConsensusOp] = [:]
         if HorizonConsensus.applies(to: config) {
             var targets: [Int] = []
             // A line an earlier run wrote without its image — any run before the view mode
@@ -1211,27 +1216,34 @@ public final actor FrameGraphBuilder {
                     targets.append(frame.frameIndex)
                 }
             }
-            if targets.isEmpty && imageTargets.isEmpty {
-                // The whole of this step is one op, and what it makes is already written.
-                alreadyDone[.horizonConsensus] = 1
+            let ops = HorizonConsensusOp.ops(
+              frames: frames,
+              targets: targets,
+              imageTargets: imageTargets,
+              configManager: configManager,
+              rawImageBytes: rawImageBytes
+            ) { errorString in
+                Task { await errors.append(errorString) }
+                errorClosure(errorString)
             }
-            if !targets.isEmpty || !imageTargets.isEmpty {
-                let op = HorizonConsensusOp(
-                  frames: frames,
-                  targets: targets,
-                  imageTargets: imageTargets,
-                  configManager: configManager,
-                  rawImageBytes: rawImageBytes
-                ) { errorString in
-                    Task { await errors.append(errorString) }
-                    errorClosure(errorString)
+            recordAlreadyDone(.horizonConsensus,
+                              consideredFrames: outputFrames.map(\.frameIndex),
+                              builtOps: ops.count)
+            if !ops.isEmpty {
+                // Every detection is a vote, including those of frames no merge waits on, so
+                // every op waits on all of them — through one barrier, rather than each op
+                // on every horizon op.
+                let inputsReady = BlockOperation {}
+                inputsReady.name = "horizon consensus inputs ready"
+                inputsReady.addDependency(validationOp)
+                horizonOps.values.forEach { inputsReady.addDependency($0) }
+                allOps.append(inputsReady)
+                for op in ops {
+                    op.qualityOfService = .userInteractive
+                    op.addDependency(inputsReady)
+                    allOps.append(op)
+                    consensusOps[op.frame.frameIndex] = op
                 }
-                op.qualityOfService = .userInteractive
-                op.addDependency(validationOp)
-                // Every detection is a vote, including those of frames no merge waits on.
-                horizonOps.values.forEach { op.addDependency($0) }
-                allOps.append(op)
-                consensusOp = op
                 Log.i("horizon consensus will be built for \(targets.count) frame(s) and drawn " +
                       "for \(imageTargets.count) more")
             }
@@ -1264,7 +1276,9 @@ public final actor FrameGraphBuilder {
                 }
 
                 outlierOp.addDependency(validationOp)
-                if let consensusOp { outlierOp.addDependency(consensusOp) }
+                if let consensusOp = consensusOps[frame.frameIndex] {
+                    outlierOp.addDependency(consensusOp)
+                }
                 allOps.append(outlierOp)
                 outlierOps[frame.frameIndex] = outlierOp
             }
@@ -1298,7 +1312,9 @@ public final actor FrameGraphBuilder {
 
             mergeOp.qualityOfService = .userInteractive
             mergeOp.addDependency(validationOp)
-            if let consensusOp { mergeOp.addDependency(consensusOp) }
+            if let consensusOp = consensusOps[frame.frameIndex] {
+                mergeOp.addDependency(consensusOp)
+            }
 
 
             // add outlier dependencies for neighbor frames; will be a nop
@@ -1351,7 +1367,7 @@ public final actor FrameGraphBuilder {
         // and one of them is already an ancestor of every merge, so this only ever
         // removes a way to report done early.
         completionOp.addDependency(validationOp)
-        if let consensusOp { completionOp.addDependency(consensusOp) }
+        consensusOps.values.forEach { completionOp.addDependency($0) }
         outlierOps.values.forEach { completionOp.addDependency($0) }
         allOps.append(completionOp)
 
@@ -1508,20 +1524,33 @@ public final actor FrameGraphBuilder {
         if HorizonConsensus.applies(to: config), !sequenceFrames.isEmpty {
             let targets = Set(refinementFrames.map(\.frameIndex))
               .union(mergeFrames.map(\.frameIndex)).sorted()
-            if !targets.isEmpty {
-                let consensusOp = HorizonConsensusOp(
-                  frames: sequenceFrames,
-                  targets: targets,
-                  configManager: configManager,
-                  rawImageBytes: rawImageBytes
-                ) { errorString in
-                    Task { await errors.append(errorString) }
-                    errorClosure(errorString)
+            let ops = HorizonConsensusOp.ops(
+              frames: sequenceFrames,
+              targets: targets,
+              configManager: configManager,
+              rawImageBytes: rawImageBytes
+            ) { errorString in
+                Task { await errors.append(errorString) }
+                errorClosure(errorString)
+            }
+            if !ops.isEmpty {
+                // the refined detections all vote, so every op waits on every refinement
+                let inputsReady = BlockOperation {}
+                inputsReady.name = "horizon consensus inputs ready"
+                refinementOps.values.forEach { inputsReady.addDependency($0) }
+                consensusOps.append(inputsReady)
+                let byFrame = Dictionary(ops.map { ($0.frame.frameIndex, $0) },
+                                         uniquingKeysWith: { first, _ in first })
+                for op in ops {
+                    op.qualityOfService = .userInteractive
+                    op.addDependency(inputsReady)
+                    consensusOps.append(op)
                 }
-                consensusOp.qualityOfService = .userInteractive
-                refinementOps.values.forEach { consensusOp.addDependency($0) }
-                mergeOps.forEach { $0.addDependency(consensusOp) }
-                consensusOps.append(consensusOp)
+                for mergeOp in mergeOps {
+                    if let consensusOp = byFrame[mergeOp.frame.frameIndex] {
+                        mergeOp.addDependency(consensusOp)
+                    }
+                }
             }
         }
 

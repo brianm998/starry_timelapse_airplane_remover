@@ -68,8 +68,8 @@ public enum ProcessingSteps {
     ///
     /// Deliberately not `OperationType.allCases`: `preview` is thumbnail work that has
     /// nothing to do with a processing run, and `alignmentValidation` is an internal stage
-    /// this display does not break out.  `horizonConsensus` is one op for the whole
-    /// sequence, like a static tripod's horizon merge, and has a row of its own.
+    /// this display does not break out.  `horizonConsensus` is one op per frame,
+    /// and has a row of its own.
     public static func types(
       horizonDetectionEnabled: Bool,
       hasStaticReferenceHorizon: Bool,
