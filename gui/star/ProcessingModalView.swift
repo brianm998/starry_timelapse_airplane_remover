@@ -291,11 +291,23 @@ struct ProcessingStepsView: View {
     /// Wide enough for the longest translated step name at this font — "Zusammengeführter
     /// Horizont" in German — over two lines.
     private let labelWidth: CGFloat = 180
-    private let countWidth: CGFloat = 140
+    private let countWidth: CGFloat = 138
+    /// One of the three queued / running / done number columns.
+    private let numberWidth: CGFloat = 46
+
+    /// Steps with something to count and nothing left queued or running.  A step with no
+    /// operations yet is still being planned, which is not done.
+    private var doneSteps: [ProcessingStepProgress] {
+        steps.filter { $0.hasWork && $0.queued == 0 && $0.running == 0 }
+    }
+
+    private var processingSteps: [ProcessingStepProgress] {
+        steps.filter { !($0.hasWork && $0.queued == 0 && $0.running == 0) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(localized("ui.processing_steps"))
+            Text(localized("ui.steps"))
               .font(.headline)
               .foregroundColor(.white)
 
@@ -311,8 +323,51 @@ struct ProcessingStepsView: View {
                   .foregroundColor(.gray)
             }
 
-            ForEach(steps) { step in
-                stepRow(step)
+            // Done above, Processing beneath it.  Each heading is there only while it has
+            // rows, so a finishing step moves from one list to the other, bringing the Done
+            // heading with it the first time and taking the Processing one away the last.
+            if !doneSteps.isEmpty {
+                columnHeader(localized("ui.done"), showsCounts: true)
+                ForEach(doneSteps) { step in
+                    stepRow(step)
+                }
+            }
+            if !processingSteps.isEmpty {
+                columnHeader(localized("ui.processing"), showsCounts: doneSteps.isEmpty)
+                ForEach(processingSteps) { step in
+                    stepRow(step)
+                }
+            }
+        }
+    }
+
+    /// A sub-label over a group of rows.  The first one on screen also carries the names of
+    /// the three number columns, which line up with every row beneath it.
+    private func columnHeader(_ title: String, showsCounts: Bool) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+              .font(.subheadline)
+              .foregroundColor(.gray)
+              .frame(width: labelWidth, alignment: .leading)
+            Spacer()
+            if showsCounts {
+                countColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"),
+                             color: .gray)
+            }
+        }
+          .padding(.top, 4)
+    }
+
+    private func countColumns(_ queued: String, _ running: String, _ done: String,
+                              color: Color) -> some View {
+        HStack(spacing: 0) {
+            ForEach([queued, running, done], id: \.self) { text in
+                Text(text)
+                  .font(.caption)
+                  .monospacedDigit()
+                  .foregroundColor(color)
+                  .lineLimit(1)
+                  .frame(width: numberWidth, alignment: .trailing)
             }
         }
     }
@@ -366,18 +421,15 @@ struct ProcessingStepsView: View {
             // A step with no operations is only ever on screen while the plan is still
             // being worked out — once it is, `ProcessingSteps.visible` drops it — so this
             // says "not known yet", which no wording says as plainly as leaving it out.
-            Text(step.hasWork
-                   ? localized("ui.n_of_m_complete", step.completed, step.total)
-                   : "—")
-              .font(.caption)
-              .monospacedDigit()
-              .foregroundColor(step.hasWork ? .white : .gray)
-              // Wraps rather than shrinking.  `minimumScaleFactor` was scaling one row and
-              // not the row above it with the very same text in it — measured — which
-              // reads as a rendering fault; wrapping is at least the same on every row.
-              .lineLimit(2)
-              .fixedSize(horizontal: false, vertical: true)
-              .frame(width: countWidth, alignment: .trailing)
+            if step.hasWork {
+                countColumns("\(step.queued)", "\(step.running)", "\(step.completed)",
+                             color: .white)
+            } else {
+                Text("—")
+                  .font(.caption)
+                  .foregroundColor(.gray)
+                  .frame(width: numberWidth * 3, alignment: .trailing)
+            }
         }
           // Over the whole row, gaps included, rather than over the label alone: the bar
           // is the part of the row the eye is on, and it is the part being explained.

@@ -33,18 +33,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.star.desktop.domain.FrameState
 import com.star.desktop.domain.FrameStateCounts
 import com.star.desktop.domain.ProcessingButtonRole
 import com.star.desktop.domain.ViewModes
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
-import com.star.desktop.ui.components.DeviationChart
 import com.star.desktop.ui.components.ExpandToggle
 import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.components.VerticalStarPicker
 import com.star.desktop.ui.theme.StarColors
-import com.star.proto.FrameProcessingState
 import com.star.proto.FrameViewMode
 
 /** Left panel (macOS `LeftPanel`): processing controls, progress, and the images to show. */
@@ -146,26 +143,10 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
             modifier = Modifier.testTag("processing.progress").semantics { stateDescription = "${counts.complete}/$total/${if (processing) "running" else "idle"}" },
         )
 
-        // How far the star alignment moved the pictures, filling in as frames align (macOS draws it here at 200 by 200).
-        AlignmentThumbnail(vm)
-
-        ProcessingStats(counts)
-
         // "Show:" — pick which image of the frame the center shows (macOS frameModeView).
         ShowViewModes(vm)
       }
       com.star.desktop.ui.components.PanelChevron("«", { vm.setLeftPanel(false) }, Modifier.padding(6.dp))
-    }
-}
-
-/** The star deviation chart in the panel's width, with its Height slider; nothing until some frame has aligned. */
-@Composable
-private fun AlignmentThumbnail(vm: SequenceViewModel) {
-    val data by vm.alignment.collectAsState()
-    val current by vm.currentIndex.collectAsState()
-    val alignment = data
-    if (alignment != null && alignment.hasStar) {
-        DeviationChart(alignment.starPoints, vm.frameCount, current, vm::setCurrentIndex, chartHeight = 170.dp, compact = true)
     }
 }
 
@@ -180,39 +161,6 @@ private fun ProcessingProgressBar(counts: FrameStateCounts, modifier: Modifier =
         if (done > 0f) Box(Modifier.weight(done).fillMaxHeight().background(StarColors.green))
         if (working > 0f) Box(Modifier.weight(working).fillMaxHeight().background(StarColors.yellow))
         if (left > 0f) Box(Modifier.weight(left).fillMaxHeight().background(StarColors.gray))
-    }
-}
-
-/**
- * How many frames are in each state (macOS `processingStateView`): untouched, being worked on, and finished, or every state there is
- * when expanded. A state no frame is in is gray.
- */
-@Composable
-private fun ProcessingStats(counts: FrameStateCounts) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(Modifier.padding(top = 4.dp)) {
-        Text(localized("ui.processing_stats"), color = StarColors.textPrimary, fontSize = 12.sp)
-        Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (expanded) {
-                for (state in FrameProcessingState.entries.filter { it != FrameProcessingState.UNRECOGNIZED }) {
-                    StatRow(counts[state], FrameState.message(state))
-                }
-            } else {
-                StatRow(counts.unprocessed, FrameState.message(FrameProcessingState.FPS_UNPROCESSED))
-                StatRow(counts.working, localized("ui.processing_2"))
-                StatRow(counts.complete, FrameState.message(FrameProcessingState.FPS_COMPLETE))
-            }
-        }
-        ExpandToggle(expanded, { expanded = !expanded })
-    }
-}
-
-@Composable
-private fun StatRow(count: Int, label: String) {
-    val color = if (count == 0) StarColors.gray else StarColors.white
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("$count", color = color, fontSize = 11.sp, modifier = Modifier.width(36.dp))
-        Text(label, color = color, fontSize = 11.sp)
     }
 }
 
