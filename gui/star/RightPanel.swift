@@ -52,6 +52,9 @@ struct RightPanel: View {
                             Divider()
                             self.debugSection
                         }
+                          // room under the last control, so it can always be scrolled
+                          // clear of the panel's close chevron and stays clickable
+                          .padding(.bottom, 32)
                           // a floor, so the panel is not a sliver while every section is
                           // collapsed, and does not jump much as sections open and close
                           .frame(minWidth: 180, alignment: .leading)
