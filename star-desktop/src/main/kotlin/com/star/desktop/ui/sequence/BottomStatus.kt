@@ -52,7 +52,8 @@ fun BottomStatus(vm: SequenceViewModel) {
         }
 
         // Counts are only the frame's once its outliers have been read; before that they are zeroes that mean nothing.
-        info?.takeIf { it.outliersLoaded }?.let { i ->
+        // They only apply to frames that use outliers: selective, or automatic with auto-select.
+        info?.takeIf { it.outliersLoaded && it.cleanMethod != com.star.proto.CleanMethod.CLEAN_AUTOMATIC }?.let { i ->
             Column {
                 Line(localized("ui.n_will_remove", i.numPositiveOutliers), if (i.numPositiveOutliers == 0) StarColors.white else StarColors.red)
                 Line(localized("ui.n_will_keep", i.numNegativeOutliers), if (i.numNegativeOutliers == 0) StarColors.white else StarColors.green)
