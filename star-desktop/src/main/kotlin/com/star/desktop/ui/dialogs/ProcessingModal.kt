@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameStateCounts
@@ -60,6 +61,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     val report by svm.stepProgress.collectAsState()
     val rows = StepRow.of(report)
     val counts = FrameStateCounts(frameStates, svm.frameCount)
+    val extraction by svm.extraction.collectAsState()
 
     Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
         Column(
@@ -85,7 +87,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
             HorizontalDivider(color = StarColors.cellDefault)
 
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                StepsView(rows, hasReport = report != null)
+                StepsView(rows, hasReport = report != null, extraction = extraction)
                 HorizontalDivider(color = StarColors.cellDefault)
                 AlignmentSection(app, svm)
             }
@@ -116,15 +118,37 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
 
 /** One bar per processing step, stacked in the order the daemon sends them (also drawn by the reopened-sequence panel, over what was found on disk). */
 @Composable
-internal fun StepsView(rows: List<StepRow>, hasReport: Boolean) {
+internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.star.proto.FrameExtraction? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(localized("ui.processing_steps"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        // Extracting the video's frames comes first, above the horizon, for frames that are being extracted from a video.
+        if (extraction != null && extraction.active) ExtractionRowView(extraction)
         when {
             // Nothing reported yet: the run is still being planned.
             !hasReport -> Text("…", color = StarColors.textSecondary, fontSize = 12.sp)
             // Every step turned out to have nothing left to do (a re-run over a sequence that is already finished).
             rows.isEmpty() -> Text(localized("ui.nothing_to_do"), color = StarColors.textSecondary, fontSize = 12.sp)
             else -> rows.forEach { StepRowView(it) }
+        }
+    }
+}
+
+@Composable
+private fun ExtractionRowView(e: com.star.proto.FrameExtraction) {
+    val name = localized("ui.processing_step_extracting_video")
+    HoverTip(name) {
+        Row(Modifier.fillMaxWidth().testTag("processing.extraction"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(name, color = StarColors.white, fontSize = 13.sp, maxLines = 2, modifier = Modifier.width(NAME_WIDTH))
+            val done = if (e.total > 0) (e.extracted.toFloat() / e.total).coerceIn(0f, 1f) else 0f
+            Row(Modifier.weight(1f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color(0.32f, 0.32f, 0.32f))) {
+                if (done > 0f) Box(Modifier.weight(done).fillMaxHeight().background(StarColors.green))
+                if (done < 1f) Box(Modifier.weight(1f - done).fillMaxHeight())
+            }
+            Text(
+                localized("ui.n_of_m_complete", e.extracted, e.total),
+                color = StarColors.white, fontSize = 12.sp, maxLines = 2,
+                textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(COUNT_WIDTH),
+            )
         }
     }
 }

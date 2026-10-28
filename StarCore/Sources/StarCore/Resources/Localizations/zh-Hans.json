@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "对于能快速给出任意一帧的视频，允许多少个额外的 ffmpeg 进程在按顺序提取之前提取帧（默认 1）。",
   "cli.help.extraction_long_gop_jump_workers": "对 H.264、H.265 等视频的同样设置，只有用户请求的帧才会启动一个（默认 1）。",
   "cli.errors.extraction_option_needs_video": "--tiff-compression、--extract-in-background 和 --extraction-*-workers 仅在输入是视频文件时适用。",
-  "cli.waited_for_frames": "视频提取用了 {0}；运行在提取完最后一帧 {1} 后结束。"
+  "cli.waited_for_frames": "视频提取用了 {0}；运行在提取完最后一帧 {1} 后结束。",
+  "ui.processing_step_extracting_video": "提取视频帧"
 }

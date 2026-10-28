@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "Quantos processos ffmpeg extras podem extrair quadros à frente da extração em ordem, em um vídeo que entrega qualquer quadro rapidamente (padrão 1).",
   "cli.help.extraction_long_gop_jump_workers": "O mesmo para H.264, H.265 e vídeos semelhantes, em que só um quadro pedido pelo usuário inicia um (padrão 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background e --extraction-*-workers só valem quando a entrada é um arquivo de vídeo.",
-  "cli.waited_for_frames": "A extração do vídeo levou {0}; a execução terminou {1} depois da extração do último quadro."
+  "cli.waited_for_frames": "A extração do vídeo levou {0}; a execução terminou {1} depois da extração do último quadro.",
+  "ui.processing_step_extracting_video": "Extraindo quadros do vídeo"
 }

@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "How many extra ffmpeg processes may extract frames ahead of the in-order extraction on a video that can give up any frame quickly (default 1).",
   "cli.help.extraction_long_gop_jump_workers": "The same for H.264, H.265 and similar videos, where only a frame the user asks for starts one (default 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background and --extraction-*-workers only apply when the input is a video file.",
-  "cli.waited_for_frames": "Video extraction took {0}; the run finished {1} after the last frame was extracted."
+  "cli.waited_for_frames": "Video extraction took {0}; the run finished {1} after the last frame was extracted.",
+  "ui.processing_step_extracting_video": "Extracting video frames"
 }

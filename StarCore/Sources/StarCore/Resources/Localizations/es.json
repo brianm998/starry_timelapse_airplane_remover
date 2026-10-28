@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "Cuántos procesos ffmpeg adicionales pueden extraer fotogramas por delante de la extracción en orden, en un vídeo que puede dar cualquier fotograma rápidamente (1 por defecto).",
   "cli.help.extraction_long_gop_jump_workers": "Lo mismo para H.264, H.265 y vídeos similares, donde solo un fotograma pedido por el usuario inicia uno (1 por defecto).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background y --extraction-*-workers solo se aplican cuando la entrada es un archivo de vídeo.",
-  "cli.waited_for_frames": "La extracción del vídeo tardó {0}; la ejecución terminó {1} después de extraer el último fotograma."
+  "cli.waited_for_frames": "La extracción del vídeo tardó {0}; la ejecución terminó {1} después de extraer el último fotograma.",
+  "ui.processing_step_extracting_video": "Extrayendo fotogramas del vídeo"
 }

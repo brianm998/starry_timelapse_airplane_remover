@@ -153,6 +153,12 @@ struct FrameWaitPanelView: View {
           .padding(24)
           .background(.black.opacity(0.7))
           .cornerRadius(10)
+          // The whole frame area, not just the card: nothing underneath (the horizon painter, the outlier tools) can be clicked or
+          // dragged on a frame that is not there.
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .background(Color.black.opacity(0.35))
+          .contentShape(Rectangle())
+          .gesture(DragGesture(minimumDistance: 0))
           .accessibilityIdentifier("extraction.waitpanel")
           .task(id: index) {
               while !Task.isCancelled {

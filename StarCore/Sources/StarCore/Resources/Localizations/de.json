@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "Wie viele zusätzliche ffmpeg-Prozesse der Reihenfolge-Extraktion vorauseilen dürfen, bei einem Video, das jedes Bild schnell liefern kann (Standard 1).",
   "cli.help.extraction_long_gop_jump_workers": "Dasselbe für H.264, H.265 und ähnliche Videos, bei denen nur ein vom Benutzer angefordertes Bild einen startet (Standard 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background und --extraction-*-workers gelten nur, wenn die Eingabe eine Videodatei ist.",
-  "cli.waited_for_frames": "Die Videoextraktion dauerte {0}; der Lauf war {1} nach der Extraktion des letzten Bildes beendet."
+  "cli.waited_for_frames": "Die Videoextraktion dauerte {0}; der Lauf war {1} nach der Extraktion des letzten Bildes beendet.",
+  "ui.processing_step_extracting_video": "Videobilder extrahieren"
 }

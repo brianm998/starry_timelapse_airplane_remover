@@ -1141,5 +1141,6 @@
   "cli.help.extraction_jump_workers": "عدد عمليات ffmpeg الإضافية التي يمكنها استخراج الإطارات قبل الاستخراج بالترتيب، في فيديو يعطي أي إطار بسرعة (الافتراضي 1).",
   "cli.help.extraction_long_gop_jump_workers": "الأمر نفسه لفيديوهات H.264 وH.265 وما شابهها، حيث لا يبدأ واحدة إلا إطار يطلبه المستخدم (الافتراضي 1).",
   "cli.errors.extraction_option_needs_video": "لا تنطبق --tiff-compression و--extract-in-background و--extraction-*-workers إلا عندما يكون الإدخال ملف فيديو.",
-  "cli.waited_for_frames": "استغرق استخراج الفيديو {0}؛ وانتهى التشغيل بعد {1} من استخراج الإطار الأخير."
+  "cli.waited_for_frames": "استغرق استخراج الفيديو {0}؛ وانتهى التشغيل بعد {1} من استخراج الإطار الأخير.",
+  "ui.processing_step_extracting_video": "استخراج إطارات الفيديو"
 }
