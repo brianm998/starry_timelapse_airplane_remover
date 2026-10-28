@@ -63,7 +63,7 @@ class DesktopFeatureRunner {
         StepAction.CLEAN_SELECTIVE to { clean = "selective" },
         StepAction.CLEAN_AUTO_SELECTIVE to { clean = "autoSelective" },
         StepAction.OPEN_SEQUENCE to ::openSequence,
-        StepAction.IMPORT_VIDEO to ::importVideo,
+        StepAction.IMPORT_VIDEO to { t -> importVideo(t) },
         StepAction.IMPORT_VIDEO_BACKGROUND to { t -> importVideo(t, inBackground = true) },
         StepAction.PROCESS_EVERY_FRAME to ::processEveryFrame,
         StepAction.RENDER_OUTPUT_VIDEO to ::renderOutputVideo,
