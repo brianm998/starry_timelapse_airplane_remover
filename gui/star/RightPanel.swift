@@ -26,6 +26,7 @@ struct RightPanel: View {
     // which sections are open; all start open.  Kept here rather than in the
     // view model: this view stays alive while the panel is hidden, so it survives that
     @State private var expandedSections = Set(RightPanelSectionKind.allCases)
+    @State private var showingChangeMode = false
 
     private func isExpanded(_ kind: RightPanelSectionKind) -> Binding<Bool> {
         Binding(
@@ -472,68 +473,153 @@ struct RightPanel: View {
     }
 
     var pixelReplacementModeView: some View {
-        @Bindable var viewModel = viewModel
-        return VStack(alignment: .leading) {
-            if viewModel.currentFrameHasOverriddenCleanMethod {
-                Text(localized("ui.custom"))
-                  .foregroundColor(.white)
-            } else {
-                Text(localized("ui.default"))
-                  .foregroundColor(.white)
+        let method = viewModel.getCleanMethod(forFrame: viewModel.currentIndex)
+        let name = method.frameModeName
+        let text = viewModel.currentFrameHasOverriddenCleanMethod
+          ? localized("ui.processing_mode_current_custom", name)
+          : localized("ui.processing_mode_current_default", name)
+        return HStack {
+            Text(text)
+              .foregroundColor(.white)
+            Spacer(minLength: 8)
+            Button(localized("ui.change_mode")) {
+                showingChangeMode = true
             }
-            Picker(localized("ui.clean"),
-                   selection: $viewModel.currentFrameHighLevelCleanMethod)
-            {
+              .help(localized("ui.clean_method_help"))
+        }
+          .sheet(isPresented: $showingChangeMode) {
+              ChangeProcessingModeView()
+          }
+    }
+}
+
+extension CleanMethod {
+    /// The name of this mode as the change-mode dialog and the panel show it.
+    var frameModeName: String {
+        switch self {
+        case .automatic(let usesOutliers):
+            localized(usesOutliers ? "ui.frame_mode_auto_selective" : "ui.frame_mode_automatic")
+        case .selective:
+            localized("ui.frame_mode_selective")
+        }
+    }
+
+    var frameModeDescription: String {
+        switch self {
+        case .automatic(let usesOutliers):
+            localized(usesOutliers ? "ui.frame_mode_desc_auto_selective" : "ui.frame_mode_desc_automatic")
+        case .selective:
+            localized("ui.frame_mode_desc_selective")
+        }
+    }
+}
+
+/// Changes the current frame's processing mode.  The two choices are held here and only
+/// reach the frame when OK is pressed; Cancel leaves the frame as it was.
+struct ChangeProcessingModeView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var clean: HighLevelCleanMethod = .automatic
+    @State private var autoSelect: AutoPreservationMode = .no
+    @State private var loaded = false
+
+    private var currentMethod: CleanMethod {
+        viewModel.getCleanMethod(forFrame: viewModel.currentIndex)
+    }
+
+    private var newMethod: CleanMethod {
+        CleanMethod(highLevelCleanMethod: clean, autoPreservationMode: autoSelect)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(localized("ui.change_mode_title"))
+              .font(.title)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localized("ui.processing_mode_current", currentMethod.frameModeName))
+                  .font(.headline)
+                Text(currentMethod.frameModeDescription)
+                  .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            Picker(localized("ui.clean"), selection: $clean) {
                 ForEach(HighLevelCleanMethod.allCases, id: \.id) { value in
                     HStack {
                         switch value {
-                        case .automatic:
-                            AutoIcon()
-                              .foregroundColor(.white)
-                            Text(localized("ui.automatic"))
-                              .foregroundColor(.white)
-                            
-                        case .selective:
-                            SelectiveIcon()
-                              .foregroundColor(.white)
-                            Text(localized("ui.selective"))
-                              .foregroundColor(.white)
+                        case .automatic: AutoIcon()
+                        case .selective: SelectiveIcon()
                         }
+                        Text(localized(value == .automatic ? "ui.automatic" : "ui.selective"))
                     }
                 }
             }
-              .foregroundColor(.white)
               .pickerStyle(.inline)
               .help(localized("ui.clean_method_help"))
 
-//            Text(AutoPreservationMode.topTitle)
-//              .foregroundColor(.white)
-            Picker(localized("ui.auto_select"),
-                   selection: $viewModel.currentFrameAutoPreservationMode)
-            {
+            Picker(localized("ui.auto_select"), selection: $autoSelect) {
                 ForEach(AutoPreservationMode.allCases, id: \.id) { value in
                     HStack {
                         switch value {
-                        case .yes:
-                            AutoSelectiveIcon()
-                              .foregroundColor(.white)
-                        case .no:
-                            AutoIcon()
-                              .foregroundColor(.white)
+                        case .yes: AutoSelectiveIcon()
+                        case .no: AutoIcon()
                         }
                         Text(value.titleText)
-                          .foregroundColor(.white)
                     }
                 }
             }
-              .foregroundColor(.white)
               .pickerStyle(.inline)
-              .disabled(viewModel.currentFrameHighLevelCleanMethod != .automatic)
+              .disabled(clean != .automatic)
               .help(localized("ui.auto_select_help"))
 
+            Group {
+                if newMethod == currentMethod {
+                    Text(localized("ui.change_mode_none"))
+                      .foregroundColor(.secondary)
+                } else {
+                    Text(localized("ui.change_mode_summary",
+                                   currentMethod.frameModeName,
+                                   newMethod.frameModeName,
+                                   newMethod.frameModeDescription))
+                }
+            }
+              .fixedSize(horizontal: false, vertical: true)
 
+            HStack {
+                Button(localized("ui.cancel")) {
+                    dismiss()
+                }
+                  .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button(localized("ui.ok")) {
+                    viewModel.applyCleanMethodToCurrentFrame(newMethod)
+                    dismiss()
+                }
+                  .keyboardShortcut(.defaultAction)
+                  .buttonStyle(.borderedProminent)
+                  .tint(.blue)
+                  .disabled(newMethod == currentMethod)
+            }
         }
-          .fixedSize(horizontal: true, vertical: false)
+          .padding(24)
+          .frame(width: 460)
+          .onAppear {
+              guard !loaded else { return }
+              loaded = true
+              switch currentMethod {
+              case .automatic(let usesOutliers):
+                  clean = .automatic
+                  autoSelect = usesOutliers ? .yes : .no
+              case .selective:
+                  clean = .selective
+                  autoSelect = .no
+              }
+          }
     }
 }
 

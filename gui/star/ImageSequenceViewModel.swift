@@ -3583,6 +3583,22 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    /// Gives the current frame a new clean method in one step, setting the two published
+    /// choices without their didSets so no intermediate mode is ever applied to the frame.
+    func applyCleanMethodToCurrentFrame(_ method: CleanMethod) {
+        switch method {
+        case .automatic(let useOutliers):
+            self._currentFrameHighLevelCleanMethod = .automatic
+            self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+        case .selective:
+            self._currentFrameHighLevelCleanMethod = .selective
+            self._currentFrameAutoPreservationMode = .no
+        }
+        if getCleanMethod(forFrame: currentIndex) != method {
+            self.set(cleanMethod: method, forFrame: currentIndex)
+        }
+    }
+
     // update the CleanMethod for the current frame
     // from the two vars above
     private func updateCleanMethod() {
