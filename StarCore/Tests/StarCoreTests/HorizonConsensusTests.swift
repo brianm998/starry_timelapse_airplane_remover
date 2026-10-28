@@ -194,6 +194,40 @@ final class HorizonConsensusTests: XCTestCase {
 
     // MARK: - end to end on a synthetic pan
 
+    /// A frame's line built on its own from a `Prepared` — what each frame's op does — is the
+    /// line the whole sequence's run gives it, whichever other frames are being written.  So
+    /// a frame can be written, and merged, before the rest of the sequence has its lines.
+    func testAFrameBuiltOnItsOwnIsTheLineTheWholeRunGivesIt() throws {
+        let pan = SyntheticPan()
+        var parameters = HorizonConsensus.Parameters()
+        parameters.gridWidth = pan.gridWidth
+        parameters.focalLengthCandidates = [0.61, 0.70, 0.81]
+        // ±4 rather than ±16: each frame's unsmoothed line costs a whole consensus, built
+        // serially here, and the smoothing reads its neighbours the same way at any radius
+        parameters.temporalSmoothingRadius = 4
+        let lines = pan.detectedLines(cloudy: 120...200)
+        let records = pan.storedRecords()
+        // a cloudy frame and a clear one, the first of two adjacent targets
+        let targets = [160, 161, 260]
+        let whole = try XCTUnwrap(HorizonConsensus.run(
+          lines: lines, similarityRecords: records, targets: targets,
+          width: pan.width, height: pan.height, voterOrigin: 0, parameters: parameters))
+        let prepared = try XCTUnwrap(HorizonConsensus.prepare(
+          lines: lines, similarityRecords: records, targets: targets,
+          width: pan.width, height: pan.height, voterOrigin: 0, parameters: parameters))
+        XCTAssertEqual(prepared.calibration, whole.calibration)
+
+        for target in targets {
+            var unsmoothed: [Int: [Float]] = [:]
+            for source in prepared.smoothingSources(of: target) {
+                unsmoothed[source] = prepared.unsmoothed(source)?.line
+            }
+            XCTAssertEqual(unsmoothed.count, 2 * parameters.temporalSmoothingRadius + 1)
+            let alone = try XCTUnwrap(prepared.smoothed(target, unsmoothed: unsmoothed))
+            XCTAssertEqual(alone, whole.lines[target], "frame \(target)")
+        }
+    }
+
     /// A wide-angle pan across a ridge, with a cloud bank that the per-frame detection reads
     /// as ground for eighty frames.  The focal length is found, and the cloudy frames get the
     /// ridge back.
@@ -514,16 +548,29 @@ final class HorizonConsensusTests: XCTestCase {
         parameters.gridWidth = pan.gridWidth
         parameters.focalLengthCandidates = [0.61, 0.70, 0.81]
         let targets = [8, 18, 28]
-        let op = HorizonConsensusOp(frames: h.frames, targets: targets,
-                                    configManager: h.configManager, rawImageBytes: 0,
-                                    parameters: parameters) { error in
+        let ops = HorizonConsensusOp.ops(frames: h.frames, targets: targets,
+                                         configManager: h.configManager, rawImageBytes: 0,
+                                         parameters: parameters) { error in
             XCTFail("the op reported \(error)")
         }
-        try await op.run()
-
-        // hoisted so the closure captures the manager rather than the harness
+        // one op per frame, so the step counts frames, sharing one build of the sequence
+        XCTAssertEqual(ops.map(\.frame.frameIndex), targets)
+        XCTAssertTrue(ops.allSatisfy { $0.build === ops[0].build && $0.build != nil })
+        // Each frame's line is written by its own op, before the next one has run: what a
+        // frame's merge waits on.
         let manager = h.configManager
         let config = await MainActor.run { manager.config() }
+        for op in ops {
+            try await op.run()
+            XCTAssertTrue(HorizonConsensusStore.exists(frameIndex: op.frame.frameIndex,
+                                                       config: config))
+            for later in ops where later.frame.frameIndex > op.frame.frameIndex {
+                XCTAssertFalse(HorizonConsensusStore.exists(frameIndex: later.frame.frameIndex,
+                                                            config: config))
+            }
+        }
+
+
         for frame in targets {
             let record = try XCTUnwrap(HorizonConsensusStore.read(frameIndex: frame,
                                                                   width: pan.width,
@@ -539,7 +586,7 @@ final class HorizonConsensusTests: XCTestCase {
                         atPath: HorizonConsensusStore.calibrationPath(config)))
 
         // each line is also drawn as the frame's horizon consensus image, for its view mode
-        XCTAssertEqual(op.type, .horizonConsensus, "a step of its own")
+        XCTAssertTrue(ops.allSatisfy { $0.type == .horizonConsensus }, "a step of its own")
         for frame in targets {
             let record = try XCTUnwrap(HorizonConsensusStore.read(frameIndex: frame,
                                                                   width: pan.width,
@@ -578,11 +625,13 @@ final class HorizonConsensusTests: XCTestCase {
         let accessor = h.frames[0].imageAccessor
         XCTAssertFalse(accessor.imageExists(frameIndex: 0, ofType: .consensusHorizon, atSize: .original))
 
-        let op = HorizonConsensusOp(frames: h.frames, targets: [], imageTargets: [0],
-                                    configManager: h.configManager, rawImageBytes: 0) { error in
+        let ops = HorizonConsensusOp.ops(frames: h.frames, targets: [], imageTargets: [0],
+                                         configManager: h.configManager, rawImageBytes: 0) { error in
             XCTFail("the op reported \(error)")
         }
-        try await op.run()
+        XCTAssertEqual(ops.count, 1)
+        XCTAssertNil(ops.first?.build, "nothing to build, only to draw")
+        for op in ops { try await op.run() }
 
         let loaded = try await accessor.load(frameIndex: 0, type: .consensusHorizon,
                                              atSize: .original)

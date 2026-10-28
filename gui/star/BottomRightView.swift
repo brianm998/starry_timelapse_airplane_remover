@@ -229,7 +229,7 @@ struct BottomRightView: View {
                  */
                 
                 VStack {
-                    if let _ = frameView.outlierViews {
+                    if let _ = frameView.outlierViews, frameView.cleanMethod.usesOutliers {
                         
                         if let numPositive = frameView.frameObserver.numberOfPositiveOutliers {
                             Text(localized("ui.n_will_remove", numPositive))
