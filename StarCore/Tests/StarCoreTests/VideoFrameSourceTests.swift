@@ -296,8 +296,8 @@ final class VideoFrameSourceTests: XCTestCase {
         let video = try h264("replace", frames: 480, size: "1280x720")
         let source = try await VideoFrameSource.make(videoPath: video, settings: .default)
         source.prioritize([470], reason: .userViewing)
-        try await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertTrue(source.isBeingJumpedTo(470))
+        let started = await waitUntil(10) { source.isBeingJumpedTo(470) }
+        XCTAssertTrue(started)
         try await Task.sleep(nanoseconds: 200_000_000)
         source.prioritize([300], reason: .userViewing)
         let moved = await waitUntil(10) { source.isBeingJumpedTo(300) || source.isAvailable(300) }
