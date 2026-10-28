@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Wyrównuje film na twoich klatkach w pełnym rozmiarze. Najostrzejszy wynik, najdłuższy czas i największe obciążenie komputera.",
   "ui.preset_fastest": "Najszybsze",
   "ui.preset_fastest_blurb": "Wyrównuje film na kopiach o połowie rozmiaru. Skraca najwolniejszy etap do jednej czwartej i jest znacznie lżejsze dla komputera. Drobne szczegóły mogą wyglądać nieco miękko.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "błąd przy tworzeniu podglądu klatki {0}: {1}",
   "ui.preview_first": "Najpierw podgląd",
   "ui.process": "Przetwórz",

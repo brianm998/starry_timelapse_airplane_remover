@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Alinea el vídeo a partir de tus fotogramas a tamaño completo. El resultado más nítido, el más lento de terminar y el más exigente con tu ordenador.",
   "ui.preset_fastest": "Más rápido",
   "ui.preset_fastest_blurb": "Alinea el vídeo a partir de copias a mitad de tamaño. Reduce el paso más lento a la cuarta parte y es mucho más suave con tu ordenador. El detalle fino puede acabar viéndose algo blando.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "error al crear la vista previa del fotograma {0}: {1}",
   "ui.preview_first": "Vista previa primero",
   "ui.process": "Procesar",

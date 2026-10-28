@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -106,10 +107,9 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                     )
                 }
                 Box(Modifier.weight(1f))
-                HoverTip(localized("ui.keep_processing_and_go_back_to_the_frames")) {
-                    Button(onClick = svm::dismissProcessingModal, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
-                        Text(localized("ui.dismiss"))
-                    }
+                Text(localized("ui.preview_while_processing_help"), color = StarColors.white.copy(alpha = 0.7f), fontSize = 11.sp, modifier = Modifier.widthIn(max = 320.dp))
+                Button(onClick = svm::dismissProcessingModal, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
+                    Text(localized("ui.preview"))
                 }
             }
         }

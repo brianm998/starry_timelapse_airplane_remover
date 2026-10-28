@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Совмещает видео по вашим кадрам в полном размере. Самый резкий результат, самый долгий и самый тяжёлый для компьютера.",
   "ui.preset_fastest": "Самый быстрый",
   "ui.preset_fastest_blurb": "Совмещает видео по копиям половинного размера. Сокращает самый медленный этап вчетверо и куда мягче к компьютеру. Мелкие детали могут выглядеть слегка мягкими.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "ошибка создания предпросмотра кадра {0}: {1}",
   "ui.preview_first": "Сначала предпросмотр",
   "ui.process": "Обработать",

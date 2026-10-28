@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "จัดวิดีโอจากเฟรมขนาดเต็มของคุณ ผลลัพธ์คมที่สุด ใช้เวลานานที่สุด และหนักกับเครื่องมากที่สุด",
   "ui.preset_fastest": "เร็วที่สุด",
   "ui.preset_fastest_blurb": "จัดวิดีโอจากสำเนาครึ่งขนาด ลดขั้นตอนที่ช้าที่สุดลงเหลือหนึ่งในสี่และเบากับเครื่องมาก รายละเอียดเล็ก ๆ อาจดูนุ่มขึ้นเล็กน้อย",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "สร้างภาพตัวอย่างของเฟรม {0} ผิดพลาด: {1}",
   "ui.preview_first": "ดูตัวอย่างก่อน",
   "ui.process": "ประมวลผล",

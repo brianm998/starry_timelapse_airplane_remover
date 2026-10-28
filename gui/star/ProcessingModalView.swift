@@ -262,9 +262,17 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
 
             Spacer()
 
-            Button(localized("ui.dismiss"), action: dismiss)
-              .keyboardShortcut(.defaultAction)
-              .help(localized("ui.keep_processing_and_go_back_to_the_frames"))
+            VStack(alignment: .trailing, spacing: 4) {
+                Button(localized("ui.preview"), action: dismiss)
+                  .keyboardShortcut(.defaultAction)
+                  .help(localized("ui.preview_while_processing_help"))
+                Text(localized("ui.preview_while_processing_help"))
+                  .font(.caption)
+                  .foregroundColor(.secondary)
+                  .multilineTextAlignment(.trailing)
+                  .fixedSize(horizontal: false, vertical: true)
+                  .frame(maxWidth: 320, alignment: .trailing)
+            }
         }
           .padding(20)
     }

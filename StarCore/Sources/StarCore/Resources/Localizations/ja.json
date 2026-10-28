@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "フレームを原寸のまま使って動画を重ね合わせます。最もシャープな結果ですが、最も時間がかかり、コンピュータへの負荷も最大です。",
   "ui.preset_fastest": "最速",
   "ui.preset_fastest_blurb": "半分サイズのコピーから動画を重ね合わせます。最も遅い工程を 4 分の 1 に短縮し、コンピュータへの負荷もはるかに軽くなります。細部はやや甘く見えることがあります。",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "フレーム {0} のプレビュー作成エラー: {1}",
   "ui.preview_first": "先にプレビュー",
   "ui.process": "処理",

@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Lijnt de video uit vanaf je beelden op volledige grootte. Het scherpste resultaat, het traagst klaar en het zwaarst voor je computer.",
   "ui.preset_fastest": "Snelst",
   "ui.preset_fastest_blurb": "Lijnt de video uit vanaf kopieën van halve grootte. Brengt de traagste stap terug tot een kwart en is veel lichter voor je computer. Fijne details kunnen wat zacht ogen.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "fout bij het maken van de voorvertoning van beeld {0}: {1}",
   "ui.preview_first": "Eerst voorvertonen",
   "ui.process": "Verwerk",

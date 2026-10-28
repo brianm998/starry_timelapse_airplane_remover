@@ -239,7 +239,7 @@ struct LeftPanel: View {
                 }
             } label: {
                 Text(role == .status
-                       ? localized("ui.status")
+                       ? localized("ui.show_progress")
                        : localized("ui.process_frames"))
             }
               .disabled(processButtonDisabled)

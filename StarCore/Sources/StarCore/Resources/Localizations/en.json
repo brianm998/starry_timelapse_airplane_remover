@@ -692,6 +692,8 @@
   "ui.preset_best_quality_blurb": "Lines the video up from your frames at their full size.  The sharpest result, the slowest to finish, and the hardest on your computer.",
   "ui.preset_fastest": "Fastest",
   "ui.preset_fastest_blurb": "Lines the video up from half size copies.  Cuts the slowest step to a quarter and is much easier on your computer.  Fine detail can end up looking a little soft.",
+  "ui.preview": "Preview",
+  "ui.preview_while_processing_help": "Processing keeps going in the background. Preview lets you look at the finished frames while it runs; use Show Progress on the left to come back here.",
   "ui.preview_creation_error": "frame {0} error preview creation: {1}",
   "ui.preview_first": "Preview first",
   "ui.process": "Process",
