@@ -247,23 +247,27 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
     ) { vm.runHorizonRefinement() }
 
     val activeMethod = info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE
-    val cmLabels = CLEAN_METHODS.toMap()
+    // The mode is changed from a dialog that only applies it on OK (macOS ChangeProcessingModeView), not from toggles in the panel.
+    var showChangeMode by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val modeName = localized(com.star.desktop.ui.dialogs.frameModeNameKey(activeMethod))
     HoverTip(localized("ui.clean_method_help")) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(localized("ui.clean_method"), color = StarColors.textPrimary, fontSize = 11.sp)
-            // Whether the method is this frame's own or the sequence's (macOS Custom / Default).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                localized(if (info?.cleanMethodOverridden == true) "ui.custom" else "ui.default"),
-                color = StarColors.white, fontSize = 11.sp,
+                localized(if (info?.cleanMethodOverridden == true) "ui.processing_mode_current_custom" else "ui.processing_mode_current_default", modeName),
+                color = StarColors.white, fontSize = 11.sp, modifier = Modifier.weight(1f),
             )
-            com.star.desktop.ui.components.VerticalStarPicker(
-                options = CLEAN_METHODS.map { it.first },
-                selected = activeMethod,
-                label = { cmLabels[it]?.let { key -> localized(key) } ?: "" },
-                onSelect = { fvm.setCleanMethod(it) },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            androidx.compose.material3.OutlinedButton(
+                onClick = { showChangeMode = true },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) { Text(localized("ui.change_mode"), fontSize = 11.sp) }
         }
+    }
+    if (showChangeMode) {
+        com.star.desktop.ui.dialogs.ChangeProcessingModeDialog(
+            current = activeMethod,
+            onCancel = { showChangeMode = false },
+            onConfirm = { fvm.setCleanMethod(it); showChangeMode = false },
+        )
     }
     // How many neighbours this frame is merged with for the horizon (a fixed camera only), the sequence's number until the frame is
     // given its own. macOS dropped the matching "align with N neighbor frames" row, so it is not here either; the daemon still
@@ -388,13 +392,6 @@ private fun NeighborCountEditor(
         }
     }
 }
-
-/** Per-frame clean methods (proto `CleanMethod`) with the catalogue key of the label, as in the macOS picker. */
-private val CLEAN_METHODS: List<Pair<CleanMethod, String>> = listOf(
-    CleanMethod.CLEAN_AUTOMATIC to "ui.automatic",
-    CleanMethod.CLEAN_AUTOMATIC_TRUE to "ui.auto_selective",
-    CleanMethod.CLEAN_SELECTIVE to "ui.selective",
-)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
