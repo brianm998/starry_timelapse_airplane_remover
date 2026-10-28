@@ -19,6 +19,9 @@ data class StepRow(val type: String, val queued: Int, val running: Int, val done
     /** False for a step with nothing to it at all: no operations, and nothing already on disk that they would have produced. */
     val hasWork: Boolean get() = total > 0
 
+    /** Something to count and nothing left queued or running; a step with no operations yet is still being planned, which is not done. */
+    val isDone: Boolean get() = hasWork && queued == 0 && running == 0
+
     val doneFraction: Float get() = fraction(completed)
     val runningFraction: Float get() = fraction(running)
 

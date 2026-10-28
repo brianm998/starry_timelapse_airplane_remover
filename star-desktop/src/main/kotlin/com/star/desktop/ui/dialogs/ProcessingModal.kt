@@ -49,7 +49,8 @@ import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 
 private val NAME_WIDTH = 180.dp
-private val COUNT_WIDTH = 140.dp
+private val NUMBER_WIDTH = 46.dp
+private val COUNT_WIDTH = NUMBER_WIDTH * 3
 
 /**
  * Processing progress screen (macOS `ProcessingModalView`): what each step of the run is doing, in one bar each (done, running, still
@@ -120,7 +121,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
 @Composable
 internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.star.proto.FrameExtraction? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(localized("ui.processing_steps"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Text(localized("ui.steps"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         // Extracting the video's frames comes first, above the horizon, for frames that are being extracted from a video.
         if (extraction != null && extraction.active) ExtractionRowView(extraction)
         when {
@@ -128,7 +129,37 @@ internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.
             !hasReport -> Text("…", color = StarColors.textSecondary, fontSize = 12.sp)
             // Every step turned out to have nothing left to do (a re-run over a sequence that is already finished).
             rows.isEmpty() -> Text(localized("ui.nothing_to_do"), color = StarColors.textSecondary, fontSize = 12.sp)
-            else -> rows.forEach { StepRowView(it) }
+            else -> {
+                // Done above, Processing beneath it, each heading only while it has rows: a finishing step moves from one list to the other.
+                val (done, processing) = rows.partition { it.isDone }
+                if (done.isNotEmpty()) {
+                    GroupHeader(localized("ui.done"), showsCounts = true)
+                    done.forEach { StepRowView(it) }
+                }
+                if (processing.isNotEmpty()) {
+                    GroupHeader(localized("ui.processing"), showsCounts = done.isEmpty())
+                    processing.forEach { StepRowView(it) }
+                }
+            }
+        }
+    }
+}
+
+/** A sub-label over a group of rows; the first one on screen also names the three number columns, which line up with every row below. */
+@Composable
+private fun GroupHeader(title: String, showsCounts: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(title, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+        if (showsCounts) CountColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"), StarColors.textSecondary)
+    }
+}
+
+/** The queued, running and done columns. */
+@Composable
+private fun CountColumns(queued: String, running: String, done: String, color: Color) {
+    Row {
+        for (text in listOf(queued, running, done)) {
+            Text(text, color = color, fontSize = 12.sp, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(NUMBER_WIDTH))
         }
     }
 }
@@ -160,11 +191,8 @@ private fun StepRowView(step: StepRow) {
             Text(step.name, color = if (step.hasWork) StarColors.white else StarColors.textSecondary, fontSize = 13.sp, maxLines = 2, modifier = Modifier.width(NAME_WIDTH))
             StepBar(step, Modifier.weight(1f))
             // A step with no operations is only on screen while the plan is still being worked out, so this says "not known yet".
-            Text(
-                if (step.hasWork) localized("ui.n_of_m_complete", step.completed, step.total) else "—",
-                color = if (step.hasWork) StarColors.white else StarColors.textSecondary, fontSize = 12.sp, maxLines = 2,
-                textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(COUNT_WIDTH),
-            )
+            if (step.hasWork) CountColumns("${step.queued}", "${step.running}", "${step.completed}", StarColors.white)
+            else Text("—", color = StarColors.textSecondary, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(COUNT_WIDTH))
         }
     }
 }
