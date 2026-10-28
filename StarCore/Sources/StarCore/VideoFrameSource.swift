@@ -612,11 +612,18 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
             if !stillWanted { stop(jump) }
         }
 
-        var candidates = requests
-            .filter { accessKind == .seekable || $0.value.isUserRequest }
-            .filter { !failedJumpFrames.contains($0.key) }
-            .map { (index: $0.key, priority: $0.value) }
-            .sorted { $0.priority != $1.priority ? $0.priority > $1.priority : $0.index < $1.index }
+        // Built in plain steps: the windows compiler gives up type-checking this as one chained expression.
+        let seekable = accessKind == .seekable
+        var candidates: [(index: Int, priority: FramePriorityReason)] = []
+        for (index, priority) in requests {
+            if !seekable && !priority.isUserRequest { continue }
+            if failedJumpFrames.contains(index) { continue }
+            candidates.append((index: index, priority: priority))
+        }
+        candidates.sort { (a: (index: Int, priority: FramePriorityReason), b: (index: Int, priority: FramePriorityReason)) -> Bool in
+            if a.priority != b.priority { return a.priority > b.priority }
+            return a.index < b.index
+        }
 
         while let candidate = candidates.first {
             candidates.removeFirst()
