@@ -68,21 +68,24 @@ struct ProcessingModalView: View {
     /// updating it does not ask for another pass.
     @State private var rates = StepRateTracker()
 
-    /// What star is doing now and why, with a time estimate when there is a rate to give one.
+    /// What star is doing now, across every running step.
     private func headline(for steps: [ProcessingStepProgress]) -> String? {
-        rates.observe(steps)
         return ProcessingHeadline.text(
           steps: steps,
           extraction: viewModel.extractionProgress,
           hasPlan: frameGraphViewModel.graphBuildsCompleted > viewModel.processingBuildCount,
           framesComplete: viewModel.count(for: .complete),
-          frameCount: viewModel.frames.count,
-          secondsRemaining: { rates.secondsRemaining(for: $0) }
+          frameCount: viewModel.frames.count
         )
     }
 
     var body: some View {
         let steps = self.steps
+        // Feed the rates before anything asks them for an estimate.
+        let _ = rates.observe(steps)
+        let estimates = Dictionary(uniqueKeysWithValues: steps.compactMap { step in
+            rates.secondsRemaining(for: step).map { (step.type, $0) }
+        })
         ProcessingModalPanel(
           framesComplete: viewModel.count(for: .complete),
           frameCount: viewModel.frames.count,
@@ -90,6 +93,8 @@ struct ProcessingModalView: View {
           extraction: viewModel.extractionProgress,
           statusText: viewModel.processingStatusText ?? viewModel.waitingForFramesText,
           headline: headline(for: steps),
+          overall: ProcessingHeadline.overallText(steps: steps, secondsRemaining: { rates.secondsRemaining(for: $0) }),
+          stepEstimates: estimates,
           showAlignment: showAlignment,
           cameraMoving: viewModel.cameraMotion == .moving,
           openAlignmentWindow: { openWindow(id: StarApp.alignmentWindowName) },
@@ -170,6 +175,12 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     /// can be given; drawn directly under the frames-complete line.
     var headline: String? = nil
 
+    /// How long the whole run has left, shown first under the title.
+    var overall: String? = nil
+
+    /// Seconds left for each step that has a measured rate, shown beside its bar.
+    var stepEstimates: [OperationType: TimeInterval] = [:]
+
     /// Whether the alignment charts are drawn.  Off is what the toggle in the alignment
     /// heading gives, and it takes the tallest part of the panel with it.
     @Binding var showAlignment: Bool
@@ -238,7 +249,7 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ProcessingStepsView(steps: steps, extraction: extraction)
+            ProcessingStepsView(steps: steps, extraction: extraction, estimates: stepEstimates)
             Divider()
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -289,6 +300,12 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
                                              framesComplete, frameCount))
                   .font(.caption)
                   .foregroundColor(.gray)
+                if let overall {
+                    Text(overall)
+                      .font(.caption.weight(.semibold))
+                      .foregroundColor(.white)
+                      .fixedSize(horizontal: false, vertical: true)
+                }
                 if let headline {
                     Text(headline)
                       .font(.caption)
@@ -338,6 +355,8 @@ struct ProcessingStepsView: View {
     let steps: [ProcessingStepProgress]
     /// The video extraction, shown as the first row, above the horizon; nil for frames that are not being extracted from a video.
     var extraction: FrameExtractionProgress? = nil
+    /// Seconds left per step, for the column beside the bars.
+    var estimates: [OperationType: TimeInterval] = [:]
 
     private let doneColor: Color = .green
     private let runningColor: Color = .yellow
@@ -351,6 +370,22 @@ struct ProcessingStepsView: View {
     private let countWidth: CGFloat = 138
     /// One of the three queued / running / done number columns.
     private let numberWidth: CGFloat = 46
+    /// The time-left column between each bar and its counts.
+    private let etaWidth: CGFloat = 56
+
+    private func etaText(_ seconds: TimeInterval?) -> String {
+        guard let seconds, seconds.isFinite else { return "" }
+        return ProcessingHeadline.duration(seconds)
+    }
+
+    private func etaColumn(_ text: String, color: Color = .white) -> some View {
+        Text(text)
+          .font(.caption)
+          .monospacedDigit()
+          .foregroundColor(color)
+          .lineLimit(1)
+          .frame(width: etaWidth, alignment: .trailing)
+    }
 
     /// Steps with something to count and nothing left queued or running.  A step with no
     /// operations yet is still being planned, which is not done.
@@ -408,6 +443,7 @@ struct ProcessingStepsView: View {
               .frame(width: labelWidth, alignment: .leading)
             Spacer()
             if showsCounts {
+                etaColumn(localized("ui.time_left"), color: .gray)
                 countColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"),
                              colors: [.gray, .gray, .gray])
             }
@@ -449,6 +485,7 @@ struct ProcessingStepsView: View {
                   .cornerRadius(4)
             }
               .frame(height: 14)
+            etaColumn(progress.isComplete ? "" : etaText(progress.estimatedSecondsRemaining))
             Text(localized("ui.n_of_m_complete", progress.extracted, progress.total))
               .font(.caption)
               .monospacedDigit()
@@ -474,6 +511,8 @@ struct ProcessingStepsView: View {
               .frame(width: labelWidth, alignment: .leading)
 
             stepBar(step)
+
+            etaColumn(isDone ? "" : etaText(estimates[step.type]))
 
             // A step with no operations is only ever on screen while the plan is still
             // being worked out — once it is, `ProcessingSteps.visible` drops it — so this
