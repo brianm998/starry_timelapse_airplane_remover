@@ -1934,6 +1934,7 @@ public final class ImageSequenceViewModel {
       withNewImageSequence imageSequenceDirname: String,
       and videoInfo: VideoInfo? = nil,
       frameSource: FrameSource? = nil,
+      outputDir: String? = nil,
       closure: @Sendable @escaping (Int, Double) -> Void) async throws
     {
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
@@ -1969,7 +1970,7 @@ public final class ImageSequenceViewModel {
         }
 
         var config = Config(
-          outputPath: inputImageSequencePath,
+          outputPath: outputDir ?? inputImageSequencePath,
           imageSequenceName: inputImageSequenceName,
           imageSequencePath: inputImageSequencePath,
           writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
