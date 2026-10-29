@@ -507,7 +507,7 @@ public final actor FrameGraphBuilder {
         if stale.contains(.output) {
             var deleted = 0
             for frame in frames where range.output.contains(frame.frameIndex) {
-                guard frame.outputFileExistsOnDisk() else { continue }
+                guard frame.mergeOutputExistsOnDisk() else { continue }
                 await frame.deleteMergeOutput()
                 deleted += 1
                 touched.insert(frame.frameIndex)

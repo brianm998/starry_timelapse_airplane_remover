@@ -294,6 +294,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                   atSize: .original)
     }
 
+    /// True when anything `deleteMergeOutput` deletes is on disk: the output image, or any
+    /// of the processed images it is linked from.
+    ///
+    /// Not `outputFileExistsOnDisk`, which is the question for "is this frame done".  The
+    /// output lives in the user's output directory and the processed images in the temp
+    /// one, so deleting the output directory by hand leaves the processed images behind,
+    /// and `finishAuto` links them straight back as the new output.  Asked that way, the
+    /// `output` stage's invalidation passed over every frame of a sequence whose output
+    /// directory was gone, and a reprocess under a new merge put the old merge back.
+    nonisolated public func mergeOutputExistsOnDisk() -> Bool {
+        [FrameViewMode.final, .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed]
+          .contains { imageAccessor.imageExists(frameIndex: frameIndex,
+                                                ofType: $0,
+                                                atSize: .original) }
+    }
+
     // populated by pruning
 
     public func getOutlierGroups() async -> OutlierGroups? { await outlierProcessor.getOutlierGroups() }
@@ -1853,6 +1869,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               as: .autoProcessed,
               atSizes: outputSizes
             )
+            // The frame is as finished as the branch below leaves it.  Without this it
+            // stayed where `MergeOp` found it, so the gui never counted it complete: Render
+            // Video stayed disabled and every Process Frames linked it again.
+            self.set(state: .complete)
             return
         }
 
