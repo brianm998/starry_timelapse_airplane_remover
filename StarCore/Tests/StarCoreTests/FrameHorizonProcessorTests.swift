@@ -189,6 +189,47 @@ final class FrameHorizonProcessorTests: FrameHarnessTestCase {
                        "a moving sequence must not write a sequence-wide reference")
     }
 
+    /// A painted frame's horizon is never written as a mask of its own — detection and the merge both
+    /// return the painting — so asked by file alone it was never done, and every reopen of a finished
+    /// moving sequence put one horizon op per painted frame back on the progress (ten on a sequence with
+    /// ten references).  The survey's predicates count the painting as the work done.
+    func testAPaintedMovingFrameCountsAsHavingItsHorizon() async throws {
+        let h = try await FrameHarness.make(frameCount: 2, width: 64, height: 48, named: "painted-done")
+        harness = h
+        await h.updateConfig { $0.tripodHeadWasMoving = true }
+
+        try await processor(h).saveHorizonReferenceMask(
+          paintedYPerColumn: [Int?](repeating: 12, count: 32),
+          viewWidth: 32, viewHeight: 24)
+        _ = try await h.frame.loadOrCreateHorizonMask()
+
+        let config = await h.configManager.config()
+        XCTAssertFalse(h.frame.horizonMaskExistsOnDisk(),
+                       "precondition: detection returns the painting and writes no mask")
+        XCTAssertTrue(h.frame.horizonDetectionIsDone(config: config))
+        XCTAssertTrue(h.frame.horizonMergeIsDone(config: config))
+        XCTAssertFalse(h.frames[1].horizonDetectionIsDone(config: config),
+                       "the frame that was not painted still has its detection ahead of it")
+        XCTAssertFalse(h.frames[1].horizonMergeIsDone(config: config))
+    }
+
+    /// A fixed camera's painting is the whole sequence's, and the per-frame file beside it only marks
+    /// which frame was painted: it must not stand in for that frame's mask or for the one merge.
+    func testAPaintedStaticFrameDoesNotCountAsHavingItsHorizon() async throws {
+        let h = try await FrameHarness.make(frameCount: 2, width: 64, height: 48, named: "painted-static")
+        harness = h
+        await h.updateConfig { $0.tripodHeadWasMoving = false }
+
+        try await processor(h).saveHorizonReferenceMask(
+          paintedYPerColumn: [Int?](repeating: 12, count: 32),
+          viewWidth: 32, viewHeight: 24)
+
+        let config = await h.configManager.config()
+        XCTAssertTrue(h.frame.horizonReferenceExistsOnDisk(), "precondition: the marker is there")
+        XCTAssertFalse(h.frame.horizonDetectionIsDone(config: config))
+        XCTAssertFalse(h.frame.horizonMergeIsDone(config: config))
+    }
+
     /// The painter leaves gaps where the user did not paint; they are linearly interpolated so the
     /// saved mask has a continuous skyline rather than steps.
     func testGapsBetweenPaintedColumnsAreLinearlyInterpolated() async throws {

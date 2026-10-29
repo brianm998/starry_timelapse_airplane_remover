@@ -1238,7 +1238,7 @@ struct ProcessingSettingsView: View {
 
     /// `Config.cloudAwareMerge`: a second merge aligned to the motion of the clouds, blended in
     /// where it explains the frame better. Off by default; see the property's doc comment for
-    /// what it does, what it costs, and why changing it re-does the alignment stage.
+    /// what it does, what it costs, and why changing it re-does the star aligned merge.
     private var cloudAwareMergeView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(

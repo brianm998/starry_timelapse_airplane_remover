@@ -500,7 +500,7 @@ final class HorizonConsensusTests: XCTestCase {
         progress = await SequenceProgressSurvey.survey(
           frames: h.frames, config: config, homographyDatabase: manager.homographyDatabase)
         XCTAssertTrue(progress.needsRebuild)
-        XCTAssertEqual(progress.staleStages, [.horizonConsensus, .outliers, .output])
+        XCTAssertEqual(progress.staleStages, [.horizonConsensus, .alignedMerge, .outliers, .output])
         XCTAssertFalse(progress.isComplete, "the output frames will be made again")
         XCTAssertEqual(progress.framesComplete, 0)
         XCTAssertFalse(progress.isUntouched, "the horizons are still done")

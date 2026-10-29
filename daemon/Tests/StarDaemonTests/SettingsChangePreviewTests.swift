@@ -86,18 +86,16 @@ final class SettingsChangePreviewTests: XCTestCase {
         XCTAssertFalse(preview.staleStages.contains("horizon"), "upstream of the change is untouched")
     }
 
-    /// The cloud-aware merge changes the star aligned image the alignment stage writes, so turning it on over a sequence that has been
-    /// processed says so (alignment and everything after it is stale), and leaves what is upstream of alignment alone.
-    func testTurningTheCloudAwareMergeOnIsStaleFromAlignmentOn() async throws {
+    /// The cloud-aware merge changes only how the star aligned neighbours are combined, so turning it on over a sequence that has been processed
+    /// says so (the merge and everything after it is stale), and leaves the alignment and the horizon consensus fitted along it alone.
+    func testTurningTheCloudAwareMergeOnIsStaleFromTheMergeOn() async throws {
         let session = try await makeSession()
         await session.setOpened(untouched: false)
         let on = await proposal(of: session) { $0.cloudAwareMerge = true }
 
         let preview = await session.previewConfigChange(on)
 
-        XCTAssertTrue(preview.staleStages.contains("alignment"), "\(preview.staleStages)")
-        XCTAssertTrue(preview.staleStages.contains("output"), "\(preview.staleStages)")
-        XCTAssertFalse(preview.staleStages.contains("keypoints"), "upstream of alignment is untouched: \(preview.staleStages)")
+        XCTAssertEqual(preview.staleStages, ["alignedMerge", "outliers", "output"])
         XCTAssertTrue(preview.contradictsFinishedWork)
     }
 

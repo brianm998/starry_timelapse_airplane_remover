@@ -427,7 +427,7 @@ public final actor FrameGraphBuilder {
             Log.i("deleted \(deleted) stale keypoint file(s) and cleared the keypoint cache")
         }
 
-        // The three stages below are in dependency order, and the order matters to the
+        // The stages below are in dependency order, and the order matters to the
         // frame state as well as to the reading: `invalidateAlignmentIfExists` leaves a
         // frame `.unprocessed`, and the two after it then find nothing left to move.  The
         // state is put back from what is actually on disk at the end, for the frames where
@@ -472,6 +472,20 @@ public final actor FrameGraphBuilder {
             }
             HorizonConsensusStore.deleteCalibration(config: config)
             Log.i("deleted \(deleted) stale horizon consensus line(s)")
+        }
+
+        // The merged images alone: the homographies they were warped by are still good
+        // unless `alignment` is stale too, in which case it has taken these already.
+        if stale.contains(.alignedMerge) {
+            var deleted = 0
+            for frame in frames where range.output.contains(frame.frameIndex) {
+                if frame.discardStarAlignedMerge() {
+                    deleted += 1
+                    touched.insert(frame.frameIndex)
+                }
+            }
+            Log.i("deleted \(deleted) stale star aligned merge(s); they will be merged " +
+                  "again from the stored homographies")
         }
 
         if stale.contains(.outliers) {
@@ -735,11 +749,11 @@ public final actor FrameGraphBuilder {
 
         for frameIndex in range.horizon {
             guard let frame = framesByIndex[frameIndex] else { continue }
-            if frame.horizonMaskExistsOnDisk() { haveHorizon.insert(frameIndex) }
+            if frame.horizonDetectionIsDone(config: config) { haveHorizon.insert(frameIndex) }
         }
         for frameIndex in range.keypoint {
             guard let frame = framesByIndex[frameIndex] else { continue }
-            if frame.mergedHorizonMaskExistsOnDisk() {
+            if frame.horizonMergeIsDone(config: config) {
                 haveMergedHorizon.insert(frameIndex)
             }
             if frame.keypointsExistOnDisk(ofType: .starAligned, config: config) {

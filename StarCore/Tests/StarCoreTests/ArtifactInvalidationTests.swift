@@ -170,6 +170,47 @@ final class ArtifactInvalidationTests: FrameHarnessTestCase {
         XCTAssertEqual(left[.horizon], 3)
     }
 
+    /// A setting read only while the warped neighbours are combined: the star aligned merge
+    /// and what was made from it go, the homographies it was warped by stay, and so does the
+    /// earth aligned merge the setting never reaches.
+    func testTheCloudAwareMergeRedoesTheStarMergeAndKeepsTheHomographies() async throws {
+        let harness = try await makeHarness()
+        try await plantEveryArtifact(in: harness)
+        let database = await harness.configManager.homographyDatabase
+        for frame in harness.frames {
+            for type in [HomographyDatabase.HomographyType.star, .earth] {
+                try await database.write(
+                  frameIndex: frame.frameIndex, type: type,
+                  results: HomographyResultsCodable(for: frame.frameIndex, with: []))
+            }
+        }
+
+        var changed = harness.config
+        changed.cloudAwareMerge = true
+        try await invalidate(harness, builtWith: harness.config, nowUsing: changed)
+
+        let left = present(in: harness)
+        XCTAssertNil(left[.alignment], "the star aligned merge is what the setting changes")
+        XCTAssertNil(left[.outliers])
+        XCTAssertNil(left[.output])
+        XCTAssertEqual(left[.keypoints], 3)
+        XCTAssertEqual(left[.horizon], 3)
+        for frame in harness.frames {
+            XCTAssertFalse(harness.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                             ofType: .subtraction,
+                                                             atSize: .original),
+                           "the subtraction image is made from the star aligned merge")
+            XCTAssertTrue(harness.imageAccessor.imageExists(frameIndex: frame.frameIndex,
+                                                            ofType: .earthAligned,
+                                                            atSize: .original))
+        }
+        let indices = Set(harness.frames.map(\.frameIndex))
+        let star = try await database.storedFrameIndices(type: .star)
+        let earth = try await database.storedFrameIndices(type: .earth)
+        XCTAssertEqual(star, indices, "the homographies are the expensive half, and still good")
+        XCTAssertEqual(earth, indices)
+    }
+
     /// The motivating case, now with the whole chain behind it.
     func testAKeypointSettingRedoesEverythingFromDetectionOnwards() async throws {
         let harness = try await makeHarness()

@@ -251,7 +251,7 @@ message UpdateConfigRequest { string session_id = 1; Config config = 2; }
 // processed frames have different settings" line, and Process Now becoming Update). Compared against the settings the last run began with (the
 // session's snapshot; the config as it stood when this was first asked if none has run).
 message ConfigChangePreview {
-  repeated string stale_stages = 1;           // the cached stages the change would invalidate: horizon, mergedHorizon, keypoints, alignment, outliers, output
+  repeated string stale_stages = 1;           // the cached stages the change would invalidate: horizon, mergedHorizon, keypoints, alignment, horizonConsensus, alignedMerge, outliers, output
   bool contradicts_finished_work = 2;         // some stage is stale AND there is finished work for it to contradict (StarCore SettingsChangeState)
 }
 
@@ -393,7 +393,7 @@ message Config {
   string          image_sequence_dirname                               = 61;
   // Whether the star aligned merge also runs its cloud-aware stage: a second merge aligned to the motion of the clouds, blended in where it
   // explains the frame better, with the stars put back, so fast-moving clouds are not banded and repeated. StarCore Config.cloudAwareMerge, off
-  // unless asked for. Changing it throws away the alignment stage's results for frames already processed (see Sequence.PreviewConfigChange).
+  // unless asked for. Changing it redoes the star aligned merge of frames already processed, keeping their alignment (see Sequence.PreviewConfigChange).
   optional bool   cloud_aware_merge                                    = 62;
 }
 
