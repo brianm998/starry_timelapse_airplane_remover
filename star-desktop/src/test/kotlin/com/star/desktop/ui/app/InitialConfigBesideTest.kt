@@ -34,4 +34,10 @@ class InitialConfigBesideTest {
     @Test fun withNoChoiceTheDefaultIsLeftAlone() {
         assertEquals(com.star.proto.DetectionType.DETECTION_MILD, initialConfigBeside("/a/b/seq").detectionType)
     }
+
+    /** A user short of disk picks another volume, and the output (and with it the working files and a video's frames) goes there instead. */
+    @Test fun aChosenFolderReplacesBesideTheSource() {
+        assertEquals("/Volumes/big/work", initialConfigBeside("/a/b/seq", outputDir = "/Volumes/big/work").outputPath)
+        assertEquals("/Volumes/big/work", initialConfigBeside("/a/b/clip.mov", outputDir = "/Volumes/big/work").outputPath)
+    }
 }

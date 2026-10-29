@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "To samo dla H.264, H.265 i podobnych wideo, gdzie uruchamia je tylko klatka zażądana przez użytkownika (domyślnie 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background i --extraction-*-workers dotyczą tylko wejścia będącego plikiem wideo.",
   "cli.waited_for_frames": "Wyodrębnianie wideo trwało {0}; przebieg zakończył się {1} po wyodrębnieniu ostatniej klatki.",
-  "ui.processing_step_extracting_video": "Wyodrębnianie klatek wideo"
+  "ui.processing_step_extracting_video": "Wyodrębnianie klatek wideo",
+  "ui.location_title": "Gdzie umieścić pliki robocze",
+  "ui.location_blurb": "Tymczasowe pliki robocze Star, jego wynik i klatki wyodrębnione z wideo mogą zajmować kilkukrotnie więcej miejsca niż same obrazy. Umieść je na woluminie z wystarczającą ilością wolnego miejsca.",
+  "ui.location_choose": "Wybierz…",
+  "ui.location_beside": "Obok źródła",
+  "ui.location_needed": "Potrzebne miejsce: około {0}",
+  "ui.location_needed_video": "Potrzebne miejsce: około {0} ({1} na klatki, {2} na przetwarzanie)",
+  "ui.location_available": "Dostępne na tym woluminie: {0}",
+  "ui.location_unknown_free": "Nie udało się ustalić wolnego miejsca na tym woluminie.",
+  "ui.location_short": "Na tym woluminie nie ma dość miejsca. Wybierz inny folder lub zwolnij {0}.",
+  "ui.sequence_location_title": "Otwórz sekwencję obrazów",
+  "ui.sequence_location_open": "Otwórz"
 }

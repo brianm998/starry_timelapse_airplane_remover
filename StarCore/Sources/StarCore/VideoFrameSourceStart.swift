@@ -5,11 +5,15 @@ extension VideoFrameSource {
 
     /// `<video dir>/<sanitized video name>/`, where a video's frames go (the gui, the daemon and the cli all use it).
     ///
+    /// With `parentFolder` the frames go in `<parentFolder>/<sanitized video name>/` instead, for a user who has pointed the working
+    /// files at another volume.
+    ///
     /// Sanitizes only the new folder's name.  Sanitizing the whole path turned a Windows path like C:\Users\me\Desktop\x.mp4 into the
     /// relative path C__Users_me_Desktop_x, which ffmpeg then failed to write to (EIO, -5).
-    public static func outputFolder(forVideoAt videoPath: String) -> String {
+    public static func outputFolder(forVideoAt videoPath: String, in parentFolder: String? = nil) -> String {
         let url = URL(fileURLWithPath: videoPath)
-        return url.deletingLastPathComponent()
+        let parent = parentFolder.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? url.deletingLastPathComponent()
+        return parent
           .appendingPathComponent(url.deletingPathExtension().lastPathComponent.sanitized)
           .path
     }
@@ -22,9 +26,10 @@ extension VideoFrameSource {
       videoPath: String,
       format: FrameDecodeFormat = .tiff16,
       settings: FrameExtractionSettings = .default,
-      requireExactCount: Bool = true
+      requireExactCount: Bool = true,
+      framesParentFolder: String? = nil
     ) async throws -> VideoFrameSource {
-        let folder = outputFolder(forVideoAt: videoPath)
+        let folder = outputFolder(forVideoAt: videoPath, in: framesParentFolder)
         let fileManager = FileManager.default
         let createdOutputFolder = !fileManager.fileExists(atPath: folder)
 

@@ -381,6 +381,11 @@ final class VideoFrameSourceTests: XCTestCase {
         XCTAssertGreaterThan(asIs.frameCount, 0)
     }
 
+    func testFramesGoUnderTheChosenParentFolderWhenOneIsGiven() {
+        XCTAssertEqual(VideoFrameSource.outputFolder(forVideoAt: "/videos/night.mov"), "/videos/night")
+        XCTAssertEqual(VideoFrameSource.outputFolder(forVideoAt: "/videos/night.mov", in: "/Volumes/big/work"), "/Volumes/big/work/night")
+    }
+
     func testAFolderOfOtherImagesIsNotOverwrittenByAnImport() async throws {
         let video = try h264("clash", frames: 24)
         let folder = VideoFrameSource.outputFolder(forVideoAt: video)

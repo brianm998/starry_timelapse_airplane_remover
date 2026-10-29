@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "Totéž pro H.264, H.265 a podobná videa, kde jeden spustí jen snímek vyžádaný uživatelem (výchozí 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background a --extraction-*-workers platí jen tehdy, když je vstupem videosoubor.",
   "cli.waited_for_frames": "Extrakce videa trvala {0}; běh skončil {1} po extrakci posledního snímku.",
-  "ui.processing_step_extracting_video": "Extrakce snímků videa"
+  "ui.processing_step_extracting_video": "Extrakce snímků videa",
+  "ui.location_title": "Kam umístit pracovní soubory",
+  "ui.location_blurb": "Dočasné pracovní soubory programu Star, jeho výstup a snímky extrahované z videa mohou zabírat několikanásobek velikosti obrázků. Umístěte je na svazek s dostatkem volného místa.",
+  "ui.location_choose": "Vybrat…",
+  "ui.location_beside": "Vedle zdroje",
+  "ui.location_needed": "Potřebné místo: asi {0}",
+  "ui.location_needed_video": "Potřebné místo: asi {0} ({1} na snímky, {2} na zpracování)",
+  "ui.location_available": "K dispozici na tomto svazku: {0}",
+  "ui.location_unknown_free": "Volné místo na tomto svazku se nepodařilo zjistit.",
+  "ui.location_short": "Na tomto svazku není dost místa. Vyberte jinou složku nebo uvolněte {0}.",
+  "ui.sequence_location_title": "Otevřít sekvenci obrázků",
+  "ui.sequence_location_open": "Otevřít"
 }

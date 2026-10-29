@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "H.264, H.265 ve benzeri videolar için aynısı; yalnızca kullanıcının istediği kare bir tane başlatır (varsayılan 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background ve --extraction-*-workers yalnızca girdi bir video dosyası olduğunda geçerlidir.",
   "cli.waited_for_frames": "Video çıkarma {0} sürdü; çalıştırma son kare çıkarıldıktan {1} sonra bitti.",
-  "ui.processing_step_extracting_video": "Video kareleri çıkarılıyor"
+  "ui.processing_step_extracting_video": "Video kareleri çıkarılıyor",
+  "ui.location_title": "Çalışma dosyaları nereye konsun",
+  "ui.location_blurb": "Star'ın geçici çalışma dosyaları, çıktısı ve bir videodan çıkarılan kareler görüntülerin boyutunun birkaç katını kaplayabilir. Bunları yeterli boş alanı olan bir birime koyun.",
+  "ui.location_choose": "Seç…",
+  "ui.location_beside": "Kaynağın yanında",
+  "ui.location_needed": "Gereken alan: yaklaşık {0}",
+  "ui.location_needed_video": "Gereken alan: yaklaşık {0} (kareler için {1}, işleme için {2})",
+  "ui.location_available": "Bu birimde kullanılabilir: {0}",
+  "ui.location_unknown_free": "Bu birimdeki boş alan belirlenemedi.",
+  "ui.location_short": "Bu birimde yeterli yer yok. Başka bir klasör seçin veya {0} yer açın.",
+  "ui.sequence_location_title": "Görüntü Dizisini Aç",
+  "ui.sequence_location_open": "Aç"
 }

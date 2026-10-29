@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "เช่นเดียวกันสำหรับวิดีโอ H.264, H.265 และที่คล้ายกัน ซึ่งมีเพียงเฟรมที่ผู้ใช้ขอเท่านั้นที่เริ่มหนึ่งโปรเซส (ค่าเริ่มต้น 1)",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background และ --extraction-*-workers ใช้ได้เฉพาะเมื่ออินพุตเป็นไฟล์วิดีโอ",
   "cli.waited_for_frames": "การแยกวิดีโอใช้เวลา {0} การรันเสร็จสิ้นหลังจากแยกเฟรมสุดท้ายแล้ว {1}",
-  "ui.processing_step_extracting_video": "แยกเฟรมวิดีโอ"
+  "ui.processing_step_extracting_video": "แยกเฟรมวิดีโอ",
+  "ui.location_title": "ที่เก็บไฟล์ทำงาน",
+  "ui.location_blurb": "ไฟล์ทำงานชั่วคราวของ Star ผลลัพธ์ และเฟรมที่แยกจากวิดีโออาจใช้พื้นที่หลายเท่าของขนาดรูปภาพ ควรเก็บไว้ในไดรฟ์ที่มีพื้นที่ว่างเพียงพอ",
+  "ui.location_choose": "เลือก…",
+  "ui.location_beside": "ข้างไฟล์ต้นฉบับ",
+  "ui.location_needed": "พื้นที่ที่ต้องใช้: ประมาณ {0}",
+  "ui.location_needed_video": "พื้นที่ที่ต้องใช้: ประมาณ {0} ({1} สำหรับเฟรม, {2} สำหรับการประมวลผล)",
+  "ui.location_available": "พื้นที่ว่างในไดรฟ์นี้: {0}",
+  "ui.location_unknown_free": "ไม่สามารถตรวจสอบพื้นที่ว่างของไดรฟ์นี้ได้",
+  "ui.location_short": "พื้นที่ในไดรฟ์นี้ไม่พอ เลือกโฟลเดอร์อื่นหรือเพิ่มพื้นที่ว่าง {0}",
+  "ui.sequence_location_title": "เปิดลำดับรูปภาพ",
+  "ui.sequence_location_open": "เปิด"
 }

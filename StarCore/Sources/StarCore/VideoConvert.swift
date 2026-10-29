@@ -115,6 +115,7 @@ public func readVideoInfo(named inputPath: String, outputFolder: String) async t
 public func decodeVideo(
     named inputPath: String,
     format: FrameDecodeFormat = .tiff16,
+    framesParentFolder: String? = nil,
     progress progressCallback: @escaping ProgressCallback
 ) async throws -> (outputDirectory: String, videoInfo: VideoInfo) {
     let ffmpegPath = ToolPaths.ffmpeg
@@ -122,7 +123,7 @@ public func decodeVideo(
 
     // The frame count is only the denominator of the extraction progress here, so it is not worth a packet count: the header's
     // (an estimate when the container has no count) will do, and a bar past its end is clamped.
-    let source = try await VideoFrameSource.make(videoPath: inputPath, format: format, settings: .sweepOnly, requireExactCount: false)
+    let source = try await VideoFrameSource.make(videoPath: inputPath, format: format, settings: .sweepOnly, requireExactCount: false, framesParentFolder: framesParentFolder)
     let outputFolder = source.outputFolder
     let fileManager = FileManager.default
 
@@ -181,9 +182,10 @@ public func decodeVideo(
 public func startVideoExtraction(
     named inputPath: String,
     format: FrameDecodeFormat = .tiff16,
-    settings: FrameExtractionSettings = .default
+    settings: FrameExtractionSettings = .default,
+    framesParentFolder: String? = nil
 ) async throws -> (source: VideoFrameSource, videoInfo: VideoInfo) {
-    let source = try await VideoFrameSource.make(videoPath: inputPath, format: format, settings: settings)
+    let source = try await VideoFrameSource.make(videoPath: inputPath, format: format, settings: settings, framesParentFolder: framesParentFolder)
     func giveUp() {
         source.stop()
         if source.createdOutputFolder { try? FileManager.default.removeItem(atPath: source.outputFolder) }

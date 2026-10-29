@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "O mesmo para H.264, H.265 e vídeos semelhantes, em que só um quadro pedido pelo usuário inicia um (padrão 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background e --extraction-*-workers só valem quando a entrada é um arquivo de vídeo.",
   "cli.waited_for_frames": "A extração do vídeo levou {0}; a execução terminou {1} depois da extração do último quadro.",
-  "ui.processing_step_extracting_video": "Extraindo quadros do vídeo"
+  "ui.processing_step_extracting_video": "Extraindo quadros do vídeo",
+  "ui.location_title": "Onde colocar os arquivos de trabalho",
+  "ui.location_blurb": "Os arquivos temporários de trabalho do Star, a saída e os quadros extraídos de um vídeo podem ocupar várias vezes o tamanho das imagens. Coloque-os em um volume com espaço livre suficiente.",
+  "ui.location_choose": "Escolher…",
+  "ui.location_beside": "Ao lado da origem",
+  "ui.location_needed": "Espaço necessário: cerca de {0}",
+  "ui.location_needed_video": "Espaço necessário: cerca de {0} ({1} para os quadros, {2} para o processamento)",
+  "ui.location_available": "Disponível neste volume: {0}",
+  "ui.location_unknown_free": "Não foi possível determinar o espaço livre deste volume.",
+  "ui.location_short": "Não há espaço suficiente neste volume. Escolha outra pasta ou libere {0}.",
+  "ui.sequence_location_title": "Abrir sequência de imagens",
+  "ui.sequence_location_open": "Abrir"
 }

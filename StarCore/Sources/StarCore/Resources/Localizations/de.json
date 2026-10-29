@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "Dasselbe für H.264, H.265 und ähnliche Videos, bei denen nur ein vom Benutzer angefordertes Bild einen startet (Standard 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background und --extraction-*-workers gelten nur, wenn die Eingabe eine Videodatei ist.",
   "cli.waited_for_frames": "Die Videoextraktion dauerte {0}; der Lauf war {1} nach der Extraktion des letzten Bildes beendet.",
-  "ui.processing_step_extracting_video": "Videobilder extrahieren"
+  "ui.processing_step_extracting_video": "Videobilder extrahieren",
+  "ui.location_title": "Wohin die Arbeitsdateien kommen",
+  "ui.location_blurb": "Die temporären Arbeitsdateien von Star, die Ausgabe und die aus einem Video extrahierten Bilder können ein Vielfaches der Bildgröße belegen. Wähle ein Volume mit genug freiem Speicherplatz.",
+  "ui.location_choose": "Auswählen…",
+  "ui.location_beside": "Neben der Quelle",
+  "ui.location_needed": "Benötigter Speicherplatz: etwa {0}",
+  "ui.location_needed_video": "Benötigter Speicherplatz: etwa {0} ({1} für die Bilder, {2} für die Verarbeitung)",
+  "ui.location_available": "Auf diesem Volume verfügbar: {0}",
+  "ui.location_unknown_free": "Der freie Speicherplatz dieses Volumes konnte nicht ermittelt werden.",
+  "ui.location_short": "Auf diesem Volume ist nicht genug Platz. Wähle einen anderen Ordner oder gib {0} frei.",
+  "ui.sequence_location_title": "Bildsequenz öffnen",
+  "ui.sequence_location_open": "Öffnen"
 }

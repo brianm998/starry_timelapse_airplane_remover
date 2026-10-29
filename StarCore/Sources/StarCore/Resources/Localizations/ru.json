@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "То же для H.264, H.265 и похожих видео, где его запускает только кадр, запрошенный пользователем (по умолчанию 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background и --extraction-*-workers применяются, только если вход — видеофайл.",
   "cli.waited_for_frames": "Извлечение видео заняло {0}; запуск завершился через {1} после извлечения последнего кадра.",
-  "ui.processing_step_extracting_video": "Извлечение кадров видео"
+  "ui.processing_step_extracting_video": "Извлечение кадров видео",
+  "ui.location_title": "Куда поместить рабочие файлы",
+  "ui.location_blurb": "Временные рабочие файлы Star, результат обработки и кадры, извлечённые из видео, могут занимать в несколько раз больше места, чем сами изображения. Выберите том с достаточным свободным местом.",
+  "ui.location_choose": "Выбрать…",
+  "ui.location_beside": "Рядом с источником",
+  "ui.location_needed": "Потребуется места: около {0}",
+  "ui.location_needed_video": "Потребуется места: около {0} ({1} для кадров, {2} для обработки)",
+  "ui.location_available": "Доступно на этом томе: {0}",
+  "ui.location_unknown_free": "Не удалось определить свободное место на этом томе.",
+  "ui.location_short": "На этом томе недостаточно места. Выберите другую папку или освободите {0}.",
+  "ui.sequence_location_title": "Открыть последовательность изображений",
+  "ui.sequence_location_open": "Открыть"
 }

@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "H.264، H.265 اور ایسی ویڈیوز کے لیے وہی، جہاں صرف صارف کا مانگا ہوا فریم ایک شروع کرتا ہے (ڈیفالٹ 1)۔",
   "cli.errors.extraction_option_needs_video": "--tiff-compression، --extract-in-background اور --extraction-*-workers صرف تب لاگو ہوتے ہیں جب ان پٹ ایک ویڈیو فائل ہو۔",
   "cli.waited_for_frames": "ویڈیو نکالنے میں {0} لگے؛ آخری فریم نکلنے کے {1} بعد رن ختم ہوا۔",
-  "ui.processing_step_extracting_video": "ویڈیو فریم نکالنا"
+  "ui.processing_step_extracting_video": "ویڈیو فریم نکالنا",
+  "ui.location_title": "ورک فائلیں کہاں رکھیں",
+  "ui.location_blurb": "Star کی عارضی ورک فائلیں، اس کا آؤٹ پٹ اور ویڈیو سے نکالے گئے فریم تصاویر کے سائز سے کئی گنا جگہ لے سکتے ہیں۔ انہیں کافی خالی جگہ والے والیوم پر رکھیں۔",
+  "ui.location_choose": "منتخب کریں…",
+  "ui.location_beside": "ماخذ کے ساتھ",
+  "ui.location_needed": "درکار جگہ: تقریباً {0}",
+  "ui.location_needed_video": "درکار جگہ: تقریباً {0} (فریموں کے لیے {1}، پروسیسنگ کے لیے {2})",
+  "ui.location_available": "اس والیوم پر دستیاب: {0}",
+  "ui.location_unknown_free": "اس والیوم کی خالی جگہ معلوم نہیں ہو سکی۔",
+  "ui.location_short": "اس والیوم پر کافی جگہ نہیں ہے۔ کوئی اور فولڈر منتخب کریں یا {0} خالی کریں۔",
+  "ui.sequence_location_title": "امیج سیکوئنس کھولیں",
+  "ui.sequence_location_open": "کھولیں"
 }

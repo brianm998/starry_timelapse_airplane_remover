@@ -78,6 +78,14 @@ fun StarApp(vm: AppViewModel) {
                     onCancel = vm::cancelVideoImport,
                 )
             }
+            val pendingSequence by vm.pendingSequence.collectAsState()
+            pendingSequence?.let { dir ->
+                com.star.desktop.ui.dialogs.SequenceLocationDialog(
+                    sequenceDir = dir,
+                    onOpen = vm::confirmSequenceLocation,
+                    onCancel = vm::cancelSequenceLocation,
+                )
+            }
             val showInfo by vm.showInfoDialog.collectAsState()
             if (showInfo) {
                 val infoType by vm.currentInfoType.collectAsState()

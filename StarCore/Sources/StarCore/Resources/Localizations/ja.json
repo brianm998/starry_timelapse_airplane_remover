@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "H.264、H.265 などのビデオでの同じ設定。ユーザーが求めたフレームだけが 1 つ開始します (既定 1)。",
   "cli.errors.extraction_option_needs_video": "--tiff-compression、--extract-in-background、--extraction-*-workers は入力がビデオファイルの場合にのみ有効です。",
   "cli.waited_for_frames": "ビデオの抽出に {0} かかりました。実行は最後のフレームの抽出の {1} 後に終了しました。",
-  "ui.processing_step_extracting_video": "ビデオのフレームを抽出"
+  "ui.processing_step_extracting_video": "ビデオのフレームを抽出",
+  "ui.location_title": "作業ファイルの保存先",
+  "ui.location_blurb": "Starの一時作業ファイル、出力、およびビデオから抽出したフレームは、画像の何倍もの容量を使うことがあります。空き容量が十分なボリュームを選んでください。",
+  "ui.location_choose": "選択…",
+  "ui.location_beside": "ソースと同じ場所",
+  "ui.location_needed": "必要な容量：約 {0}",
+  "ui.location_needed_video": "必要な容量：約 {0}（フレーム用 {1}、処理用 {2}）",
+  "ui.location_available": "このボリュームの空き容量：{0}",
+  "ui.location_unknown_free": "このボリュームの空き容量を確認できませんでした。",
+  "ui.location_short": "このボリュームには十分な空きがありません。別のフォルダを選ぶか、{0} を空けてください。",
+  "ui.sequence_location_title": "イメージシーケンスを開く",
+  "ui.sequence_location_open": "開く"
 }

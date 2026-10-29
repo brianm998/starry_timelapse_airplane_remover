@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "Tương tự cho video H.264, H.265 và tương tự, nơi chỉ một khung hình do người dùng yêu cầu mới khởi động một tiến trình (mặc định 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background và --extraction-*-workers chỉ áp dụng khi đầu vào là tệp video.",
   "cli.waited_for_frames": "Trích xuất video mất {0}; lần chạy kết thúc {1} sau khi trích xuất khung hình cuối cùng.",
-  "ui.processing_step_extracting_video": "Trích xuất khung hình video"
+  "ui.processing_step_extracting_video": "Trích xuất khung hình video",
+  "ui.location_title": "Nơi đặt các tệp làm việc",
+  "ui.location_blurb": "Các tệp làm việc tạm thời của Star, kết quả đầu ra và các khung hình trích xuất từ video có thể chiếm dung lượng gấp nhiều lần ảnh gốc. Hãy đặt chúng trên ổ có đủ dung lượng trống.",
+  "ui.location_choose": "Chọn…",
+  "ui.location_beside": "Cạnh nguồn",
+  "ui.location_needed": "Dung lượng cần: khoảng {0}",
+  "ui.location_needed_video": "Dung lượng cần: khoảng {0} ({1} cho các khung hình, {2} cho xử lý)",
+  "ui.location_available": "Còn trống trên ổ này: {0}",
+  "ui.location_unknown_free": "Không thể xác định dung lượng trống của ổ này.",
+  "ui.location_short": "Ổ này không đủ chỗ. Hãy chọn thư mục khác hoặc giải phóng {0}.",
+  "ui.sequence_location_title": "Mở chuỗi ảnh",
+  "ui.sequence_location_open": "Mở"
 }

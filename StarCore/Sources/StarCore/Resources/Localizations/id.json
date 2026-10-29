@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "Hal yang sama untuk video H.264, H.265, dan sejenisnya, di mana hanya bingkai yang diminta pengguna yang memulai satu (bawaan 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background, dan --extraction-*-workers hanya berlaku jika masukannya berkas video.",
   "cli.waited_for_frames": "Ekstraksi video memakan {0}; proses selesai {1} setelah bingkai terakhir diekstrak.",
-  "ui.processing_step_extracting_video": "Mengekstrak bingkai video"
+  "ui.processing_step_extracting_video": "Mengekstrak bingkai video",
+  "ui.location_title": "Tempat menyimpan berkas kerja",
+  "ui.location_blurb": "Berkas kerja sementara Star, keluarannya, dan bingkai yang diekstrak dari video bisa memakan beberapa kali ukuran gambar. Simpan di volume yang punya cukup ruang kosong.",
+  "ui.location_choose": "Pilih…",
+  "ui.location_beside": "Di samping sumber",
+  "ui.location_needed": "Ruang yang dibutuhkan: sekitar {0}",
+  "ui.location_needed_video": "Ruang yang dibutuhkan: sekitar {0} ({1} untuk bingkai, {2} untuk pemrosesan)",
+  "ui.location_available": "Tersedia di volume ini: {0}",
+  "ui.location_unknown_free": "Ruang kosong di volume ini tidak dapat ditentukan.",
+  "ui.location_short": "Ruang di volume ini tidak cukup. Pilih folder lain atau kosongkan {0}.",
+  "ui.sequence_location_title": "Buka Urutan Gambar",
+  "ui.sequence_location_open": "Buka"
 }

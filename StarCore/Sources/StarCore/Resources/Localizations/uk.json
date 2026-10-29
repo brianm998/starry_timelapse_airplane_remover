@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "Те саме для H.264, H.265 та подібних відео, де його запускає лише кадр, запитаний користувачем (типово 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background і --extraction-*-workers застосовуються, лише якщо вхід — відеофайл.",
   "cli.waited_for_frames": "Видобування відео тривало {0}; запуск завершився через {1} після видобування останнього кадру.",
-  "ui.processing_step_extracting_video": "Видобування кадрів відео"
+  "ui.processing_step_extracting_video": "Видобування кадрів відео",
+  "ui.location_title": "Куди помістити робочі файли",
+  "ui.location_blurb": "Тимчасові робочі файли Star, результат обробки та кадри, видобуті з відео, можуть займати в кілька разів більше місця, ніж самі зображення. Виберіть том із достатньою кількістю вільного місця.",
+  "ui.location_choose": "Вибрати…",
+  "ui.location_beside": "Поруч із джерелом",
+  "ui.location_needed": "Потрібно місця: близько {0}",
+  "ui.location_needed_video": "Потрібно місця: близько {0} ({1} для кадрів, {2} для обробки)",
+  "ui.location_available": "Доступно на цьому томі: {0}",
+  "ui.location_unknown_free": "Не вдалося визначити вільне місце на цьому томі.",
+  "ui.location_short": "На цьому томі недостатньо місця. Виберіть іншу теку або звільніть {0}.",
+  "ui.sequence_location_title": "Відкрити послідовність зображень",
+  "ui.sequence_location_open": "Відкрити"
 }
