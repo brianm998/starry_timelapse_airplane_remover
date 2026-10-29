@@ -257,12 +257,12 @@ class DesktopFeatureRunner {
         click(if (isMoving) "startup.moving.moving" else "startup.moving.static")
         if (hasHorizon) click(if (isMoving) "startup.selectmovinghorizons.no" else "startup.selecthorizon.no")
 
-        // Removal toggles, all on by default: everything is automatic; meteors off is auto selective; satellites off is selective.
+        // Mode choice defaults to automatic; the auto-selective toggle under it makes it auto selective; the selective row is selective.
         waitFor(t, "the removal prompt", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("startup.removal.start") }
         when (cleanMethod) {
             "auto" -> Unit
-            "autoSelective" -> t.onNodeWithTag("startup.removal.meteors").performClick()
-            "selective" -> t.onNodeWithTag("startup.removal.satellites").performClick()
+            "autoSelective" -> t.onNodeWithTag("startup.removal.autoselective").performClick()
+            "selective" -> t.onNodeWithTag("startup.removal.selective").performClick()
             else -> throw RunnerError("unknown clean method $cleanMethod")
         }
         // Optional, for a runner too small for the default: detect keypoints at 1/<divisor> size. Written into the session config

@@ -253,12 +253,12 @@ final class GuiFeatureRunner {
         try tap(s.moving ? "startup.moving.moving" : "startup.moving.static")
         if s.horizon { try tap(s.moving ? "startup.selectmovinghorizons.no" : "startup.selecthorizon.no") }
 
-        // Removal toggles, all on by default: everything is automatic; meteors off is auto selective; satellites off is selective.
+        // Mode choice defaults to automatic; the auto-selective toggle under it makes it auto selective; the selective row is selective.
         guard element("startup.removal.start").waitForExistence(timeout: 120) else { throw RunnerError("the removal prompt did not appear") }
         switch s.clean {
         case "auto": break
-        case "autoSelective": try tap("startup.removal.meteors")
-        case "selective": try tap("startup.removal.satellites")
+        case "autoSelective": try tap("startup.removal.autoselective")
+        case "selective": try tap("startup.removal.selective")
         default: throw RunnerError("unknown clean method \(s.clean)")
         }
     }
