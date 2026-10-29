@@ -50,7 +50,7 @@ import com.star.desktop.i18n.localized
 
 /**
  * Right panel (macOS `RightPanel`), in labelled sections split by dividers: the selective tools (only while this frame's clean
- * method reviews outliers), how the frame is displayed, what changes its processing, and debug. Every section and control has
+ * method reviews outliers), what changes its processing, and debug. Every section and control has
  * hover help.
  */
 @Composable
@@ -79,10 +79,6 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
             }
             SectionDivider()
         }
-        CollapsibleSection(vm, RightPanelSection.DISPLAY, localized("ui.display"), localized("ui.section.display_help")) {
-            DisplaySection(vm)
-        }
-        SectionDivider()
         CollapsibleSection(vm, RightPanelSection.PROCESSING, localized("ui.processing"), localized("ui.section.processing_help")) {
             ProcessingSection(app, vm, fvm)
         }
@@ -172,7 +168,7 @@ private fun SelectiveToolsSection(vm: SequenceViewModel, fvm: FrameViewModel) {
 
 /** How the frame is shown and stepped through; nothing here changes the processed output. */
 @Composable
-private fun DisplaySection(vm: SequenceViewModel) {
+internal fun DisplaySection(vm: SequenceViewModel) {
     val fastAdv by vm.fastAdvancement.collectAsState()
 
     // How the fast buttons (z / x) move, and what they do in the strategy chosen (macOS "Fast Advancement Type").
@@ -303,7 +299,7 @@ enum class RightPanelSection { SELECTIVE_TOOLS, DISPLAY, PROCESSING, DEBUG }
  * the panel's column, so they keep its spacing.
  */
 @Composable
-private fun CollapsibleSection(vm: SequenceViewModel, section: RightPanelSection, title: String, help: String, content: @Composable () -> Unit) {
+internal fun CollapsibleSection(vm: SequenceViewModel, section: RightPanelSection, title: String, help: String, content: @Composable () -> Unit) {
     val expanded by vm.expandedRightPanelSections.collectAsState()
     val open = section in expanded
     SectionHeader(title, help, open) { vm.toggleRightPanelSection(section) }
