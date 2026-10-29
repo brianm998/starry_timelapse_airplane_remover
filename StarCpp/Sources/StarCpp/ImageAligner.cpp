@@ -3084,6 +3084,19 @@ constexpr int kLowPassMedian = 5;         // takes the stars out of the luma, fu
 constexpr int kLowPassRadius = 6;
 constexpr int kErrorRadius = 24;
 constexpr int kAlphaRadius = 16;
+// The relative test is averaged over this radius, over the pixels it can be computed at,
+// before it is multiplied into the weight.  Computed per pixel, as the guide has it, it
+// crosses its ramp in a different place on every frame over faint cloud: the weight came
+// out as blobs a few hundred pixels across that moved from frame to frame, and the cloud
+// under them switched between this stage's and the star merge's, which shows as shimmer.
+// On frames 777-805 of the a9-3 moving sequence, averaging it over 48px took 40% out of
+// that switching (the weight's change from the mean of the frames either side, times the
+// difference between the two merges: 29 -> 18 per pixel of the cloud area) for 0.005 of
+// cloud correlation; 32px got to 22, 64px to 15 for 0.008.  Blurring the weight itself
+// that widely measured the same, but carried it 144px past the trusted sky, below the
+// horizon.  Weights taken from the spread of the whole nine frame stack were steadier
+// still (11) and cost 0.02 of correlation.
+constexpr int kRelativeRadius = 48;
 constexpr int kMorphSize = 7;
 
 // Fixed-point scales for cloudBoxBlur: values are quantised to 1/scale before summing.
@@ -3100,10 +3113,13 @@ constexpr int kGateHalo = 96;             // 2 + 3*6 + 3*24 = 92, rounded up
 constexpr int kWeightHalo = 48;           // 3*16
 
 // Everything the weight at a pixel depends on lies within this many pixels of it:
-// 3*16 (weight blur) + 3*24 (error blur) + 3*6 + 2 (low-pass) = 140.  The region the
-// full resolution work runs on is the weight's support grown by this plus some slack, so
-// that no filter ever reads the region's own border.
-constexpr int kRegionMargin = 160;
+// 3*16 (weight blur) + 3*48 (relative test's average) + 3*24 (error blur) + 3*6 + 2
+// (low-pass) = 284.  The region the full resolution work runs on is the weight's support
+// grown by this plus some slack, so that no filter ever reads the region's own border.
+constexpr int kRegionMargin = 300;
+static_assert(kRegionMargin >= 3 * kAlphaRadius + 3 * kRelativeRadius + 3 * kErrorRadius
+                               + 3 * kLowPassRadius + 2,
+              "the region must hold everything the weight depends on");
 
 // Whether there is any cloud to follow at all, from the velocity field the motion search
 // has already produced.  Not part of the guide's algorithm, and added because its gate
@@ -3125,6 +3141,8 @@ constexpr float kMovingSpeed = 3.f;       // low-res px per frame: 12 at full si
 constexpr float kMovingPeak = 0.5f;
 constexpr int kMinMovingTiles = 6;
 constexpr double kTrustedTileShare = 0.95;
+// The pre-filter's own threshold, on one neighbour's search: see the pre-filter.
+constexpr int kPrefilterMovingTiles = 3;
 
 // Test hook, see ia_debug_set_cloud_region_restriction.
 std::atomic<bool> gRestrictToRegion{true};
@@ -3848,37 +3866,46 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
             return (double)inside >= kTrustedTileShare * (double)rc.area();
         };
 
-        // Pre-filter, one neighbour and every other tile in each direction: a clear frame
-        // costs the full velocity search twice over and this finds out for a fraction of
-        // one.  It only ever stops a frame whose sparse tiles show no cloud motion after a
-        // grid median, which is what a clear frame looks like; anything else goes on to
-        // the full search, which makes the real decision.
+        // Pre-filter: the full test below, on the one neighbour already built.  A clear
+        // frame then never builds the other seven, and the search it makes here is one the
+        // full test reuses rather than repeats.  It stops a frame only where even this one
+        // neighbour shows fewer than kPrefilterMovingTiles moving tiles; the full test
+        // makes the real decision for everything else.
+        //
+        // It used to be cheaper, every other tile with a median over that sparse grid, and
+        // that median spans five tiles (1920px) in each direction: a band of cloud one or two
+        // tiles tall along the horizon lost it to the clear sky above, so the pre-filter
+        // stopped frames the full test found 20-40 moving tiles in.  On a 1407 frame moving
+        // sequence it stopped 224 of the 864 frames the full test passes, in no particular
+        // pattern from one frame to the next, and the clouds in the output flashed between
+        // this stage's and the star merge's.  Replayed on that sequence's own tile searches,
+        // this version stops none of those whose full count is above 8 (four at 6-8), and
+        // still stops 427 of the 487 the full test fails.  A frame it stops costs 1.6-2.0
+        // CPU-s at 24MP instead of 0.7-0.9 (the merge before it is ~27).
         // (Skipped when that neighbour could not be built: the full search then decides.)
+        Grid probeGrid;                       // the probe neighbour's search, measured once
+        int probeOffset = 0;
         const LowLayer *one = layerAt(2) ? layerAt(2) : layerAt(-2) ? layerAt(-2)
                             : layerAt(1) ? layerAt(1) : layerAt(-1);
         if (one) {
             const float displacement = std::abs(one->offset) * kMovingSpeed;   // low-res px
-            Grid g = measureGrid(baseBp, *one, tg, nullptr, kVelocityRadius, 2);
+            probeGrid = measureGrid(baseBp, *one, tg, nullptr, kVelocityRadius);
+            probeOffset = one->offset;
+            Grid g = probeGrid;
+            fillUnmeasured(g, nullptr);
+            medianGrid(g);
             int moving = 0;
-            for (int i = 0; i < tg.ny; i += 2) for (int j = 0; j < tg.nx; j += 2) {
-                if (!g.ok[g.at(i, j)] || !trustedTile(i, j)) continue;
-                // median of the measured sparse neighbours' magnitudes, itself included;
-                // a neighbour that did not correlate counts as not having moved
-                float mags[9]; int n = 0;
-                for (int di = -2; di <= 2; di += 2) for (int dj = -2; dj <= 2; dj += 2) {
-                    const int ii = i + di, jj = j + dj;
-                    if (ii < 0 || jj < 0 || ii >= tg.ny || jj >= tg.nx || !g.ok[g.at(ii, jj)]) continue;
-                    const size_t u = g.at(ii, jj);
-                    mags[n++] = g.peak[u] >= kMovingPeak ? std::hypot(g.v[0][u], g.v[1][u]) : 0.f;
-                }
-                std::nth_element(mags, mags + n / 2, mags + n);
-                if (mags[n / 2] >= displacement) ++moving;
+            for (int i = 0; i < tg.ny; ++i) for (int j = 0; j < tg.nx; ++j) {
+                const size_t t = g.at(i, j);
+                if (probeGrid.peak[t] >= kMovingPeak && std::hypot(g.v[0][t], g.v[1][t]) >= displacement
+                    && trustedTile(i, j)) ++moving;
             }
             clock.mark("prefilter");
-            if (moving < 2) {
+            if (moving < kPrefilterMovingTiles) {
                 Log_d("cloud-aware merge: frame %d pre-filter found no cloud motion %.2fs", baseFrameIndex, seconds());
                 char text[96];
-                std::snprintf(text, sizeof text, "prefilter_moving_sparse_tiles %d (need 2)\n", moving);
+                std::snprintf(text, sizeof text, "prefilter_moving_tiles %d (need %d)\n", moving,
+                              kPrefilterMovingTiles);
                 cloudWriteStats(debugDir, baseFrameIndex, "no cloud motion (pre-filter)", 0, 0,
                                 cv::Rect(), W, H, 0, clock, text);
                 return false;
@@ -3909,7 +3936,8 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
         // shift in each measured tile, counted at a few levels.
         float peakMax = 0.f; int peakTiles = 0, peak30 = 0, peak40 = 0, peak50 = 0, peak60 = 0;
         auto measureFilled = [&](const LowLayer &l) {
-            Grid g = measureGrid(baseBp, l, tg, nullptr, kVelocityRadius);
+            Grid g = (probeGrid.ny > 0 && l.offset == probeOffset)
+                   ? probeGrid : measureGrid(baseBp, l, tg, nullptr, kVelocityRadius);
             for (size_t t = 0; t < g.ok.size(); ++t) {
                 if (!g.ok[t]) continue;
                 const float pk = g.peak[t];
@@ -4119,32 +4147,53 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
         lpC.release();
         cloudBoxBlur(lpB, kErrorRadius, kLumaScale);       // eC, in lpB
 
+        // The relative test where it can be computed (trusted sky, every source present),
+        // averaged over kRelativeRadius among those pixels: `rel` carries the sum and
+        // `relWeight` the count, both blurred, so pixels it cannot be computed at add
+        // nothing and take nothing.
+        cv::Mat rel(region.size(), CV_32F), relWeight(region.size(), CV_32F);
+        auto usableAt = [&](int y, int x) {
+            const uint8_t *s = trusted.empty() ? nullptr : trusted.ptr<uint8_t>(region.y + y) + region.x;
+            return (!s || s[x]) && !starMisses.ptr<uint8_t>(region.y + y)[region.x + x]
+                && !missesC.ptr<uint8_t>(y)[x];
+        };
+        cv::parallel_for_(cv::Range(0, region.height), [&](const cv::Range &rg) {
+            for (int y = rg.start; y < rg.end; ++y) {
+                const float *eC = lpB.ptr<float>(y);
+                const float *eM = gate.eM.ptr<float>(region.y + y) + region.x;
+                float *r = rel.ptr<float>(y), *n = relWeight.ptr<float>(y);
+                for (int x = 0; x < region.width; ++x) {
+                    if (!usableAt(y, x)) { r[x] = 0.f; n[x] = 0.f; continue; }
+                    const float improvement = 1.f - eC[x] / std::max(eM[x], 1e-6f);
+                    const float v = (improvement - (float)kRelLow) / (float)(kRelHigh - kRelLow);
+                    r[x] = v < 0.f ? 0.f : (v > 1.f ? 1.f : v);
+                    n[x] = 1.f;
+                }
+            }
+        });
+        lpB.release();
+        cloudBoxBlur(rel, kRelativeRadius, kWeightScale);
+        cloudBoxBlur(relWeight, kRelativeRadius, kWeightScale);
+
         cv::Mat alpha(region.size(), CV_32F);
         {
             const float floorValue = gate.floorValue;
             cv::parallel_for_(cv::Range(0, region.height), [&](const cv::Range &rg) {
                 for (int y = rg.start; y < rg.end; ++y) {
-                    const float *eC = lpB.ptr<float>(y);
                     const float *eM = gate.eM.ptr<float>(region.y + y) + region.x;
-                    const uint8_t *s = trusted.empty() ? nullptr : trusted.ptr<uint8_t>(region.y + y) + region.x;
-                    const uint8_t *ms = starMisses.ptr<uint8_t>(region.y + y) + region.x;
-                    const uint8_t *mc = missesC.ptr<uint8_t>(y);
+                    const float *r = rel.ptr<float>(y), *n = relWeight.ptr<float>(y);
                     float *a = alpha.ptr<float>(y);
                     for (int x = 0; x < region.width; ++x) {
-                        const float bound = (!s || s[x]) ? weightBound(eM[x], floorValue) : 0.f;
-                        float v = 0.f;
-                        if (bound > 0.f && !(ms && ms[x]) && !mc[x]) {
-                            const float rel = 1.f - eC[x] / std::max(eM[x], 1e-6f);
-                            float r = (rel - (float)kRelLow) / (float)(kRelHigh - kRelLow);
-                            r = r < 0.f ? 0.f : (r > 1.f ? 1.f : r);
-                            v = r * bound;
-                        }
-                        a[x] = v;
+                        const float bound = usableAt(y, x) ? weightBound(eM[x], floorValue) : 0.f;
+                        // relWeight is the share of usable pixels around this one; under
+                        // 1e-3 there is too little around it to average
+                        a[x] = (bound > 0.f && n[x] > 1e-3f) ? std::min(1.f, r[x] / n[x]) * bound : 0.f;
                     }
                 }
             });
         }
-        lpB.release();
+        rel.release();
+        relWeight.release();
         cloudBoxBlur(alpha, kAlphaRadius, kWeightScale);
         clock.mark("weight");
 

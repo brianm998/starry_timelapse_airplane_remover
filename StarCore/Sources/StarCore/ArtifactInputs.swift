@@ -230,6 +230,21 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     ///      `TemporalHorizonDetector.workingWidth` wide (6804f8f3).
     public static let movingHorizonDetectionAlgorithmVersion = 2
 
+    /// Which version of the cloud-aware stage (ImageAligner.cpp, cloudAwareRefine) made the
+    /// stored star aligned merges.
+    ///
+    /// Recorded only while the stage is on, like `earthAlignmentAlgorithmVersion` only where
+    /// the ground is fitted: a merge made with it off never ran this code.  A record from a
+    /// run with it on that predates the key counts as changed, and its merges, outliers and
+    /// output are rebuilt once; the alignment is kept.
+    ///
+    /// - 1: the first version.  Never written.
+    /// - 2: the pre-filter runs the full test on one neighbour instead of a median over
+    ///      every other tile, which stopped frames with a band of cloud along the horizon on
+    ///      some frames and not the next, so the band flashed; and the relative test is
+    ///      averaged over 48px, which steadies the weight from one frame to the next.
+    public static let cloudAwareMergeAlgorithmVersion = 2
+
     public let version: Int
 
     /// stage rawValue → setting name → value.  Nested rather than flat so a stage can be
@@ -435,15 +450,20 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     }
 
     /// What the star aligned merge reads beyond the homographies it warps by: whether the
-    /// cloud-aware stage runs.
+    /// cloud-aware stage runs, and while it does, the version of its code.
     ///
     /// It used to be recorded under `alignment`, and only while on, which threw away every
     /// homography — and the horizon consensus fitted along them — to change how the warped
     /// frames are combined.  Recorded here unconditionally: every record written before this
     /// stage existed is given it by `load` (`movingMergeInputsToTheirOwnStage`), so the key
-    /// appearing is not a change to any of them.
+    /// appearing is not a change to any of them.  See `cloudAwareMergeAlgorithmVersion` for
+    /// the other key.
     private static func alignedMergeInputs(_ config: Config) -> [String: String] {
-        ["cloudAwareMerge": str(config.cloudAwareMerge)]
+        var inputs = ["cloudAwareMerge": str(config.cloudAwareMerge)]
+        if config.cloudAwareMerge {
+            inputs["cloudAwareMergeAlgorithmVersion"] = str(cloudAwareMergeAlgorithmVersion)
+        }
+        return inputs
     }
 
     /// What `HorizonConsensus` reads beyond the stages before it: whether it runs, and the

@@ -61,6 +61,8 @@ final class CloudAwareMergeTests: XCTestCase {
         var cloudTransmittance = 0.0
         var noiseSigma = 60.0
         var stars: [Star] = []
+        var width = CloudAwareMergeTests.width
+        var height = CloudAwareMergeTests.height
 
         /// Texture wavelengths between about 18 and 70px, so it is cloud structure at the
         /// scale the stage correlates, and not noise or a gradient.
@@ -228,7 +230,8 @@ final class CloudAwareMergeTests: XCTestCase {
         let path = Self.directory.appendingPathComponent(name).path
         Self.lock.lock(); defer { Self.lock.unlock() }
         if !Self.written.contains(name) {
-            let mat = Self.render(scene, at: t, shiftX: shiftX, trail: trail)
+            let mat = Self.render(scene, at: t, shiftX: shiftX, trail: trail,
+                                  width: scene.width, height: scene.height)
             XCTAssertTrue(mat.write(to: path), "could not write \(path)")
             Self.written.insert(name)
         }
@@ -513,6 +516,38 @@ final class CloudAwareMergeTests: XCTestCase {
             XCTAssertGreaterThan(median, 0.9, "stars \(name)")
             XCTAssertGreaterThan(kept, 0.9, "stars \(name)")
         }
+    }
+
+    // MARK: - 2b. a thin band of cloud
+
+    /// A band of cloud a few hundred pixels tall across a frame nine motion tiles high:
+    /// the shape low cloud along a horizon has, which none of the blobs above have.
+    ///
+    /// On real footage the pre-filter once stopped frames like this: its median over every
+    /// other tile, five tiles across, was outvoted by the clear sky above and below the
+    /// band, so on a moving sequence it stopped frames whose full search found 20 to 40
+    /// tiles of moving cloud, on some frames and not the next, and the band flashed between
+    /// this stage's cloud and the star merge's.  This scene does not reproduce that: the
+    /// synthetic clear sky next to a band, or to a frame border, correlates at a large shift
+    /// (the band-pass leaves a halo that depends on y alone), where real clear sky does not,
+    /// so the old pre-filter let it through.  What it does pin is the property: a thin band
+    /// is followed.
+    func testAThinBandOfCloudIsFollowed() throws {
+        var scene = Scene()
+        scene.height = 2048
+        scene.cloudCentre = (x: 768, y: 960)
+        scene.cloudRadius = (x: 1150, y: 130)
+        scene.stars = Scene.makeStars(count: 320, width: scene.width, height: scene.height, seed: 78)
+        let base = try pixels(try XCTUnwrap(MatWrapper.load(fromFilename: try framePath("band", scene, t: 0))))
+        let off = try merge("band", scene, cloudAware: false)
+        let on = try merge("band", scene, cloudAware: true)
+        let corrOff = cloudCorrelation(base: base, candidate: try pixels(off.merged), scene: scene,
+                                       width: scene.width, height: scene.height)
+        let corrOn = cloudCorrelation(base: base, candidate: try pixels(on.merged), scene: scene,
+                                      width: scene.width, height: scene.height)
+        print("thin band: correlation flag off \(corrOff), flag on \(corrOn)")
+        XCTAssertGreaterThan(corrOn, 0.9, "the band must keep the base frame's structure")
+        XCTAssertGreaterThan(corrOn, corrOff + 0.15)
     }
 
     // MARK: - 3. stars behind thin cloud
