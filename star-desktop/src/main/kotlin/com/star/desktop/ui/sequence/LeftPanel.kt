@@ -145,6 +145,11 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
 
         // "Show:" — pick which image of the frame the center shows (macOS frameModeView).
         ShowViewModes(vm)
+
+        // How the frame is shown and stepped through, under the images to show.
+        CollapsibleSection(vm, RightPanelSection.DISPLAY, localized("ui.display"), localized("ui.section.display_help")) {
+            DisplaySection(vm)
+        }
       }
       com.star.desktop.ui.components.PanelChevron("«", { vm.setLeftPanel(false) }, Modifier.padding(6.dp))
     }

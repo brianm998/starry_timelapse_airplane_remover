@@ -47,8 +47,6 @@ struct RightPanel: View {
                                 self.selectiveToolsSection
                                 Divider()
                             }
-                            self.displaySection
-                            Divider()
                             self.processingSection
                             Divider()
                             self.debugSection
@@ -226,133 +224,6 @@ struct RightPanel: View {
                       .frame(maxWidth: 140, alignment: .bottom)
                 }
                   .help(localized("ui.trash_opacity_help"))
-            }
-        }
-    }
-
-    // MARK: - Display
-
-    var displaySection: some View {
-        @Bindable var viewModel = viewModel
-        return VStack(alignment: .leading) {
-            RightPanelSectionHeader(title: localized("ui.display"),
-                                    help: localized("ui.section.display_help"),
-                                    isExpanded: self.isExpanded(.display))
-
-            if expandedSections.contains(.display) {
-                Group {
-                    Text(localized("ui.fast_advancement_type"))
-                      .foregroundColor(.white)
-
-                    Picker("", selection: $viewModel.fastAdvancementType) {
-                        ForEach(FastAdvancementType.allCases, id: \.self) { value in
-                            Text(value.localizedName).tag(value)
-                        }
-                    }
-                      .frame(maxWidth: 140)
-
-                    switch viewModel.fastAdvancementType {
-                    case .normal:
-                        Text(localized("ui.fast_skip_n_frames", viewModel.fastSkipAmount))
-                          .frame(maxWidth: 140)
-                          .multilineTextAlignment(.leading)
-                          .foregroundColor(.white)
-                    case .skipEmpties:
-                        Text(localized("ui.skip_all_frames_without_outliers"))
-                          .frame(maxWidth: 140)
-                          .foregroundColor(.white)
-                    case .toNextPositive:
-                        Text(localized("ui.skip_to_next_frame_with_a_positive_outlier"))
-                          .frame(maxWidth: 140)
-                          .foregroundColor(.white)
-                    case .toNextNegative:
-                        Text(localized("ui.skip_to_next_frame_with_a_negative_outlier"))
-                          .frame(maxWidth: 140)
-                          .foregroundColor(.white)
-                    case .toNextUnknown:
-                        Text(localized("ui.skip_to_next_frame_with_a_unknown_outlier"))
-                          .frame(maxWidth: 140)
-                          .foregroundColor(.white)
-                    }
-                }
-                  .help(localized("ui.fast_advancement_type_help"))
-
-    //                    Toggle(skipEmpties ? "change to # of frames" : "change to skip empties",
-    //                           isOn: $skipEmpties)
-
-                // XXX add advance to has undecided
-                // XXX add advance to has paintable
-                // XXX add advance to has not paintable
-
-                if viewModel.fastAdvancementType == .normal {
-                    Group {
-                        Text(localized("ui.fast_skip"))
-                          .foregroundColor(.white)
-                        Picker("", selection: $viewModel.fastSkipAmount) {
-                            ForEach(0 ..< 51) {
-                                Text(localized("ui.n_frames_lower", $0))
-                            }
-                        }.frame(maxWidth: 140)
-                    }
-                      .help(localized("ui.fast_skip_help"))
-                }
-
-                Group {
-                    Toggle(localized("ui.show_horizon_line"), isOn: Binding(
-                        get: { viewModel.userPreferences.showHorizonOnMainView ?? false },
-                        set: { viewModel.userPreferences.showHorizonOnMainView = $0 }
-                    ))
-                      .foregroundColor(.white)
-
-                    HorizonLineKindToggles()
-                }
-                  .help(localized("ui.show_horizon_line_help"))
-
-                // frame rate
-                let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]
-                Group {
-                    Text(localized("ui.frame_rate"))
-                      .foregroundColor(.white)
-                    Picker("", selection: $viewModel.videoPlaybackFramerate) {
-                        ForEach(frame_rates, id: \.self) {
-                            Text(localized("ui.n_fps", $0))
-                        }
-                    }.frame(maxWidth: 100)
-                }
-                  .help(localized("ui.frame_rate_help"))
-
-                // not disabled with the overlays: it dims the frame itself, so it
-                // is useful in every clean mode
-                Group {
-                    Text(localized("ui.frame_opacity"))
-                      .foregroundColor(.white)
-                    Slider(value: $viewModel.frameOpacity, in : 0...1)
-                      .frame(maxWidth: 140, alignment: .bottom)
-                }
-                  .help(localized("ui.frame_opacity_help"))
-
-                Group {
-                    HStack {
-                        Text(localized("ui.zoom"))
-                          .foregroundColor(.white)
-                        Spacer()
-                        // Editable max zoom here
-                        EditableMaxZoomView(
-                          focusedField: $focusedField,
-                          textColor: .white,
-                          alwaysOpen: false
-                        )
-                    }
-                      .frame(maxWidth: 140)
-                    Slider(value: $viewModel.currentZoomScale,
-                           in: viewModel.minZoomScale...viewModel.maxZoomScale)
-                      .frame(maxWidth: 140, alignment: .bottom)
-                }
-                  .help(localized("ui.zoom_help"))
-
-                Toggle(localized("ui.show_full_resolution"), isOn: $viewModel.showFullResolution)
-                  .foregroundColor(.white)
-                  .help(localized("ui.show_full_resolution_help"))
             }
         }
     }
@@ -625,7 +496,6 @@ struct ChangeProcessingModeView: View {
 
 enum RightPanelSectionKind: Hashable, CaseIterable {
     case selectiveTools
-    case display
     case processing
     case debug
 }
