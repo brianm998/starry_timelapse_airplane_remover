@@ -858,19 +858,26 @@ struct ResourceProfileView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(localized("ui.use_of_this_mac"))
-              .foregroundColor(textColor)
-            // Stacked, not a segmented row: the right panel is narrow, and four buttons
-            // side by side made the control wider than everything around it.
-            Picker("", selection: profileBinding) {
-                Text(localized("ui.use_full")).foregroundColor(textColor).tag(ResourceProfile?.some(.full))
-                Text(localized("ui.use_balanced")).foregroundColor(textColor).tag(ResourceProfile?.some(.balanced))
-                Text(localized("ui.use_light")).foregroundColor(textColor).tag(ResourceProfile?.some(.light))
+        // Trailing-aligned so the controls stay pinned to the right edge while the "Limited by"
+        // line below them grows and shrinks to the left, rather than the whole view's left
+        // edge (and so its right-hand controls) shifting with that text's width.
+        VStack(alignment: .trailing, spacing: 4) {
+            // Centre-aligned, so the label sits level with the middle (Balanced) radio.
+            HStack(alignment: .center, spacing: 8) {
+                Text(localized("ui.use_of_this_mac"))
+                  .foregroundColor(textColor)
+                // Stacked, not a segmented row: the right panel is narrow, and four buttons
+                // side by side made the control wider than everything around it.
+                Picker("", selection: profileBinding) {
+                    Text(localized("ui.use_full")).foregroundColor(textColor).tag(ResourceProfile?.some(.full))
+                    Text(localized("ui.use_balanced")).foregroundColor(textColor).tag(ResourceProfile?.some(.balanced))
+                    Text(localized("ui.use_light")).foregroundColor(textColor).tag(ResourceProfile?.some(.light))
+                }
+                  .pickerStyle(.radioGroup)
+                  .colorScheme(.dark)
+                  .labelsHidden()
+                  .fixedSize()
             }
-              .pickerStyle(.radioGroup)
-              .colorScheme(.dark)
-              .labelsHidden()
             Button(localized("ui.use_custom")) {
                 if viewModel.resourceProfile != .custom {
                     viewModel.resourceProfile = .custom
@@ -888,6 +895,7 @@ struct ResourceProfileView: View {
                 Text(status)
                   .font(.caption)
                   .foregroundColor(.gray)
+                  .multilineTextAlignment(.trailing)
             }
         }
         .help(localized("ui.use_of_this_mac_help"))
