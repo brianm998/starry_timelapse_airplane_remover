@@ -126,6 +126,10 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
     /** The pre-stroke horizon baseline captured at the start of the current refinement stroke. */
     fun preStrokeBaseline(): IntArray? = preStrokeHorizon
 
+    /** Whether any paint has gone on since the last [clear]: what the frame-change confirmation asks about (macOS `hasStrokes`). */
+    var hasStrokes by mutableStateOf(false)
+        private set
+
     // ---- painting ----
     fun beginStroke() { newSegment = true }
     fun endStroke() { lastX = null; lastY = null; newSegment = true }
@@ -133,6 +137,7 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
     /** Paint a brush stamp at image (x, y), gap-filling from the previous sample in the same stroke. */
     fun paint(x: Int, y: Int) {
         if (phase == HorizonPhase.COMPUTING) return
+        hasStrokes = true
         if (newSegment) {
             resetGesture()
             if (phase == HorizonPhase.REFINEMENT) preStrokeHorizon = horizonY.copyOf()
@@ -387,6 +392,7 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
             solvedHorizon[i] = -1
         }
         phase = HorizonPhase.BAND_SELECTION
+        hasStrokes = false
         preStrokeHorizon = null
         gen++
         resetGesture()

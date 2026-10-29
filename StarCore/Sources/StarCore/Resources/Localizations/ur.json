@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "زمین کی ہم آہنگی",
   "ui.status.brief.horizon_consensus": "افق کو حتمی بنانا",
   "ui.status.brief.outliers": "لکیروں کی تلاش",
-  "ui.status.brief.merged": "لکیریں مٹانا اور فریم لکھنا"
+  "ui.status.brief.merged": "لکیریں مٹانا اور فریم لکھنا",
+  "ui.horizon_change_frame.title": "فریم تبدیل کریں؟",
+  "ui.horizon_change_frame.message": "آپ نے اس فریم پر افق کا حوالہ پینٹ کرنا شروع کر دیا ہے۔ فریم {0} پر جانے سے آپ کا پینٹ کیا ہوا ضائع ہو جائے گا۔",
+  "ui.horizon_change_frame.confirm": "فریم تبدیل کریں",
+  "ui.horizon_change_frame.keep": "پینٹ کرتے رہیں"
 }

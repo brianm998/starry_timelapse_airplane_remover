@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "allineamento del terreno",
   "ui.status.brief.horizon_consensus": "definizione dell'orizzonte",
   "ui.status.brief.outliers": "ricerca delle scie",
-  "ui.status.brief.merged": "rimozione delle scie e scrittura dei fotogrammi"
+  "ui.status.brief.merged": "rimozione delle scie e scrittura dei fotogrammi",
+  "ui.horizon_change_frame.title": "Cambiare fotogramma?",
+  "ui.horizon_change_frame.message": "Hai iniziato a dipingere un riferimento d'orizzonte su questo fotogramma. Passando al fotogramma {0} ciò che hai dipinto andrà perso.",
+  "ui.horizon_change_frame.confirm": "Cambia fotogramma",
+  "ui.horizon_change_frame.keep": "Continua a dipingere"
 }

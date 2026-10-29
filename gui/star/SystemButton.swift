@@ -4,6 +4,8 @@ import SwiftUI
 // a button with a system name
 
 struct SystemButton: View {
+    @Environment(\.hotkeysEnabled) private var hotkeysEnabled
+    let shortcutEnabled: Bool
 
     let name: String
     let shortcutKey: KeyEquivalent
@@ -18,6 +20,7 @@ struct SystemButton: View {
          modifiers: EventModifiers = [],
          color: Color,
          size: CGFloat = 30,
+         shortcutEnabled: Bool = true,
          toolTip: String,
          action: @escaping () -> Void)
     {
@@ -26,6 +29,7 @@ struct SystemButton: View {
         self.modifiers = modifiers
         self.color = color
         self.size = size
+        self.shortcutEnabled = shortcutEnabled
         self.toolTip = toolTip
         self.action = action
     }
@@ -35,6 +39,7 @@ struct SystemButton: View {
             Button("", action: action)
               .opacity(0)
               .keyboardShortcut(shortcutKey, modifiers: modifiers)
+              .disabled(!(hotkeysEnabled && shortcutEnabled))
             
             Button(action: action) {
                 buttonImage(name, size: size)
@@ -43,6 +48,15 @@ struct SystemButton: View {
               .help(toolTip)
               .foregroundColor(color)
         }
+    }
+}
+
+/// Cleared over a modal panel, so the keys of the buttons underneath stop answering.
+private struct HotkeysEnabledKey: EnvironmentKey { static let defaultValue = true }
+extension EnvironmentValues {
+    var hotkeysEnabled: Bool {
+        get { self[HotkeysEnabledKey.self] }
+        set { self[HotkeysEnabledKey.self] = newValue }
     }
 }
 

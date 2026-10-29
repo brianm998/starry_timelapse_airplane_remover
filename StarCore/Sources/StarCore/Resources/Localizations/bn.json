@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "ভূমি সাজানো হচ্ছে",
   "ui.status.brief.horizon_consensus": "দিগন্ত স্থির করা হচ্ছে",
   "ui.status.brief.outliers": "ট্রেইল খোঁজা হচ্ছে",
-  "ui.status.brief.merged": "ট্রেইল মুছে ফ্রেম লেখা হচ্ছে"
+  "ui.status.brief.merged": "ট্রেইল মুছে ফ্রেম লেখা হচ্ছে",
+  "ui.horizon_change_frame.title": "ফ্রেম পরিবর্তন করবেন?",
+  "ui.horizon_change_frame.message": "আপনি এই ফ্রেমে দিগন্তের রেফারেন্স আঁকা শুরু করেছেন। ফ্রেম {0}-এ গেলে আপনার আঁকা বাতিল হয়ে যাবে।",
+  "ui.horizon_change_frame.confirm": "ফ্রেম পরিবর্তন করুন",
+  "ui.horizon_change_frame.keep": "আঁকা চালিয়ে যান"
 }

@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "भूमि संरेखित हो रही है",
   "ui.status.brief.horizon_consensus": "क्षितिज स्थिर किया जा रहा है",
   "ui.status.brief.outliers": "ट्रेल खोजे जा रहे हैं",
-  "ui.status.brief.merged": "ट्रेल मिटाकर फ़्रेम लिखे जा रहे हैं"
+  "ui.status.brief.merged": "ट्रेल मिटाकर फ़्रेम लिखे जा रहे हैं",
+  "ui.horizon_change_frame.title": "फ़्रेम बदलें?",
+  "ui.horizon_change_frame.message": "आपने इस फ़्रेम पर क्षितिज संदर्भ पेंट करना शुरू कर दिया है। फ़्रेम {0} पर जाने से आपका पेंट किया हुआ हट जाएगा।",
+  "ui.horizon_change_frame.confirm": "फ़्रेम बदलें",
+  "ui.horizon_change_frame.keep": "पेंटिंग जारी रखें"
 }

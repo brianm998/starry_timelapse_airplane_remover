@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "zarovnávání země",
   "ui.status.brief.horizon_consensus": "ustalování horizontu",
   "ui.status.brief.outliers": "hledání stop",
-  "ui.status.brief.merged": "odstraňování stop a zápis snímků"
+  "ui.status.brief.merged": "odstraňování stop a zápis snímků",
+  "ui.horizon_change_frame.title": "Změnit snímek?",
+  "ui.horizon_change_frame.message": "Na tomto snímku jste začali malovat referenční horizont. Přechodem na snímek {0} se to, co jste namalovali, zahodí.",
+  "ui.horizon_change_frame.confirm": "Změnit snímek",
+  "ui.horizon_change_frame.keep": "Pokračovat v malování"
 }

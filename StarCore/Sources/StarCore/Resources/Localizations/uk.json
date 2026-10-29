@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "вирівнювання землі",
   "ui.status.brief.horizon_consensus": "уточнення горизонту",
   "ui.status.brief.outliers": "пошук слідів",
-  "ui.status.brief.merged": "вилучення слідів і запис кадрів"
+  "ui.status.brief.merged": "вилучення слідів і запис кадрів",
+  "ui.horizon_change_frame.title": "Змінити кадр?",
+  "ui.horizon_change_frame.message": "Ви почали малювати опорний горизонт на цьому кадрі. Перехід до кадру {0} відкине намальоване.",
+  "ui.horizon_change_frame.confirm": "Змінити кадр",
+  "ui.horizon_change_frame.keep": "Продовжити малювати"
 }

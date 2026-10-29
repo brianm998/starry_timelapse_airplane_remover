@@ -154,11 +154,27 @@ struct FrameEditView: View {
         // During the startup moving-horizon flow the user advances through evenly-spaced
         // frames. Reset the painter state each time the frame changes so the user gets a
         // clean canvas for each new horizon.
+        // The same goes for a frame the user moved to by hand: the paint state belongs to the
+        // frame it was made on.  Frames moved to after paint has started only get here once
+        // the user has confirmed (see `ImageSequenceViewModel.currentIndex`).
         .onChange(of: viewModel.currentIndex) { _, _ in
-            guard viewModel.isShowingHorizonPainter,
-                  viewModel.horizonPainterMode == .startup
-            else { return }
+            guard viewModel.isShowingHorizonPainter else { return }
             resetPaintStateForCurrentFrame()
+        }
+        .onChange(of: horizonPaintState?.hasStrokes ?? false) { _, started in
+            viewModel.horizonPaintingStarted = started
+        }
+        .alert(localized("ui.horizon_change_frame.title"),
+               isPresented: Binding(get: { viewModel.pendingHorizonFrameChange != nil },
+                                    set: { if !$0 { viewModel.cancelHorizonFrameChange() } }))
+        {
+            Button(localized("ui.horizon_change_frame.confirm"), role: .destructive) {
+                viewModel.confirmHorizonFrameChange()
+            }
+            Button(localized("ui.horizon_change_frame.keep"), role: .cancel) {}
+        } message: {
+            Text(localized("ui.horizon_change_frame.message",
+                           (viewModel.pendingHorizonFrameChange ?? 0) + 1))
         }
     }
 

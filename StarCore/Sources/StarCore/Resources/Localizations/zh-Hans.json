@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "正在对齐地面",
   "ui.status.brief.horizon_consensus": "正在确定地平线",
   "ui.status.brief.outliers": "正在查找轨迹",
-  "ui.status.brief.merged": "正在抹除轨迹并写出帧"
+  "ui.status.brief.merged": "正在抹除轨迹并写出帧",
+  "ui.horizon_change_frame.title": "要更换帧吗？",
+  "ui.horizon_change_frame.message": "您已开始在此帧上绘制地平线参考。切换到第 {0} 帧将丢弃已绘制的内容。",
+  "ui.horizon_change_frame.confirm": "更换帧",
+  "ui.horizon_change_frame.keep": "继续绘制"
 }

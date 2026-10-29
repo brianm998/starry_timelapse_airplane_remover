@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "zemin hizalanıyor",
   "ui.status.brief.horizon_consensus": "ufuk netleştiriliyor",
   "ui.status.brief.outliers": "izler aranıyor",
-  "ui.status.brief.merged": "izler temizlenip kareler yazılıyor"
+  "ui.status.brief.merged": "izler temizlenip kareler yazılıyor",
+  "ui.horizon_change_frame.title": "Kare değiştirilsin mi?",
+  "ui.horizon_change_frame.message": "Bu karede ufuk referansı boyamaya başladınız. {0}. kareye geçmek, boyadıklarınızı atar.",
+  "ui.horizon_change_frame.confirm": "Kareyi Değiştir",
+  "ui.horizon_change_frame.keep": "Boyamaya Devam Et"
 }

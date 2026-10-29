@@ -157,7 +157,22 @@ class SequenceViewModel(
     // Edit sub-mode: when on, the center view is the horizon painter instead of the outlier overlay.
     private val _horizonPaintMode = MutableStateFlow(false)
     val horizonPaintMode: StateFlow<Boolean> = _horizonPaintMode.asStateFlow()
-    fun toggleHorizonPaint() { _horizonPaintMode.value = !_horizonPaintMode.value }
+    fun toggleHorizonPaint() { _horizonPaintMode.value = !_horizonPaintMode.value; _horizonPaintStarted.value = false }
+
+    // Paint on a horizon reference belongs to the frame it was painted on: once there is any, moving off the frame is held back and asked
+    // about (macOS `horizonPaintingStarted` / `pendingHorizonFrameChange`).
+    private val _horizonPaintStarted = MutableStateFlow(false)
+    fun setHorizonPaintStarted(started: Boolean) { _horizonPaintStarted.value = started }
+    private val _pendingHorizonFrameChange = MutableStateFlow<Int?>(null)
+    /** The frame a change was headed for when it was held back; non-null while the "change frame?" dialog is up. */
+    val pendingHorizonFrameChange: StateFlow<Int?> = _pendingHorizonFrameChange.asStateFlow()
+    fun confirmHorizonFrameChange() {
+        val target = _pendingHorizonFrameChange.value ?: return
+        _pendingHorizonFrameChange.value = null
+        _horizonPaintStarted.value = false
+        setCurrentIndex(target, confirmed = true)
+    }
+    fun cancelHorizonFrameChange() { _pendingHorizonFrameChange.value = null }
 
     // ---- startup horizon flow (macOS horizonPainterMode == .startup + startup frame indices/position) ----
     // When true the painter shows "i / N" progress + Next/Continue and the AppViewModel routes the
@@ -184,7 +199,7 @@ class SequenceViewModel(
         _startupHorizonIndices.value = indices
         _startupHorizonPosition.value = position
         _horizonPainterStartup.value = true
-        indices.getOrNull(position)?.let { setCurrentIndex(it) }
+        indices.getOrNull(position)?.let { setCurrentIndex(it, confirmed = true) }
         _mode.value = InteractionMode.EDIT
         _horizonPaintMode.value = true
     }
@@ -201,7 +216,7 @@ class SequenceViewModel(
         val next = _startupHorizonPosition.value + 1
         if (next >= idx.size) return
         _startupHorizonPosition.value = next
-        setCurrentIndex(idx[next])
+        setCurrentIndex(idx[next], confirmed = true)
     }
 
     /** Leave startup horizon-painting and close the painter (macOS resets horizonPainterMode to .normal). */
@@ -210,6 +225,7 @@ class SequenceViewModel(
         _startupHorizonIndices.value = emptyList()
         _startupHorizonPosition.value = 0
         _horizonPaintMode.value = false
+        _horizonPaintStarted.value = false
         _mode.value = InteractionMode.SCRUB
     }
 
@@ -530,8 +546,12 @@ class SequenceViewModel(
     }
     fun toggleFilmstrip() { _showFilmstrip.value = !_showFilmstrip.value }
 
-    fun setCurrentIndex(i: Int) {
+    fun setCurrentIndex(i: Int, confirmed: Boolean = false) {
         val clamped = i.coerceIn(0, (frameCount - 1).coerceAtLeast(0))
+        if (!confirmed && _horizonPaintMode.value && _horizonPaintStarted.value && clamped != _currentIndex.value) {
+            _pendingHorizonFrameChange.value = clamped
+            return
+        }
         _currentIndex.value = clamped
     }
 
