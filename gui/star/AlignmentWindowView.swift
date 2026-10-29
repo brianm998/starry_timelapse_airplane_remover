@@ -7,6 +7,8 @@ import Charts
 struct AlignmentWindowView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
 
+    @State private var showingInfo = false
+
     @State private var showStarDeviation = true
     @State private var showEarthDeviation = true
     
@@ -27,6 +29,15 @@ struct AlignmentWindowView: View {
         }
           .padding(20)
           .navigationTitle(localized("ui.star_alignment_info"))
+          .toolbar {
+              ToolbarItem {
+                  AlignmentInfoButton { showingInfo = true }
+              }
+          }
+          .sheet(isPresented: $showingInfo) {
+              AlignmentInfoContent { showingInfo = false }
+                .frame(width: 560)
+          }
     }
         
     func mainView(_ viewModel: ImageSequenceViewModel) -> some View {
@@ -851,5 +862,76 @@ extension Color {
             .pink, .teal, .indigo, .brown
         ]
         return palette[(abs(offset) - 1) % palette.count]
+    }
+}
+
+/// The circled "i" that asks for the explanation of the alignment charts.
+struct AlignmentInfoButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "info.circle")
+        }
+          .buttonStyle(.borderless)
+          .foregroundColor(.gray)
+          .help(localized("ui.alignment_info_help"))
+    }
+}
+
+/// What the alignment charts show and how to read them, in words a user who has never heard
+/// of a homography can follow.  Shared by the processing modal, which draws it over itself,
+/// and the alignment window, which presents it as a sheet.
+struct AlignmentInfoContent: View {
+    let close: () -> Void
+
+    private func section(_ title: String, _ body: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(localized(title))
+              .font(.headline)
+            Text(localized(body))
+              .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(localized("ui.alignment_info_title"))
+              .font(.title2)
+            section("ui.alignment_info_what_title", "ui.alignment_info_what_body")
+            section("ui.alignment_info_good_title", "ui.alignment_info_good_body")
+            section("ui.alignment_info_bad_title", "ui.alignment_info_bad_body")
+            Text(localized("ui.alignment_info_use_body"))
+              .font(.caption)
+              .foregroundColor(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button(localized("ui.done"), action: close)
+                  .keyboardShortcut(.defaultAction)
+            }
+        }
+          .padding(24)
+    }
+}
+
+/// `AlignmentInfoContent` as a card over a dimmed backdrop, for drawing on top of the
+/// processing modal, which is itself an overlay and so cannot present a sheet over itself.
+struct AlignmentInfoOverlay: View {
+    let close: () -> Void
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+              .fill(Color.black.opacity(0.5))
+              .contentShape(Rectangle())
+              .onTapGesture(perform: close)
+            AlignmentInfoContent(close: close)
+              .frame(width: 540)
+              .background(Color(white: 0.22))
+              .environment(\.colorScheme, .dark)
+              .cornerRadius(14)
+              .shadow(radius: 24)
+        }
     }
 }

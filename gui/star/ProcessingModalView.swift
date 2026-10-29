@@ -22,6 +22,7 @@ import logging
 struct ProcessingModalView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @Environment(FrameGraphViewModel.self) var frameGraphViewModel: FrameGraphViewModel
+    @Environment(\.openWindow) private var openWindow
 
     private var steps: [ProcessingStepProgress] {
         // `alreadyDone` describes whichever graph was built last, so until this run's is
@@ -90,6 +91,7 @@ struct ProcessingModalView: View {
           statusText: viewModel.processingStatusText ?? viewModel.waitingForFramesText,
           headline: headline(for: steps),
           showAlignment: showAlignment,
+          openAlignmentWindow: { openWindow(id: StarApp.alignmentWindowName) },
           stop: { viewModel.stopProcessing() },
           dismiss: { viewModel.processingModalShowing = false },
           concurrencyContent: {
@@ -171,6 +173,12 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     /// heading gives, and it takes the tallest part of the panel with it.
     @Binding var showAlignment: Bool
 
+    /// Opens the alignment window; nil leaves the button out.
+    var openAlignmentWindow: (() -> Void)? = nil
+
+    /// Whether the explanation of the alignment charts is up over the panel.
+    @State private var showingAlignmentInfo = false
+
     let stop: () -> Void
     let dismiss: () -> Void
 
@@ -217,6 +225,10 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
               .cornerRadius(14)
               .shadow(radius: 24)
               .padding(20)
+
+            if showingAlignmentInfo {
+                AlignmentInfoOverlay { showingAlignmentInfo = false }
+            }
         }
     }
 
@@ -229,6 +241,15 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
                     Text(localized("ui.alignment_2"))
                       .font(.headline)
                       .foregroundColor(.white)
+                    AlignmentInfoButton { showingAlignmentInfo = true }
+                    if let openAlignmentWindow {
+                        Button(action: openAlignmentWindow) {
+                            Image(systemName: "arrow.up.forward.app")
+                        }
+                          .buttonStyle(.borderless)
+                          .foregroundColor(.gray)
+                          .help(localized("ui.open_alignment_window_help"))
+                    }
                     Spacer()
                     Toggle(localized("ui.show_alignment_results"), isOn: $showAlignment)
                       .toggleStyle(.checkbox)
@@ -317,6 +338,8 @@ struct ProcessingStepsView: View {
     private let doneColor: Color = .green
     private let runningColor: Color = .yellow
     private let queuedColor = Color(white: 0.32)
+    /// For what is finished, or has nothing left: quieter than the white of what is live.
+    private let settledColor = Color(white: 0.68)
 
     /// Wide enough for the longest translated step name at this font — "Zusammengeführter
     /// Horizont" in German — over two lines.
@@ -359,13 +382,13 @@ struct ProcessingStepsView: View {
             if !doneSteps.isEmpty {
                 columnHeader(localized("ui.done"), showsCounts: true)
                 ForEach(doneSteps) { step in
-                    stepRow(step)
+                    stepRow(step, isDone: true)
                 }
             }
             if !processingSteps.isEmpty {
                 columnHeader(localized("ui.processing"), showsCounts: doneSteps.isEmpty)
                 ForEach(processingSteps) { step in
-                    stepRow(step)
+                    stepRow(step, isDone: false)
                 }
             }
         }
@@ -382,20 +405,20 @@ struct ProcessingStepsView: View {
             Spacer()
             if showsCounts {
                 countColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"),
-                             color: .gray)
+                             colors: [.gray, .gray, .gray])
             }
         }
           .padding(.top, 4)
     }
 
     private func countColumns(_ queued: String, _ running: String, _ done: String,
-                              color: Color) -> some View {
+                              colors: [Color]) -> some View {
         HStack(spacing: 0) {
-            ForEach([queued, running, done], id: \.self) { text in
+            ForEach(Array([queued, running, done].enumerated()), id: \.offset) { index, text in
                 Text(text)
                   .font(.caption)
                   .monospacedDigit()
-                  .foregroundColor(color)
+                  .foregroundColor(colors[index])
                   .lineLimit(1)
                   .frame(width: numberWidth, alignment: .trailing)
             }
@@ -435,13 +458,13 @@ struct ProcessingStepsView: View {
           .accessibilityIdentifier("processing.extraction")
     }
 
-    private func stepRow(_ step: ProcessingStepProgress) -> some View {
+    private func stepRow(_ step: ProcessingStepProgress, isDone: Bool) -> some View {
         HStack(spacing: 12) {
             // Two lines because these are translated, and no single-line column this
             // panel can afford would hold every language's version of every name.
             Text(step.type.stepName)
               .font(.callout)
-              .foregroundColor(step.hasWork ? .white : .gray)
+              .foregroundColor(!step.hasWork ? .gray : isDone ? settledColor : .white)
               .lineLimit(2)
               .fixedSize(horizontal: false, vertical: true)
               .frame(width: labelWidth, alignment: .leading)
@@ -452,8 +475,13 @@ struct ProcessingStepsView: View {
             // being worked out — once it is, `ProcessingSteps.visible` drops it — so this
             // says "not known yet", which no wording says as plainly as leaving it out.
             if step.hasWork {
+                // A column goes quiet when it has nothing to say: nothing queued, nothing
+                // running, or everything done.
+                let total = step.queued + step.running + step.completed
                 countColumns("\(step.queued)", "\(step.running)", "\(step.completed)",
-                             color: .white)
+                             colors: [step.queued == 0 ? settledColor : .white,
+                                      step.running == 0 ? settledColor : .white,
+                                      step.completed == total ? settledColor : .white])
             } else {
                 Text("—")
                   .font(.caption)
