@@ -16,26 +16,40 @@ class ProcessingHeadlineTest {
 
     private fun step(type: String, queued: Int = 0, running: Int = 0, done: Int = 0) = StepRow(type, queued, running, done, 0)
 
-    private fun text(steps: List<StepRow>, hasPlan: Boolean = true, complete: Int = 0, eta: Double? = null) =
-        ProcessingHeadline.text(steps, null, hasPlan, complete, 10) { eta }
+    private fun text(steps: List<StepRow>, hasPlan: Boolean = true, complete: Int = 0) =
+        ProcessingHeadline.text(steps, null, hasPlan, complete, 10)
 
     @Test fun planningUntilTheDaemonHasReported() {
         assertEquals(localized("ui.status.planning"), text(listOf(step("horizon")), hasPlan = false))
     }
 
-    @Test fun describesTheEarliestRunningStep() {
-        val steps = listOf(step("horizon", done = 10), step("starKeypoints", queued = 5, running = 2, done = 3), step("merge", queued = 10))
-        assertEquals(ProcessingHeadline.activity("starKeypoints"), text(steps))
+    @Test fun namesEveryRunningStep() {
+        val steps = listOf(
+            step("horizon", queued = 3, running = 2, done = 5), step("starKeypoints", queued = 5, running = 2, done = 3),
+            step("earthHomography", queued = 4), step("merge", queued = 10),
+        )
+        assertEquals(localized("ui.status.working_on", "${ProcessingHeadline.brief("horizon")}, ${ProcessingHeadline.brief("starKeypoints")}"), text(steps))
     }
 
     @Test fun fallsBackToTheFirstQueuedStep() {
         assertEquals(ProcessingHeadline.activity("starKeypoints"), text(listOf(step("horizon", done = 10), step("starKeypoints", queued = 10))))
     }
 
-    @Test fun appendsTheEstimateOnlyWhenThereIsOne() {
-        val steps = listOf(step("starKeypoints", queued = 5, running = 2, done = 3))
-        assertEquals(ProcessingHeadline.activity("starKeypoints"), text(steps))
-        assertTrue(text(steps, eta = 600.0)!!.endsWith(localized("ui.status.left_step", localized("duration.minutes", 10))))
+    @Test fun overallEstimateIsTheSlowestMeasuredStep() {
+        val steps = listOf(step("horizon", queued = 3, running = 2, done = 5), step("starKeypoints", queued = 5, running = 2, done = 3))
+        assertEquals(
+            localized("ui.status.overall_about", localized("duration.minutes", 10)),
+            ProcessingHeadline.overallText(steps) { if (it.type == "horizon") 120.0 else 600.0 },
+        )
+    }
+
+    @Test fun overallEstimateAdmitsWhatItCannotSeeYet() {
+        val steps = listOf(step("starKeypoints", queued = 5, running = 2, done = 3), step("merge", queued = 10))
+        assertEquals(
+            localized("ui.status.overall_at_least", localized("duration.minutes", 10)),
+            ProcessingHeadline.overallText(steps) { if (it.type == "merge") null else 600.0 },
+        )
+        assertNull(ProcessingHeadline.overallText(steps) { null })
     }
 
     @Test fun finishingWhileFramesRemainAndQuietOnceDone() {

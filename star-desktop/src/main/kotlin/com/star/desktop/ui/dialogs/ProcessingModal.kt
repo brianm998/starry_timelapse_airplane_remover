@@ -44,6 +44,8 @@ import com.star.desktop.domain.StepRateTracker
 import com.star.desktop.domain.StepRow
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.AlignmentInfoButton
+import com.star.desktop.ui.components.AlignmentInfoOverlay
 import com.star.desktop.ui.components.DeviationChart
 import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.sequence.SequenceViewModel
@@ -52,6 +54,10 @@ import com.star.desktop.ui.theme.StarShapes
 
 private val NAME_WIDTH = 180.dp
 private val NUMBER_WIDTH = 46.dp
+/** The time-left column between each bar and its counts. */
+private val ETA_WIDTH = 56.dp
+/** For what is finished or has nothing left: quieter than the white of what is live. */
+private val SETTLED = Color(0.68f, 0.68f, 0.68f)
 private val COUNT_WIDTH = NUMBER_WIDTH * 3
 
 /**
@@ -69,7 +75,12 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     // Fed each time the counts change; not state the screen draws, so updating it asks for no further pass.
     val rates = remember { StepRateTracker() }
     rates.observe(rows)
-    val headline = ProcessingHeadline.text(rows, extraction, report != null, counts.complete, svm.frameCount) { rates.secondsRemaining(it) }
+    val headline = ProcessingHeadline.text(rows, extraction, report != null, counts.complete, svm.frameCount)
+    val overall = ProcessingHeadline.overallText(rows) { rates.secondsRemaining(it) }
+    val estimates = rows.mapNotNull { row -> rates.secondsRemaining(row)?.let { row.type to it } }.toMap()
+    val session by app.sessions.session.collectAsState()
+    val cameraMoving = session?.config?.tripodHeadWasMoving == true
+    var showingInfo by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
         Column(
@@ -89,6 +100,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                         report?.status?.takeIf { it.isNotEmpty() } ?: localized("progress.frames_complete", counts.complete, svm.frameCount),
                         color = StarColors.textSecondary, fontSize = 12.sp,
                     )
+                    if (overall != null) Text(overall, color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, modifier = Modifier.testTag("processing.overall"))
                     if (headline != null) Text(headline, color = StarColors.white.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.testTag("processing.headline"))
                 }
                 ResourceProfileControl(app)
@@ -96,9 +108,9 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
             HorizontalDivider(color = StarColors.cellDefault)
 
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                StepsView(rows, hasReport = report != null, extraction = extraction)
+                StepsView(rows, hasReport = report != null, extraction = extraction, estimates = estimates)
                 HorizontalDivider(color = StarColors.cellDefault)
-                AlignmentSection(app, svm)
+                AlignmentSection(app, svm) { showingInfo = true }
             }
 
             HorizontalDivider(color = StarColors.cellDefault)
@@ -121,12 +133,13 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                 }
             }
         }
+        if (showingInfo) AlignmentInfoOverlay(cameraMoving) { showingInfo = false }
     }
 }
 
 /** One bar per processing step, stacked in the order the daemon sends them (also drawn by the reopened-sequence panel, over what was found on disk). */
 @Composable
-internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.star.proto.FrameExtraction? = null) {
+internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.star.proto.FrameExtraction? = null, estimates: Map<String, Double> = emptyMap()) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(localized("ui.steps"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         // Extracting the video's frames comes first, above the horizon, for frames that are being extracted from a video.
@@ -141,11 +154,11 @@ internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.
                 val (done, processing) = rows.partition { it.isDone }
                 if (done.isNotEmpty()) {
                     GroupHeader(localized("ui.done"), showsCounts = true)
-                    done.forEach { StepRowView(it) }
+                    done.forEach { StepRowView(it, isDone = true, estimates[it.type]) }
                 }
                 if (processing.isNotEmpty()) {
                     GroupHeader(localized("ui.processing"), showsCounts = done.isEmpty())
-                    processing.forEach { StepRowView(it) }
+                    processing.forEach { StepRowView(it, isDone = false, estimates[it.type]) }
                 }
             }
         }
@@ -157,19 +170,30 @@ internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.
 private fun GroupHeader(title: String, showsCounts: Boolean) {
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(title, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-        if (showsCounts) CountColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"), StarColors.textSecondary)
+        if (showsCounts) {
+            EtaColumn(localized("ui.time_left"), StarColors.textSecondary)
+            CountColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"), List(3) { StarColors.textSecondary })
+        }
     }
 }
 
 /** The queued, running and done columns. */
 @Composable
-private fun CountColumns(queued: String, running: String, done: String, color: Color) {
+private fun CountColumns(queued: String, running: String, done: String, colors: List<Color>) {
     Row {
-        for (text in listOf(queued, running, done)) {
-            Text(text, color = color, fontSize = 12.sp, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(NUMBER_WIDTH))
+        for ((index, text) in listOf(queued, running, done).withIndex()) {
+            Text(text, color = colors[index], fontSize = 12.sp, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(NUMBER_WIDTH))
         }
     }
 }
+
+/** The time left for a step, in the column beside its bar; empty until there is a rate to go on. */
+@Composable
+private fun EtaColumn(text: String, color: Color = Color.White) {
+    Text(text, color = color, fontSize = 12.sp, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(ETA_WIDTH))
+}
+
+private fun etaText(seconds: Double?): String = if (seconds == null || !seconds.isFinite()) "" else ProcessingHeadline.duration(seconds)
 
 @Composable
 private fun ExtractionRowView(e: com.star.proto.FrameExtraction) {
@@ -182,6 +206,7 @@ private fun ExtractionRowView(e: com.star.proto.FrameExtraction) {
                 if (done > 0f) Box(Modifier.weight(done).fillMaxHeight().background(StarColors.green))
                 if (done < 1f) Box(Modifier.weight(1f - done).fillMaxHeight())
             }
+            EtaColumn(if (e.complete || !e.etaKnown) "" else etaText(e.etaSeconds))
             Text(
                 localized("ui.n_of_m_complete", e.extracted, e.total),
                 color = StarColors.white, fontSize = 12.sp, maxLines = 2,
@@ -192,13 +217,22 @@ private fun ExtractionRowView(e: com.star.proto.FrameExtraction) {
 }
 
 @Composable
-private fun StepRowView(step: StepRow) {
+private fun StepRowView(step: StepRow, isDone: Boolean, secondsLeft: Double?) {
     HoverTip(step.help) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(step.name, color = if (step.hasWork) StarColors.white else StarColors.textSecondary, fontSize = 13.sp, maxLines = 2, modifier = Modifier.width(NAME_WIDTH))
+            Text(step.name, color = if (!step.hasWork) StarColors.textSecondary else if (isDone) SETTLED else StarColors.white, fontSize = 13.sp, maxLines = 2, modifier = Modifier.width(NAME_WIDTH))
             StepBar(step, Modifier.weight(1f))
+            EtaColumn(if (isDone) "" else etaText(secondsLeft))
             // A step with no operations is only on screen while the plan is still being worked out, so this says "not known yet".
-            if (step.hasWork) CountColumns("${step.queued}", "${step.running}", "${step.completed}", StarColors.white)
+            // A column goes quiet when it has nothing to say: nothing queued, nothing running, or everything done.
+            if (step.hasWork) CountColumns(
+                "${step.queued}", "${step.running}", "${step.completed}",
+                listOf(
+                    if (step.queued == 0) SETTLED else StarColors.white,
+                    if (step.running == 0) SETTLED else StarColors.white,
+                    if (step.completed == step.total) SETTLED else StarColors.white,
+                ),
+            )
             else Text("—", color = StarColors.textSecondary, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(COUNT_WIDTH))
         }
     }
@@ -248,11 +282,16 @@ private fun ResourceProfileControl(app: AppViewModel) {
  * rebuilt every time it is dismissed and brought back.
  */
 @Composable
-private fun AlignmentSection(app: AppViewModel, svm: SequenceViewModel) {
+private fun AlignmentSection(app: AppViewModel, svm: SequenceViewModel, showInfo: () -> Unit) {
     var show by remember { mutableStateOf(app.prefs.showAlignmentInProcessingWindow) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(localized("ui.alignment_2"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text(localized("ui.alignment_2"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            AlignmentInfoButton(showInfo)
+            HoverTip(localized("ui.open_alignment_window_help")) {
+                Text("↗", color = StarColors.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp).clickable { app.openAlignmentWindow() })
+            }
+            Box(Modifier.weight(1f))
             HoverTip(localized("ui.show_alignment_results_help")) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = show, onCheckedChange = { show = it; app.prefs.showAlignmentInProcessingWindow = it })
