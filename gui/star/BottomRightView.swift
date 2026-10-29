@@ -255,7 +255,9 @@ struct BottomRightView: View {
                 }
 
                 Space(width: 5)
-                
+
+                ProcessingButtonsView()
+
                 EditableFrameNumberView()
 
 
@@ -378,5 +380,70 @@ struct BottomRightView: View {
                   //await frameDataHarvesterDataHolder.setCallback(nil)
               }
           }
+    }
+}
+
+
+/// "Process Frames" / "Show Progress" and "Render Video", which used to sit at the top of the
+/// left panel.  The first is one button in two roles: while a run is going it is the only way
+/// back to a processing modal that has been dismissed, and the frame counts must not disable it.
+struct ProcessingButtonsView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    var role: ProcessingButtonRole {
+        ProcessingButtonRole.current(
+          isProcessingFrames: viewModel.isProcessingFrames,
+          isRenderingVideo: viewModel.isRenderingVideo,
+          unprocessedCount: viewModel.frameStateMap[.unprocessed]?.count ?? 0,
+          horizonDetectedCount: viewModel.frameStateMap[.horizonDetected]?.count ?? 0,
+          frameCount: viewModel.frames.count,
+          pendingHorizonRefinement: viewModel.hasPendingHorizonRefinement
+        )
+    }
+
+    var processButtonDisabled: Bool {
+        if case .process(let enabled) = role { return !enabled }
+        return false
+    }
+
+    var renderButtonDisabled: Bool {
+        let complete = viewModel.frameStateMap[.complete]?.count ?? 0
+        return complete != viewModel.frames.count || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+    }
+
+    var body: some View {
+        let role = self.role
+        HStack {
+            Button() {
+                switch role {
+                case .status:  viewModel.processingModalShowing = true
+                case .process: viewModel.shouldShowProcessingSettings = true
+                }
+            } label: {
+                Text(role == .status
+                       ? localized("ui.show_progress")
+                       : localized("ui.process_frames"))
+            }
+              .disabled(processButtonDisabled)
+              .if(!processButtonDisabled) {
+                  $0.buttonStyle(.borderedProminent)
+                    .tint(.blue)
+              }
+              .help(role == .status
+                      ? localized("ui.show_the_processing_status_again")
+                      : localized("ui.choose_settings_and_process_these_frames"))
+
+            Button() {
+                viewModel.renderVideoSheetShowing = true
+                viewModel.isRenderingVideo = false
+            } label: {
+                Text(localized("ui.render_video_from_n_frames_lower", viewModel.frames.count))
+            }
+              .disabled(renderButtonDisabled)
+              .if(!renderButtonDisabled) {
+                  $0.buttonStyle(.borderedProminent)
+                    .tint(.blue)
+              }
+        }
     }
 }
