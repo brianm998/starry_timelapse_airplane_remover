@@ -1157,5 +1157,19 @@
   "ui.location_unknown_free": "Volné místo na tomto svazku se nepodařilo zjistit.",
   "ui.location_short": "Na tomto svazku není dost místa. Vyberte jinou složku nebo uvolněte {0}.",
   "ui.sequence_location_title": "Otevřít sekvenci obrázků",
-  "ui.sequence_location_open": "Otevřít"
+  "ui.sequence_location_open": "Otevřít",
+  "ui.status.planning": "Planning the run: working out which steps each frame still needs.",
+  "ui.status.extracting": "Extracting the video's frames, so processing can start on them.",
+  "ui.status.finishing": "Finishing up: writing the last of the frames.",
+  "ui.status.horizon": "Finding the horizon in each frame, so the sky and the ground can be aligned separately.",
+  "ui.status.merged_horizon": "Smoothing each frame's horizon with its neighbours', to get a steadier sky mask.",
+  "ui.status.star_keypoints": "Finding the stars in each frame, so frames can be lined up with their neighbours. This is usually the slowest step.",
+  "ui.status.earth_keypoints": "Finding features on the ground, so the landscape can be aligned on its own.",
+  "ui.status.star_alignment": "Working out how to line up each frame's stars with its neighbours', so the sky can be combined.",
+  "ui.status.earth_alignment": "Working out how to line up each frame's ground with its neighbours', so the landscape stays steady.",
+  "ui.status.horizon_consensus": "Settling each frame's horizon from what its neighbours agree on.",
+  "ui.status.outliers": "Looking for airplane and satellite trails, and deciding which to paint out.",
+  "ui.status.merged": "Painting out the trails using the aligned neighbours, and writing the finished frames.",
+  "ui.status.left_step": "About {0} left for this step.",
+  "ui.status.left_overall": "About {0} left."
 }
