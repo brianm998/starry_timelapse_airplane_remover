@@ -39,6 +39,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameStateCounts
+import com.star.desktop.domain.ProcessingHeadline
+import com.star.desktop.domain.StepRateTracker
 import com.star.desktop.domain.StepRow
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
@@ -64,6 +66,10 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     val rows = StepRow.of(report)
     val counts = FrameStateCounts(frameStates, svm.frameCount)
     val extraction by svm.extraction.collectAsState()
+    // Fed each time the counts change; not state the screen draws, so updating it asks for no further pass.
+    val rates = remember { StepRateTracker() }
+    rates.observe(rows)
+    val headline = ProcessingHeadline.text(rows, extraction, report != null, counts.complete, svm.frameCount) { rates.secondsRemaining(it) }
 
     Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
         Column(
@@ -83,6 +89,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                         report?.status?.takeIf { it.isNotEmpty() } ?: localized("progress.frames_complete", counts.complete, svm.frameCount),
                         color = StarColors.textSecondary, fontSize = 12.sp,
                     )
+                    if (headline != null) Text(headline, color = StarColors.white.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.testTag("processing.headline"))
                 }
                 ResourceProfileControl(app)
             }

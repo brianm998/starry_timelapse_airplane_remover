@@ -62,13 +62,33 @@ struct ProcessingModalView: View {
     /// `.numberOfFramesToProcessConcurrently` without fighting over the keyboard.
     @FocusState private var focusedField: FocusedField?
 
+    /// How fast each step is going, for the estimate in the header.  A reference type that
+    /// `body` feeds each time the counts change: it is not state the view draws, so
+    /// updating it does not ask for another pass.
+    @State private var rates = StepRateTracker()
+
+    /// What star is doing now and why, with a time estimate when there is a rate to give one.
+    private func headline(for steps: [ProcessingStepProgress]) -> String? {
+        rates.observe(steps)
+        return ProcessingHeadline.text(
+          steps: steps,
+          extraction: viewModel.extractionProgress,
+          hasPlan: frameGraphViewModel.graphBuildsCompleted > viewModel.processingBuildCount,
+          framesComplete: viewModel.count(for: .complete),
+          frameCount: viewModel.frames.count,
+          secondsRemaining: { rates.secondsRemaining(for: $0) }
+        )
+    }
+
     var body: some View {
+        let steps = self.steps
         ProcessingModalPanel(
           framesComplete: viewModel.count(for: .complete),
           frameCount: viewModel.frames.count,
           steps: steps,
           extraction: viewModel.extractionProgress,
           statusText: viewModel.processingStatusText ?? viewModel.waitingForFramesText,
+          headline: headline(for: steps),
           showAlignment: showAlignment,
           stop: { viewModel.stopProcessing() },
           dismiss: { viewModel.processingModalShowing = false },
@@ -142,6 +162,10 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     /// builds a frame graph has operations to count from the start, and the frames-complete
     /// line is the more useful of the two.
     var statusText: String? = nil
+
+    /// One sentence on what is happening right now and why, with a time estimate when one
+    /// can be given; drawn directly under the frames-complete line.
+    var headline: String? = nil
 
     /// Whether the alignment charts are drawn.  Off is what the toggle in the alignment
     /// heading gives, and it takes the tallest part of the panel with it.
@@ -240,6 +264,12 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
                                              framesComplete, frameCount))
                   .font(.caption)
                   .foregroundColor(.gray)
+                if let headline {
+                    Text(headline)
+                      .font(.caption)
+                      .foregroundColor(.white.opacity(0.85))
+                      .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer()
             concurrencyContent()
