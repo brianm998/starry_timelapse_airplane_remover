@@ -46,12 +46,15 @@ struct StarCommands: Commands {
                 RemoveAllButton()
                   .environment(viewModel)
                   .keyboardShortcut("a", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 KeepAllButton()
                   .environment(viewModel)
                   .keyboardShortcut("k", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ClearUndecidedButton()
                   .environment(viewModel)
                   .keyboardShortcut("u", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ProcessAllFramesButton()
                   .environment(viewModel)
                 ProcessRemainingFramesButton()
@@ -62,11 +65,13 @@ struct StarCommands: Commands {
                   .environment(viewModel)
                 ApplyAllDecisionTreeButton()
                   .environment(viewModel)
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ApplyDecisionTreeButton()
                   .environment(viewModel)
                 RenderCurrentFrameButton()
                   .environment(viewModel)
                   .keyboardShortcut("r", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 RenderAllFramesButton()
                   .environment(viewModel)
             }
@@ -76,27 +81,35 @@ struct StarCommands: Commands {
                 ChangeToolButton(tool: .remove)
                   .environment(viewModel)
                   .keyboardShortcut("1", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ChangeToolButton(tool: .keep)
                   .environment(viewModel)
                   .keyboardShortcut("2", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ChangeToolButton(tool: .razor)
                   .environment(viewModel)
                   .keyboardShortcut("3", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ChangeToolButton(tool: .shovel)
                   .environment(viewModel)
                   .keyboardShortcut("4", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ChangeToolButton(tool: .trash)
                   .environment(viewModel)
                   .keyboardShortcut("5", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ChangeToolButton(tool: .removeFromTrash)
                   .environment(viewModel)
                   .keyboardShortcut("6", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ChangeToolButton(tool: .multi)
                   .environment(viewModel)
                   .keyboardShortcut("7", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
                 ChangeToolButton(tool: .information)
                   .environment(viewModel)
                   .keyboardShortcut("8", modifiers: [])
+                  .disabled(!viewModel.menuHotkeysEnabled)
 
                 Divider()
 
@@ -106,6 +119,7 @@ struct StarCommands: Commands {
                 }
                 .environment(viewModel)
                 .keyboardShortcut("e", modifiers: [])
+                .disabled(!viewModel.menuHotkeysEnabled)
 
                 // S — switch to scrub interaction mode.
                 // Disabled while the user is painting horizons on
@@ -116,6 +130,7 @@ struct StarCommands: Commands {
                 }
                 .environment(viewModel)
                 .keyboardShortcut("s", modifiers: [])
+                .disabled(!viewModel.menuHotkeysEnabled)
                 .disabled(viewModel.isShowingHorizonPainter
                           && viewModel.horizonPainterMode == .startup)
 
@@ -125,6 +140,7 @@ struct StarCommands: Commands {
                 }
                 .environment(viewModel)
                 .keyboardShortcut("g", modifiers: [])
+                .disabled(!viewModel.menuHotkeysEnabled)
 
                 // H — toggle the horizon painter overlay
                 Button(viewModel.isShowingHorizonPainter
@@ -134,6 +150,7 @@ struct StarCommands: Commands {
                 }
                 .environment(viewModel)
                 .keyboardShortcut("h", modifiers: [])
+                .disabled(viewModel.isProcessingModalUp)
 
                 // Toggle side panels. The tab keyboard shortcut for this
                 // is handled by TabCatcher inside ImageSequenceView, since

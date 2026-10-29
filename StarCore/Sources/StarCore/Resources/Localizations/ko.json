@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "지면 정렬 중",
   "ui.status.brief.horizon_consensus": "지평선 확정 중",
   "ui.status.brief.outliers": "궤적 찾는 중",
-  "ui.status.brief.merged": "궤적 지우고 프레임 기록 중"
+  "ui.status.brief.merged": "궤적 지우고 프레임 기록 중",
+  "ui.horizon_change_frame.title": "프레임을 변경할까요?",
+  "ui.horizon_change_frame.message": "이 프레임에서 수평선 기준 칠하기를 시작했습니다. {0}번 프레임으로 이동하면 칠한 내용이 취소됩니다.",
+  "ui.horizon_change_frame.confirm": "프레임 변경",
+  "ui.horizon_change_frame.keep": "계속 칠하기"
 }

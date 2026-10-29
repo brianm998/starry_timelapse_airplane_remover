@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "menyelaraskan tanah",
   "ui.status.brief.horizon_consensus": "memantapkan horizon",
   "ui.status.brief.outliers": "mencari jejak",
-  "ui.status.brief.merged": "menghapus jejak dan menulis bingkai"
+  "ui.status.brief.merged": "menghapus jejak dan menulis bingkai",
+  "ui.horizon_change_frame.title": "Ganti bingkai?",
+  "ui.horizon_change_frame.message": "Anda sudah mulai melukis referensi cakrawala pada bingkai ini. Berpindah ke bingkai {0} akan membuang apa yang sudah Anda lukis.",
+  "ui.horizon_change_frame.confirm": "Ganti Bingkai",
+  "ui.horizon_change_frame.keep": "Lanjutkan Melukis"
 }

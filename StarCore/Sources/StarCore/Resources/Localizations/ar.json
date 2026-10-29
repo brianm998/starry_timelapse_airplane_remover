@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "محاذاة الأرض",
   "ui.status.brief.horizon_consensus": "تثبيت الأفق",
   "ui.status.brief.outliers": "البحث عن الآثار",
-  "ui.status.brief.merged": "محو الآثار وكتابة الإطارات"
+  "ui.status.brief.merged": "محو الآثار وكتابة الإطارات",
+  "ui.horizon_change_frame.title": "تغيير الإطار؟",
+  "ui.horizon_change_frame.message": "لقد بدأت برسم مرجع الأفق على هذا الإطار. الانتقال إلى الإطار {0} سيتجاهل ما رسمته.",
+  "ui.horizon_change_frame.confirm": "تغيير الإطار",
+  "ui.horizon_change_frame.keep": "متابعة الرسم"
 }

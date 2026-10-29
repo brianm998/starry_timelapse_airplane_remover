@@ -26,6 +26,8 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
     // While the horizon painter is open its own keys (brush size, sky/ground, reset, return, escape) are the ones that
     // count; r would otherwise render the frame under it, and the arrows move off the frame being painted.
     if (svm.horizonPaintMode.value) return false
+    // Under the processing screen nothing behind it should answer to a key.
+    if (svm.showProcessingModal.value) return false
     // Ctrl, Cmd and Alt with a letter are the menu's (Ctrl+R would render the frame, Ctrl+Z skip back), not the plain keys that move and edit.
     if (event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return false
 

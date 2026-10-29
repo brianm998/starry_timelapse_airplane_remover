@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "alineando la tierra",
   "ui.status.brief.horizon_consensus": "fijando el horizonte",
   "ui.status.brief.outliers": "buscando estelas",
-  "ui.status.brief.merged": "borrando estelas y escribiendo fotogramas"
+  "ui.status.brief.merged": "borrando estelas y escribiendo fotogramas",
+  "ui.horizon_change_frame.title": "¿Cambiar de fotograma?",
+  "ui.horizon_change_frame.message": "Ha empezado a pintar una referencia de horizonte en este fotograma. Al cambiar al fotograma {0} se descartará lo que ha pintado.",
+  "ui.horizon_change_frame.confirm": "Cambiar de fotograma",
+  "ui.horizon_change_frame.keep": "Seguir pintando"
 }

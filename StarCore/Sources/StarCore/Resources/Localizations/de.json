@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "Erde wird ausgerichtet",
   "ui.status.brief.horizon_consensus": "Horizont wird festgelegt",
   "ui.status.brief.outliers": "Spuren werden gesucht",
-  "ui.status.brief.merged": "Spuren werden entfernt und Bilder geschrieben"
+  "ui.status.brief.merged": "Spuren werden entfernt und Bilder geschrieben",
+  "ui.horizon_change_frame.title": "Bild wechseln?",
+  "ui.horizon_change_frame.message": "Sie haben begonnen, eine Horizont-Referenz auf diesem Bild zu malen. Beim Wechsel zu Bild {0} wird das Gemalte verworfen.",
+  "ui.horizon_change_frame.confirm": "Bild wechseln",
+  "ui.horizon_change_frame.keep": "Weiter malen"
 }

@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "alinhando o solo",
   "ui.status.brief.horizon_consensus": "definindo o horizonte",
   "ui.status.brief.outliers": "procurando rastros",
-  "ui.status.brief.merged": "apagando rastros e gravando quadros"
+  "ui.status.brief.merged": "apagando rastros e gravando quadros",
+  "ui.horizon_change_frame.title": "Mudar de quadro?",
+  "ui.horizon_change_frame.message": "Você começou a pintar uma referência de horizonte neste quadro. Mudar para o quadro {0} descartará o que você pintou.",
+  "ui.horizon_change_frame.confirm": "Mudar de quadro",
+  "ui.horizon_change_frame.keep": "Continuar pintando"
 }

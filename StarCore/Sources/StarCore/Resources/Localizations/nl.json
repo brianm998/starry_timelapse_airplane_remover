@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "aarde uitlijnen",
   "ui.status.brief.horizon_consensus": "horizon vastleggen",
   "ui.status.brief.outliers": "sporen zoeken",
-  "ui.status.brief.merged": "sporen wegschilderen en beelden schrijven"
+  "ui.status.brief.merged": "sporen wegschilderen en beelden schrijven",
+  "ui.horizon_change_frame.title": "Frame wijzigen?",
+  "ui.horizon_change_frame.message": "U bent begonnen met het schilderen van een horizonreferentie op dit frame. Overschakelen naar frame {0} verwerpt wat u hebt geschilderd.",
+  "ui.horizon_change_frame.confirm": "Frame wijzigen",
+  "ui.horizon_change_frame.keep": "Doorgaan met schilderen"
 }

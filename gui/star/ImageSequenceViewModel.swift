@@ -385,6 +385,43 @@ public final class ImageSequenceViewModel {
     /// When `true` the horizon-painting overlay is shown over the frame view.
     var isShowingHorizonPainter = false
 
+    /// Whether the user has put any paint on the horizon painter's current frame.  Mirrored
+    /// from the painter's `HorizonPaintState` by `FrameEditView`, because the paint state
+    /// lives in that view and `currentIndex` has to be able to ask.
+    var horizonPaintingStarted = false
+
+    /// The frame a change of `currentIndex` was headed for when it was held back because
+    /// painting had started; non-nil while the "change frame?" alert is up.
+    var pendingHorizonFrameChange: Int?
+
+    /// Set by the callers that move the frame on purpose mid-paint (the startup flow's
+    /// advance), so they are not asked about.
+    private var horizonFrameChangeApproved = false
+
+    /// A modal panel (the processing dialog, the re-open progress panel) is over the window.
+    /// Nothing under it should answer to a key.
+    var isProcessingModalUp: Bool {
+        (processingModalShowing && isProcessingFrames)
+            || (sequenceProgressModalShowing && !isProcessingFrames)
+    }
+
+    /// Whether the single-key menu shortcuts (modes, tools, remove/keep/render ...) act.
+    /// Off under a modal, and off while painting a horizon, where `s` would leave the
+    /// edit aside and `space` or `r` would change what is happening under the brush.
+    var menuHotkeysEnabled: Bool { !isProcessingModalUp && !isShowingHorizonPainter }
+
+    /// The user answered the "change frame?" alert: yes.
+    func confirmHorizonFrameChange() {
+        guard let target = pendingHorizonFrameChange else { return }
+        pendingHorizonFrameChange = nil
+        horizonFrameChangeApproved = true
+        currentIndex = target
+        horizonFrameChangeApproved = false
+    }
+
+    /// The user answered the "change frame?" alert: keep painting.
+    func cancelHorizonFrameChange() { pendingHorizonFrameChange = nil }
+
     /// Differentiates how the horizon painter was opened.
     var horizonPainterMode: HorizonPainterMode = .normal
 
@@ -545,7 +582,9 @@ public final class ImageSequenceViewModel {
         horizonPainterStartupFramePosition += 1
         recordStartupHorizonProgress()
         guard horizonPainterStartupFramePosition < horizonPainterStartupFrameIndices.count else { return }
+        horizonFrameChangeApproved = true
         currentIndex = horizonPainterStartupFrameIndices[horizonPainterStartupFramePosition]
+        horizonFrameChangeApproved = false
         // FrameEditView watches currentIndex while painter is open in startup mode
         // and resets the HorizonPaintState for the new frame automatically.
     }
@@ -745,6 +784,17 @@ public final class ImageSequenceViewModel {
     // the frame number of the frame we're currently showing
     var currentIndex = 0 {
         didSet {
+            // Paint on a horizon reference belongs to the frame it was painted on: moving
+            // off it by any route (filmstrip, arrows, playback) is held back and asked about.
+            if oldValue != currentIndex,
+               isShowingHorizonPainter,
+               horizonPaintingStarted,
+               !horizonFrameChangeApproved
+            {
+                pendingHorizonFrameChange = currentIndex
+                currentIndex = oldValue   // assigning in its own didSet does not recurse
+                return
+            }
             if oldValue != currentIndex { prioritizeForUser() }
             if currentIndex >= 0,
                currentIndex < self.frames.count

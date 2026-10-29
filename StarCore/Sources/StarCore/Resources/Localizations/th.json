@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "กำลังจัดวางพื้นดิน",
   "ui.status.brief.horizon_consensus": "กำลังสรุปเส้นขอบฟ้า",
   "ui.status.brief.outliers": "กำลังหาแนวเส้นทาง",
-  "ui.status.brief.merged": "กำลังลบแนวเส้นทางและเขียนเฟรม"
+  "ui.status.brief.merged": "กำลังลบแนวเส้นทางและเขียนเฟรม",
+  "ui.horizon_change_frame.title": "เปลี่ยนเฟรมหรือไม่?",
+  "ui.horizon_change_frame.message": "คุณเริ่มระบายเส้นขอบฟ้าอ้างอิงบนเฟรมนี้แล้ว การเปลี่ยนไปยังเฟรม {0} จะทิ้งสิ่งที่คุณระบายไว้",
+  "ui.horizon_change_frame.confirm": "เปลี่ยนเฟรม",
+  "ui.horizon_change_frame.keep": "ระบายต่อ"
 }

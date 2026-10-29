@@ -62,6 +62,7 @@ struct VideoPlaybackButtons : View {
                              shortcutKey: backwards_shortcut_key,
                              color: button_color,
                              size: buttonSize,
+                             shortcutEnabled: !viewModel.isShowingHorizonPainter,
                              toolTip: """
                                play in reverse
                                (keyboard shortcut '\(backwards_shortcut_key)')
@@ -80,6 +81,7 @@ struct VideoPlaybackButtons : View {
                     }
                       .opacity(0)
                       .keyboardShortcut(backwards_shortcut_key, modifiers: [])
+                      .disabled(viewModel.isShowingHorizonPainter)
                 } 
             
                 // play/pause button
@@ -87,6 +89,7 @@ struct VideoPlaybackButtons : View {
                              shortcutKey: " ",
                              color: viewModel.videoPlaying ? .blue : button_color,
                              size: buttonSize,
+                             shortcutEnabled: !viewModel.isShowingHorizonPainter,
                              toolTip: """
                                Play / Pause
                                """)

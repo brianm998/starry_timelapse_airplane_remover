@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "alignement du sol",
   "ui.status.brief.horizon_consensus": "stabilisation de l'horizon",
   "ui.status.brief.outliers": "recherche des traînées",
-  "ui.status.brief.merged": "effacement des traînées et écriture des images"
+  "ui.status.brief.merged": "effacement des traînées et écriture des images",
+  "ui.horizon_change_frame.title": "Changer d'image ?",
+  "ui.horizon_change_frame.message": "Vous avez commencé à peindre une référence d'horizon sur cette image. Passer à l'image {0} abandonnera ce que vous avez peint.",
+  "ui.horizon_change_frame.confirm": "Changer d'image",
+  "ui.horizon_change_frame.keep": "Continuer à peindre"
 }

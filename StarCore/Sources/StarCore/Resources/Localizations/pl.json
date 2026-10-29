@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "wyrównywanie ziemi",
   "ui.status.brief.horizon_consensus": "ustalanie horyzontu",
   "ui.status.brief.outliers": "szukanie smug",
-  "ui.status.brief.merged": "zamalowywanie smug i zapisywanie klatek"
+  "ui.status.brief.merged": "zamalowywanie smug i zapisywanie klatek",
+  "ui.horizon_change_frame.title": "Zmienić klatkę?",
+  "ui.horizon_change_frame.message": "Rozpoczęto malowanie referencji horyzontu na tej klatce. Przejście do klatki {0} spowoduje odrzucenie tego, co zostało namalowane.",
+  "ui.horizon_change_frame.confirm": "Zmień klatkę",
+  "ui.horizon_change_frame.keep": "Maluj dalej"
 }

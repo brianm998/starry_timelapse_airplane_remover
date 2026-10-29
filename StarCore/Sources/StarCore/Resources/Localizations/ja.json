@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "地上を位置合わせ中",
   "ui.status.brief.horizon_consensus": "地平線を確定中",
   "ui.status.brief.outliers": "トレイルを探しています",
-  "ui.status.brief.merged": "トレイルを消去してフレームを書き出し中"
+  "ui.status.brief.merged": "トレイルを消去してフレームを書き出し中",
+  "ui.horizon_change_frame.title": "フレームを変更しますか？",
+  "ui.horizon_change_frame.message": "このフレームで水平線の基準のペイントを始めています。フレーム {0} に移動すると、ペイントした内容は破棄されます。",
+  "ui.horizon_change_frame.confirm": "フレームを変更",
+  "ui.horizon_change_frame.keep": "ペイントを続ける"
 }

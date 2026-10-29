@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "aligning the ground",
   "ui.status.brief.horizon_consensus": "settling the horizon",
   "ui.status.brief.outliers": "looking for trails",
-  "ui.status.brief.merged": "painting out trails and writing frames"
+  "ui.status.brief.merged": "painting out trails and writing frames",
+  "ui.horizon_change_frame.title": "Change frame?",
+  "ui.horizon_change_frame.message": "You have started painting a horizon reference on this frame. Changing to frame {0} discards what you have painted.",
+  "ui.horizon_change_frame.confirm": "Change Frame",
+  "ui.horizon_change_frame.keep": "Keep Painting"
 }

@@ -1218,5 +1218,9 @@
   "ui.status.brief.earth_alignment": "đang căn mặt đất",
   "ui.status.brief.horizon_consensus": "đang chốt đường chân trời",
   "ui.status.brief.outliers": "đang tìm vệt",
-  "ui.status.brief.merged": "đang xóa vệt và ghi khung"
+  "ui.status.brief.merged": "đang xóa vệt và ghi khung",
+  "ui.horizon_change_frame.title": "Đổi khung hình?",
+  "ui.horizon_change_frame.message": "Bạn đã bắt đầu vẽ đường chân trời tham chiếu trên khung hình này. Chuyển sang khung hình {0} sẽ bỏ những gì bạn đã vẽ.",
+  "ui.horizon_change_frame.confirm": "Đổi khung hình",
+  "ui.horizon_change_frame.keep": "Tiếp tục vẽ"
 }
