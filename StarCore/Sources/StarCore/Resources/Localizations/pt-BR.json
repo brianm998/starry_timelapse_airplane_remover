@@ -1171,5 +1171,15 @@
   "ui.status.outliers": "Looking for airplane and satellite trails, and deciding which to paint out.",
   "ui.status.merged": "Painting out the trails using the aligned neighbours, and writing the finished frames.",
   "ui.status.left_step": "About {0} left for this step.",
-  "ui.status.left_overall": "About {0} left."
+  "ui.status.left_overall": "About {0} left.",
+  "ui.alignment_info_title": "About the alignment charts",
+  "ui.alignment_info_help": "What do the alignment charts show?",
+  "ui.open_alignment_window_help": "Open the alignment window, with larger charts and more detail",
+  "ui.alignment_info_what_title": "What is being measured",
+  "ui.alignment_info_what_body": "Before star can combine frames, it lines each frame up with the frames around it. Every line on a chart is one neighbor: +1 is the next frame, -1 is the one before, +2 is the one after that, and so on. The height of a line at a frame is its neighbor homography distance: a single number for how much that frame has to be shifted, turned or stretched to line up with that neighbor. For the most part it is the shift in pixels. Neighbors after the frame plot above zero, neighbors before it plot below.",
+  "ui.alignment_info_good_title": "What good looks like",
+  "ui.alignment_info_good_body": "The lines are smooth and spread out in order: +2 about twice as far from zero as +1, and the lines below zero mirror the ones above. The stars drift steadily as the sky turns, so the lines rise and fall gradually from frame to frame. The Earth chart sits close to zero when the camera was on a tripod, and follows the camera's motion when it was not.",
+  "ui.alignment_info_bad_title": "What to watch for",
+  "ui.alignment_info_bad_body": "Red dots mark alignments star does not trust. Sudden jumps, spikes, or lines that cross or tangle usually mean the frame had too few usable stars (thin cloud, fog, a bright moon, dawn or dusk) or the camera was bumped. Star tries to repair these from the neighboring frames, so a few are fine; long stretches of them are worth a look at those frames.",
+  "ui.alignment_info_use_body": "Hover a chart to read a value, click it to jump to that frame, and drag or pinch to pan and zoom."
 }
