@@ -91,6 +91,7 @@ struct ProcessingModalView: View {
           statusText: viewModel.processingStatusText ?? viewModel.waitingForFramesText,
           headline: headline(for: steps),
           showAlignment: showAlignment,
+          cameraMoving: viewModel.cameraMotion == .moving,
           openAlignmentWindow: { openWindow(id: StarApp.alignmentWindowName) },
           stop: { viewModel.stopProcessing() },
           dismiss: { viewModel.processingModalShowing = false },
@@ -173,6 +174,9 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     /// heading gives, and it takes the tallest part of the panel with it.
     @Binding var showAlignment: Bool
 
+    /// Whether the camera moved during the sequence; picks the wording of the alignment explanation.
+    var cameraMoving: Bool = false
+
     /// Opens the alignment window; nil leaves the button out.
     var openAlignmentWindow: (() -> Void)? = nil
 
@@ -227,7 +231,7 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
               .padding(20)
 
             if showingAlignmentInfo {
-                AlignmentInfoOverlay { showingAlignmentInfo = false }
+                AlignmentInfoOverlay(cameraMoving: cameraMoving) { showingAlignmentInfo = false }
             }
         }
     }

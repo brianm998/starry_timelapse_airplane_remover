@@ -35,7 +35,7 @@ struct AlignmentWindowView: View {
               }
           }
           .sheet(isPresented: $showingInfo) {
-              AlignmentInfoContent { showingInfo = false }
+              AlignmentInfoContent(cameraMoving: viewModel.imageSequence?.cameraMotion == .moving) { showingInfo = false }
                 .frame(width: 560)
           }
     }
@@ -886,6 +886,8 @@ struct AlignmentInfoButton: View {
 /// of a homography can follow.  Shared by the processing modal, which draws it over itself,
 /// and the alignment window, which presents it as a sheet.
 struct AlignmentInfoContent: View {
+    /// Whether the camera moved, which changes what the charts should look like.
+    let cameraMoving: Bool
     let close: () -> Void
 
     private func section(_ title: String, _ body: String) -> some View {
@@ -902,8 +904,10 @@ struct AlignmentInfoContent: View {
             Text(localized("ui.alignment_info_title"))
               .font(.title2)
             section("ui.alignment_info_what_title", "ui.alignment_info_what_body")
-            section("ui.alignment_info_good_title", "ui.alignment_info_good_body")
-            section("ui.alignment_info_bad_title", "ui.alignment_info_bad_body")
+            section("ui.alignment_info_good_title",
+                    cameraMoving ? "ui.alignment_info_good_body_moving" : "ui.alignment_info_good_body_fixed")
+            section("ui.alignment_info_bad_title",
+                    cameraMoving ? "ui.alignment_info_bad_body_moving" : "ui.alignment_info_bad_body_fixed")
             Text(localized("ui.alignment_info_use_body"))
               .font(.caption)
               .foregroundColor(.secondary)
@@ -921,6 +925,7 @@ struct AlignmentInfoContent: View {
 /// `AlignmentInfoContent` as a card over a dimmed backdrop, for drawing on top of the
 /// processing modal, which is itself an overlay and so cannot present a sheet over itself.
 struct AlignmentInfoOverlay: View {
+    let cameraMoving: Bool
     let close: () -> Void
 
     var body: some View {
@@ -929,7 +934,7 @@ struct AlignmentInfoOverlay: View {
               .fill(Color.black.opacity(0.5))
               .contentShape(Rectangle())
               .onTapGesture(perform: close)
-            AlignmentInfoContent(close: close)
+            AlignmentInfoContent(cameraMoving: cameraMoving, close: close)
               .frame(width: 540)
               .background(Color(white: 0.22))
               .environment(\.colorScheme, .dark)
