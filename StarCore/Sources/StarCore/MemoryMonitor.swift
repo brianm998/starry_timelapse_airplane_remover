@@ -131,8 +131,18 @@ public actor MemoryMonitor {
     ///
     /// `physical / 16` is 6.25%: 8GB at 128GB, 12GB at 192GB, and clamped up to 2GB at or
     /// below 32GB so small machines keep the old behaviour.
-    private var systemFloorBytes: UInt64 =
-      max(2 * 1024 * 1024 * 1024, UInt64(ProcessInfo.processInfo.physicalMemory) / 16)
+    ///
+    /// `STAR_SYSTEM_FLOOR_MB` overrides it, for CI: a 7GB hosted macOS VM can start with under
+    /// 2GB free, below the default floor, so nothing is ever admitted and a run stalls.
+    private var systemFloorBytes: UInt64 = MemoryMonitor.defaultSystemFloorBytes()
+
+    private static func defaultSystemFloorBytes() -> UInt64 {
+        if let text = ProcessInfo.processInfo.environment["STAR_SYSTEM_FLOOR_MB"],
+           let megabytes = UInt64(text), megabytes < UInt64.max / (1024 * 1024) {
+            return megabytes * 1024 * 1024
+        }
+        return max(2 * 1024 * 1024 * 1024, UInt64(ProcessInfo.processInfo.physicalMemory) / 16)
+    }
 
     /// How loudly the OS is complaining about memory.
     ///

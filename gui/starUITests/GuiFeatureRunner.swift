@@ -127,6 +127,9 @@ final class GuiFeatureRunner {
         let markers = scratch.appendingPathComponent("run-markers")
         try FileManager.default.createDirectory(at: markers, withIntermediateDirectories: true)
         app.launchEnvironment["STAR_RUN_MARKER_DIR"] = markers.path
+        if let floor = ProcessInfo.processInfo.environment["STAR_SYSTEM_FLOOR_MB"], !floor.isEmpty {
+            app.launchEnvironment["STAR_SYSTEM_FLOOR_MB"] = floor
+        }
         app.launchArguments += ["-StarUITestOpenSequence", copy.path]
         app.launch()
 
