@@ -24,3 +24,11 @@ will notice but the user who reads that language.
   as they are.
 - Check with `i18n/check.py` before finishing. Its "same as English" count per language sits at
   roughly 40 (the exceptions above); if it rises, look at what you added.
+
+## Swift and Kotlin clients change together
+
+The macOS gui (`gui/`, SwiftUI) and the desktop client (`star-desktop/`, Kotlin/Compose) are two
+front ends to the same program. A user-facing change to one — a screen's wording, layout,
+colours, buttons, estimates, dialogs — is made to the other in the same change, with the same
+behaviour and the same catalogue keys, and each side's tests updated. Don't ship one and leave
+the other "for later"; if a platform genuinely cannot do something, say so in the change.
