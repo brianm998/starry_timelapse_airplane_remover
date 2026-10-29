@@ -45,7 +45,10 @@ struct AlignmentWindowView: View {
         return HStack {
             ScrollView {
                 VStack(alignment: .leading) {
-                    if let results = viewModel.currentFrameView.frameObserver.starAlignmentResults {
+                    // Gated on the sequence's alignment data rather than on the current
+                    // frame's results: mid-run the current frame is often not aligned yet,
+                    // which left this window with only its legend.
+                    if viewModel.starAlignmentInfo.contains(where: { !$0.isEmpty }) {
                         if showStarDeviation {
                             Text(localized("ui.deviation_in_star_alignment"))
                             AlignmentDeviationChart(
@@ -61,7 +64,7 @@ struct AlignmentWindowView: View {
                         }
                     }
                     if viewModel.allowEarthAlignment,
-                       let results = viewModel.currentFrameView.frameObserver.earthAlignmentResults
+                       viewModel.earthAlignmentInfo.contains(where: { !$0.isEmpty })
                     {
                         if showEarthDeviation {
                             Text(localized("ui.deviation_in_earth_alignment"))
