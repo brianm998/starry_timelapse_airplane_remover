@@ -2,7 +2,7 @@ import SwiftUI
 import StarCore
 import logging
 
-/// What the left panel's top button offers.
+/// What the Process / Show Progress button (bottom right) offers.
 ///
 /// A value rather than a pair of conditions spelled out in the view, because it is two
 /// different buttons sharing one place on screen and the rule for which one it is has to
@@ -65,13 +65,8 @@ struct LeftPanel: View {
             ScrollView() {
                 VStack(alignment: .leading) {
 
-                    self.processingButtons
+                    ProcessingProgressMarker()
 
-                    ProcessingProgressBarView()
-                      .frame(maxWidth: 200, alignment: .leading)
-                     //.frame(maxWidth: .none)
-                    
-                    Space(height: 10)
 
                     self.frameModeView
 
@@ -101,113 +96,6 @@ struct LeftPanel: View {
           .background(Color(white: 0.22).zIndex(0))
           .frame(maxHeight: .infinity, alignment: .bottom)
         
-    }
-
-    /// The processing modal's Dismiss button hands the window back with the run still
-    /// going, and there was no way back to it — dismissing it was a one-way door.  While a
-    /// run is live this button is that way back, which is also the only thing it could
-    /// usefully be: starting a second run over the same frames is exactly what it must not
-    /// do.
-    var processingButtonRole: ProcessingButtonRole {
-        ProcessingButtonRole.current(
-          isProcessingFrames: viewModel.isProcessingFrames,
-          isRenderingVideo: viewModel.isRenderingVideo,
-          unprocessedCount: viewModel.frameStateMap[.unprocessed]?.count ?? 0,
-          horizonDetectedCount: viewModel.frameStateMap[.horizonDetected]?.count ?? 0,
-          frameCount: viewModel.frames.count,
-          pendingHorizonRefinement: viewModel.hasPendingHorizonRefinement
-        )
-    }
-
-    var processButtonDisabled: Bool {
-        if case .process(let enabled) = processingButtonRole { return !enabled }
-        return false
-    }
-
-    var updateButtonDisabled: Bool {
-        let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
-        return userModified == 0 || viewModel.isProcessingFrames || viewModel.isRenderingVideo 
-    }
-
-    var renderButtonDisabled: Bool {
-        let complete = viewModel.frameStateMap[.complete]?.count ?? 0
-        return complete != viewModel.frames.count || viewModel.isProcessingFrames || viewModel.isRenderingVideo
-    }
-    
-    var processingButtons: some View {
-        VStack(alignment: .leading) {
-            let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
-            let horizonCount = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
-
-            let role = processingButtonRole
-
-            Button() {
-                switch role {
-                case .status:  viewModel.processingModalShowing = true
-                case .process: viewModel.shouldShowProcessingSettings = true
-                }
-            } label: {
-                Text(role == .status
-                       ? localized("ui.show_progress")
-                       : localized("ui.process_frames"))
-            }
-              .disabled(processButtonDisabled)
-              .if(!processButtonDisabled) {
-                  $0.buttonStyle(.borderedProminent)
-                    .tint(.blue)
-              }
-              .help(role == .status
-                      ? localized("ui.show_the_processing_status_again")
-                      : localized("ui.choose_settings_and_process_these_frames"))
-            
-            
-            let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
-            /*
-            Button() {
-                // XXX this has no max number of processes :(
-                Task {
-                  await viewModel.processAll()
-                }
-            } label: {
-                Text(localized("ui.update_n_frames", userModified))
-            }
-              .disabled(updateButtonDisabled)
-              .if(!updateButtonDisabled) { view in
-                  view
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue)
-              }
-*/
-            let complete = viewModel.frameStateMap[.complete]?.count ?? 0
-
-            Button() {
-                Log.d("render video")
-                viewModel.renderVideoSheetShowing = true
-                /*
-
-                 need to keep track of ffmpeg parameters when we load a video
-                 (get rid of script to render)
-
-                 default ffmpeg parameters to prores high quailty in config
-
-                 have ui that allows users to change codec and frame rate, etc.
-
-                 show render progress in UI somehow
-                 
-                 */
-
-                viewModel.isRenderingVideo = false
-                
-            } label: {
-                Text(localized("ui.render_video_from_n_frames_lower", viewModel.frames.count))
-            }
-              .disabled(renderButtonDisabled)
-              .if(!renderButtonDisabled) { view in
-                  view
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue)
-              }
-        }
     }
 
     var frameModeView: some View {
@@ -411,49 +299,17 @@ extension View {                // XXX move this
     }
 }
 
-struct ProcessingProgressBarView: View {
+/// Not drawn: the progress bar it replaced is redundant with the processing modal, but the
+/// Gherkin UI tests still wait on this element's label.
+struct ProcessingProgressMarker: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    
-    let unprocessedColor: Color = .gray
-    let processingColor: Color = .yellow
-    let completeColor: Color = .green
 
     var body: some View {
-        return GeometryReader { geometry in
-            let totalWidth = geometry.size.width
-            let totalFrames = max(1, viewModel.frames.count)
-            
-            let unprocessed = CGFloat(viewModel.frameStateMap[.unprocessed]?.count ?? 0)
-            let processing = CGFloat(viewModel.numberOfFramesProcessingNow)
-            let complete = CGFloat(viewModel.frameStateMap[.complete]?.count ?? 0)
-
-            
-            let unprocessedWidth = totalWidth * (unprocessed / CGFloat(totalFrames))
-            let processingWidth = totalWidth * (processing / CGFloat(totalFrames))
-            let completeWidth = totalWidth * (complete / CGFloat(totalFrames))
-
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(completeColor)
-                    .frame(width: completeWidth)
-
-                Rectangle()
-                    .fill(processingColor)
-                    .frame(width: processingWidth)
-
-                Rectangle()
-                    .fill(unprocessedColor)
-                    .frame(width: unprocessedWidth)
-
-            }
-            .cornerRadius(4)
-            .frame(height: 10)
-        }
-        .frame(height: 10)
+        Color.clear
+          .frame(width: 0, height: 0)
           // What the Gherkin UI tests wait on: "<complete>/<total>/<running|idle>" in the label (the value comes through empty for an ignored-children element).
           .accessibilityElement(children: .ignore)
           .accessibilityIdentifier("processing.progress")
           .accessibilityLabel("\(viewModel.frameStateMap[.complete]?.count ?? 0)/\(viewModel.frames.count)/\(viewModel.isProcessingFrames ? "running" : "idle")")
     }
 }
-

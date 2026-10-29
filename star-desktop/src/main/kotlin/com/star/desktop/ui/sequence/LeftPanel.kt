@@ -7,14 +7,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -29,12 +27,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameStateCounts
-import com.star.desktop.domain.ProcessingButtonRole
 import com.star.desktop.domain.ViewModes
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
@@ -44,20 +40,17 @@ import com.star.desktop.ui.components.VerticalStarPicker
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameViewMode
 
-/** Left panel (macOS `LeftPanel`): processing controls, progress, and the images to show. */
+/** Left panel (macOS `LeftPanel`): the per-frame processing commands, and the images to show. */
 @Composable
 fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val processing by vm.isProcessing.collectAsState()
     val rendering by vm.rendering.collectAsState()
     val renderProgress by vm.renderProgress.collectAsState()
     val states by vm.frameStates.collectAsState()
-    val seqState by vm.sequenceState.collectAsState()
-    val refinementPending by vm.refinementPending.collectAsState()
     val busy = processing || rendering
 
     val total = vm.frameCount
     val counts = remember(states, total) { FrameStateCounts(states, total) }
-    val role = ProcessingButtonRole.current(processing, rendering, counts, total, refinementPending)
 
     Column(modifier.width(220.dp).fillMaxHeight().background(StarColors.sidePanel)) {
       Column(
@@ -69,33 +62,6 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(localized("ui.processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-
-        // Status while a run is going, which puts the processing screen back; otherwise it opens the settings, where a run is started.
-        when (role) {
-            ProcessingButtonRole.Status -> HoverTip(localized("ui.show_the_processing_status_again")) {
-                Button(
-                    onClick = { vm.reopenProcessingModal() },
-                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(localized("ui.show_progress")) }
-            }
-            is ProcessingButtonRole.Process -> HoverTip(localized("ui.choose_settings_and_process_these_frames")) {
-                Button(
-                    onClick = { app.openSettings() },
-                    enabled = role.enabled,
-                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                    modifier = Modifier.fillMaxWidth().testTag("process.frames"),
-                ) { Text(localized("ui.process_frames")) }
-            }
-        }
-
-        // Enabled once every frame is complete: there is nothing to render a video from before that.
-        Button(
-            onClick = { app.openRenderVideo() },
-            enabled = counts.complete == total && !busy,
-            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(localized("ui.render_video_from_n_frames_lower", total), fontSize = 12.sp) }
 
         OutlinedButton(onClick = { vm.processRemaining() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(localized("ui.process_frames_from_here_to_the_end"))
@@ -134,14 +100,9 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
             )
         }
 
-        ProcessingProgressBar(counts, Modifier.padding(top = 4.dp))
-        Text(
-            localized("ui.n_of_m_complete", counts.complete, total) + (seqState?.let { " · $it" } ?: ""),
-            color = StarColors.textSecondary,
-            fontSize = 11.sp,
-            // What the Gherkin desktop tests wait on: "<complete>/<total>", with the run over (not locale text).
-            modifier = Modifier.testTag("processing.progress").semantics { stateDescription = "${counts.complete}/$total/${if (processing) "running" else "idle"}" },
-        )
+        // Not drawn: the progress bar is redundant with the processing screen, but the Gherkin desktop tests wait on this node.
+        // What they wait on: "<complete>/<total>", with the run over (not locale text).
+        Box(Modifier.size(0.dp).testTag("processing.progress").semantics { stateDescription = "${counts.complete}/$total/${if (processing) "running" else "idle"}" })
 
         // "Show:" — pick which image of the frame the center shows (macOS frameModeView).
         ShowViewModes(vm)
@@ -152,20 +113,6 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
         }
       }
       com.star.desktop.ui.components.PanelChevron("«", { vm.setLeftPanel(false) }, Modifier.padding(6.dp))
-    }
-}
-
-/**
- * The progress bar under the buttons (macOS `ProcessingProgressBarView`): finished frames in green, then the ones being worked on in
- * yellow, then the ones not started in gray, each as wide as its share of the sequence.
- */
-@Composable
-private fun ProcessingProgressBar(counts: FrameStateCounts, modifier: Modifier = Modifier) {
-    val (done, working, left) = counts.fractions()
-    Row(modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(4.dp)).background(StarColors.cellDefault)) {
-        if (done > 0f) Box(Modifier.weight(done).fillMaxHeight().background(StarColors.green))
-        if (working > 0f) Box(Modifier.weight(working).fillMaxHeight().background(StarColors.yellow))
-        if (left > 0f) Box(Modifier.weight(left).fillMaxHeight().background(StarColors.gray))
     }
 }
 

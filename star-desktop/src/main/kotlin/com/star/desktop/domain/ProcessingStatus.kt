@@ -3,7 +3,7 @@ package com.star.desktop.domain
 import com.star.proto.FrameProcessingState
 
 /**
- * What the left panel's top button offers (macOS `ProcessingButtonRole`): two different buttons sharing one place. While a run is going it
+ * What the Process / Show Progress button offers (macOS `ProcessingButtonRole`): two different buttons sharing one place. While a run is going it
  * is the only way back to a processing screen that was dismissed, and it must never be disabled; otherwise it opens the settings, from
  * where a run is started.
  */
