@@ -43,7 +43,7 @@ final class ArtifactInputsTests: XCTestCase {
     func testStagesAreDeclaredInDependencyOrder() {
         XCTAssertEqual(ArtifactStage.allCases,
                        [.horizon, .mergedHorizon, .keypoints,
-                        .alignment, .horizonConsensus, .outliers, .output],
+                        .alignment, .horizonConsensus, .alignedMerge, .outliers, .output],
                        "andDownstream slices allCases, so the declaration order IS the " +
                        "dependency order — reordering these silently breaks the cascade")
     }
@@ -51,16 +51,18 @@ final class ArtifactInputsTests: XCTestCase {
     func testDownstreamOfAStageIncludesItselfAndEverythingAfter() {
         XCTAssertEqual(ArtifactStage.horizon.andDownstream,
                        [.horizon, .mergedHorizon, .keypoints,
-                        .alignment, .horizonConsensus, .outliers, .output])
+                        .alignment, .horizonConsensus, .alignedMerge, .outliers, .output])
         XCTAssertEqual(ArtifactStage.mergedHorizon.andDownstream,
                        [.mergedHorizon, .keypoints, .alignment, .horizonConsensus,
-                        .outliers, .output])
+                        .alignedMerge, .outliers, .output])
         XCTAssertEqual(ArtifactStage.keypoints.andDownstream,
-                       [.keypoints, .alignment, .horizonConsensus, .outliers, .output])
+                       [.keypoints, .alignment, .horizonConsensus, .alignedMerge, .outliers, .output])
         XCTAssertEqual(ArtifactStage.alignment.andDownstream,
-                       [.alignment, .horizonConsensus, .outliers, .output])
+                       [.alignment, .horizonConsensus, .alignedMerge, .outliers, .output])
         XCTAssertEqual(ArtifactStage.horizonConsensus.andDownstream,
-                       [.horizonConsensus, .outliers, .output])
+                       [.horizonConsensus, .alignedMerge, .outliers, .output])
+        XCTAssertEqual(ArtifactStage.alignedMerge.andDownstream,
+                       [.alignedMerge, .outliers, .output])
         XCTAssertEqual(ArtifactStage.outliers.andDownstream, [.outliers, .output])
         XCTAssertEqual(ArtifactStage.output.andDownstream, [.output])
     }
@@ -98,7 +100,7 @@ final class ArtifactInputsTests: XCTestCase {
             .staleStages(comparedTo: ArtifactInputs.current(from: before))
 
         XCTAssertEqual(stale, [.horizon, .mergedHorizon, .keypoints,
-                               .alignment, .horizonConsensus, .outliers, .output])
+                               .alignment, .horizonConsensus, .alignedMerge, .outliers, .output])
     }
 
     /// The connector's neighbour bound decides which blobs join, so moving it off the default
@@ -129,7 +131,7 @@ final class ArtifactInputsTests: XCTestCase {
         let stale = ArtifactInputs.current(from: after)
             .staleStages(comparedTo: ArtifactInputs.current(from: before))
 
-        XCTAssertEqual(stale, [.keypoints, .alignment, .horizonConsensus, .outliers, .output],
+        XCTAssertEqual(stale, [.keypoints, .alignment, .horizonConsensus, .alignedMerge, .outliers, .output],
                        "nothing recorded here feeds back into the horizon masks, but " +
                        "everything after the keypoints was built from them")
     }
@@ -164,7 +166,7 @@ final class ArtifactInputsTests: XCTestCase {
 
         let stale = current.staleStages(comparedTo: builtByAnEarlierStar)
 
-        XCTAssertEqual(stale, [.keypoints, .alignment, .horizonConsensus, .outliers, .output],
+        XCTAssertEqual(stale, [.keypoints, .alignment, .horizonConsensus, .alignedMerge, .outliers, .output],
                        "a detection-code change cannot have moved a horizon mask, and " +
                        "rebuilding those would cost the whole sequence (got \(stale))")
         XCTAssertEqual(current.differences(from: builtByAnEarlierStar)[.keypoints],
@@ -186,7 +188,7 @@ final class ArtifactInputsTests: XCTestCase {
         let fittedByAnEarlierStar = ArtifactInputs(version: current.version, stages: stages)
 
         XCTAssertEqual(current.staleStages(comparedTo: fittedByAnEarlierStar),
-                       [.alignment, .horizonConsensus, .outliers, .output])
+                       [.alignment, .horizonConsensus, .alignedMerge, .outliers, .output])
         XCTAssertEqual(current.differences(from: fittedByAnEarlierStar)[.alignment],
                        ["alignmentAlgorithmVersion 1 -> " +
                           "\(ArtifactInputs.alignmentAlgorithmVersion)"])
@@ -210,7 +212,7 @@ final class ArtifactInputsTests: XCTestCase {
                        "waved through as an unreadable format")
 
         XCTAssertEqual(current.staleStages(comparedTo: pre),
-                       [.keypoints, .alignment, .horizonConsensus, .outliers, .output],
+                       [.keypoints, .alignment, .horizonConsensus, .alignedMerge, .outliers, .output],
                        "the key appearing at all is what invalidates these — its value " +
                        "is never compared against anything, because they have none")
 
@@ -333,7 +335,7 @@ final class ArtifactInputsTests: XCTestCase {
         off.useHorizonConsensus = false
         XCTAssertEqual(ArtifactInputs.current(from: off)
                          .staleStages(comparedTo: ArtifactInputs.current(from: on)),
-                       [.horizonConsensus, .outliers, .output])
+                       [.horizonConsensus, .alignedMerge, .outliers, .output])
 
         var fixedOn = config()
         fixedOn.tripodHeadWasMoving = false
@@ -424,8 +426,6 @@ final class ArtifactInputsTests: XCTestCase {
             ("pixelThreshold",             { $0.pixelThreshold = 2.5 }),
             ("numberAlignedNeighborFrames", { $0.numberAlignedNeighborFrames = 12 }),
             ("horizonDetectionEnabled",    { $0.horizonDetectionEnabled = false }),
-            // It changes the star aligned image this stage writes.
-            ("cloudAwareMerge",            { $0.cloudAwareMerge = true }),
         ]
         for (name, mutate) in mutations {
             var after = base
@@ -440,38 +440,73 @@ final class ArtifactInputsTests: XCTestCase {
         }
     }
 
-    /// The cloud-aware merge is recorded only while it is on, so that a record written
-    /// before the setting existed — which is what every existing temp dir holds — is the
-    /// record a flag-off run still computes.  Recording it unconditionally would make an
-    /// absent key count as a change and discard every sequence's alignment, outliers and
-    /// output on the first run after upgrading.
-    func testCloudAwareMergeIsRecordedOnlyWhileItIsOn() {
-        let alignment = ArtifactStage.alignment.rawValue
-
+    /// The cloud-aware merge is the merge stage's input, and both ways round: turning it off
+    /// again redoes the merges it made.
+    func testCloudAwareMergeIsTheMergeStagesInput() {
+        let merge = ArtifactStage.alignedMerge.rawValue
         let off = ArtifactInputs.current(from: config())
-        XCTAssertNil(off.stages[alignment]?["cloudAwareMerge"],
-                     "a flag-off record must not mention the setting")
-
         var onConfig = config()
         onConfig.cloudAwareMerge = true
         let on = ArtifactInputs.current(from: onConfig)
-        XCTAssertEqual(on.stages[alignment]?["cloudAwareMerge"], "true")
 
-        // Everything else the record holds is what a flag-off run records: the setting
-        // is the only thing that distinguishes the two, and only in the alignment stage.
-        var stages = on.stages
-        stages[alignment]?.removeValue(forKey: "cloudAwareMerge")
-        XCTAssertEqual(ArtifactInputs(version: on.version, stages: stages), off)
+        XCTAssertEqual(off.stages[merge], ["cloudAwareMerge": "false"])
+        XCTAssertEqual(on.stages[merge], ["cloudAwareMerge": "true"])
+        XCTAssertNil(on.stages[ArtifactStage.alignment.rawValue]?["cloudAwareMerge"],
+                     "the alignment does not read it")
+        XCTAssertEqual(off.staleStages(comparedTo: on), [.alignedMerge, .outliers, .output])
+    }
 
-        // On to off invalidates as well, since the record that had the key differs.
-        let turnedOff = off.staleStages(comparedTo: on)
-        XCTAssertTrue(turnedOff.contains(.alignment), "got \(turnedOff)")
-        XCTAssertTrue(turnedOff.contains(.output), "got \(turnedOff)")
+    /// The bug this stage was split out for: turning the cloud-aware merge on for a
+    /// finished moving sequence re-fitted all 1407 frames' star and earth homographies and
+    /// rebuilt the horizon consensus fitted along them, to change only how the warped
+    /// neighbours are combined.
+    func testCloudAwareMergeRedoesTheMergeAndKeepsTheAlignment() {
+        var moving = config()
+        moving.tripodHeadWasMoving = true
+        var on = moving
+        on.cloudAwareMerge = true
+        let stale = ArtifactInputs.current(from: on)
+            .staleStages(comparedTo: ArtifactInputs.current(from: moving))
+        XCTAssertEqual(stale, [.alignedMerge, .outliers, .output])
+    }
 
-        // And nothing upstream of alignment is touched either way.
-        let turnedOn = on.staleStages(comparedTo: off)
-        XCTAssertFalse(turnedOn.contains(.keypoints), "got \(turnedOn)")
-        XCTAssertFalse(turnedOn.contains(.horizon), "got \(turnedOn)")
+    /// A record written while `cloudAwareMerge` lived under `alignment` — the one that run
+    /// left behind.  Read back, it must compare as the record it would have been, both ways
+    /// round: not as an alignment change (which re-fits everything once more for nothing),
+    /// and not as a record with no merge stage (which no flag change can ever invalidate).
+    func testARecordFromBeforeTheMergeStageLoadsInItsShape() throws {
+        let alignment = ArtifactStage.alignment.rawValue
+        let merge = ArtifactStage.alignedMerge.rawValue
+        var onConfig = config()
+        onConfig.tripodHeadWasMoving = true
+        onConfig.cloudAwareMerge = true
+        var offConfig = onConfig
+        offConfig.cloudAwareMerge = false
+
+        func legacy(_ config: Config) -> ArtifactInputs {
+            var stages = ArtifactInputs.current(from: config).stages
+            // recorded then only while on
+            stages.removeValue(forKey: merge)
+            if config.cloudAwareMerge { stages[alignment]?["cloudAwareMerge"] = "true" }
+            return ArtifactInputs(version: ArtifactInputs.currentVersion, stages: stages)
+        }
+
+        let dir = NSTemporaryDirectory() + "artifact-inputs-legacy-\(UUID().uuidString)"
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+
+        let cases: [(Config, Config, Set<ArtifactStage>)] = [
+            (onConfig, onConfig, []),
+            (offConfig, offConfig, []),
+            (offConfig, onConfig, [.alignedMerge, .outliers, .output]),
+            (onConfig, offConfig, [.alignedMerge, .outliers, .output]),
+        ]
+        for (written, now, expected) in cases {
+            try legacy(written).save(toTempOutputPath: dir)
+            let loaded = ArtifactInputs.load(fromTempOutputPath: dir)
+            XCTAssertEqual(ArtifactInputs.current(from: now).staleStages(comparedTo: loaded),
+                           expected,
+                           "written with \(written.cloudAwareMerge), now \(now.cloudAwareMerge)")
+        }
     }
 
     /// A fixed camera has no ground to align — the earth branch median merges the static
@@ -507,7 +542,7 @@ final class ArtifactInputsTests: XCTestCase {
         let fittedBeforeTheKey = ArtifactInputs(version: current.version, stages: stages)
         // the horizon consensus is carried along the ground those fits describe
         XCTAssertEqual(current.staleStages(comparedTo: fittedBeforeTheKey),
-                       [.alignment, .horizonConsensus, .outliers, .output])
+                       [.alignment, .horizonConsensus, .alignedMerge, .outliers, .output])
 
         var fixed = config()
         fixed.tripodHeadWasMoving = false

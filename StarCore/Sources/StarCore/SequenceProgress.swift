@@ -122,11 +122,11 @@ public enum SequenceProgressSurvey {
             framesOnDisk[type] = frames.filter(isOnDisk).count
         }
 
-        count(.horizon)        { $0.horizonMaskExistsOnDisk() }
+        count(.horizon)        { $0.horizonDetectionIsDone(config: config) }
         // Per frame, even for a static sequence, where one merge op produces the mask for
         // the whole sequence and hard-links it to every frame.  The question here is how
         // much of the sequence has a merged horizon, not how many operations ran.
-        count(.mergedHorizon)  { $0.mergedHorizonMaskExistsOnDisk() }
+        count(.mergedHorizon)  { $0.horizonMergeIsDone(config: config) }
         count(.starKeypoints)  { $0.keypointsExistOnDisk(ofType: .starAligned, config: config) }
         count(.earthKeypoints) { $0.keypointsExistOnDisk(ofType: .earthAligned, config: config) }
         count(.horizonConsensus) {
@@ -182,6 +182,9 @@ extension ArtifactStage {
         case .keypoints:        [.starKeypoints, .earthKeypoints]
         case .alignment:        [.starHomography, .earthHomography]
         case .horizonConsensus: [.horizonConsensus]
+        // No step of its own: the merge runs inside the outlier and output steps, which
+        // follow it and so are stale with it.
+        case .alignedMerge:     []
         case .outliers:         [.outliers]
         case .output:           [.merge]
         }

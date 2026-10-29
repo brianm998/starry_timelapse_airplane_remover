@@ -1419,10 +1419,10 @@ public struct Config: Codable, Sendable {
     /// "Cloud-aware merge" under Merge Settings in the desktop client's settings sheet (the
     /// daemon carries it as `cloud_aware_merge`).
     ///
-    /// Changing it discards the alignment stage's cached results (`ArtifactInputs`
-    /// records it only while it is on), including that stage's homographies, which are
-    /// recomputed from the cached keypoints. Splitting a separate merge stage so the
-    /// homographies could be kept is not done.
+    /// Changing it discards the star aligned merges and everything made from them — the
+    /// outliers and the output — but keeps the homographies, the horizon consensus and the
+    /// earth aligned merges: `ArtifactInputs` records it under the `alignedMerge` stage,
+    /// which comes after all three.
     public var cloudAwareMerge: Bool = false
 
     mutating public func set(videoInfo: VideoInfo) {

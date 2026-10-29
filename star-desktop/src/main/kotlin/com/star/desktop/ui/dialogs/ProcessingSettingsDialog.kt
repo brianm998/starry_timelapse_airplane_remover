@@ -653,7 +653,7 @@ internal val GPU_FIELD_LABELS = setOf(GPU_FOR_MERGE_LABEL, GPU_FOR_SIFT_LABEL, G
 private val NEEDS_GPU: (SettingsEdit) -> Boolean = { !it.gpuUnavailable }
 
 // Not an expert setting either: whether fast-moving clouds come out banded is something anyone shooting a moving sky wants to be able to turn on.
-// Off unless asked for (StarCore Config.cloudAwareMerge); turning it on or off makes the daemon redo the alignment of frames already processed,
+// Off unless asked for (StarCore Config.cloudAwareMerge); turning it on or off makes the daemon redo the star aligned merge of frames already processed,
 // which the sheet's contradiction check already says through the preview of the proposed config.
 internal val MERGE_FIELDS: List<ExpertField> = listOf(
     BoolField("Cloud-aware merge", "ui.cloud_aware_merge", { it.cloudAwareMerge }, { b, v -> b.setCloudAwareMerge(v) }, { it.hasCloudAwareMerge() }),

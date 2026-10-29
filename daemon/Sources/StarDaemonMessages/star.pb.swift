@@ -1766,7 +1766,7 @@ public struct Star_V1_ConfigChangePreview: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// the cached stages the change would invalidate: horizon, mergedHorizon, keypoints, alignment, outliers, output
+  /// the cached stages the change would invalidate: horizon, mergedHorizon, keypoints, alignment, horizonConsensus, alignedMerge, outliers, output
   public var staleStages: [String] = []
 
   /// some stage is stale AND there is finished work for it to contradict (StarCore SettingsChangeState)
@@ -2303,7 +2303,7 @@ public struct Star_V1_Config: @unchecked Sendable {
 
   /// Whether the star aligned merge also runs its cloud-aware stage: a second merge aligned to the motion of the clouds, blended in where it
   /// explains the frame better, with the stars put back, so fast-moving clouds are not banded and repeated. StarCore Config.cloudAwareMerge, off
-  /// unless asked for. Changing it throws away the alignment stage's results for frames already processed (see Sequence.PreviewConfigChange).
+  /// unless asked for. Changing it redoes the star aligned merge of frames already processed, keeping their alignment (see Sequence.PreviewConfigChange).
   public var cloudAwareMerge: Bool {
     get {_storage._cloudAwareMerge ?? false}
     set {_uniqueStorage()._cloudAwareMerge = newValue}
