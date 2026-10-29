@@ -450,7 +450,9 @@ final class ArtifactInputsTests: XCTestCase {
         let on = ArtifactInputs.current(from: onConfig)
 
         XCTAssertEqual(off.stages[merge], ["cloudAwareMerge": "false"])
-        XCTAssertEqual(on.stages[merge], ["cloudAwareMerge": "true"])
+        XCTAssertEqual(on.stages[merge], ["cloudAwareMerge": "true",
+                                          "cloudAwareMergeAlgorithmVersion":
+                                            String(ArtifactInputs.cloudAwareMergeAlgorithmVersion)])
         XCTAssertNil(on.stages[ArtifactStage.alignment.rawValue]?["cloudAwareMerge"],
                      "the alignment does not read it")
         XCTAssertEqual(off.staleStages(comparedTo: on), [.alignedMerge, .outliers, .output])
@@ -474,6 +476,8 @@ final class ArtifactInputsTests: XCTestCase {
     /// left behind.  Read back, it must compare as the record it would have been, both ways
     /// round: not as an alignment change (which re-fits everything once more for nothing),
     /// and not as a record with no merge stage (which no flag change can ever invalidate).
+    /// One written with the stage on was made by its first version, so its merges are redone
+    /// once whatever the flag now says, and nothing before them is.
     func testARecordFromBeforeTheMergeStageLoadsInItsShape() throws {
         let alignment = ArtifactStage.alignment.rawValue
         let merge = ArtifactStage.alignedMerge.rawValue
@@ -495,7 +499,7 @@ final class ArtifactInputsTests: XCTestCase {
         defer { try? FileManager.default.removeItem(atPath: dir) }
 
         let cases: [(Config, Config, Set<ArtifactStage>)] = [
-            (onConfig, onConfig, []),
+            (onConfig, onConfig, [.alignedMerge, .outliers, .output]),
             (offConfig, offConfig, []),
             (offConfig, onConfig, [.alignedMerge, .outliers, .output]),
             (onConfig, offConfig, [.alignedMerge, .outliers, .output]),
@@ -507,6 +511,27 @@ final class ArtifactInputsTests: XCTestCase {
                            expected,
                            "written with \(written.cloudAwareMerge), now \(now.cloudAwareMerge)")
         }
+    }
+
+    /// The cloud-aware stage's version is the merge's input while the stage is on, and
+    /// nothing's while it is off: a record its first version wrote redoes the merges and
+    /// keeps the alignment, and a merge made with it off is the one it always was.
+    func testTheCloudAwareMergeVersionRedoesOnlyItsOwnMerges() {
+        let merge = ArtifactStage.alignedMerge.rawValue
+        var on = config()
+        on.tripodHeadWasMoving = true
+        on.cloudAwareMerge = true
+        var stages = ArtifactInputs.current(from: on).stages
+        stages[merge]?.removeValue(forKey: "cloudAwareMergeAlgorithmVersion")
+        let firstVersion = ArtifactInputs(version: ArtifactInputs.currentVersion, stages: stages)
+        XCTAssertEqual(ArtifactInputs.current(from: on).staleStages(comparedTo: firstVersion),
+                       [.alignedMerge, .outliers, .output])
+
+        var off = on
+        off.cloudAwareMerge = false
+        XCTAssertNil(ArtifactInputs.current(from: off).stages[merge]?["cloudAwareMergeAlgorithmVersion"])
+        XCTAssertEqual(ArtifactInputs.current(from: off)
+                         .staleStages(comparedTo: ArtifactInputs.current(from: off)), [])
     }
 
     /// A fixed camera has no ground to align — the earth branch median merges the static

@@ -27,6 +27,8 @@ import StarCpp
 ///                              with `sqlite3 <src> ".backup <dst>"`, which is consistent
 ///                              even while the source is being written to.
 ///   STAR_CLOUD_REPLAY_SOURCE   the directory of original frames, LRT_%05d.tif
+///   STAR_CLOUD_REPLAY_PATTERN  optional printf pattern for the frame (and mask) file names,
+///                              default "LRT_%05d.tif"; e.g. "image_%04d.tiff"
 ///   STAR_CLOUD_REPLAY_MASKS    optional: the directory of sky masks, same names (a run's
 ///                              `mergedHorizon/`, which is what the merge is given for a
 ///                              static sequence).  Without it the whole frame is sky.
@@ -55,13 +57,17 @@ private final class DecodeCache: @unchecked Sendable {
         return mat
     }
     func drop() { lock.lock(); frames.removeAll(); lock.unlock() }
+    /// Drops every decode but `names`, for a run over consecutive frames.
+    func keep(only names: Set<String>) {
+        lock.lock(); frames = frames.filter { names.contains($0.key) }; lock.unlock()
+    }
 }
 
 final class CloudAwareMergeReplayTests: XCTestCase {
 
     private struct StoredNeighbour: Decodable {
         let frameIndex: Int
-        let homography: [Double]
+        let homography: [Double]?      // nil where the alignment failed
     }
     private struct StoredRow: Decodable {
         let neighborHomography: [StoredNeighbour]
@@ -118,21 +124,24 @@ final class CloudAwareMergeReplayTests: XCTestCase {
             XCTAssertTrue(GPUOps.registerIfAvailable(), "no GPU to run the -gpu modes on")
         }
 
-        func name(_ fileIndex: Int) -> String { String(format: "LRT_%05d.tif", fileIndex) }
+        let pattern = env("STAR_CLOUD_REPLAY_PATTERN") ?? "LRT_%05d.tif"
+        func name(_ fileIndex: Int) -> String { String(format: pattern, fileIndex) }
 
         for fileIndex in frames {
-            decoded.drop()
             // File names are 1-based; the stored rows are keyed by the 0-based frame index.
             let baseIndex = fileIndex - 1
             let row = try storedRow(db: db, frameIndex: baseIndex)
+            decoded.keep(only: Set([fileIndex] + row.neighborHomography.map { $0.frameIndex + 1 })
+                                .reduce(into: Set<String>()) { $0.insert("\(source)/\(name($1))") })
 
             var infos: [AlignmentNeighborInfo] = []
             var homography: [Int: MatWrapper] = [:]
             for n in row.neighborHomography {
+                guard let values = n.homography else { continue }
                 infos.append(AlignmentNeighborInfo(filename: "\(source)/\(name(n.frameIndex + 1))",
                                                    maskFilename: nil, keypoints: nil,
                                                    frameIndex: Int32(n.frameIndex)))
-                homography[n.frameIndex - baseIndex] = MatWrapper(homographyValues: n.homography)
+                homography[n.frameIndex - baseIndex] = MatWrapper(homographyValues: values)
             }
             let base = try XCTUnwrap(MatWrapper.load(fromFilename: "\(source)/\(name(fileIndex))"),
                                      "cannot load frame \(fileIndex)")
@@ -166,7 +175,8 @@ final class CloudAwareMergeReplayTests: XCTestCase {
                 let seconds = Date().timeIntervalSince(wall)
                 let cpuUsed = cpuSeconds() - cpu
 
-                let path = "\(out)/\(String(name(fileIndex).dropLast(4)))-\(mode).tif"
+                let stem = (name(fileIndex) as NSString).deletingPathExtension
+                let path = "\(out)/\(stem)-\(mode).tif"
                 if env("STAR_CLOUD_REPLAY_WRITE") != "0" {
                     XCTAssertTrue(result.merged.write(to: path), "could not write \(path)")
                 }
