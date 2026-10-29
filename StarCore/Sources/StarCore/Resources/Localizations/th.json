@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "หน่วยความจำเหลือน้อย",
   "warning.title.output_write_failed": "เขียนผลลัพธ์ไม่สำเร็จ",
   "warning.title.oversized_reservation": "เกินขีดจำกัดหน่วยความจำ",
-  "warning.title.previous_run_died": "การทำงานครั้งก่อนหยุดกลางคัน"
+  "warning.title.previous_run_died": "การทำงานครั้งก่อนหยุดกลางคัน",
+  "ui.status.working_on": "กำลังทำ: {0}",
+  "ui.status.overall_about": "เหลืออีกประมาณ {0} โดยรวม จนกว่าจะเขียนเฟรมที่รวมแล้วครบทุกเฟรม",
+  "ui.status.overall_at_least": "เหลืออีกอย่างน้อย {0} โดยรวม ขั้นตอนที่ยังไม่เริ่มจะเพิ่มเวลาขึ้นอีก",
+  "ui.time_left": "เวลาที่เหลือ",
+  "ui.status.brief.horizon": "กำลังหาเส้นขอบฟ้า",
+  "ui.status.brief.merged_horizon": "กำลังทำเส้นขอบฟ้าให้เรียบ",
+  "ui.status.brief.star_keypoints": "กำลังหาดาว",
+  "ui.status.brief.earth_keypoints": "กำลังหาลักษณะเด่นของพื้นดิน",
+  "ui.status.brief.star_alignment": "กำลังจัดวางท้องฟ้า",
+  "ui.status.brief.earth_alignment": "กำลังจัดวางพื้นดิน",
+  "ui.status.brief.horizon_consensus": "กำลังสรุปเส้นขอบฟ้า",
+  "ui.status.brief.outliers": "กำลังหาแนวเส้นทาง",
+  "ui.status.brief.merged": "กำลังลบแนวเส้นทางและเขียนเฟรม"
 }

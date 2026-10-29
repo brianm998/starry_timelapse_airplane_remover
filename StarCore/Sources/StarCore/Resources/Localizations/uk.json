@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Мало памʼяті",
   "warning.title.output_write_failed": "Не вдалося записати результат",
   "warning.title.oversized_reservation": "Перевищено межу памʼяті",
-  "warning.title.previous_run_died": "Попередній запуск зупинено"
+  "warning.title.previous_run_died": "Попередній запуск зупинено",
+  "ui.status.working_on": "Виконується: {0}.",
+  "ui.status.overall_about": "Залишилося приблизно {0} загалом, доки не буде записано всі обʼєднані кадри.",
+  "ui.status.overall_at_least": "Залишилося щонайменше {0} загалом; етапи, що ще не почалися, додадуть часу.",
+  "ui.time_left": "Залишилося часу",
+  "ui.status.brief.horizon": "пошук горизонту",
+  "ui.status.brief.merged_horizon": "згладжування горизонту",
+  "ui.status.brief.star_keypoints": "пошук зір",
+  "ui.status.brief.earth_keypoints": "пошук особливостей землі",
+  "ui.status.brief.star_alignment": "вирівнювання неба",
+  "ui.status.brief.earth_alignment": "вирівнювання землі",
+  "ui.status.brief.horizon_consensus": "уточнення горизонту",
+  "ui.status.brief.outliers": "пошук слідів",
+  "ui.status.brief.merged": "вилучення слідів і запис кадрів"
 }

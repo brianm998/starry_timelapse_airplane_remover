@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Mało pamięci",
   "warning.title.output_write_failed": "Nie można zapisać wyniku",
   "warning.title.oversized_reservation": "Przekroczono limit pamięci",
-  "warning.title.previous_run_died": "Poprzedni przebieg zatrzymany"
+  "warning.title.previous_run_died": "Poprzedni przebieg zatrzymany",
+  "ui.status.working_on": "W toku: {0}.",
+  "ui.status.overall_about": "Zostało łącznie około {0}, aż każda scalona klatka zostanie zapisana.",
+  "ui.status.overall_at_least": "Zostało łącznie co najmniej {0}; kroki, które jeszcze się nie zaczęły, dodadzą czasu.",
+  "ui.time_left": "Pozostały czas",
+  "ui.status.brief.horizon": "szukanie horyzontu",
+  "ui.status.brief.merged_horizon": "wygładzanie horyzontu",
+  "ui.status.brief.star_keypoints": "szukanie gwiazd",
+  "ui.status.brief.earth_keypoints": "szukanie cech ziemi",
+  "ui.status.brief.star_alignment": "wyrównywanie nieba",
+  "ui.status.brief.earth_alignment": "wyrównywanie ziemi",
+  "ui.status.brief.horizon_consensus": "ustalanie horyzontu",
+  "ui.status.brief.outliers": "szukanie smug",
+  "ui.status.brief.merged": "zamalowywanie smug i zapisywanie klatek"
 }

@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "메모리 부족",
   "warning.title.output_write_failed": "출력을 기록할 수 없음",
   "warning.title.oversized_reservation": "메모리 한도 초과",
-  "warning.title.previous_run_died": "이전 실행이 멈춤"
+  "warning.title.previous_run_died": "이전 실행이 멈춤",
+  "ui.status.working_on": "작업 중: {0}.",
+  "ui.status.overall_about": "병합된 모든 프레임이 기록될 때까지 전체적으로 약 {0} 남았습니다.",
+  "ui.status.overall_at_least": "전체적으로 최소 {0} 남았습니다. 아직 시작하지 않은 단계가 더해집니다.",
+  "ui.time_left": "남은 시간",
+  "ui.status.brief.horizon": "지평선 찾는 중",
+  "ui.status.brief.merged_horizon": "지평선 다듬는 중",
+  "ui.status.brief.star_keypoints": "별 찾는 중",
+  "ui.status.brief.earth_keypoints": "지면 특징 찾는 중",
+  "ui.status.brief.star_alignment": "하늘 정렬 중",
+  "ui.status.brief.earth_alignment": "지면 정렬 중",
+  "ui.status.brief.horizon_consensus": "지평선 확정 중",
+  "ui.status.brief.outliers": "궤적 찾는 중",
+  "ui.status.brief.merged": "궤적 지우고 프레임 기록 중"
 }

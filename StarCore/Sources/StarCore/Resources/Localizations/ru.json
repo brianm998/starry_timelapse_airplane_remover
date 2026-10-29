@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Мало памяти",
   "warning.title.output_write_failed": "Не удалось записать вывод",
   "warning.title.oversized_reservation": "Превышен предел памяти",
-  "warning.title.previous_run_died": "Предыдущий запуск остановлен"
+  "warning.title.previous_run_died": "Предыдущий запуск остановлен",
+  "ui.status.working_on": "Выполняется: {0}.",
+  "ui.status.overall_about": "Осталось примерно {0} в целом, пока не будут записаны все объединённые кадры.",
+  "ui.status.overall_at_least": "Осталось не менее {0} в целом; этапы, которые ещё не начались, добавят времени.",
+  "ui.time_left": "Осталось времени",
+  "ui.status.brief.horizon": "поиск горизонта",
+  "ui.status.brief.merged_horizon": "сглаживание горизонта",
+  "ui.status.brief.star_keypoints": "поиск звёзд",
+  "ui.status.brief.earth_keypoints": "поиск особенностей земли",
+  "ui.status.brief.star_alignment": "выравнивание неба",
+  "ui.status.brief.earth_alignment": "выравнивание земли",
+  "ui.status.brief.horizon_consensus": "уточнение горизонта",
+  "ui.status.brief.outliers": "поиск следов",
+  "ui.status.brief.merged": "удаление следов и запись кадров"
 }

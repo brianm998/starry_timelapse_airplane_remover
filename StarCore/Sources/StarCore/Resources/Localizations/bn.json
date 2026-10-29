@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "মেমরি কম",
   "warning.title.output_write_failed": "আউটপুট লেখা যায়নি",
   "warning.title.oversized_reservation": "মেমরি সীমা অতিক্রান্ত",
-  "warning.title.previous_run_died": "আগের রান থেমে গেছে"
+  "warning.title.previous_run_died": "আগের রান থেমে গেছে",
+  "ui.status.working_on": "কাজ চলছে: {0}।",
+  "ui.status.overall_about": "সব মিলিয়ে আনুমানিক {0} বাকি, যতক্ষণ না প্রতিটি মিলিত ফ্রেম লেখা হয়।",
+  "ui.status.overall_at_least": "সব মিলিয়ে অন্তত {0} বাকি; যে ধাপগুলো শুরু হয়নি সেগুলো এর সঙ্গে যোগ হবে।",
+  "ui.time_left": "বাকি সময়",
+  "ui.status.brief.horizon": "দিগন্ত খোঁজা হচ্ছে",
+  "ui.status.brief.merged_horizon": "দিগন্ত মসৃণ করা হচ্ছে",
+  "ui.status.brief.star_keypoints": "তারা খোঁজা হচ্ছে",
+  "ui.status.brief.earth_keypoints": "ভূমির বৈশিষ্ট্য খোঁজা হচ্ছে",
+  "ui.status.brief.star_alignment": "আকাশ সাজানো হচ্ছে",
+  "ui.status.brief.earth_alignment": "ভূমি সাজানো হচ্ছে",
+  "ui.status.brief.horizon_consensus": "দিগন্ত স্থির করা হচ্ছে",
+  "ui.status.brief.outliers": "ট্রেইল খোঁজা হচ্ছে",
+  "ui.status.brief.merged": "ট্রেইল মুছে ফ্রেম লেখা হচ্ছে"
 }

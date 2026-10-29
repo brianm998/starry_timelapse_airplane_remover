@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Bellek az",
   "warning.title.output_write_failed": "Çıktı yazılamadı",
   "warning.title.oversized_reservation": "Bellek sınırı aşıldı",
-  "warning.title.previous_run_died": "Önceki çalıştırma durdu"
+  "warning.title.previous_run_died": "Önceki çalıştırma durdu",
+  "ui.status.working_on": "Üzerinde çalışılan: {0}.",
+  "ui.status.overall_about": "Birleştirilmiş tüm kareler yazılana kadar toplamda yaklaşık {0} kaldı.",
+  "ui.status.overall_at_least": "Toplamda en az {0} kaldı; henüz başlamamış adımlar bunu artıracak.",
+  "ui.time_left": "Kalan süre",
+  "ui.status.brief.horizon": "ufuk aranıyor",
+  "ui.status.brief.merged_horizon": "ufuk yumuşatılıyor",
+  "ui.status.brief.star_keypoints": "yıldızlar bulunuyor",
+  "ui.status.brief.earth_keypoints": "zemin özellikleri bulunuyor",
+  "ui.status.brief.star_alignment": "gökyüzü hizalanıyor",
+  "ui.status.brief.earth_alignment": "zemin hizalanıyor",
+  "ui.status.brief.horizon_consensus": "ufuk netleştiriliyor",
+  "ui.status.brief.outliers": "izler aranıyor",
+  "ui.status.brief.merged": "izler temizlenip kareler yazılıyor"
 }

@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "内存不足",
   "warning.title.output_write_failed": "无法写出输出",
   "warning.title.oversized_reservation": "超出内存限制",
-  "warning.title.previous_run_died": "上一次运行已停止"
+  "warning.title.previous_run_died": "上一次运行已停止",
+  "ui.status.working_on": "正在处理：{0}。",
+  "ui.status.overall_about": "总共还需约 {0}，直到写出所有已合并的帧。",
+  "ui.status.overall_at_least": "总共至少还需 {0}；尚未开始的步骤会增加这个时间。",
+  "ui.time_left": "剩余时间",
+  "ui.status.brief.horizon": "正在寻找地平线",
+  "ui.status.brief.merged_horizon": "正在平滑地平线",
+  "ui.status.brief.star_keypoints": "正在寻找星点",
+  "ui.status.brief.earth_keypoints": "正在寻找地面特征",
+  "ui.status.brief.star_alignment": "正在对齐天空",
+  "ui.status.brief.earth_alignment": "正在对齐地面",
+  "ui.status.brief.horizon_consensus": "正在确定地平线",
+  "ui.status.brief.outliers": "正在查找轨迹",
+  "ui.status.brief.merged": "正在抹除轨迹并写出帧"
 }

@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Málo paměti",
   "warning.title.output_write_failed": "Výstup nelze zapsat",
   "warning.title.oversized_reservation": "Překročena mez paměti",
-  "warning.title.previous_run_died": "Předchozí běh zastaven"
+  "warning.title.previous_run_died": "Předchozí běh zastaven",
+  "ui.status.working_on": "Právě probíhá: {0}.",
+  "ui.status.overall_about": "Celkem zbývá asi {0}, než se zapíše každý sloučený snímek.",
+  "ui.status.overall_at_least": "Celkem zbývá nejméně {0}; kroky, které ještě nezačaly, čas prodlouží.",
+  "ui.time_left": "Zbývající čas",
+  "ui.status.brief.horizon": "hledání horizontu",
+  "ui.status.brief.merged_horizon": "vyhlazování horizontu",
+  "ui.status.brief.star_keypoints": "hledání hvězd",
+  "ui.status.brief.earth_keypoints": "hledání prvků země",
+  "ui.status.brief.star_alignment": "zarovnávání oblohy",
+  "ui.status.brief.earth_alignment": "zarovnávání země",
+  "ui.status.brief.horizon_consensus": "ustalování horizontu",
+  "ui.status.brief.outliers": "hledání stop",
+  "ui.status.brief.merged": "odstraňování stop a zápis snímků"
 }

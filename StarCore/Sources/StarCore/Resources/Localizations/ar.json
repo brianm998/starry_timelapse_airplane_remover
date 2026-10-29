@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "ذاكرة منخفضة",
   "warning.title.output_write_failed": "تعذّرت كتابة المخرجات",
   "warning.title.oversized_reservation": "تجاوز حد الذاكرة",
-  "warning.title.previous_run_died": "توقّف التشغيل السابق"
+  "warning.title.previous_run_died": "توقّف التشغيل السابق",
+  "ui.status.working_on": "قيد التنفيذ: {0}.",
+  "ui.status.overall_about": "تبقّى نحو {0} إجمالًا حتى تُكتب كل الإطارات المدمجة.",
+  "ui.status.overall_at_least": "تبقّى {0} على الأقل إجمالًا؛ والخطوات التي لم تبدأ بعد ستزيد المدة.",
+  "ui.time_left": "الوقت المتبقي",
+  "ui.status.brief.horizon": "البحث عن الأفق",
+  "ui.status.brief.merged_horizon": "تنعيم الأفق",
+  "ui.status.brief.star_keypoints": "البحث عن النجوم",
+  "ui.status.brief.earth_keypoints": "البحث عن معالم الأرض",
+  "ui.status.brief.star_alignment": "محاذاة السماء",
+  "ui.status.brief.earth_alignment": "محاذاة الأرض",
+  "ui.status.brief.horizon_consensus": "تثبيت الأفق",
+  "ui.status.brief.outliers": "البحث عن الآثار",
+  "ui.status.brief.merged": "محو الآثار وكتابة الإطارات"
 }

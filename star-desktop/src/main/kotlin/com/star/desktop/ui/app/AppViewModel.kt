@@ -481,6 +481,7 @@ class AppViewModel(
     private val _showAlignmentWindow = MutableStateFlow(false)
     val showAlignmentWindow: StateFlow<Boolean> = _showAlignmentWindow.asStateFlow()
     fun toggleAlignmentWindow() { _showAlignmentWindow.value = !_showAlignmentWindow.value }
+    fun openAlignmentWindow() { _showAlignmentWindow.value = true }
     fun closeAlignmentWindow() { _showAlignmentWindow.value = false }
 
     /** Keeps the machine from sleeping while a sequence is open; a replacement can be given for a test. */

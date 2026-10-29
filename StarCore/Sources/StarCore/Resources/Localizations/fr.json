@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Mémoire faible",
   "warning.title.output_write_failed": "Impossible d'écrire la sortie",
   "warning.title.oversized_reservation": "Limite de mémoire dépassée",
-  "warning.title.previous_run_died": "Exécution précédente arrêtée"
+  "warning.title.previous_run_died": "Exécution précédente arrêtée",
+  "ui.status.working_on": "En cours : {0}.",
+  "ui.status.overall_about": "Environ {0} restantes au total, jusqu'à l'écriture de toutes les images fusionnées.",
+  "ui.status.overall_at_least": "Au moins {0} restantes au total ; les étapes qui n'ont pas démarré s'y ajouteront.",
+  "ui.time_left": "Temps restant",
+  "ui.status.brief.horizon": "recherche de l'horizon",
+  "ui.status.brief.merged_horizon": "lissage de l'horizon",
+  "ui.status.brief.star_keypoints": "recherche des étoiles",
+  "ui.status.brief.earth_keypoints": "recherche des éléments du sol",
+  "ui.status.brief.star_alignment": "alignement du ciel",
+  "ui.status.brief.earth_alignment": "alignement du sol",
+  "ui.status.brief.horizon_consensus": "stabilisation de l'horizon",
+  "ui.status.brief.outliers": "recherche des traînées",
+  "ui.status.brief.merged": "effacement des traînées et écriture des images"
 }

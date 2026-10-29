@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "मेमोरी कम",
   "warning.title.output_write_failed": "आउटपुट नहीं लिखा जा सका",
   "warning.title.oversized_reservation": "मेमोरी सीमा पार",
-  "warning.title.previous_run_died": "पिछला रन रुक गया"
+  "warning.title.previous_run_died": "पिछला रन रुक गया",
+  "ui.status.working_on": "काम जारी है: {0}।",
+  "ui.status.overall_about": "कुल मिलाकर लगभग {0} बाकी, जब तक हर मिलाया गया फ़्रेम लिख नहीं दिया जाता।",
+  "ui.status.overall_at_least": "कुल मिलाकर कम से कम {0} बाकी; जो चरण शुरू नहीं हुए वे इसमें जुड़ेंगे।",
+  "ui.time_left": "शेष समय",
+  "ui.status.brief.horizon": "क्षितिज खोजा जा रहा है",
+  "ui.status.brief.merged_horizon": "क्षितिज को चिकना किया जा रहा है",
+  "ui.status.brief.star_keypoints": "तारे खोजे जा रहे हैं",
+  "ui.status.brief.earth_keypoints": "भूमि की विशेषताएँ खोजी जा रही हैं",
+  "ui.status.brief.star_alignment": "आकाश संरेखित हो रहा है",
+  "ui.status.brief.earth_alignment": "भूमि संरेखित हो रही है",
+  "ui.status.brief.horizon_consensus": "क्षितिज स्थिर किया जा रहा है",
+  "ui.status.brief.outliers": "ट्रेल खोजे जा रहे हैं",
+  "ui.status.brief.merged": "ट्रेल मिटाकर फ़्रेम लिखे जा रहे हैं"
 }

@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Memoria scarsa",
   "warning.title.output_write_failed": "Impossibile scrivere l'output",
   "warning.title.oversized_reservation": "Limite di memoria superato",
-  "warning.title.previous_run_died": "Esecuzione precedente interrotta"
+  "warning.title.previous_run_died": "Esecuzione precedente interrotta",
+  "ui.status.working_on": "In corso: {0}.",
+  "ui.status.overall_about": "Mancano circa {0} in tutto, finché ogni fotogramma unito non è scritto.",
+  "ui.status.overall_at_least": "Mancano almeno {0} in tutto; i passaggi non ancora iniziati si aggiungeranno.",
+  "ui.time_left": "Tempo rimanente",
+  "ui.status.brief.horizon": "ricerca dell'orizzonte",
+  "ui.status.brief.merged_horizon": "livellamento dell'orizzonte",
+  "ui.status.brief.star_keypoints": "ricerca delle stelle",
+  "ui.status.brief.earth_keypoints": "ricerca dei dettagli del terreno",
+  "ui.status.brief.star_alignment": "allineamento del cielo",
+  "ui.status.brief.earth_alignment": "allineamento del terreno",
+  "ui.status.brief.horizon_consensus": "definizione dell'orizzonte",
+  "ui.status.brief.outliers": "ricerca delle scie",
+  "ui.status.brief.merged": "rimozione delle scie e scrittura dei fotogrammi"
 }

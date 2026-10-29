@@ -41,27 +41,28 @@ public final class StepRateTracker {
     }
 }
 
-/// The one short sentence under the modal's title that says what star is doing right now,
-/// and why, with how long it has left when that can be told.
+/// The short lines under the modal's title: what star is working on right now, across every
+/// step that is running, and how long the whole run has left.  Per-step estimates are not
+/// part of the sentence; the modal puts each beside its own bar.
 public enum ProcessingHeadline {
 
     /// - Parameters:
     ///   - steps: the visible steps, in pipeline order (`ProcessingSteps.visible`).
     ///   - hasPlan: whether this run's operations have been built; until then every step
     ///     reads as empty, which is "still planning", not "nothing to do".
-    ///   - secondsRemaining: the estimate for a step, if there is one.
     public static func text(
       steps: [ProcessingStepProgress],
       extraction: FrameExtractionProgress?,
       hasPlan: Bool,
       framesComplete: Int,
-      frameCount: Int,
-      secondsRemaining: (ProcessingStepProgress) -> TimeInterval?
+      frameCount: Int
     ) -> String? {
         let working = steps.filter { $0.hasWork && ($0.queued > 0 || $0.running > 0) }
-        // The earliest unfinished step is the one the rest are waiting on; when several
-        // are going at once, it is the one that sets the pace.
-        let active = working.first(where: { $0.running > 0 }) ?? working.first
+        let running = working.filter { $0.running > 0 }
+        // Every step that is running, not only the farthest advanced: the steps overlap, and
+        // naming one of them reads as the others standing idle.  When nothing is running yet,
+        // the first queued step is what is about to start.
+        let active = running.first ?? working.first
 
         if let extraction, !extraction.isComplete, extraction.error == nil, active == nil {
             return withEstimate(localized("ui.status.extracting"),
@@ -72,7 +73,23 @@ public enum ProcessingHeadline {
             if steps.isEmpty { return nil }
             return framesComplete < frameCount ? localized("ui.status.finishing") : nil
         }
-        return withEstimate(active.type.stepActivity, secondsRemaining(active), key: "ui.status.left_step")
+        if running.isEmpty { return active.type.stepActivity }
+        return localized("ui.status.working_on", running.map { $0.type.stepBrief }.joined(separator: ", "))
+    }
+
+    /// How long the whole run has left, for the top of the modal: until every merged frame
+    /// is written.  The steps overlap, so the slowest measured step sets the pace; a step
+    /// that has not started has no rate yet, and its time is not in the figure, which then
+    /// says so rather than promising a finish it cannot back.
+    public static func overallText(
+      steps: [ProcessingStepProgress],
+      secondsRemaining: (ProcessingStepProgress) -> TimeInterval?
+    ) -> String? {
+        let working = steps.filter { $0.hasWork && ($0.queued > 0 || $0.running > 0) }
+        let known = working.compactMap { secondsRemaining($0) }.filter { $0.isFinite }
+        guard let longest = known.max() else { return nil }
+        let key = known.count == working.count ? "ui.status.overall_about" : "ui.status.overall_at_least"
+        return localized(key, duration(longest))
     }
 
     private static func withEstimate(_ sentence: String, _ seconds: TimeInterval?, key: String) -> String {
@@ -92,6 +109,22 @@ public enum ProcessingHeadline {
 }
 
 extension OperationType {
+    /// The same activity in a few words, to list beside others.
+    public var stepBrief: String {
+        switch self {
+        case .horizon:          localized("ui.status.brief.horizon")
+        case .mergedHorizon:    localized("ui.status.brief.merged_horizon")
+        case .starKeypoints:    localized("ui.status.brief.star_keypoints")
+        case .earthKeypoints:   localized("ui.status.brief.earth_keypoints")
+        case .starHomography:   localized("ui.status.brief.star_alignment")
+        case .earthHomography:  localized("ui.status.brief.earth_alignment")
+        case .horizonConsensus: localized("ui.status.brief.horizon_consensus")
+        case .outliers:         localized("ui.status.brief.outliers")
+        case .merge:            localized("ui.status.brief.merged")
+        default:                ""
+        }
+    }
+
     /// What this step is doing and why, as one sentence for the modal's header.  The longer
     /// account, with what it costs, is `stepHelp`.
     public var stepActivity: String {

@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Pouca memória",
   "warning.title.output_write_failed": "Não foi possível gravar a saída",
   "warning.title.oversized_reservation": "Limite de memória excedido",
-  "warning.title.previous_run_died": "Execução anterior interrompida"
+  "warning.title.previous_run_died": "Execução anterior interrompida",
+  "ui.status.working_on": "Trabalhando em: {0}.",
+  "ui.status.overall_about": "Faltam cerca de {0} no total, até que todos os quadros mesclados sejam gravados.",
+  "ui.status.overall_at_least": "Faltam pelo menos {0} no total; as etapas que ainda não começaram vão somar a esse tempo.",
+  "ui.time_left": "Tempo restante",
+  "ui.status.brief.horizon": "procurando o horizonte",
+  "ui.status.brief.merged_horizon": "suavizando o horizonte",
+  "ui.status.brief.star_keypoints": "procurando estrelas",
+  "ui.status.brief.earth_keypoints": "procurando características do solo",
+  "ui.status.brief.star_alignment": "alinhando o céu",
+  "ui.status.brief.earth_alignment": "alinhando o solo",
+  "ui.status.brief.horizon_consensus": "definindo o horizonte",
+  "ui.status.brief.outliers": "procurando rastros",
+  "ui.status.brief.merged": "apagando rastros e gravando quadros"
 }

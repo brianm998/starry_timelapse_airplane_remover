@@ -6,20 +6,21 @@ final class ProcessingHeadlineTests: XCTestCase {
         ProcessingStepProgress(type: type, queued: queued, running: running, done: done)
     }
 
-    private func text(_ steps: [ProcessingStepProgress], hasPlan: Bool = true, complete: Int = 0,
-                      eta: TimeInterval? = nil) -> String? {
+    private func text(_ steps: [ProcessingStepProgress], hasPlan: Bool = true, complete: Int = 0) -> String? {
         ProcessingHeadline.text(steps: steps, extraction: nil, hasPlan: hasPlan, framesComplete: complete,
-                                frameCount: 10, secondsRemaining: { _ in eta })
+                                frameCount: 10)
     }
 
     func testPlanningUntilTheGraphIsBuilt() {
         XCTAssertEqual(text([step(.horizon)], hasPlan: false), localized("ui.status.planning"))
     }
 
-    func testDescribesTheEarliestRunningStep() {
-        let steps = [step(.horizon, done: 10), step(.starKeypoints, queued: 5, running: 2, done: 3),
-                     step(.merge, queued: 10)]
-        XCTAssertEqual(text(steps), OperationType.starKeypoints.stepActivity)
+    func testNamesEveryRunningStep() {
+        let steps = [step(.horizon, queued: 3, running: 2, done: 5), step(.starKeypoints, queued: 5, running: 2, done: 3),
+                     step(.earthHomography, queued: 4), step(.merge, queued: 10)]
+        let expected = localized("ui.status.working_on",
+                                 "\(OperationType.horizon.stepBrief), \(OperationType.starKeypoints.stepBrief)")
+        XCTAssertEqual(text(steps), expected)
     }
 
     func testFallsBackToTheFirstQueuedStepWhenNothingIsRunning() {
@@ -27,10 +28,19 @@ final class ProcessingHeadlineTests: XCTestCase {
         XCTAssertEqual(text(steps), OperationType.starKeypoints.stepActivity)
     }
 
-    func testAppendsTheEstimateOnlyWhenThereIsOne() {
-        let steps = [step(.starKeypoints, queued: 5, running: 2, done: 3)]
-        XCTAssertEqual(text(steps), OperationType.starKeypoints.stepActivity)
-        XCTAssertTrue(text(steps, eta: 600)!.hasSuffix(localized("ui.status.left_step", localized("duration.minutes", 10))))
+    func testOverallEstimateIsTheSlowestMeasuredStep() {
+        let steps = [step(.horizon, queued: 3, running: 2, done: 5), step(.starKeypoints, queued: 5, running: 2, done: 3)]
+        let eta: (ProcessingStepProgress) -> TimeInterval? = { $0.type == .horizon ? 120 : 600 }
+        XCTAssertEqual(ProcessingHeadline.overallText(steps: steps, secondsRemaining: eta),
+                       localized("ui.status.overall_about", localized("duration.minutes", 10)))
+    }
+
+    func testOverallEstimateAdmitsWhatItCannotSeeYet() {
+        let steps = [step(.starKeypoints, queued: 5, running: 2, done: 3), step(.merge, queued: 10)]
+        let eta: (ProcessingStepProgress) -> TimeInterval? = { $0.type == .merge ? nil : 600 }
+        XCTAssertEqual(ProcessingHeadline.overallText(steps: steps, secondsRemaining: eta),
+                       localized("ui.status.overall_at_least", localized("duration.minutes", 10)))
+        XCTAssertNil(ProcessingHeadline.overallText(steps: steps, secondsRemaining: { _ in nil }))
     }
 
     func testFinishingWhileFramesRemainAndQuietOnceDone() {

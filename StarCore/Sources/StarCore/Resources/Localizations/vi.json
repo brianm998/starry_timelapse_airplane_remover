@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Thiếu bộ nhớ",
   "warning.title.output_write_failed": "Không ghi được kết quả",
   "warning.title.oversized_reservation": "Vượt giới hạn bộ nhớ",
-  "warning.title.previous_run_died": "Lần chạy trước đã dừng"
+  "warning.title.previous_run_died": "Lần chạy trước đã dừng",
+  "ui.status.working_on": "Đang thực hiện: {0}.",
+  "ui.status.overall_about": "Còn khoảng {0} nữa, cho đến khi mọi khung đã ghép được ghi xong.",
+  "ui.status.overall_at_least": "Còn ít nhất {0} nữa; các bước chưa bắt đầu sẽ cộng thêm vào.",
+  "ui.time_left": "Thời gian còn lại",
+  "ui.status.brief.horizon": "đang tìm đường chân trời",
+  "ui.status.brief.merged_horizon": "đang làm mượt đường chân trời",
+  "ui.status.brief.star_keypoints": "đang tìm sao",
+  "ui.status.brief.earth_keypoints": "đang tìm điểm đặc trưng mặt đất",
+  "ui.status.brief.star_alignment": "đang căn bầu trời",
+  "ui.status.brief.earth_alignment": "đang căn mặt đất",
+  "ui.status.brief.horizon_consensus": "đang chốt đường chân trời",
+  "ui.status.brief.outliers": "đang tìm vệt",
+  "ui.status.brief.merged": "đang xóa vệt và ghi khung"
 }

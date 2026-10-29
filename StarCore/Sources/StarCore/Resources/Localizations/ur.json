@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "میموری کم ہے",
   "warning.title.output_write_failed": "نتیجہ نہ لکھا جا سکا",
   "warning.title.oversized_reservation": "میموری کی حد سے تجاوز",
-  "warning.title.previous_run_died": "پچھلا عمل رک گیا"
+  "warning.title.previous_run_died": "پچھلا عمل رک گیا",
+  "ui.status.working_on": "اس وقت جاری: {0}۔",
+  "ui.status.overall_about": "مجموعی طور پر تقریباً {0} باقی ہیں، جب تک ہر ملایا گیا فریم لکھ نہ دیا جائے۔",
+  "ui.status.overall_at_least": "مجموعی طور پر کم از کم {0} باقی ہیں؛ جو مراحل شروع نہیں ہوئے وہ اس میں اضافہ کریں گے۔",
+  "ui.time_left": "باقی وقت",
+  "ui.status.brief.horizon": "افق کی تلاش",
+  "ui.status.brief.merged_horizon": "افق کو ہموار کرنا",
+  "ui.status.brief.star_keypoints": "ستاروں کی تلاش",
+  "ui.status.brief.earth_keypoints": "زمین کی خصوصیات کی تلاش",
+  "ui.status.brief.star_alignment": "آسمان کی ہم آہنگی",
+  "ui.status.brief.earth_alignment": "زمین کی ہم آہنگی",
+  "ui.status.brief.horizon_consensus": "افق کو حتمی بنانا",
+  "ui.status.brief.outliers": "لکیروں کی تلاش",
+  "ui.status.brief.merged": "لکیریں مٹانا اور فریم لکھنا"
 }

@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Memoria baja",
   "warning.title.output_write_failed": "No se pudo escribir la salida",
   "warning.title.oversized_reservation": "Límite de memoria superado",
-  "warning.title.previous_run_died": "La ejecución anterior se detuvo"
+  "warning.title.previous_run_died": "La ejecución anterior se detuvo",
+  "ui.status.working_on": "En curso: {0}.",
+  "ui.status.overall_about": "Quedan unos {0} en total, hasta que se escriban todos los fotogramas combinados.",
+  "ui.status.overall_at_least": "Quedan al menos {0} en total; los pasos que no han empezado aumentarán esta cifra.",
+  "ui.time_left": "Tiempo restante",
+  "ui.status.brief.horizon": "buscando el horizonte",
+  "ui.status.brief.merged_horizon": "suavizando el horizonte",
+  "ui.status.brief.star_keypoints": "buscando estrellas",
+  "ui.status.brief.earth_keypoints": "buscando rasgos de la tierra",
+  "ui.status.brief.star_alignment": "alineando el cielo",
+  "ui.status.brief.earth_alignment": "alineando la tierra",
+  "ui.status.brief.horizon_consensus": "fijando el horizonte",
+  "ui.status.brief.outliers": "buscando estelas",
+  "ui.status.brief.merged": "borrando estelas y escribiendo fotogramas"
 }

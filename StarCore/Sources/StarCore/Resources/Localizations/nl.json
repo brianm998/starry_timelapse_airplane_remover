@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Weinig geheugen",
   "warning.title.output_write_failed": "Kon de uitvoer niet schrijven",
   "warning.title.oversized_reservation": "Geheugenlimiet overschreden",
-  "warning.title.previous_run_died": "Vorige run gestopt"
+  "warning.title.previous_run_died": "Vorige run gestopt",
+  "ui.status.working_on": "Bezig met: {0}.",
+  "ui.status.overall_about": "Nog ongeveer {0} in totaal, tot elk samengevoegd beeld is weggeschreven.",
+  "ui.status.overall_at_least": "Nog minstens {0} in totaal; stappen die nog niet zijn begonnen komen erbij.",
+  "ui.time_left": "Resterende tijd",
+  "ui.status.brief.horizon": "horizon zoeken",
+  "ui.status.brief.merged_horizon": "horizon gladstrijken",
+  "ui.status.brief.star_keypoints": "sterren zoeken",
+  "ui.status.brief.earth_keypoints": "kenmerken van de aarde zoeken",
+  "ui.status.brief.star_alignment": "hemel uitlijnen",
+  "ui.status.brief.earth_alignment": "aarde uitlijnen",
+  "ui.status.brief.horizon_consensus": "horizon vastleggen",
+  "ui.status.brief.outliers": "sporen zoeken",
+  "ui.status.brief.merged": "sporen wegschilderen en beelden schrijven"
 }

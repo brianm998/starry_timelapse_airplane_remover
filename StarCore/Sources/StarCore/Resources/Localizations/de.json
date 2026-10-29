@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Wenig Arbeitsspeicher",
   "warning.title.output_write_failed": "Ausgabe konnte nicht geschrieben werden",
   "warning.title.oversized_reservation": "Speichergrenze überschritten",
-  "warning.title.previous_run_died": "Vorheriger Lauf gestoppt"
+  "warning.title.previous_run_died": "Vorheriger Lauf gestoppt",
+  "ui.status.working_on": "In Arbeit: {0}.",
+  "ui.status.overall_about": "Insgesamt noch etwa {0}, bis jedes zusammengeführte Bild geschrieben ist.",
+  "ui.status.overall_at_least": "Insgesamt noch mindestens {0}; noch nicht gestartete Schritte kommen hinzu.",
+  "ui.time_left": "Verbleibende Zeit",
+  "ui.status.brief.horizon": "Horizont wird gesucht",
+  "ui.status.brief.merged_horizon": "Horizont wird geglättet",
+  "ui.status.brief.star_keypoints": "Sterne werden gesucht",
+  "ui.status.brief.earth_keypoints": "Erdmerkmale werden gesucht",
+  "ui.status.brief.star_alignment": "Himmel wird ausgerichtet",
+  "ui.status.brief.earth_alignment": "Erde wird ausgerichtet",
+  "ui.status.brief.horizon_consensus": "Horizont wird festgelegt",
+  "ui.status.brief.outliers": "Spuren werden gesucht",
+  "ui.status.brief.merged": "Spuren werden entfernt und Bilder geschrieben"
 }

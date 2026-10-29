@@ -1205,5 +1205,18 @@
   "warning.title.memory_pressure": "Memori menipis",
   "warning.title.output_write_failed": "Keluaran tidak bisa ditulis",
   "warning.title.oversized_reservation": "Batas memori terlampaui",
-  "warning.title.previous_run_died": "Proses sebelumnya berhenti"
+  "warning.title.previous_run_died": "Proses sebelumnya berhenti",
+  "ui.status.working_on": "Sedang mengerjakan: {0}.",
+  "ui.status.overall_about": "Sekitar {0} lagi secara keseluruhan, hingga setiap bingkai gabungan selesai ditulis.",
+  "ui.status.overall_at_least": "Setidaknya {0} lagi secara keseluruhan; langkah yang belum dimulai akan menambahnya.",
+  "ui.time_left": "Sisa waktu",
+  "ui.status.brief.horizon": "mencari horizon",
+  "ui.status.brief.merged_horizon": "menghaluskan horizon",
+  "ui.status.brief.star_keypoints": "mencari bintang",
+  "ui.status.brief.earth_keypoints": "mencari fitur tanah",
+  "ui.status.brief.star_alignment": "menyelaraskan langit",
+  "ui.status.brief.earth_alignment": "menyelaraskan tanah",
+  "ui.status.brief.horizon_consensus": "memantapkan horizon",
+  "ui.status.brief.outliers": "mencari jejak",
+  "ui.status.brief.merged": "menghapus jejak dan menulis bingkai"
 }
