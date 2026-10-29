@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "Lo stesso per H.264, H.265 e video simili, dove solo un fotogramma richiesto dall'utente ne avvia uno (predefinito 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background e --extraction-*-workers valgono solo quando l'input è un file video.",
   "cli.waited_for_frames": "L'estrazione del video ha richiesto {0}; l'esecuzione è terminata {1} dopo l'estrazione dell'ultimo fotogramma.",
-  "ui.processing_step_extracting_video": "Estrazione dei fotogrammi del video"
+  "ui.processing_step_extracting_video": "Estrazione dei fotogrammi del video",
+  "ui.location_title": "Dove salvare i file di lavoro",
+  "ui.location_blurb": "I file di lavoro temporanei di Star, il suo output e i fotogrammi estratti da un video possono occupare diverse volte la dimensione delle immagini. Mettili su un volume con abbastanza spazio libero.",
+  "ui.location_choose": "Scegli…",
+  "ui.location_beside": "Accanto alla sorgente",
+  "ui.location_needed": "Spazio necessario: circa {0}",
+  "ui.location_needed_video": "Spazio necessario: circa {0} ({1} per i fotogrammi, {2} per l'elaborazione)",
+  "ui.location_available": "Disponibile su questo volume: {0}",
+  "ui.location_unknown_free": "Non è stato possibile determinare lo spazio libero di questo volume.",
+  "ui.location_short": "Spazio insufficiente su questo volume. Scegli un'altra cartella o libera {0}.",
+  "ui.sequence_location_title": "Apri sequenza di immagini",
+  "ui.sequence_location_open": "Apri"
 }

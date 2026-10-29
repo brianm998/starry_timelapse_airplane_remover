@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "La même chose pour H.264, H.265 et les vidéos similaires, où seule une image demandée par l'utilisateur en démarre un (1 par défaut).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background et --extraction-*-workers ne s'appliquent que si l'entrée est un fichier vidéo.",
   "cli.waited_for_frames": "L'extraction de la vidéo a pris {0} ; le traitement s'est terminé {1} après l'extraction de la dernière image.",
-  "ui.processing_step_extracting_video": "Extraction des images de la vidéo"
+  "ui.processing_step_extracting_video": "Extraction des images de la vidéo",
+  "ui.location_title": "Où placer les fichiers de travail",
+  "ui.location_blurb": "Les fichiers de travail temporaires de Star, sa sortie et les images extraites d'une vidéo peuvent occuper plusieurs fois la taille des images. Placez-les sur un volume qui dispose d'assez d'espace libre.",
+  "ui.location_choose": "Choisir…",
+  "ui.location_beside": "À côté de la source",
+  "ui.location_needed": "Espace nécessaire : environ {0}",
+  "ui.location_needed_video": "Espace nécessaire : environ {0} ({1} pour les images, {2} pour le traitement)",
+  "ui.location_available": "Disponible sur ce volume : {0}",
+  "ui.location_unknown_free": "L'espace libre de ce volume n'a pas pu être déterminé.",
+  "ui.location_short": "Il n'y a pas assez de place sur ce volume. Choisissez un autre dossier ou libérez {0}.",
+  "ui.sequence_location_title": "Ouvrir une séquence d'images",
+  "ui.sequence_location_open": "Ouvrir"
 }

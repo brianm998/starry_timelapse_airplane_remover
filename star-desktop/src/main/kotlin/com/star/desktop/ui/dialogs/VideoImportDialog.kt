@@ -62,6 +62,7 @@ fun VideoImportDialog(
     var compression by remember { mutableStateOf(TiffCompressionChoice.PACKBITS) }
     val info by produceState<ProbeVideoResponse?>(null, videoPath) { value = runCatching { probe(videoPath) }.getOrNull() }
     // On by default where any frame can be had cheaply; once the user has touched the box, what the probe finds no longer changes it.
+    var outputDir by remember { mutableStateOf<String?>(null) }
     var background by remember { mutableStateOf(false) }
     var backgroundChosen by remember { mutableStateOf(false) }
     LaunchedEffect(info) { if (!backgroundChosen) background = VideoImport.extractInBackgroundByDefault(info) }
@@ -133,6 +134,10 @@ fun VideoImportDialog(
                 }
             }
 
+            // Where the frames, the output and the working files go, and whether the volume has room for them.
+            val frameBytes = info?.let { VideoImport.estimatedBytes(it, format, q, compression) }
+            WorkingLocationSection(videoPath, outputDir, { outputDir = it }, inputBytes = frameBytes, frameBytes = frameBytes)
+
             // Start working while the frames are still being extracted. The help says why this is off for H.264 and the like.
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).testTag("videoimport.background")
@@ -147,7 +152,7 @@ fun VideoImportDialog(
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
                 Button(
-                    onClick = { onImport(VideoImportOptions(format, q, compression, background)) },
+                    onClick = { onImport(VideoImportOptions(format, q, compression, background, outputDir)) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     modifier = Modifier.testTag("videoimport.import"),
                 ) { Text(localized("ui.video_import_start")) }

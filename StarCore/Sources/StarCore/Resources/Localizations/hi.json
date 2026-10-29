@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "H.264, H.265 और ऐसे अन्य वीडियो के लिए वही, जहाँ केवल उपयोगकर्ता द्वारा माँगा गया फ़्रेम एक शुरू करता है (डिफ़ॉल्ट 1)।",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background और --extraction-*-workers केवल तब लागू होते हैं जब इनपुट वीडियो फ़ाइल हो।",
   "cli.waited_for_frames": "वीडियो निकालने में {0} लगे; रन आख़िरी फ़्रेम निकलने के {1} बाद पूरा हुआ।",
-  "ui.processing_step_extracting_video": "वीडियो फ़्रेम निकालना"
+  "ui.processing_step_extracting_video": "वीडियो फ़्रेम निकालना",
+  "ui.location_title": "कार्य फ़ाइलें कहाँ रखें",
+  "ui.location_blurb": "Star की अस्थायी कार्य फ़ाइलें, उसका आउटपुट और वीडियो से निकाले गए फ़्रेम छवियों के आकार से कई गुना जगह ले सकते हैं। इन्हें पर्याप्त खाली जगह वाले वॉल्यूम पर रखें।",
+  "ui.location_choose": "चुनें…",
+  "ui.location_beside": "स्रोत के बगल में",
+  "ui.location_needed": "आवश्यक जगह: लगभग {0}",
+  "ui.location_needed_video": "आवश्यक जगह: लगभग {0} (फ़्रेम के लिए {1}, प्रोसेसिंग के लिए {2})",
+  "ui.location_available": "इस वॉल्यूम पर उपलब्ध: {0}",
+  "ui.location_unknown_free": "इस वॉल्यूम की खाली जगह का पता नहीं लगाया जा सका।",
+  "ui.location_short": "इस वॉल्यूम पर पर्याप्त जगह नहीं है। कोई दूसरा फ़ोल्डर चुनें या {0} खाली करें।",
+  "ui.sequence_location_title": "इमेज सीक्वेंस खोलें",
+  "ui.sequence_location_open": "खोलें"
 }

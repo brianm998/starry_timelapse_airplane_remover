@@ -25,6 +25,8 @@ data class VideoImportOptions(
     val tiffCompression: TiffCompressionChoice = TiffCompressionChoice.PACKBITS,
     /** Go to the main screen while the video's frames are still being extracted. */
     val extractInBackground: Boolean = false,
+    /** Where the frames, the output and the working files go; null is beside the video. */
+    val outputDir: String? = null,
 )
 
 object VideoImport {

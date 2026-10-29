@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "Hetzelfde voor H.264, H.265 en vergelijkbare video's, waar alleen een door de gebruiker gevraagd beeld er een start (standaard 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background en --extraction-*-workers gelden alleen als de invoer een videobestand is.",
   "cli.waited_for_frames": "Het uitpakken van de video duurde {0}; de run was {1} na het uitpakken van het laatste beeld klaar.",
-  "ui.processing_step_extracting_video": "Videobeelden uitpakken"
+  "ui.processing_step_extracting_video": "Videobeelden uitpakken",
+  "ui.location_title": "Waar de werkbestanden komen",
+  "ui.location_blurb": "De tijdelijke werkbestanden van Star, de uitvoer en de uit een video gehaalde beelden kunnen een veelvoud van de grootte van de afbeeldingen innemen. Zet ze op een volume met genoeg vrije ruimte.",
+  "ui.location_choose": "Kies…",
+  "ui.location_beside": "Naast de bron",
+  "ui.location_needed": "Benodigde ruimte: ongeveer {0}",
+  "ui.location_needed_video": "Benodigde ruimte: ongeveer {0} ({1} voor de beelden, {2} voor de verwerking)",
+  "ui.location_available": "Beschikbaar op dit volume: {0}",
+  "ui.location_unknown_free": "De vrije ruimte op dit volume kon niet worden bepaald.",
+  "ui.location_short": "Er is niet genoeg ruimte op dit volume. Kies een andere map of maak {0} vrij.",
+  "ui.sequence_location_title": "Beeldreeks openen",
+  "ui.sequence_location_open": "Openen"
 }

@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "الأمر نفسه لفيديوهات H.264 وH.265 وما شابهها، حيث لا يبدأ واحدة إلا إطار يطلبه المستخدم (الافتراضي 1).",
   "cli.errors.extraction_option_needs_video": "لا تنطبق --tiff-compression و--extract-in-background و--extraction-*-workers إلا عندما يكون الإدخال ملف فيديو.",
   "cli.waited_for_frames": "استغرق استخراج الفيديو {0}؛ وانتهى التشغيل بعد {1} من استخراج الإطار الأخير.",
-  "ui.processing_step_extracting_video": "استخراج إطارات الفيديو"
+  "ui.processing_step_extracting_video": "استخراج إطارات الفيديو",
+  "ui.location_title": "مكان حفظ ملفات العمل",
+  "ui.location_blurb": "قد تشغل ملفات العمل المؤقتة لبرنامج Star ومخرجاته والإطارات المستخرجة من الفيديو أضعاف حجم الصور. ضعها على وحدة تخزين تتسع لها.",
+  "ui.location_choose": "اختيار…",
+  "ui.location_beside": "بجوار المصدر",
+  "ui.location_needed": "المساحة المطلوبة: نحو {0}",
+  "ui.location_needed_video": "المساحة المطلوبة: نحو {0} ({1} للإطارات، {2} للمعالجة)",
+  "ui.location_available": "المتاح على هذه الوحدة: {0}",
+  "ui.location_unknown_free": "تعذر تحديد المساحة الحرة على هذه الوحدة.",
+  "ui.location_short": "لا توجد مساحة كافية على هذه الوحدة. اختر مجلدًا آخر أو حرّر {0}.",
+  "ui.sequence_location_title": "فتح تسلسل صور",
+  "ui.sequence_location_open": "فتح"
 }

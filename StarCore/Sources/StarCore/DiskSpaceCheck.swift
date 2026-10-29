@@ -80,6 +80,16 @@ public enum DiskSpaceCheck {
         return total
     }
 
+    /// Total size of the image files directly in `directory`, which is what a run's output and working files are sized by
+    /// (the same set the desktop client counts).  Zero when the folder cannot be listed.
+    public static func sequenceInputBytes(inDirectory directory: String) -> UInt64 {
+        let imageExtensions: Set<String> = ["jpg", "jpeg", "tif", "tiff", "png"]
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return 0 }
+        return totalSize(ofFiles: names
+          .filter { imageExtensions.contains(($0 as NSString).pathExtension.lowercased()) }
+          .map { "\(directory)/\($0)" })
+    }
+
     /// Free space on the volume holding `path`, or nil if it cannot be determined.
     ///
     /// Walks up to the nearest existing ancestor first: the output directory usually does not

@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "H.264, H.265 ও অনুরূপ ভিডিওর জন্য একই, যেখানে শুধু ব্যবহারকারীর চাওয়া ফ্রেম একটি শুরু করে (ডিফল্ট ১)।",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background এবং --extraction-*-workers কেবল তখনই প্রযোজ্য যখন ইনপুট একটি ভিডিও ফাইল।",
   "cli.waited_for_frames": "ভিডিও এক্সট্র্যাক্ট করতে {0} লেগেছে; শেষ ফ্রেম এক্সট্র্যাক্ট হওয়ার {1} পরে রান শেষ হয়েছে।",
-  "ui.processing_step_extracting_video": "ভিডিও ফ্রেম এক্সট্র্যাক্ট করা"
+  "ui.processing_step_extracting_video": "ভিডিও ফ্রেম এক্সট্র্যাক্ট করা",
+  "ui.location_title": "কাজের ফাইল কোথায় রাখবেন",
+  "ui.location_blurb": "Star-এর অস্থায়ী কাজের ফাইল, আউটপুট এবং ভিডিও থেকে বের করা ফ্রেম ছবির আকারের কয়েক গুণ জায়গা নিতে পারে। এগুলো পর্যাপ্ত ফাঁকা জায়গা আছে এমন ভলিউমে রাখুন।",
+  "ui.location_choose": "বেছে নিন…",
+  "ui.location_beside": "উৎসের পাশে",
+  "ui.location_needed": "প্রয়োজনীয় জায়গা: প্রায় {0}",
+  "ui.location_needed_video": "প্রয়োজনীয় জায়গা: প্রায় {0} (ফ্রেমের জন্য {1}, প্রসেসিংয়ের জন্য {2})",
+  "ui.location_available": "এই ভলিউমে উপলব্ধ: {0}",
+  "ui.location_unknown_free": "এই ভলিউমের ফাঁকা জায়গা নির্ণয় করা যায়নি।",
+  "ui.location_short": "এই ভলিউমে যথেষ্ট জায়গা নেই। অন্য ফোল্ডার বেছে নিন অথবা {0} খালি করুন।",
+  "ui.sequence_location_title": "ইমেজ সিকোয়েন্স খুলুন",
+  "ui.sequence_location_open": "খুলুন"
 }

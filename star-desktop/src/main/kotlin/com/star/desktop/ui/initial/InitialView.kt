@@ -157,7 +157,7 @@ private fun DragAndDropEvent.droppedFiles(): List<File> = try {
 private fun handleDroppedFiles(vm: AppViewModel, files: List<File>) {
     val action = resolveDrop(files) ?: return
     when (action.kind) {
-        OpenKind.SEQUENCE -> vm.openSequence(action.path)
+        OpenKind.SEQUENCE -> vm.requestSequence(action.path)
         OpenKind.VIDEO -> vm.openVideo(action.path)
         OpenKind.CONFIG -> vm.openConfig(action.path)
     }
@@ -209,7 +209,7 @@ private fun open(vm: AppViewModel, kind: OpenKind) {
         OpenKind.CONFIG -> chooseFile(localized("ui.resume_from_config_title"), setOf("json"))
     } ?: return
     when (kind) {
-        OpenKind.SEQUENCE -> vm.openSequence(path)
+        OpenKind.SEQUENCE -> vm.requestSequence(path)
         OpenKind.VIDEO -> vm.openVideo(path)
         OpenKind.CONFIG -> vm.openConfig(path)
     }
@@ -217,7 +217,7 @@ private fun open(vm: AppViewModel, kind: OpenKind) {
 
 private fun openPath(vm: AppViewModel, path: String) {
     when (inferOpenKind(path)) {
-        OpenKind.SEQUENCE -> vm.openSequence(path)
+        OpenKind.SEQUENCE -> vm.requestSequence(path)
         OpenKind.VIDEO -> vm.openVideo(path)
         OpenKind.CONFIG -> vm.openConfig(path)
     }

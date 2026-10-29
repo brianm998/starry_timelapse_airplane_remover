@@ -1166,6 +1166,8 @@ extension Session {
         try FileManager.default.createDirectory(atPath: scratchSessionDir, withIntermediateDirectories: true)
 
         let videoName = (videoPath as NSString).lastPathComponent
+        // The frames go where the output does when the client chose a place for it (a volume with room), else beside the video.
+        let framesParent: String? = protoConfig.outputPath.isEmpty ? nil : protoConfig.outputPath
         report(OpenEvents.stage(.examiningVideo, name: videoName))
         let sequenceDir: String
         let vi: VideoInfo
@@ -1174,13 +1176,14 @@ extension Session {
             // Answer once the first frame is out: the rest arrive while the session is open, and extraction belongs to the session
             // (it outlives this call), which stops it when it closes.  Cancelling the open still stops it and takes the folder back.
             report(OpenEvents.stage(.extractingFrames))
-            let (source, info) = try await startVideoExtraction(named: videoPath, format: frameFormat, settings: extractionSettings)
+            let (source, info) = try await startVideoExtraction(named: videoPath, format: frameFormat, settings: extractionSettings,
+                                                                        framesParentFolder: framesParent)
             sequenceDir = source.outputFolder
             vi = info
             frameSource = source
         } else {
             let extracting = OnceFlag()
-            let (dir, info) = try await decodeVideo(named: videoPath, format: frameFormat) { current, total, outputDir in
+            let (dir, info) = try await decodeVideo(named: videoPath, format: frameFormat, framesParentFolder: framesParent) { current, total, outputDir in
                 if extracting.setOnce() { report(OpenEvents.stage(.extractingFrames)) }
                 var io = Star_V1_IoProgress()
                 io.current   = Int32(current)

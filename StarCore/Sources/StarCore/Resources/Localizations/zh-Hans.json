@@ -1146,5 +1146,16 @@
   "cli.help.extraction_long_gop_jump_workers": "对 H.264、H.265 等视频的同样设置，只有用户请求的帧才会启动一个（默认 1）。",
   "cli.errors.extraction_option_needs_video": "--tiff-compression、--extract-in-background 和 --extraction-*-workers 仅在输入是视频文件时适用。",
   "cli.waited_for_frames": "视频提取用了 {0}；运行在提取完最后一帧 {1} 后结束。",
-  "ui.processing_step_extracting_video": "提取视频帧"
+  "ui.processing_step_extracting_video": "提取视频帧",
+  "ui.location_title": "工作文件的存放位置",
+  "ui.location_blurb": "Star 的临时工作文件、输出以及从视频中提取的帧，可能占用图像大小的数倍空间。请将它们放在有足够可用空间的卷上。",
+  "ui.location_choose": "选择…",
+  "ui.location_beside": "与源文件相同位置",
+  "ui.location_needed": "所需空间：约 {0}",
+  "ui.location_needed_video": "所需空间：约 {0}（帧 {1}，处理 {2}）",
+  "ui.location_available": "此卷的可用空间：{0}",
+  "ui.location_unknown_free": "无法确定此卷的可用空间。",
+  "ui.location_short": "此卷空间不足。请选择其他文件夹，或腾出 {0}。",
+  "ui.sequence_location_title": "打开图像序列",
+  "ui.sequence_location_open": "打开"
 }

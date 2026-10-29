@@ -47,11 +47,12 @@ fun resolveDrop(files: List<File>): OpenAction? {
     }
 }
 
-/** Native directory chooser (image sequence). Blocks on the EDT. */
-fun chooseDirectory(): String? {
+/** Native directory chooser (image sequence by default, or a folder for [title]). Opens at [startAt] when that is a folder. Blocks on the EDT. */
+fun chooseDirectory(title: String = localized("ui.open_image_sequence").trimEnd('…', '.'), startAt: String? = null): String? {
     val chooser = JFileChooser().apply {
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-        dialogTitle = localized("ui.open_image_sequence").trimEnd('…', '.')
+        dialogTitle = title
+        startAt?.let { File(it).takeIf { f -> f.isDirectory }?.let { f -> currentDirectory = f } }
     }
     return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile?.absolutePath else null
 }

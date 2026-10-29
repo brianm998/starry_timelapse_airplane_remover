@@ -30,7 +30,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
     MenuBar {
         Menu(localized("ui.file"), mnemonic = 'F') {
             Item(localized("ui.open_image_sequence"), shortcut = primaryShortcut(Key.O)) {
-                chooseDirectory()?.let { app.openSequence(it) }
+                chooseDirectory()?.let { app.requestSequence(it) }
             }
             Item(localized("ui.open_video")) {
                 chooseFile(localized("ui.open_video_title"))?.let { app.openVideo(it) }

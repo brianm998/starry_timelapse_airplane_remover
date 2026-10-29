@@ -1168,5 +1168,16 @@
   "cli.help.extraction_long_gop_jump_workers": "The same for H.264, H.265 and similar videos, where only a frame the user asks for starts one (default 1).",
   "cli.errors.extraction_option_needs_video": "--tiff-compression, --extract-in-background and --extraction-*-workers only apply when the input is a video file.",
   "cli.waited_for_frames": "Video extraction took {0}; the run finished {1} after the last frame was extracted.",
-  "ui.processing_step_extracting_video": "Extracting video frames"
+  "ui.processing_step_extracting_video": "Extracting video frames",
+  "ui.location_title": "Where to put the working files",
+  "ui.location_blurb": "Star's temporary working files, its output and any frames extracted from a video can take several times the size of the images. Put them on a volume with enough free space.",
+  "ui.location_choose": "Choose…",
+  "ui.location_beside": "Beside the source",
+  "ui.location_needed": "Space needed: about {0}",
+  "ui.location_needed_video": "Space needed: about {0} ({1} for the frames, {2} for processing)",
+  "ui.location_available": "Available on this volume: {0}",
+  "ui.location_unknown_free": "The free space on this volume could not be determined.",
+  "ui.location_short": "There is not enough room on this volume. Choose another folder or free up {0}.",
+  "ui.sequence_location_title": "Open Image Sequence",
+  "ui.sequence_location_open": "Open"
 }
