@@ -3773,12 +3773,13 @@ final class ClickRuleTests: XCTestCase {
         }
     }
 
-    func testAClickLeavesTheOppositeDecision() throws {
+    func testAClickLeavesTheDecisionTheVectorSays() throws {
         let cases = try XCTUnwrap(try doc()["toggle"] as? [[String: String]])
-        XCTAssertGreaterThanOrEqual(cases.count, 5)
+        XCTAssertEqual(cases.count, 7 * 5, "seven tools, five starting decisions")
         for c in cases {
             let after = try XCTUnwrap(try reason(try XCTUnwrap(c["after"])))
-            XCTAssertEqual(OutlierGroupView.decisionAfterClick(try reason(try XCTUnwrap(c["decision"]))), after, "\(c)")
+            let tool = try XCTUnwrap(ToolType(rawValue: try XCTUnwrap(c["tool"])))
+            XCTAssertEqual(OutlierGroupView.decisionAfterClick(try reason(try XCTUnwrap(c["decision"])), tool: tool), after, "\(c)")
         }
     }
 

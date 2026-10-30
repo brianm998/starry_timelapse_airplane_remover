@@ -1,23 +1,178 @@
 {
-  "comment": "E1 and E2 of the parity plan: what a click on an outlier group does. `toggle`: the decision a click leaves (the macOS gui sets userSelected(!willRemove), whichever of Remove and Keep is chosen). `groupClick`: whether the click applies the tool or opens the multi-choice sheet, from the tool, the Multi Choice switch, and whether the group has a decision (the switch only counts on a decided group, and Trash and Information come first). The gui's OutlierGroupView and the desktop's ClickRules each answer from these.",
+  "comment": "E1 and E2 of the parity plan: what a click on an outlier group does. `toggle`: the decision a click leaves. A group that has one is flipped whichever tool is chosen; one that has none takes the tool's decision (Keep keeps it, every other tool removes it). `groupClick`: whether the click applies the tool or opens the multi-choice sheet, from the tool, the Multi Choice switch, and whether the group has a decision (the switch only counts on a decided group, and Trash and Information come first). The gui's OutlierGroupView and the desktop's ClickRules each answer from these.",
   "toggle": [
     {
+      "tool": "remove",
       "decision": "undecided",
       "after": "userRemove"
     },
     {
+      "tool": "remove",
       "decision": "classifierRemove",
       "after": "userKeep"
     },
     {
+      "tool": "remove",
       "decision": "classifierKeep",
       "after": "userRemove"
     },
     {
+      "tool": "remove",
       "decision": "userRemove",
       "after": "userKeep"
     },
     {
+      "tool": "remove",
+      "decision": "userKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "keep",
+      "decision": "undecided",
+      "after": "userKeep"
+    },
+    {
+      "tool": "keep",
+      "decision": "classifierRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "keep",
+      "decision": "classifierKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "keep",
+      "decision": "userRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "keep",
+      "decision": "userKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "multi",
+      "decision": "undecided",
+      "after": "userRemove"
+    },
+    {
+      "tool": "multi",
+      "decision": "classifierRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "multi",
+      "decision": "classifierKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "multi",
+      "decision": "userRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "multi",
+      "decision": "userKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "razor",
+      "decision": "undecided",
+      "after": "userRemove"
+    },
+    {
+      "tool": "razor",
+      "decision": "classifierRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "razor",
+      "decision": "classifierKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "razor",
+      "decision": "userRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "razor",
+      "decision": "userKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "shovel",
+      "decision": "undecided",
+      "after": "userRemove"
+    },
+    {
+      "tool": "shovel",
+      "decision": "classifierRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "shovel",
+      "decision": "classifierKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "shovel",
+      "decision": "userRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "shovel",
+      "decision": "userKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "removeFromTrash",
+      "decision": "undecided",
+      "after": "userRemove"
+    },
+    {
+      "tool": "removeFromTrash",
+      "decision": "classifierRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "removeFromTrash",
+      "decision": "classifierKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "removeFromTrash",
+      "decision": "userRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "removeFromTrash",
+      "decision": "userKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "none",
+      "decision": "undecided",
+      "after": "userRemove"
+    },
+    {
+      "tool": "none",
+      "decision": "classifierRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "none",
+      "decision": "classifierKeep",
+      "after": "userRemove"
+    },
+    {
+      "tool": "none",
+      "decision": "userRemove",
+      "after": "userKeep"
+    },
+    {
+      "tool": "none",
       "decision": "userKeep",
       "after": "userRemove"
     }

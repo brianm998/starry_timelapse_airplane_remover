@@ -26,9 +26,11 @@ struct OutlierGroupView: View {
         return multiChoice && decided ? .openMultiChoice : .applyTool
     }
 
-    /// The decision a click leaves: the opposite of whether the group is to be removed now (an undecided group is not, so it is removed).
-    static func decisionAfterClick(_ current: RemoveReason?) -> RemoveReason {
-        .userSelected(!(current?.willRemove ?? false))
+    /// The decision a click leaves. A group that has one is flipped, whichever tool is chosen; one that has none takes the tool's: Keep keeps
+    /// it and every other tool removes it. (The click used to ignore the tool, so Keep marked an undecided group for removal.)
+    static func decisionAfterClick(_ current: RemoveReason?, tool: ToolType) -> RemoveReason {
+        guard let current else { return .userSelected(tool != .keep) }
+        return .userSelected(!current.willRemove)
     }
 
     var body: some View {
@@ -161,8 +163,8 @@ struct OutlierGroupView: View {
                               case .openMultiChoice:
                                   openMultiChoiceSheet()
                               case .applyTool:
-                                  // change the paintability of this outlier group: set it to the opposite of what it was (an undecided
-                                  // group has no paint decision, which `decisionAfterClick` reads as not removed)
+                                  // change the paintability of this outlier group: the opposite of what it was, or the tool's decision
+                                  // for a group that had none (`decisionAfterClick`)
                                   toggleRemoveReason(origShouldPaint) {
                                       topViewModel.refreshCursor()
                                   }
@@ -324,7 +326,7 @@ struct OutlierGroupView: View {
     
     // used when user selects an outlier group outisde of details selection mode 
     func toggleRemoveReason(_ origShouldPaint: RemoveReason? = nil, closure: @escaping () -> Void) {
-        let shouldRemove = Self.decisionAfterClick(origShouldPaint)
+        let shouldRemove = Self.decisionAfterClick(origShouldPaint, tool: viewModel.selectionMode)
 
         Task {
             // update the view model to show the change quickly
