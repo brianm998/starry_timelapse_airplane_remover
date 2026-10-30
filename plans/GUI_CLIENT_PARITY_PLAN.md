@@ -667,10 +667,11 @@ Started 2026-10-29 on branch `claude/gui-client-parity-plan-3b6676`. Commits beg
 
 ### 9.1 Done, with a test that fails without the change
 
-Desktop: `./gradlew test`, green (624 tests after the fifth round).
-gui: `xcodebuild test -scheme star -only-testing:starTests`, green (258 tests after the fifth round). Daemon: `swift test --filter` on the suites it touches
-(`ExpertConfigFieldsTests|MappingTests|SessionCloseTests|EnumParityTests|HorizonRefinementSessionTests|StepProgressReportTests`, 105 tests after P10), green.
-StarCore's own test suite and the cli were not run; the StarCore changes are additive (an optional callback, one new method).
+Desktop: `./gradlew test`, green (632 tests after the sixth round).
+gui: `xcodebuild test -scheme star -only-testing:starTests`, green (261 tests after the sixth round). Daemon: `swift test --filter` on the suites it touches
+(`FinalImageSavedEventTests|ExpertConfigFieldsTests|MappingTests|SessionCloseTests|EnumParityTests|HorizonRefinementSessionTests|StepProgressReportTests`, 109 tests after L10), green.
+StarCore: `swift test --filter 'LocalizationTests|FrameCleanMethodChangeTests'` (20 tests), green. StarCore's whole test suite and the cli were not run; the StarCore changes are additive
+(an optional callback, one new method) except L10, which removes a gate in `FrameAirplaneRemover.set(cleanMethod:)` that only the gui's callers could pass.
 
 | ID | What changed | Test |
 |---|---|---|
@@ -721,20 +722,23 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
 | Layer 0 | `gherkin/ui/ids.json`: the ids a UI step may use (`accessibilityIdentifier` in gui/star, `testTag` in star-desktop). Each client scans its source for id-shaped literals in the registry's namespaces (so an id passed to a helper that tags the control counts; a Kotlin template is a family `x.*`); an id found and not listed, a listed id missing, or a closed `knownGaps` entry fails. It showed nine real gaps, all closed: the gui tags `process.frames`, `settings.process`, `processing.headline`, `processing.overall`, `startup.selecthorizon.yes`; the desktop tags `render.cancel`, `render.custom_frame_rate`, `render.done`, `render.error`. **The desktop's `:test` did not rerun when a file under `gherkin/ui` or the catalogue changed (gradle did not know it read them): both are inputs of `tasks.test` now** | `IdRegistryTest`, `IdRegistryTests` (a removed id and a closed gap fail the desktop one) |
 | P6 | desktop settings sheet: Automatic / Selective in the main column; under Show Expert Settings, Selective Auto Clean (Yes/No, off while Selective is chosen; starts at Yes when the method reviews outliers, as the gui) then the detection type (off while the method does not review outliers); it was a three-way plus an always-visible detection row. `CleanMethodChoice` is pinned by the `cleanMethod` vector in `constants.json`. New `ui.selective_auto_clean` in 22 tables. The gui's `HighLevelCleanMethod`/`AutoPreservationMode` headings and Yes/No/Automatic/Selective were English literals in StarCore: they read the catalogue now. **Their help and description texts are still English** (8 long strings, 22 translations each) | `SharedConstantsTest(s)` (the mapping), `ViewModeNameTests.testTheCleanMethodRowsAreTitledInTheUsersLanguage`; the sheet itself not looked at |
 | I1 | gui: `DetectionType.localizedName` for the three pickers, the transport tooltips use `ui.transport_*`, "Process N (new only)" and the painter's Next/Continue use the existing keys | `NoHardCodedStringsTests` (the gui counterpart of the Kotlin lint, §6.2.3) |
+| L10 | `FrameAirplaneRemover.set(cleanMethod:)` returned before linking the new final unless `observer?.cleanMethod == cleanMethod`; the gui sets its observer first (always true for it), the daemon's frames have none (`nil == method`), so the override was recorded and the old final stayed. The gate is gone (neither the config, which the gui writes first, nor the observer can say what the method was before). `Session.setCleanMethod` no longer calls `markAsChanged`/`frameEdited` (they left the frame "user modified" and rendered it again when its save timer fired ten seconds later): a frame at rest (complete, user modified, outliers ready) has the new method's image linked, or made, at once and the client is told the final changed; a frame a run has not reached, or is still in, only records the method | `FrameCleanMethodChangeTests` (StarCore, harness: three methods linked with no observer, with one, and `process: false`; all three fail on the old gate) and `FinalImageSavedEventTests` (daemon: linked, event sent, state stays complete, nothing queued; an unprocessed frame only records it; both fail on the old `setCleanMethod`). **Not run on a real sequence; the gui's path is unchanged except that it can no longer be skipped** |
+| S2, S3 | a run picked back up (Restart Now, or the engine restart that carries a run on) opens without the "where this sequence left off" panel (`ResumedRun.showsProgressPanel`; the survey was launched by `onOpened` and `resumeProcessing` never closed it), and it ends with the post-render question unless the render prompts are off (`ResumedRun.asksAboutRenderingAtTheEnd`; `resumeProcessing` cleared `awaitingProcessingPrompt`, so `handleProcessingDone` returned early). The gui's `restartProcessing` does both | `ResumedRunTest` (the two rules; `AppViewModel` cannot be built without an engine, so a source scan that it uses them); **no run** |
+| Q14 (desktop) | the status's "N frames processing" sums the step report's running operations (the gui's `numberOfFramesProcessingNow`); it counted frames in a working state | `OperationsRunningTest` (the sum, and that the status reads it) |
+| I1 | gui outlier table headers (`"id"`, `"size"`, `"remove"`, each feature's own name) read the catalogue keys the desktop already used (`ui.name`, `ui.size`, `ui.remove`, `ui.<feature>`, `ui.classification_score`); `gherkin/ui/vectors/outlierColumns.json` lists the always-shown and the 35 optional columns in table order with label keys and defaults, and each client checks its own table against it (they already agreed). The Remove and Keep tool help (`tool.help.remove`, `tool.help.keep`) now says a click switches the group and a dragged box sets it (D2: the gui's click flips the decision whichever tool is chosen), in all 22 tables; only the gui shows tool help | `OutlierColumnsTests`, `OutlierColumnsTest`; the headers themselves not looked at |
 
 ### 9.2 Looked at, not done, and what the next person needs to know
 
 * **L4, L5, Q6 are one change.** D7/D8 remove the desktop's left-panel Render block, but the desktop Gherkin runner clicks `render.all.frames`
   there to finish an auto selective run (`DesktopFeatureRunner.kt:306`). Remove the block only together with the runner step, once L5
   (same end state in both clients) is fixed, which needs a processing run in each client.
-* **L10:** `FrameAirplaneRemover.set(cleanMethod:)` returns early when `observer?.cleanMethod == cleanMethod` is false. The name `hasChanged` is
-  inverted: the gui sets `frameObserver.set(cleanMethod:)` **first**, so the comparison is true; the daemon has no observer, so nothing is linked.
-  The observer is held weakly (`weak var observer`), and `set(observer:)` starts a Task that writes the frame's current method into it, so
-  attach one per frame when the frame is created, not just before a change.
-* **P4, P11, S2, S3** (P10 is done above) change what happens when a run ends or is cancelled; they need a run to confirm which callback fires.
-* Not started: Q5, P5, P8, P9, M9–M11, D10–D12 (except the three settings and Decision Tree, All Frames above),
-  I1's remaining items: the gui's clean-method help and description texts (P6 above), the outlier-table headers, and the `FrameProcessingState.shortString` badges (English on purpose for the updatable log, so they need a second property).
-* The strings `tool.help.*` still say a click on Remove/Keep "marks" a group; with D2 a click toggles. Left alone: changing them is 22 translations.
+* **P4, P11** change what happens when a run is superseded: P4 (a settings change over a live run: the gui cancels and `processAll()` asks the pre-render question again; the
+  desktop restarts with the old answer, `updateSettingsAndProcess`) and P11 (`stopRun(announce:false)` emits no cancel, so a superseded run leaves its answer armed for the next
+  run to end on). Both are in `AppViewModel`, which tests cannot build; they need a run to confirm which callback fires. (S2, S3 and P10 are done above.)
+* Not started: Q5, P5, P8, P9 (the desktop has `setResourceProfile`, and the four chips in the modal, but no "Use of this Mac" section in the right panel and no "Limited by"), M9–M11, D10–D12 (except the three settings and Decision Tree, All Frames above),
+  I1's remaining items: the gui's clean-method help and description texts (P6 above: eight long strings in StarCore's `CleanMethod.swift`, which only the gui shows, so the desktop
+  needs them too before they are worth 22 translations each) and the `FrameProcessingState.shortString` badges (English on purpose for the updatable log, so they need a second property).
+* The desktop shows no tool help at all (`tool.help.*` are read only by the gui); that is a gap of its own, not listed in §4.
 
 ### 9.3 Blocked on the owner
 
