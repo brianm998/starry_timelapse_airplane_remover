@@ -889,6 +889,7 @@
   "ui.selected_number": "নির্বাচিত #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Star দিয়ে দিগন্ত বেছে নেওয়া সহজ।",
   "ui.selective": "নির্বাচনী",
+  "ui.selective_auto_clean": "স্বয়ংক্রিয়-নির্বাচনী পরিষ্কার:",
   "ui.selective_auto_selective_detect_outlier": "নির্বাচনী / স্বয়ংক্রিয়-নির্বাচনী মোড আউটলায়ার গ্রুপ শনাক্ত করে, যেগুলি আপনি দেখে সম্পাদনা করতে পারেন। স্বয়ংক্রিয় মোড করে না।",
   "ui.selective_processing_mode": "নির্বাচনী প্রক্রিয়াকরণ মোড:",
   "ui.sequence_location_open": "খুলুন",

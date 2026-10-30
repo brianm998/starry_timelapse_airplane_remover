@@ -48,4 +48,25 @@ class SharedConstantsTest {
         assertEquals(k["tooHigh"].asDouble, KeypointDivisor.TOO_HIGH)
         assertEquals(k["max"].asDouble, KeypointDivisor.MAX)
     }
+
+    private fun cleanMethodNamed(name: String): com.star.proto.CleanMethod = when (name) {
+        "automatic" -> com.star.proto.CleanMethod.CLEAN_AUTOMATIC
+        "autoSelective" -> com.star.proto.CleanMethod.CLEAN_AUTOMATIC_TRUE
+        "selective" -> com.star.proto.CleanMethod.CLEAN_SELECTIVE
+        else -> error("no clean method named $name")
+    }
+
+    /** P6: the two questions behind a clean method, as StarCore's `CleanMethod(highLevelCleanMethod:autoPreservationMode:)` puts them together. */
+    @Test fun theCleanMethodChoiceIsStarCores() {
+        val rule = doc.getAsJsonObject("cleanMethod")
+        for (element in rule.getAsJsonArray("cases")) {
+            val c = element.asJsonObject
+            val high = if (c["highLevel"].asString == "selective") HighLevelClean.SELECTIVE else HighLevelClean.AUTOMATIC
+            assertEquals(cleanMethodNamed(c["expected"].asString), CleanMethodChoice.method(high, c["autoPreservation"].asBoolean), c.toString())
+        }
+        for (element in rule.getAsJsonArray("autoPreservationStart")) {
+            val c = element.asJsonObject
+            assertEquals(c["expected"].asBoolean, CleanMethodChoice.autoPreservationStart(cleanMethodNamed(c["method"].asString)), c.toString())
+        }
+    }
 }

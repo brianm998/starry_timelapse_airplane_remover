@@ -51,13 +51,14 @@ public enum HighLevelCleanMethod: InstructionOption,
     public var titleText: String {
         switch self {
         case .automatic:
-            "Automatic"
+            localized("ui.automatic")
         case .selective:
-            "Selective"
+            localized("ui.selective")
         }
     }
 
-    public static let topTitle = "Clean Mode:"
+    /// The row's heading, from the catalogue: the same "Clean Method" the desktop's settings sheet has, with the colon the other rows' headings carry.
+    public static var topTitle: String { localized("ui.clean_method") + ":" }
     
     public var helpText: String {
         switch self {
@@ -101,7 +102,7 @@ public enum AutoPreservationMode: String, InstructionOption, Identifiable {
 
     public var id: Self { self }
 
-    public static let topTitle = "Selective Auto Clean:"
+    public static var topTitle: String { localized("ui.selective_auto_clean") }
     
     public var helpText: String {
         switch self {
@@ -113,7 +114,10 @@ public enum AutoPreservationMode: String, InstructionOption, Identifiable {
     }
 
     public var titleText: String {
-        self.rawValue
+        switch self {
+        case .yes: localized("ui.yes")
+        case .no: localized("ui.no")
+        }
     }
 
     public var boolValue: Bool {

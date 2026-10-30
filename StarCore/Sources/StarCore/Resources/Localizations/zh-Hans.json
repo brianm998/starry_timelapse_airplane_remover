@@ -889,6 +889,7 @@
   "ui.selected_number": "已选择 #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "用 Star 选择地平线很简单。",
   "ui.selective": "选择式",
+  "ui.selective_auto_clean": "自动选择式清理：",
   "ui.selective_auto_selective_detect_outlier": "选择式与自动选择式会检测出可供你查看和编辑的离群组。自动模式则不会。",
   "ui.selective_processing_mode": "选择式处理模式：",
   "ui.sequence_location_open": "打开",

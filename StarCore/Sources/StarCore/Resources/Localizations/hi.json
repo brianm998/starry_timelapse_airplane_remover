@@ -889,6 +889,7 @@
   "ui.selected_number": "चयनित #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Star से क्षितिज चुनना आसान है।",
   "ui.selective": "चयनात्मक",
+  "ui.selective_auto_clean": "स्वतः-चयनात्मक सफ़ाई:",
   "ui.selective_auto_selective_detect_outlier": "चयनात्मक / स्वतः-चयनात्मक ऐसे आउटलायर समूह पहचानते हैं जिन्हें आप देख और संपादित कर सकते हैं। स्वचालित नहीं पहचानता।",
   "ui.selective_processing_mode": "चयनात्मक प्रसंस्करण मोड:",
   "ui.sequence_location_open": "खोलें",

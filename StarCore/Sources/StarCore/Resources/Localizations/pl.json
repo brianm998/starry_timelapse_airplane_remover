@@ -889,6 +889,7 @@
   "ui.selected_number": "Zaznaczone nr {0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Zaznaczanie horyzontu w star jest proste.",
   "ui.selective": "Wybiórczy",
+  "ui.selective_auto_clean": "Automatyczno-wybiórcze czyszczenie:",
   "ui.selective_auto_selective_detect_outlier": "Tryby Wybiórczy i Automatyczno-wybiórczy wykrywają grupy odstające, które możesz przejrzeć i edytować. Tryb Automatyczny tego nie robi.",
   "ui.selective_processing_mode": "Wybiórczy tryb przetwarzania:",
   "ui.sequence_location_open": "Otwórz",

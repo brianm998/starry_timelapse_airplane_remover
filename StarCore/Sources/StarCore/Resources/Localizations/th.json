@@ -889,6 +889,7 @@
   "ui.selected_number": "เลือกไว้ #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "การเลือกเส้นขอบฟ้าใน star นั้นง่าย",
   "ui.selective": "เลือกได้",
+  "ui.selective_auto_clean": "ทำความสะอาดแบบอัตโนมัติ-เลือกได้:",
   "ui.selective_auto_selective_detect_outlier": "โหมดเลือกได้และอัตโนมัติ-เลือกได้จะตรวจหากลุ่มค่าผิดปกติที่คุณตรวจดูและแก้ไขได้ ส่วนโหมดอัตโนมัติไม่ทำ",
   "ui.selective_processing_mode": "โหมดประมวลผลแบบเลือกได้:",
   "ui.sequence_location_open": "เปิด",

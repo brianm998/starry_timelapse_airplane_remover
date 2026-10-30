@@ -3540,6 +3540,29 @@ final class SharedConstantsTests: XCTestCase {
         }
     }
 
+    private func cleanMethodName(_ method: CleanMethod) -> String {
+        switch method {
+        case .automatic(false): "automatic"
+        case .automatic(true): "autoSelective"
+        case .selective: "selective"
+        }
+    }
+
+    /// P6: the two questions behind a clean method, as the desktop's `CleanMethodChoice` puts them together.
+    func testTheCleanMethodChoiceIsTheDesktops() throws {
+        let rule = try XCTUnwrap(try doc()["cleanMethod"] as? [String: Any])
+        for c in try XCTUnwrap(rule["cases"] as? [[String: Any]]) {
+            let high: HighLevelCleanMethod = (c["highLevel"] as? String) == "selective" ? .selective : .automatic
+            let preservation: AutoPreservationMode = (c["autoPreservation"] as? Bool) == true ? .yes : .no
+            XCTAssertEqual(cleanMethodName(CleanMethod(highLevelCleanMethod: high, autoPreservationMode: preservation)), c["expected"] as? String, "\(c)")
+        }
+        for c in try XCTUnwrap(rule["autoPreservationStart"] as? [[String: Any]]) {
+            let method: CleanMethod = switch c["method"] as? String { case "automatic": .automatic(false); case "autoSelective": .automatic(true); default: .selective }
+            // ProcessingSettingsView.init: the sheet opens with Selective Auto Clean at Yes whenever the method reviews outliers.
+            XCTAssertEqual(method.usesOutliers, c["expected"] as? Bool, "\(c)")
+        }
+    }
+
     /// Q7: the playback speeds the Display picker offers are the same in both clients.
     func testThePlaybackRatesAreTheDesktops() throws {
         XCTAssertEqual(try doc()["playbackFrameRates"] as? [Int], LeftPanel.playbackFrameRates)
@@ -3668,6 +3691,21 @@ final class ViewModeNameTests: XCTestCase {
         XCTAssertFalse(source.contains("value.rawValue"), "the mode names were English")
         XCTAssertFalse(source.contains("value.shortName"), "the view names were English")
         XCTAssertTrue(source.contains("localized(\"ui.interaction_mode_help\")"))
+    }
+
+    /// P6: the settings sheet's clean-method rows have headings and choices in the user's language (the help and description under them
+    /// are still English, `HighLevelCleanMethod.helpText` and the others).
+    func testTheCleanMethodRowsAreTitledInTheUsersLanguage() {
+        StarLocalization.shared.languageOverride = "en"
+        XCTAssertEqual(HighLevelCleanMethod.automatic.titleText, "Automatic")
+        XCTAssertEqual(HighLevelCleanMethod.selective.titleText, "Selective")
+        XCTAssertEqual(HighLevelCleanMethod.topTitle, "Clean Method:")
+        XCTAssertEqual(AutoPreservationMode.topTitle, "Selective Auto Clean:")
+        XCTAssertEqual(AutoPreservationMode.yes.titleText, "Yes")
+        let english = [HighLevelCleanMethod.topTitle, AutoPreservationMode.topTitle, HighLevelCleanMethod.automatic.titleText, AutoPreservationMode.no.titleText]
+        StarLocalization.shared.languageOverride = "de"
+        let german = [HighLevelCleanMethod.topTitle, AutoPreservationMode.topTitle, HighLevelCleanMethod.automatic.titleText, AutoPreservationMode.no.titleText]
+        for (g, e) in zip(german, english) { XCTAssertNotEqual(g, e) }
     }
 
     func testTheNotFoundLineNamesTheMode() throws {

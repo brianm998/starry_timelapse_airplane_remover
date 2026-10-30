@@ -889,6 +889,7 @@
   "ui.selected_number": "Seçili #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Star ile ufku seçmek kolaydır.",
   "ui.selective": "Seçmeli",
+  "ui.selective_auto_clean": "Otomatik-seçmeli temizleme:",
   "ui.selective_auto_selective_detect_outlier": "Seçmeli ve Otomatik-seçmeli kipler, gözden geçirip düzenleyebileceğiniz aykırı gruplar algılar. Otomatik kip algılamaz.",
   "ui.selective_processing_mode": "Seçmeli işleme kipi:",
   "ui.sequence_location_open": "Aç",

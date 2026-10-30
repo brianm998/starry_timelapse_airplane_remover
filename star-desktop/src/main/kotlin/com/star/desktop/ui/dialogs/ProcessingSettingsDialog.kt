@@ -40,7 +40,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.CleanMethodChoice
 import com.star.desktop.domain.FieldInput
+import com.star.desktop.domain.HighLevelClean
 import com.star.desktop.domain.SettingsChange
 import com.star.desktop.domain.SettingsEdit
 import com.star.desktop.engine.EngineStatus
@@ -115,6 +117,8 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             }
 
             var clean by remember(cfg) { mutableStateOf(cfg.cleanMethod) }
+            // "Selective Auto Clean", the expert Yes/No under Automatic: where it stands is kept while Selective is chosen, as the gui does.
+            var autoPreserve by remember(cfg) { mutableStateOf(CleanMethodChoice.autoPreservationStart(cfg.cleanMethod)) }
             var detection by remember(cfg) { mutableStateOf(cfg.detectionType) }
             var horizon by remember(cfg) { mutableStateOf(cfg.horizonDetectionEnabled) }
             var tripod by remember(cfg) { mutableStateOf(cfg.tripodHeadWasMoving) }
@@ -135,42 +139,20 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 localized("ui.clean_method"), info = info, infoId = "clean",
                 help = choicesHelp(
                     localized("ui.automatic") to localized("ui.mode_desc_automatic"),
-                    localized("ui.auto_selective") to localized("ui.mode_desc_auto_selective"),
                     localized("ui.selective") to localized("ui.mode_desc_selective"),
                 ),
             ) {
                 Segmented(
                     options = listOf(
-                        CleanMethod.CLEAN_AUTOMATIC to localized("ui.automatic"),
-                        CleanMethod.CLEAN_AUTOMATIC_TRUE to localized("ui.auto_selective"),
-                        CleanMethod.CLEAN_SELECTIVE to localized("ui.selective"),
+                        HighLevelClean.AUTOMATIC to localized("ui.automatic"),
+                        HighLevelClean.SELECTIVE to localized("ui.selective"),
                     ),
-                    selected = clean,
-                    onSelect = { clean = it },
+                    selected = CleanMethodChoice.highLevel(clean),
+                    onSelect = { clean = CleanMethodChoice.method(it, autoPreserve) },
                 )
                 Text(
                     localized("ui.selective_auto_selective_detect_outlier"),
                     color = StarColors.textDisabled, fontSize = 10.sp,
-                )
-            }
-
-            // How strictly outliers are looked for: only means something when the method finds outlier groups at all.
-            SettingGroup(
-                localized("ui.selective_processing_mode").removeSuffix(":"), enabled = edit.usesOutliers,
-                info = info, infoId = "detection", help = localized("setting_help.selective_processing_mode"),
-            ) {
-                Segmented(
-                    options = listOf(
-                        DetectionType.DETECTION_MILD to localized("detection_type.mild"),
-                        DetectionType.DETECTION_STRONG to localized("detection_type.strong"),
-                        DetectionType.DETECTION_STRONGER to localized("detection_type.stronger"),
-                        DetectionType.DETECTION_EXCESSIVE to localized("detection_type.excessive"),
-                        // A config that has its own blob processor shows as this, rather than as none of the above.
-                        DetectionType.DETECTION_CUSTOM to localized("detection_type.custom"),
-                    ),
-                    selected = detection,
-                    onSelect = { detection = it },
-                    enabled = edit.usesOutliers,
                 )
             }
 
@@ -240,6 +222,45 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
 
             ToggleRow(localized(if (showExpert) "ui.hide_expert_settings" else "ui.show_expert_settings"), showExpert) { app.setShowExpertSettings(it) }
             if (showExpert) {
+                // The gui's order: Selective Auto Clean, how strictly outliers are looked for, then the groups of numbers.
+                // Selective always reviews outliers, whatever this is left at.
+                SettingGroup(
+                    localized("ui.selective_auto_clean").removeSuffix(":"), enabled = clean != CleanMethod.CLEAN_SELECTIVE,
+                    info = info, infoId = "autoselective",
+                    help = choicesHelp(
+                        localized("ui.yes") to localized("ui.mode_desc_auto_selective"),
+                        localized("ui.no") to localized("ui.mode_desc_automatic"),
+                    ),
+                ) {
+                    Segmented(
+                        options = listOf(true to localized("ui.yes"), false to localized("ui.no")),
+                        selected = autoPreserve,
+                        onSelect = {
+                            autoPreserve = it
+                            if (clean != CleanMethod.CLEAN_SELECTIVE) clean = CleanMethodChoice.method(HighLevelClean.AUTOMATIC, it)
+                        },
+                        enabled = clean != CleanMethod.CLEAN_SELECTIVE,
+                    )
+                }
+                // How strictly outliers are looked for: only means something when the method finds outlier groups at all.
+                SettingGroup(
+                    localized("ui.selective_processing_mode").removeSuffix(":"), enabled = edit.usesOutliers,
+                    info = info, infoId = "detection", help = localized("setting_help.selective_processing_mode"),
+                ) {
+                    Segmented(
+                        options = listOf(
+                            DetectionType.DETECTION_MILD to localized("detection_type.mild"),
+                            DetectionType.DETECTION_STRONG to localized("detection_type.strong"),
+                            DetectionType.DETECTION_STRONGER to localized("detection_type.stronger"),
+                            DetectionType.DETECTION_EXCESSIVE to localized("detection_type.excessive"),
+                            // A config that has its own blob processor shows as this, rather than as none of the above.
+                            DetectionType.DETECTION_CUSTOM to localized("detection_type.custom"),
+                        ),
+                        selected = detection,
+                        onSelect = { detection = it },
+                        enabled = edit.usesOutliers,
+                    )
+                }
                 // Only to word the "needs a newer engine" note; whether a field is supported
                 // is decided by its presence in the config the daemon sent, not by this.
                 val daemonVersion = (app.engineStatus.value as? EngineStatus.Connected)?.daemonVersion
@@ -672,7 +693,7 @@ internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
 private val ALL_FIELDS: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + MERGE_FIELDS + PERFORMANCE_FIELDS
 
 /** Every row that has an explanation, which Show Info opens: the pickers and each field with help text. */
-private val ALL_INFO_IDS: List<String> = listOf("clean", "detection", "scene", "camera") + ALL_FIELDS.filter { it.helpKeys.isNotEmpty() }.map { it.label }
+private val ALL_INFO_IDS: List<String> = listOf("clean", "autoselective", "detection", "scene", "camera") + ALL_FIELDS.filter { it.helpKeys.isNotEmpty() }.map { it.label }
 
 /** The toggles by id, for the rules that read one toggle from another's row. */
 private val BOOL_FIELDS: Map<String, BoolField> = ALL_FIELDS.filterIsInstance<BoolField>().associateBy { it.label }

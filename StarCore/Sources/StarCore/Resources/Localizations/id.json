@@ -889,6 +889,7 @@
   "ui.selected_number": "Terpilih #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Memilih horizon dengan Star itu mudah.",
   "ui.selective": "Selektif",
+  "ui.selective_auto_clean": "Pembersihan selektif otomatis:",
   "ui.selective_auto_selective_detect_outlier": "Mode Selektif dan Selektif otomatis mendeteksi kelompok pencilan yang bisa kamu tinjau dan sunting. Mode Otomatis tidak.",
   "ui.selective_processing_mode": "Mode pemrosesan selektif:",
   "ui.sequence_location_open": "Buka",

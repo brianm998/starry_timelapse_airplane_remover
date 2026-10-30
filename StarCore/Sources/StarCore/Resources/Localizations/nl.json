@@ -889,6 +889,7 @@
   "ui.selected_number": "Geselecteerd nr. {0}",
   "ui.selecting_the_horizon_with_star_is_easy": "De horizon selecteren met Star is eenvoudig.",
   "ui.selective": "Selectief",
+  "ui.selective_auto_clean": "Auto-selectief opschonen:",
   "ui.selective_auto_selective_detect_outlier": "Selectief en Auto-selectief detecteren uitschietersgroepen die je kunt nakijken en bewerken. Automatisch doet dat niet.",
   "ui.selective_processing_mode": "Selectieve verwerkingsmodus:",
   "ui.sequence_location_open": "Openen",

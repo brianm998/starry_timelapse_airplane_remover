@@ -81,5 +81,44 @@
     30,
     60,
     90
-  ]
+  ],
+  "cleanMethod": {
+    "comment": "P6: the settings sheet asks Automatic or Selective, and (expert) Selective Auto Clean Yes or No. `cases` is StarCore's CleanMethod(highLevelCleanMethod:autoPreservationMode:); `autoPreservationStart` is where Selective Auto Clean stands when the sheet opens on a method.",
+    "cases": [
+      {
+        "highLevel": "automatic",
+        "autoPreservation": false,
+        "expected": "automatic"
+      },
+      {
+        "highLevel": "automatic",
+        "autoPreservation": true,
+        "expected": "autoSelective"
+      },
+      {
+        "highLevel": "selective",
+        "autoPreservation": false,
+        "expected": "selective"
+      },
+      {
+        "highLevel": "selective",
+        "autoPreservation": true,
+        "expected": "selective"
+      }
+    ],
+    "autoPreservationStart": [
+      {
+        "method": "automatic",
+        "expected": false
+      },
+      {
+        "method": "autoSelective",
+        "expected": true
+      },
+      {
+        "method": "selective",
+        "expected": true
+      }
+    ]
+  }
 }

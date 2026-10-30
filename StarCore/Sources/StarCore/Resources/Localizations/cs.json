@@ -889,6 +889,7 @@
   "ui.selected_number": "Vybráno č. {0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Vybrat horizont ve star je snadné.",
   "ui.selective": "Výběrový",
+  "ui.selective_auto_clean": "Automaticko-výběrové čištění:",
   "ui.selective_auto_selective_detect_outlier": "Výběrový a Automaticko-výběrový režim zjišťují odlehlé skupiny, které si můžete projít a upravit. Automatický režim nikoli.",
   "ui.selective_processing_mode": "Výběrový režim zpracování:",
   "ui.sequence_location_open": "Otevřít",

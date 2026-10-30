@@ -889,6 +889,7 @@
   "ui.selected_number": "Đã chọn #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Chọn đường chân trời bằng Star rất dễ.",
   "ui.selective": "Chọn lọc",
+  "ui.selective_auto_clean": "Làm sạch tự động chọn lọc:",
   "ui.selective_auto_selective_detect_outlier": "Chế độ Chọn lọc và Tự động chọn lọc phát hiện các nhóm ngoại lai để bạn xem lại và chỉnh sửa. Chế độ Tự động thì không.",
   "ui.selective_processing_mode": "Chế độ xử lý chọn lọc:",
   "ui.sequence_location_open": "Mở",

@@ -889,6 +889,7 @@
   "ui.selected_number": "Sélectionné n° {0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Sélectionner l'horizon avec Star est facile.",
   "ui.selective": "Sélectif",
+  "ui.selective_auto_clean": "Nettoyage auto-sélectif :",
   "ui.selective_auto_selective_detect_outlier": "Les modes Sélectif et Auto-sélectif détectent des groupes aberrants que vous pouvez examiner et modifier. Le mode Automatique ne le fait pas.",
   "ui.selective_processing_mode": "Mode de traitement sélectif :",
   "ui.sequence_location_open": "Ouvrir",

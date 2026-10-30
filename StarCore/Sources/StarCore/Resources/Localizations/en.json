@@ -818,6 +818,7 @@
   "ui.selected_number": "Selected #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Selecting the horizon with Star is easy.",
   "ui.selective": "Selective",
+  "ui.selective_auto_clean": "Selective Auto Clean:",
   "ui.selective_auto_selective_detect_outlier": "Selective / Auto-Selective detect outlier groups you can review & edit. Automatic does not.",
   "ui.selective_processing_mode": "Selective Processing Mode:",
   "ui.sequence_processed_with_other_version": "This sequence was last processed with Star {0}; the engine is {1}.",

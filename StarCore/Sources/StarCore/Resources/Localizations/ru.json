@@ -889,6 +889,7 @@
   "ui.selected_number": "Выбрано № {0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Выбрать горизонт в Star просто.",
   "ui.selective": "Выборочный",
+  "ui.selective_auto_clean": "Авто-выборочная очистка:",
   "ui.selective_auto_selective_detect_outlier": "Выборочный и авто-выборочный режимы находят группы выбросов, которые можно просмотреть и изменить. Автоматический — нет.",
   "ui.selective_processing_mode": "Выборочный режим обработки:",
   "ui.sequence_location_open": "Открыть",

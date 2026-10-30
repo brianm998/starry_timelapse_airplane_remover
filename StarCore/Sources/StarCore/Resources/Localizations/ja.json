@@ -889,6 +889,7 @@
   "ui.selected_number": "選択 #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Star で地平線を選ぶのは簡単です。",
   "ui.selective": "選択式",
+  "ui.selective_auto_clean": "自動選択式クリーン:",
   "ui.selective_auto_selective_detect_outlier": "選択式と自動選択式は、確認・編集できる外れ値グループを検出します。自動モードは検出しません。",
   "ui.selective_processing_mode": "選択処理モード:",
   "ui.sequence_location_open": "開く",

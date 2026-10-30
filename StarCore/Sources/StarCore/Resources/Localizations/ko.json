@@ -889,6 +889,7 @@
   "ui.selected_number": "선택 #{0}",
   "ui.selecting_the_horizon_with_star_is_easy": "Star로 지평선을 선택하는 것은 간단합니다.",
   "ui.selective": "선택형",
+  "ui.selective_auto_clean": "자동 선택형 정리:",
   "ui.selective_auto_selective_detect_outlier": "선택형과 자동 선택형은 검토하고 편집할 수 있는 이상치 그룹을 감지합니다. 자동 모드는 감지하지 않습니다.",
   "ui.selective_processing_mode": "선택 처리 모드:",
   "ui.sequence_location_open": "열기",
