@@ -1,0 +1,48 @@
+{
+  "comment": "Every id a UI step may use: `.accessibilityIdentifier(\"…\")` under gui/star and `Modifier.testTag(\"…\")` under star-desktop/src/main (Layer 0, plan §6.2.1). Each client's unit test scans its own source. An id both clients carry is in `ids`; an entry ending in `*` stands for a family (the desktop builds those names from a template). `knownGaps.<client>` names the ids that client lacks, with why; an id found on either side that is in neither list fails the test, and so does a gap that has been closed (remove the entry). Ids built at run time, such as `testTag(tag)`, are not seen.",
+  "ids": [
+    "videoimport.import",
+    "videoimport.format.*",
+    "videoimport.compression.*",
+    "videoimport.background",
+    "sequencelocation.open",
+    "render.all.frames",
+    "prompt.pre.yes",
+    "prompt.pre.no",
+    "processing.progress",
+    "processing.extraction",
+    "location.short",
+    "location.reset",
+    "location.needed",
+    "location.folder",
+    "location.choose",
+    "location.available",
+    "extraction.waitpanel",
+    "extraction.progress",
+    "extraction.error",
+    "extraction.band"
+  ],
+  "knownGaps": {
+    "gui": {
+      "settings.process": "on the desktop's control, not yet on the gui's",
+      "process.frames": "on the desktop's control, not yet on the gui's",
+      "processing.overall": "on the desktop's control, not yet on the gui's",
+      "processing.headline": "on the desktop's control, not yet on the gui's"
+    },
+    "desktop": {
+      "startup.selectmovinghorizons.no": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "startup.selecthorizon.no": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "startup.removal.start": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "startup.removal.groundalignment": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "startup.removal.autoselective": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "startup.moving.static": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "startup.moving.moving": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "startup.horizon.yes": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "startup.horizon.no": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "render.error": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "render.done": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "render.custom_frame_rate": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)",
+      "render.cancel": "on the gui's control, not yet on the desktop's (the @ui corpus of plan §6.3 steps on it)"
+    }
+  }
+}
