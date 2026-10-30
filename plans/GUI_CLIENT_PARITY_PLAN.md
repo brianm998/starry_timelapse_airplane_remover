@@ -667,9 +667,9 @@ Started 2026-10-29 on branch `claude/gui-client-parity-plan-3b6676`. Commits beg
 
 ### 9.1 Done, with a test that fails without the change
 
-Desktop: `./gradlew test`, green (609 tests after the third round).
+Desktop: `./gradlew test`, green (611 tests after Q3).
 gui: `xcodebuild test -scheme star -only-testing:starTests`, green (248 tests after the third round). Daemon: `swift test --filter` on the suites it touches
-(`ExpertConfigFieldsTests|MappingTests|StepProgressReportTests|SessionCloseTests|EnumParityTests`, 96 tests), green.
+(`ExpertConfigFieldsTests|MappingTests|SessionCloseTests|EnumParityTests`, 89 tests after Q3), green.
 StarCore's own test suite and the cli were not run; the StarCore changes are additive (an optional callback, one new method).
 
 | ID | What changed | Test |
@@ -713,6 +713,7 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
 | Q13 | desktop grid panel: outlier counts only when `FrameInfo.outliers_loaded`; Display toggles in the gui's order; the horizon's Pending/Set row under Mode in Processing | build; nothing tested it |
 | Q8 (part) | desktop hides the mode and view pickers while playing (it greyed them). **Placement (gui: bottom left, "[mode] with [original\|final] frames") is not done** | build |
 | Q7 | desktop playback speed is the gui's Display picker (1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90 fps) in the Display section; the bottom strip's -/+ are gone (`ui.fps`, `ui.transport_slower`, `ui.transport_faster` are now unused by both clients, left in the tables) | `SharedConstantsTest(s)` for the list |
+| Q3 | `Mapping.availableModes` also lists the star/earth aligned images a frame can build (`canProduceAlignedImage`); `Frame.GetPreview` could not serve them (`ImageAccessor.load(.original)` returns nothing for a missing full-size file), so `GetFramePreviewRequest.build_if_missing` (additive) makes the daemon build the image first, one at a time; the desktop sets it only for the frame on screen (preview and full-size), not for thumbnails or the playback prefetch | `SessionCloseTests` (the offer, and when a build is needed, with stored homographies), `FramePreviewRequestTest` (the flag on the wire); **a build on a processed frame was not run** |
 | I1 | gui: `DetectionType.localizedName` for the three pickers, the transport tooltips use `ui.transport_*`, "Process N (new only)" and the painter's Next/Continue use the existing keys | `NoHardCodedStringsTests` (the gui counterpart of the Kotlin lint, §6.2.3) |
 
 ### 9.2 Looked at, not done, and what the next person needs to know
@@ -725,11 +726,8 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
   The observer is held weakly (`weak var observer`), and `set(observer:)` starts a Task that writes the frame's current method into it, so
   attach one per frame when the frame is created, not just before a change.
 * **P4, P11, S2, S3** change what happens when a run ends or is cancelled; they need a run to confirm which callback fires.
-* **Q1** (placeholder instead of falling back to another mode) should wait for Q3, or the desktop shows the placeholder for modes the daemon
-  has not made.
-* **Q3** (offer the aligned images the gui can build on demand): the gui asks `FrameAirplaneRemover.canProduceAlignedImage(of:)` (homographies exist);
-  `Mapping.availableModes` asks `imageExists`. Offering them from the daemon is only right if `Frame.GetPreview` (`PreviewFiles.ref` / `fullSizeRef`) builds
-  those two on demand, which I did not check; do that first, with a daemon test, or the desktop will offer modes that answer "not yet generated". Q1 waits for it.
+* **Q1** (placeholder instead of falling back to another mode) was waiting for Q3, which is done; it still needs the desktop to show a placeholder
+  for a mode the frame has not got, and to keep showing the previous picture while an aligned image is being built (the request waits for the build).
 * **Q8** keeps the pickers in the top bar; the gui's strip is below the image, with "with" and "frames" around the view picker (`ui.with`, `ui.frames`).
 * Not started: Q5, Q11, P5, P6, P8–P11, M9–M11, the grouping of D9's menu tree, D10–D12 (except the three settings and Decision Tree, All Frames above),
   the id registry of Layer 0, I1's remaining items (outlier-table headers, `FrameProcessingState.shortString` badges — English on purpose for the updatable log, so they need a second property).
