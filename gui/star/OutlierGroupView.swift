@@ -15,6 +15,22 @@ struct OutlierGroupView: View {
 
     @Environment(\.openWindow) private var openWindow
 
+    /// What a click on a group does once the trash and information tools have had theirs.
+    enum GroupClick: Equatable { case applyTool, openMultiChoice }
+
+    /// With the "Multi Choice" switch on, a click on a group that has a decision opens the multi-choice sheet; otherwise it applies the tool
+    /// (a toggle for Remove, Keep and Multi). Trash and Information keep their meaning. `gherkin/ui/vectors/clickRules.json` pins this and
+    /// the desktop's `ClickRules.groupClick` to the same table.
+    static func groupClick(tool: ToolType, multiChoice: Bool, decided: Bool) -> GroupClick {
+        if tool == .trash || tool == .information { return .applyTool }
+        return multiChoice && decided ? .openMultiChoice : .applyTool
+    }
+
+    /// The decision a click leaves: the opposite of whether the group is to be removed now (an undecided group is not, so it is removed).
+    static func decisionAfterClick(_ current: RemoveReason?) -> RemoveReason {
+        .userSelected(!(current?.willRemove ?? false))
+    }
+
     var body: some View {
         @Bindable var groupViewModel = groupViewModel
         @Bindable var viewModel = viewModel
@@ -129,29 +145,25 @@ struct OutlierGroupView: View {
                       // dump the tapped outlier into the trash
                       viewModel.frames[groupViewModel.group.frameIndex].dumpInTrash(groupViewModel.group)
                       topViewModel.refreshCursor()
+                  } else if viewModel.selectionMode == .information {
+                      // list this group's details, whatever its decision: an undecided group used to fall through
+                      // to the toggle below and was marked for removal by looking at it
+                      handleDetailsMode()
                   } else {                   
                       Task {
                           let origShouldPaint = await groupViewModel.group.shouldRemove() 
                           
                           await MainActor.run {
-                              if let origShouldPaint {
-                                  // change the paintability of this outlier group
-                                  // set it to user selected opposite previous value
-
-                                  Log.d("viewModel.selectionMode \(viewModel.selectionMode)")
-                                  
-                                  if viewModel.selectionMode == .information {
-                                      handleDetailsMode()
-                                  } else if viewModel.multiChoice {
-                                      openMultiChoiceSheet()
-                                  } else {
-                                      toggleRemoveReason(origShouldPaint) {
-                                          topViewModel.refreshCursor()
-                                      }
-                                  }
-                              } else {
-                                  // handle outliers without a paint decision 
-                                  toggleRemoveReason() {
+                              Log.d("viewModel.selectionMode \(viewModel.selectionMode)")
+                              switch Self.groupClick(tool: viewModel.selectionMode,
+                                                     multiChoice: viewModel.multiChoice,
+                                                     decided: origShouldPaint != nil) {
+                              case .openMultiChoice:
+                                  openMultiChoiceSheet()
+                              case .applyTool:
+                                  // change the paintability of this outlier group: set it to the opposite of what it was (an undecided
+                                  // group has no paint decision, which `decisionAfterClick` reads as not removed)
+                                  toggleRemoveReason(origShouldPaint) {
                                       topViewModel.refreshCursor()
                                   }
                               }
@@ -312,11 +324,7 @@ struct OutlierGroupView: View {
     
     // used when user selects an outlier group outisde of details selection mode 
     func toggleRemoveReason(_ origShouldPaint: RemoveReason? = nil, closure: @escaping () -> Void) {
-        var will_paint = false
-        if let origShouldPaint = origShouldPaint {
-            will_paint = origShouldPaint.willRemove
-        }
-        let shouldRemove = RemoveReason.userSelected(!will_paint)
+        let shouldRemove = Self.decisionAfterClick(origShouldPaint)
 
         Task {
             // update the view model to show the change quickly

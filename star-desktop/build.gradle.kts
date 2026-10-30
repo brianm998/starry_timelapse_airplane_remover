@@ -497,6 +497,13 @@ tasks.test {
     // Every daemon a test starts finds (and clears) the run markers in its own directory, never the ones a real run left in the user's
     // application support: a test that wants a killed run to report writes its marker here.
     environment("STAR_RUN_MARKER_DIR", layout.buildDirectory.dir("run-markers").get().asFile.absolutePath)
+    // The Layer 0 checks (gherkin/ui, plans/GUI_CLIENT_PARITY_PLAN.md §6.2) read the shared expectations and the catalogue from outside this
+    // project: without these inputs a change to one of those files leaves the tests "up to date" and unrun.
+    val sharedRoot = rootProject.file("..")
+    inputs.files(
+        fileTree(File(sharedRoot, "gherkin/ui")),
+        fileTree(File(sharedRoot, "StarCore/Sources/StarCore/Resources/Localizations")),
+    )
 }
 
 // The Gherkin desktop tests (gherkin/features/*.feature, tagged @desktop): a `gherkinTest` source set of generated test entry points

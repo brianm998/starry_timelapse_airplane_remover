@@ -123,6 +123,14 @@ class ProcessingRepository(
      */
     private var startedSinceCancel = false
 
+    /**
+     * How many runs this session has started from here: a `start`, a `restart`, a granular reprocess, or a refinement the daemon began, each the
+     * next number. What the "render a video?" question is armed for (see `RenderQuestion`): the question belongs to one run, and a run started
+     * after it was armed is another run, whatever ends first.
+     */
+    var runsStarted: Int = 0
+        private set
+
     private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, localized("ui.engine_not_connected"))
 
     /** Open the persistent progress subscription. Call once at session open, before [start]. */
@@ -140,6 +148,7 @@ class ProcessingRepository(
     }
 
     suspend fun start(sessionId: String, startIndex: Int = 0, endIndex: Int = -1, force: Boolean = false) {
+        runsStarted++
         _sequenceState.value = null
         _stepProgress.value = null
         _processing.value = true
@@ -157,6 +166,7 @@ class ProcessingRepository(
      * stop, and does not announce it, so to anything watching this is the run going on rather than one cancelled and another begun.
      */
     suspend fun restart(sessionId: String, startIndex: Int = 0, endIndex: Int = -1) {
+        runsStarted++
         _sequenceState.value = null
         _stepProgress.value = null
         _processing.value = true
@@ -182,6 +192,7 @@ class ProcessingRepository(
     /** Granular reprocess of selected frames; progress arrives over the live StreamProgress subscription. */
     suspend fun reprocessFrames(sessionId: String, indices: List<Int>, type: com.star.proto.ReprocessingType) {
         if (indices.isEmpty()) return
+        runsStarted++
         _sequenceState.value = null
         _stepProgress.value = null
         _processing.value = true
@@ -196,9 +207,19 @@ class ProcessingRepository(
 
     /**
      * Start a run the daemon claims some other way than `Processing.Start` (a horizon refinement): [start] asks for it and
-     * says whether one began. Until it does, and for the length of it, this is a run like any other.
+     * says whether one began. Until it does, and for the length of it, this is a run like any other. When none began (there was nothing to
+     * refine, or the daemon is already running one and will not start two) what was showing is put back: a refused start used to clear the
+     * busy flag, and the step bars, of the run that was still going (L9).
      */
     suspend fun startClaimedRun(start: suspend () -> Boolean) {
+        val before = Triple(_sequenceState.value, _stepProgress.value, _processing.value)
+        val startedBefore = startedSinceCancel
+        fun putBack() {
+            _sequenceState.value = before.first
+            _stepProgress.value = before.second
+            _processing.value = before.third
+            startedSinceCancel = startedBefore
+        }
         _sequenceState.value = null
         _stepProgress.value = null
         _processing.value = true
@@ -206,10 +227,10 @@ class ProcessingRepository(
         val started = try {
             start()
         } catch (e: Throwable) {
-            _processing.value = false
+            putBack()
             throw e
         }
-        if (!started) _processing.value = false
+        if (!started) putBack() else runsStarted++
     }
 
     /** A frame's horizon lines changed: a mask written or deleted, a reference painted or cleared, a refinement finished (`horizon_updated`). */

@@ -75,6 +75,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val showHorizon by vm.showHorizonOnMainView.collectAsState()
     val horizonVersion by vm.horizonVersion.collectAsState()
     val revisions by vm.frameRevisions.collectAsState()
+    val dataVersions by vm.frameDataVersions.collectAsState()
 
     val cellWidth = (vm.info.imageWidth * scale).coerceIn(70f, 1000f)
     val gridState = rememberLazyGridState()
@@ -101,6 +102,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 viewMode = viewMode,
                 showHorizon = showHorizon,
                 revision = revisions[i] ?: 0,
+                dataVersion = dataVersions[i] ?: 0,
                 horizonVersion = horizonVersion,
             )
         }
@@ -120,15 +122,23 @@ private fun GridCell(
     showHorizon: Boolean,
     /** Changes when a picture of this frame is saved, so the thumbnail is fetched again. */
     revision: Int,
+    /** Changes when what the client holds of this frame is out of date, so its counts are fetched again. */
+    dataVersion: Int,
     /** Changes when a horizon (or a frame's being pending refinement) may have changed, so the line is fetched again. */
     horizonVersion: Int,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
-    var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
+    // True once the daemon has been asked for this mode's picture and has none: the cell says so rather than showing another mode (Q1).
+    var missing by remember(index, viewMode) { mutableStateOf(false) }
+    // The frame's counts as the view model has them, which an edit made anywhere changes (Q11); fetched when the frame's data goes stale.
+    val info by vm.frameInfoFlow(index).collectAsState()
     var overlay by remember(index) { mutableStateOf<GetHorizonOverlayResponse?>(null) }
     val visibleHorizonKinds by vm.visibleHorizonLineKinds.collectAsState()
-    LaunchedEffect(index, viewMode, state, revision) { thumb = vm.loadThumb(index, viewMode) }
-    LaunchedEffect(index, state, horizonVersion) { info = vm.frameInfo(index) }
+    LaunchedEffect(index, viewMode, state, revision) {
+        thumb = vm.loadThumb(index, viewMode)
+        missing = thumb == null
+    }
+    LaunchedEffect(index, state, dataVersion, horizonVersion) { vm.refreshFrameInfo(index) }
     LaunchedEffect(index, showHorizon, state, horizonVersion) {
         overlay = if (showHorizon) {
             val h = (256f * vm.info.imageHeight / vm.info.imageWidth.coerceAtLeast(1)).toInt().coerceAtLeast(1)
@@ -179,6 +189,8 @@ private fun GridCell(
             val t = thumb
             if (t != null) {
                 Image(bitmap = t, contentDescription = localized("ui.frame_n", index), modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else if (missing) {
+                com.star.desktop.ui.sequence.ImageNotFound(com.star.desktop.ui.sequence.imageNotFoundText(viewMode), fontSize = 10.sp, modifier = Modifier.fillMaxSize())
             }
             // Per-cell horizon lines of the kinds switched on (the composite's orange while pending), scaled from the overlay's draw space.
             val ov = overlay
@@ -187,12 +199,12 @@ private fun GridCell(
                     drawHorizonLines(ov, visibleHorizonKinds, size.width, size.height, 1.5.dp.toPx()) { it }
                 }
             }
-            if (state != null) {
+            // What the frame is doing, in the state's own colour, and nothing on a finished one (macOS: a complete frame has no badge). It
+            // used to say "complete" on every finished cell, and turned orange while a horizon refinement was pending, which the gui does not.
+            if (state != null && state != com.star.proto.FrameProcessingState.FPS_COMPLETE) {
                 val s = FrameState.shortString(state)
                 if (s.isNotEmpty()) {
-                    // In the state's own colour, orange while the frame waits for its horizon to be refined (macOS).
-                    val color = if (info?.refinementPending == true) StarColors.orange else StarColors.stateColor(state)
-                    Text(s, color = color, fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+                    Text(s, color = StarColors.stateColor(state), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
                 }
             }
         }

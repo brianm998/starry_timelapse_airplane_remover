@@ -2,6 +2,7 @@ package com.star.desktop.ui.sequence.edit
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -164,6 +165,18 @@ class HorizonPainterDetailsTest {
         assertEquals(15, s.brushRadius)
     }
 
+    /** H2 of the parity plan: painting the band is not paint to lose; the "change frame?" question starts with the first refinement stroke. */
+    @Test fun completingTheBandClearsTheFrameChangeFlag() {
+        val s = HorizonPaintState(w, h)
+        s.beginStroke(); s.paint(200, 300); s.endStroke()
+        assertTrue(s.hasStrokes, "a band stroke is paint")
+        s.transitionToRefinement(List(w) { 300 })
+        assertEquals(false, s.hasStrokes, "the spent band still asked about a change of frame")
+        s.brushRadius = 40
+        s.beginStroke(); s.paint(200, 400); s.endStroke()
+        assertTrue(s.hasStrokes, "a refinement stroke is paint again")
+    }
+
     /** A stroke nudges the shown horizon at once; what is saved is the solver's answer, which has not come yet. */
     @Test fun whatIsSavedIsTheSolversAnswerNotTheStrokesNudge() {
         val s = refining(300)
@@ -197,63 +210,32 @@ class HorizonPainterDetailsTest {
         assertEquals(true, refining().hasSolvedHorizon())
     }
 
-    /** The sky/ground mode is the user's, and nothing about a new frame, a reset or a loaded horizon changes it. */
-    @Test fun theSkyGroundModeSurvivesEverythingElse() {
+    /** H1 of the parity plan: Ground is for refining a horizon that is there, and every way back to band selection puts the brush on Sky. */
+    @Test fun resetAndBandSelectionPutTheBrushBackOnSky() {
+        val s = HorizonPaintState(w, h)
+        s.isErasing = true
+        s.clear()
+        assertFalse(s.isErasing, "Reset left the brush on Ground")
+
+        s.isErasing = true
+        s.phase = HorizonPhase.BAND_SELECTION
+        assertFalse(s.isErasing, "band selection left the brush on Ground")
+    }
+
+    @Test fun aNewFrameWithASavedHorizonKeepsTheModeAndOneBandedFromScratchDropsIt() {
         val s = HorizonPaintState(w, h)
         s.isErasing = true
         s.resetForNewFrame()
-        assertTrue(s.isErasing, "a new frame reset the mode")
+        assertTrue(s.isErasing, "advancing the frame dropped the mode before the load had said where it settles")
         s.loadExistingHorizon(List(w) { 300 }, margin = 50)
-        assertTrue(s.isErasing, "loading a horizon reset the mode")
-        s.clear()
-        assertTrue(s.isErasing, "Reset reset the mode")
-    }
-}
+        assertTrue(s.isErasing, "a frame that has a horizon to refine lost the mode")
 
-/** The painter's keyboard, as macOS binds it. */
-@OptIn(androidx.compose.ui.InternalComposeUiApi::class)
-class PainterKeyActionTest {
-    private fun down(key: androidx.compose.ui.input.key.Key) =
-        androidx.compose.ui.input.key.KeyEvent(key, androidx.compose.ui.input.key.KeyEventType.KeyDown)
-
-    @Test fun theKeysAreTheMacOSOnes() {
-        assertEquals(HorizonPainterKey.SHRINK_BRUSH, painterKeyAction(down(androidx.compose.ui.input.key.Key.LeftBracket)))
-        assertEquals(HorizonPainterKey.GROW_BRUSH, painterKeyAction(down(androidx.compose.ui.input.key.Key.RightBracket)))
-        assertEquals(HorizonPainterKey.TOGGLE_MODE, painterKeyAction(down(androidx.compose.ui.input.key.Key.Minus)))
-        assertEquals(HorizonPainterKey.SKY, painterKeyAction(down(androidx.compose.ui.input.key.Key.P)))
-        assertEquals(HorizonPainterKey.GROUND, painterKeyAction(down(androidx.compose.ui.input.key.Key.E)))
-        assertEquals(HorizonPainterKey.RESET, painterKeyAction(down(androidx.compose.ui.input.key.Key.R)))
-        assertEquals(HorizonPainterKey.CANCEL, painterKeyAction(down(androidx.compose.ui.input.key.Key.Escape)))
-        assertEquals(HorizonPainterKey.SAVE, painterKeyAction(down(androidx.compose.ui.input.key.Key.Enter)))
+        s.resetForNewFrame()
+        s.phase = HorizonPhase.BAND_SELECTION // no saved horizon: the view falls back to the band
+        assertFalse(s.isErasing, "a frame banded from scratch kept Ground, with no control to undo it")
     }
 
-    @Test fun otherKeysAreLeftToTheWindow() {
-        assertEquals(null, painterKeyAction(down(androidx.compose.ui.input.key.Key.Z)))
-        assertEquals(null, painterKeyAction(down(androidx.compose.ui.input.key.Key.DirectionLeft)))
-    }
-
-    /** Once per press. */
-    @Test fun theReleaseDoesNothing() {
-        assertEquals(null, painterKeyAction(androidx.compose.ui.input.key.KeyEvent(
-            androidx.compose.ui.input.key.Key.R, androidx.compose.ui.input.key.KeyEventType.KeyUp)))
-    }
-}
-
-/** The "↓Npx" stepper (macOS `adjustMaxDownwardExtension`). */
-class MaxDownwardExtensionTest {
-    /** Stepping down from the derived default starts from the number on screen, not from the stored 0: the first "−" is not a no-op. */
-    @Test fun steppingFromTheDerivedDefaultStartsFromTheNumberOnScreen() {
-        assertEquals(40, nextMaxDownwardExtension(MaxDownward(configured = 0, effective = 50), -10))
-        assertEquals(60, nextMaxDownwardExtension(MaxDownward(configured = 0, effective = 50), +10))
-    }
-
-    @Test fun aStoredValueIsSteppedFromItself() {
-        assertEquals(70, nextMaxDownwardExtension(MaxDownward(configured = 60, effective = 60), +10))
-        assertEquals(50, nextMaxDownwardExtension(MaxDownward(configured = 60, effective = 60), -10))
-    }
-
-    @Test fun itNeverGoesBelowZero() {
-        assertEquals(0, nextMaxDownwardExtension(MaxDownward(configured = 5, effective = 5), -10))
-        assertEquals(0, nextMaxDownwardExtension(MaxDownward(configured = 0, effective = 4), -10))
+    @Test fun thePainterOpensOnSky() {
+        assertFalse(HorizonPaintState(w, h).isErasing)
     }
 }

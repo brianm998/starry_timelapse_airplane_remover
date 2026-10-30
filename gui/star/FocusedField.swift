@@ -37,6 +37,7 @@ enum FocusedField: Hashable {
     case horizonSpikeWindowHalf
     case keypointMemoryMultiplier
     case maxConcurrentKeypointOps
+    case mergeStreamingThresholdMB
     case outlierMemoryMultiplier
     case mergeMemoryMultiplier
     case horizonMemoryMultiplier

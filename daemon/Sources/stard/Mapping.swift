@@ -6,7 +6,15 @@ import StarDaemonMessages
 // Bidirectional type mapping between StarCore types and proto types.
 enum Mapping {
     /// What `max_mat_memory_fraction` is clamped to (the macOS settings row's own limits).
+    static let pixelThresholdRange: ClosedRange<Double> = 0.001...10
+
     static let memoryBudgetFractionRange: ClosedRange<Double> = 0.1 ... 0.95
+
+    /// What the custom resource limits are clamped to: the ranges the macOS "Custom" popover's steppers and sliders offer.
+    static let customCpuWidthRange = 1 ... 256
+    static let customGpuWidthRange = 1 ... 32
+    static let customGpuDutyCycleRange: ClosedRange<Double> = 0.05 ... 1.0
+    static let customDiskStreamsRange = 1 ... 16
 
 
     // MARK: - FrameViewMode
@@ -60,13 +68,19 @@ enum Mapping {
         }
     }
 
-    /// The images [frame] has on disk now that a client can ask for; the original is always among them.
-    static func availableModes(of frame: FrameAirplaneRemover) -> [Star_V1_FrameViewMode] {
-        StarCore.FrameViewMode.allCases.compactMap { type in
-            guard let mode = protoFrameViewMode(type) else { return nil }
-            if type == .original { return mode }
-            return frame.imageAccessor.imageExists(frameIndex: frame.frameIndex, ofType: type, atSize: .original) ? mode : nil
+    /// The images [frame] has on disk now that a client can ask for, and the aligned ones it can build from its homographies (the
+    /// default mode never writes them, so a frame that was processed has them only this way, as the macOS gui offers them: see
+    /// `FrameViewModel.hasImage`); the original is always among them.
+    static func availableModes(of frame: FrameAirplaneRemover) async -> [Star_V1_FrameViewMode] {
+        var modes: [Star_V1_FrameViewMode] = []
+        for type in StarCore.FrameViewMode.allCases {
+            guard let mode = protoFrameViewMode(type) else { continue }
+            var offered = type == .original
+                || frame.imageAccessor.imageExists(frameIndex: frame.frameIndex, ofType: type, atSize: .original)
+            if !offered, type.isRecomputableCache { offered = await frame.canProduceAlignedImage(of: type) }
+            if offered { modes.append(mode) }
         }
+        return modes
     }
 
     // MARK: - FrameProcessingState
@@ -188,6 +202,15 @@ enum Mapping {
         }
         if snapshot { out.available = frameRanges(source.availableFrames) }
         return out
+    }
+
+    /// The answer to `Session.GetFreeSpace`: StarCore's own count of what the volume holding `path` has free.
+    static func freeSpaceResponse(for path: String) -> Star_V1_FreeSpaceResponse {
+        var response = Star_V1_FreeSpaceResponse()
+        guard let available = DiskSpaceCheck.availableBytes(forPath: path) else { return response }
+        response.known = true
+        response.availableBytes = available
+        return response
     }
 
     /// The answer to `Session.ProbeVideo`.
@@ -404,6 +427,7 @@ enum Mapping {
         out.mergeStreamingThresholdMb = Int32(c.mergeStreamingThresholdMB)
         out.useGpuAcceleration = c.useGPUForMerge
         out.cloudAwareMerge = c.cloudAwareMerge
+        out.pixelThreshold = c.pixelThreshold
         // Read-only: not a Config field, so there is nothing for applyExpertConfig to
         // apply it back onto — computed fresh on every outgoing Config so a client
         // always shows the daemon's own machine's hardware, not a stale answer from
@@ -411,6 +435,12 @@ enum Mapping {
         out.gpuHardwareAvailable = Config.isGPUHardwareAvailable
         if let device = GPUCapability.deviceName() { out.gpuDeviceName = device }
         out.resourceProfile = c.resourceProfile.rawValue
+        out.customCpuWidth = Int32(c.customResources.cpuWidth)
+        out.customQos = c.customResources.qos.rawValue
+        out.customGpuWidth = Int32(c.customResources.gpuWidth)
+        out.customGpuDutyCycle = c.customResources.gpuDutyCycle
+        out.customDiskStreamsPerVolume = Int32(c.customResources.diskStreamsPerVolume)
+        out.customIoPolicy = c.customResources.ioPolicy.rawValue
         out.useGpuForSift = c.useGPUForSIFT
         out.useGpuForAkaze = c.useGPUForAKAZE
         // Not an expert setting — recorded state.  Always sent, so a client that re-opens a
@@ -480,10 +510,30 @@ enum Mapping {
         }
         if p.hasUseGpuAcceleration { c.useGPUForMerge = p.useGpuAcceleration }
         if p.hasCloudAwareMerge { c.cloudAwareMerge = p.cloudAwareMerge }
+        // The range the gui's field accepts: a threshold of 0 throws every pixel out, and a text box with no limits can send it.
+        if p.hasPixelThreshold, p.pixelThreshold.isFinite {
+            c.pixelThreshold = min(max(p.pixelThreshold, Mapping.pixelThresholdRange.lowerBound), Mapping.pixelThresholdRange.upperBound)
+        }
         // Unknown names are ignored rather than rejected: a newer client may know profiles
         // this daemon does not, and keeping the config's own is the safe answer.
+        if p.hasCustomCpuWidth { c.customResources.cpuWidth = min(max(Int(p.customCpuWidth), customCpuWidthRange.lowerBound), customCpuWidthRange.upperBound) }
+        if p.hasCustomQos, let qos = ResourceQoS(rawValue: p.customQos) { c.customResources.qos = qos }
+        if p.hasCustomGpuWidth { c.customResources.gpuWidth = min(max(Int(p.customGpuWidth), customGpuWidthRange.lowerBound), customGpuWidthRange.upperBound) }
+        if p.hasCustomGpuDutyCycle, p.customGpuDutyCycle.isFinite {
+            c.customResources.gpuDutyCycle = min(max(p.customGpuDutyCycle, customGpuDutyCycleRange.lowerBound), customGpuDutyCycleRange.upperBound)
+        }
+        if p.hasCustomDiskStreamsPerVolume {
+            c.customResources.diskStreamsPerVolume = min(max(Int(p.customDiskStreamsPerVolume), customDiskStreamsRange.lowerBound), customDiskStreamsRange.upperBound)
+        }
+        if p.hasCustomIoPolicy, let policy = ResourceIOPolicy(rawValue: p.customIoPolicy) { c.customResources.ioPolicy = policy }
         if p.hasResourceProfile, let profile = ResourceProfile(rawValue: p.resourceProfile) {
-            c.resourceProfile = profile
+            if profile == .custom, c.resourceProfile != .custom, p.hasStartCustomFromProfile, p.startCustomFromProfile {
+                // Opening Custom from another profile, as asked: it starts as that profile's limits (the memory budget and the pipeline depth
+                // with them, whatever the request echoed), so nothing changes until the user edits one (macOS `Config.makeCustom`).
+                c.makeCustom()
+            } else {
+                c.resourceProfile = profile
+            }
         }
         if p.hasUseGpuForSift { c.useGPUForSIFT = p.useGpuForSift }
         if p.hasUseGpuForAkaze { c.useGPUForAKAZE = p.useGpuForAkaze }
@@ -603,7 +653,7 @@ enum Mapping {
             fi.outliersLoaded       = true
         }
         fi.notExtracted = !frame.imageAccessor.imageSequence.source.isAvailable(frame.frameIndex)
-        fi.availableModes = availableModes(of: frame)
+        fi.availableModes = await availableModes(of: frame)
         if let path = frame.imageAccessor.nameForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original) {
             fi.filename = (path as NSString).lastPathComponent
         }

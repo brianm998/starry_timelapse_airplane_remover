@@ -57,6 +57,7 @@ fun Filmstrip(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val states by vm.frameStates.collectAsState()
     val loads by vm.outlierLoadState.collectAsState()
     val revisions by vm.frameRevisions.collectAsState()
+    val dataVersions by vm.frameDataVersions.collectAsState()
     val extracted by vm.extractedFrames.collectAsState()
     val listState = rememberLazyListState()
 
@@ -80,6 +81,7 @@ fun Filmstrip(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 state = states[i],
                 outliersLoading = loads[i] == OUTLIERS_LOADING,
                 revision = revisions[i] ?: 0,
+                dataVersion = dataVersions[i] ?: 0,
                 extracted = extracted?.contains(i) ?: true,
             )
         }
@@ -98,11 +100,16 @@ private fun FilmstripCell(
     outliersLoading: Boolean,
     /** Changes when a picture of this frame is saved, so the thumbnail is fetched again. */
     revision: Int,
+    /** Changes when what the client holds of this frame is out of date, so its counts are fetched again. */
+    dataVersion: Int,
     /** False while the frame's original has not been extracted from its video yet. */
     extracted: Boolean = true,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
-    var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
+    // True once the daemon has been asked for the original's thumbnail and has none (macOS draws "N/A" there).
+    var missing by remember(index) { mutableStateOf(false) }
+    // The frame's counts as the view model has them, which an edit made anywhere changes (Q11).
+    val info by vm.frameInfoFlow(index).collectAsState()
     var overlay by remember(index) { mutableStateOf<com.star.proto.GetHorizonOverlayResponse?>(null) }
     val showHorizon by vm.showHorizonOnMainView.collectAsState()
     val visibleHorizonKinds by vm.visibleHorizonLineKinds.collectAsState()
@@ -114,8 +121,12 @@ private fun FilmstripCell(
         } else null
     }
     // Reload when the frame's processing state changes (its picture may exist now) and when a picture of it is saved.
-    LaunchedEffect(index, state, revision) { vm.loadThumb(index, thumbnail = true)?.let { thumb = it } }
-    LaunchedEffect(index, state) { info = vm.frameInfo(index) }
+    LaunchedEffect(index, state, revision) {
+        val loaded = vm.loadThumb(index, thumbnail = true)
+        if (loaded != null) thumb = loaded
+        missing = thumb == null
+    }
+    LaunchedEffect(index, state, dataVersion) { vm.refreshFrameInfo(index) }
 
     // The streamed state updates live during processing; `Frame.Get` is the source of truth on open
     // (the stream is empty until processing runs, so a fresh sequence reports `unprocessed` only here).
@@ -194,6 +205,8 @@ private fun FilmstripCell(
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )
+                } else if (missing) {
+                    ImageNotFound(localized("ui.n_a"), fontSize = 12.sp, modifier = Modifier.fillMaxSize())
                 }
                 // Not extracted from the video yet: dimmed, with a mark, and no thumbnail to show.
                 if (!extracted) {

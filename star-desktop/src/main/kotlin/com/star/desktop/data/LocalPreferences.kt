@@ -6,6 +6,9 @@ import com.star.desktop.domain.FrameRatePref
 import com.star.desktop.domain.GpuToggle
 import com.star.desktop.util.Log
 import java.io.File
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * Client-local UI preferences in `~/.star.userprefs.json` — the ONLY file the client serializes.
@@ -22,6 +25,10 @@ class LocalPreferences {
 
     /** Serialises the read-modify-write of [edit], and guards the in-memory copies below. */
     private val lock = Any()
+
+    /** Set when the file exists but did not parse: [edit] then keeps its changes in memory and leaves the file alone. */
+    @Volatile
+    private var loadFailed = false
 
     private val recent = linkedMapOf<String, Long>()
 
@@ -188,15 +195,32 @@ class LocalPreferences {
         return map[RECENT_KEY] as? Map<String, Any?> ?: emptyMap()
     }
 
-    /** The file as it is now, empty when there is none or it cannot be read. */
-    private fun read(): MutableMap<String, Any?> {
+    /** The file as it is now: empty when there is none, null when there is one that does not parse. */
+    private fun read(): MutableMap<String, Any?>? {
         if (!prefsFile.exists()) return linkedMapOf()
         return try {
+            val text = prefsFile.readText()
+            // Nothing in a blank file to protect, and nothing to parse.
+            if (text.isBlank()) return linkedMapOf()
             val type = object : TypeToken<MutableMap<String, Any?>>() {}.type
-            gson.fromJson<MutableMap<String, Any?>>(prefsFile.readText(), type) ?: linkedMapOf()
+            gson.fromJson<MutableMap<String, Any?>>(text, type) ?: linkedMapOf()
         } catch (e: Exception) {
             Log.w("Prefs") { "failed to read $prefsFile: ${e.message}" }
-            linkedMapOf()
+            null
+        }
+    }
+
+    /** Keep a copy of the unreadable file for the user, once, and stop writing to it for the rest of this run. */
+    private fun markLoadFailed() {
+        if (!loadFailed) Log.w("Prefs") { "not saving preferences: $prefsFile could not be read and would be overwritten" }
+        loadFailed = true
+        val copy = File(prefsFile.path + ".undecodable")
+        if (prefsFile.exists() && !copy.exists()) {
+            try {
+                Files.copy(prefsFile.toPath(), copy.toPath())
+            } catch (e: Exception) {
+                Log.w("Prefs") { "could not keep a copy of $prefsFile: ${e.message}" }
+            }
         }
     }
 
@@ -205,21 +229,34 @@ class LocalPreferences {
      * after, with only the keys [change] touches different: the macOS app writes the same file, and a
      * copy read at startup and written back whole would undo whatever it changed in the meantime. What
      * was written is then adopted as this instance's own copy.
+     *
+     * When the file cannot be parsed the change is made to this instance's copy only, so it still holds for
+     * the session, and the file is left as it is.
      */
     private fun edit(change: (MutableMap<String, Any?>) -> Unit) = synchronized(lock) {
-        val map = read()
+        val onDisk = if (loadFailed) null else read()
+        if (onDisk == null && !loadFailed) markLoadFailed()
+        val map = onDisk ?: LinkedHashMap(snapshot)
         val before = gson.toJson(map)
         change(map)
         // Nothing to write, and no file to create just because the app was started.
-        if (gson.toJson(map) != before) write(map)
+        if (!loadFailed && gson.toJson(map) != before) write(map)
         adopt(map)
     }
 
+    /** Written beside the file and renamed over it: removing it first, or writing it in place, leaves a window with a missing or empty file. */
     private fun write(map: Map<String, Any?>) {
+        val temp = File(prefsFile.parentFile, "${prefsFile.name}.tmp")
         try {
-            prefsFile.writeText(gson.toJson(map))
+            temp.writeText(gson.toJson(map))
+            try {
+                Files.move(temp.toPath(), prefsFile.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } catch (e: AtomicMoveNotSupportedException) {
+                Files.move(temp.toPath(), prefsFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
         } catch (e: Exception) {
             Log.w("Prefs") { "failed to write $prefsFile: ${e.message}" }
+            temp.delete()
         }
     }
 

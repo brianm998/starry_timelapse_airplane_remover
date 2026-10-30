@@ -17,12 +17,12 @@ object ClickRules {
     }
 
     /**
-     * What clicking a group does with [tool]. The multi tool always opens the sheet. With the "Multi Choice" switch on, so does any tool
-     * on a group that has a decision ([decided]); Trash and Information keep their meaning (macOS checks them first).
+     * What clicking a group does with [tool]. With the "Multi Choice" switch on, any tool on a group that has a decision ([decided]) opens
+     * the sheet; Trash and Information keep their meaning (macOS checks them first). With it off the Multi tool is no different from
+     * Remove and Keep: a click toggles the decision, as in the macOS app (dragging a box with it is what opens the multi-select sheet).
      */
     fun groupClick(tool: ToolType, multiChoice: Boolean, decided: Boolean): GroupClick = when {
         tool == ToolType.TRASH || tool == ToolType.INFORMATION -> GroupClick.APPLY_TOOL
-        tool == ToolType.MULTI -> GroupClick.OPEN_MULTI_CHOICE
         multiChoice && decided -> GroupClick.OPEN_MULTI_CHOICE
         else -> GroupClick.APPLY_TOOL
     }

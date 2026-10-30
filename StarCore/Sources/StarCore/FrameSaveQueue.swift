@@ -107,6 +107,56 @@ public class FrameSaveQueue {
         }
     }
 
+    /// Save, at once, every frame in `frames` whose save is still waiting for its timer, and return when they have all
+    /// been written, so a close does not drop what the user changed in the last few seconds.  A frame already being
+    /// saved is only waited for, and none is saved twice.  With `includeUnqueuedEdits`, a frame that is changed
+    /// but was never queued (an edit that closed the sequence before its save was queued) is saved too.
+    /// Gives up after `timeout` rather than hold a close hostage to a save that never ends.
+    public func flush(frames: [FrameAirplaneRemover],
+                      includeUnqueuedEdits: Bool = false,
+                      timeout: TimeInterval = 120) async
+    {
+        var waiting: [FrameAirplaneRemover] = []
+        for frame in frames {
+            switch await frame.savingState() {
+            case .notSaving:
+                guard includeUnqueuedEdits, await frame.hasChanges() else { continue }
+                await frame.set(frameSavingState: .savePending)
+                await beginSave(of: frame)
+            case .inPurgatory:
+                // Claimed before the frame's own timer can: that only saves a frame still in purgatory when it fires.
+                await frame.set(frameSavingState: .savePending)
+                await beginSave(of: frame)
+            case .savePending, .saving:
+                break
+            }
+            waiting.append(frame)
+        }
+        guard !waiting.isEmpty else { return }
+        Log.i("FrameSaveQueue: waiting for \(waiting.count) frame(s) to finish saving")
+        let deadline = Date().addingTimeInterval(timeout)
+        for frame in waiting {
+            while true {
+                let state = await frame.savingState()
+                if state == .notSaving || state == .inPurgatory { break }
+                if Date() > deadline {
+                    Log.e("FrameSaveQueue: gave up waiting for frame \(frame.frameIndex) to finish saving")
+                    return
+                }
+                do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
+            }
+        }
+    }
+
+    private func beginSave(of frame: FrameAirplaneRemover) async {
+        do {
+            try await saveNow(frame: frame) { }
+        } catch {
+            Log.e("FrameSaveQueue: could not save frame \(frame.frameIndex): \(error)")
+            await frame.set(frameSavingState: .notSaving)
+        }
+    }
+
     public func frameSavingStateChanged(for frame: FrameAirplaneRemover,
                                         from oldState: FrameSavingState,
                                         to newState: FrameSavingState) 

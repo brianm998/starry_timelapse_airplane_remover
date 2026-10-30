@@ -195,21 +195,15 @@ struct InitialView: View {
                                  
                                  */
 
-                                if let fileExtension = url.path.components(separatedBy: ".").last {
-                                    if fileExtension == "jpeg" ||
-                                       fileExtension == "jpg" ||
-                                       fileExtension == "tiff" ||
-                                       fileExtension == "tif" // XXX this could be better :(
-                                    {
-                                        // single image drops are not videos, and
-                                        // also not an image sequence
+                                if Self.isImageFile(url.path) {
+                                    // single image drops are not videos, and
+                                    // also not an image sequence
 
-                                        // startup with a new sequence dir
-                                        Task { @MainActor in
-                                            startupWithSequenceDir(url.deletingLastPathComponent().path())
-                                        }
-                                        return
+                                    // startup with a new sequence dir
+                                    Task { @MainActor in
+                                        startupWithSequenceDir(url.deletingLastPathComponent().path())
                                     }
+                                    return
                                 }
                                 
                                 // handle video drops 
@@ -245,6 +239,12 @@ struct InitialView: View {
         }
         
         return false
+    }
+
+    /// Whether a dropped file is one of the frames of an image sequence rather than a video.  Whatever its case: a camera's
+    /// `IMG_0001.JPG` is a frame, and used to be sent down the video path.  The same extensions the file chooser offers.
+    nonisolated static func isImageFile(_ path: String) -> Bool {
+        ["jpg", "jpeg", "tif", "tiff", "png"].contains(URL(fileURLWithPath: path).pathExtension.lowercased())
     }
 
     func handle(error: String) {

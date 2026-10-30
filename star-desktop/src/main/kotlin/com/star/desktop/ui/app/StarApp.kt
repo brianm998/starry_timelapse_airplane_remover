@@ -63,6 +63,8 @@ fun StarApp(vm: AppViewModel) {
             if (showSettings && screen is AppScreen.Sequence) {
                 com.star.desktop.ui.dialogs.ProcessingSettingsDialog(vm)
             }
+            val showCustomLimits by vm.showCustomLimits.collectAsState()
+            if (showCustomLimits && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.ResourceCustomLimitsDialog(vm)
             val showPreferences by vm.showPreferences.collectAsState()
             if (showPreferences) com.star.desktop.ui.dialogs.PreferencesDialog(vm)
             val showRenderVideo by vm.showRenderVideo.collectAsState()
@@ -76,6 +78,7 @@ fun StarApp(vm: AppViewModel) {
                     probe = { vm.sessions.probeVideo(it) },
                     onImport = vm::confirmVideoImport,
                     onCancel = vm::cancelVideoImport,
+                    freeSpace = { vm.sessions.freeSpace(it) },
                 )
             }
             val pendingSequence by vm.pendingSequence.collectAsState()
@@ -84,6 +87,7 @@ fun StarApp(vm: AppViewModel) {
                     sequenceDir = dir,
                     onOpen = vm::confirmSequenceLocation,
                     onCancel = vm::cancelSequenceLocation,
+                    freeSpace = { vm.sessions.freeSpace(it) },
                 )
             }
             val showInfo by vm.showInfoDialog.collectAsState()

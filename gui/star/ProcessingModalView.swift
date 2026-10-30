@@ -305,12 +305,14 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
                       .font(.caption.weight(.semibold))
                       .foregroundColor(.white)
                       .fixedSize(horizontal: false, vertical: true)
+                      .accessibilityIdentifier("processing.overall")
                 }
                 if let headline {
                     Text(headline)
                       .font(.caption)
                       .foregroundColor(.white.opacity(0.85))
                       .fixedSize(horizontal: false, vertical: true)
+                      .accessibilityIdentifier("processing.headline")
                 }
             }
             Spacer()

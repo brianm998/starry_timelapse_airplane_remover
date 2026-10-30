@@ -34,6 +34,8 @@ actor Session {
     /// stopped, so a completion that arrives late from a run that was stopped or replaced is
     /// recognisably not the current one and does nothing.
     private var runGeneration = 0
+    /// How many runs have been started or stopped: each takes the next number, so a test can tell a run was superseded.
+    var runNumber: Int { runGeneration }
     private var activeRun: Int?
 
     /// The task that builds the frame graph for `activeRun`; a stop waits for it so it never
@@ -382,8 +384,11 @@ actor Session {
         runGeneration += 1
         let generation = runGeneration
         activeRun = generation
-        // The run adopts whatever the settings now are, so this is the baseline the next settings change is compared against.
-        settingsSnapshot = await configManager.config()
+        // The run adopts whatever the settings now are, so this is the baseline the next settings change is compared against: for a run of the
+        // whole sequence, as the macOS gui takes it in `beginProcessing` (Process All). A run of some of the frames (process from here, a frame
+        // again, a re-process) leaves it where it was, so a change made before it is still a change to the frames it did not touch (L11).
+        let wholeSequence = max(0, startIndex) == 0 && (endIndex.map { $0 >= frames.count - 1 } ?? true)
+        if wholeSequence { settingsSnapshot = await configManager.config() }
         await beginStepReports(generation: generation, types: ProcessingSteps.types(for: await configManager.config()))
         // Before the graph is built, which surveys the disk: a horizon reference the user painted and put off
         // applying is taken on by this run, so starting one is a way through it and not a way around it.  Over
@@ -525,15 +530,18 @@ actor Session {
         let generation: Int
         let types: [OperationType]
         let baseline: StepProgressReport.Sample
-        let status: String?
+        /// What the run is doing when there is nothing to count yet; cleared once its operations are queued (`stepsQueued`).
+        var status: String?
     }
     private var stepReports: StepReports?
+    /// The line the current run's reports carry in place of counts, nil once there is nothing to say (read by the tests).
+    var stepReportStatus: String? { stepReports?.status }
     private var stepReportTask: Task<Void, Never>?
     private var lastStepReport: Star_V1_StepProgress?
 
     /// Report each step of the run `generation` about four times a second for as long as it changes (`ProgressEvent.step_progress`), measured
     /// from now.  `status` is for a run that cannot be counted in operations.
-    private func beginStepReports(generation: Int, types: [OperationType], status: String? = nil) async {
+    func beginStepReports(generation: Int, types: [OperationType], status: String? = nil) async {
         stepReportTask?.cancel()
         let baseline = await StepProgressReport.sample()
         stepReports = StepReports(generation: generation, types: types, baseline: baseline, status: status)
@@ -550,7 +558,8 @@ actor Session {
     private func reportSteps(generation: Int) async {
         guard let context = stepReports, context.generation == generation, activeRun == generation, !closed else { return }
         let report = StepProgressReport.make(types: context.types, now: await StepProgressReport.sample(),
-                                             baseline: context.baseline, status: context.status ?? waitingForFramesStatus())
+                                             baseline: context.baseline, status: context.status ?? waitingForFramesStatus(),
+                                             governor: await ResourceGovernor.shared.latest.map(StepProgressReport.GovernorVerdict.init))
         guard report != lastStepReport else { return }
         lastStepReport = report
         var prog = Star_V1_ProgressEvent()
@@ -564,6 +573,13 @@ actor Session {
         let progress = source.progress
         guard !progress.isComplete, progress.error == nil, progress.total > 0 else { return nil }
         return localized("ui.processing_waiting_for_frames", progress.extracted * 100 / progress.total)
+    }
+
+    /// The run `generation` has put its operations on the queue: there is something to count, so the bars say more than the line that
+    /// covered the wait did.  macOS clears its `processingStatusText` here; this kept the line up for the whole run (P10).
+    func stepsQueued(generation: Int) {
+        guard stepReports?.generation == generation else { return }
+        stepReports?.status = nil
     }
 
     /// The run is over: one last report, so the bars end where the run did, and no more.
@@ -599,15 +615,20 @@ actor Session {
     // MARK: - Per-frame settings
 
     /// Make `method` the clean method of `frame` alone (macOS `set(cleanMethod:forFrame:)`): in the frame, and as an override in the
-    /// config, which is what a reopened session reads it back from.  The finished image depends on the method, so it is written again.
+    /// config, which is what a reopened session reads it back from.  The finished image depends on the method, so a frame at rest has the
+    /// image of the new method linked as its final at once, or made if there is none (what the gui does); it is not marked as changed,
+    /// which would only have it rendered again when its save timer fired, and left "user modified" until then.  A frame a run is still
+    /// working on, or has not reached, is left to the run, which reads the override when it gets to the end.
     func setCleanMethod(_ method: CleanMethod, of frame: FrameAirplaneRemover) async {
-        await frame.set(cleanMethod: method)
+        let state = await frame.processingState()
+        let atRest = [.complete, .userModified, .outlierProcessingComplete].contains(state)
+        await frame.set(cleanMethod: method, process: atRest)
         var config = await configManager.config()
         config.pixelReplacementOverrides[frame.frameIndex] = method
         await configManager.update(config)
         await configManager.flush()
-        await frame.markAsChanged()
-        await frameEdited(frame)
+        // `ImageAccessor` announces a write only at preview size, and previews are an option.
+        if atRest { onImageSaved(frameIndex: frame.frameIndex, type: .final) }
     }
 
     /// Give `frame` its own neighbour count of `kind`, or with a nil `count` take its own away; and do what the change calls for
@@ -788,6 +809,7 @@ actor Session {
             ) { errors in
                 Task { await weakSelf.session?.refinementCompleted(generation: generation, errors: errors, mergedFrames: merged) }
             }
+            await weakSelf.session?.stepsQueued(generation: generation)
         }
         buildTask = build
         await build.value

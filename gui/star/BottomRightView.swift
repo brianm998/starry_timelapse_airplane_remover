@@ -330,7 +330,7 @@ struct BottomRightView: View {
                     if viewModel.isProcessingFrames {
                         ProgressView()
                           .colorScheme(.dark)
-                        Text(localized("ui.processing_n_more_frames", viewModel.frames.count - viewModel.numberOfFramesProcessed))
+                        Text(localized("ui.processing_n_more_frames", viewModel.framesLeftToProcess))
                           .foregroundColor(.white)
                         Button {
                             viewModel.stopProcessing()
@@ -424,6 +424,7 @@ struct ProcessingButtonsView: View {
                        ? localized("ui.show_progress")
                        : localized("ui.process_frames"))
             }
+              .accessibilityIdentifier("process.frames")
               .disabled(processButtonDisabled)
               .if(!processButtonDisabled) {
                   $0.buttonStyle(.borderedProminent)
@@ -435,7 +436,6 @@ struct ProcessingButtonsView: View {
 
             Button() {
                 viewModel.renderVideoSheetShowing = true
-                viewModel.isRenderingVideo = false
             } label: {
                 Text(localized("ui.render_video_from_n_frames_lower", viewModel.frames.count))
             }

@@ -2609,6 +2609,11 @@ public struct Callbacks: Sendable {
 
     public var frameSavingStateChangeCallback: (@Sendable (FrameAirplaneRemover, FrameSavingState, FrameSavingState) -> ())?
 
+    /// Called each time the user's edit changes a frame's decisions (`FrameAirplaneRemover.markAsChanged()`), so that
+    /// a client can write them down and queue the frame for saving at once, rather than when the user leaves the frame:
+    /// an edit on the last frame touched is otherwise lost to a Close (the daemon does this per edit, in `frameEdited`).
+    public var frameEditedCallback: (@Sendable (FrameAirplaneRemover) -> ())?
+
     public var exisingFrameStateChangeCallback: (@Sendable (Int) -> ())?
 
     // called for the user to see a frame

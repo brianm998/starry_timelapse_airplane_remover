@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.numberFieldRules
 import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.ToolType
 import com.star.desktop.domain.usesOutliers
@@ -75,7 +76,7 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
         val usesOutliers = (info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE).usesOutliers
         if (usesOutliers) {
             CollapsibleSection(vm, RightPanelSection.SELECTIVE_TOOLS, localized("ui.section.selective_tools"), localized("ui.section.selective_tools_help")) {
-                SelectiveToolsSection(vm, fvm)
+                SelectiveToolsSection(vm)
             }
             SectionDivider()
         }
@@ -96,68 +97,36 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
 
 /** The tools for deciding by hand which outliers go and which stay, and how the outliers and the trash are drawn. */
 @Composable
-private fun SelectiveToolsSection(vm: SequenceViewModel, fvm: FrameViewModel) {
+private fun SelectiveToolsSection(vm: SequenceViewModel) {
     val tool by vm.tool.collectAsState()
-    val groups by fvm.groups.collectAsState()
-    val decisions by fvm.decisions.collectAsState()
-    val selection by fvm.selection.collectAsState()
-    val info by fvm.info.collectAsState()
     val onlyUnclassified by vm.classifyOnlyUnclassified.collectAsState()
     var showToolHelp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         HoverTip(localized("ui.tool_help")) {
-            Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+            Text(localized("ui.tool"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         }
         ToolHelpButton { showToolHelp = true }
     }
     if (showToolHelp) com.star.desktop.ui.dialogs.ToolHelpDialog(onClose = { showToolHelp = false })
-    ToolType.selectable.forEachIndexed { i, t ->
-        ToolRow(t, number = i + 1, selected = t == tool, onClick = { vm.setTool(t) })
+    ToolType.selectable.forEach { t ->
+        ToolRow(t, selected = t == tool, onClick = { vm.setTool(t) })
     }
     // With this on, clicking a group that has a decision opens the multi-choice sheet whatever the tool (macOS "multi choice").
     val multiChoice by vm.multiChoiceMode.collectAsState()
     SwitchRow(localized("ui.multi_choice"), localized("ui.multi_choice_help"), multiChoice, vm::setMultiChoiceMode)
 
-    val remove = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == true }
-    val keep = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == false }
-    val undecided = groups.size - remove - keep
-    HoverTip(localized("ui.outlier_counts_help")) {
-        Column {
-            Text(localized("ui.outliers_count", groups.size), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("✕$remove", color = StarColors.red, fontSize = 11.sp)
-                Text("✓$keep", color = StarColors.green, fontSize = 11.sp)
-                Text("?$undecided", color = StarColors.orange, fontSize = 11.sp)
-            }
-        }
-    }
+    // The outlier counts, the trash count, Keep All / Remove All / Clear Undecided and the decision trees are menu commands only, as in the gui
+    // (owner decision D8); this panel used to carry them as buttons.
     val showTrash by vm.showTrash.collectAsState()
-    // The trash, and what is in it: shown over the frame and, while it is, taken in by the tools below.
+    // The trash, and what is in it: shown over the frame and, while it is, taken in by the tools above.
     SwitchRow(localized("ui.show_trash"), localized("ui.show_trash_help"), showTrash, vm::setShowTrash)
-    info?.let { if (it.numTrashOutliers > 0) Text("${localized("ui.trash")}: ${it.numTrashOutliers}", color = StarColors.gray, fontSize = 11.sp) }
-    BulkButton(localized("ui.keep_all"), StarColors.green, help = localized("ui.keep_all_of_the_outlier_groups_in_the_frame")) { fvm.keepAll(showTrash) }
-    BulkButton(localized("ui.remove_all"), StarColors.red, help = localized("ui.remove_all_of_the_outlier_groups_in_the")) { fvm.removeAll(showTrash) }
-    BulkButton(localized("ui.clear_undecided"), StarColors.gray, help = localized("ui.don_t_paint_any_of_the_undecided_outlier")) { fvm.clearUndecided(showTrash) }
-    BulkButton(
-        localized("ui.decision_tree_all"), StarColors.blue,
-        help = localized("ui.apply_the_outlier_group_decision_tree_to_all"),
-    ) { vm.applyDecisionTreeToCurrentFrame() }
-    BulkButton(
-        localized("ui.dt_auto_only"), StarColors.blue,
-        help = localized("ui.apply_the_outlier_group_decision_tree_to_all_2"),
-    ) { vm.applyDecisionTreeToCurrentFrame(autoOnly = true) }
-    BulkButton(
-        localized("ui.decision_tree_all_frames"), StarColors.blue,
-        help = localized("ui.decision_tree_all_frames_help"),
-    ) { vm.applyDecisionTreeAll() }
     HoverTip(localized("ui.only_unclassified_help")) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             androidx.compose.material3.Checkbox(checked = onlyUnclassified, onCheckedChange = { vm.setClassifyOnlyUnclassified(it) })
             Text(localized("ui.only_unclassified"), color = StarColors.orange, fontSize = 11.sp)
         }
     }
-    selection.singleOrNull()?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
 
     // How strongly the outlier groups and the trash are drawn (macOS: sliders, in memory only).
     val outlierOpacity by vm.outlierOpacity.collectAsState()
@@ -211,6 +180,15 @@ internal fun DisplaySection(vm: SequenceViewModel) {
         }
     }
 
+    // How fast the sequence plays (the gui's Display picker; the bottom strip's slower and faster buttons are gone).
+    val playbackFps by vm.playbackFps.collectAsState()
+    HoverTip(localized("ui.frame_rate_help")) {
+        Column {
+            Text(localized("ui.frame_rate"), color = StarColors.textPrimary, fontSize = 11.sp)
+            PlaybackRatePicker(playbackFps, vm::setPlaybackFps)
+        }
+    }
+
     // Not tied to the outliers like the two in the selective tools: it dims the frame itself, which helps in every clean mode.
     val frameOpacity by vm.frameOpacity.collectAsState()
     OpacitySlider(localized("ui.frame_opacity"), localized("ui.frame_opacity_help"), frameOpacity, vm::setFrameOpacity)
@@ -220,6 +198,32 @@ internal fun DisplaySection(vm: SequenceViewModel) {
     }
     val fullResolution by vm.showFullResolution.collectAsState()
     SwitchRow(localized("ui.show_full_resolution"), localized("ui.show_full_resolution_help"), fullResolution, vm::setShowFullResolution)
+}
+
+/** The playback speed as a drop-down of [com.star.desktop.domain.PlaybackRates.choices], "N fps" each. */
+@Composable
+private fun PlaybackRatePicker(selected: Int, onSelect: (Int) -> Unit) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier
+                .width(100.dp)
+                .clip(com.star.desktop.ui.theme.StarShapes.picker)
+                .background(StarColors.cellDefault)
+                .clickable { expanded = true }
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        ) {
+            Text(localized("ui.n_fps", selected), color = StarColors.textPrimary, fontSize = 12.sp)
+        }
+        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            com.star.desktop.domain.PlaybackRates.choices.forEach { fps ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(localized("ui.n_fps", fps), color = if (fps == selected) StarColors.accent else StarColors.textPrimary, fontSize = 12.sp) },
+                    onClick = { onSelect(fps); expanded = false },
+                )
+            }
+        }
+    }
 }
 
 /** What changes how frames are processed: the horizon reference, the clean method, the static merge and rendering. */
@@ -280,6 +284,12 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
                 )
             }
         }
+    }
+
+    // How much of the machine a run may take, between the neighbour count and the render button as in the gui (Q5), pinned to the right.
+    val stepReport by vm.stepProgress.collectAsState()
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+        com.star.desktop.ui.dialogs.ResourceProfileControl(app, com.star.desktop.domain.ResourceStatus.text(stepReport))
     }
 
     // Writes the frame's decisions into its finished image; there is nothing to write until its outliers are loaded.
@@ -377,12 +387,7 @@ private fun NeighborCountEditor(
                     .clip(RoundedCornerShape(3.dp))
                     .background(StarColors.cellDefault)
                     .padding(horizontal = 4.dp, vertical = 2.dp)
-                    .onPreviewKeyEvent { e ->
-                        if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
-                            (e.key == androidx.compose.ui.input.key.Key.Enter || e.key == androidx.compose.ui.input.key.Key.NumPadEnter)
-                        ) { commit(); true } else false
-                    }
-                    .onFocusChanged { if (!it.isFocused) commit() },
+                    .numberFieldRules(commit = { commit() }, revert = { text = count.toString() }),
             )
             Text(localized(suffixKey), color = color, fontSize = 11.sp)
         }
@@ -406,7 +411,7 @@ private fun BulkButton(label: String, color: Color, help: String? = null, enable
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ToolRow(tool: ToolType, number: Int, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+private fun ToolRow(tool: ToolType, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     val accent = StarColors.toolColor(tool)
     val alpha = if (enabled) 1f else 0.35f
     HoverTip(if (enabled) tool.helpText else localized("tool.help.disabled")) {
@@ -428,10 +433,7 @@ private fun ToolRow(tool: ToolType, number: Int, selected: Boolean, enabled: Boo
             tint = Color.Unspecified,
             modifier = Modifier.size(28.dp),
         )
-        Column {
-            Text(tool.displayName, color = StarColors.textPrimary, fontSize = 11.sp)
-            Text("$number", color = StarColors.textDisabled, fontSize = 9.sp)
-        }
+        Text(tool.displayName, color = StarColors.textPrimary, fontSize = 11.sp)
     }
     }
 }
@@ -473,10 +475,7 @@ private fun ZoomControls(vm: SequenceViewModel) {
             Text(localized("ui.slider.max_zoom_prefix"), color = StarColors.textSecondary, fontSize = 11.sp)
             androidx.compose.foundation.text.BasicTextField(
                 value = maxText,
-                onValueChange = {
-                    maxText = it
-                    it.toFloatOrNull()?.let { v -> if (v >= fit && v <= FrameTransform.MAX_SCALE_LIMIT) t.setMaxScale(v, canvas) }
-                },
+                onValueChange = { maxText = it },
                 singleLine = true,
                 textStyle = androidx.compose.ui.text.TextStyle(color = if (valid) StarColors.white else StarColors.red, fontSize = 11.sp),
                 cursorBrush = SolidColor(StarColors.white),
@@ -484,7 +483,15 @@ private fun ZoomControls(vm: SequenceViewModel) {
                     .width(40.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(StarColors.cellDefault)
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    // Applied on Return or leaving the field, not on each key (the gui's rule): a number is not the user's answer until it is done.
+                    .numberFieldRules(
+                        commit = {
+                            if (valid && parsed != null) { if (parsed != t.maxScale) t.setMaxScale(parsed, canvas) }
+                            else maxText = formatScale(t.maxScale)
+                        },
+                        revert = { maxText = formatScale(t.maxScale) },
+                    ),
             )
         }
     }

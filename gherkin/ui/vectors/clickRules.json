@@ -1,0 +1,243 @@
+{
+  "comment": "E1 and E2 of the parity plan: what a click on an outlier group does. `toggle`: the decision a click leaves (the macOS gui sets userSelected(!willRemove), whichever of Remove and Keep is chosen). `groupClick`: whether the click applies the tool or opens the multi-choice sheet, from the tool, the Multi Choice switch, and whether the group has a decision (the switch only counts on a decided group, and Trash and Information come first). The gui's OutlierGroupView and the desktop's ClickRules each answer from these.",
+  "toggle": [
+    {
+      "decision": "undecided",
+      "after": "userRemove"
+    },
+    {
+      "decision": "classifierRemove",
+      "after": "userKeep"
+    },
+    {
+      "decision": "classifierKeep",
+      "after": "userRemove"
+    },
+    {
+      "decision": "userRemove",
+      "after": "userKeep"
+    },
+    {
+      "decision": "userKeep",
+      "after": "userRemove"
+    }
+  ],
+  "groupClick": [
+    {
+      "tool": "remove",
+      "multiChoice": false,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "remove",
+      "multiChoice": false,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "remove",
+      "multiChoice": true,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "remove",
+      "multiChoice": true,
+      "decided": true,
+      "expected": "multiChoiceSheet"
+    },
+    {
+      "tool": "keep",
+      "multiChoice": false,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "keep",
+      "multiChoice": false,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "keep",
+      "multiChoice": true,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "keep",
+      "multiChoice": true,
+      "decided": true,
+      "expected": "multiChoiceSheet"
+    },
+    {
+      "tool": "razor",
+      "multiChoice": false,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "razor",
+      "multiChoice": false,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "razor",
+      "multiChoice": true,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "razor",
+      "multiChoice": true,
+      "decided": true,
+      "expected": "multiChoiceSheet"
+    },
+    {
+      "tool": "shovel",
+      "multiChoice": false,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "shovel",
+      "multiChoice": false,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "shovel",
+      "multiChoice": true,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "shovel",
+      "multiChoice": true,
+      "decided": true,
+      "expected": "multiChoiceSheet"
+    },
+    {
+      "tool": "trash",
+      "multiChoice": false,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "trash",
+      "multiChoice": false,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "trash",
+      "multiChoice": true,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "trash",
+      "multiChoice": true,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "removeFromTrash",
+      "multiChoice": false,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "removeFromTrash",
+      "multiChoice": false,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "removeFromTrash",
+      "multiChoice": true,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "removeFromTrash",
+      "multiChoice": true,
+      "decided": true,
+      "expected": "multiChoiceSheet"
+    },
+    {
+      "tool": "multi",
+      "multiChoice": false,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "multi",
+      "multiChoice": false,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "multi",
+      "multiChoice": true,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "multi",
+      "multiChoice": true,
+      "decided": true,
+      "expected": "multiChoiceSheet"
+    },
+    {
+      "tool": "information",
+      "multiChoice": false,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "information",
+      "multiChoice": false,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "information",
+      "multiChoice": true,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "information",
+      "multiChoice": true,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "none",
+      "multiChoice": false,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "none",
+      "multiChoice": false,
+      "decided": true,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "none",
+      "multiChoice": true,
+      "decided": false,
+      "expected": "applyTool"
+    },
+    {
+      "tool": "none",
+      "multiChoice": true,
+      "decided": true,
+      "expected": "multiChoiceSheet"
+    }
+  ]
+}

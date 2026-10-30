@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -148,11 +149,8 @@ class SequenceViewModel(
         _rightPanelShowing.value = !hide
     }
 
-    // The sky/ground brush mode the painter was last left in, so it is the same the next time it opens (macOS keeps
-    // it on the sequence's view model for the same reason).
-    private val _horizonPaintErasing = MutableStateFlow(false)
-    val horizonPaintErasing: StateFlow<Boolean> = _horizonPaintErasing.asStateFlow()
-    fun setHorizonPaintErasing(erasing: Boolean) { _horizonPaintErasing.value = erasing }
+    /** What the multi-frame sheets were last left with, so the next one starts there (E5 of the parity plan). */
+    val multiSheetMemory = com.star.desktop.ui.dialogs.MultiSheetMemory()
 
     // Edit sub-mode: when on, the center view is the horizon painter instead of the outlier overlay.
     private val _horizonPaintMode = MutableStateFlow(false)
@@ -330,6 +328,25 @@ class SequenceViewModel(
         _frameRevisions.value = _frameRevisions.value.let { it + (index to ((it[index] ?: 0) + 1)) }
     }
 
+    /**
+     * Bumped for a frame each time what this client holds of it is marked out of date ([frameDataChanged]): a processing state change,
+     * its outliers loading, or a bulk edit. The filmstrip and grid cells fetch the frame's counts again on it.
+     */
+    private val _frameDataVersions = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val frameDataVersions: StateFlow<Map<Int, Int>> = _frameDataVersions.asStateFlow()
+
+    /**
+     * The state, counts and clean method of frame [index], live. Every edit made to the frame lands in this one flow (the edit view's
+     * decisions, Keep All, a clean-method change, a bulk edit), so a cell that draws from it follows them; a cell that kept its own copy,
+     * fetched when the frame's index or state changed, went on showing the outlier ticks it had before the edit (Q11).
+     */
+    fun frameInfoFlow(index: Int): StateFlow<com.star.proto.FrameInfo?> = frameVMFor(index).info
+
+    /** Fetch frame [index]'s info from the daemon into [frameInfoFlow]. */
+    suspend fun refreshFrameInfo(index: Int) {
+        frameInfo(index)?.let { frameVMFor(index).applyInfo(it) }
+    }
+
     // State the `init` block's collectors read the moment they start; a property declared below it would still be null then.
     private val _showFullResolution = MutableStateFlow(false)
     val showFullResolution: StateFlow<Boolean> = _showFullResolution.asStateFlow()
@@ -474,6 +491,7 @@ class SequenceViewModel(
      * fetched again right away if it is the frame on screen.
      */
     private fun frameDataChanged(index: Int) {
+        _frameDataVersions.update { it + (index to ((it[index] ?: 0) + 1)) }
         val vm = frameVMs[index] ?: return
         vm.invalidate()
         if (index == _currentIndex.value) vm.load(force = true)
@@ -672,6 +690,9 @@ class SequenceViewModel(
     }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
 
+    /** How many runs this session has started (see [ProcessingRepository.runsStarted]). */
+    val runsStarted: Int get() = processing.runsStarted
+
     /** Stop the run in progress and start it over under the settings as they now are (macOS `updateSettingsAndProcess` over a live run). */
     fun restartProcessing() = startProcessingRun { processing.restart(sessionId, 0, -1) }
 
@@ -700,7 +721,8 @@ class SequenceViewModel(
         fullResolutionJob?.cancel()
         if (wanted == null) return
         fullResolutionJob = scope.launch {
-            val ref = frames.previewPath(sessionId, wanted.first, wanted.second, com.star.proto.PreviewSize.PREVIEW_SIZE_ORIGINAL) ?: return@launch
+            val ref = frames.previewPath(sessionId, wanted.first, wanted.second, com.star.proto.PreviewSize.PREVIEW_SIZE_ORIGINAL, buildIfMissing = true)
+                ?: return@launch
             val bitmap = imageCache.loadUncached(ref.path) ?: return@launch
             if (_currentIndex.value == wanted.first && _viewMode.value == wanted.second) _fullResolution.value = bitmap
         }
@@ -1105,20 +1127,17 @@ class SequenceViewModel(
         modeBeforePlayback = null
     }
 
-    /** Preview path for [index] in [mode], falling back through the other view modes. Null if none exist. */
+    /**
+     * Preview path for [index] in exactly [mode]; null when the frame has no picture of that kind. It used to fall back through the other
+     * modes, so a frame that was not processed showed its original under "final"; the macOS gui shows "image not found" there (Q1).
+     */
     suspend fun previewRefPath(
         index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL,
         size: com.star.proto.PreviewSize = com.star.proto.PreviewSize.PREVIEW_SIZE_PREVIEW,
     ): String? {
-        val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
-        for (m in order) {
-            frames.previewPath(sessionId, index, m, size)?.let {
-                Log.d("Sequence") { "previewRefPath(frame=$index): resolved via $m -> ${it.path}" }
-                return it.path
-            }
-        }
-        Log.d("Sequence") { "previewRefPath(frame=$index): no preview for any mode (tried $order)" }
-        return null
+        val ref = frames.previewPath(sessionId, index, mode, size)
+        if (ref == null) Log.d("Sequence") { "previewRefPath(frame=$index): no $mode picture" }
+        return ref?.path
     }
 
     /**
@@ -1143,23 +1162,17 @@ class SequenceViewModel(
     private suspend fun loadPreview(index: Int, mode: FrameViewMode) {
         previewJob?.cancel()
         previewJob = scope.launch {
-            // Try the requested mode, then fall back through the others (PREVIEW_FALLBACK), so we
-            // show whatever exists: a frame that is not processed yet shows its original.
-            val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
-            var ref: com.star.proto.ImageRef? = null
-            var resolvedMode: FrameViewMode? = null
-            for (m in order) {
-                ref = frames.previewPath(sessionId, index, m)
-                if (ref != null) { resolvedMode = m; break }
-            }
+            // Exactly the mode asked for. An aligned one the frame builds from its homographies is built by the daemon first (the request
+            // waits, and the picture on screen stays until it is done); any other that is missing is the placeholder's "image not found".
+            val ref = frames.previewPath(sessionId, index, mode, buildIfMissing = true)
             if (ref == null) {
-                Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): no preview available (tried $order)" }
+                Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): no preview available" }
                 _previewAvailable.value = false
                 _currentPreview.value = null
                 return@launch
             }
             val bmp = imageCache.load(ref.path, index)
-            Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): using $resolvedMode -> ${ref.path} (decoded=${bmp != null})" }
+            Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): ${ref.path} (decoded=${bmp != null})" }
             if (_currentIndex.value == index) {
                 _currentPreview.value = bmp
                 _previewAvailable.value = bmp != null
@@ -1198,17 +1211,6 @@ class SequenceViewModel(
 
         /** How many frames ahead of the one showing playback keeps loaded (macOS `videoPrefetchLookahead`). */
         const val PLAYBACK_LOOKAHEAD = 30
-
-        /**
-         * What to show when the wanted mode has no preview yet. The original comes before the debug
-         * images: a frame that is not finished shows its own picture, never its subtraction.
-         */
-        private val PREVIEW_FALLBACK = listOf(
-            FrameViewMode.VIEW_PROCESSED,
-            FrameViewMode.VIEW_ORIGINAL,
-            FrameViewMode.VIEW_SUBTRACTION,
-            FrameViewMode.VIEW_VALIDATION,
-        )
     }
 
     /**

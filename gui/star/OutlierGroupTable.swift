@@ -146,14 +146,24 @@ struct OutlierGroupTable: View {
         self.closure = closure
     }
 
+    /// A column's title: its name in the catalogue, as the desktop's table and this window's column list say it.
+    /// `ui.<name in lower case>` for a feature, with the two that have a name of their own.
+    static func header(for column: String) -> String {
+        switch column {
+        case "name": return localized("ui.name")
+        case "classificationScore": return localized("ui.classification_score")
+        default: return localized("ui.\(column.lowercased())")
+        }
+    }
+
     var nameColumn: DTColumn {
-        TableColumn("id", value: \.id) { (row: OutlierGroupTableRow) in
+        TableColumn(Self.header(for: "name"), value: \.id) { (row: OutlierGroupTableRow) in
             Text(String(row.name))
         }.width(min: 40, ideal: 60, max: 100)
     }
     
     var sizeColumn: DTColumn {
-        TableColumn("size", value: \.size) { (row: OutlierGroupTableRow) in
+        TableColumn(Self.header(for: "size"), value: \.size) { (row: OutlierGroupTableRow) in
             Text(String(row.size))
         }.width(min: 40, ideal: 40, max: 80)
     }
@@ -185,7 +195,7 @@ struct OutlierGroupTable: View {
                                      KeyPathComparator<OutlierGroupTableRow>,
                                      Image,
                                      Text> {
-        TableColumn("remove",
+        TableColumn(Self.header(for: "remove"),
                     value: \OutlierGroupTableRow.willRemoveType) { (row: OutlierGroupTableRow) in
             image(for: row.willRemoveType)
         }.width(min: 10, ideal: 20, max: 80)
@@ -197,7 +207,7 @@ struct OutlierGroupTable: View {
                      value: KeyPath<OutlierGroupTableRow,Double>,
                      closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
     {
-        TableColumn(name, value: value) { (row: OutlierGroupTableRow) in
+        TableColumn(Self.header(for: name), value: value) { (row: OutlierGroupTableRow) in
             Text(String(format: "%.5g", closure(row)))
         }//}.width(min: 40, ideal: 60, max: 100)
     }
@@ -466,6 +476,12 @@ struct OutlierGroupTable: View {
                     }
                 } .onChange(of: sortOrder) {
                     viewModel.outlierGroupTableRows.sort(using: sortOrder)
+                } .task(id: viewModel.currentIndex) {
+                    // the window follows the frame (E6)
+                    await viewModel.fillOutlierGroupTableForCurrentFrame()
+                } .task(id: viewModel.currentFrameView.outlierViews?.count) {
+                    // ...and fills in once the frame's groups have been loaded
+                    await viewModel.fillOutlierGroupTableForCurrentFrame()
                 } .onDisappear() {
                     // without this selection will persist 
                     if let frame = viewModel.outlierGroupWindowFrame {

@@ -35,6 +35,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.modalScrim
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.domain.FrameFormatChoice
 import com.star.desktop.domain.TiffCompressionChoice
 import com.star.desktop.domain.VideoImport
@@ -56,6 +58,7 @@ fun VideoImportDialog(
     probe: suspend (String) -> ProbeVideoResponse?,
     onImport: (VideoImportOptions) -> Unit,
     onCancel: () -> Unit,
+    freeSpace: suspend (String) -> Long? = { null },
 ) {
     var format by remember { mutableStateOf(FrameFormatChoice.TIFF16) }
     var quality by remember { mutableFloatStateOf(VideoImport.DEFAULT_JPEG_QUALITY.toFloat()) }
@@ -67,7 +70,9 @@ fun VideoImportDialog(
     var backgroundChosen by remember { mutableStateOf(false) }
     LaunchedEffect(info) { if (!backgroundChosen) background = VideoImport.extractInBackgroundByDefault(info) }
 
-    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = onCancel), contentAlignment = Alignment.Center) {
+    // Return starts the import and Esc cancels; a click outside the card does neither.
+    val importNow = { onImport(VideoImportOptions(format, quality.toInt(), compression, background, outputDir)) }
+    Box(Modifier.fillMaxSize().background(StarColors.scrim).modalScrim().defaultAction(importNow, onEscape = onCancel), contentAlignment = Alignment.Center) {
         Column(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -136,7 +141,7 @@ fun VideoImportDialog(
 
             // Where the frames, the output and the working files go, and whether the volume has room for them.
             val frameBytes = info?.let { VideoImport.estimatedBytes(it, format, q, compression) }
-            WorkingLocationSection(videoPath, outputDir, { outputDir = it }, inputBytes = frameBytes, frameBytes = frameBytes)
+            WorkingLocationSection(videoPath, outputDir, { outputDir = it }, inputBytes = frameBytes, frameBytes = frameBytes, freeSpace = freeSpace)
 
             // Start working while the frames are still being extracted. The help says why this is off for H.264 and the like.
             Row(
@@ -152,7 +157,7 @@ fun VideoImportDialog(
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
                 Button(
-                    onClick = { onImport(VideoImportOptions(format, q, compression, background, outputDir)) },
+                    onClick = importNow,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     modifier = Modifier.testTag("videoimport.import"),
                 ) { Text(localized("ui.video_import_start")) }

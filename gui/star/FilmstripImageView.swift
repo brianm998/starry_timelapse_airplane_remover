@@ -224,7 +224,7 @@ struct FilmstripImageView: View {
             Button {
                 viewModel.processSelectedFrames(with: .none)
             } label: {
-                Label("Process \(label) (new only)", systemImage: "play.circle")
+                Label(localized("ui.process_n_new_only", label), systemImage: "play.circle")
             }
 
             Divider()

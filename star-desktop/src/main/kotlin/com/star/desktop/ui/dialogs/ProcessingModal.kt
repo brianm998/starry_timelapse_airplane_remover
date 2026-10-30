@@ -48,6 +48,7 @@ import com.star.desktop.ui.components.AlignmentInfoButton
 import com.star.desktop.ui.components.AlignmentInfoOverlay
 import com.star.desktop.ui.components.DeviationChart
 import com.star.desktop.ui.components.HoverTip
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -59,6 +60,13 @@ private val ETA_WIDTH = 56.dp
 /** For what is finished or has nothing left: quieter than the white of what is live. */
 private val SETTLED = Color(0.68f, 0.68f, 0.68f)
 private val COUNT_WIDTH = NUMBER_WIDTH * 3
+
+/**
+ * Whether this run's plan is complete, which is what the report's `graph_built` says. A report arrives as soon as the run starts, with every
+ * step listed and nothing done, so having one is not having a plan: until the plan is built the headline reads "planning", not "finishing up"
+ * (macOS: `graphBuildsCompleted > processingBuildCount`).
+ */
+internal fun hasPlan(report: com.star.proto.StepProgress?): Boolean = report?.graphBuilt == true
 
 /**
  * Processing progress screen (macOS `ProcessingModalView`): what each step of the run is doing, in one bar each (done, running, still
@@ -75,14 +83,15 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     // Fed each time the counts change; not state the screen draws, so updating it asks for no further pass.
     val rates = remember { StepRateTracker() }
     rates.observe(rows)
-    val headline = ProcessingHeadline.text(rows, extraction, report != null, counts.complete, svm.frameCount)
+    val headline = ProcessingHeadline.text(rows, extraction, hasPlan(report), counts.complete, svm.frameCount)
     val overall = ProcessingHeadline.overallText(rows) { rates.secondsRemaining(it) }
     val estimates = rows.mapNotNull { row -> rates.secondsRemaining(row)?.let { row.type to it } }.toMap()
     val session by app.sessions.session.collectAsState()
     val cameraMoving = session?.config?.tripodHeadWasMoving == true
     var showingInfo by remember { mutableStateOf(false) }
 
-    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
+    // Return is the Preview button, the sheet's default one in the gui.
+    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}.defaultAction(svm::dismissProcessingModal), contentAlignment = Alignment.Center) {
         Column(
             Modifier
                 .widthIn(min = 480.dp, max = 640.dp)
@@ -103,7 +112,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                     if (overall != null) Text(overall, color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, modifier = Modifier.testTag("processing.overall"))
                     if (headline != null) Text(headline, color = StarColors.white.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.testTag("processing.headline"))
                 }
-                ResourceProfileControl(app)
+                ResourceProfileControl(app, com.star.desktop.domain.ResourceStatus.text(report))
             }
             HorizontalDivider(color = StarColors.cellDefault)
 
@@ -127,9 +136,14 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                     )
                 }
                 Box(Modifier.weight(1f))
-                Text(localized("ui.preview_while_processing_help"), color = StarColors.white.copy(alpha = 0.7f), fontSize = 11.sp, modifier = Modifier.widthIn(max = 320.dp))
-                Button(onClick = svm::dismissProcessingModal, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
-                    Text(localized("ui.preview"))
+                Text(
+                    localized("ui.preview_while_processing_help"), color = StarColors.white, fontSize = 11.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(max = 320.dp),
+                )
+                HoverTip(localized("ui.preview_while_processing_help")) {
+                    Button(onClick = svm::dismissProcessingModal, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
+                        Text(localized("ui.preview"))
+                    }
                 }
             }
         }
@@ -249,17 +263,20 @@ private fun StepBar(step: StepRow, modifier: Modifier = Modifier) {
     }
 }
 
-/** "Use of this Mac": Full, Balanced, Light, or Custom (whose limits are in the settings). Changing it reaches a run in progress. */
+/**
+ * "Use of this Mac": Full, Balanced, Light, or Custom (whose limits are in the settings). Changing it reaches a run in progress. Here, in the
+ * settings sheet, and in the right panel's Processing section, where the gui has it (Q5).
+ */
 @Composable
-private fun ResourceProfileControl(app: AppViewModel) {
+internal fun ResourceProfileControl(app: AppViewModel, status: String? = null) {
     val session by app.sessions.session.collectAsState()
-    val current = session?.config?.takeIf { it.hasResourceProfile() }?.resourceProfile ?: "full"
+    val current = com.star.desktop.domain.ResourceProfiles.profileOf(session?.config)
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         HoverTip(localized("ui.use_of_this_mac_help")) {
             Text(localized("ui.use_of_this_mac"), color = StarColors.textSecondary, fontSize = 11.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for ((profile, key) in listOf("full" to "ui.use_full", "balanced" to "ui.use_balanced", "light" to "ui.use_light", "custom" to "ui.use_custom")) {
+            for ((profile, key) in com.star.desktop.domain.ResourceProfiles.choices) {
                 val selected = current == profile
                 Text(
                     localized(key),
@@ -267,11 +284,17 @@ private fun ResourceProfileControl(app: AppViewModel) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(5.dp))
                         .background(if (selected) StarColors.accent else StarColors.cellDefault)
-                        .clickable { app.setResourceProfile(profile) }
+                        .clickable {
+                            app.setResourceProfile(profile)
+                            // Custom is chosen and its limits come up to be edited, as in the gui.
+                            if (profile == com.star.desktop.domain.ResourceProfiles.CUSTOM) app.openCustomLimits()
+                        }
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
             }
         }
+        // "Limited by: GPU" while a run is going (the gui samples the governor every five seconds; the daemon reports it with the steps).
+        if (status != null) Text(status, color = StarColors.textDisabled, fontSize = 10.sp)
     }
 }
 

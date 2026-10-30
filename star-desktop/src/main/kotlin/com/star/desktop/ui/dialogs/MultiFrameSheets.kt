@@ -18,6 +18,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,11 +31,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.modalScrim
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.domain.MultiFrameRange
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.desktop.i18n.localized
+
+/** How many frames "some frames" means until the user says (macOS `number_of_frames`). */
+internal const val DEFAULT_FRAME_COUNT = 50
+
+/**
+ * What the multi-frame sheets keep between openings (macOS holds it on the sequence's view model): the removal the select sheet last had
+ * (Keep to begin with), the frame range each sheet last had, and the number of frames, which the two share. The sheets used to start from Remove,
+ * all frames and 5 every time.
+ */
+class MultiSheetMemory {
+    var selectAction: Int = 1
+    var selectRange: MultiFrameRange = MultiFrameRange.ALL
+    var choiceRange: MultiFrameRange = MultiFrameRange.ALL
+    var frameCount: Int = DEFAULT_FRAME_COUNT
+}
 
 /**
  * An action a sheet can apply: keep/remove, optionally to outliers *overlapping* those in the area. [summaryPrefix] is the catalogue
@@ -54,6 +73,9 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
         title = localized("ui.change_overlapping_outliers_in_other_frames"),
         actions = actions,
         defaultIndex = if (target.currentlyRemoves) 1 else 0,   // pre-select the opposite of the clicked group
+        initialRange = vm.multiSheetMemory.choiceRange,
+        initialCount = vm.multiSheetMemory.frameCount,
+        onRemember = { _, range, count -> vm.multiSheetMemory.choiceRange = range; count?.let { vm.multiSheetMemory.frameCount = it } },
         current = vm.currentIndex.value,
         frameCount = vm.frameCount,
         actionButtonLabel = { localized(if (it.shouldRemove) "ui.remove" else "ui.keep") },
@@ -74,7 +96,14 @@ fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: S
     MultiFrameSheet(
         title = localized("ui.change_outliers_in_the_selected_area_across"),
         actions = actions,
-        defaultIndex = 0,
+        defaultIndex = vm.multiSheetMemory.selectAction,
+        initialRange = vm.multiSheetMemory.selectRange,
+        initialCount = vm.multiSheetMemory.frameCount,
+        onRemember = { action, range, count ->
+            vm.multiSheetMemory.selectAction = action
+            vm.multiSheetMemory.selectRange = range
+            count?.let { vm.multiSheetMemory.frameCount = it }
+        },
         current = vm.currentIndex.value,
         frameCount = vm.frameCount,
         actionButtonLabel = { localized("ui.modify") },
@@ -90,6 +119,10 @@ private fun MultiFrameSheet(
     title: String,
     actions: List<MultiAction>,
     defaultIndex: Int,
+    initialRange: MultiFrameRange,
+    initialCount: Int,
+    /** Told what the sheet was left with when it goes (applied or not), so the next one starts from it. */
+    onRemember: (action: Int, range: MultiFrameRange, count: Int?) -> Unit,
     /** The frame being looked at, and how many there are: the sentence under the choices counts the frames each one reaches. */
     current: Int,
     frameCount: Int,
@@ -100,12 +133,16 @@ private fun MultiFrameSheet(
     trashInitially: Boolean? = null,
 ) {
     var actionIdx by remember { mutableStateOf(defaultIndex.coerceIn(0, actions.size - 1)) }
-    var range by remember { mutableStateOf(MultiFrameRange.ALL) }
-    var nText by remember { mutableStateOf("5") }
+    var range by remember { mutableStateOf(initialRange) }
+    var nText by remember { mutableStateOf(initialCount.toString()) }
     var includingTrash by remember { mutableStateOf(trashInitially ?: false) }
     val action = actions[actionIdx]
+    val left by rememberUpdatedState(Triple(actionIdx, range, nText.toIntOrNull()))
+    DisposableEffect(Unit) { onDispose { onRemember(left.first, left.second, left.third) } }
 
-    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = onCancel), contentAlignment = Alignment.Center) {
+    // Return applies and Esc cancels; a click outside the card does neither.
+    val apply = { onApply(action, range, nText.toIntOrNull() ?: DEFAULT_FRAME_COUNT, includingTrash) }
+    Box(Modifier.fillMaxSize().background(StarColors.scrim).modalScrim().defaultAction(apply, onEscape = onCancel), contentAlignment = Alignment.Center) {
         Column(
             Modifier
                 .widthIn(min = 340.dp, max = 460.dp)
@@ -147,7 +184,7 @@ private fun MultiFrameSheet(
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
                 Button(
-                    onClick = { onApply(action, range, nText.toIntOrNull() ?: 5, includingTrash) },
+                    onClick = apply,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                 ) { Text(actionButtonLabel(action)) }
             }

@@ -100,6 +100,7 @@ extension Dispatcher {
 
         // Session
         register(method: "Session.ProbeVideo")   { id, payload, transport in await SessionHandlers.probeVideo(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
+        register(method: "Session.GetFreeSpace")   { id, payload, transport in await SessionHandlers.freeSpace(id: id, payload: payload, transport: transport); await t.taskCompleted(id: id) }
         register(method: "Session.OpenSequence") { id, payload, transport in await SessionHandlers.openSequence(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Session.OpenConfig")   { id, payload, transport in await SessionHandlers.openConfig(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Session.OpenVideo")    { id, payload, transport in await SessionHandlers.openVideo(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

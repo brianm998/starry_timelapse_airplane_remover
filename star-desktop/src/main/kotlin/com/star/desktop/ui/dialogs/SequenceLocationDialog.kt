@@ -29,6 +29,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.modalScrim
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.domain.WorkingLocation
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.theme.StarColors
@@ -47,12 +49,14 @@ fun SequenceLocationDialog(
     sequenceDir: String,
     onOpen: (outputDir: String?) -> Unit,
     onCancel: () -> Unit,
+    freeSpace: suspend (String) -> Long? = { null },
 ) {
     var outputDir by remember { mutableStateOf<String?>(null) }
     // Stat-ing thousands of images is not for the UI thread.
     val inputBytes by produceState<Long?>(null, sequenceDir) { value = withContext(Dispatchers.IO) { WorkingLocation.sequenceInputBytes(File(sequenceDir)) } }
 
-    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(onClick = onCancel), contentAlignment = Alignment.Center) {
+    // Return opens it and Esc cancels; a click outside the card does neither.
+    Box(Modifier.fillMaxSize().background(StarColors.scrim).modalScrim().defaultAction({ onOpen(outputDir) }, onEscape = onCancel), contentAlignment = Alignment.Center) {
         Column(
             modifier = Modifier
                 .widthIn(max = 520.dp)
@@ -65,7 +69,7 @@ fun SequenceLocationDialog(
         ) {
             Text(localized("ui.sequence_location_title"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
             Text(File(sequenceDir).name, color = StarColors.textPrimary, fontSize = 13.sp)
-            WorkingLocationSection(sequenceDir, outputDir, { outputDir = it }, inputBytes = inputBytes)
+            WorkingLocationSection(sequenceDir, outputDir, { outputDir = it }, inputBytes = inputBytes, freeSpace = freeSpace)
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
                 Button(

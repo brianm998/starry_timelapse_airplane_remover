@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -70,22 +71,33 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
                     Text(localized("ui.welcome_to_star", it.daemonVersion), color = StarColors.textPrimary, fontSize = 32.sp, fontWeight = FontWeight.Light)
                 }
                 Text(localized("ui.the_starry_timelapse_airplane_remover"), color = StarColors.textSecondary, fontSize = 16.sp)
-                OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.about_star")) }
+                HoverTip(localized("ui.tell_me_how_to_us_this_software")) {
+                    OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.learn_about_star")) }
+                }
 
                 DropZone(vm = vm, onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
 
+                // The gui's labels, order and hover texts (S8): Load Video, Load Image Sequence, Load Config.
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = { open(vm, OpenKind.SEQUENCE) },
-                        colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                    ) { Text(localized("ui.open_image_sequence")) }
-                    OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { Text(localized("ui.open_video")) }
-                    OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { Text(localized("ui.resume")) }
+                    HoverTip(localized("ui.load_a_video_to_process_make_sure_lots_of")) {
+                        OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { Text(localized("ui.load_video")) }
+                    }
+                    HoverTip(localized("ui.load_an_image_sequence_yet_to_be_processed")) {
+                        Button(
+                            onClick = { open(vm, OpenKind.SEQUENCE) },
+                            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                        ) { Text(localized("ui.load_image_sequence")) }
+                    }
+                    HoverTip(localized("ui.load_a_json_config_file_from_a_previous_run")) {
+                        OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { Text(localized("ui.load_config")) }
+                    }
                 }
 
                 if (recent.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    Text(localized("ui.recent"), color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                    HoverTip(localized("ui.open_a_recently_processed_sequence")) {
+                        Text(localized("ui.open_recent"), color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
+                    }
                     RecentFilesList(
                         recent = recent,
                         onOpen = { path -> openPath(vm, path) },

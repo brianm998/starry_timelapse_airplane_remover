@@ -7,6 +7,14 @@ import StarDaemonMessages
 /// as it started.
 enum StepProgressReport {
 
+    /// The part of the governor's report a client is told: which resource, if any, the run is waiting on.
+    struct GovernorVerdict: Sendable, Equatable {
+        var limitedBy: LimitingResource?
+
+        init(limitedBy: LimitingResource?) { self.limitedBy = limitedBy }
+        init(_ report: ResourceReport) { self.limitedBy = report.limitedBy }
+    }
+
     /// The counters at one moment.
     struct Sample: Sendable, Equatable {
         var operations: [OperationType: [OperationState: UInt]]
@@ -25,7 +33,11 @@ enum StepProgressReport {
 
     /// The report for `types` as of `now`, for a run that started at `baseline`.  `alreadyDone` describes whichever graph was built last,
     /// so until this run's is the one that was it belongs to nobody, and the same fact decides whether steps with nothing to do are left out.
-    static func make(types: [OperationType], now: Sample, baseline: Sample, status: String? = nil) -> Star_V1_StepProgress {
+    ///
+    /// `governor` is what the resource governor's latest report says is holding the run back (the gui's "Limited by" line); nil before it
+    /// has sampled the machine.
+    static func make(types: [OperationType], now: Sample, baseline: Sample, status: String? = nil,
+                     governor: GovernorVerdict? = nil) -> Star_V1_StepProgress {
         let graphIsBuilt = now.graphBuilds > baseline.graphBuilds
         let steps = ProcessingSteps.visible(
             ProcessingSteps.progress(for: types, counts: now.operations, since: baseline.operations,
@@ -34,6 +46,8 @@ enum StepProgressReport {
         var report = Star_V1_StepProgress()
         report.graphBuilt = graphIsBuilt
         report.status = status ?? ""
+        report.resourcesSampled = governor != nil
+        report.limitedBy = governor?.limitedBy?.description ?? ""
         report.steps = steps.map(stepCount)
         return report
     }

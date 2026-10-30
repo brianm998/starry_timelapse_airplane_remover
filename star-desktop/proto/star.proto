@@ -114,6 +114,15 @@ message OpenVideoRequest {
   ExtractionSettings extraction_settings = 7;
 }
 
+// Session.GetFreeSpace: the bytes free on the volume holding `path` (the nearest folder that exists, since an output folder usually does not yet),
+// counted as StarCore's `DiskSpaceCheck` counts them: on a Mac the capacity "for important usage", which includes what the system would
+// purge to make room for a write.  So a dialog's "available" and the daemon's own low-space warning agree, and agree with the macOS gui.
+message FreeSpaceRequest  { string path = 1; }
+message FreeSpaceResponse {
+  bool   known           = 1;   // false when the volume would not say; nothing else is set then
+  uint64 available_bytes = 2;
+}
+
 // Session.ProbeVideo: what the video's header says, without decoding it, so a dialog can tell the user how much disk the frames will take.
 message ProbeVideoRequest  { string video_path = 1; }
 message ProbeVideoResponse {
@@ -397,6 +406,22 @@ message Config {
   // explains the frame better, with the stars put back, so fast-moving clouds are not banded and repeated. StarCore Config.cloudAwareMerge, off
   // unless asked for. Changing it redoes the star aligned merge of frames already processed, keeping their alignment (see Sequence.PreviewConfigChange).
   optional bool   cloud_aware_merge                                    = 62;
+  // How far a pixel may differ from the neighbouring frames' (in the merge's own units) before it is thrown out and replaced rather than kept;
+  // StarCore Config.pixelThreshold, 1.2 unless changed.  The macOS gui offers it as an expert setting and as a slider in the right panel.
+  optional double pixel_threshold                                      = 63;
+  // The editable limits behind the "custom" resource profile (StarCore Config.customResources; the memory budget and the pipeline depth are
+  // custom's too, but they are max_mat_memory_fraction and number_of_frames_to_process_concurrently above). Always sent. Applied when present,
+  // clamped to the ranges the macOS "Custom" popover offers (a value outside one is clamped, a name that is not one of the listed is ignored).
+  optional int32  custom_cpu_width                                     = 64;   // 1 to 256
+  optional string custom_qos                                           = 65;   // "userInitiated", "utility" or "background"
+  optional int32  custom_gpu_width                                     = 66;   // 1 to 32
+  optional double custom_gpu_duty_cycle                                = 67;   // 0.05 to 1 (1 = no throttling)
+  optional int32  custom_disk_streams_per_volume                       = 68;   // 1 to 16
+  optional string custom_io_policy                                     = 69;   // "default", "utility" or "throttle"
+  // Write-only (the daemon never sends it): set on the request that changes resource_profile to "custom" to have the custom limits (the six above,
+  // the memory budget and the pipeline depth) start as the limits of the profile being left (macOS `Config.makeCustom`), so opening Custom changes
+  // nothing until a limit is edited. Without it the request's own limits are taken as sent, which is what a settings sheet that edits them wants.
+  optional bool   start_custom_from_profile                            = 70;
 }
 
 enum CleanMethod {
@@ -502,6 +527,11 @@ message GetFramePreviewRequest {
   int32         frame_index = 2;
   FrameViewMode view_mode   = 3;
   PreviewSize   size        = 4;   // default: the preview
+  // The aligned views (VIEW_STAR_ALIGNED, VIEW_EARTH_ALIGNED) are not written in the default mode.  A frame that has the homographies for
+  // one (`available_modes` lists it) builds the image when this is set: a warp of its neighbours and a full-size file, so it is asked
+  // only for the frame the user is looking at (as the macOS gui does when it opens one), never for a thumbnail or a prefetch.
+  // Ignored for every other view mode, and for an aligned image that is already on disk.
+  bool          build_if_missing = 5;
 }
 
 // How large an image Frame.GetPreview returns.  THUMBNAIL is the small one the filmstrip draws (a view mode that has none
@@ -845,6 +875,8 @@ message StepProgress {
   repeated StepCount steps = 1;   // in the order the modal stacks them
   bool   graph_built       = 2;   // the run's plan is complete, so a step with nothing to do has been left out; until then every step is listed
   string status            = 3;   // what the run is doing when it cannot be counted in operations (a horizon refinement); empty otherwise
+  string limited_by        = 4;   // the resource the governor says is holding the run back (StarCore `LimitingResource.description`: "disk <volume>", "GPU", "CPU", "memory"); empty when none is
+  bool   resources_sampled = 5;   // the governor has sampled the machine, so `limited_by` empty means "not limited" and not "not known yet"
 }
 
 // How far a previous run got on the open sequence, read off what it left on disk at the time of the call (macOS SequenceProgressSurvey,

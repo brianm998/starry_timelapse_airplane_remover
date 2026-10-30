@@ -79,15 +79,21 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
                   .onSubmit {
                       commitIfValid()
                   }
+                  // Esc puts the old value back
+                  .onExitCommand {
+                      revert()
+                  }
                   .onChange(of: focusedField.wrappedValue) {
-                      guard isEditing else { return }
+                      guard isEditing || alwaysOpen else { return }
                       if focusedField.wrappedValue != focusField {
-                          // Lost focus: cancel editing and revert
-                          isEditing = false
-                          if !alwaysOpen {
-                              editText = ""
-                          }
+                          // Lost focus: what was typed is the user's answer, as much as Return is.  Reverting here
+                          // dropped a number typed into a settings sheet that was then closed without Return.
+                          commitIfValid()
                       }
+                  }
+                  // A field that goes away while its text is still being typed (a sheet closed on it) keeps it too
+                  .onDisappear {
+                      if isEditing { commitIfValid() }
                   }
 
                 Text(suffixTextProvider(value))
@@ -106,7 +112,8 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
         }
     }
 
-    /// Validates and commits the edited text, then exits edit mode.
+    /// Validates and commits the edited text, then exits edit mode.  A value that is not valid is put back, and one that
+    /// is the value already there changes nothing (and so does not run `commitAction`, which can create an override).
     private func commitIfValid() {
         let allowedChars: CharacterSet = allowDecimal
             ? CharacterSet(charactersIn: "0123456789.")
@@ -115,14 +122,26 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
                                 .filter { allowedChars.contains($0) })
         if let newVal = Value(filtered),
            newVal >= minValue,
-           newVal <= maxValue {
+           newVal <= maxValue,
+           newVal != value {
             value = newVal
             commitAction(newVal)
         }
-        // Exit editing mode in all cases (commit or revert)
+        finishEditing()
+    }
+
+    /// Esc: leave the field with the value it had.
+    private func revert() {
+        finishEditing()
+    }
+
+    /// Exit edit mode, showing the value now in force, and give the keyboard back: a field that kept focus after its
+    /// commit swallowed the digits and arrow keys meant for the frame.
+    private func finishEditing() {
         isEditing = false
-        if !alwaysOpen {
-            editText = ""
+        editText = alwaysOpen ? String(value) : ""
+        if focusedField.wrappedValue == focusField {
+            focusedField.wrappedValue = nil
         }
     }
 }

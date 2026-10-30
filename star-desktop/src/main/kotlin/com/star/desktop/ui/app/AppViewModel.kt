@@ -179,8 +179,8 @@ internal fun withRemovalChoices(current: Config, cleanMethod: CleanMethod?, allo
 }
 
 /**
- * The initial config for opening [source] (an image sequence's folder or a video file): selective cleaning,
- * previews on, and output written into the folder that holds the source, never left to the daemon's
+ * The initial config for opening [source] (an image sequence's folder or a video file): StarCore's default clean
+ * method (automatic), previews on, and output written into the folder that holds the source, never left to the daemon's
  * per-session scratch fallback (a fresh hidden temp dir on every open). Config's `basename` already embeds
  * the sequence's own dirname, so this can't collide with a sibling sequence, and opening the same source
  * again resolves to the same output location, which is what lets `FrameAirplaneRemover.init`'s
@@ -308,9 +308,23 @@ class AppViewModel(
         scope.launch {
             val current = runCatching { sessions.getConfig() }.getOrNull() ?: return@launch
             if (current.hasResourceProfile() && current.resourceProfile == profile) return@launch
-            runCatching { updateSessionConfig(current.toBuilder().setResourceProfile(profile).build()) }.onFailure { report(it.message ?: it.toString()) }
+            runCatching { updateSessionConfig(com.star.desktop.domain.ResourceProfiles.switchTo(current, profile)) }.onFailure { report(it.message ?: it.toString()) }
         }
     }
+
+    /** The Custom limits, set as the popover edits them (macOS applies each as it changes, and a run in progress moves to it). */
+    fun setCustomLimits(limits: com.star.desktop.domain.CustomLimits) {
+        scope.launch {
+            val current = runCatching { sessions.getConfig() }.getOrNull() ?: return@launch
+            runCatching { updateSessionConfig(limits.applyTo(current)) }.onFailure { report(it.message ?: it.toString()) }
+        }
+    }
+
+    // The Custom limits popover (macOS `ResourceCustomLimitsView`): up while the user is editing them.
+    private val _showCustomLimits = MutableStateFlow(false)
+    val showCustomLimits: StateFlow<Boolean> = _showCustomLimits.asStateFlow()
+    fun openCustomLimits() { _showCustomLimits.value = true }
+    fun closeCustomLimits() { _showCustomLimits.value = false }
 
     /**
      * What applying [config] would do to the work already on disk (the settings sheet's red line, and Process Now becoming Update); null when
@@ -330,7 +344,19 @@ class AppViewModel(
             val running = currentSequence?.isProcessing?.value == true
             runCatching { updateSessionConfig(config.toBuilder().setReprocessOnSettingsChange(reprocess).build()) }.onFailure { report(it.message ?: it.toString()) }
             closeSettings()
-            if (running) currentSequence?.restartProcessing() else requestProcessAll()
+            if (running) {
+                // As the gui: stop, and ask the question about rendering again, since the answer given was for the run being replaced (P4).
+                // With the question turned off there is nothing to ask, and the run is started over in one step.
+                if (prefs.skipRenderPromptAfterProcessing) {
+                    renderQuestion.disarm()
+                    currentSequence?.restartProcessing()
+                } else {
+                    currentSequence?.cancelProcessing()
+                    requestProcessAll()
+                }
+            } else {
+                requestProcessAll()
+            }
         }
     }
 
@@ -421,15 +447,19 @@ class AppViewModel(
     val showPreRenderPrompt: StateFlow<Boolean> = _showPreRenderPrompt.asStateFlow()
     private val _showPostRenderPrompt = MutableStateFlow(false)
     val showPostRenderPrompt: StateFlow<Boolean> = _showPostRenderPrompt.asStateFlow()
-    private var autoRenderAfterProcessing = false
-    private var awaitingProcessingPrompt = false
+    /** The question at the end of a run, and which run it is about (P11). */
+    private val renderQuestion = RenderQuestion()
+
+    /** Arm the end-of-run question for the run the next `processAll` (or resume) starts. */
+    private fun armRenderQuestion(render: Boolean, ask: Boolean) {
+        renderQuestion.arm(forRun = (currentSequence?.runsStarted ?: 0) + 1, render = render, ask = ask)
+    }
 
     /** Entry point for "Process All": skip-pref → start directly; otherwise show the pre-render prompt. */
     fun requestProcessAll() {
         val svm = currentSequence ?: return
         if (prefs.skipRenderPromptAfterProcessing) {
-            autoRenderAfterProcessing = false
-            awaitingProcessingPrompt = false
+            renderQuestion.disarm()
             svm.processAll()
         } else {
             _showPreRenderPrompt.value = true
@@ -438,8 +468,7 @@ class AppViewModel(
 
     fun confirmStartProcessing(autoRender: Boolean, dontAskAgain: Boolean) {
         if (dontAskAgain) prefs.setSkipRenderPrompt(true)
-        autoRenderAfterProcessing = autoRender
-        awaitingProcessingPrompt = !dontAskAgain
+        armRenderQuestion(render = autoRender, ask = !dontAskAgain)
         _showPreRenderPrompt.value = false
         currentSequence?.processAll()
     }
@@ -463,13 +492,10 @@ class AppViewModel(
     }
 
     private fun handleProcessingDone() {
-        if (!awaitingProcessingPrompt) return
-        awaitingProcessingPrompt = false
-        if (autoRenderAfterProcessing) {
-            autoRenderAfterProcessing = false
-            openRenderVideo(autoStart = true)
-        } else {
-            _showPostRenderPrompt.value = true
+        when (renderQuestion.done(currentSequence?.runsStarted ?: 0)) {
+            RenderQuestion.Outcome.RENDER -> openRenderVideo(autoStart = true)
+            RenderQuestion.Outcome.ASK -> _showPostRenderPrompt.value = true
+            RenderQuestion.Outcome.NOTHING -> Unit
         }
     }
 
@@ -921,8 +947,7 @@ class AppViewModel(
         val svm = currentSequence ?: return
         if (svm.horizonPaintMode.value) return
         svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
-        autoRenderAfterProcessing = false
-        awaitingProcessingPrompt = false
+        armRenderQuestion(render = false, ask = com.star.desktop.domain.ResumedRun.asksAboutRenderingAtTheEnd(prefs.skipRenderPromptAfterProcessing))
         svm.processAll()
     }
 
@@ -1018,7 +1043,7 @@ class AppViewModel(
                     return@launch
                 }
                 sessions.applySessionInfo(opened)
-                onOpened(path, withGpuPreferences(opened), promptStartup = promptStartup)
+                onOpened(path, withGpuPreferences(opened), promptStartup = promptStartup, showProgress = com.star.desktop.domain.ResumedRun.showsProgressPanel(resuming = afterOpen != null))
                 afterOpen?.invoke()
             } catch (e: CancellationException) {
                 throw e
@@ -1059,17 +1084,43 @@ class AppViewModel(
         if (work.isPending) _closeConfirmation.value = CloseConfirmation(CloseAction.CLOSE_SESSION, work.description()) else closeSession()
     }
 
+    /** What File ▸ Open… was going to do, held while the question about the work it would interrupt is up. */
+    private var pendingOpen: (() -> Unit)? = null
+
+    /**
+     * File ▸ Open Image Sequence…, Open Video…, Resume…: run [open], which asks the user what to open, once it is clear that nothing is
+     * going to be interrupted, or the user has said it may be. Opening closes the sequence that is open, so it is held to the same question
+     * as File ▸ Close (it used to close the session, run and all, without asking). Asked before the chooser, not after it, so no one picks
+     * a file to be told it cannot be opened.
+     */
+    fun requestOpen(open: () -> Unit) {
+        val work = pendingWork()
+        if (!work.isPending) {
+            open()
+            return
+        }
+        pendingOpen = open
+        _closeConfirmation.value = CloseConfirmation(CloseAction.OPEN, work.description())
+    }
+
     /** The question's yes: do what was asked, interrupting what is going. */
     fun confirmClose() {
         val asked = _closeConfirmation.value ?: return
         _closeConfirmation.value = null
+        val open = pendingOpen
+        pendingOpen = null
         when (asked.action) {
             CloseAction.QUIT -> quitNow()
             CloseAction.CLOSE_SESSION -> closeSession()
+            CloseAction.OPEN -> open?.invoke()
         }
     }
 
-    fun cancelClose() { _closeConfirmation.value = null }
+    /** The question's no: nothing is interrupted, and what was asked for is dropped with it. */
+    fun cancelClose() {
+        _closeConfirmation.value = null
+        pendingOpen = null
+    }
 
     /**
      * Quit: ask the engine to shut down first, so it writes out what is pending and clears its run marker. Killing it instead leaves the marker,
@@ -1116,13 +1167,13 @@ class AppViewModel(
 
         _showPreRenderPrompt.value = false
         _showPostRenderPrompt.value = false
-        autoRenderAfterProcessing = false
-        awaitingProcessingPrompt = false
+        renderQuestion.disarm()
         // A condition acknowledged about the sequence just closed is not acknowledged about the next, and a banner about it is not still up.
         bannerExpiry?.cancel()
         bannerExpiry = null
         _warningState.update { WarningRouting.reset(it) }
         _showSettings.value = false
+        _showCustomLimits.value = false
         _showExpertSettings.value = false
         _sequenceProgress.value = null
         renderJob?.cancel()
@@ -1158,7 +1209,7 @@ class AppViewModel(
             if (resume != null && java.io.File(resume).exists()) {
                 _screen.value = AppScreen.Loading("ui.resuming_session", resume, null)
                 try {
-                    onOpened(resume, sessions.openConfig(resume), addToRecent = false)
+                    onOpened(resume, sessions.openConfig(resume), addToRecent = false, showProgress = com.star.desktop.domain.ResumedRun.showsProgressPanel(resuming = wasProcessing))
                     if (wasProcessing) resumeProcessing()
                 } catch (e: Throwable) {
                     fail(e.message ?: localized("ui.failed_to_resume_the_session_after_the_restart"))
@@ -1190,7 +1241,7 @@ class AppViewModel(
 
     suspend fun shutdown() = engine.shutdown()
 
-    private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true, promptStartup: Boolean = false) {
+    private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true, promptStartup: Boolean = false, showProgress: Boolean = true) {
         // Normally the open has already closed what was open; this is for the restart-after-crash route,
         // where the old session died with the engine. Before anything below sets state for the new one.
         teardownSequence()
@@ -1222,10 +1273,7 @@ class AppViewModel(
                 when (it) {
                     "done" -> handleProcessingDone()
                     // A stopped or failed run is not one to offer a render for.
-                    "cancelled", "error" -> {
-                        awaitingProcessingPrompt = false
-                        autoRenderAfterProcessing = false
-                    }
+                    "cancelled", "error" -> renderQuestion.disarm()
                 }
             }
         }
@@ -1263,7 +1311,8 @@ class AppViewModel(
             // carries the answers. The exception is a hand-painted horizon selection the last
             // session never finished, which has to come before processing rather than after.
             // The panel waits for that: a run started now would fall back to the automatic horizon detection they had declined.
-            if (!resumeStartupHorizonIfUnfinished(svm, info.config)) showSequenceProgress(svm)
+            val painting = resumeStartupHorizonIfUnfinished(svm, info.config)
+            if (!painting && showProgress) showSequenceProgress(svm)
         }
     }
 

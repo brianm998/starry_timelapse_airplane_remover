@@ -67,6 +67,8 @@ import com.star.proto.OutlierFeaturesResponse
 import com.star.proto.OutlierGroupList
 import com.star.proto.Point
 import com.star.proto.PreviewSize
+import com.star.proto.FreeSpaceRequest
+import com.star.proto.FreeSpaceResponse
 import com.star.proto.ProbeVideoRequest
 import com.star.proto.ProbeVideoResponse
 import com.star.proto.ProgressEvent
@@ -200,6 +202,10 @@ class StarClient(private val conn: StdioConnection) {
     suspend fun probeVideo(videoPath: String): ProbeVideoResponse =
         call("Session.ProbeVideo", ProbeVideoRequest.newBuilder().setVideoPath(videoPath).build(), ProbeVideoResponse.parser())
 
+    /** The bytes free on the volume holding [path] as the daemon (StarCore) counts them; `known` is false if the volume would not say. */
+    suspend fun freeSpace(path: String): FreeSpaceResponse =
+        call("Session.GetFreeSpace", FreeSpaceRequest.newBuilder().setPath(path).build(), FreeSpaceResponse.parser())
+
     /** As [openSequence], but streams how the frames are coming, and cancelling the collector cancels the open (no session is left behind). */
     fun openSequenceStream(sequenceDir: String, initialConfig: Config = Config.getDefaultInstance()): Flow<OpenProgress> =
         serverStream(
@@ -278,13 +284,19 @@ class StarClient(private val conn: StdioConnection) {
             com.star.proto.FrameEtaResponse.parser(),
         )
 
-    /** The frame's image for [viewMode] at [size]: the preview by default, the filmstrip's thumbnail, or an 8-bit copy of the full-size image. */
+    /**
+     * The frame's image for [viewMode] at [size]: the preview by default, the filmstrip's thumbnail, or an 8-bit copy of the full-size image.
+     * With [buildIfMissing] a star or earth aligned image the default mode never wrote is built from the frame's homographies: set it for the
+     * frame being looked at, not for a thumbnail or a prefetch.
+     */
     suspend fun getFramePreview(
         sessionId: String, frameIndex: Int, viewMode: FrameViewMode, size: PreviewSize = PreviewSize.PREVIEW_SIZE_PREVIEW,
+        buildIfMissing: Boolean = false,
     ): ImageRef =
         call(
             "Frame.GetPreview",
-            GetFramePreviewRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setViewMode(viewMode).setSize(size).build(),
+            GetFramePreviewRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setViewMode(viewMode).setSize(size)
+                .setBuildIfMissing(buildIfMissing).build(),
             ImageRef.parser(),
         )
 

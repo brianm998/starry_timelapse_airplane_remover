@@ -51,6 +51,25 @@ final class StepProgressReportTests: XCTestCase {
         XCTAssertEqual(StepProgressReport.make(types: [.merge], now: sample(), baseline: sample()).status, "")
     }
 
+    /// The gui's "Limited by: X" under Use of this Mac: the governor's verdict rides on the step report, and "not sampled yet" is not
+    /// "not limited".
+    func testTheResourceTheGovernorBlamesIsPassedOn() {
+        let none = StepProgressReport.make(types: [.merge], now: sample(), baseline: sample())
+        XCTAssertFalse(none.resourcesSampled, "no report from the governor yet")
+        XCTAssertEqual(none.limitedBy, "")
+
+        let free = StepProgressReport.make(types: [.merge], now: sample(), baseline: sample(), governor: .init(limitedBy: nil))
+        XCTAssertTrue(free.resourcesSampled)
+        XCTAssertEqual(free.limitedBy, "", "sampled and nothing limits the run")
+
+        for (resource, text) in [(LimitingResource.gpu, "GPU"), (.cpu, "CPU"), (.memory, "memory"), (.disk("/Volumes/rp"), "disk /Volumes/rp")] {
+            let report = StepProgressReport.make(types: [.merge], now: sample(), baseline: sample(), governor: .init(limitedBy: resource))
+            XCTAssertTrue(report.resourcesSampled)
+            XCTAssertEqual(report.limitedBy, text)
+        }
+        XCTAssertNotEqual(none, free, "the session sends a report again when only this changes")
+    }
+
     func testAReportThatHasNotChangedEqualsTheLastOne() {
         let a = StepProgressReport.make(types: [.horizon], now: sample([.horizon: [.done: 1]], builds: 1), baseline: sample())
         let b = StepProgressReport.make(types: [.horizon], now: sample([.horizon: [.done: 1]], builds: 1), baseline: sample())

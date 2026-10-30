@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -42,6 +43,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.modalScrim
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.domain.RenderState
 import com.star.desktop.domain.RenderVideo
 import com.star.desktop.i18n.localized
@@ -71,7 +74,9 @@ fun RenderVideoDialog(app: AppViewModel) {
     val rendering = state is RenderState.Rendering
 
     Box(
-        Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = !rendering, onClick = app::closeRenderVideo),
+        // Esc closes it, except while a render is going (its own Cancel is what stops that); a click outside the card does not.
+        Modifier.fillMaxSize().background(StarColors.scrim).modalScrim()
+            .defaultAction({}, onEscape = { if (!rendering) app.closeRenderVideo() }),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -173,6 +178,7 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
                 textStyle = TextStyle(fontSize = 12.sp, color = StarColors.textPrimary),
                 cursorBrush = SolidColor(StarColors.white),
                 modifier = Modifier
+                    .testTag("render.custom_frame_rate")
                     .width(80.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .background(StarColors.sidePanel)
@@ -254,7 +260,7 @@ private fun RenderingView(state: RenderState.Rendering, onCancel: () -> Unit) {
     Text(localized("ui.frame_n_of_m", state.current, state.total), color = StarColors.textSecondary, fontSize = 13.sp)
     LinearProgressIndicator(progress = { state.fraction }, modifier = Modifier.fillMaxWidth(), color = StarColors.green, trackColor = StarColors.cellDefault)
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-        OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
+        OutlinedButton(onClick = onCancel, modifier = Modifier.testTag("render.cancel")) { Text(localized("ui.cancel")) }
     }
 }
 
@@ -263,7 +269,7 @@ private fun RenderingView(state: RenderState.Rendering, onCancel: () -> Unit) {
 private fun SucceededView(state: RenderState.Succeeded, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var problem by remember { mutableStateOf<String?>(null) }
-    Text(renderedStatus(state.path, state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+    Text(renderedStatus(state.path, state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.testTag("render.done"))
     state.path?.let { Text(it, color = StarColors.textSecondary, fontSize = 11.sp) }
     problem?.let { Text(it, color = StarColors.red, fontSize = 12.sp) }
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
@@ -283,7 +289,7 @@ private fun SucceededView(state: RenderState.Succeeded, onDismiss: () -> Unit) {
 @Composable
 private fun FailedView(state: RenderState.Failed, onDismiss: () -> Unit) {
     androidx.compose.foundation.text.selection.SelectionContainer {
-        Text(localized("ui.rendering_error", state.message), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        Text(localized("ui.rendering_error", state.message), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.testTag("render.error"))
     }
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
         Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.dismiss")) }

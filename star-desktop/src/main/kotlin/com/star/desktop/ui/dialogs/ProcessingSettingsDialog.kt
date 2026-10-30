@@ -40,7 +40,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.CleanMethodChoice
+import com.star.desktop.domain.CleanMethodTexts
 import com.star.desktop.domain.FieldInput
+import com.star.desktop.domain.HighLevelClean
 import com.star.desktop.domain.SettingsChange
 import com.star.desktop.domain.SettingsEdit
 import com.star.desktop.engine.EngineStatus
@@ -88,7 +91,8 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(localized("ui.processing_settings"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            // The gui's header (P8): the sentence that says what the sheet is for, and not the name of the menu item that opens it.
+            Text(localized(SETTINGS_TITLE_KEY), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
 
             // Under the title, and only over a sequence that has work on disk this change contradicts: a sequence nothing has been done to is
             // what this sheet was built for, and there is nothing to warn about there.
@@ -115,6 +119,8 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             }
 
             var clean by remember(cfg) { mutableStateOf(cfg.cleanMethod) }
+            // "Selective Auto Clean", the expert Yes/No under Automatic: where it stands is kept while Selective is chosen, as the gui does.
+            var autoPreserve by remember(cfg) { mutableStateOf(CleanMethodChoice.autoPreservationStart(cfg.cleanMethod)) }
             var detection by remember(cfg) { mutableStateOf(cfg.detectionType) }
             var horizon by remember(cfg) { mutableStateOf(cfg.horizonDetectionEnabled) }
             var tripod by remember(cfg) { mutableStateOf(cfg.tripodHeadWasMoving) }
@@ -134,43 +140,22 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             SettingGroup(
                 localized("ui.clean_method"), info = info, infoId = "clean",
                 help = choicesHelp(
-                    localized("ui.automatic") to localized("ui.mode_desc_automatic"),
-                    localized("ui.auto_selective") to localized("ui.mode_desc_auto_selective"),
-                    localized("ui.selective") to localized("ui.mode_desc_selective"),
+                    localized("ui.automatic") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.AUTOMATIC)),
+                    localized("ui.selective") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.SELECTIVE)),
                 ),
             ) {
                 Segmented(
                     options = listOf(
-                        CleanMethod.CLEAN_AUTOMATIC to localized("ui.automatic"),
-                        CleanMethod.CLEAN_AUTOMATIC_TRUE to localized("ui.auto_selective"),
-                        CleanMethod.CLEAN_SELECTIVE to localized("ui.selective"),
+                        HighLevelClean.AUTOMATIC to localized("ui.automatic"),
+                        HighLevelClean.SELECTIVE to localized("ui.selective"),
                     ),
-                    selected = clean,
-                    onSelect = { clean = it },
+                    tip = { localized(CleanMethodTexts.tipKey(it)) },
+                    selected = CleanMethodChoice.highLevel(clean),
+                    onSelect = { clean = CleanMethodChoice.method(it, autoPreserve) },
                 )
                 Text(
                     localized("ui.selective_auto_selective_detect_outlier"),
                     color = StarColors.textDisabled, fontSize = 10.sp,
-                )
-            }
-
-            // How strictly outliers are looked for: only means something when the method finds outlier groups at all.
-            SettingGroup(
-                localized("ui.selective_processing_mode").removeSuffix(":"), enabled = edit.usesOutliers,
-                info = info, infoId = "detection", help = localized("setting_help.selective_processing_mode"),
-            ) {
-                Segmented(
-                    options = listOf(
-                        DetectionType.DETECTION_MILD to localized("detection_type.mild"),
-                        DetectionType.DETECTION_STRONG to localized("detection_type.strong"),
-                        DetectionType.DETECTION_STRONGER to localized("detection_type.stronger"),
-                        DetectionType.DETECTION_EXCESSIVE to localized("detection_type.excessive"),
-                        // A config that has its own blob processor shows as this, rather than as none of the above.
-                        DetectionType.DETECTION_CUSTOM to localized("detection_type.custom"),
-                    ),
-                    selected = detection,
-                    onSelect = { detection = it },
-                    enabled = edit.usesOutliers,
                 )
             }
 
@@ -240,6 +225,46 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
 
             ToggleRow(localized(if (showExpert) "ui.hide_expert_settings" else "ui.show_expert_settings"), showExpert) { app.setShowExpertSettings(it) }
             if (showExpert) {
+                // The gui's order: Selective Auto Clean, how strictly outliers are looked for, then the groups of numbers.
+                // Selective always reviews outliers, whatever this is left at.
+                SettingGroup(
+                    localized("ui.selective_auto_clean").removeSuffix(":"), enabled = clean != CleanMethod.CLEAN_SELECTIVE,
+                    info = info, infoId = "autoselective",
+                    help = choicesHelp(
+                        localized("ui.yes") to localized(CleanMethodTexts.autoPreservationDescriptionKey(true)),
+                        localized("ui.no") to localized(CleanMethodTexts.autoPreservationDescriptionKey(false)),
+                    ),
+                ) {
+                    Segmented(
+                        options = listOf(true to localized("ui.yes"), false to localized("ui.no")),
+                        tip = { localized(CleanMethodTexts.autoPreservationTipKey(it)) },
+                        selected = autoPreserve,
+                        onSelect = {
+                            autoPreserve = it
+                            if (clean != CleanMethod.CLEAN_SELECTIVE) clean = CleanMethodChoice.method(HighLevelClean.AUTOMATIC, it)
+                        },
+                        enabled = clean != CleanMethod.CLEAN_SELECTIVE,
+                    )
+                }
+                // How strictly outliers are looked for: only means something when the method finds outlier groups at all.
+                SettingGroup(
+                    localized("ui.selective_processing_mode").removeSuffix(":"), enabled = edit.usesOutliers,
+                    info = info, infoId = "detection", help = localized("setting_help.selective_processing_mode"),
+                ) {
+                    Segmented(
+                        options = listOf(
+                            DetectionType.DETECTION_MILD to localized("detection_type.mild"),
+                            DetectionType.DETECTION_STRONG to localized("detection_type.strong"),
+                            DetectionType.DETECTION_STRONGER to localized("detection_type.stronger"),
+                            DetectionType.DETECTION_EXCESSIVE to localized("detection_type.excessive"),
+                            // A config that has its own blob processor shows as this, rather than as none of the above.
+                            DetectionType.DETECTION_CUSTOM to localized("detection_type.custom"),
+                        ),
+                        selected = detection,
+                        onSelect = { detection = it },
+                        enabled = edit.usesOutliers,
+                    )
+                }
                 // Only to word the "needs a newer engine" note; whether a field is supported
                 // is decided by its presence in the config the daemon sent, not by this.
                 val daemonVersion = (app.engineStatus.value as? EngineStatus.Connected)?.daemonVersion
@@ -358,6 +383,9 @@ private fun SettingGroup(
 }
 
 /** What each of a picker's choices means, under its title: a heading and a paragraph apiece (macOS's info panel for these rows). */
+/** The catalogue key of the sheet's header, the one the gui's `ProcessingSettingsView` reads. */
+internal const val SETTINGS_TITLE_KEY = "ui.choose_from_the_following_options_to_let"
+
 private fun choicesHelp(vararg choices: Pair<String, String>): String = choices.joinToString("\n\n") { (name, meaning) -> "$name\n$meaning" }
 
 @Composable
@@ -456,6 +484,7 @@ internal sealed interface ExpertField {
 internal val FIELD_HELP: Map<String, List<String>> = mapOf(
     "Neighbor frames" to listOf("setting_help.neighbor_frames"),
     "Static neighbor frames" to listOf("setting_help.static_neighbor_frames"),
+    "Pixel threshold" to listOf("setting_help.pixel_threshold"),
     "Max keypoints" to listOf("setting_help.max_keypoints"),
     "Ground horizon extension" to listOf("setting_help.ground_horizon_extension"),
     "Sky horizon extension" to listOf("setting_help.sky_horizon_extension"),
@@ -555,26 +584,30 @@ private val NEEDS_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly }
 /** The reference-horizon rows: they smooth between horizons the user painted, which only a camera that moved has. */
 private val NEEDS_MOVING_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly && !it.cameraFixed }
 
+// The gui's order (P8): ... the base image threshold, the keypoint divisor, earth alignment, the debug images, and the smoothing last.
 internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
     IntField("Neighbor frames", "ui.neighbor_frame_count", { it.numberAlignedNeighborFrames }, { b, v -> b.setNumberAlignedNeighborFrames(v) }, 1, 1000, { it.hasNumberAlignedNeighborFrames() },
         maxForFrames = { it - 1 }),
     // Only a camera that did not move has frames whose horizons can be merged; a moving camera uses the aligned neighbors above.
     IntField("Static neighbor frames", "ui.static_neighbor_frame_count", { it.numberStaticNeighborFrames }, { b, v -> b.setNumberStaticNeighborFrames(v) }, 1, 1000, { it.hasNumberStaticNeighborFrames() },
         enabled = { it.cameraFixed }, maxForFrames = { it - 1 }),
+    // How far a pixel may be from its neighbours' before it is thrown out and replaced.  The macOS gui has had this row (and a right-panel slider) all along.
+    DoubleField("Pixel threshold", "ui.pixel_threshold", { it.pixelThreshold }, { b, v -> b.setPixelThreshold(v) }, { it.hasPixelThreshold() },
+        min = 0.001, max = 10.0),
     IntField("Max keypoints", "ui.max_keypoints", { it.alignmentMaxKeypoints }, { b, v -> b.setAlignmentMaxKeypoints(v) }, 4, 10000, { it.hasAlignmentMaxKeypoints() }),
     IntField("Ground horizon extension", "ui.ground_horizon_extension", { it.alignmentGroundHorizonExtension }, { b, v -> b.setAlignmentGroundHorizonExtension(v) }, 0, 10000, { it.hasAlignmentGroundHorizonExtension() }),
     IntField("Sky horizon extension", "ui.sky_horizon_extension", { it.alignmentSkyHorizonExtension }, { b, v -> b.setAlignmentSkyHorizonExtension(v) }, 0, 10000, { it.hasAlignmentSkyHorizonExtension() }),
     IntField("Base image dilate size", "ui.base_image_dilation_size", { it.alignmentBaseImageDilateSize }, { b, v -> b.setAlignmentBaseImageDilateSize(v) }, 4, 10000, { it.hasAlignmentBaseImageDilateSize() }),
     IntField("Base image threshold", "ui.base_image_threshold", { it.alignmentBaseImageThresholdValue }, { b, v -> b.setAlignmentBaseImageThresholdValue(v) }, 1, 255, { it.hasAlignmentBaseImageThresholdValue() }),
-    DoubleField("Homography smoothing ε", "ui.homography_smoothing", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }, { it.hasHomographySmoothingEpsilon() },
-        min = 0.0, max = 10.0, enabled = NEEDS_HORIZON),
-    BoolField("Allow earth alignment", "ui.allow_earth_alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }, { it.hasAllowEarthAlignment() }),
     // Detect on a smaller copy of each frame.  Keypoint detection is the most memory hungry step and its cost is per pixel, so this cuts it by
     // about the square of the divisor, at some cost in alignment quality.  Keypoint files are kept separately per setting, so switching back and
     // forth does not mix the two.  1 (full size) to 8, both inclusive; StarCore clamps anything <= 1 to full resolution.
     DoubleField("Keypoint detection divisor", "ui.keypoint_divisor", { it.alignmentKeypointDetectionDivisor }, { b, v -> b.setAlignmentKeypointDetectionDivisor(v) }, { it.hasAlignmentKeypointDetectionDivisor() },
         min = 1.0, max = 8.0),
+    BoolField("Allow earth alignment", "ui.allow_earth_alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }, { it.hasAllowEarthAlignment() }),
     BoolField("Write debug images", "ui.write_debug_images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }, { it.hasAlignmentWriteDebugImages() }),
+    DoubleField("Homography smoothing ε", "ui.homography_smoothing", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }, { it.hasHomographySmoothingEpsilon() },
+        min = 0.0, max = 10.0, enabled = NEEDS_HORIZON),
 )
 
 internal val HORIZON_FIELDS: List<ExpertField> = listOf(
@@ -668,7 +701,7 @@ internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
 private val ALL_FIELDS: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + MERGE_FIELDS + PERFORMANCE_FIELDS
 
 /** Every row that has an explanation, which Show Info opens: the pickers and each field with help text. */
-private val ALL_INFO_IDS: List<String> = listOf("clean", "detection", "scene", "camera") + ALL_FIELDS.filter { it.helpKeys.isNotEmpty() }.map { it.label }
+private val ALL_INFO_IDS: List<String> = listOf("clean", "autoselective", "detection", "scene", "camera") + ALL_FIELDS.filter { it.helpKeys.isNotEmpty() }.map { it.label }
 
 /** The toggles by id, for the rules that read one toggle from another's row. */
 private val BOOL_FIELDS: Map<String, BoolField> = ALL_FIELDS.filterIsInstance<BoolField>().associateBy { it.label }

@@ -46,9 +46,11 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     var overlayExists by remember(current) { mutableStateOf<Boolean?>(null) }
     var pending by remember(current) { mutableStateOf(false) }
     val states by vm.frameStates.collectAsState()
-    var info by remember(current) { mutableStateOf<FrameInfo?>(null) }
-    LaunchedEffect(current, states[current], horizonVersion) {
-        info = vm.frameInfo(current)
+    val dataVersions by vm.frameDataVersions.collectAsState()
+    // The frame's counts as the view model has them, which an edit made anywhere changes (Q11).
+    val info by vm.frameInfoFlow(current.coerceAtLeast(0)).collectAsState()
+    LaunchedEffect(current, states[current], dataVersions[current], horizonVersion) {
+        vm.refreshFrameInfo(current.coerceAtLeast(0))
         val overlay = vm.horizonOverlay(current, 16, 16)
         overlayExists = overlay?.exists
         pending = overlay?.refinementPending ?: info?.refinementPending ?: false
@@ -67,15 +69,16 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 SectionTitle(localized("ui.display"))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Switch(checked = showFilmstrip, onCheckedChange = { vm.toggleFilmstrip() })
-                    Text(localized("ui.show_filmstrip"), color = StarColors.white, fontSize = 11.sp)
-                }
+                // The gui's order: the horizon lines and which kinds, then the filmstrip.
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Switch(checked = showHorizon, onCheckedChange = vm::setShowHorizonOnMainView)
                     Text(localized("ui.show_horizon_lines"), color = StarColors.white, fontSize = 11.sp)
                 }
                 HorizonLineKindToggles(vm)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Switch(checked = showFilmstrip, onCheckedChange = { vm.toggleFilmstrip() })
+                    Text(localized("ui.show_filmstrip"), color = StarColors.white, fontSize = 11.sp)
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -84,13 +87,11 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 // The file the frame is from (macOS: the original image's name).
                 info?.filename?.takeIf { it.isNotEmpty() }?.let { InfoRow(localized("ui.file"), it) }
                 (states[current] ?: info?.state)?.let { InfoRow(localized("ui.state"), FrameState.shortString(it), StarColors.stateColor(it)) }
-                // Whether the horizon is waiting for a refinement (macOS GridRightPanel).
-                if (overlayExists == true) {
-                    InfoRow(localized("ui.horizon"), localized(if (pending) "ui.pending" else "ui.set"), if (pending) StarColors.orange else StarColors.green)
-                }
             }
 
-            info?.let { fi ->
+            // The counts mean something only once the frame's outliers are in memory: a frame still purged to disk reports zeros
+            // that are "not known", which the gui leaves out (it shows the section when the frame's outliers are loaded).
+            info?.takeIf { it.outliersLoaded }?.let { fi ->
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     SectionTitle(localized("ui.outliers"))
                     InfoRow(localized("ui.positive"), "${fi.numPositiveOutliers}", if (fi.numPositiveOutliers > 0) StarColors.red else StarColors.white)
@@ -98,9 +99,13 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     InfoRow(localized("ui.undecided"), "${fi.numUndecidedOutliers}", if (fi.numUndecidedOutliers > 0) StarColors.orange else StarColors.white)
                     InfoRow(localized("ui.trash"), "${fi.numTrashOutliers}", if (fi.numTrashOutliers > 0) StarColors.gray else StarColors.white)
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SectionTitle(localized("ui.processing"))
-                    InfoRow(localized("ui.mode"), cleanMethodName(fi.cleanMethod))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SectionTitle(localized("ui.processing"))
+                info?.let { InfoRow(localized("ui.mode"), cleanMethodName(it.cleanMethod)) }
+                // Whether the horizon is waiting for a refinement, under the mode as in the gui's Processing section.
+                if (overlayExists == true) {
+                    InfoRow(localized("ui.horizon"), localized(if (pending) "ui.pending" else "ui.set"), if (pending) StarColors.orange else StarColors.green)
                 }
             }
             Text(localized("ui.double_click_a_thumbnail_to_edit"), color = StarColors.textDisabled, fontSize = 10.sp)

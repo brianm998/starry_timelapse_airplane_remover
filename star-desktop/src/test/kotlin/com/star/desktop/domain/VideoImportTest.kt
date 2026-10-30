@@ -38,10 +38,10 @@ class VideoImportTest {
         assertEquals(FrameFormat.FRAME_FORMAT_TIFF16, FrameFormat.forNumber(0))
     }
 
-    @Test fun `sizes are written in decimal units`() {
+    @Test fun `sizes are written in binary units, as StarCore does`() {
         assertEquals("512 bytes", VideoImport.formatBytes(512))
-        assertEquals("1.5 KB", VideoImport.formatBytes(1500))
-        assertTrue(VideoImport.formatBytes(2_300_000_000).startsWith("2.3 GB"))
+        assertEquals("1KB", VideoImport.formatBytes(1500))
+        assertEquals("2.1GB", VideoImport.formatBytes(2_300_000_000))
     }
 
     @Test fun `uncompressed tiffs are priced from the exact bytes and packbits from the old numbers`() {

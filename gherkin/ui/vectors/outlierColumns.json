@@ -1,0 +1,190 @@
+{
+  "comment": "The outlier window's table (gui OutlierGroupTable, desktop OutlierTable): the columns always shown, then the optional ones in table order, each with the key the clients remember it by, its name in the catalogue, and whether it shows until the user chooses otherwise. Each client's test checks its own table against this.",
+  "fixed": [
+    {
+      "key": "remove",
+      "label": "ui.remove"
+    },
+    {
+      "key": "size",
+      "label": "ui.size"
+    }
+  ],
+  "optional": [
+    {
+      "key": "name",
+      "label": "ui.name",
+      "default": false
+    },
+    {
+      "key": "width",
+      "label": "ui.width",
+      "default": true
+    },
+    {
+      "key": "height",
+      "label": "ui.height",
+      "default": true
+    },
+    {
+      "key": "centerX",
+      "label": "ui.centerx",
+      "default": false
+    },
+    {
+      "key": "centerY",
+      "label": "ui.centery",
+      "default": false
+    },
+    {
+      "key": "minX",
+      "label": "ui.minx",
+      "default": false
+    },
+    {
+      "key": "minY",
+      "label": "ui.miny",
+      "default": false
+    },
+    {
+      "key": "maxX",
+      "label": "ui.maxx",
+      "default": false
+    },
+    {
+      "key": "maxY",
+      "label": "ui.maxy",
+      "default": false
+    },
+    {
+      "key": "hypotenuse",
+      "label": "ui.hypotenuse",
+      "default": true
+    },
+    {
+      "key": "aspectRatio",
+      "label": "ui.aspectratio",
+      "default": true
+    },
+    {
+      "key": "fillAmount",
+      "label": "ui.fillamount",
+      "default": true
+    },
+    {
+      "key": "surfaceAreaRatio",
+      "label": "ui.surfacearearatio",
+      "default": true
+    },
+    {
+      "key": "averagebrightness",
+      "label": "ui.averagebrightness",
+      "default": true
+    },
+    {
+      "key": "medianBrightness",
+      "label": "ui.medianbrightness",
+      "default": true
+    },
+    {
+      "key": "maxBrightness",
+      "label": "ui.maxbrightness",
+      "default": true
+    },
+    {
+      "key": "numberOfNearbyOutliersInSameFrame",
+      "label": "ui.numberofnearbyoutliersinsameframe",
+      "default": true
+    },
+    {
+      "key": "maxHoughTransformCount",
+      "label": "ui.maxhoughtransformcount",
+      "default": true
+    },
+    {
+      "key": "pixelBorderAmount",
+      "label": "ui.pixelborderamount",
+      "default": true
+    },
+    {
+      "key": "averageLineVariance",
+      "label": "ui.averagelinevariance",
+      "default": true
+    },
+    {
+      "key": "lineLength",
+      "label": "ui.linelength",
+      "default": true
+    },
+    {
+      "key": "nearbyDirectOverlapScore",
+      "label": "ui.nearbydirectoverlapscore",
+      "default": true
+    },
+    {
+      "key": "boundingBoxOverlapScore",
+      "label": "ui.boundingboxoverlapscore",
+      "default": true
+    },
+    {
+      "key": "lineIntensityScore",
+      "label": "ui.lineintensityscore",
+      "default": true
+    },
+    {
+      "key": "linePixelScore",
+      "label": "ui.linepixelscore",
+      "default": true
+    },
+    {
+      "key": "borderBrightness",
+      "label": "ui.borderbrightness",
+      "default": true
+    },
+    {
+      "key": "bunchCount",
+      "label": "ui.bunchcount",
+      "default": true
+    },
+    {
+      "key": "medianBunchSize",
+      "label": "ui.medianbunchsize",
+      "default": true
+    },
+    {
+      "key": "maxBunchSize",
+      "label": "ui.maxbunchsize",
+      "default": true
+    },
+    {
+      "key": "neighborLineThetaScore",
+      "label": "ui.neighborlinethetascore",
+      "default": true
+    },
+    {
+      "key": "neighborLineRhoScore",
+      "label": "ui.neighborlinerhoscore",
+      "default": true
+    },
+    {
+      "key": "neighborLineSizeScore",
+      "label": "ui.neighborlinesizescore",
+      "default": true
+    },
+    {
+      "key": "neighborLineBrightnessScore",
+      "label": "ui.neighborlinebrightnessscore",
+      "default": true
+    },
+    {
+      "key": "neighborLineDistanceScore",
+      "label": "ui.neighborlinedistancescore",
+      "default": true
+    },
+    {
+      "key": "classificationScore",
+      "label": "ui.classification_score",
+      "default": true
+    }
+  ]
+}

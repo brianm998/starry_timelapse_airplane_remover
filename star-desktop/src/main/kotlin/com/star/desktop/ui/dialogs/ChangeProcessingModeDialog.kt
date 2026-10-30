@@ -28,6 +28,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.modalScrim
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.components.VerticalStarPicker
 import com.star.desktop.ui.theme.StarColors
@@ -62,7 +64,9 @@ fun ChangeProcessingModeDialog(current: CleanMethod, onCancel: () -> Unit, onCon
     val changed = chosen != current
 
     Box(
-        Modifier.fillMaxSize().background(Color(0.5f, 0.5f, 0.5f, 0.5f)).clickable(onClick = onCancel),
+        // Return confirms what is chosen (OK does nothing when it is what the frame already has, so neither does Return) and Esc cancels.
+        Modifier.fillMaxSize().background(Color(0.5f, 0.5f, 0.5f, 0.5f)).modalScrim()
+            .defaultAction({ if (changed) onConfirm(chosen) }, onEscape = onCancel),
         contentAlignment = Alignment.Center,
     ) {
         Column(

@@ -23,7 +23,10 @@ public enum DetectionType: String, Codable, CaseIterable, Sendable {
     case stronger   // excessive with a final small processor
     case excessive  // takes much longer, finds a LOT more bad signals
     case custom     // user configured
-    
+
+    /// The name a person reads for this type, in their language (the raw value is the identifier in `config.json`).
+    public var localizedName: String { localized("detection_type.\(rawValue)") }
+
     public var blobProcessor: AbstractBlobProcessor {
         switch self {
         case .mild:

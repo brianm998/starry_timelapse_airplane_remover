@@ -191,14 +191,13 @@ class FrameViewModel(
     /**
      * Apply the active [tool] to the clicked group (single-group tap path; macOS `OutlierGroupView.onTapGesture`).
      * TRASH dumps the tapped group into the trash (via the area tool over the group's own bounds, which
-     * `contains` it). Razor/shovel/get-from-trash have no single-group action in macOS — they toggle the
-     * tapped group's decision, matching the macOS `toggleRemoveReason` fallback. The real razor/shovel/trash/
+     * `contains` it). Every other tool toggles the tapped group's decision, matching the macOS
+     * `toggleRemoveReason`: a click on a group Remove has already removed keeps it, and one on an undecided group removes it.
+     * What Remove and Keep set is what dragging a box does ([setDecisionsInBox]). The real razor/shovel/trash/
      * extract behavior is the rubber-band drag (see [applyAreaTool]).
      */
     fun applyTool(groupId: Int, tool: ToolType) {
         when (tool) {
-            ToolType.REMOVE -> setDecision(groupId, RemoveReason.RR_USER_REMOVE)
-            ToolType.KEEP -> setDecision(groupId, RemoveReason.RR_USER_KEEP)
             ToolType.INFORMATION -> selectGroup(groupId)
             ToolType.TRASH -> {
                 val g = _groups.value.firstOrNull { it.id == groupId } ?: return

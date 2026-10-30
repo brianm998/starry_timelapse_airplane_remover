@@ -66,6 +66,27 @@ enum PreviewFiles {
         return ref
     }
 
+    /// Whether `frame`'s aligned image of `mode` has to be built before a preview of it can be made: it is one of the two the default mode
+    /// does not write, it is not on disk, and the frame has the homographies to build it from.
+    static func alignedImageNeedsBuilding(for frame: FrameAirplaneRemover, mode: FrameViewMode) async -> Bool {
+        guard mode.isRecomputableCache,
+              !frame.imageAccessor.imageExists(frameIndex: frame.frameIndex, ofType: mode, atSize: .original)
+        else { return false }
+        return await frame.canProduceAlignedImage(of: mode)
+    }
+
+    /// Builds the full-size aligned image of `mode` if it needs it (`alignedImageNeedsBuilding`), one at a time since each is a warp of
+    /// the neighbours in memory, which is what the macOS gui does when the user opens an aligned view.  A failure leaves the image
+    /// missing, and the preview that follows says so.
+    static func buildAlignedImageIfNeeded(for frame: FrameAirplaneRemover, mode: FrameViewMode) async {
+        guard await alignedImageNeedsBuilding(for: frame, mode: mode) else { return }
+        Log.d("preview: frame \(frame.frameIndex) mode \(mode) not on disk — building it from the homographies")
+        _ = await FullSizeGate.shared.run {
+            do { try await frame.ensureFullSizeAlignedImage(of: mode) }
+            catch { Log.w("preview: frame \(frame.frameIndex) could not build its \(mode) image: \(error)") }
+        }
+    }
+
     private static func isStale(_ previewPath: String, madeFrom originalPath: String?) -> Bool {
         guard let previewDate = modificationDate(previewPath) else { return true }
         guard let originalPath, let originalDate = modificationDate(originalPath) else {

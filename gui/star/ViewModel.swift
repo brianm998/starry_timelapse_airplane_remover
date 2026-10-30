@@ -329,6 +329,68 @@ public final class ViewModel {
     var showCloseConfirmation = false
     var closeConfirmationMessage: String = ""
     var closeConfirmationAction: (() -> Void)?
+    /// The label of the question's confirm button: "Stop and Close", or "Stop and Open" when it is File ▸ Open that would interrupt.
+    var closeConfirmationConfirmKey = "ui.stop_and_close"
+
+    /// What File ▸ Open can open.
+    enum OpenKind { case imageSequence, video, config }
+
+    /// File ▸ Open Image Sequence…, Open Video…, Resume from config.json…: ask what to open, behind the same work-in-progress question
+    /// as Close, since opening replaces the sequence that is open (M3 of the parity plan; the desktop client has always had these items,
+    /// and now asks too).  Asked before the file chooser, so no one picks a file to be refused.
+    func requestOpen(_ kind: OpenKind) {
+        guard let seq = imageSequence, seq.hasPendingWork else {
+            chooseSourceToOpen(kind)
+            return
+        }
+        closeConfirmationMessage = localized("ui.work_in_progress.opening", seq.pendingWorkDescription)
+        closeConfirmationConfirmKey = "ui.stop_and_open"
+        closeConfirmationAction = { [weak self] in self?.chooseSourceToOpen(kind) }
+        showCloseConfirmation = true
+    }
+
+    private func chooseSourceToOpen(_ kind: OpenKind) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        switch kind {
+        case .imageSequence:
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+        case .video:
+            panel.canChooseDirectories = false
+            panel.canChooseFiles = true
+        case .config:
+            panel.allowedContentTypes = [.json]
+            panel.canChooseDirectories = false
+            panel.canChooseFiles = true
+        }
+        guard panel.runModal() == .OK, let path = panel.url?.path else { return }
+
+        // What is chosen replaces the open sequence: close it the way File ▸ Close does, back to the start screen, which is
+        // where the sheets that ask about a video or a sequence are shown.
+        if imageSequence != nil { unloadSequence() }
+        switch kind {
+        case .imageSequence:
+            pendingSequenceOpen = PendingSequenceOpen(path: path)
+        case .video:
+            pendingVideoImport = PendingVideoImport(path: path)
+        case .config:
+            eraserTask = Task.detached(priority: .userInitiated) { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.startup(withConfigFile: path)
+                    await MainActor.run { self.imageSequence?.initialLoadInProgress = true }
+                } catch {
+                    Log.e("\(error)")
+                    await MainActor.run {
+                        self.report(error: "\(error)")
+                        self.imageSequence = nil
+                        self.isLoadingImageSequence = false
+                    }
+                }
+            }
+        }
+    }
     
     var showInfoDialog = false
     var currentInfoType: InfoType = .about
@@ -348,9 +410,17 @@ public final class ViewModel {
         return loadGeneration
     }
 
+    /// Stops the video import in flight, if there is one.  StarCore's `decodeVideo` and `startVideoExtraction` stop
+    /// ffmpeg and take back the frames folder they made when their task is cancelled, so cancelling the task is all it
+    /// takes: without it the decode ran on to the end and left the folder behind (the daemon behind the Kotlin client
+    /// has always cancelled it).
+    private var cancelVideoImport: (() -> Void)?
+
     /// The Cancel button of the loading view.
     func cancelLoading() {
         loadGeneration += 1
+        cancelVideoImport?()
+        cancelVideoImport = nil
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         imageSequence = nil
@@ -455,8 +525,12 @@ public final class ViewModel {
         // awake for a run was never ended, because `deinit` is not reliably called.
         if let closing = imageSequence {
             closing.stopProcessing()
+            closing.cancelVideoRender()
             closing.stopVideo()
             closing.disable()
+            // What the user changed in the last few seconds is still waiting for its save: write it out in the
+            // background, so the window is gone at once and the edits are not (they were lost here before).
+            Task { await closing.flushSaves() }
         }
         imageSequence = nil
         cursorStack = []
@@ -610,46 +684,59 @@ public final class ViewModel {
         let generation = beginLoad()
 
         isProbingImageSequence = true
-
-        if extractInBackground {
-            // Go to the main screen once the first frame is out; the rest are extracted while the sequence is open.  Extraction
-            // belongs to the source, which the sequence's view model holds and stops when it closes.
-            let (source, videoInfo) = try await Task.detached() {
-                try await startVideoExtraction(named: path, format: format, framesParentFolder: outputDir)
-            }.value
+        // A failed or cancelled import leaves neither "Examining video" nor the extraction ring up for the next load to show.
+        defer {
             isProbingImageSequence = false
-            guard generation == loadGeneration else { source.stop(); return }
-            try await startup(withNewImageSequence: source.outputFolder, and: videoInfo, frameSource: source, outputDir: outputDir)
-            return
+            isExtractingImageSequence = false
+            cancelVideoImport = nil
         }
 
-        let (frames, videoInfo) = try await Task.detached() {
-            try await decodeVideo(named: path, format: format, framesParentFolder: outputDir) { currentFrame, totalFrames, outputDir in
-                Task { @MainActor in
-                    self.isExtractingImageSequence = true
-                    self.isProbingImageSequence = false
-                    self.numberExtracted = currentFrame
-                    self.amountExtracted = totalFrames > 0 ? Double(currentFrame) / Double(totalFrames) : 0
+        do {
+            if extractInBackground {
+                // Go to the main screen once the first frame is out; the rest are extracted while the sequence is open.  Extraction
+                // belongs to the source, which the sequence's view model holds and stops when it closes.
+                let extraction = Task.detached() {
+                    try await startVideoExtraction(named: path, format: format, framesParentFolder: outputDir)
+                }
+                cancelVideoImport = { extraction.cancel() }
+                let (source, videoInfo) = try await extraction.value
+                isProbingImageSequence = false
+                guard generation == loadGeneration else { source.stop(); return }
+                try await startup(withNewImageSequence: source.outputFolder, and: videoInfo, frameSource: source, outputDir: outputDir)
+                return
+            }
 
-                    // XXX make a preview here
-                    /*
-                     XXX because have no config,
-                         we don't know where the previews and thumbnails should go
-                         or what size they should be
-                     XXX
-                     */
+            let decoding = Task.detached() {
+                try await decodeVideo(named: path, format: format, framesParentFolder: outputDir) { currentFrame, totalFrames, outputDir in
+                    Task { @MainActor in
+                        self.isExtractingImageSequence = true
+                        self.isProbingImageSequence = false
+                        self.numberExtracted = currentFrame
+                        self.amountExtracted = totalFrames > 0 ? Double(currentFrame) / Double(totalFrames) : 0
+
+                        // XXX make a preview here
+                        /*
+                         XXX because have no config,
+                             we don't know where the previews and thumbnails should go
+                             or what size they should be
+                         XXX
+                         */
+                    }
                 }
             }
-        }.value
+            cancelVideoImport = { decoding.cancel() }
+            let (frames, videoInfo) = try await decoding.value
 
-        isExtractingImageSequence = false
-        
-        Log.d("frames in \(frames)")
+            isExtractingImageSequence = false
 
-        // Cancelled while the video was being taken apart: do not go on to open what came out.
-        guard generation == loadGeneration else { return }
-        try await startup(withNewImageSequence: frames, and: videoInfo, outputDir: outputDir)
+            Log.d("frames in \(frames)")
+
+            // Cancelled while the video was being taken apart: do not go on to open what came out.
+            guard generation == loadGeneration else { return }
+            try await startup(withNewImageSequence: frames, and: videoInfo, outputDir: outputDir)
+        } catch is CancellationError {
+            // The user pressed Cancel (`cancelLoading`); the decode took back what it had made.
+            Log.i("video import cancelled")
+        }
     }
 }
-
-

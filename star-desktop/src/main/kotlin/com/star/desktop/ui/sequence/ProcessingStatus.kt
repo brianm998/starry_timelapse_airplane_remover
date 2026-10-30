@@ -25,6 +25,13 @@ import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.theme.StarColors
 
 /**
+ * The number "N frames processing" says: the operations running now, over every step of the run, as the gui's `numberOfFramesProcessingNow`
+ * counts them (Q14). The desktop counted the frames whose state was a working one, which is not the same number: a frame between two
+ * operations is not running anything, and one operation (a static camera's merged horizon) can serve every frame.
+ */
+internal fun operationsRunning(report: com.star.proto.StepProgress?): Int = report?.stepsList?.sumOf { it.running } ?: 0
+
+/**
  * What is going on, while a run is (macOS `BottomRightView`): a spinner, how much is left, and a red Stop. In every mode: edit counts the
  * frames being worked on now, scrub and grid the frames still to do. It shows nothing when nothing is running.
  */
@@ -33,8 +40,9 @@ fun ProcessingStatus(vm: SequenceViewModel, mode: InteractionMode) {
     val processing by vm.isProcessing.collectAsState()
     if (!processing) return
     val states by vm.frameStates.collectAsState()
+    val report by vm.stepProgress.collectAsState()
     val text = if (mode == InteractionMode.EDIT) {
-        localized("ui.n_frames_processing", states.values.count(FrameState::isWorking))
+        localized("ui.n_frames_processing", operationsRunning(report))
     } else {
         localized("ui.processing_n_more_frames", (vm.frameCount - states.values.count(FrameState::isComplete)).coerceAtLeast(0))
     }

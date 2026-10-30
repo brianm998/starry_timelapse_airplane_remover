@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.app.StartupStep
 import com.star.desktop.ui.theme.StarColors
@@ -159,25 +160,32 @@ private fun RemovalPrompt(app: AppViewModel) {
         else -> CleanMethod.CLEAN_AUTOMATIC
     }
 
-    Title(localized("ui.startup_mode_title"))
-    HorizontalDivider(color = StarColors.cellDefault)
-    ModeChoice(localized("ui.startup_mode_automatic"), localized("ui.startup_mode_automatic_desc"), !selective, "startup.removal.automatic") { selective = false }
-    if (!selective) {
-        Column(Modifier.padding(start = 34.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            ToggleRow(localized("ui.startup_auto_selective_toggle"), autoSelective, "startup.removal.autoselective") { autoSelective = it }
-            Body(localized("ui.startup_auto_selective_desc"))
+    // Return is the Start Processing button, as in the gui, where it is the sheet's default button.
+    Column(
+        Modifier.fillMaxWidth().defaultAction({ app.startupStartProcessing(cleanMethod, allowEarthAlignment = groundAlignment) }),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Title(localized("ui.startup_mode_title"))
+        HorizontalDivider(color = StarColors.cellDefault)
+        ModeChoice(localized("ui.startup_mode_automatic"), localized("ui.startup_mode_automatic_desc"), !selective, "startup.removal.automatic") { selective = false }
+        if (!selective) {
+            Column(Modifier.padding(start = 34.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                ToggleRow(localized("ui.startup_auto_selective_toggle"), autoSelective, "startup.removal.autoselective") { autoSelective = it }
+                Body(localized("ui.startup_auto_selective_desc"))
+            }
         }
-    }
-    ModeChoice(localized("ui.startup_mode_selective"), localized("ui.startup_mode_selective_desc"), selective, "startup.removal.selective") { selective = true }
-    HorizontalDivider(color = StarColors.cellDefault)
-    ToggleRow(localized("ui.startup_ground_alignment_toggle"), groundAlignment, "startup.removal.groundalignment") { groundAlignment = it }
-    Body(localized("ui.startup_ground_alignment_desc"))
-    HorizontalDivider(color = StarColors.cellDefault)
-    KeypointDivisorSection(app)
-    HorizontalDivider(color = StarColors.cellDefault)
-    AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton(localized("ui.close")) { app.dismissStartup() }
-        PrimaryButton(localized("ui.start_processing"), "startup.removal.start") { app.startupStartProcessing(cleanMethod, allowEarthAlignment = groundAlignment) }
+        ModeChoice(localized("ui.startup_mode_selective"), localized("ui.startup_mode_selective_desc"), selective, "startup.removal.selective") { selective = true }
+        HorizontalDivider(color = StarColors.cellDefault)
+        ToggleRow(localized("ui.startup_ground_alignment_toggle"), groundAlignment, "startup.removal.groundalignment") { groundAlignment = it }
+        Body(localized("ui.startup_ground_alignment_desc"))
+        HorizontalDivider(color = StarColors.cellDefault)
+        KeypointDivisorSection(app)
+        HorizontalDivider(color = StarColors.cellDefault)
+        AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
+            SecondaryButton(localized("ui.close")) { app.dismissStartup() }
+            PrimaryButton(localized("ui.start_processing"), "startup.removal.start") { app.startupStartProcessing(cleanMethod, allowEarthAlignment = groundAlignment) }
+        }
     }
 }
 

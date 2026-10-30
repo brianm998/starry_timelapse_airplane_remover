@@ -226,6 +226,9 @@ struct ProcessingSettingsView: View {
     @State private var showHorizonMultiplierInfo = false
     @State private var showHorizonFloorInfo = false
     @State private var showCloudAwareMergeInfo = false
+    @State private var showAllowEarthAlignmentInfo = false
+    @State private var showMaxKeypointOpsInfo = false
+    @State private var showMergeStreamingInfo = false
     @State private var showUseGPUForMergeInfo = false
     @State private var showUseGPUForSIFTInfo = false
     @State private var showUseGPUForAKAZEInfo = false
@@ -275,6 +278,9 @@ struct ProcessingSettingsView: View {
         showHorizonMultiplierInfo ||
         showHorizonFloorInfo ||
         showCloudAwareMergeInfo ||
+        showAllowEarthAlignmentInfo ||
+        showMaxKeypointOpsInfo ||
+        showMergeStreamingInfo ||
         showUseGPUForMergeInfo ||
         showUseGPUForSIFTInfo ||
         showUseGPUForAKAZEInfo
@@ -326,6 +332,9 @@ struct ProcessingSettingsView: View {
         showHorizonMultiplierInfo = true
         showHorizonFloorInfo = true
         showCloudAwareMergeInfo = true
+        showAllowEarthAlignmentInfo = true
+        showMaxKeypointOpsInfo = true
+        showMergeStreamingInfo = true
         showUseGPUForMergeInfo = true
         showUseGPUForSIFTInfo = true
         showUseGPUForAKAZEInfo = true
@@ -377,6 +386,9 @@ struct ProcessingSettingsView: View {
         showHorizonMultiplierInfo = false
         showHorizonFloorInfo = false
         showCloudAwareMergeInfo = false
+        showAllowEarthAlignmentInfo = false
+        showMaxKeypointOpsInfo = false
+        showMergeStreamingInfo = false
         showUseGPUForMergeInfo = false
         showUseGPUForSIFTInfo = false
         showUseGPUForAKAZEInfo = false
@@ -539,6 +551,8 @@ struct ProcessingSettingsView: View {
                                   Divider()
                                   self.alignmentKeypointDivisorView
                                   Divider()
+                                  self.allowEarthAlignmentView
+                                  Divider()
                                   self.alignmentWriteDebugImagesViewValueView
                                   Divider()
                                   self.homographySmoothingEpsilonView
@@ -608,6 +622,10 @@ struct ProcessingSettingsView: View {
                                   self.horizonMultiplierView
                                   Divider()
                                   self.horizonFloorView
+                                  Divider()
+                                  self.maxKeypointOpsView
+                                  Divider()
+                                  self.mergeStreamingView
                               }
                           } label: {
                               Text(localized("ui.memory_settings"))
@@ -676,6 +694,7 @@ struct ProcessingSettingsView: View {
                       }
                         .buttonStyle(PlainButtonStyle()) // XXX these styles suck
                         .fixedSize(horizontal: true, vertical: true)
+                        .accessibilityIdentifier("settings.process")
 
                       Spacer()
                       Button() {
@@ -1236,6 +1255,104 @@ struct ProcessingSettingsView: View {
         .disabled(viewModel.sceneType == .skyOnly || viewModel.useCannyForHorizonDetection == .no)
     }
 
+    /// `Config.allowEarthAlignment`: on a moving camera, also line up the ground from frame to frame.  The startup question sets it; the
+    /// desktop client's sheet has always had it as a row, and now this one does.
+    private var allowEarthAlignmentView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showAllowEarthAlignmentInfo,
+          addSpacer: { addSpacer },
+          infoText: localized("setting_help.allow_earth_alignment")
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text(localized("ui.allow_earth_alignment"))
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    Space(width: 10)
+                    Toggle(isOn: $viewModel.allowEarthAlignment) {
+                        Text("")
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    /// `Config.maxConcurrentKeypointOps`: a cap on how many keypoint detections run at once (0 = no cap beyond the memory budget's).
+    private var maxKeypointOpsView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showMaxKeypointOpsInfo,
+          addSpacer: { addSpacer },
+          infoText: localized("setting_help.max_keypoint_ops")
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text(localized("ui.max_keypoint_ops"))
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.maxConcurrentKeypointOps,
+                      minValue: 0,
+                      maxValue: 256,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .maxConcurrentKeypointOps,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    /// `Config.mergeStreamingThresholdMB`: past this many megabytes of source frames a median merge streams them from scratch files.
+    private var mergeStreamingView: some View {
+        @Bindable var viewModel = viewModel
+        return InfoTextInstructionGridRow(
+          showInfo: $showMergeStreamingInfo,
+          addSpacer: { addSpacer },
+          infoText: localized("setting_help.merge_streaming_mb")
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text(localized("ui.merge_streaming_mb"))
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                HStack {
+                    EditableNumberView(
+                      value: $viewModel.mergeStreamingThresholdMB,
+                      minValue: 0,
+                      maxValue: 65536,
+                      fullTextProvider: { _ in "" },
+                      prefixText: "",
+                      suffixTextProvider: { _ in "" },
+                      textColor: .white,
+                      focusedField: $focusedField,
+                      focusField: .mergeStreamingThresholdMB,
+                      alwaysOpen: true
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
     /// `Config.cloudAwareMerge`: a second merge aligned to the motion of the clouds, blended in
     /// where it explains the frame better. Off by default; see the property's doc comment for
     /// what it does, what it costs, and why changing it re-does the star aligned merge.
@@ -1729,7 +1846,7 @@ struct ProcessingSettingsView: View {
                 HStack {
                     Picker("", selection: $viewModel.detectionType) {
                         ForEach(DetectionType.allCases, id: \.self) { value in
-                            Text(value.rawValue).tag(value)
+                            Text(value.localizedName).tag(value)
                         }
                     }
                       .frame(maxWidth: 120)

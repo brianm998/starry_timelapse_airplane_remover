@@ -1,0 +1,30 @@
+{
+  "comment": "S8: the start screen's controls in the order the gui's InitialView has them, each with its label and its hover text in the catalogue. The desktop's InitialView says the same (it also has a Recent list with a remove button, which the gui lacks: D12). Each client's test reads its own view's source for these keys in this order.",
+  "controls": [
+    {
+      "id": "learn",
+      "label": "ui.learn_about_star",
+      "tip": "ui.tell_me_how_to_us_this_software"
+    },
+    {
+      "id": "video",
+      "label": "ui.load_video",
+      "tip": "ui.load_a_video_to_process_make_sure_lots_of"
+    },
+    {
+      "id": "sequence",
+      "label": "ui.load_image_sequence",
+      "tip": "ui.load_an_image_sequence_yet_to_be_processed"
+    },
+    {
+      "id": "config",
+      "label": "ui.load_config",
+      "tip": "ui.load_a_json_config_file_from_a_previous_run"
+    },
+    {
+      "id": "recent",
+      "label": "ui.open_recent",
+      "tip": "ui.open_a_recently_processed_sequence"
+    }
+  ]
+}

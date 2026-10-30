@@ -34,7 +34,7 @@ struct KeypointDivisorStartupView: View {
     /// and re-running this would stomp a choice the user just made.
     @State private var hasConfigured = false
 
-    private struct Preset {
+    struct Preset {
         let divisor: Double
         let name: String
         let blurb: String
@@ -42,7 +42,7 @@ struct KeypointDivisorStartupView: View {
 
     /// The three offered values. 1.5 comes from `Config` rather than being written here so
     /// the recommendation and the preset cannot drift apart.
-    private static var presets: [Preset] { [
+    static var presets: [Preset] { [
         Preset(divisor: 1.0,
                name: localized("ui.preset_best_quality"),
                blurb: localized("ui.preset_best_quality_blurb")),
@@ -56,13 +56,13 @@ struct KeypointDivisorStartupView: View {
 
     /// Above this, say so. Not a limit — the value is still accepted, because someone
     /// desperate for speed on a machine this footage does not fit may want it anyway.
-    private static let tooHighDivisor: Double = 4.0
+    static let tooHighDivisor: Double = 4.0
 
     /// The largest value the field will accept at all — past here it is not a trade any
     /// more, it is a typo. Inclusive, matching the `maxValue: 8` this same setting already
     /// has in the Advanced panel's `EditableNumberView`, so a value entered here is one
     /// that panel will also accept.
-    private static let maxDivisor: Double = 8.0
+    static let maxDivisor: Double = 8.0
 
     private var divisor: Double { viewModel.alignmentKeypointDetectionDivisor }
 
