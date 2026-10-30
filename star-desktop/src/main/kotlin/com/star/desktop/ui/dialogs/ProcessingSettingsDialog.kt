@@ -91,7 +91,8 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(localized("ui.processing_settings"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            // The gui's header (P8): the sentence that says what the sheet is for, and not the name of the menu item that opens it.
+            Text(localized(SETTINGS_TITLE_KEY), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
 
             // Under the title, and only over a sequence that has work on disk this change contradicts: a sequence nothing has been done to is
             // what this sheet was built for, and there is nothing to warn about there.
@@ -382,6 +383,9 @@ private fun SettingGroup(
 }
 
 /** What each of a picker's choices means, under its title: a heading and a paragraph apiece (macOS's info panel for these rows). */
+/** The catalogue key of the sheet's header, the one the gui's `ProcessingSettingsView` reads. */
+internal const val SETTINGS_TITLE_KEY = "ui.choose_from_the_following_options_to_let"
+
 private fun choicesHelp(vararg choices: Pair<String, String>): String = choices.joinToString("\n\n") { (name, meaning) -> "$name\n$meaning" }
 
 @Composable
@@ -580,6 +584,7 @@ private val NEEDS_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly }
 /** The reference-horizon rows: they smooth between horizons the user painted, which only a camera that moved has. */
 private val NEEDS_MOVING_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly && !it.cameraFixed }
 
+// The gui's order (P8): ... the base image threshold, the keypoint divisor, earth alignment, the debug images, and the smoothing last.
 internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
     IntField("Neighbor frames", "ui.neighbor_frame_count", { it.numberAlignedNeighborFrames }, { b, v -> b.setNumberAlignedNeighborFrames(v) }, 1, 1000, { it.hasNumberAlignedNeighborFrames() },
         maxForFrames = { it - 1 }),
@@ -594,15 +599,15 @@ internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
     IntField("Sky horizon extension", "ui.sky_horizon_extension", { it.alignmentSkyHorizonExtension }, { b, v -> b.setAlignmentSkyHorizonExtension(v) }, 0, 10000, { it.hasAlignmentSkyHorizonExtension() }),
     IntField("Base image dilate size", "ui.base_image_dilation_size", { it.alignmentBaseImageDilateSize }, { b, v -> b.setAlignmentBaseImageDilateSize(v) }, 4, 10000, { it.hasAlignmentBaseImageDilateSize() }),
     IntField("Base image threshold", "ui.base_image_threshold", { it.alignmentBaseImageThresholdValue }, { b, v -> b.setAlignmentBaseImageThresholdValue(v) }, 1, 255, { it.hasAlignmentBaseImageThresholdValue() }),
-    DoubleField("Homography smoothing ε", "ui.homography_smoothing", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }, { it.hasHomographySmoothingEpsilon() },
-        min = 0.0, max = 10.0, enabled = NEEDS_HORIZON),
-    BoolField("Allow earth alignment", "ui.allow_earth_alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }, { it.hasAllowEarthAlignment() }),
     // Detect on a smaller copy of each frame.  Keypoint detection is the most memory hungry step and its cost is per pixel, so this cuts it by
     // about the square of the divisor, at some cost in alignment quality.  Keypoint files are kept separately per setting, so switching back and
     // forth does not mix the two.  1 (full size) to 8, both inclusive; StarCore clamps anything <= 1 to full resolution.
     DoubleField("Keypoint detection divisor", "ui.keypoint_divisor", { it.alignmentKeypointDetectionDivisor }, { b, v -> b.setAlignmentKeypointDetectionDivisor(v) }, { it.hasAlignmentKeypointDetectionDivisor() },
         min = 1.0, max = 8.0),
+    BoolField("Allow earth alignment", "ui.allow_earth_alignment", { it.allowEarthAlignment }, { b, v -> b.setAllowEarthAlignment(v) }, { it.hasAllowEarthAlignment() }),
     BoolField("Write debug images", "ui.write_debug_images", { it.alignmentWriteDebugImages }, { b, v -> b.setAlignmentWriteDebugImages(v) }, { it.hasAlignmentWriteDebugImages() }),
+    DoubleField("Homography smoothing ε", "ui.homography_smoothing", { it.homographySmoothingEpsilon }, { b, v -> b.setHomographySmoothingEpsilon(v) }, { it.hasHomographySmoothingEpsilon() },
+        min = 0.0, max = 10.0, enabled = NEEDS_HORIZON),
 )
 
 internal val HORIZON_FIELDS: List<ExpertField> = listOf(
