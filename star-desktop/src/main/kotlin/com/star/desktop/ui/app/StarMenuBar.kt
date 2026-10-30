@@ -80,6 +80,8 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             val usesOutliers = currentMethod?.usesOutliers ?: true
             Item(localized("ui.decision_tree_all"), enabled = hasSession && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame() }
             Item(localized("ui.dt_auto_only"), enabled = hasSession && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame(autoOnly = true) }
+            // Every frame at once: this was a button in the right panel, which the gui's panel never had (owner decision D8), so it is a command.
+            Item(localized("ui.decision_tree_all_frames"), enabled = hasSession) { svm?.applyDecisionTreeAll() }
             Item(localized("ui.render_this_frame"), enabled = hasSession) { svm?.renderCurrentFrame() }
             Item(localized("ui.render_all_frames"), enabled = hasSession) { svm?.renderAllFrames() }
             Separator()

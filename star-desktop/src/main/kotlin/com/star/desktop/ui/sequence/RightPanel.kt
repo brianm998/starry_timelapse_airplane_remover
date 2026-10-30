@@ -76,7 +76,7 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
         val usesOutliers = (info?.cleanMethod ?: CleanMethod.CLEAN_SELECTIVE).usesOutliers
         if (usesOutliers) {
             CollapsibleSection(vm, RightPanelSection.SELECTIVE_TOOLS, localized("ui.section.selective_tools"), localized("ui.section.selective_tools_help")) {
-                SelectiveToolsSection(vm, fvm)
+                SelectiveToolsSection(vm)
             }
             SectionDivider()
         }
@@ -97,68 +97,36 @@ fun RightPanel(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel,
 
 /** The tools for deciding by hand which outliers go and which stay, and how the outliers and the trash are drawn. */
 @Composable
-private fun SelectiveToolsSection(vm: SequenceViewModel, fvm: FrameViewModel) {
+private fun SelectiveToolsSection(vm: SequenceViewModel) {
     val tool by vm.tool.collectAsState()
-    val groups by fvm.groups.collectAsState()
-    val decisions by fvm.decisions.collectAsState()
-    val selection by fvm.selection.collectAsState()
-    val info by fvm.info.collectAsState()
     val onlyUnclassified by vm.classifyOnlyUnclassified.collectAsState()
     var showToolHelp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         HoverTip(localized("ui.tool_help")) {
-            Text(localized("menu.tools"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+            Text(localized("ui.tool"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         }
         ToolHelpButton { showToolHelp = true }
     }
     if (showToolHelp) com.star.desktop.ui.dialogs.ToolHelpDialog(onClose = { showToolHelp = false })
-    ToolType.selectable.forEachIndexed { i, t ->
-        ToolRow(t, number = i + 1, selected = t == tool, onClick = { vm.setTool(t) })
+    ToolType.selectable.forEach { t ->
+        ToolRow(t, selected = t == tool, onClick = { vm.setTool(t) })
     }
     // With this on, clicking a group that has a decision opens the multi-choice sheet whatever the tool (macOS "multi choice").
     val multiChoice by vm.multiChoiceMode.collectAsState()
     SwitchRow(localized("ui.multi_choice"), localized("ui.multi_choice_help"), multiChoice, vm::setMultiChoiceMode)
 
-    val remove = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == true }
-    val keep = groups.count { com.star.desktop.domain.OutlierDecisions.willRemove(decisions[it.id] ?: it.shouldRemove) == false }
-    val undecided = groups.size - remove - keep
-    HoverTip(localized("ui.outlier_counts_help")) {
-        Column {
-            Text(localized("ui.outliers_count", groups.size), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("✕$remove", color = StarColors.red, fontSize = 11.sp)
-                Text("✓$keep", color = StarColors.green, fontSize = 11.sp)
-                Text("?$undecided", color = StarColors.orange, fontSize = 11.sp)
-            }
-        }
-    }
+    // The outlier counts, the trash count, Keep All / Remove All / Clear Undecided and the decision trees are menu commands only, as in the gui
+    // (owner decision D8); this panel used to carry them as buttons.
     val showTrash by vm.showTrash.collectAsState()
-    // The trash, and what is in it: shown over the frame and, while it is, taken in by the tools below.
+    // The trash, and what is in it: shown over the frame and, while it is, taken in by the tools above.
     SwitchRow(localized("ui.show_trash"), localized("ui.show_trash_help"), showTrash, vm::setShowTrash)
-    info?.let { if (it.numTrashOutliers > 0) Text("${localized("ui.trash")}: ${it.numTrashOutliers}", color = StarColors.gray, fontSize = 11.sp) }
-    BulkButton(localized("ui.keep_all"), StarColors.green, help = localized("ui.keep_all_of_the_outlier_groups_in_the_frame")) { fvm.keepAll(showTrash) }
-    BulkButton(localized("ui.remove_all"), StarColors.red, help = localized("ui.remove_all_of_the_outlier_groups_in_the")) { fvm.removeAll(showTrash) }
-    BulkButton(localized("ui.clear_undecided"), StarColors.gray, help = localized("ui.don_t_paint_any_of_the_undecided_outlier")) { fvm.clearUndecided(showTrash) }
-    BulkButton(
-        localized("ui.decision_tree_all"), StarColors.blue,
-        help = localized("ui.apply_the_outlier_group_decision_tree_to_all"),
-    ) { vm.applyDecisionTreeToCurrentFrame() }
-    BulkButton(
-        localized("ui.dt_auto_only"), StarColors.blue,
-        help = localized("ui.apply_the_outlier_group_decision_tree_to_all_2"),
-    ) { vm.applyDecisionTreeToCurrentFrame(autoOnly = true) }
-    BulkButton(
-        localized("ui.decision_tree_all_frames"), StarColors.blue,
-        help = localized("ui.decision_tree_all_frames_help"),
-    ) { vm.applyDecisionTreeAll() }
     HoverTip(localized("ui.only_unclassified_help")) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             androidx.compose.material3.Checkbox(checked = onlyUnclassified, onCheckedChange = { vm.setClassifyOnlyUnclassified(it) })
             Text(localized("ui.only_unclassified"), color = StarColors.orange, fontSize = 11.sp)
         }
     }
-    selection.singleOrNull()?.let { Text(localized("ui.selected_number", it), color = StarColors.orange, fontSize = 10.sp) }
 
     // How strongly the outlier groups and the trash are drawn (macOS: sliders, in memory only).
     val outlierOpacity by vm.outlierOpacity.collectAsState()
@@ -402,7 +370,7 @@ private fun BulkButton(label: String, color: Color, help: String? = null, enable
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ToolRow(tool: ToolType, number: Int, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+private fun ToolRow(tool: ToolType, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     val accent = StarColors.toolColor(tool)
     val alpha = if (enabled) 1f else 0.35f
     HoverTip(if (enabled) tool.helpText else localized("tool.help.disabled")) {
@@ -424,10 +392,7 @@ private fun ToolRow(tool: ToolType, number: Int, selected: Boolean, enabled: Boo
             tint = Color.Unspecified,
             modifier = Modifier.size(28.dp),
         )
-        Column {
-            Text(tool.displayName, color = StarColors.textPrimary, fontSize = 11.sp)
-            Text("$number", color = StarColors.textDisabled, fontSize = 9.sp)
-        }
+        Text(tool.displayName, color = StarColors.textPrimary, fontSize = 11.sp)
     }
     }
 }
