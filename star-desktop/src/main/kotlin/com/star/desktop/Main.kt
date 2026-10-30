@@ -92,6 +92,8 @@ private fun runApp(args: Array<String>) = application {
             title = localized("ui.outliers_for_frame", listed?.frameIndex ?: looking),
             state = rememberWindowState(size = DpSize(960.dp, 720.dp)),
         ) {
+            // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).
+            StarMenuBar(vm)
             com.star.desktop.ui.theme.StarTheme {
                 com.star.desktop.ui.windows.OutlierWindowView(svm)
             }
@@ -107,6 +109,8 @@ private fun runApp(args: Array<String>) = application {
             title = localized("ui.star_blob_processing"),
             state = rememberWindowState(size = DpSize(1100.dp, 800.dp)),
         ) {
+            // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).
+            StarMenuBar(vm)
             com.star.desktop.ui.theme.StarTheme {
                 com.star.desktop.ui.windows.BlobProcessingWindowView(
                     session = svm != null,
@@ -126,6 +130,8 @@ private fun runApp(args: Array<String>) = application {
             title = localized("ui.star_debug"),
             state = rememberWindowState(size = DpSize(1100.dp, 600.dp)),
         ) {
+            // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).
+            StarMenuBar(vm)
             com.star.desktop.ui.theme.StarTheme {
                 com.star.desktop.ui.windows.DebugWindowView(vm.debugLog, vm.engineLogPath)
             }
@@ -140,6 +146,8 @@ private fun runApp(args: Array<String>) = application {
             title = localized("ui.alignment_2"),
             state = rememberWindowState(size = DpSize(720.dp, 560.dp)),
         ) {
+            // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).
+            StarMenuBar(vm)
             com.star.desktop.ui.theme.StarTheme {
                 com.star.desktop.ui.windows.AlignmentWindowView(vm, svm)
             }
