@@ -29,4 +29,12 @@ object OutlierDecisions {
      */
     fun toggled(reason: RemoveReason): RemoveReason =
         if (willRemove(reason) == true) RemoveReason.RR_USER_KEEP else RemoveReason.RR_USER_REMOVE
+
+    /**
+     * What a click on a group with [tool] leaves. A group that has a decision is flipped, whichever tool is chosen; one that has none takes the
+     * tool's: Keep keeps it and every other tool removes it (`gherkin/ui/vectors/clickRules.json`, the gui's `decisionAfterClick`). The click
+     * used to ignore the tool in both clients, so Keep marked an undecided group for removal.
+     */
+    fun clicked(reason: RemoveReason, tool: ToolType): RemoveReason =
+        if (willRemove(reason) == null && tool == ToolType.KEEP) RemoveReason.RR_USER_KEEP else toggled(reason)
 }

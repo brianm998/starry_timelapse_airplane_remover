@@ -56,32 +56,16 @@ fun resolveVideoChoice(caps: VideoCapabilities, wanted: VideoEncodeSettings?): V
 }
 
 /**
- * The encode settings this session already has: the video it was imported from (so that a 29.97 fps import is
- * rendered at 29.97 and not at the list's first rate), else what its config recorded. null when neither names a
- * codec, which is a sequence that never had a video.
+ * What a render starts from: the encode settings the session's config holds, as the macOS gui reads them and nothing else (L12). A video import
+ * has put its own there (a 29.97 fps import is rendered at 29.97 and not at the list's first rate: `Config.set(videoInfo:)` when the
+ * daemon opens the video), and a reopened session has what it was saved with. null when the config names no codec, which is a sequence that
+ * never had a video. What the user last chose in this dialog used to be laid over it, and the source video's own settings under it, so the
+ * two clients started from different places.
  */
 fun storedVideoSettings(info: SessionInfo?): VideoEncodeSettings? {
     if (info == null) return null
-    if (info.hasSourceVideoInfo() && info.sourceVideoInfo.settings.codec.isNotEmpty()) return info.sourceVideoInfo.settings
     if (info.config.hasVideo() && info.config.video.codec.isNotEmpty()) return info.config.video
     return null
-}
-
-/**
- * What a render starts from: the video an import came from keeps its own (a 29.97 fps import is rendered at 29.97); otherwise what the user last chose
- * in this dialog, in either app ([remembered], with a field only where they have chosen one), over what the config recorded.
- */
-fun startingVideoSettings(info: SessionInfo?, remembered: VideoEncodeSettings?): VideoEncodeSettings? {
-    if (info != null && info.hasSourceVideoInfo() && info.sourceVideoInfo.settings.codec.isNotEmpty()) return info.sourceVideoInfo.settings
-    val configured = storedVideoSettings(info)
-    if (remembered == null) return configured
-    val b = (configured ?: VideoEncodeSettings.getDefaultInstance()).toBuilder()
-    if (remembered.codec.isNotEmpty()) b.codec = remembered.codec
-    if (remembered.encoder.isNotEmpty()) b.encoder = remembered.encoder
-    if (remembered.pixelFormat.isNotEmpty()) b.pixelFormat = remembered.pixelFormat
-    if (remembered.muxer.isNotEmpty()) b.muxer = remembered.muxer
-    if (remembered.frameRate > 0) b.frameRate = remembered.frameRate
-    return b.build()
 }
 
 private const val DEFAULT_FRAME_RATE = 24.0

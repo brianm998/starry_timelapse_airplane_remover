@@ -265,32 +265,39 @@ private fun StepBar(step: StepRow, modifier: Modifier = Modifier) {
 
 /**
  * "Use of this Mac": Full, Balanced, Light, or Custom (whose limits are in the settings). Changing it reaches a run in progress. Here, in the
- * settings sheet, and in the right panel's Processing section, where the gui has it (Q5).
+ * settings sheet, and in the right panel's Processing section, where the gui has it (Q5). [stacked] puts the four choices one under another,
+ * left-aligned: the right panel is about 150 pixels wide, and four in a row wrapped "Light" to a letter a line and pushed "Custom…" out of sight
+ * (the gui stacks them there for the same reason).
  */
 @Composable
-internal fun ResourceProfileControl(app: AppViewModel, status: String? = null) {
+internal fun ResourceProfileControl(app: AppViewModel, status: String? = null, stacked: Boolean = false) {
     val session by app.sessions.session.collectAsState()
     val current = com.star.desktop.domain.ResourceProfiles.profileOf(session?.config)
-    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    @Composable fun Choice(profile: String, key: String) {
+        val selected = current == profile
+        Text(
+            localized(key),
+            color = if (selected) Color.White else StarColors.textPrimary, fontSize = 11.sp,
+            modifier = Modifier
+                .clip(RoundedCornerShape(5.dp))
+                .background(if (selected) StarColors.accent else StarColors.cellDefault)
+                .clickable {
+                    app.setResourceProfile(profile)
+                    // Custom is chosen and its limits come up to be edited, as in the gui.
+                    if (profile == com.star.desktop.domain.ResourceProfiles.CUSTOM) app.openCustomLimits()
+                }
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+    Column(horizontalAlignment = if (stacked) Alignment.Start else Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         HoverTip(localized("ui.use_of_this_mac_help")) {
             Text(localized("ui.use_of_this_mac"), color = StarColors.textSecondary, fontSize = 11.sp)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for ((profile, key) in com.star.desktop.domain.ResourceProfiles.choices) {
-                val selected = current == profile
-                Text(
-                    localized(key),
-                    color = if (selected) Color.White else StarColors.textPrimary, fontSize = 11.sp,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(if (selected) StarColors.accent else StarColors.cellDefault)
-                        .clickable {
-                            app.setResourceProfile(profile)
-                            // Custom is chosen and its limits come up to be edited, as in the gui.
-                            if (profile == com.star.desktop.domain.ResourceProfiles.CUSTOM) app.openCustomLimits()
-                        }
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                )
+        if (stacked) {
+            for ((profile, key) in com.star.desktop.domain.ResourceProfiles.choices) Choice(profile, key)
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                for ((profile, key) in com.star.desktop.domain.ResourceProfiles.choices) Choice(profile, key)
             }
         }
         // "Limited by: GPU" while a run is going (the gui samples the governor every five seconds; the daemon reports it with the steps).

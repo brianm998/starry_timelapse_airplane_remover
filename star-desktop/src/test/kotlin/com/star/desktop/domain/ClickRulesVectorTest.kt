@@ -39,12 +39,13 @@ class ClickRulesVectorTest {
         else -> error(name)
     }
 
-    @Test fun aClickLeavesTheOppositeDecision() {
+    /** A decided group is flipped whatever the tool; an undecided one takes the tool's decision (Keep keeps it, the rest remove it). */
+    @Test fun aClickLeavesTheDecisionTheVectorSays() {
         val cases = doc.getAsJsonArray("toggle")
-        assertTrue(cases.size() >= 5)
+        assertEquals(7 * 5, cases.size(), "seven tools, five starting decisions")
         for (element in cases) {
             val c = element.asJsonObject
-            assertEquals(reason(c["after"].asString), OutlierDecisions.toggled(reason(c["decision"].asString)), c.toString())
+            assertEquals(reason(c["after"].asString), OutlierDecisions.clicked(reason(c["decision"].asString), tool(c["tool"].asString)), c.toString())
         }
     }
 

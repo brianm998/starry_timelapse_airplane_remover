@@ -18,7 +18,6 @@
     "processing.progress",
     "prompt.pre.no",
     "prompt.pre.yes",
-    "render.all.frames",
     "render.cancel",
     "render.custom_frame_rate",
     "render.done",
@@ -44,6 +43,8 @@
   ],
   "knownGaps": {
     "gui": {},
-    "desktop": {}
+    "desktop": {
+      "render.all.frames": "Render All Frames is a menu item on the desktop (an AWT menu, which a test cannot tag); the gui's menu item carries the identifier. The button in the left panel that carried it is gone (D8)."
+    }
   }
 }

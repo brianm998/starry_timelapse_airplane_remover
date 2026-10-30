@@ -145,8 +145,10 @@ struct GridCellView: View {
                 }
 
                 if let frameState = frameView.frameState {
-                    Text(frameState.shortString)
+                    Text(frameState.badgeText)
                         .font(.system(size: 10))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                         .foregroundColor(frameState.color)
                         .padding(.leading, 4)
                         .padding(.bottom, 2)

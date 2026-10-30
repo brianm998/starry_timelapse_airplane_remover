@@ -380,6 +380,11 @@ public enum FrameProcessingState: Codable,
         }
     }
 
+    /// What a grid cell, a filmstrip cell and the grid's right panel say about the frame: the catalogue's text for the state (the desktop's
+    /// badges read the same entries, in the user's language), and nothing for a finished frame. `shortString` below stays English: the updatable
+    /// log dedups on it, so a language change must not orphan a live line.
+    public var badgeText: String { self == .complete ? "" : message }
+
     public var shortString: String {
         switch self {
         case .unprocessed:

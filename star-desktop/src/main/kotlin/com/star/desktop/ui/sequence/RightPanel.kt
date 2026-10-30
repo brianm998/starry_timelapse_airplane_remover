@@ -251,10 +251,11 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
     var showChangeMode by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val modeName = localized(com.star.desktop.ui.dialogs.frameModeNameKey(activeMethod))
     HoverTip(localized("ui.clean_method_help")) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // The mode over its button, not beside it: the panel is about 150 pixels wide, and the label beside the button wrapped to a letter a line.
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 localized(if (info?.cleanMethodOverridden == true) "ui.processing_mode_current_custom" else "ui.processing_mode_current_default", modeName),
-                color = StarColors.white, fontSize = 11.sp, modifier = Modifier.weight(1f),
+                color = StarColors.white, fontSize = 11.sp,
             )
             androidx.compose.material3.OutlinedButton(
                 onClick = { showChangeMode = true },
@@ -288,9 +289,7 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
 
     // How much of the machine a run may take, between the neighbour count and the render button as in the gui (Q5), pinned to the right.
     val stepReport by vm.stepProgress.collectAsState()
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        com.star.desktop.ui.dialogs.ResourceProfileControl(app, com.star.desktop.domain.ResourceStatus.text(stepReport))
-    }
+    com.star.desktop.ui.dialogs.ResourceProfileControl(app, com.star.desktop.domain.ResourceStatus.text(stepReport), stacked = true)
 
     // Writes the frame's decisions into its finished image; there is nothing to write until its outliers are loaded.
     // (macOS dropped the "re-process the next N frames" controls that used to sit above this, so they are gone here too.)

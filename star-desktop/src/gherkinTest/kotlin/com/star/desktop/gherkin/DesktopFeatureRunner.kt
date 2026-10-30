@@ -47,7 +47,6 @@ class DesktopFeatureRunner {
     private var scope: CoroutineScope? = null
     private var completeFrames = -1
     private var rendersVideo = false
-    private var finishedReview = false
 
     // The setting steps, applied as the startup prompts when the sequence opens (the generator makes them precede the open step).
     private var horizon: Boolean? = null
@@ -303,13 +302,8 @@ class DesktopFeatureRunner {
             val (complete, total, running) = state.split("/")
             val done = total.toInt() > 0 && complete == total && running == "idle"
             if (done) completeFrames = complete.toInt()
-            // Auto selective leaves every frame waiting for its outliers to be reviewed (0/N complete, run over): the user finishes by
-            // rendering all frames, which writes the final images but does not move the "complete" count. The cli has no review step.
-            if (clean == "autoSelective" && total.toInt() > 0 && running == "idle" && complete != total) {
-                if (!finishedReview) { finishedReview = true; t.onNodeWithTag("render.all.frames").performClick() }
-                val written = runCatching { outputFrames().listFiles { f -> f.isFile && !f.name.startsWith(".") }.orEmpty().size }.getOrDefault(0)
-                if (written == total.toInt()) { Thread.sleep(2000); completeFrames = written; return@waitFor true }
-            }
+            // An auto selective frame is complete once its final is written (StarCore's finishAuto sets it, as finishSelective does), so the run
+            // ends N/N here as it does for every other clean method. It used to stop at 0/N and this clicked Render All Frames to finish (L5).
             done
         }
     }

@@ -204,7 +204,7 @@ class FrameViewModel(
                 // Dump EXACTLY the tapped group by id (macOS dumpInTrash(_:)); the rect is ignored when groupId > 0.
                 applyAreaTool(tool, g.bounds.minX.toFloat(), g.bounds.minY.toFloat(), g.bounds.maxX.toFloat(), g.bounds.maxY.toFloat(), groupId)
             }
-            else -> toggle(groupId)
+            else -> setDecision(groupId, OutlierDecisions.clicked(decisionFor(groupId), tool))
         }
     }
 

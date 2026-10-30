@@ -307,9 +307,9 @@ final class GuiFeatureRunner {
         }
     }
 
-    /// Auto selective in the GUI writes the final frames by itself, as the cli does (the frames stay in the review state, so the
-    /// progress line never reads N/N complete; the desktop client does need Render All Frames). The run is watched on the disk, its
-    /// outlier data and then the finals: XCUITest queries are answered by a busy app's main thread and time out.
+    /// Auto selective in the GUI writes the final frames by itself, as the cli does, and each frame is complete once its final is written
+    /// (L5: it used to stay short of complete, so the progress line never read N/N). The run is still watched on the disk, its outlier data
+    /// and then the finals: XCUITest queries are answered by a busy app's main thread and time out.
     private func finishAutoSelective(expected: Int) throws {
         func tempDir() -> URL? {
             (try? FileManager.default.contentsOfDirectory(atPath: scratch.path))?.first { $0.hasPrefix("star_temp_") }
