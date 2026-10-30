@@ -3418,10 +3418,55 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    /// Whether fast advancement passes over a frame with these outlier counts, or nil when they are not known yet (the frame's outliers
+    /// are still on disk).
+    nonisolated static func skipsFrame(_ type: FastAdvancementType,
+                                       positive: Int?, negative: Int?, undecided: Int?,
+                                       viewCount: Int?) -> Bool?
+    {
+        switch type {
+        case .normal:
+            return false
+        case .skipEmpties:
+            if let positive, let negative, let undecided { return positive + negative + undecided == 0 }
+            return viewCount.map { $0 == 0 }
+        case .toNextPositive:
+            return positive.map { $0 == 0 }
+        case .toNextNegative:
+            return negative.map { $0 == 0 }
+        case .toNextUnknown:
+            return undecided.map { $0 == 0 }
+        }
+    }
+
+    /// Load a frame's outliers from disk and count its decisions the way the daemon's frame info does, so that fast advancement can
+    /// tell whether to pass over it.  A frame with no outliers on disk stays unknown.
+    private func loadOutlierCounts(of frameView: FrameViewModel) async {
+        guard let frame = frameView.frame else { return }
+        if await frame.getOutlierGroups() == nil {
+            try? await frame.loadOutliers(loadOnly: true)
+        }
+        guard let groups = await frame.getOutlierGroups() else { return }
+        var positive = 0, negative = 0, undecided = 0
+        for group in await groups.members.values {
+            switch await group.shouldRemove() {
+            case .some(.userSelected(true)): positive += 1
+            case .some(.fromClassifier(let score)) where score > 0: positive += 1
+            case .some(.userSelected(false)): negative += 1
+            case .some(.fromClassifier(let score)) where score <= 0: negative += 1
+            default: undecided += 1
+            }
+        }
+        frameView.frameObserver.set(numberOfPositiveOutliers: positive)
+        frameView.frameObserver.set(numberOfNegativeOutliers: negative)
+        frameView.frameObserver.set(numberOfUndecidedOutliers: undecided)
+    }
+
     func transition(until fastAdvancementType: FastAdvancementType,
                     from frame: FrameViewModel,
                     forwards: Bool,
-                    currentIndex: Int? = nil)
+                    currentIndex: Int? = nil,
+                    loadedOutliers: Bool = false)
     {
         var frameIndex: Int = 0
         if let currentIndex = currentIndex {
@@ -3447,35 +3492,30 @@ public final class ImageSequenceViewModel {
         }
         let nextFrameView = self.frames[nextFrameIndex]
 
-        var skip = false
+        let observer = nextFrameView.frameObserver
+        let known = Self.skipsFrame(fastAdvancementType,
+                                    positive: observer.numberOfPositiveOutliers,
+                                    negative: observer.numberOfNegativeOutliers,
+                                    undecided: observer.numberOfUndecidedOutliers,
+                                    viewCount: nextFrameView.outlierViews?.count)
 
-        switch fastAdvancementType {
-        case .normal:
-            skip = false 
-
-        case .skipEmpties:
-            if let outlierViews = nextFrameView.outlierViews {
-                skip = outlierViews.count == 0
+        // The counts of a frame whose outliers are still on disk are not "none", they are unknown: load them and keep going rather
+        // than stop on a frame that may have what is being looked for (the desktop client's rule, owner decision D14; the gui
+        // used to stop at the first such frame).  A frame that has nothing on disk to load is stopped on, as there.
+        if known == nil, !loadedOutliers {
+            Task { @MainActor in
+                await self.loadOutlierCounts(of: nextFrameView)
+                self.transition(until: fastAdvancementType,
+                                from: frame,
+                                forwards: forwards,
+                                currentIndex: frameIndex,
+                                loadedOutliers: true)
             }
-
-        case .toNextPositive:
-          if let num = nextFrameView.frameObserver.numberOfPositiveOutliers {
-                skip = num == 0
-            }
-
-        case .toNextNegative:
-          if let num = nextFrameView.frameObserver.numberOfNegativeOutliers {
-                skip = num == 0
-            }
-
-        case .toNextUnknown:
-          if let num = nextFrameView.frameObserver.numberOfUndecidedOutliers {
-                skip = num == 0
-            }
+            return
         }
-        
+
         // skip this one
-        if skip {
+        if known ?? false {
             self.transition(until: fastAdvancementType,
                             from: frame,
                             forwards: forwards,
