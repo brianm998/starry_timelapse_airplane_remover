@@ -3508,3 +3508,34 @@ final class ProcessingHeadlineVectorsTests: XCTestCase {
         XCTAssertEqual(mismatches, [], "StarCore's headline no longer matches gherkin/ui/vectors/processingHeadline.json")
     }
 }
+
+/// Layer 0 of the parity plan (§6.2.4): the numbers `gherkin/ui/vectors/constants.json` holds are StarCore's, and the desktop copies them
+/// by hand. This is the half that reads StarCore (and the startup prompt the gui offers them from); the desktop's test reads its copies.
+final class SharedConstantsTests: XCTestCase {
+    private static var path: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("gherkin/ui/vectors/constants.json")
+    }
+
+    private func doc() throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: Self.path)) as? [String: Any])
+    }
+
+    func testTheDiskSpaceRatioIsStarCores() throws {
+        let disk = try XCTUnwrap(try doc()["diskSpace"] as? [String: Any])
+        XCTAssertEqual(disk["peakToInputRatio"] as? Double, DiskSpaceCheck.peakToInputRatio)
+        for c in try XCTUnwrap(disk["runBytes"] as? [[String: Any]]) {
+            let input = (c["inputBytes"] as! NSNumber).uint64Value
+            XCTAssertEqual(UInt64(Double(input) * DiskSpaceCheck.peakToInputRatio), (c["expected"] as! NSNumber).uint64Value, "\(input) bytes in")
+        }
+    }
+
+    func testTheKeypointDivisorChoicesAreTheStartupPromptsAndStarCores() throws {
+        let k = try XCTUnwrap(try doc()["keypointDivisor"] as? [String: Any])
+        XCTAssertEqual(k["recommendedReduced"] as? Double, Config.recommendedReducedKeypointDivisor)
+        XCTAssertEqual(k["presets"] as? [Double], KeypointDivisorStartupView.presets.map(\.divisor))
+        XCTAssertEqual(k["tooHigh"] as? Double, KeypointDivisorStartupView.tooHighDivisor)
+        XCTAssertEqual(k["max"] as? Double, KeypointDivisorStartupView.maxDivisor)
+    }
+}

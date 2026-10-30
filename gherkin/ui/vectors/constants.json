@@ -1,0 +1,17 @@
+{
+  "_comment": "Numbers both clients use and only StarCore owns. The desktop copies them by hand (WorkingLocation.PEAK_TO_INPUT_RATIO, KeypointDivisor), so each client's test reads this file: the gui against StarCore's own values (DiskSpaceCheck.peakToInputRatio, Config.recommendedReducedKeypointDivisor, the presets and limits the startup prompt offers), the desktop against its copies. Change a value in StarCore and the gui test fails until this file says the same, and then the desktop test fails until its copy does.",
+  "diskSpace": {
+    "peakToInputRatio": 4.0,
+    "runBytes": [
+      { "inputBytes": 0, "expected": 0 },
+      { "inputBytes": 1000, "expected": 4000 },
+      { "inputBytes": 10737418240, "expected": 42949672960 }
+    ]
+  },
+  "keypointDivisor": {
+    "presets": [1.0, 1.5, 2.0],
+    "recommendedReduced": 1.5,
+    "tooHigh": 4.0,
+    "max": 8.0
+  }
+}
