@@ -2324,6 +2324,80 @@ public struct Star_V1_Config: @unchecked Sendable {
   /// Clears the value of `pixelThreshold`. Subsequent reads from it will return its default value.
   public mutating func clearPixelThreshold() {_uniqueStorage()._pixelThreshold = nil}
 
+  /// The editable limits behind the "custom" resource profile (StarCore Config.customResources; the memory budget and the pipeline depth are
+  /// custom's too, but they are max_mat_memory_fraction and number_of_frames_to_process_concurrently above). Always sent. Applied when present,
+  /// clamped to the ranges the macOS "Custom" popover offers (a value outside one is clamped, a name that is not one of the listed is ignored).
+  public var customCpuWidth: Int32 {
+    get {_storage._customCpuWidth ?? 0}
+    set {_uniqueStorage()._customCpuWidth = newValue}
+  }
+  /// Returns true if `customCpuWidth` has been explicitly set.
+  public var hasCustomCpuWidth: Bool {_storage._customCpuWidth != nil}
+  /// Clears the value of `customCpuWidth`. Subsequent reads from it will return its default value.
+  public mutating func clearCustomCpuWidth() {_uniqueStorage()._customCpuWidth = nil}
+
+  /// "userInitiated", "utility" or "background"
+  public var customQos: String {
+    get {_storage._customQos ?? String()}
+    set {_uniqueStorage()._customQos = newValue}
+  }
+  /// Returns true if `customQos` has been explicitly set.
+  public var hasCustomQos: Bool {_storage._customQos != nil}
+  /// Clears the value of `customQos`. Subsequent reads from it will return its default value.
+  public mutating func clearCustomQos() {_uniqueStorage()._customQos = nil}
+
+  /// 1 to 32
+  public var customGpuWidth: Int32 {
+    get {_storage._customGpuWidth ?? 0}
+    set {_uniqueStorage()._customGpuWidth = newValue}
+  }
+  /// Returns true if `customGpuWidth` has been explicitly set.
+  public var hasCustomGpuWidth: Bool {_storage._customGpuWidth != nil}
+  /// Clears the value of `customGpuWidth`. Subsequent reads from it will return its default value.
+  public mutating func clearCustomGpuWidth() {_uniqueStorage()._customGpuWidth = nil}
+
+  /// 0.05 to 1 (1 = no throttling)
+  public var customGpuDutyCycle: Double {
+    get {_storage._customGpuDutyCycle ?? 0}
+    set {_uniqueStorage()._customGpuDutyCycle = newValue}
+  }
+  /// Returns true if `customGpuDutyCycle` has been explicitly set.
+  public var hasCustomGpuDutyCycle: Bool {_storage._customGpuDutyCycle != nil}
+  /// Clears the value of `customGpuDutyCycle`. Subsequent reads from it will return its default value.
+  public mutating func clearCustomGpuDutyCycle() {_uniqueStorage()._customGpuDutyCycle = nil}
+
+  /// 1 to 16
+  public var customDiskStreamsPerVolume: Int32 {
+    get {_storage._customDiskStreamsPerVolume ?? 0}
+    set {_uniqueStorage()._customDiskStreamsPerVolume = newValue}
+  }
+  /// Returns true if `customDiskStreamsPerVolume` has been explicitly set.
+  public var hasCustomDiskStreamsPerVolume: Bool {_storage._customDiskStreamsPerVolume != nil}
+  /// Clears the value of `customDiskStreamsPerVolume`. Subsequent reads from it will return its default value.
+  public mutating func clearCustomDiskStreamsPerVolume() {_uniqueStorage()._customDiskStreamsPerVolume = nil}
+
+  /// "default", "utility" or "throttle"
+  public var customIoPolicy: String {
+    get {_storage._customIoPolicy ?? String()}
+    set {_uniqueStorage()._customIoPolicy = newValue}
+  }
+  /// Returns true if `customIoPolicy` has been explicitly set.
+  public var hasCustomIoPolicy: Bool {_storage._customIoPolicy != nil}
+  /// Clears the value of `customIoPolicy`. Subsequent reads from it will return its default value.
+  public mutating func clearCustomIoPolicy() {_uniqueStorage()._customIoPolicy = nil}
+
+  /// Write-only (the daemon never sends it): set on the request that changes resource_profile to "custom" to have the custom limits (the six above,
+  /// the memory budget and the pipeline depth) start as the limits of the profile being left (macOS `Config.makeCustom`), so opening Custom changes
+  /// nothing until a limit is edited. Without it the request's own limits are taken as sent, which is what a settings sheet that edits them wants.
+  public var startCustomFromProfile: Bool {
+    get {_storage._startCustomFromProfile ?? false}
+    set {_uniqueStorage()._startCustomFromProfile = newValue}
+  }
+  /// Returns true if `startCustomFromProfile` has been explicitly set.
+  public var hasStartCustomFromProfile: Bool {_storage._startCustomFromProfile != nil}
+  /// Clears the value of `startCustomFromProfile`. Subsequent reads from it will return its default value.
+  public mutating func clearStartCustomFromProfile() {_uniqueStorage()._startCustomFromProfile = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -6176,7 +6250,7 @@ extension Star_V1_ConfigChangePreview: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{3}resource_profile\0\u{3}reprocess_on_settings_change\0\u{3}max_mat_memory_fraction\0\u{3}gpu_device_name\0\u{3}image_sequence_dirname\0\u{3}cloud_aware_merge\0\u{3}pixel_threshold\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{3}resource_profile\0\u{3}reprocess_on_settings_change\0\u{3}max_mat_memory_fraction\0\u{3}gpu_device_name\0\u{3}image_sequence_dirname\0\u{3}cloud_aware_merge\0\u{3}pixel_threshold\0\u{3}custom_cpu_width\0\u{3}custom_qos\0\u{3}custom_gpu_width\0\u{3}custom_gpu_duty_cycle\0\u{3}custom_disk_streams_per_volume\0\u{3}custom_io_policy\0\u{3}start_custom_from_profile\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -6239,6 +6313,13 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _imageSequenceDirname: String = String()
     var _cloudAwareMerge: Bool? = nil
     var _pixelThreshold: Double? = nil
+    var _customCpuWidth: Int32? = nil
+    var _customQos: String? = nil
+    var _customGpuWidth: Int32? = nil
+    var _customGpuDutyCycle: Double? = nil
+    var _customDiskStreamsPerVolume: Int32? = nil
+    var _customIoPolicy: String? = nil
+    var _startCustomFromProfile: Bool? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -6309,6 +6390,13 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _imageSequenceDirname = source._imageSequenceDirname
       _cloudAwareMerge = source._cloudAwareMerge
       _pixelThreshold = source._pixelThreshold
+      _customCpuWidth = source._customCpuWidth
+      _customQos = source._customQos
+      _customGpuWidth = source._customGpuWidth
+      _customGpuDutyCycle = source._customGpuDutyCycle
+      _customDiskStreamsPerVolume = source._customDiskStreamsPerVolume
+      _customIoPolicy = source._customIoPolicy
+      _startCustomFromProfile = source._startCustomFromProfile
     }
   }
 
@@ -6387,6 +6475,13 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 61: try { try decoder.decodeSingularStringField(value: &_storage._imageSequenceDirname) }()
         case 62: try { try decoder.decodeSingularBoolField(value: &_storage._cloudAwareMerge) }()
         case 63: try { try decoder.decodeSingularDoubleField(value: &_storage._pixelThreshold) }()
+        case 64: try { try decoder.decodeSingularInt32Field(value: &_storage._customCpuWidth) }()
+        case 65: try { try decoder.decodeSingularStringField(value: &_storage._customQos) }()
+        case 66: try { try decoder.decodeSingularInt32Field(value: &_storage._customGpuWidth) }()
+        case 67: try { try decoder.decodeSingularDoubleField(value: &_storage._customGpuDutyCycle) }()
+        case 68: try { try decoder.decodeSingularInt32Field(value: &_storage._customDiskStreamsPerVolume) }()
+        case 69: try { try decoder.decodeSingularStringField(value: &_storage._customIoPolicy) }()
+        case 70: try { try decoder.decodeSingularBoolField(value: &_storage._startCustomFromProfile) }()
         default: break
         }
       }
@@ -6579,6 +6674,27 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       try { if let v = _storage._pixelThreshold {
         try visitor.visitSingularDoubleField(value: v, fieldNumber: 63)
       } }()
+      try { if let v = _storage._customCpuWidth {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 64)
+      } }()
+      try { if let v = _storage._customQos {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 65)
+      } }()
+      try { if let v = _storage._customGpuWidth {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 66)
+      } }()
+      try { if let v = _storage._customGpuDutyCycle {
+        try visitor.visitSingularDoubleField(value: v, fieldNumber: 67)
+      } }()
+      try { if let v = _storage._customDiskStreamsPerVolume {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 68)
+      } }()
+      try { if let v = _storage._customIoPolicy {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 69)
+      } }()
+      try { if let v = _storage._startCustomFromProfile {
+        try visitor.visitSingularBoolField(value: v, fieldNumber: 70)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -6648,6 +6764,13 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._imageSequenceDirname != rhs_storage._imageSequenceDirname {return false}
         if _storage._cloudAwareMerge != rhs_storage._cloudAwareMerge {return false}
         if _storage._pixelThreshold != rhs_storage._pixelThreshold {return false}
+        if _storage._customCpuWidth != rhs_storage._customCpuWidth {return false}
+        if _storage._customQos != rhs_storage._customQos {return false}
+        if _storage._customGpuWidth != rhs_storage._customGpuWidth {return false}
+        if _storage._customGpuDutyCycle != rhs_storage._customGpuDutyCycle {return false}
+        if _storage._customDiskStreamsPerVolume != rhs_storage._customDiskStreamsPerVolume {return false}
+        if _storage._customIoPolicy != rhs_storage._customIoPolicy {return false}
+        if _storage._startCustomFromProfile != rhs_storage._startCustomFromProfile {return false}
         return true
       }
       if !storagesAreEqual {return false}

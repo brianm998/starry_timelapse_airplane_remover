@@ -168,6 +168,120 @@ final class ExpertConfigFieldsTests: XCTestCase {
         XCTAssertEqual(config.pixelThreshold, 3, accuracy: 1e-12)
     }
 
+    // MARK: - the limits behind Custom (P9 of the parity plan: the Kotlin client had no popover for them)
+
+    func testTheCustomLimitsAreAlwaysSentAndComeBackApplied() {
+        var config = Config()
+        let sent = Mapping.protoConfig(config)
+        XCTAssertTrue(sent.hasCustomCpuWidth && sent.hasCustomQos && sent.hasCustomGpuWidth && sent.hasCustomGpuDutyCycle
+                      && sent.hasCustomDiskStreamsPerVolume && sent.hasCustomIoPolicy, "always sent, so the popover opens on the current values")
+        XCTAssertEqual(Int(sent.customCpuWidth), config.customResources.cpuWidth)
+        XCTAssertEqual(sent.customQos, config.customResources.qos.rawValue)
+
+        var p = Star_V1_Config()
+        p.customCpuWidth = 6
+        p.customQos = "background"
+        p.customGpuWidth = 3
+        p.customGpuDutyCycle = 0.4
+        p.customDiskStreamsPerVolume = 2
+        p.customIoPolicy = "throttle"
+        Mapping.applyExpertConfig(&config, from: p)
+        XCTAssertEqual(config.customResources, CustomResourceLimits(cpuWidth: 6, qos: .background, gpuWidth: 3, gpuDutyCycle: 0.4,
+                                                                    diskStreamsPerVolume: 2, ioPolicy: .throttle))
+        XCTAssertEqual(config.resourceProfile, .full, "the limits are stored; the profile is chosen separately")
+    }
+
+    func testTheCustomLimitsAreClampedToThePopoversRanges() {
+        var config = Config()
+        var p = Star_V1_Config()
+        for (sent, kept) in [(0, 1), (-4, 1), (256, 256), (1000, 256)] {
+            p.customCpuWidth = Int32(sent)
+            Mapping.applyExpertConfig(&config, from: p)
+            XCTAssertEqual(config.customResources.cpuWidth, kept, "cpu \(sent)")
+        }
+        for (sent, kept) in [(0, 1), (32, 32), (99, 32)] {
+            p.customGpuWidth = Int32(sent)
+            Mapping.applyExpertConfig(&config, from: p)
+            XCTAssertEqual(config.customResources.gpuWidth, kept, "gpu \(sent)")
+        }
+        for (sent, kept) in [(0.0, 0.05), (-1.0, 0.05), (0.5, 0.5), (1.0, 1.0), (7.0, 1.0)] {
+            p.customGpuDutyCycle = sent
+            Mapping.applyExpertConfig(&config, from: p)
+            XCTAssertEqual(config.customResources.gpuDutyCycle, kept, accuracy: 1e-12, "duty \(sent)")
+        }
+        for (sent, kept) in [(0, 1), (16, 16), (40, 16)] {
+            p.customDiskStreamsPerVolume = Int32(sent)
+            Mapping.applyExpertConfig(&config, from: p)
+            XCTAssertEqual(config.customResources.diskStreamsPerVolume, kept, "disk \(sent)")
+        }
+    }
+
+    func testANameThatIsNotOneOfTheListedAndANonNumberAreIgnored() {
+        var config = Config()
+        let before = config.customResources
+        var p = Star_V1_Config()
+        p.customQos = "realtime"
+        p.customIoPolicy = "turbo"
+        p.customGpuDutyCycle = .nan
+        Mapping.applyExpertConfig(&config, from: p)
+        XCTAssertEqual(config.customResources, before)
+    }
+
+    /// Opening Custom must change nothing until a limit is edited: the limits start as the profile that was in effect, as the gui's
+    /// `resourceProfile` observer does with `makeCustom`.  The client's copy of the config still holds whatever the limits were last, so
+    /// the client says so when it is opening Custom.
+    func testOpeningCustomWhenAskedTakesTheLimitsOfTheProfileItLeaves() {
+        var config = Config()
+        config.resourceProfile = .light
+        var p = Mapping.protoConfig(config)       // the client's copy, echoing every limit
+        p.resourceProfile = "custom"
+        p.startCustomFromProfile = true
+        p.maxMatMemoryFraction = 0.9
+        Mapping.applyExpertConfig(&config, from: p)
+
+        let light = ResourceLimits.preset(.light)
+        XCTAssertEqual(config.resourceProfile, .custom)
+        XCTAssertEqual(config.customResources.cpuWidth, light.cpuWidth)
+        XCTAssertEqual(config.customResources.qos, light.qos)
+        XCTAssertEqual(config.customResources.gpuWidth, light.gpuWidth)
+        XCTAssertEqual(config.customResources.gpuDutyCycle, light.gpuDutyCycle, accuracy: 1e-12)
+        XCTAssertEqual(config.customResources.diskStreamsPerVolume, light.diskStreamsPerVolume)
+        XCTAssertEqual(config.customResources.ioPolicy, light.ioPolicy)
+        XCTAssertEqual(config.maxMatMemoryFraction, light.memoryFraction, accuracy: 1e-12, "the memory budget starts as the profile's too")
+        XCTAssertEqual(config.numberOfFramesToProcessConcurrently, light.pipelineDepth)
+        XCTAssertEqual(config.resources, light, "nothing changes until the user edits a limit")
+    }
+
+    /// The settings sheet switches to Custom and edits the pipeline depth in one save; without the flag, what it sends is what it means.
+    func testASwitchToCustomWithoutTheFlagKeepsWhatItCarries() {
+        var config = Config()
+        config.resourceProfile = .balanced
+        var p = Star_V1_Config()
+        p.resourceProfile = "custom"
+        p.customCpuWidth = 3
+        Mapping.applyExpertConfig(&config, from: p)
+        XCTAssertEqual(config.resourceProfile, .custom)
+        XCTAssertEqual(config.customResources.cpuWidth, 3)
+        XCTAssertEqual(config.numberOfFramesToProcessConcurrently, Config().numberOfFramesToProcessConcurrently, "nothing was taken over from Balanced")
+    }
+
+    func testTheFlagMeansNothingUnlessTheProfileIsChangingToCustom() {
+        var config = Config()
+        config.customResources.cpuWidth = 5
+        var p = Star_V1_Config()
+        p.startCustomFromProfile = true
+        p.resourceProfile = "balanced"
+        Mapping.applyExpertConfig(&config, from: p)
+        XCTAssertEqual(config.resourceProfile, .balanced)
+        XCTAssertEqual(config.customResources.cpuWidth, 5, "leaving Custom keeps what was set, for the next time")
+
+        config.resourceProfile = .custom
+        p.resourceProfile = "custom"
+        Mapping.applyExpertConfig(&config, from: p)
+        XCTAssertEqual(config.customResources.cpuWidth, 5, "already custom: nothing to take over")
+        XCTAssertFalse(Mapping.protoConfig(config).hasStartCustomFromProfile, "the daemon never sends it")
+    }
+
     // MARK: - who chose the divisor
 
     /// `set(imageInfo:)` picks a divisor for a client that did not (`resolveAutomaticKeypointDivisor`), and must not pick one over the

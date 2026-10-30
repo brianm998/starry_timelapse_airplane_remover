@@ -400,6 +400,19 @@ message Config {
   // How far a pixel may differ from the neighbouring frames' (in the merge's own units) before it is thrown out and replaced rather than kept;
   // StarCore Config.pixelThreshold, 1.2 unless changed.  The macOS gui offers it as an expert setting and as a slider in the right panel.
   optional double pixel_threshold                                      = 63;
+  // The editable limits behind the "custom" resource profile (StarCore Config.customResources; the memory budget and the pipeline depth are
+  // custom's too, but they are max_mat_memory_fraction and number_of_frames_to_process_concurrently above). Always sent. Applied when present,
+  // clamped to the ranges the macOS "Custom" popover offers (a value outside one is clamped, a name that is not one of the listed is ignored).
+  optional int32  custom_cpu_width                                     = 64;   // 1 to 256
+  optional string custom_qos                                           = 65;   // "userInitiated", "utility" or "background"
+  optional int32  custom_gpu_width                                     = 66;   // 1 to 32
+  optional double custom_gpu_duty_cycle                                = 67;   // 0.05 to 1 (1 = no throttling)
+  optional int32  custom_disk_streams_per_volume                       = 68;   // 1 to 16
+  optional string custom_io_policy                                     = 69;   // "default", "utility" or "throttle"
+  // Write-only (the daemon never sends it): set on the request that changes resource_profile to "custom" to have the custom limits (the six above,
+  // the memory budget and the pipeline depth) start as the limits of the profile being left (macOS `Config.makeCustom`), so opening Custom changes
+  // nothing until a limit is edited. Without it the request's own limits are taken as sent, which is what a settings sheet that edits them wants.
+  optional bool   start_custom_from_profile                            = 70;
 }
 
 enum CleanMethod {

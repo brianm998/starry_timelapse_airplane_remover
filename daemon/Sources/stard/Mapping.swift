@@ -10,6 +10,12 @@ enum Mapping {
 
     static let memoryBudgetFractionRange: ClosedRange<Double> = 0.1 ... 0.95
 
+    /// What the custom resource limits are clamped to: the ranges the macOS "Custom" popover's steppers and sliders offer.
+    static let customCpuWidthRange = 1 ... 256
+    static let customGpuWidthRange = 1 ... 32
+    static let customGpuDutyCycleRange: ClosedRange<Double> = 0.05 ... 1.0
+    static let customDiskStreamsRange = 1 ... 16
+
 
     // MARK: - FrameViewMode
 
@@ -420,6 +426,12 @@ enum Mapping {
         out.gpuHardwareAvailable = Config.isGPUHardwareAvailable
         if let device = GPUCapability.deviceName() { out.gpuDeviceName = device }
         out.resourceProfile = c.resourceProfile.rawValue
+        out.customCpuWidth = Int32(c.customResources.cpuWidth)
+        out.customQos = c.customResources.qos.rawValue
+        out.customGpuWidth = Int32(c.customResources.gpuWidth)
+        out.customGpuDutyCycle = c.customResources.gpuDutyCycle
+        out.customDiskStreamsPerVolume = Int32(c.customResources.diskStreamsPerVolume)
+        out.customIoPolicy = c.customResources.ioPolicy.rawValue
         out.useGpuForSift = c.useGPUForSIFT
         out.useGpuForAkaze = c.useGPUForAKAZE
         // Not an expert setting — recorded state.  Always sent, so a client that re-opens a
@@ -495,8 +507,24 @@ enum Mapping {
         }
         // Unknown names are ignored rather than rejected: a newer client may know profiles
         // this daemon does not, and keeping the config's own is the safe answer.
+        if p.hasCustomCpuWidth { c.customResources.cpuWidth = min(max(Int(p.customCpuWidth), customCpuWidthRange.lowerBound), customCpuWidthRange.upperBound) }
+        if p.hasCustomQos, let qos = ResourceQoS(rawValue: p.customQos) { c.customResources.qos = qos }
+        if p.hasCustomGpuWidth { c.customResources.gpuWidth = min(max(Int(p.customGpuWidth), customGpuWidthRange.lowerBound), customGpuWidthRange.upperBound) }
+        if p.hasCustomGpuDutyCycle, p.customGpuDutyCycle.isFinite {
+            c.customResources.gpuDutyCycle = min(max(p.customGpuDutyCycle, customGpuDutyCycleRange.lowerBound), customGpuDutyCycleRange.upperBound)
+        }
+        if p.hasCustomDiskStreamsPerVolume {
+            c.customResources.diskStreamsPerVolume = min(max(Int(p.customDiskStreamsPerVolume), customDiskStreamsRange.lowerBound), customDiskStreamsRange.upperBound)
+        }
+        if p.hasCustomIoPolicy, let policy = ResourceIOPolicy(rawValue: p.customIoPolicy) { c.customResources.ioPolicy = policy }
         if p.hasResourceProfile, let profile = ResourceProfile(rawValue: p.resourceProfile) {
-            c.resourceProfile = profile
+            if profile == .custom, c.resourceProfile != .custom, p.hasStartCustomFromProfile, p.startCustomFromProfile {
+                // Opening Custom from another profile, as asked: it starts as that profile's limits (the memory budget and the pipeline depth
+                // with them, whatever the request echoed), so nothing changes until the user edits one (macOS `Config.makeCustom`).
+                c.makeCustom()
+            } else {
+                c.resourceProfile = profile
+            }
         }
         if p.hasUseGpuForSift { c.useGPUForSIFT = p.useGpuForSift }
         if p.hasUseGpuForAkaze { c.useGPUForAKAZE = p.useGpuForAkaze }
