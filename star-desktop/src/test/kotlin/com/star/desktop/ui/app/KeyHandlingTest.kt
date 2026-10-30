@@ -19,4 +19,14 @@ class KeyHandlingTest {
             assertFalse(key in TRANSPORT_KEYS, "$key")
         }
     }
+
+    /** M4: under the painter the keys that change frame answer (and ask first once paint has started); nothing else does. */
+    @Test fun underThePainterOnlyTheFrameKeysAnswer() {
+        for (key in listOf(Key.DirectionLeft, Key.DirectionRight, Key.B, Key.F, Key.Z, Key.X)) {
+            assertTrue(key in PAINT_MODE_FRAME_KEYS, "$key")
+        }
+        for (key in listOf(Key.R, Key.D, Key.Tab, Key.W, Key.One, Key.Home, Key.MoveEnd)) {
+            assertFalse(key in PAINT_MODE_FRAME_KEYS, "$key")
+        }
+    }
 }
