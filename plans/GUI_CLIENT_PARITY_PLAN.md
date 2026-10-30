@@ -667,8 +667,8 @@ Started 2026-10-29 on branch `claude/gui-client-parity-plan-3b6676`. Commits beg
 
 ### 9.1 Done, with a test that fails without the change
 
-Desktop: `./gradlew test`, green (618 tests after the fourth round).
-gui: `xcodebuild test -scheme star -only-testing:starTests`, green (252 tests after the fourth round). Daemon: `swift test --filter` on the suites it touches
+Desktop: `./gradlew test`, green (624 tests after the fifth round).
+gui: `xcodebuild test -scheme star -only-testing:starTests`, green (258 tests after the fifth round). Daemon: `swift test --filter` on the suites it touches
 (`ExpertConfigFieldsTests|MappingTests|SessionCloseTests|EnumParityTests|HorizonRefinementSessionTests|StepProgressReportTests`, 105 tests after P10), green.
 StarCore's own test suite and the cli were not run; the StarCore changes are additive (an optional callback, one new method).
 
@@ -698,7 +698,7 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
 | Q12 | desktop grid shows no badge on a finished frame and no orange for a pending refinement | build only |
 | H2 | desktop: completing the band clears `hasStrokes`, so "change frame?" starts with the first refinement stroke | `HorizonPainterDetailsTest.completingTheBandClearsTheFrameChangeFlag` |
 | Q4 | desktop right panel: outlier counts, trash count, Keep/Remove/Clear buttons, the three decision-tree buttons and "Selected #N" are gone (D8); header `ui.tool`; no digits under the tools. Decision Tree, All Frames became a menu item | build; nothing tested the removed controls |
-| M12 | desktop menu uses the gui's labels (`ui.close`, `ui.process_all_frames`, the window items, `ui.paint_horizon_reference`). **The top-level grouping still differs** (gui: Actions, Tools; desktop: File, View, Process, Export, Window, Outliers) | `CommandTableTest`, `CommandTableTests` |
+| M12 | desktop menu uses the gui's labels (`ui.close`, `ui.process_all_frames`, the window items, `ui.paint_horizon_reference`). **and the menus are the gui's tree** (File, Actions, Tools, Window; `commands.json` gives each command's `menu` and the menus' title keys; Language stays a desktop menu of its own, Preferences is in File off a Mac) | `CommandTableTest(s)`, including `everyCommandIsInItsMenuAndNoOther` on each side |
 | D9, M3 | gui menus gain Open Image Sequence (⌘O), Open Video, Resume from config.json (behind the same work-in-progress question as Close, with a "Stop and Open" button), Process Current Frame, Cancel Processing, Processing Settings (⇧⌘,), Render Video, Toggle Filmstrip, Play / Pause, and Close gets ⌘W | `CommandTableTests`; **not run in the app** |
 | E6, E7, D12 | gui outlier window lists the current frame's groups and follows the frame; the classification toggle has its own label; Decision Tree, All Frames works in the gui | build; **not run in the app** |
 | Q10 | gui fast advancement loads a frame's outliers and keeps scanning (D14) | `FastAdvancementSkipTests` (the decision only) |
@@ -718,6 +718,8 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
 | I1 (view modes) | StarCore `FrameViewMode.longName` reads `view_mode.<case>` from the catalogue (it was English literals, so the gui's Show lists, blob window and the not-found line were English in every language) | `ViewModeNameTests` (English unchanged, every case differs in German) |
 | Q11 | filmstrip and grid cells (and the grid right panel) draw the frame's counts and clean method from its `FrameViewModel.info`, which every edit updates, and fetch them again when `frameDataVersions` says the frame's data went stale; they kept a copy fetched at index/state change | `FrameInfoLiveTest` (an edit lands in `frameInfoFlow`; a refresh replaces what was held); the cells are build-checked |
 | P10 | the daemon clears the refinement run's "Clearing the renders" line (`stepsQueued(generation:)`) once its operations are queued, as the gui clears `processingStatusText`; it stayed in every step report of the run | `HorizonRefinementSessionTests.testThePreparingLineGoesOnceTheRunIsQueued` (the clear, and that another run's does not); **the call after `enqueueHorizonRefinement` was not exercised in a run** |
+| Layer 0 | `gherkin/ui/ids.json`: the ids a UI step may use (`accessibilityIdentifier` in gui/star, `testTag` in star-desktop). Each client scans its source for id-shaped literals in the registry's namespaces (so an id passed to a helper that tags the control counts; a Kotlin template is a family `x.*`); an id found and not listed, a listed id missing, or a closed `knownGaps` entry fails. It showed nine real gaps, all closed: the gui tags `process.frames`, `settings.process`, `processing.headline`, `processing.overall`, `startup.selecthorizon.yes`; the desktop tags `render.cancel`, `render.custom_frame_rate`, `render.done`, `render.error`. **The desktop's `:test` did not rerun when a file under `gherkin/ui` or the catalogue changed (gradle did not know it read them): both are inputs of `tasks.test` now** | `IdRegistryTest`, `IdRegistryTests` (a removed id and a closed gap fail the desktop one) |
+| P6 | desktop settings sheet: Automatic / Selective in the main column; under Show Expert Settings, Selective Auto Clean (Yes/No, off while Selective is chosen; starts at Yes when the method reviews outliers, as the gui) then the detection type (off while the method does not review outliers); it was a three-way plus an always-visible detection row. `CleanMethodChoice` is pinned by the `cleanMethod` vector in `constants.json`. New `ui.selective_auto_clean` in 22 tables. The gui's `HighLevelCleanMethod`/`AutoPreservationMode` headings and Yes/No/Automatic/Selective were English literals in StarCore: they read the catalogue now. **Their help and description texts are still English** (8 long strings, 22 translations each) | `SharedConstantsTest(s)` (the mapping), `ViewModeNameTests.testTheCleanMethodRowsAreTitledInTheUsersLanguage`; the sheet itself not looked at |
 | I1 | gui: `DetectionType.localizedName` for the three pickers, the transport tooltips use `ui.transport_*`, "Process N (new only)" and the painter's Next/Continue use the existing keys | `NoHardCodedStringsTests` (the gui counterpart of the Kotlin lint, §6.2.3) |
 
 ### 9.2 Looked at, not done, and what the next person needs to know
@@ -730,8 +732,8 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
   The observer is held weakly (`weak var observer`), and `set(observer:)` starts a Task that writes the frame's current method into it, so
   attach one per frame when the frame is created, not just before a change.
 * **P4, P11, S2, S3** (P10 is done above) change what happens when a run ends or is cancelled; they need a run to confirm which callback fires.
-* Not started: Q5, P5, P6, P8, P9, M9–M11, the grouping of D9's menu tree, D10–D12 (except the three settings and Decision Tree, All Frames above),
-  the id registry of Layer 0, I1's remaining items (outlier-table headers, `FrameProcessingState.shortString` badges — English on purpose for the updatable log, so they need a second property).
+* Not started: Q5, P5, P8, P9, M9–M11, D10–D12 (except the three settings and Decision Tree, All Frames above),
+  I1's remaining items: the gui's clean-method help and description texts (P6 above), the outlier-table headers, and the `FrameProcessingState.shortString` badges (English on purpose for the updatable log, so they need a second property).
 * The strings `tool.help.*` still say a click on Remove/Keep "marks" a group; with D2 a click toggles. Left alone: changing them is 22 translations.
 
 ### 9.3 Blocked on the owner
@@ -739,6 +741,6 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
 * `sudo automationmodetool enable-automationmode-without-authentication` (it reports "Automation Mode is disabled"): nothing in
   `gui/starUITests` can run here until then, so no `@ui` feature has been run on the gui.
 * The `ui_small` and `ui_small_selective` fixtures (§6.3): they are built from `a7sii_10`, which is not in this Mac's test-data cache, and the upload is the owner's.
-* Phases 0–2 (spikes, `gherkin/ui`, the `@ui` corpus, CI) are therefore not started; the Layer 0 pieces that need no app are: the gui lint is in;
-  the command table, the id registry and the shared vectors are not.
+* Phases 0–2 (spikes, `gherkin/ui`, the `@ui` corpus, CI) are therefore not started; the Layer 0 pieces that need no app (the gui lint, the command table with its menus,
+  the id registry and the shared vectors) are in.
 
