@@ -348,9 +348,17 @@ public final class ViewModel {
         return loadGeneration
     }
 
+    /// Stops the video import in flight, if there is one.  StarCore's `decodeVideo` and `startVideoExtraction` stop
+    /// ffmpeg and take back the frames folder they made when their task is cancelled, so cancelling the task is all it
+    /// takes: without it the decode ran on to the end and left the folder behind (the daemon behind the Kotlin client
+    /// has always cancelled it).
+    private var cancelVideoImport: (() -> Void)?
+
     /// The Cancel button of the loading view.
     func cancelLoading() {
         loadGeneration += 1
+        cancelVideoImport?()
+        cancelVideoImport = nil
         isLoadingImageSequence = false
         loadingImageSequenceFilename = nil
         imageSequence = nil
@@ -613,46 +621,59 @@ public final class ViewModel {
         let generation = beginLoad()
 
         isProbingImageSequence = true
-
-        if extractInBackground {
-            // Go to the main screen once the first frame is out; the rest are extracted while the sequence is open.  Extraction
-            // belongs to the source, which the sequence's view model holds and stops when it closes.
-            let (source, videoInfo) = try await Task.detached() {
-                try await startVideoExtraction(named: path, format: format, framesParentFolder: outputDir)
-            }.value
+        // A failed or cancelled import leaves neither "Examining video" nor the extraction ring up for the next load to show.
+        defer {
             isProbingImageSequence = false
-            guard generation == loadGeneration else { source.stop(); return }
-            try await startup(withNewImageSequence: source.outputFolder, and: videoInfo, frameSource: source, outputDir: outputDir)
-            return
+            isExtractingImageSequence = false
+            cancelVideoImport = nil
         }
 
-        let (frames, videoInfo) = try await Task.detached() {
-            try await decodeVideo(named: path, format: format, framesParentFolder: outputDir) { currentFrame, totalFrames, outputDir in
-                Task { @MainActor in
-                    self.isExtractingImageSequence = true
-                    self.isProbingImageSequence = false
-                    self.numberExtracted = currentFrame
-                    self.amountExtracted = totalFrames > 0 ? Double(currentFrame) / Double(totalFrames) : 0
+        do {
+            if extractInBackground {
+                // Go to the main screen once the first frame is out; the rest are extracted while the sequence is open.  Extraction
+                // belongs to the source, which the sequence's view model holds and stops when it closes.
+                let extraction = Task.detached() {
+                    try await startVideoExtraction(named: path, format: format, framesParentFolder: outputDir)
+                }
+                cancelVideoImport = { extraction.cancel() }
+                let (source, videoInfo) = try await extraction.value
+                isProbingImageSequence = false
+                guard generation == loadGeneration else { source.stop(); return }
+                try await startup(withNewImageSequence: source.outputFolder, and: videoInfo, frameSource: source, outputDir: outputDir)
+                return
+            }
 
-                    // XXX make a preview here
-                    /*
-                     XXX because have no config,
-                         we don't know where the previews and thumbnails should go
-                         or what size they should be
-                     XXX
-                     */
+            let decoding = Task.detached() {
+                try await decodeVideo(named: path, format: format, framesParentFolder: outputDir) { currentFrame, totalFrames, outputDir in
+                    Task { @MainActor in
+                        self.isExtractingImageSequence = true
+                        self.isProbingImageSequence = false
+                        self.numberExtracted = currentFrame
+                        self.amountExtracted = totalFrames > 0 ? Double(currentFrame) / Double(totalFrames) : 0
+
+                        // XXX make a preview here
+                        /*
+                         XXX because have no config,
+                             we don't know where the previews and thumbnails should go
+                             or what size they should be
+                         XXX
+                         */
+                    }
                 }
             }
-        }.value
+            cancelVideoImport = { decoding.cancel() }
+            let (frames, videoInfo) = try await decoding.value
 
-        isExtractingImageSequence = false
-        
-        Log.d("frames in \(frames)")
+            isExtractingImageSequence = false
 
-        // Cancelled while the video was being taken apart: do not go on to open what came out.
-        guard generation == loadGeneration else { return }
-        try await startup(withNewImageSequence: frames, and: videoInfo, outputDir: outputDir)
+            Log.d("frames in \(frames)")
+
+            // Cancelled while the video was being taken apart: do not go on to open what came out.
+            guard generation == loadGeneration else { return }
+            try await startup(withNewImageSequence: frames, and: videoInfo, outputDir: outputDir)
+        } catch is CancellationError {
+            // The user pressed Cancel (`cancelLoading`); the decode took back what it had made.
+            Log.i("video import cancelled")
+        }
     }
 }
-
-
