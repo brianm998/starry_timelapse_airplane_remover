@@ -3531,6 +3531,15 @@ final class SharedConstantsTests: XCTestCase {
         }
     }
 
+    /// P14: the custom frame rate field takes 0.01 to 1000, as the desktop's does.
+    func testTheCustomFrameRateRuleIsTheDesktops() throws {
+        let rule = try XCTUnwrap(try doc()["customFrameRate"] as? [String: Any])
+        XCTAssertEqual(RenderVideoSheetView.customFrameRateRange, (rule["min"] as! Double)...(rule["max"] as! Double))
+        for c in try XCTUnwrap(rule["cases"] as? [[String: Any]]) {
+            XCTAssertEqual(RenderVideoSheetView.customFrameRate(c["text"] as! String), c["expected"] as? Double, "\"\(c["text"] as! String)\"")
+        }
+    }
+
     func testTheKeypointDivisorChoicesAreTheStartupPromptsAndStarCores() throws {
         let k = try XCTUnwrap(try doc()["keypointDivisor"] as? [String: Any])
         XCTAssertEqual(k["recommendedReduced"] as? Double, Config.recommendedReducedKeypointDivisor)
@@ -3581,6 +3590,14 @@ final class VideoRenderWiringTests: XCTestCase {
         XCTAssertTrue(sheet.contains("viewModel.cancelVideoRender()"))
         XCTAssertTrue(sheet.contains("error is CancellationError"), "a render the user stopped is not an error to show")
         XCTAssertTrue(try source("ViewModel.swift").contains("closing.cancelVideoRender()"))
+    }
+
+    /// P14: picking Custom keeps the rate in force (it put 24 there), and the field applies as it is typed.
+    func testCustomKeepsTheCurrentRateAndTheFieldAppliesAsItIsTyped() throws {
+        let sheet = try source("RenderVideoSheetView.swift")
+        XCTAssertTrue(sheet.contains("frameRate = .custom(frameRate.rawValue)"), "Custom starts at the rate in force")
+        XCTAssertFalse(sheet.contains(".onSubmit"), "a rate typed and not submitted used to be dropped")
+        XCTAssertTrue(sheet.contains("ui.enter_a_number_from_a_to_b"))
     }
 
     /// Q14: "Processing N more frames" counted down from a number nothing set.

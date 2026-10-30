@@ -35,6 +35,7 @@ struct RenderVideoSheetView: View {
         let config = viewModel.config 
         let frameRate = config.config().frameRate 
         _frameRate = State(initialValue: frameRate)
+        if case .custom = frameRate { _customPicked = State(initialValue: true) }
         _frameRateString = State(initialValue: String(format: "%g", frameRate.rawValue))
         
         // The config may name settings that do not go together, or ones the bundled ffmpeg does
@@ -63,6 +64,8 @@ struct RenderVideoSheetView: View {
     
     @State private var frameRateString: String
     @State private var frameRate: FrameRate 
+    /// Whether the Custom row is the picked one.  Not derivable from the rate: Custom starts at the rate in force, which is usually a standard one.
+    @State private var customPicked = false
     @State private var codec: FFmpegCodec 
     @State private var encoder: FFmpegEncoder
     @State private var pixelFormat: FFmpegPixelFormat
@@ -205,7 +208,7 @@ struct RenderVideoSheetView: View {
                   .font(.title)
                 
                 HStack {
-                    Picker(localized("ui.frame_rate"), selection: $frameRate) {
+                    Picker(localized("ui.frame_rate"), selection: rateSelection) {
                         ForEach(FrameRate.allCases, id: \.self) { frameRate in
                             switch frameRate {
                             case .custom(_):
@@ -215,25 +218,18 @@ struct RenderVideoSheetView: View {
                             }
                         }
                     }
-                    switch frameRate {
-                    case .custom(let customFrameRate):
-                        TextField("",
-                                  text: $frameRateString)
-                        //                  .focused($focusedField, equals: .frameRate)
+                    if customPicked {
+                        TextField("", text: $frameRateString)
                           .frame(maxWidth: 60)
-                          .onSubmit {
-                              let filtered = frameRateString.filter { "0123456789.-".contains($0) }
-                              if let newValue = Double(filtered),
-                                 newValue >= 0,
-                                 newValue <= 1000
-                              {
-                                  self.frameRate = .custom(newValue)
-                                  //self.frameRateString = String(format: "%g", newValue)
-                              }
+                          .overlay(RoundedRectangle(cornerRadius: 4)
+                                     .stroke(customRateProblem ? Color.red : Color.clear))
+                          .accessibilityIdentifier("render.custom_frame_rate")
+                          .onChange(of: frameRateString) {
+                              // Applied as it is typed, so Render is never one keystroke behind what the field says.
+                              let digits = frameRateString.filter { "0123456789.".contains($0) }
+                              if digits != frameRateString { frameRateString = digits }
+                              if let value = Self.customFrameRate(digits) { frameRate = .custom(value) }
                           }
-                        
-                    default:
-                        Group { }
                     }
                     Text(localized("ui.frames_per_second"))
                     Text(localized("ui.total_length"))
@@ -242,15 +238,17 @@ struct RenderVideoSheetView: View {
                   .onChange(of: frameRate) {
                       viewModel.userPreferences.frameRate = frameRate
                       viewModel.frameRate = frameRate
-                      
-                      switch frameRate {
-                      case .custom(let customFrameRate):
-                          self.frameRateString = String(format: "%g", customFrameRate)
-                          
-                      default:
-                          break
+                      // The field shows what it was given; only a change that did not come from it (the picker) rewrites it, or
+                      // "1.50" would be reformatted to "1.5" under the cursor.
+                      if Self.customFrameRate(frameRateString) != frameRate.rawValue {
+                          self.frameRateString = String(format: "%g", frameRate.rawValue)
                       }
                   }
+                if customPicked && customRateProblem {
+                    Text(localized("ui.enter_a_number_from_a_to_b", Self.rateText(Self.customFrameRateRange.lowerBound), Self.rateText(Self.customFrameRateRange.upperBound)))
+                      .font(.caption)
+                      .foregroundColor(.red)
+                }
                 
                 Text(frameRate.description)
                   .lineLimit(nil)
@@ -343,6 +341,7 @@ struct RenderVideoSheetView: View {
                     Button(localized("ui.render")) {
                         startRender()
                     }
+                      .disabled(customPicked && customRateProblem)
                 }
                 Spacer()
             }
@@ -351,6 +350,37 @@ struct RenderVideoSheetView: View {
         }
           .frame(minWidth: 300)
     }
+
+    /// The picker's selection: a standard rate, or the Custom row, whose tag (`.custom(24)`) is only a tag.  Picking Custom keeps the
+    /// rate in force for the field to start from; it used to put 24 there.
+    private var rateSelection: Binding<FrameRate> {
+        Binding(
+          get: { customPicked ? .custom(24) : frameRate },
+          set: { picked in
+              if case .custom = picked {
+                  customPicked = true
+                  frameRate = .custom(frameRate.rawValue)
+              } else {
+                  customPicked = false
+                  frameRate = picked
+              }
+          })
+    }
+
+    /// What the custom frame rate field accepts: from 0.01 to 1000 (the daemon refuses 0).  The desktop's rule is the same:
+    /// `gherkin/ui/vectors/constants.json` holds the cases both are checked against.
+    static let customFrameRateRange: ClosedRange<Double> = 0.01...1000
+
+    static func customFrameRate(_ text: String) -> Double? {
+        guard let value = Double(text.trimmingCharacters(in: .whitespaces)),
+              value.isFinite, customFrameRateRange.contains(value) else { return nil }
+        return value
+    }
+
+    /// "0.01", "1000": a bound as the message says it.
+    static func rateText(_ value: Double) -> String { String(format: "%g", value) }
+
+    private var customRateProblem: Bool { Self.customFrameRate(frameRateString) == nil }
 
     private var totalLengthText: String {
         formatTimeInterval(Double(viewModel.frames.count)/frameRate.rawValue)

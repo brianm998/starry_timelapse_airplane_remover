@@ -24,6 +24,18 @@ class SharedConstantsTest {
         }
     }
 
+    /** P14: the render sheet's custom frame rate field takes 0.01 to 1000 in both clients. */
+    @Test fun theCustomFrameRateRuleIsTheGuis() {
+        val rule = doc.getAsJsonObject("customFrameRate")
+        assertEquals(rule["min"].asDouble, RenderVideo.CUSTOM_MIN)
+        assertEquals(rule["max"].asDouble, RenderVideo.CUSTOM_MAX)
+        for (element in rule.getAsJsonArray("cases")) {
+            val c = element.asJsonObject
+            val expected = c["expected"].takeIf { !it.isJsonNull }?.asDouble
+            assertEquals(expected, RenderVideo.customRate(c["text"].asString), "\"${c["text"].asString}\"")
+        }
+    }
+
     @Test fun theKeypointDivisorChoicesAreTheStartupPromptsAndStarCores() {
         val k = doc.getAsJsonObject("keypointDivisor")
         assertEquals(k.getAsJsonArray("presets").map { it.asDouble }, KeypointDivisor.presets.map { it.divisor })

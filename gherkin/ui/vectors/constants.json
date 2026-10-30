@@ -1,17 +1,72 @@
 {
-  "_comment": "Numbers both clients use and only StarCore owns. The desktop copies them by hand (WorkingLocation.PEAK_TO_INPUT_RATIO, KeypointDivisor), so each client's test reads this file: the gui against StarCore's own values (DiskSpaceCheck.peakToInputRatio, Config.recommendedReducedKeypointDivisor, the presets and limits the startup prompt offers), the desktop against its copies. Change a value in StarCore and the gui test fails until this file says the same, and then the desktop test fails until its copy does.",
+  "_comment": "Numbers and small rules both clients use. The disk-space and keypoint-divisor values are StarCore's, which the desktop copies by hand (WorkingLocation.PEAK_TO_INPUT_RATIO, KeypointDivisor): the gui's test reads this file against StarCore's own values (DiskSpaceCheck.peakToInputRatio, Config.recommendedReducedKeypointDivisor, the presets and limits the startup prompt offers) and the desktop's against its copies, so a change in StarCore fails the gui test until this file says the same, and then the desktop test until its copy does. customFrameRate is the render sheet's custom frame rate field, which each client implements: the same cases go through both.",
   "diskSpace": {
     "peakToInputRatio": 4.0,
     "runBytes": [
-      { "inputBytes": 0, "expected": 0 },
-      { "inputBytes": 1000, "expected": 4000 },
-      { "inputBytes": 10737418240, "expected": 42949672960 }
+      {
+        "inputBytes": 0,
+        "expected": 0
+      },
+      {
+        "inputBytes": 1000,
+        "expected": 4000
+      },
+      {
+        "inputBytes": 10737418240,
+        "expected": 42949672960
+      }
     ]
   },
   "keypointDivisor": {
-    "presets": [1.0, 1.5, 2.0],
+    "presets": [
+      1.0,
+      1.5,
+      2.0
+    ],
     "recommendedReduced": 1.5,
     "tooHigh": 4.0,
     "max": 8.0
+  },
+  "customFrameRate": {
+    "min": 0.01,
+    "max": 1000.0,
+    "cases": [
+      {
+        "text": "24",
+        "expected": 24.0
+      },
+      {
+        "text": "12.5",
+        "expected": 12.5
+      },
+      {
+        "text": "1000",
+        "expected": 1000.0
+      },
+      {
+        "text": "0.01",
+        "expected": 0.01
+      },
+      {
+        "text": "1000.1",
+        "expected": null
+      },
+      {
+        "text": "0",
+        "expected": null
+      },
+      {
+        "text": "0.009",
+        "expected": null
+      },
+      {
+        "text": "",
+        "expected": null
+      },
+      {
+        "text": "1.2.3",
+        "expected": null
+      }
+    ]
   }
 }
