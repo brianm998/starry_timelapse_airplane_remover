@@ -115,22 +115,21 @@ private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMo
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // The pickers are not there while the sequence plays (the gui hides them: there is nothing to choose between until it stops).
         // Mode segmented control
-        com.star.desktop.ui.components.StarPicker(
+        if (!playing) com.star.desktop.ui.components.StarPicker(
             options = InteractionMode.entries,
             selected = mode,
             label = { localized(it.labelKey) },
             onSelect = { vm.setMode(it) },
-            enabled = !playing,
         )
         Box(Modifier.weight(1f))
         // View-mode toggle
-        com.star.desktop.ui.components.StarPicker(
+        if (!playing) com.star.desktop.ui.components.StarPicker(
             options = listOf(FrameViewMode.VIEW_ORIGINAL, FrameViewMode.VIEW_PROCESSED),
             selected = viewMode, // grid 'Show' may set SUBTRACTION/VALIDATION → no pill highlights (matches old chips)
             label = { localized(if (it == FrameViewMode.VIEW_PROCESSED) "ui.view_processed" else "ui.view_original") },
             onSelect = { vm.setViewMode(it) },
-            enabled = !playing,
             isEnabled = { it in available },
         )
         if (mode == InteractionMode.EDIT) {
