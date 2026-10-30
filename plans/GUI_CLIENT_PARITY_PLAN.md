@@ -1,6 +1,8 @@
 # GUI client parity: findings and a shared Gherkin UI suite
 
-**Status:** approved 2026-10-29. The owner took every default in §3 (D1–D14). Next: Phase 0 (§7).
+**Status:** approved 2026-10-29. The owner took every default in §3 (D1–D14). Phase 3 has started on the findings that
+needed no UI automation (§9 lists what is done, what is built but not yet exercised in a running app, and what is blocked);
+Phases 0–2 are blocked on two things only the owner can do (§9.3).
 **Audience:** the agent that implements it.
 **Reads with:** `gherkin/README.md` (the existing corpus, generator and runners), `plans/CROSS_PLATFORM_DAEMON_DESIGN.md`
 (the daemon contract), `CLAUDE.md` (localization; "Swift and Kotlin clients change together").
@@ -656,3 +658,69 @@ These need a run, not more reading:
 * whether a Kotlin Cancel on a fresh sequence leaves a `config.json` beside the sequence (the daemon saves before frames load,
   `Session.swift:1119`);
 * whether the gui's ffmpeg glob and `VideoExport`'s concat list give identical videos for the same frames (P12).
+
+---
+
+## 9. Implementation log
+
+Started 2026-10-29 on branch `claude/gui-client-parity-plan-3b6676`. Commits begin with the finding's ID (`git log --grep '^L1:'`).
+
+### 9.1 Done, with a test that fails without the change
+
+Desktop: `./gradlew test`, green (594 tests; the one failure on the first run was the new pixel-threshold row lacking its help entry, fixed).
+gui: `xcodebuild test -scheme star -only-testing:starTests`, green (230 tests). Daemon: `swift test --filter` on the suites it touches
+(`ExpertConfigFieldsTests|MappingTests|StepProgressReportTests|SessionCloseTests|EnumParityTests`, 96 tests), green.
+StarCore's own test suite and the cli were not run; the StarCore changes are additive (an optional callback, one new method).
+
+| ID | What changed | Test |
+|---|---|---|
+| L1 | desktop no longer overrides a new sequence's clean method (proto zero = automatic) | `InitialConfigBesideTest.theRestOfTheDefaultsAreKept` |
+| M1 | desktop `LocalPreferences` keeps an unreadable file, writes `.undecodable`, keeps changes in memory, writes through a temp file and a rename; a blank file counts as no file (both clients) | `LocalPreferencesTest` (7 new) |
+| M2 | gui `UserPreferences.save()` merges into the file: only the keys this process changed, objects member by member (recents) | `UserPreferencesMergeTests` |
+| P1 | desktop headline uses the proto's `graph_built` | `ProcessingModalPlanTest` |
+| P2 | `Config.pixel_threshold = 63` (proto, daemon in and out, clamped 0.001–10), desktop expert row with its help text. **The right-panel slider is not done.** | `ExpertConfigFieldsTests`, `ExpertFieldWiringTest`, `SettingsRulesTest` |
+| L3 | gui: `Callbacks.frameEditedCallback` fires from `markAsChanged()`; the gui writes the frame's decisions and queues its save on every edit (what `Session.frameEdited` does); `FrameSaveQueue.flush` (StarCore) saves what is waiting, and `unloadSequence` calls it. E4 follows: every multi-choice/multi-select frame goes through `markAsChanged`. | it builds, and `UserPreferencesStoreTests` and `SettingsWiringTests` stay green; **the callback and the flush were not exercised on a real sequence** |
+| L6 | gui re-process clears only the selected frames | `ReprocessClearingTests` |
+| L2, M13 | gui `detectionType` is stored in the sequence's `config.json` (loader + `didSet`), set into `constants` when a sequence opens, seeded from the preference only for a new sequence; the Blob window picker also sets the preference | `SettingsWiringTests` (existing, pairs the loader with the writer) |
+| E1, E2 | desktop toggles on a click for Remove, Keep and Multi (D2, D3); cursor shows the opposite | `ClickRulesTest`, `ToolCursorsTest` |
+| E3 | gui Information tool no longer marks an undecided group for removal | build only |
+| S1, S7 | gui cancels the video import task (StarCore's `decodeVideo`/`startVideoExtraction` stop ffmpeg and delete the folder on cancel), resets the probing/extracting flags on any exit, and a cancel is not reported as an error | build only |
+| S6 | gui single-image drop is case-insensitive and includes png | `DroppedImageTests` |
+| M3 | desktop File ▸ Open… / Resume… ask first when work is going (`CloseAction.OPEN`; strings `ui.work_in_progress.opening`, `ui.stop_and_open` in all 22 tables). **The gui has no Open items yet (D9).** | `PendingWorkTest` |
+| M5, M6, M8 | desktop keys: transport keys do nothing while playing; no keys under the reopen panel; `d` in any mode | `KeyHandlingTest` (the key set only; `handleGlobalKey` needs the test host of §6.3) |
+| M7 | gui `H` from scrub/grid switches to edit first | build only |
+| H1 | desktop painter opens on Sky and Reset / band selection put it back; a new frame keeps the mode only when it has a horizon to refine | `HorizonPaintStateTest` |
+| S4, S5 | desktop dialogs are modal (`modalScrim`), Return = default, Esc = cancel: video import, sequence location, change mode, multi sheets, render video (Esc only); startup Removal screen: Return starts processing. **The post-render prompt already did this.** | the existing Compose tests stay green; the key handling itself is not tested (needs the test host of §6.3) |
+| P13 | desktop Preview button: Return, hover help, white right-aligned help text | build only |
+| E5 | desktop multi sheets start on Keep, remember action, range and N (default 50, shared) | `MultiSheetMemoryTest` |
+| Q2 | desktop grid Show list = original, final and every available mode | `ViewModesTest` |
+| Q9 | desktop `numberFieldRules` (Return and leaving commit, Esc reverts, focus leaves) on the neighbour-count and max-zoom fields; gui `EditableNumberView` commits on focus loss and on disappearing, Esc reverts, unchanged is a no-op, focus leaves after commit | build only |
+| Q12 | desktop grid shows no badge on a finished frame and no orange for a pending refinement | build only |
+| I1 | gui: `DetectionType.localizedName` for the three pickers, the transport tooltips use `ui.transport_*`, "Process N (new only)" and the painter's Next/Continue use the existing keys | `NoHardCodedStringsTests` (the gui counterpart of the Kotlin lint, §6.2.3) |
+
+### 9.2 Looked at, not done, and what the next person needs to know
+
+* **L4, L5, Q6 are one change.** D7/D8 remove the desktop's left-panel Render block, but the desktop Gherkin runner clicks `render.all.frames`
+  there to finish an auto selective run (`DesktopFeatureRunner.kt:306`). Remove the block only together with the runner step, once L5
+  (same end state in both clients) is fixed, which needs a processing run in each client.
+* **L10:** `FrameAirplaneRemover.set(cleanMethod:)` returns early when `observer?.cleanMethod == cleanMethod` is false. The name `hasChanged` is
+  inverted: the gui sets `frameObserver.set(cleanMethod:)` **first**, so the comparison is true; the daemon has no observer, so nothing is linked.
+  The observer is held weakly (`weak var observer`), and `set(observer:)` starts a Task that writes the frame's current method into it, so
+  attach one per frame when the frame is created, not just before a change.
+* **P4, P11, S2, S3** change what happens when a run ends or is cancelled; they need a run to confirm which callback fires.
+* **Q1** (placeholder instead of falling back to another mode) should wait for Q3, or the desktop shows the placeholder for modes the daemon
+  has not made.
+* **P14** (the gui's custom frame rate picker resets to 24): `FrameRate.custom(24)` is the picker's tag; keeping the current rate needs the tag to carry it.
+* **E6** (outlier window from the menu lists nothing) needs an observer on the current frame in the gui.
+* Not started: Q3–Q5, Q7, Q8, Q10, Q11, Q13, Q14, P5–P12 (except P12's reading), M4, M9–M12, H2, H3, D9's menu tree, D10–D12, I1's remaining
+  items (outlier-table headers, `FrameProcessingState.shortString` badges — English on purpose for the updatable log, so they need a second property).
+* The strings `tool.help.*` still say a click on Remove/Keep "marks" a group; with D2 a click toggles. Left alone: changing them is 22 translations.
+
+### 9.3 Blocked on the owner
+
+* `sudo automationmodetool enable-automationmode-without-authentication` (it reports "Automation Mode is disabled"): nothing in
+  `gui/starUITests` can run here until then, so no `@ui` feature has been run on the gui.
+* The `ui_small` and `ui_small_selective` fixtures (§6.3): they are built from `a7sii_10`, which is not in this Mac's test-data cache, and the upload is the owner's.
+* Phases 0–2 (spikes, `gherkin/ui`, the `@ui` corpus, CI) are therefore not started; the Layer 0 pieces that need no app are: the gui lint is in;
+  the command table, the id registry and the shared vectors are not.
+
