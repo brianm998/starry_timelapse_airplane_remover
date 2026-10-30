@@ -2559,6 +2559,14 @@ public final class ImageSequenceViewModel {
             }
         }
         
+        // Every edit, not only leaving the frame: an edit on the frame the user was last on was otherwise never saved
+        // when they closed the sequence from it.  (The daemon does this in `Session.frameEdited`.)
+        callbacks.frameEditedCallback = { [weak self] frame in
+            Task { @MainActor [weak self] in
+                await self?.frameEdited(frame)
+            }
+        }
+
         callbacks.frameSavingStateChangeCallback = { [weak self] frame, oldState, newState in
             guard let self else { return }            
             Task { @MainActor [weak self] in
@@ -3453,6 +3461,22 @@ public final class ImageSequenceViewModel {
         } else {
             self.currentIndex = nextFrameView.frameIndex
         }
+    }
+
+    /// The user changed `frame`'s decisions: write them down now, so that nothing that happens before the save timer fires
+    /// can lose them, and queue the frame for its save, which every further edit puts off again.  A burst of clicks is
+    /// one save, and the frame counts as pending work (a Close or a Quit asks first) until it is written.
+    func frameEdited(_ frame: FrameAirplaneRemover) async {
+        await frame.writeOutliersRemoveReasons()
+        await self.frameSaveQueue.readyToSave(frame: frame) { [weak self] in
+            await self?.refresh(frame: frame)
+        }
+    }
+
+    /// Write out every edit still waiting for its save (the sequence is being closed), and return once they are on disk.
+    func flushSaves() async {
+        let edited = self.frames.compactMap { $0.frame }
+        await frameSaveQueue.flush(frames: edited, includeUnqueuedEdits: true)
     }
 
     // used when advancing between frames

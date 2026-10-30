@@ -457,6 +457,9 @@ public final class ViewModel {
             closing.stopProcessing()
             closing.stopVideo()
             closing.disable()
+            // What the user changed in the last few seconds is still waiting for its save: write it out in the
+            // background, so the window is gone at once and the edits are not (they were lost here before).
+            Task { await closing.flushSaves() }
         }
         imageSequence = nil
         cursorStack = []

@@ -379,6 +379,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         //Log.d("mark as changed")
         self.state = .userModified
+        callbacks.frameEditedCallback?(self)
         //Task { await self.updateCombineSubjects() }
         await self.updateCombineSubjects()
     }
