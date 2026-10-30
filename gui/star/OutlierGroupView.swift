@@ -129,6 +129,10 @@ struct OutlierGroupView: View {
                       // dump the tapped outlier into the trash
                       viewModel.frames[groupViewModel.group.frameIndex].dumpInTrash(groupViewModel.group)
                       topViewModel.refreshCursor()
+                  } else if viewModel.selectionMode == .information {
+                      // list this group's details, whatever its decision: an undecided group used to fall through
+                      // to the toggle below and was marked for removal by looking at it
+                      handleDetailsMode()
                   } else {                   
                       Task {
                           let origShouldPaint = await groupViewModel.group.shouldRemove() 
@@ -140,9 +144,7 @@ struct OutlierGroupView: View {
 
                                   Log.d("viewModel.selectionMode \(viewModel.selectionMode)")
                                   
-                                  if viewModel.selectionMode == .information {
-                                      handleDetailsMode()
-                                  } else if viewModel.multiChoice {
+                                  if viewModel.multiChoice {
                                       openMultiChoiceSheet()
                                   } else {
                                       toggleRemoveReason(origShouldPaint) {
