@@ -668,7 +668,7 @@ Started 2026-10-29 on branch `claude/gui-client-parity-plan-3b6676`. Commits beg
 ### 9.1 Done, with a test that fails without the change
 
 Desktop: `./gradlew test`, green (594 tests; the one failure on the first run was the new pixel-threshold row lacking its help entry, fixed).
-gui: `xcodebuild test -scheme star -only-testing:starTests`, green (230 tests). Daemon: `swift test --filter` on the suites it touches
+gui: `xcodebuild test -scheme star -only-testing:starTests`, green (238 tests after the second round). Daemon: `swift test --filter` on the suites it touches
 (`ExpertConfigFieldsTests|MappingTests|StepProgressReportTests|SessionCloseTests|EnumParityTests`, 96 tests), green.
 StarCore's own test suite and the cli were not run; the StarCore changes are additive (an optional callback, one new method).
 
@@ -696,6 +696,14 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
 | Q2 | desktop grid Show list = original, final and every available mode | `ViewModesTest` |
 | Q9 | desktop `numberFieldRules` (Return and leaving commit, Esc reverts, focus leaves) on the neighbour-count and max-zoom fields; gui `EditableNumberView` commits on focus loss and on disappearing, Esc reverts, unchanged is a no-op, focus leaves after commit | build only |
 | Q12 | desktop grid shows no badge on a finished frame and no orange for a pending refinement | build only |
+| H2 | desktop: completing the band clears `hasStrokes`, so "change frame?" starts with the first refinement stroke | `HorizonPainterDetailsTest.completingTheBandClearsTheFrameChangeFlag` |
+| Q4 | desktop right panel: outlier counts, trash count, Keep/Remove/Clear buttons, the three decision-tree buttons and "Selected #N" are gone (D8); header `ui.tool`; no digits under the tools. Decision Tree, All Frames became a menu item | build; nothing tested the removed controls |
+| M12 | desktop menu uses the gui's labels (`ui.close`, `ui.process_all_frames`, the window items, `ui.paint_horizon_reference`). **The top-level grouping still differs** (gui: Actions, Tools; desktop: File, View, Process, Export, Window, Outliers) | `CommandTableTest`, `CommandTableTests` |
+| D9, M3 | gui menus gain Open Image Sequence (⌘O), Open Video, Resume from config.json (behind the same work-in-progress question as Close, with a "Stop and Open" button), Process Current Frame, Cancel Processing, Processing Settings (⇧⌘,), Render Video, Toggle Filmstrip, Play / Pause, and Close gets ⌘W | `CommandTableTests`; **not run in the app** |
+| E6, E7, D12 | gui outlier window lists the current frame's groups and follows the frame; the classification toggle has its own label; Decision Tree, All Frames works in the gui | build; **not run in the app** |
+| Q10 | gui fast advancement loads a frame's outliers and keeps scanning (D14) | `FastAdvancementSkipTests` (the decision only) |
+| P7, D12 | gui settings sheet has Allow Earth Alignment, Max Keypoint Ops and Merge Streaming MB | `SettingsWiringTests` (the new property); the rows are build-checked |
+| Layer 0 | `gherkin/ui/commands.json` (menu commands both clients must offer, with `knownGaps`) checked by a unit test on each side; `gherkin/ui/vectors/processingHeadline.json` (StarCore's headline text, recorded with `TEST_RUNNER_STAR_VECTORS_RECORD=1`) checked against the Kotlin copy | `CommandTableTest(s)`, `ProcessingHeadlineVectorsTest(s)` |
 | I1 | gui: `DetectionType.localizedName` for the three pickers, the transport tooltips use `ui.transport_*`, "Process N (new only)" and the painter's Next/Continue use the existing keys | `NoHardCodedStringsTests` (the gui counterpart of the Kotlin lint, §6.2.3) |
 
 ### 9.2 Looked at, not done, and what the next person needs to know
@@ -712,8 +720,9 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
   has not made.
 * **P14** (the gui's custom frame rate picker resets to 24): `FrameRate.custom(24)` is the picker's tag; keeping the current rate needs the tag to carry it.
 * **E6** (outlier window from the menu lists nothing) needs an observer on the current frame in the gui.
-* Not started: Q3–Q5, Q7, Q8, Q10, Q11, Q13, Q14, P5–P12 (except P12's reading), M4, M9–M12, H2, H3, D9's menu tree, D10–D12, I1's remaining
-  items (outlier-table headers, `FrameProcessingState.shortString` badges — English on purpose for the updatable log, so they need a second property).
+* Not started: Q3, Q5, Q7, Q8, Q11, Q13, Q14, P5, P6, P8–P12 (except P12's reading), M4, M9–M11, H3, the grouping of D9's menu tree, D10–D12 (except the
+  three settings and Decision Tree, All Frames above), the rest of the Layer 0 pieces (the id registry, vectors for `WorkingLocation`, `FrameState.isWorking`
+  and the keypoint-divisor presets), I1's remaining items (outlier-table headers, `FrameProcessingState.shortString` badges — English on purpose for the updatable log, so they need a second property).
 * The strings `tool.help.*` still say a click on Remove/Keep "marks" a group; with D2 a click toggles. Left alone: changing them is 22 translations.
 
 ### 9.3 Blocked on the owner
