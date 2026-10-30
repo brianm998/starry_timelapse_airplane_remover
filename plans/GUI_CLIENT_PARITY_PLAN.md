@@ -667,9 +667,9 @@ Started 2026-10-29 on branch `claude/gui-client-parity-plan-3b6676`. Commits beg
 
 ### 9.1 Done, with a test that fails without the change
 
-Desktop: `./gradlew test`, green (611 tests after Q3).
-gui: `xcodebuild test -scheme star -only-testing:starTests`, green (248 tests after the third round). Daemon: `swift test --filter` on the suites it touches
-(`ExpertConfigFieldsTests|MappingTests|SessionCloseTests|EnumParityTests`, 89 tests after Q3), green.
+Desktop: `./gradlew test`, green (618 tests after the fourth round).
+gui: `xcodebuild test -scheme star -only-testing:starTests`, green (252 tests after the fourth round). Daemon: `swift test --filter` on the suites it touches
+(`ExpertConfigFieldsTests|MappingTests|SessionCloseTests|EnumParityTests|HorizonRefinementSessionTests|StepProgressReportTests`, 105 tests after P10), green.
 StarCore's own test suite and the cli were not run; the StarCore changes are additive (an optional callback, one new method).
 
 | ID | What changed | Test |
@@ -711,9 +711,13 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
 | M4 | desktop: under the horizon painter the arrows, b/f and z/x still answer (and `setCurrentIndex` asks "Change frame?" once paint has started); Home/End and the editing keys stay the painter's | `KeyHandlingTest.underThePainterOnlyTheFrameKeysAnswer` (the key set only) |
 | H3 | desktop painter stays in "computing" until a video frame is extracted, then loads its saved horizon | `HorizonPainterWaitTest` (`awaitFrameExtracted`) |
 | Q13 | desktop grid panel: outlier counts only when `FrameInfo.outliers_loaded`; Display toggles in the gui's order; the horizon's Pending/Set row under Mode in Processing | build; nothing tested it |
-| Q8 (part) | desktop hides the mode and view pickers while playing (it greyed them). **Placement (gui: bottom left, "[mode] with [original\|final] frames") is not done** | build |
+| Q8 | desktop hides the mode and view pickers while playing (it greyed them), and they are at the bottom left, "[mode] with [original\|processed] frames", at the start of the bottom row (they were in a top bar beside a Paint Horizon Reference chip that the right panel button and the menu already do: the chip is gone; the top bar is only the engine badge, which only the desktop has). The gui's pickers showed `rawValue`/`shortName`, English in every language: they read the catalogue now (`interaction_mode.*`, `ui.view_original`/`ui.view_processed`, new `ui.interaction_mode_help` in 22 tables), so the gui says "Processed" where it said "final" | `ModePickersTest`, `ViewModeNameTests.testTheBottomLeftPickersReadTheCatalogue`; the layout itself not looked at |
 | Q7 | desktop playback speed is the gui's Display picker (1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90 fps) in the Display section; the bottom strip's -/+ are gone (`ui.fps`, `ui.transport_slower`, `ui.transport_faster` are now unused by both clients, left in the tables) | `SharedConstantsTest(s)` for the list |
 | Q3 | `Mapping.availableModes` also lists the star/earth aligned images a frame can build (`canProduceAlignedImage`); `Frame.GetPreview` could not serve them (`ImageAccessor.load(.original)` returns nothing for a missing full-size file), so `GetFramePreviewRequest.build_if_missing` (additive) makes the daemon build the image first, one at a time; the desktop sets it only for the frame on screen (preview and full-size), not for thumbnails or the playback prefetch | `SessionCloseTests` (the offer, and when a build is needed, with stored homographies), `FramePreviewRequestTest` (the flag on the wire); **a build on a processed frame was not run** |
+| Q1 | a frame with no picture in the view mode showing says "<mode> image not found for this frame" (`ui.image_not_found_for_frame`) in the main view, the grid cells (smaller type) and "N/A" in the filmstrip; the desktop no longer falls back through final / original / subtraction / validation. An aligned mode is asked for with `build_if_missing` (Q3); the picture on screen stays until it is built, with no "building" text | `ViewModeExactTest` (fails on the old fallback: it asked for SUBTRACTION and VALIDATION too); the cells are build-checked |
+| I1 (view modes) | StarCore `FrameViewMode.longName` reads `view_mode.<case>` from the catalogue (it was English literals, so the gui's Show lists, blob window and the not-found line were English in every language) | `ViewModeNameTests` (English unchanged, every case differs in German) |
+| Q11 | filmstrip and grid cells (and the grid right panel) draw the frame's counts and clean method from its `FrameViewModel.info`, which every edit updates, and fetch them again when `frameDataVersions` says the frame's data went stale; they kept a copy fetched at index/state change | `FrameInfoLiveTest` (an edit lands in `frameInfoFlow`; a refresh replaces what was held); the cells are build-checked |
+| P10 | the daemon clears the refinement run's "Clearing the renders" line (`stepsQueued(generation:)`) once its operations are queued, as the gui clears `processingStatusText`; it stayed in every step report of the run | `HorizonRefinementSessionTests.testThePreparingLineGoesOnceTheRunIsQueued` (the clear, and that another run's does not); **the call after `enqueueHorizonRefinement` was not exercised in a run** |
 | I1 | gui: `DetectionType.localizedName` for the three pickers, the transport tooltips use `ui.transport_*`, "Process N (new only)" and the painter's Next/Continue use the existing keys | `NoHardCodedStringsTests` (the gui counterpart of the Kotlin lint, §6.2.3) |
 
 ### 9.2 Looked at, not done, and what the next person needs to know
@@ -725,11 +729,8 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
   inverted: the gui sets `frameObserver.set(cleanMethod:)` **first**, so the comparison is true; the daemon has no observer, so nothing is linked.
   The observer is held weakly (`weak var observer`), and `set(observer:)` starts a Task that writes the frame's current method into it, so
   attach one per frame when the frame is created, not just before a change.
-* **P4, P11, S2, S3** change what happens when a run ends or is cancelled; they need a run to confirm which callback fires.
-* **Q1** (placeholder instead of falling back to another mode) was waiting for Q3, which is done; it still needs the desktop to show a placeholder
-  for a mode the frame has not got, and to keep showing the previous picture while an aligned image is being built (the request waits for the build).
-* **Q8** keeps the pickers in the top bar; the gui's strip is below the image, with "with" and "frames" around the view picker (`ui.with`, `ui.frames`).
-* Not started: Q5, Q11, P5, P6, P8–P11, M9–M11, the grouping of D9's menu tree, D10–D12 (except the three settings and Decision Tree, All Frames above),
+* **P4, P11, S2, S3** (P10 is done above) change what happens when a run ends or is cancelled; they need a run to confirm which callback fires.
+* Not started: Q5, P5, P6, P8, P9, M9–M11, the grouping of D9's menu tree, D10–D12 (except the three settings and Decision Tree, All Frames above),
   the id registry of Layer 0, I1's remaining items (outlier-table headers, `FrameProcessingState.shortString` badges — English on purpose for the updatable log, so they need a second property).
 * The strings `tool.help.*` still say a click on Remove/Keep "marks" a group; with D2 a click toggles. Left alone: changing them is 22 translations.
 
