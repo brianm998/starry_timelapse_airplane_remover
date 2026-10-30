@@ -3,7 +3,6 @@ package com.star.desktop.data
 import com.star.desktop.i18n.localized
 import com.star.desktop.engine.StarClient
 import com.star.desktop.engine.StarRpcException
-import com.star.proto.CleanMethod
 import com.star.proto.Config
 import com.star.proto.ConfigChangePreview
 import com.star.proto.OpenProgress
@@ -90,12 +89,12 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
          *    cannot change these fields after open.
          *  - Horizon detection starts on, as StarCore's own default does (macOS leaves it so when the first startup
          *    prompt is left alone, e.g. for Advanced); the "does it include a horizon?" answer turns it off.
-         *  - Clean method defaults to **selective**: only `selective`/`automatic(true)` have
-         *    `usesOutliers == true`, so this is required for the outlier-editing UX (the app's
-         *    centerpiece) to have any outliers to show. The ProcessingSettings dialog can change it.
+         *  - The clean method is left at the proto's zero, `CLEAN_AUTOMATIC`, which is StarCore's own default
+         *    (`Config.swift`, `.automatic(false)`) and what the macOS gui starts a new sequence with. The startup
+         *    removal question, or the Processing Settings sheet, change it; leaving that question with Close keeps
+         *    this, in both clients. (This used to be selective, from before the startup question existed.)
          */
         fun defaultInitialConfig(): Config = Config.newBuilder()
-            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE)
             .setWriteFramePreviewFiles(true)
             .setWriteOutlierGroupFiles(true)
             .setHorizonDetectionEnabled(true)

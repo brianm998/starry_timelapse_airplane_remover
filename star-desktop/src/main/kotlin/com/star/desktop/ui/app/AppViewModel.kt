@@ -179,8 +179,8 @@ internal fun withRemovalChoices(current: Config, cleanMethod: CleanMethod?, allo
 }
 
 /**
- * The initial config for opening [source] (an image sequence's folder or a video file): selective cleaning,
- * previews on, and output written into the folder that holds the source, never left to the daemon's
+ * The initial config for opening [source] (an image sequence's folder or a video file): StarCore's default clean
+ * method (automatic), previews on, and output written into the folder that holds the source, never left to the daemon's
  * per-session scratch fallback (a fresh hidden temp dir on every open). Config's `basename` already embeds
  * the sequence's own dirname, so this can't collide with a sibling sequence, and opening the same source
  * again resolves to the same output location, which is what lets `FrameAirplaneRemover.init`'s

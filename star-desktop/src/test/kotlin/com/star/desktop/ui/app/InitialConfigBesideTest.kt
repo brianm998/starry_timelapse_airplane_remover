@@ -20,9 +20,10 @@ class InitialConfigBesideTest {
         assertEquals(File("/Volumes/x/shoots").path, initialConfigBeside("/Volumes/x/shoots/clip.mov").outputPath)
     }
 
+    /** The macOS gui starts a new sequence on StarCore's default, automatic, and so does this client (L1 of the parity plan). */
     @Test fun theRestOfTheDefaultsAreKept() {
         val config = initialConfigBeside("/a/b/clip.mp4")
-        assertEquals(CleanMethod.CLEAN_SELECTIVE, config.cleanMethod)
+        assertEquals(CleanMethod.CLEAN_AUTOMATIC, config.cleanMethod)
         assertTrue(config.writeFramePreviewFiles && config.writeOutlierGroupFiles)
     }
 
