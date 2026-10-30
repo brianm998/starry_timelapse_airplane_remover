@@ -7,8 +7,11 @@ import com.star.proto.SessionInfo
 import com.star.proto.VideoCapabilities
 import com.star.proto.VideoEncodeSettings
 import com.star.proto.VideoInfo
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.assertNull
 
 class VideoChoiceTest {
@@ -84,55 +87,32 @@ class VideoChoiceTest {
         return b.build()
     }
 
-    @Test fun theVideoAnImportCameFromComesFirst() {
-        val s = storedVideoSettings(session(settings("prores", fps = 29.97), settings("h264", fps = 25.0)))
+    /** L12: the config is all there is. An import's own settings are in it (the daemon's `Config.set(videoInfo:)`), so a 29.97 fps import starts at 29.97. */
+    @Test fun theConfigsRecordedSettingsAreWhatARenderStartsFrom() {
+        val s = storedVideoSettings(session(configVideo = settings("prores", fps = 29.97)))
         assertEquals("prores", s?.codec)
         assertEquals(29.97, s?.frameRate)
     }
 
-    @Test fun theConfigsRecordedSettingsComeNext() {
-        assertEquals("h264", storedVideoSettings(session(configVideo = settings("h264", fps = 25.0)))?.codec)
+    /** The source video's own settings and what was chosen before are no longer laid over or under it: the gui reads the config only. */
+    @Test fun theSourceVideoAndWhatWasChosenBeforeAreNotConsulted() {
+        val s = storedVideoSettings(session(videoFromSource = settings("prores", fps = 29.97), configVideo = settings("h264", fps = 25.0)))
+        assertEquals("h264", s?.codec)
+        assertEquals(25.0, s?.frameRate)
+        assertNull(storedVideoSettings(session(videoFromSource = settings("prores", fps = 29.97))), "a source video that the config does not carry says nothing")
     }
 
-    @Test fun aSessionWithNeitherHasNothingStored() {
+    @Test fun aSessionWhoseConfigNamesNoCodecHasNothingStored() {
         assertNull(storedVideoSettings(session()))
         assertNull(storedVideoSettings(session(configVideo = settings(codec = ""))), "a config with no codec says nothing")
         assertNull(storedVideoSettings(null))
     }
 
-    // ---- what a render starts from
-
-    private fun remembered(codec: String = "", encoder: String = "", fps: Double = 0.0, pixelFormat: String = "", muxer: String = ""): VideoEncodeSettings =
-        VideoEncodeSettings.newBuilder().setCodec(codec).setEncoder(encoder).setFrameRate(fps).setPixelFormat(pixelFormat).setMuxer(muxer).build()
-
-    @Test fun anImportKeepsItsOwnRateWhateverWasChosenBefore() {
-        val s = startingVideoSettings(session(videoFromSource = settings("prores", fps = 29.97)), remembered(codec = "h264", fps = 60.0))
-        assertEquals("prores", s?.codec)
-        assertEquals(29.97, s?.frameRate)
-    }
-
-    @Test fun otherwiseWhatTheUserLastChoseBeatsWhatTheConfigRecorded() {
-        val s = startingVideoSettings(session(configVideo = settings("prores", fps = 24.0)), remembered(codec = "h264", fps = 30.0))
-        assertEquals("h264", s?.codec)
-        assertEquals(30.0, s?.frameRate)
-    }
-
-    /** The user chose a frame rate and never a codec: the codec is the config's, not nothing. */
-    @Test fun aFieldTheUserNeverChoseStaysWhatTheConfigHas() {
-        val s = startingVideoSettings(session(configVideo = settings("prores", fps = 24.0)), remembered(fps = 50.0))
-        assertEquals("prores", s?.codec)
-        assertEquals(50.0, s?.frameRate)
-    }
-
-    @Test fun withNothingRememberedItIsWhatWasStored() {
-        assertEquals("prores", startingVideoSettings(session(configVideo = settings("prores")), null)?.codec)
-        assertNull(startingVideoSettings(session(), null))
-    }
-
-    @Test fun whatWasChosenWithNothingStoredStillSeedsTheRender() {
-        val s = startingVideoSettings(session(), remembered(codec = "h264", muxer = "mov"))
-        assertEquals("h264", s?.codec)
-        assertEquals("mov", s?.muxer)
+    @Test fun theDialogStartsFromTheConfigAlone() {
+        val dialog = listOf(File("src/main/kotlin/com/star/desktop/ui/dialogs/RenderVideoDialog.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/RenderVideoDialog.kt"))
+            .first { it.isFile }.readText()
+        assertTrue("storedVideoSettings(info)" in dialog)
+        assertFalse("rememberedVideoSettings" in dialog || "startingVideoSettings" in dialog, "the layering is gone")
     }
 
     /** The scale height goes to the daemon, and survives re-resolving the choice under a new codec. */

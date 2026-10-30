@@ -113,11 +113,11 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
     val info = app.sessions.session.value
     val frameCount = info?.frameCount ?: 0
 
-    // Start from what the render was last set to (the video an import came from, else what the user last chose, in this app or the Mac's, else the
-    // config), not the first entry of every list; each level is checked against what the one above allows.
-    val start = remember(c) { startingVideoSettings(info, rememberedVideoSettings(app)) }
+    // Start from what the config holds (an import's own settings are there), not the first entry of every list, as the gui does (L12); each
+    // level is checked against what the one above allows.
+    val start = remember(c) { storedVideoSettings(info) }
     var choice by remember(c) { mutableStateOf(resolveVideoChoice(c, start)) }
-    /** A choice the user made: kept for the next render, as the Mac keeps it. */
+    /** A choice the user made: kept in the Mac's preferences, which the macOS gui seeds a new sequence from; this client starts from the config. */
     fun choose(next: VideoChoice) {
         choice = next
         app.prefs.videoFrameRate = next.frameRate
@@ -294,19 +294,6 @@ private fun FailedView(state: RenderState.Failed, onDismiss: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
         Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.dismiss")) }
     }
-}
-
-/** What the user last chose, as the settings the dialog would start from; a field only where they have chosen one. */
-private fun rememberedVideoSettings(app: AppViewModel): VideoEncodeSettings? {
-    val p = app.prefs
-    if (p.videoFrameRate == null && p.videoCodec == null && p.videoEncoder == null && p.videoPixelFormat == null && p.videoMuxer == null) return null
-    return VideoEncodeSettings.newBuilder().also { b ->
-        p.videoFrameRate?.let { b.frameRate = it }
-        p.videoCodec?.let { b.codec = it }
-        p.videoEncoder?.let { b.encoder = it }
-        p.videoPixelFormat?.let { b.pixelFormat = it }
-        p.videoMuxer?.let { b.muxer = it }
-    }.build()
 }
 
 /**
