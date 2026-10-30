@@ -107,10 +107,8 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
 
     // The paint state persists across frame advances so brush size and Sky/Ground mode survive
     // (macOS resetForNewFrame); per-frame paint data is cleared in the LaunchedEffect below. The
-    // transform is the session's: the zoom and pan are the same here as in the edit view.
-    val state = remember { HorizonPaintState(imgW, imgH).also { it.isErasing = vm.horizonPaintErasing.value } }
-    // The sky/ground mode outlives this painter: it is remembered for the next time it opens.
-    LaunchedEffect(state) { snapshotFlow { state.isErasing }.collect { vm.setHorizonPaintErasing(it) } }
+    // transform is the session's: the zoom and pan are the same here as in the edit view. The mode starts on Sky each time the painter opens.
+    val state = remember { HorizonPaintState(imgW, imgH) }
     // Tell the session when paint has started, so a change of frame is asked about; clears when it is gone (a new frame, closing).
     LaunchedEffect(state) { snapshotFlow { state.hasStrokes }.collect { vm.setHorizonPaintStarted(it) } }
     DisposableEffect(state) { onDispose { vm.setHorizonPaintStarted(false) } }

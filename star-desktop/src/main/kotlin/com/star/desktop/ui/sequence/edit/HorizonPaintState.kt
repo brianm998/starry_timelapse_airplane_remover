@@ -27,7 +27,9 @@ enum class HorizonPhase { BAND_SELECTION, COMPUTING, REFINEMENT }
  * (composition read) refresh without observing the underlying `IntArray`s element-by-element.
  *
  * The instance is reused across startup frame advances ([resetForNewFrame]) so [brushRadius] and
- * [isErasing] survive (matching macOS `resetForNewFrame`).
+ * [isErasing] survive them (matching macOS `resetForNewFrame`), but the mode is Sky on every other way in: the painter opens on
+ * Sky, and Reset and band selection put it back (the band is always additive, and its toolbar has no sky/ground buttons to
+ * undo a Ground left over from before).
  */
 class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
 
@@ -40,8 +42,19 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
     private var gen = 0
     fun generation(): Int = gen
 
-    /** Current workflow step. Assigning it triggers recomposition + redraw (it is read in the Canvas). */
-    var phase by mutableStateOf(HorizonPhase.BAND_SELECTION)
+    private var currentPhase by mutableStateOf(HorizonPhase.BAND_SELECTION)
+
+    /**
+     * Current workflow step. Assigning it triggers recomposition + redraw (it is read in the Canvas). Going to band selection puts the brush
+     * back on Sky, as the gui does: there is no sky/ground choice there to correct it, and a frame banded from scratch is not the one the
+     * Ground mode was chosen on.
+     */
+    var phase: HorizonPhase
+        get() = currentPhase
+        set(value) {
+            currentPhase = value
+            if (value == HorizonPhase.BAND_SELECTION) isErasing = false
+        }
 
     // ---- brush (image px; the same sizes as macOS, whatever the image's size) ----
     val minBrush: Int get() = MIN_BRUSH
@@ -51,8 +64,9 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
     fun shrinkBrush() { brushRadius = (brushRadius - BRUSH_STEP).coerceAtLeast(minBrush) }
 
     /**
-     * Refinement only: false = paint sky (adds), true = paint ground (removes). Not reset by anything here: the mode a
-     * user chose stays across frames and resets; the view model keeps it for the next time the painter opens.
+     * Refinement only: false = paint sky (adds), true = paint ground (removes). Starts on Sky and returns to it with band selection, so
+     * it outlives a new frame only when that frame has a horizon to refine ([resetForNewFrame]); nothing keeps it for the next time the
+     * painter opens.
      */
     var isErasing by mutableStateOf(false)
 
@@ -403,11 +417,14 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
     /**
      * Reset per-frame paint data for a new frame while preserving the brush size and sky/ground mode
      * (macOS `resetForNewFrame`). Lands on [HorizonPhase.COMPUTING] while the view loads any existing
-     * horizon asynchronously.
+     * horizon asynchronously. The mode lasts as far as the phase the load settles on: a frame with a saved horizon goes to
+     * refinement and keeps it, one that has to be banded from scratch goes to band selection, which puts it back on Sky.
      */
     fun resetForNewFrame() {
-        clear()   // leaves brush size and sky/ground mode alone
+        val erasing = isErasing
+        clear()   // leaves the brush size alone, and puts the mode back on Sky with the band selection it starts
         phase = HorizonPhase.COMPUTING
+        isErasing = erasing
         bump()
     }
 
