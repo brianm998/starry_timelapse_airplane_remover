@@ -609,15 +609,20 @@ actor Session {
     // MARK: - Per-frame settings
 
     /// Make `method` the clean method of `frame` alone (macOS `set(cleanMethod:forFrame:)`): in the frame, and as an override in the
-    /// config, which is what a reopened session reads it back from.  The finished image depends on the method, so it is written again.
+    /// config, which is what a reopened session reads it back from.  The finished image depends on the method, so a frame at rest has the
+    /// image of the new method linked as its final at once, or made if there is none (what the gui does); it is not marked as changed,
+    /// which would only have it rendered again when its save timer fired, and left "user modified" until then.  A frame a run is still
+    /// working on, or has not reached, is left to the run, which reads the override when it gets to the end.
     func setCleanMethod(_ method: CleanMethod, of frame: FrameAirplaneRemover) async {
-        await frame.set(cleanMethod: method)
+        let state = await frame.processingState()
+        let atRest = [.complete, .userModified, .outlierProcessingComplete].contains(state)
+        await frame.set(cleanMethod: method, process: atRest)
         var config = await configManager.config()
         config.pixelReplacementOverrides[frame.frameIndex] = method
         await configManager.update(config)
         await configManager.flush()
-        await frame.markAsChanged()
-        await frameEdited(frame)
+        // `ImageAccessor` announces a write only at preview size, and previews are an option.
+        if atRest { onImageSaved(frameIndex: frame.frameIndex, type: .final) }
     }
 
     /// Give `frame` its own neighbour count of `kind`, or with a nil `count` take its own away; and do what the change calls for

@@ -1746,21 +1746,20 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       update: Bool = true
     ) async {
 
-        var hasChanged = false
-        
         if update {
             let frameIndex = self.frameIndex
             await MainActor.run {
                 configManager.setPixelReplacementOverride(cleanMethod, forFrame: frameIndex)
             }
         }
-        hasChanged = await observer?.cleanMethod == cleanMethod
         await observer?.set(cleanMethod: cleanMethod)
 
-        
+        // This used to stop here unless `observer?.cleanMethod == cleanMethod`.  The gui sets its
+        // observer's method before calling, so that was always true for it, and a frame with no
+        // observer (every frame the daemon holds) never got its new final linked.  Neither the
+        // config nor the observer can say what the method was before this call (the gui writes
+        // the override first), so asking again costs one hard link and is the same for both.
         if !process { return }
-
-        if !hasChanged { return }
 
         // after setting the clean mode on a frame, we need to
         // 1. check to see if there is a processed type for this method

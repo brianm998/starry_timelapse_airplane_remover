@@ -98,4 +98,66 @@ final class FinalImageSavedEventTests: XCTestCase {
 
         XCTAssertTrue(events.isEmpty, "nothing has been written until the save ends: \(events)")
     }
+
+    // MARK: - A frame's own clean method (parity plan L10)
+
+    private func plant(_ frame: FrameAirplaneRemover, _ type: FrameViewMode) throws -> String {
+        let path = try XCTUnwrap(frame.imageAccessor.nameForImage(frameIndex: frame.frameIndex, ofType: type, atSize: .original))
+        try FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: path, contents: Data([1, 2, 3]))
+        return path
+    }
+
+    private func inode(_ path: String) throws -> UInt64 {
+        let attributes = try FileManager.default.attributesOfItem(atPath: path)
+        return try XCTUnwrap(attributes[.systemFileNumber] as? UInt64)
+    }
+
+    /// The daemon's frames have no `FrameObserver`, and StarCore linked the new final only for a frame that had one: the method was
+    /// recorded and the old picture stayed until the frame's save timer fired, with the frame "user modified" meanwhile.  Now the new
+    /// method's image is the final at once, the client is told, and the frame is not marked as changed.
+    func testANewCleanMethodLinksItsImageAndTellsTheClient() async throws {
+        let session = try await makeSession()
+        let found = await session.frame(at: 1)
+        let frame = try XCTUnwrap(found)
+        let selective = try plant(frame, .selectiveProcessed)
+        await frame.set(state: .complete)
+
+        let events = await finalImageEvents(from: session) {
+            await session.setCleanMethod(.selective, of: frame)
+        }
+
+        let final = try XCTUnwrap(frame.imageAccessor.nameForImage(frameIndex: 1, ofType: .final, atSize: .original))
+        XCTAssertEqual(try inode(final), try inode(selective), "the final is the selective image")
+        XCTAssertEqual(events.map { Int($0.frameIndex) }, [1])
+        let state = await frame.processingState()
+        XCTAssertEqual(state, .complete, "a method change is not an edit that needs the frame rendered again")
+        let saving = await frame.savingState()
+        XCTAssertEqual(saving, .notSaving, "nothing was queued for the save timer")
+        let config = await session.config()
+        XCTAssertEqual(config.pixelReplacementOverrides[1], .selective)
+        await session.close()
+    }
+
+    /// A frame no step has reached has nothing to link; the method is only recorded, and the run that gets to the frame reads it.
+    func testAFrameNoRunHasReachedOnlyRecordsItsNewCleanMethod() async throws {
+        let session = try await makeSession()
+        let found = await session.frame(at: 2)
+        let frame = try XCTUnwrap(found)
+        let state = await frame.processingState()
+        XCTAssertEqual(state, .unprocessed)
+
+        let events = await finalImageEvents(from: session) {
+            await session.setCleanMethod(.selective, of: frame)
+        }
+
+        let final = try XCTUnwrap(frame.imageAccessor.nameForImage(frameIndex: 2, ofType: .final, atSize: .original))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: final))
+        XCTAssertTrue(events.isEmpty)
+        let after = await frame.processingState()
+        XCTAssertEqual(after, .unprocessed)
+        let config = await session.config()
+        XCTAssertEqual(config.pixelReplacementOverrides[2], .selective)
+        await session.close()
+    }
 }
