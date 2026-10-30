@@ -1739,6 +1739,16 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    /// How many megabytes of source frames a median merge keeps in memory before it streams them from scratch files instead
+    /// (0 = never stream).  The desktop client has always offered it; the sheet now does too.
+    var mergeStreamingThresholdMB: Int {
+        didSet {
+            var realConfig = config.config()
+            realConfig.mergeStreamingThresholdMB = mergeStreamingThresholdMB
+            config.update(realConfig)
+        }
+    }
+
     var outlierMemoryMultiplier: Int {
         didSet {
             var realConfig = config.config()
@@ -2132,6 +2142,7 @@ public final class ImageSequenceViewModel {
         self.memoryBudgetFraction = config.maxMatMemoryFraction
         self.keypointMemoryMultiplier = config.keypointMemoryMultiplier
         self.maxConcurrentKeypointOps = config.maxConcurrentKeypointOps
+        self.mergeStreamingThresholdMB = config.mergeStreamingThresholdMB
         self.outlierMemoryMultiplier = config.outlierMemoryMultiplier
         self.mergeMemoryMultiplier = config.mergeMemoryMultiplier
         self.horizonMemoryMultiplier = config.horizonMemoryMultiplier
