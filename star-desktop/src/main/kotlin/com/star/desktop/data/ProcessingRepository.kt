@@ -123,6 +123,14 @@ class ProcessingRepository(
      */
     private var startedSinceCancel = false
 
+    /**
+     * How many runs this session has started from here: a `start`, a `restart`, a granular reprocess, or a refinement the daemon began, each the
+     * next number. What the "render a video?" question is armed for (see `RenderQuestion`): the question belongs to one run, and a run started
+     * after it was armed is another run, whatever ends first.
+     */
+    var runsStarted: Int = 0
+        private set
+
     private fun c(): StarClient = clientProvider() ?: throw StarRpcException(-1, localized("ui.engine_not_connected"))
 
     /** Open the persistent progress subscription. Call once at session open, before [start]. */
@@ -140,6 +148,7 @@ class ProcessingRepository(
     }
 
     suspend fun start(sessionId: String, startIndex: Int = 0, endIndex: Int = -1, force: Boolean = false) {
+        runsStarted++
         _sequenceState.value = null
         _stepProgress.value = null
         _processing.value = true
@@ -157,6 +166,7 @@ class ProcessingRepository(
      * stop, and does not announce it, so to anything watching this is the run going on rather than one cancelled and another begun.
      */
     suspend fun restart(sessionId: String, startIndex: Int = 0, endIndex: Int = -1) {
+        runsStarted++
         _sequenceState.value = null
         _stepProgress.value = null
         _processing.value = true
@@ -182,6 +192,7 @@ class ProcessingRepository(
     /** Granular reprocess of selected frames; progress arrives over the live StreamProgress subscription. */
     suspend fun reprocessFrames(sessionId: String, indices: List<Int>, type: com.star.proto.ReprocessingType) {
         if (indices.isEmpty()) return
+        runsStarted++
         _sequenceState.value = null
         _stepProgress.value = null
         _processing.value = true
@@ -219,7 +230,7 @@ class ProcessingRepository(
             putBack()
             throw e
         }
-        if (!started) putBack()
+        if (!started) putBack() else runsStarted++
     }
 
     /** A frame's horizon lines changed: a mask written or deleted, a reference painted or cleared, a refinement finished (`horizon_updated`). */

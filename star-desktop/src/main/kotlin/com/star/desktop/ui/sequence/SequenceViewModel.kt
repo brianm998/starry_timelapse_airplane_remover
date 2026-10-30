@@ -690,6 +690,9 @@ class SequenceViewModel(
     }
     fun cancelProcessing() = scope.launch { processing.cancel(sessionId) }
 
+    /** How many runs this session has started (see [ProcessingRepository.runsStarted]). */
+    val runsStarted: Int get() = processing.runsStarted
+
     /** Stop the run in progress and start it over under the settings as they now are (macOS `updateSettingsAndProcess` over a live run). */
     fun restartProcessing() = startProcessingRun { processing.restart(sessionId, 0, -1) }
 

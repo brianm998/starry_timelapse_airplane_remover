@@ -344,7 +344,19 @@ class AppViewModel(
             val running = currentSequence?.isProcessing?.value == true
             runCatching { updateSessionConfig(config.toBuilder().setReprocessOnSettingsChange(reprocess).build()) }.onFailure { report(it.message ?: it.toString()) }
             closeSettings()
-            if (running) currentSequence?.restartProcessing() else requestProcessAll()
+            if (running) {
+                // As the gui: stop, and ask the question about rendering again, since the answer given was for the run being replaced (P4).
+                // With the question turned off there is nothing to ask, and the run is started over in one step.
+                if (prefs.skipRenderPromptAfterProcessing) {
+                    renderQuestion.disarm()
+                    currentSequence?.restartProcessing()
+                } else {
+                    currentSequence?.cancelProcessing()
+                    requestProcessAll()
+                }
+            } else {
+                requestProcessAll()
+            }
         }
     }
 
@@ -435,15 +447,19 @@ class AppViewModel(
     val showPreRenderPrompt: StateFlow<Boolean> = _showPreRenderPrompt.asStateFlow()
     private val _showPostRenderPrompt = MutableStateFlow(false)
     val showPostRenderPrompt: StateFlow<Boolean> = _showPostRenderPrompt.asStateFlow()
-    private var autoRenderAfterProcessing = false
-    private var awaitingProcessingPrompt = false
+    /** The question at the end of a run, and which run it is about (P11). */
+    private val renderQuestion = RenderQuestion()
+
+    /** Arm the end-of-run question for the run the next `processAll` (or resume) starts. */
+    private fun armRenderQuestion(render: Boolean, ask: Boolean) {
+        renderQuestion.arm(forRun = (currentSequence?.runsStarted ?: 0) + 1, render = render, ask = ask)
+    }
 
     /** Entry point for "Process All": skip-pref → start directly; otherwise show the pre-render prompt. */
     fun requestProcessAll() {
         val svm = currentSequence ?: return
         if (prefs.skipRenderPromptAfterProcessing) {
-            autoRenderAfterProcessing = false
-            awaitingProcessingPrompt = false
+            renderQuestion.disarm()
             svm.processAll()
         } else {
             _showPreRenderPrompt.value = true
@@ -452,8 +468,7 @@ class AppViewModel(
 
     fun confirmStartProcessing(autoRender: Boolean, dontAskAgain: Boolean) {
         if (dontAskAgain) prefs.setSkipRenderPrompt(true)
-        autoRenderAfterProcessing = autoRender
-        awaitingProcessingPrompt = !dontAskAgain
+        armRenderQuestion(render = autoRender, ask = !dontAskAgain)
         _showPreRenderPrompt.value = false
         currentSequence?.processAll()
     }
@@ -477,13 +492,10 @@ class AppViewModel(
     }
 
     private fun handleProcessingDone() {
-        if (!awaitingProcessingPrompt) return
-        awaitingProcessingPrompt = false
-        if (autoRenderAfterProcessing) {
-            autoRenderAfterProcessing = false
-            openRenderVideo(autoStart = true)
-        } else {
-            _showPostRenderPrompt.value = true
+        when (renderQuestion.done(currentSequence?.runsStarted ?: 0)) {
+            RenderQuestion.Outcome.RENDER -> openRenderVideo(autoStart = true)
+            RenderQuestion.Outcome.ASK -> _showPostRenderPrompt.value = true
+            RenderQuestion.Outcome.NOTHING -> Unit
         }
     }
 
@@ -935,8 +947,7 @@ class AppViewModel(
         val svm = currentSequence ?: return
         if (svm.horizonPaintMode.value) return
         svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
-        autoRenderAfterProcessing = false
-        awaitingProcessingPrompt = com.star.desktop.domain.ResumedRun.asksAboutRenderingAtTheEnd(prefs.skipRenderPromptAfterProcessing)
+        armRenderQuestion(render = false, ask = com.star.desktop.domain.ResumedRun.asksAboutRenderingAtTheEnd(prefs.skipRenderPromptAfterProcessing))
         svm.processAll()
     }
 
@@ -1156,8 +1167,7 @@ class AppViewModel(
 
         _showPreRenderPrompt.value = false
         _showPostRenderPrompt.value = false
-        autoRenderAfterProcessing = false
-        awaitingProcessingPrompt = false
+        renderQuestion.disarm()
         // A condition acknowledged about the sequence just closed is not acknowledged about the next, and a banner about it is not still up.
         bannerExpiry?.cancel()
         bannerExpiry = null
@@ -1263,10 +1273,7 @@ class AppViewModel(
                 when (it) {
                     "done" -> handleProcessingDone()
                     // A stopped or failed run is not one to offer a render for.
-                    "cancelled", "error" -> {
-                        awaitingProcessingPrompt = false
-                        autoRenderAfterProcessing = false
-                    }
+                    "cancelled", "error" -> renderQuestion.disarm()
                 }
             }
         }

@@ -85,6 +85,24 @@ class ProcessingRepositoryTest {
         assertFalse(r.processing.value, "nothing began")
     }
 
+    /** What `RenderQuestion` is armed against: each run that begins is the next number, however it was asked for. */
+    @Test
+    fun everyRunThatBeginsIsTheNextOne() = runBlocking {
+        val r = repo()
+        assertEquals(0, r.runsStarted)
+        runCatching { r.start("s") }                       // no engine: the RPC fails, but the run was asked for
+        assertEquals(1, r.runsStarted)
+        runCatching { r.restart("s") }
+        runCatching { r.reprocessFrames("s", listOf(2), com.star.proto.ReprocessingType.REPROCESS_EVERYTHING) }
+        assertEquals(3, r.runsStarted)
+        r.startClaimedRun { true }
+        assertEquals(4, r.runsStarted)
+        r.startClaimedRun { false }                        // refused: not a run
+        assertEquals(4, r.runsStarted)
+        r.reprocessFrames("s", emptyList(), com.star.proto.ReprocessingType.REPROCESS_EVERYTHING)
+        assertEquals(4, r.runsStarted, "no frames, no run")
+    }
+
     @Test
     fun aCancelledThatArrivesAfterTheNextStartIsNotAboutTheNewRun() = runBlocking {
         val r = repo()
