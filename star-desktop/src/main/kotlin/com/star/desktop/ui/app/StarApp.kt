@@ -63,6 +63,8 @@ fun StarApp(vm: AppViewModel) {
             if (showSettings && screen is AppScreen.Sequence) {
                 com.star.desktop.ui.dialogs.ProcessingSettingsDialog(vm)
             }
+            val showCustomLimits by vm.showCustomLimits.collectAsState()
+            if (showCustomLimits && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.ResourceCustomLimitsDialog(vm)
             val showPreferences by vm.showPreferences.collectAsState()
             if (showPreferences) com.star.desktop.ui.dialogs.PreferencesDialog(vm)
             val showRenderVideo by vm.showRenderVideo.collectAsState()

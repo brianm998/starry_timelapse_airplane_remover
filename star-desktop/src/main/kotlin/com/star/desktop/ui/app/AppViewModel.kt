@@ -308,9 +308,23 @@ class AppViewModel(
         scope.launch {
             val current = runCatching { sessions.getConfig() }.getOrNull() ?: return@launch
             if (current.hasResourceProfile() && current.resourceProfile == profile) return@launch
-            runCatching { updateSessionConfig(current.toBuilder().setResourceProfile(profile).build()) }.onFailure { report(it.message ?: it.toString()) }
+            runCatching { updateSessionConfig(com.star.desktop.domain.ResourceProfiles.switchTo(current, profile)) }.onFailure { report(it.message ?: it.toString()) }
         }
     }
+
+    /** The Custom limits, set as the popover edits them (macOS applies each as it changes, and a run in progress moves to it). */
+    fun setCustomLimits(limits: com.star.desktop.domain.CustomLimits) {
+        scope.launch {
+            val current = runCatching { sessions.getConfig() }.getOrNull() ?: return@launch
+            runCatching { updateSessionConfig(limits.applyTo(current)) }.onFailure { report(it.message ?: it.toString()) }
+        }
+    }
+
+    // The Custom limits popover (macOS `ResourceCustomLimitsView`): up while the user is editing them.
+    private val _showCustomLimits = MutableStateFlow(false)
+    val showCustomLimits: StateFlow<Boolean> = _showCustomLimits.asStateFlow()
+    fun openCustomLimits() { _showCustomLimits.value = true }
+    fun closeCustomLimits() { _showCustomLimits.value = false }
 
     /**
      * What applying [config] would do to the work already on disk (the settings sheet's red line, and Process Now becoming Update); null when
@@ -1149,6 +1163,7 @@ class AppViewModel(
         bannerExpiry = null
         _warningState.update { WarningRouting.reset(it) }
         _showSettings.value = false
+        _showCustomLimits.value = false
         _showExpertSettings.value = false
         _sequenceProgress.value = null
         renderJob?.cancel()

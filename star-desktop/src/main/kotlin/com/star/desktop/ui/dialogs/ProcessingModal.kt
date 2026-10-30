@@ -270,13 +270,13 @@ private fun StepBar(step: StepRow, modifier: Modifier = Modifier) {
 @Composable
 internal fun ResourceProfileControl(app: AppViewModel, status: String? = null) {
     val session by app.sessions.session.collectAsState()
-    val current = session?.config?.takeIf { it.hasResourceProfile() }?.resourceProfile ?: "full"
+    val current = com.star.desktop.domain.ResourceProfiles.profileOf(session?.config)
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         HoverTip(localized("ui.use_of_this_mac_help")) {
             Text(localized("ui.use_of_this_mac"), color = StarColors.textSecondary, fontSize = 11.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for ((profile, key) in listOf("full" to "ui.use_full", "balanced" to "ui.use_balanced", "light" to "ui.use_light", "custom" to "ui.use_custom")) {
+            for ((profile, key) in com.star.desktop.domain.ResourceProfiles.choices) {
                 val selected = current == profile
                 Text(
                     localized(key),
@@ -284,7 +284,11 @@ internal fun ResourceProfileControl(app: AppViewModel, status: String? = null) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(5.dp))
                         .background(if (selected) StarColors.accent else StarColors.cellDefault)
-                        .clickable { app.setResourceProfile(profile) }
+                        .clickable {
+                            app.setResourceProfile(profile)
+                            // Custom is chosen and its limits come up to be edited, as in the gui.
+                            if (profile == com.star.desktop.domain.ResourceProfiles.CUSTOM) app.openCustomLimits()
+                        }
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
             }
