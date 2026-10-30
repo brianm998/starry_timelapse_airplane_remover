@@ -3753,6 +3753,29 @@ final class VideoRenderWiringTests: XCTestCase {
     }
 }
 
+/// S8: the start screen's controls are the ones `gherkin/ui/vectors/startScreen.json` lists, in that order, each with its hover text; the
+/// desktop's `StartScreenTest` reads its own start screen against the same file.
+final class StartScreenTests: XCTestCase {
+    private static var root: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    func testTheControlsAreTheVectorsInOrderWithTheirHoverTexts() throws {
+        let doc = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(contentsOf: Self.root.appendingPathComponent("gherkin/ui/vectors/startScreen.json"))) as? [String: Any])
+        let controls = try XCTUnwrap(doc["controls"] as? [[String: String]])
+        let source = try String(contentsOf: Self.root.appendingPathComponent("gui/star/InitialView.swift"), encoding: .utf8)
+        var last = source.startIndex
+        for control in controls {
+            let label = try XCTUnwrap(control["label"])
+            let tip = try XCTUnwrap(control["tip"])
+            let found = try XCTUnwrap(source.range(of: "localized(\"\(label)\")", range: last..<source.endIndex), "\(label) is not on the start screen, or is out of order")
+            last = found.upperBound
+            XCTAssertTrue(source.contains(".help(localized(\"\(tip)\"))"), "\(control["id"] ?? "") has no hover text")
+        }
+    }
+}
+
 /// Layer 0 of the parity plan (§6.2.4): the outlier table's columns are the ones `gherkin/ui/vectors/outlierColumns.json` lists, in the
 /// order and with the defaults the desktop's `OutlierTable` has, and each is titled with its name in the catalogue (the headers were
 /// `"id"`, `"size"`, `"remove"` and the feature's own name, English in every language).
