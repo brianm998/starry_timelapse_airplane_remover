@@ -751,6 +751,8 @@ StarCore: `swift test --filter 'LocalizationTests|FrameCleanMethodChangeTests'` 
 * Not started: P5, P8's layout (two columns, collapsed groups, the expert toggle), M10–M11 (D10, D11: the main window's close and the secondary windows' lifetime), D10–D12 (except the three settings and Decision Tree, All Frames above),
   I1's remaining item: the `FrameProcessingState.shortString` badges (English on purpose for the updatable log, so they need a second property).
 * The desktop shows no tool help at all (`tool.help.*` are read only by the gui); that is a gap of its own, not listed in §4.
+* **Owner calls, not engineering:** L12 (the render dialog's starting values: the desktop layers the source video's rate, then what the user last chose in either app, over the config; the gui reads the config only; a 29.97 fps import keeping its rate is the desktop's deliberate feature), and the `FrameProcessingState.shortString` badges (the gui's short English strings differ from the catalogue's `frame_state.*` texts the desktop shows; matching means about 40 short keys in 22 languages, and the gui's updatable log dedups on the English ones).
+* **What a test can do now that it could not:** a daemon test can run a real run over four tiny 8x8 frames (`ProcessingSupersedeTests`: it completes, or is stopped, in seconds, and reads `Session.runNumber` and `settingsSnapshot`). It cannot reach the outlier stages: L5 (the auto selective end state) needs frames with stars and a horizon, or a run on the owner's fixtures.
 
 ### 9.3 Blocked on the owner
 
