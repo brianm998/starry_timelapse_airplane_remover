@@ -21,12 +21,18 @@ public enum ImageAligner {
     /// there is a request, not a guarantee — see `GPUCapability`. On by default so a
     /// caller that does not think about GPU acceleration gets it when the machine
     /// supports it, same as `Config.useGPUForMerge`'s own default.
+    ///
+    /// `rows` asks for only those rows of the merge, for a caller that will read no others: each
+    /// is exactly the row the whole merge gives, the rest is `image`'s own, and where the merge
+    /// cannot say (the GPU, the streaming path, sources of another size) the whole frame is
+    /// merged, so the rows asked for are right either way.
     public static func medianMergeImage(_ image: MatWrapper, withFilenames filenames: [String],
                                          outlierThreshold: Double, includeAll: Bool,
                                          scratchDir: String? = nil,
                                          streamingThresholdBytes: Int64 = 0,
                                          loadConcurrency: Int = 1,
-                                         useGPU: Bool = true) -> MatWrapper? {
+                                         useGPU: Bool = true,
+                                         rows: Range<Int>? = nil) -> MatWrapper? {
         let cStrs = filenames.map { strdup($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
@@ -38,7 +44,9 @@ public enum ImageAligner {
                                                   scratchDir,
                                                   streamingThresholdBytes,
                                                   Int32(loadConcurrency),
-                                                  useGPU)
+                                                  useGPU,
+                                                  Int32(rows?.lowerBound ?? -1),
+                                                  Int32(rows?.upperBound ?? -1))
         }
         // nil when the C++ merge could not produce an image (unreadable source, allocation)
         return r.map { MatWrapper(ref: $0) }
@@ -213,6 +221,12 @@ public enum ImageAligner {
     /// whole frame is sky. `cloudDebugDir` makes it write its blend weight and motion
     /// field there. With `cloudAware` false all three are ignored.
     ///
+    /// `rows` asks for only those rows of the merge, for a caller that will read no others:
+    /// each is exactly the row the whole merge gives, and the rest of the frame is the base
+    /// frame's own.  Honoured on the CPU path that has the exact warp, resident and without
+    /// `cloudAware` (the earth merge); anywhere else the whole frame is merged, so the rows
+    /// asked for are right either way and a caller must not read the rest.
+    ///
     /// Returns nil when no neighbour could be warped, which is the caller's cue to
     /// fall back to the unaligned frame.
     public static func alignAndMedianMerge(baseImage: MatWrapper,
@@ -227,7 +241,8 @@ public enum ImageAligner {
                                             useGPU: Bool = true,
                                             cloudAware: Bool = false,
                                             skyMask: MatWrapper? = nil,
-                                            cloudDebugDir: String? = nil)
+                                            cloudDebugDir: String? = nil,
+                                            rows: Range<Int>? = nil)
       -> (merged: MatWrapper, warpCount: Int)?
     {
         let cNeighbors = neighbors.map { n in
@@ -265,6 +280,8 @@ public enum ImageAligner {
                                                cloudAware,
                                                skyMask?.ref,
                                                cloudDebugDir,
+                                               Int32(rows?.lowerBound ?? -1),
+                                               Int32(rows?.upperBound ?? -1),
                                                &warpCount, &errMsg)
                 }
             }
@@ -358,6 +375,12 @@ public enum ImageAligner {
     /// Test-only: whether there is an exact CPU warp on this machine for the other to be
     /// compared with.
     public static var debugExactWarpIsAvailable: Bool { ia_debug_exact_warp_is_available() }
+
+    /// The first row of an 8-bit single-channel mask that holds a value below `value`, or the
+    /// mask's height if none does: the first row of the final composite that reads the earth.
+    public static func firstRow(of mask: MatWrapper, below value: Int) -> Int {
+        Int(ia_first_row_below(mask.ref, Int32(value)))
+    }
 
     /// Test-only: the pair-shared descriptor matching the alignment ops use (`true`, the default)
     /// or OpenCV's BFMatcher on its own (`false`).  See `ia_debug_set_pair_match`; process-wide,

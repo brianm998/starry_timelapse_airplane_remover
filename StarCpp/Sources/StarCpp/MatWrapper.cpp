@@ -10,6 +10,9 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <cctype>
 #include <algorithm>
 #include <filesystem>
 #include <system_error>
@@ -512,11 +515,61 @@ static bool writeMatAtomically(const cv::Mat &mat, const std::string &fname,
     return true;
 }
 
+// Whether LZW with OpenCV's horizontal predictor takes enough off this image to be worth what it
+// costs to write.  It costs a good deal — on a whole merge phase of 24 MP night frames the LZW
+// encode was 15% of the CPU — and night-sky noise does not compress: each final frame came out at
+// 148 MB against 144 MB uncompressed.  Smooth frames, and the 8-bit masks, compress several-fold
+// and keep their compression.
+//
+// The file's own encoder is the measure: a few rows spread evenly over the image are encoded the
+// way the file would be (OpenCV gives a wide image one row to a strip, and each strip is
+// compressed on its own, so a row's compressed size does not depend on its neighbours), and the
+// image is written uncompressed unless that comes off by a tenth or more.  `STAR_TIFF_COMPRESSION`
+// in the environment overrides it: `lzw` always compresses (what was written before), `none`
+// never does, anything else (or nothing) is this rule.  Images under 8 MB are always compressed as
+// before: they are cheap, and thumbnails and previews are not what this is for.
+static bool lzwWorthIt(const cv::Mat &m) {
+    const char *env = std::getenv("STAR_TIFF_COMPRESSION");
+    if (env && std::strcmp(env, "lzw") == 0) return true;
+    if (env && std::strcmp(env, "none") == 0) return false;
+    const size_t bytes = m.total() * m.elemSize();
+    if (bytes < (8u << 20) || m.rows < 64 || m.dims != 2) return true;
+    try {
+        const int k = 32;
+        cv::Mat sample(k, m.cols, m.type());
+        for (int i = 0; i < k; ++i)
+            m.row((int)(((int64_t)(2 * i + 1) * m.rows) / (2 * k))).copyTo(sample.row(i));
+        std::vector<uchar> encoded;
+        if (!cv::imencode(".tiff", sample, encoded)) return true;
+        const double raw = (double)k * m.cols * (double)m.elemSize();
+        const double ratio = (double)encoded.size() / raw;
+        Log_d("writeTo: LZW on %d sample rows comes to %.3f of raw", k, ratio);
+        return ratio < 0.90;
+    } catch (...) {
+        return true;
+    }
+}
+
+static bool nameIsTiff(const char *filename) {
+    const std::string name(filename);
+    auto ends = [&](const char *suffix) {
+        const size_t n = std::strlen(suffix);
+        if (name.size() < n) return false;
+        for (size_t i = 0; i < n; ++i)
+            if (std::tolower((unsigned char)name[name.size() - n + i]) != suffix[i]) return false;
+        return true;
+    };
+    return ends(".tif") || ends(".tiff");
+}
+
 bool mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
     if (!ref) return false;
     try {
         Log_d("writeTo: %s", filename);
-        return writeMatAtomically(ref->mat, std::string(filename), {}, "writeTo");
+        std::vector<int> params;
+        if (nameIsTiff(filename) && !lzwWorthIt(ref->mat))
+            params = {cv::IMWRITE_TIFF_COMPRESSION, 1};     // as writeCacheTo
+        return writeMatAtomically(ref->mat, std::string(filename), params, "writeTo");
     } catch (const cv::Exception &e) {
         // Where a full disk usually lands: libtiff fails to write, OpenCV turns that into
         // a cv::Exception. Caught and logged here since it must not cross the extern "C"

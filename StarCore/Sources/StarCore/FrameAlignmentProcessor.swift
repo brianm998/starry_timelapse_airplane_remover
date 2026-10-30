@@ -746,13 +746,20 @@ final public actor FrameAlignmentProcessor {
     // MARK: - Aligned Image Creation
 
     // uses opencv2 for dark ground specific detection logic
+    /// `rows`, for a caller that will read only those rows of the image (the final composite reads
+    /// the earth from the horizon down): only those rows are merged where the merge can say so, the
+    /// rest being the frame's own pixels, and an image made that way is never written to disk at
+    /// full size, where something else would load it as a whole one.  An aligned image that already
+    /// exists is returned as it is.
     internal func loadOrCreateEarthAlignedImage(
-      forceFullSizeSave: Bool = false
+      forceFullSizeSave: Bool = false,
+      rows: Range<Int>? = nil
     ) async throws -> WarpedImageResult {
         try await loadOrCreateAlignedImage(
           forceFullSizeSave: forceFullSizeSave,
           of: .earthAligned,
-          withFailedType: .failedEarthAligned
+          withFailedType: .failedEarthAligned,
+          rows: rows
         )
     }
 
@@ -780,7 +787,8 @@ final public actor FrameAlignmentProcessor {
     private func loadOrCreateAlignedImage(
       forceFullSizeSave: Bool = false,
       of type: FrameViewMode,
-      withFailedType failedType: FrameViewMode? = nil
+      withFailedType failedType: FrameViewMode? = nil,
+      rows: Range<Int>? = nil
     ) async throws -> WarpedImageResult {
         var alignmentType: AlignmentType = .sky
 
@@ -1004,11 +1012,13 @@ final public actor FrameAlignmentProcessor {
             let staticNeighbors = self.getStaticNeighborFilenames()
             let staticThreshold = pixelThreshold
             let staticConfig = config
+            let staticRows = rows
             let mergedImage = await NativeWork.run {
                 staticBase.medianMerge(
                   with: staticNeighbors,
                   outlierThreshold: staticThreshold,
-                  config: staticConfig
+                  config: staticConfig,
+                  rows: staticRows
                 )
             }
             if let mergedImage {
@@ -1078,6 +1088,9 @@ final public actor FrameAlignmentProcessor {
                 // It is kept off the ground by the final horizon mask loaded above,
                 // nil when horizon detection is off, which makes the whole frame sky.
                 let mergeCloudAware = type == .starAligned && mergeConfig.cloudAwareMerge
+                // Only the earth merge is ever asked for a band, and only with the star
+                // aligned merge's cloud stage out of it.
+                let mergeRows = type == .earthAligned ? rows : nil
                 let mergeSkyMask = mergeCloudAware ? horizonMask?.image.mat : nil
                 let mergeCloudDebugDir: String? =
                   mergeCloudAware && mergeConfig.alignmentWriteDebugImages
@@ -1097,7 +1110,8 @@ final public actor FrameAlignmentProcessor {
                       useGPU: mergeConfig.useGPUForMerge,
                       cloudAware: mergeCloudAware,
                       skyMask: mergeSkyMask,
-                      cloudDebugDir: mergeCloudDebugDir
+                      cloudDebugDir: mergeCloudDebugDir,
+                      rows: mergeRows
                     )
                 }
 
@@ -1147,11 +1161,15 @@ final public actor FrameAlignmentProcessor {
            let image = PixelatedImage(mat: aligned)
         {
             Log.i("frame \(frameIndex) writing out a successfully aligned image of type \(type)")
+            // A merge of a band of rows is not the aligned image: never at full size, where the
+            // next load of it would hand it to something that reads the rest.
+            var alignedSizes = await self.alignedImageSizes(forceFullSize: forceFullSizeSave)
+            if rows != nil, !forceFullSizeSave { alignedSizes.removeAll { $0 == .original } }
             try await imageAccessor.save(
               image,
               frameIndex: frameIndex,
               as: type,
-              atSizes: await self.alignedImageSizes(forceFullSize: forceFullSizeSave),
+              atSizes: alignedSizes,
               overwrite: true
             )
         }

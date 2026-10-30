@@ -824,7 +824,8 @@ MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char *scratchDir,
                                                     int64_t streamingThresholdBytes,
                                                     int loadConcurrency,
-                                                    bool useGPU) {
+                                                    bool useGPU,
+                                                    int rowStart, int rowEnd) {
     try {
         // The all-resident path below holds every source at once.  When that would
         // exceed the threshold, stream from scratch files instead: same result,
@@ -862,6 +863,31 @@ MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
         });
         // in index order, so the merge sees what the serial loop handed it
         for (auto &src : sources) if (src.present) mats.push_back(src.mat);
+
+        // Only a band of rows was asked for: merge those rows of every source — the kernel works
+        // per pixel, so each is the row the whole merge gives — and hand back the base with the
+        // band replaced.  A set whose geometry does not agree goes to the whole merge, which says
+        // what it always said about that.
+        if (baseImage && !mats.empty() && rowStart >= 0 && rowEnd > rowStart &&
+            rowEnd <= baseImage->mat.rows && (rowStart > 0 || rowEnd < baseImage->mat.rows) &&
+            !useGPU) {
+            bool agrees = true;
+            for (const cv::Mat &m : mats)
+                if (m.rows != baseImage->mat.rows || m.cols != baseImage->mat.cols ||
+                    m.type() != baseImage->mat.type()) agrees = false;
+            if (agrees) {
+                std::vector<cv::Mat> band;
+                band.reserve(mats.size());
+                for (const cv::Mat &m : mats) band.push_back(m.rowRange(rowStart, rowEnd));
+                MatWrapperRef merged = medianImageFromMats(band, outlierThreshold, includeAll,
+                                                           cv::Mat(), false);
+                if (!merged) return nullptr;
+                cv::Mat whole = baseImage->mat.clone();
+                merged->mat.copyTo(whole.rowRange(rowStart, rowEnd));
+                mat_wrapper_release(merged);
+                return wrap(whole);
+            }
+        }
 
         return medianImageFromMats(mats, outlierThreshold, includeAll, cv::Mat(), useGPU);
     } KHT_CATCH_LOG("ia_median_merge_image_with_filenames")
@@ -3939,6 +3965,102 @@ extern "C" void ia_debug_set_cloud_region_restriction(bool restrict) {
     cloudaware::gRestrictToRegion.store(restrict);
 }
 
+#ifdef STAR_EXACT_WARP
+// The rows [rowStart, rowEnd) of the aligned merge of `base` and its neighbours, for the CPU
+// resident path the exact warp serves: each neighbour is warped over those rows alone
+// (`exactwarp::warpBand`, whose coordinates are the whole warp's, row for row), the coverage
+// counts are kept for them, and the median kernel runs over them — all per pixel, so each row is
+// the one the whole merge gives.  The frame handed back is the base with the band replaced.
+//
+// Returns false, having done nothing, when the exact warp does not cover these inputs: the
+// caller then merges the whole frame.  Otherwise true, with `*out` the frame (null when no
+// neighbour could be merged, as the whole path answers).
+static bool alignAndMergeBand(const cv::Mat &base, int baseFrameIndex,
+                              const AlignmentNeighborData *neighbors, int neighborCount,
+                              const int *homographyKeys, MatWrapperRef *homographyValues,
+                              int homographyCount, double outlierThreshold, int loadConcurrency,
+                              int rowStart, int rowEnd, int *outWarpCount, MatWrapperRef *out)
+{
+    std::vector<MatWrapperRef> homographies((size_t)std::max(neighborCount, 0), nullptr);
+    bool any = false;
+    for (int i = 0; i < neighborCount; ++i) {
+        homographies[(size_t)i] = homographyForOffset(neighbors[i].frameIndex - baseFrameIndex,
+                                                      homographyKeys, homographyValues,
+                                                      homographyCount);
+        if (!homographies[(size_t)i]) continue;
+        if (!exactwarp::applies(base, homographies[(size_t)i]->mat)) return false;
+        any = true;
+    }
+    if (!any) return false;
+
+    const int bandRows = rowEnd - rowStart;
+    cv::Mat misses = cv::Mat::zeros(bandRows, base.cols, CV_8U);
+    std::mutex missesMutex;
+    std::vector<MergeSource> sources((size_t)std::max(neighborCount, 0));
+    forEachMergeSource(neighborCount, loadConcurrency, [&](int i) {
+        MergeSource &source = sources[(size_t)i];
+        MatWrapperRef H = homographies[(size_t)i];
+        if (!H) return;
+        MatWrapperRef neighbor = image_cache_load(neighbors[i].filename);
+        if (!neighbor) return;
+        const cv::Mat &nm = neighbor->mat;
+        if (nm.rows != base.rows || nm.cols != base.cols || nm.type() != base.type()) {
+            source.note = std::string("aligned merge: warp of ") + neighbors[i].filename +
+                          " does not match the base geometry";
+            mat_wrapper_release(neighbor);
+            return;
+        }
+        cv::Mat warped = cv::Mat::zeros(bandRows, base.cols, base.type());
+        cv::Mat covered = cv::Mat::zeros(bandRows, base.cols, CV_8UC1);
+        exactwarp::warpBand(nm, H->mat, warped, &covered, rowStart, rowEnd);
+        mat_wrapper_release(neighbor);
+        cv::bitwise_not(covered, covered);          // 255 where the warp reached nothing
+        {
+            std::lock_guard<std::mutex> lock(missesMutex);
+            cv::add(misses, cv::Scalar(1), misses, covered);
+        }
+        source.mat = warped;
+        source.present = true;
+    });
+
+    std::vector<cv::Mat> mats;
+    mats.reserve(sources.size() + 1);
+    mats.push_back(base.rowRange(rowStart, rowEnd));
+    int warpCount = 0;
+    for (auto &source : sources) {
+        if (!source.note.empty()) Log_w("%s", source.note.c_str());
+        if (!source.present) continue;
+        mats.push_back(source.mat);
+        warpCount++;
+    }
+    if (outWarpCount) *outWarpCount = warpCount;
+    *out = nullptr;
+    if (warpCount == 0) return true;
+
+    MatWrapperRef merged = medianImageFromMats(mats, outlierThreshold, false, misses, false);
+    if (!merged) return true;
+    cv::Mat whole = base.clone();
+    merged->mat.copyTo(whole.rowRange(rowStart, rowEnd));
+    mat_wrapper_release(merged);
+    *out = wrap(whole);
+    return true;
+}
+#endif  // STAR_EXACT_WARP
+
+int ia_first_row_below(MatWrapperRef mask, int value) {
+    if (!mask || mask->mat.empty()) return 0;
+    try {
+        cv::Mat m = mask->mat;
+        if (m.channels() > 1 || m.depth() != CV_8U) return 0;   // not a mask this is for: ask for every row
+        cv::Mat lowest;
+        cv::reduce(m, lowest, 1, cv::REDUCE_MIN, CV_8U);        // each row's smallest value
+        for (int y = 0; y < lowest.rows; ++y)
+            if ((int)lowest.at<uchar>(y, 0) < value) return y;
+        return m.rows;
+    } KHT_CATCH_LOG("ia_first_row_below")
+    return 0;
+}
+
 MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIndex,
                                         const AlignmentNeighborData *neighbors,
                                         int neighborCount,
@@ -3953,6 +4075,7 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                         bool cloudAware,
                                         MatWrapperRef skyMask,
                                         const char *cloudDebugDir,
+                                        int rowStart, int rowEnd,
                                         int *outWarpCount,
                                         const char **errorMsg) {
     if (outWarpCount) *outWarpCount = 0;
@@ -3970,6 +4093,19 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
         const uint64_t residentBytes = frameBytes * (uint64_t)(neighborCount + 1);
         const bool stream = streamingThresholdBytes > 0 &&
                             residentBytes > (uint64_t)streamingThresholdBytes;
+
+#ifdef STAR_EXACT_WARP
+        // Only a band of rows was asked for, and this is the path that can give exactly that.
+        if (rowStart >= 0 && rowEnd > rowStart && rowEnd <= base.rows &&
+            (rowStart > 0 || rowEnd < base.rows) &&
+            !useGPU && !stream && !includeAll && !cloudAware && exactwarp::enabled()) {
+            MatWrapperRef banded = nullptr;
+            if (alignAndMergeBand(base, baseFrameIndex, neighbors, neighborCount, homographyKeys,
+                                  homographyValues, homographyCount, outlierThreshold,
+                                  loadConcurrency, rowStart, rowEnd, outWarpCount, &banded))
+                return banded;
+        }
+#endif
 
         // The cloud-aware stage, which refines a finished merge in place, and which every
         // path below runs once it has one.  Nothing happens unless it was asked for, and

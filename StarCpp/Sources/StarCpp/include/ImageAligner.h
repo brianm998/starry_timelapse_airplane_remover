@@ -56,13 +56,20 @@ MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
 // all-resident path — the streaming path (medianImageStreaming) stays
 // CPU-only, since it exists for source counts too large to hold on the GPU
 // (or in RAM) at once anyway.
+//
+// rowStart / rowEnd (both -1 for the whole frame) ask for only the rows [rowStart, rowEnd) of the
+// merge, for a caller that will read no others (the final composite takes the static earth
+// merge from the horizon down): each row inside is exactly the row the whole merge gives and the
+// rest of the frame is the base's own.  Honoured on the all-resident CPU path when every source
+// matches the base's geometry; anywhere else the whole frame is merged.
 MatWrapperRef ia_median_merge_image_with_filenames(MatWrapperRef baseImage,
                                                     const char **filenames, int count,
                                                     double outlierThreshold, bool includeAll,
                                                     const char *scratchDir,
                                                     int64_t streamingThresholdBytes,
                                                     int loadConcurrency,
-                                                    bool useGPU);
+                                                    bool useGPU,
+                                                    int rowStart, int rowEnd);
 
 // --- Feature detection ---
 
@@ -230,6 +237,14 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 // (8-bit, the blend weight times 255) and cloud-velocity-<baseFrameIndex>.txt (the
 // per-tile cloud velocity in full resolution pixels per frame), for checking what it
 // decided.  Nothing is written when it is null.
+//
+// rowStart / rowEnd (both -1, or rowStart 0 and rowEnd the height, for the whole frame) ask for
+// only the rows [rowStart, rowEnd) of the merge, for a caller that is going to read only those:
+// the final composite takes the earth merge from the horizon down and nothing above.  Each
+// row inside is exactly the row the whole merge gives; rows outside are the base frame's own.
+// Honoured on the CPU exact-warp path, resident, without the cloud-aware stage (the earth
+// merge); anywhere else, or when asked and not possible, the whole frame is merged and the
+// caller still gets a correct frame with a correct band.
 MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIndex,
                                         const AlignmentNeighborData *neighbors,
                                         int neighborCount,
@@ -244,8 +259,14 @@ MatWrapperRef ia_align_and_median_merge(MatWrapperRef baseImage, int baseFrameIn
                                         bool cloudAware,
                                         MatWrapperRef skyMask,
                                         const char *cloudDebugDir,
+                                        int rowStart, int rowEnd,
                                         int *outWarpCount,
                                         const char **errorMsg);
+
+// The first row of an 8-bit single-channel mask that holds a value below `value`, or its height
+// if none does.  What a band-limited merge is asked for: the rows of the final composite's mask
+// that are not all 255 are the rows that read the earth merge.
+int ia_first_row_below(MatWrapperRef mask, int value);
 
 // --- Horizon mask accumulation ---
 

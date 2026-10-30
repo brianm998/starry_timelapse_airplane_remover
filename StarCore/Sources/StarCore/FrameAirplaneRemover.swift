@@ -1635,9 +1635,56 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             var earthImage: PixelatedImage? = nil
             var horizonMask: PixelatedImage? = nil
+            // The star aligned mask and its feathered form, made ahead of the earth merge when
+            // that is told which rows to merge; the blend below reuses them when its mask is the
+            // same final horizon mask they were made from.
+            var precomputedMasks: (starAligned: PixelatedImage, feathered: PixelatedImage?)? = nil
+            // whether they were made from the merged horizon mask, which the static camera's earth
+            // merge hands back as its own (and the moving camera's does not)
+            var precomputedFromMergedMask = false
 
             if config.allowEarthAlignment {
-                let alignmentResult = try await alignmentProcessor.loadOrCreateEarthAlignedImage()
+                // The blend below takes the earth only where the feathered mask is below 255 — at
+                // 255 the earth pixel is multiplied by zero and the sky one is copied whole — so
+                // the earth merge is wanted from the first row that holds such a value to the
+                // bottom, and no higher.  Both masks need only the horizons and the homographies,
+                // not the earth merge, so they are made first.  Config.bandLimitedEarthMerge.
+                //
+                // The mask the composite blends with is the final horizon mask for the moving
+                // camera's earth merge, which hands none back, and the merged horizon mask for the
+                // static camera's, which hands that back as its own; both exist before the merge.
+                var earthRows: Range<Int>? = nil
+                let bandFromMergedMask = !config.tripodHeadWasMoving
+                let bandMask: PixelatedImage?
+                if config.bandLimitedEarthMerge {
+                    bandMask = bandFromMergedMask
+                      ? try await self.loadOrCreateMergedHorizonMask()?.image
+                      : try await horizonProcessor.loadOrCreateFinalHorizonMask()?.image
+                } else {
+                    bandMask = nil
+                }
+                if let finalMask = bandMask {
+                    let starAlignedMask =
+                      await alignmentProcessor.starAlignedHorizonMask(from: finalMask)
+                    let featherInput = starAlignedMask
+                    let feathered = await NativeWork.run {
+                        featherInput.raiseMaskBy(Self.horizonFeatherPixels)
+                    }
+                    precomputedMasks = (starAlignedMask, feathered)
+                    precomputedFromMergedMask = bandFromMergedMask
+                    if let feathered {
+                        let firstRow = await NativeWork.run {
+                            ImageAligner.firstRow(of: feathered.mat, below: 255)
+                        }
+                        if firstRow > 0 {
+                            // a mask with no row below 255 needs no earth at all; one row keeps
+                            // the merge's range non-empty
+                            earthRows = min(firstRow, height - 1)..<height
+                            Log.d("frame \(frameIndex) merges earth rows \(earthRows!) of \(height)")
+                        }
+                    }
+                }
+                let alignmentResult = try await alignmentProcessor.loadOrCreateEarthAlignedImage(rows: earthRows)
 
                 // XXX add check to see if the alignment was good, and if so, save it
                 // if not, return early
@@ -1646,6 +1693,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 // if it's bad, use the original frame and horizon mask instead
 
                 let earthAlignedImage = alignmentResult.warpedFrame
+                // The masks made ahead belong to the mask the rows were chosen for: the merged one if
+                // the merge hands a horizon back (the static camera's), the final one if it does not.
+                // Any other pairing — the static merge failing and the original frame standing in,
+                // say — and the blend makes its own.
+                if (alignmentResult.warpedHorizon != nil) != precomputedFromMergedMask {
+                    precomputedMasks = nil
+                }
                 if let mat = alignmentResult.warpedHorizon {
                     horizonMask = PixelatedImage(mat: mat)
                 } else {
@@ -1679,16 +1733,26 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     // this frame's horizon, these pixels have to come from the earth
                     // image instead.  Computed from the same homographies the merge
                     // used — see StarAlignedHorizonMask.
-                    let starAlignedMask =
-                      await alignmentProcessor.starAlignedHorizonMask(from: horizonMask)
+                    let starAlignedMask: PixelatedImage
+                    if let precomputedMasks {
+                        starAlignedMask = precomputedMasks.starAligned
+                    } else {
+                        starAlignedMask =
+                          await alignmentProcessor.starAlignedHorizonMask(from: horizonMask)
+                    }
                     // Feathered rather than switched: the two layers are medians
                     // over different time windows, and at twilight that is a
                     // measured ~5% brightness step which a hard boundary draws as
                     // a second horizon.  The ramp climbs into sky both layers
                     // agree is clean, so blending there can introduce nothing.
-                    let featherMask = starAlignedMask
-                    let featheredMask = await NativeWork.run {
-                        featherMask.raiseMaskBy(Self.horizonFeatherPixels)
+                    let featheredMask: PixelatedImage?
+                    if let precomputedMasks {
+                        featheredMask = precomputedMasks.feathered
+                    } else {
+                        let featherMask = starAlignedMask
+                        featheredMask = await NativeWork.run {
+                            featherMask.raiseMaskBy(Self.horizonFeatherPixels)
+                        }
                     }
                     // The blend is a full-frame pixel loop: native thread, CPU gate.
                     let blendBase = skyImage

@@ -77,4 +77,71 @@ final class FeatheredCompositeTests: XCTestCase {
         XCTAssertEqual(value(composite, 30, boundary), 30000)
         XCTAssertEqual(value(composite, 30, boundary - 1), 20000)
     }
+
+    // MARK: - the earth above the mask's first row below 255 is never read
+
+    private func image(_ pixels: [UInt16]) -> PixelatedImage {
+        var copy = pixels
+        return copy.withUnsafeMutableBytes { ptr in
+            PixelatedImage(mat: MatWrapper(
+              width: width, height: height,
+              cvType: 18, // CV_16UC3
+              bytesPerRow: width * 6,
+              data: ptr.baseAddress!,
+              takeOwnership: false
+            ).clone())!
+        }
+    }
+
+    private func samples(_ image: PixelatedImage) -> [UInt16] {
+        guard case .sixteenBit(let buffer) = image.imageData else {
+            XCTFail("expected 16 bit data")
+            return []
+        }
+        return Array(buffer)
+    }
+
+    /// The band-limited earth merge (`Config.bandLimitedEarthMerge`) merges the earth only from the first
+    /// row where the feathered mask holds a value below 255 — above it the earth image is the base frame's own.
+    /// That is only allowed because the composite never reads the earth there: at alpha 255 the blend copies
+    /// the sky pixel whole, and a row with a partial alpha elsewhere computes sky·w + earth·(1 − w), which at
+    /// w = 1 is the sky exactly.  This replaces every earth row above that row with something else and
+    /// requires the composite not to move by a bit — through the feathered blend, and through the hard-mask
+    /// fallback the composite takes if the feathering fails (which needs a subset of those rows).
+    func testTheEarthAboveTheMasksFirstRowBelow255IsNeverRead() throws {
+        var state: UInt64 = 0xC0FF_EE15_600D
+        func next() -> UInt16 {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return UInt16(truncatingIfNeeded: state >> 40)
+        }
+        let skyPixels = (0..<(width * height * 3)).map { _ in next() }
+        let earthPixels = (0..<(width * height * 3)).map { _ in next() }
+
+        // a wavy horizon, so the feathered mask has partial values in many rows
+        var columnY = [Int?](repeating: 0, count: width)
+        for x in 0..<width {
+            let wave: Int = Int(10.0 * sin(Double(x) / 7.0))
+            columnY[x] = 110 + wave
+        }
+        let mask = try XCTUnwrap(PixelatedImage.fromHorizonColumnY(width: width, height: height, columnY: columnY))
+        let feathered = try XCTUnwrap(mask.raiseMaskBy(24))
+        let firstRow = ImageAligner.firstRow(of: feathered.mat, below: 255)
+        XCTAssertGreaterThan(firstRow, 0, "the mask has sky rows at 255 above its feather")
+        XCTAssertLessThan(firstRow, height, "and rows below")
+
+        // earth rows above `firstRow` replaced by garbage that is nothing like them
+        var garbage = earthPixels
+        for i in 0..<(firstRow * width * 3) { garbage[i] = next() ^ 0xA5A5 }
+
+        let sky = image(skyPixels), earth = image(earthPixels), changedEarth = image(garbage)
+        XCTAssertNotEqual(samples(earth), samples(changedEarth))
+
+        let whole = try sky.blend(mask: feathered, with: earth)
+        let banded = try sky.blend(mask: feathered, with: changedEarth)
+        XCTAssertEqual(samples(whole), samples(banded), "the feathered blend read an earth row above the first row below 255")
+
+        let hardWhole = try sky.apply(mask: mask, with: earth)
+        let hardBanded = try sky.apply(mask: mask, with: changedEarth)
+        XCTAssertEqual(samples(hardWhole), samples(hardBanded), "the hard-mask fallback read an earth row above the band")
+    }
 }

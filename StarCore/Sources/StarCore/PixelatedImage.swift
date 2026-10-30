@@ -1032,6 +1032,9 @@ extension PixelatedImage {
 
     /// Median merge this image with the frames named by `frames`.
     ///
+    /// `rows` asks for only those rows (see `ImageAligner.medianMergeImage`): the rest of the
+    /// result is this image's own pixels.
+    ///
     /// Pass `config` so the merge can stream from scratch files instead of holding
     /// every source in memory when the set is large — see
     /// `Config.mergeStreamingThresholdMB` — and so it can decode more than one source
@@ -1042,7 +1045,8 @@ extension PixelatedImage {
       with frames: [String],
       outlierThreshold: Double = 1.2,
       includeAll: Bool = false,
-      config: Config? = nil
+      config: Config? = nil,
+      rows: Range<Int>? = nil
     ) -> PixelatedImage? {
         guard let mat = ImageAligner.medianMergeImage(
             self.mat,
@@ -1052,7 +1056,8 @@ extension PixelatedImage {
             scratchDir: config?.tempOutputPath,
             streamingThresholdBytes: Int64(config?.mergeStreamingThresholdMB ?? 0) * 1024 * 1024,
             loadConcurrency: config?.mergeLoadConcurrency ?? 1,
-            useGPU: config?.useGPUForMerge ?? true
+            useGPU: config?.useGPUForMerge ?? true,
+            rows: rows
         ) else {
             Log.e("median merge produced no image")
             return nil

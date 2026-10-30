@@ -1425,6 +1425,24 @@ public struct Config: Codable, Sendable {
     /// which comes after all three.
     public var cloudAwareMerge: Bool = false
 
+    /// In automatic mode, merge only the rows of the earth aligned image the final composite reads.
+    ///
+    /// The final frame blends the star aligned (sky) image and the earth aligned image through
+    /// the feathered horizon mask, and where that mask is 255 — everything above the horizon and
+    /// its feather — the earth pixel is multiplied by zero.  So the earth merge is needed from the
+    /// first row that holds any mask value below 255, to the bottom, and on a typical frame that is
+    /// about a quarter of it.  The rows merged are exactly the rows the whole merge gives, so the
+    /// final frames are byte for byte the same either way; what differs is the earth aligned
+    /// image's preview, which above that row shows the original frame rather than a merge nobody
+    /// reads.  Only the automatic clean method and only the CPU path with the exact warp use it
+    /// (the outlier methods read the aligned images themselves, and a GUI request to view one
+    /// always gets the whole merge), for the moving camera's aligned earth merge and the static
+    /// camera's median of its sources alike (whose composite mask, the final horizon mask and the
+    /// merged one respectively, is known before the merge); everywhere else this changes nothing.
+    /// Not part of
+    /// `ArtifactInputs` for the same reason: the outputs are identical.
+    public var bandLimitedEarthMerge: Bool = true
+
     mutating public func set(videoInfo: VideoInfo) {
         self.frameRate = videoInfo.frameRate
         self.codec = videoInfo.codec
@@ -1559,6 +1577,7 @@ public struct Config: Codable, Sendable {
         
         self.pixelThreshold = try c.decodeIfPresent(Double.self, forKey: .pixelThreshold) ?? self.pixelThreshold
         self.cloudAwareMerge = try c.decodeIfPresent(Bool.self, forKey: .cloudAwareMerge) ?? self.cloudAwareMerge
+        self.bandLimitedEarthMerge = try c.decodeIfPresent(Bool.self, forKey: .bandLimitedEarthMerge) ?? self.bandLimitedEarthMerge
         self.tempOutputPath = try c.decodeIfPresent(String.self, forKey: .tempOutputPath) ?? self.tempOutputPath
         self.outputPath = try c.decodeIfPresent(String.self, forKey: .outputPath) ?? self.outputPath
         self.cleanMethod = try c.decodeIfPresent(CleanMethod.self, forKey: .cleanMethod) ?? self.cleanMethod

@@ -393,14 +393,18 @@ R2 and R3 cover its median (26% of the stage) and remaps (63% of its layer build
 
 ## 5. Questions for Brian
 
-1. **R4.** With band-limited merges, what should the star-/earth-aligned intermediates show
+1. **R4.** *(Answered 2026-10-30: base-frame pixels, automatic mode only.)* With band-limited
+   merges, what should the star-/earth-aligned intermediates show
    outside their band: base-frame pixels, or a full merge built on demand when viewed?
 2. **R2.** Is runtime AVX2 dispatch acceptable in the shipped x86 binary? Every Intel Mac
    that runs macOS 13 has AVX2; the Windows/Linux daemon builds would dispatch at runtime too.
 3. **GPU merges** are off in your prefs on this Vega. Permanent until the Mac Studio? If so,
    R2–R4 and R9 are the merge phase's speed for now.
-4. **Output compression.** LZW on the final TIFF is 12.7% of the cli's merge CPU and saves
+4. **Output compression.** *(Answered 2026-10-30: adaptive — uncompressed unless LZW takes a tenth
+   off. Built; see 6.1.)* LZW on the final TIFF is 12.7% of the cli's merge CPU and saves
    0–8% of disk on this data. Keep it, make uncompressed an option, or change the default?
+   *(Measured 2026-10-30, 6.3: 15.1 % of the merge phase over a whole run, and on a9-3 the
+   LZW file is 148 MB against 144 MB uncompressed — larger, not smaller.)*
 
 ## 6. Implementation log (2026-10-29, branch `claude/core-speed-proposal-8df3ba`)
 
@@ -423,6 +427,8 @@ end-to-end A/B are in 6.3.
 | **R9** cloud stage box blurs | `StarCpp/Sources/StarCpp/BoxBlur.hpp` (the stage's `boxBlurOnce` moved out of `ImageAligner.cpp`, original arithmetic kept as the scalar form) | `blur_bench` against a verbatim copy of the original: 21.8 M elements over widths/heights 1…600 (including narrower than the window), radii 1…48, both scales, luma-sized / weight-sized / signed / NaN / ±inf / ±1e30 / exact-tie values, bitwise, scalar form and AVX2 form: **0 differ**. Mutations that fail it: round toward zero, NaN not zeroed, wrong right-edge padding. (One that does *not*: multiplying by `1/norm` instead of dividing — double rounding differs too rarely for random data to see, so the division stays by construction.) Same hook as R3 (`STAR_WARP=opencv` / `debugSetExactWarp`) selects the scalar form, so `testTheExactRemapMakesTheSameMerge` holds the blurs to it inside a whole merge. |
 | **R9 follow-up** `interpolateBlockAvx2` eight pixels at a time | `ExactWarp.hpp` (`interpolateBlockAvx2` over `interpolateRangeAvx2`, `bilinearTable3`) | The bilinear loop every warp and cloud-layer pixel goes through, and the largest single symbol in the merge-phase profile (19.9 %). For three-channel frames, eight pixels whose windows are all interior (and not on the second-to-last row, so a 16-byte load cannot leave the frame) get their offsets and weight-table indices in registers; each pixel is two 16-byte loads, one multiply per row against a laid-out weight pair, and the same left-to-right sum, `((p0+p1)+p2)+p3`, with p1/p3 moved from lanes 3–5 to 0–2 first. Anything else goes through the old per-pixel code. `warp_bench` 92.9 M pixel-channels and `remap_bench` 54 M + 1.07 G, **0 differ, 0 coverage differ**; mutations that fail: sum order changed (153 of 13 M pixels differ — the sensitivity this needs), no coverage store, interior test one row too generous. |
 | **R6** match each frame pair once | `StarCpp/Sources/StarCpp/PairMatch.hpp`; `knn2` replaces the two `matcher.knnMatch(descNeighbor, descBase, …, 2)` calls in `computeHomography` | Read from `batch_distance.cpp` and `BFMatcher::knnMatchImpl` (4.12.0): a distance is `sqrt(hal::normL2Sqr_(a, b))` (float L2) or `hal::normHamming` (packed bits) — symmetric in its arguments to the bit — and a row's answer is its two smallest under (distance, index) by strict-`<` insertion on the integer bit pattern, a distance at or above FLT_MAX/INT_MAX never chosen. One pass over the matrix gives A's op its rows and B's op its columns; the first op to ask computes both and leaves the other direction (16 bytes per row, 128 MB cap, oldest out first) under a key made of the *content hash of the two descriptor sets*, which the partner's op takes. `match_bench` against `cv::BFMatcher` in both directions: 72 M descriptor pairs (SIFT-like float 128-d, quantised floats with many equal distances, all-equal rows, sums that overflow to infinity, packed bits with few distinct distances, 1…1,200 rows a side): **0 differ**; five mutations fail it (tie to the higher index, no sentinel, only the first chunk merged, Hamming distance off by one, wrong cache key); ASan/UBSan clean. In the suite: `PairMatchEquivalenceTests` (the same sets through `knn2`; and a sky alignment of a pair of rendered star fields both ways, in both orders, with the cache's count asserted to go 1 → 0 and the homographies equal to the numbers with the sharing off). A 60-frame cloudy a9-3 run (frames 157–216, Full, both sky and earth, so L2 and Hamming), BFMatcher against the pair matcher: all **120 stored homographies** (decoded) and all **60 output frames identical**. |
+| **Q4** adaptive TIFF compression (answered 2026-10-30) | `MatWrapper.cpp`, `lzwWorthIt` in `mat_wrapper_write_to` | A TIFF of 8 MB or more is written uncompressed unless LZW takes a tenth or more off, judged by the file's own encoder on 32 evenly spaced rows (`cv::imencode(".tiff")`, one row a strip as the file would be, a row's compressed size being independent of its neighbours); `STAR_TIFF_COMPRESSION=lzw` / `none` forces either. Smaller files, and the 8-bit masks, keep LZW. Pixels are untouched: 30 merged 24 MP frames of a9-3, LZW against adaptive, **0 differing pixels in all 30** (`magick compare -metric AE`); the same frame written twice is byte-identical. `TiffCompressionTests` (noise → uncompressed and exact; smooth gradient → LZW and exact; 8-bit mask → LZW; small noisy frame → as before; the environment override), the TIFF direct-read tests unchanged. |
+| **R4** band-limited earth merge (Q1 answered 2026-10-30: base-frame pixels outside the band, automatic mode only) | `Config.bandLimitedEarthMerge` (on); `createAutoProcessedImage` makes the star-aligned mask and its feathered form first, `ImageAligner.firstRow(of:below: 255)` gives the first row the blend can read the earth at, and `loadOrCreateEarthAlignedImage(rows:)` passes it to the moving camera's aligned merge (`alignAndMergeBand`, `exactwarp::warpBand`) or the static camera's median (`ia_median_merge_image_with_filenames(rowStart,rowEnd)`) | The blend copies the sky whole where the feathered alpha is 255 and computes `sky·w + earth·(1−w)` in float elsewhere, which is exactly the sky at w = 1, so no earth row above the first one holding a value below 255 is ever read (and the hard-mask fallback needs a subset of them). `FeatheredCompositeTests.testTheEarthAboveTheMasksFirstRowBelow255IsNeverRead` replaces those rows with garbage and requires the composite unmoved through both blends (merging 3 rows too few fails it). `ExactWarpEquivalenceTests`: for bands from the top, to the bottom, one row and the whole frame, 1 and 3 channels, neighbours with missing homographies, the exact warp off, and (static) a source of another size, every band row is the whole merge's row and every other row the base's (breaking the band's coverage counts fails it with 50 errors). **Real footage:** a9-3 moving, 30 frames: engaged on all 30 (earth rows 3,069–3,115 → 4,000, 23 % of the frame), final frames **byte-identical** on against off in two independent pairs; fx3 static 12 MP dusk, 60 frames: engaged on all 60 (≈2,300 → 2,832, 19 %), final frames byte-identical in four pairs. **CPU is not resolved** (moving: 1,372 and 1,151 CPU-s off, 1,113 and 1,048 on; static, eight runs: 1,134–1,614 off, 1,050–1,761 on — the runs differ from each other by more than the effect), and the payoff is **far below section 2's ~25 %**, which was written before R2, R3 and R9: the earth merge is now roughly a tenth of the merge phase (its eight warps and one of three median stacks), so skipping three quarters of its rows is worth something like 5–8 % on a moving sequence and less on a static one, whose 17-source median the R2 kernel made cheap. Only the earth-aligned *previews* change: above the band they show the original frame. A GUI request for the aligned image, outlier modes, the GPU merge and the streaming path all merge whole; a band-limited image is never written at full size. |
 | **R10** stall watch | `StarCore/Sources/StarCore/StallWatch.swift`, called from `ResourceGovernor.tick` | `StallWatchTests`. |
 
 Two facts worth keeping from reading OpenCV 4.12.0's `imgwarp.cpp` (the tree has it at
@@ -463,6 +469,7 @@ So Q2 was answered "yes" in code — it is one `if` in `mergeKernelForThisMachin
 | 16-bit warp + its 8-bit coverage probe, 6000×1000×3 | 21.6 + 36.3 ns/px | 17.7 (scalar), 7.3 (AVX2), one pass | 1.9× scalar, 2.2–5.4× AVX2 |
 | cloud stage layer: map lambda + `cv::remap` 16-bit + 8-bit coverage probe → `remapField`, 6000×1000×3 region, smooth cloud field | 8.2 + 4.3×3 + 5.3 = 26.3 ns/px | 8.3 (AVX2), 17.2 (scalar rows) | **3.2×** AVX2, 1.5× scalar; 2.6× on a noisy ±100 px field |
 | descriptor match of one pair, both directions, 8,000 × 8,000 SIFT-like descriptors | two BFMatcher passes 0.19–0.20 s | one pair pass 0.11–0.12 s | **1.6–1.7×** for the pair; a pair's partner op then skips its match, so about half the matching CPU goes (hit rate on the 60-frame run: 341 of the first 800 matches, 43 %, the rest being sequence ends and partners still in flight) |
+| merge-only rerun of 30 cloudy 24 MP frames, final TIFF LZW → adaptive (uncompressed) | 1,391 and 1,361 CPU-s (81.6 and 76.0 s wall); files 149.4 MB | 1,262 and 1,279 CPU-s (61.9 and 63.4 s); files 144.0 MB | **−8.6 % CPU, −21 % wall**, alternating runs, both repeats agree; the file is 4 % *smaller* |
 | bilinear loop alone: warp + coverage, 6000×1000×3; cloud remap | 2.5–2.7 ns/pc; 8.7–9.0 ns/px | 2.1–2.4; 7.5–7.6 | **1.15–1.2×**, alternating runs. The count of the code (45 µops a pixel → ~30) said 1.5×; the loop is not simply issue-bound, so what it bought is 15–20 % of a kernel that was a fifth of the busy samples |
 | cloud stage box blur, one pass, 6000×3400 plane (r = 6 and 24) | 6.6–6.8 ns/element | 3.3 (3.1–3.4 at strips of 256–512 columns) | **2.0×** (1.6× with the original 64-column strips: the column pass reads a column band down 24 KB-apart rows, so a wider strip is longer runs of the same cache lines) |
 | AKAZE map passes, 24 MP-scale levels | 0.754 s | 0.431 s | 1.75× (the dense extremum scan, unchanged, is most of what is left) |
@@ -607,11 +614,40 @@ than that. The first pair of runs also shows what a cold page cache does to a co
 first time the 60 frames were read from the volume, 248 s the second, with nothing else changed. The
 saving to expect is what 6.2 says of the matcher's share, half of 16 % of phase A.
 
+#### The merge phase over a whole run (2026-10-30, after R1–R3, R5, R6, R9)
+
+A merge-only rerun of the 90-frame cloudy probe (a9-3 157–246, Full), `sample`d for 12 s every 25 s
+for the whole run: 18 windows, 705 k busy samples, shares of those. This replaces the single 25 s
+windows quoted in 6.3 above, each of which caught one phase of the merge and overstated whatever
+ran then (box blurs read 13.7 % in one, 7.7 % over the run; `lumaDownRows` 4.2 % and 2.8 %, against
+a measured 36 ms a 24 MP frame, ~0.5 % of a frame's CPU).
+
+| share | what |
+|---|---|
+| 20.9 % | warp and remap interpolation (`interpolateBlockAvx2` 13.2 %, `warpRowAvx2` 3.7 %, and 3.4 % that is OpenCV's own NEAREST warp: the horizon-mask warps, `processNN` + `remapNearest`) |
+| **15.1 %** | **`LZWEncode`** — the final TIFF (below) |
+| 12.4 % | allocation, zero-fill and free (`bzero` 7.0 %, which includes the page faults of fresh buffers; `madvise` 2.0 %) |
+| 10.5 % | the velocity search: `matchTemplate`'s DFT, integral images, spectra |
+| 8.6 % | the R2 median kernel |
+| 7.7 % | box blurs (after the AVX2 form) |
+| 3.0 % | cloud map generation; 5.0 % luma / low-res / `medianBlur`; 2.7 % file I/O; 13.9 % thin spread |
+
+**LZW on the final TIFF is the second-largest item and does nothing for the files.** The only file
+the merge phase compresses is the final frame (the `auto-processed` image the output links to):
+LZW with the horizontal predictor and one row to a strip. On this footage each comes out at
+**148 MB against 144 MB for the uncompressed source frame** — three percent *larger* — because
+night-sky noise does not compress. Q4 in section 5 is therefore sharper than it was written:
+15 % of the merge phase's CPU for a file that is no smaller.
+
 ### 6.4 Not done, and why
 
-* **R4** needs your decision (Q1) and was not started. The row-range machinery it needs from R3
-  exists (`exactwarp::warpRows` takes a destination row range), and the median kernel already
-  works on bands.
+* **R4** is done for the earth merge (6.1), moving and static. Not attempted: the *star* merge's
+  band (skip the ground rows below the horizon plus the cloud stage's 300-row margin). It is the
+  smaller half — about 10 % of that merge's rows — and unlike the earth band it sits under the cloud
+  stage, whose noise sigma is taken from the base frame's sky alone (so unaffected) but whose error
+  map, trusted region, blurs and relative test read merged rows across the sky and a margin; showing
+  that 300 rows covers every one of those dependencies is an audit of the whole stage that has not been
+  done, and the prize is a tenth of one merge.
 * **R6** is done (6.1): the cache holds only the small 2-nearest results, is capped, and cannot
   return a stale entry because it is keyed on the descriptors' content. **R7** (pyramid readback without the copy) was left: it needs a `cv::Mat` over Metal
   readback storage with a release callback, and a pool that today recycles buffers the moment
