@@ -631,6 +631,37 @@ actor Session {
         if atRest { onImageSaved(frameIndex: frame.frameIndex, type: .final) }
     }
 
+    /// "Find outliers for this frame" and "Re-process this frame from the start", inline, as the macOS gui does them (`findOutliersAndRender`, and
+    /// the button that clears first): no run and no frame graph, the frame's own steps one after another, and its finished image written at
+    /// once.  A run is working on the same frames, so one going refuses this rather than interleaving with it.  `startOver` first does what
+    /// the gui's "Re-process this frame from the start" does before it finds them again: delete the images `type` says (the panel's choice, which
+    /// leaves the alignment alone unless it names it) and the frame's stored outliers, without resetting its state.
+    func findOutliers(of frame: FrameAirplaneRemover, startOver: Bool, type: FrameReprocessingType) async throws {
+        guard !closed else { return }
+        if activeRun != nil { throw SessionError.runInProgress }
+        if startOver {
+            frame.imageAccessor.deleteAllImages(frameIndex: frame.frameIndex, reprocessingType: type)
+            try? await frame.deleteOutliers()
+        }
+        await frame.initializeEmptyOutlierGroups()
+        try await frame.findOutliers()
+        await frame.set(state: .secondClassification)
+        await frame.applyDecisionTreeToAllOutliers()
+        guard await renderNow(frame) else { throw SessionError.frameNotRendered(frame.frameIndex) }
+    }
+
+    enum SessionError: Error, CustomStringConvertible {
+        case runInProgress
+        case frameNotRendered(Int)
+
+        var description: String {
+            switch self {
+            case .runInProgress: return "a processing run is going; stop it, or wait for it, first"
+            case .frameNotRendered(let index): return "frame \(index) was found but its finished image was not written"
+            }
+        }
+    }
+
     /// Give `frame` its own neighbour count of `kind`, or with a nil `count` take its own away; and do what the change calls for
     /// (macOS `set(alignedNeighborFrames:forFrame:)` and the others).  A new aligned count invalidates the frame's star alignment, and if
     /// it had one the frame is processed again: true when that is under way.  A new static count builds the merged horizon again if

@@ -24,6 +24,7 @@ import com.star.proto.ConfigChangePreview
 import com.star.proto.DeferRefinementResponse
 import com.star.proto.DetectionType
 import com.star.proto.ExportVideoRequest
+import com.star.proto.FindFrameOutliersRequest
 import com.star.proto.FrameInfo
 import com.star.proto.FrameRef
 import com.star.proto.FrameViewMode
@@ -330,6 +331,18 @@ class StarClient(private val conn: StdioConnection) {
         call(
             "Frame.SetCleanMethod",
             SetFrameCleanMethodRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setCleanMethod(cleanMethod).build(),
+            FrameInfo.parser(),
+        )
+
+    /**
+     * Find a frame's outlier groups again inline (`Frame.FindOutliers`): no run and no frame graph; answered, with the frame, when its finished
+     * image is written. Refused while a run is going. [startOver] first throws away what [type] says, the frame's outlier data with it.
+     */
+    suspend fun findFrameOutliers(sessionId: String, frameIndex: Int, startOver: Boolean, type: com.star.proto.ReprocessingType): FrameInfo =
+        call(
+            "Frame.FindOutliers",
+            FindFrameOutliersRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setStartOver(startOver)
+                .setReprocessingType(type).build(),
             FrameInfo.parser(),
         )
 

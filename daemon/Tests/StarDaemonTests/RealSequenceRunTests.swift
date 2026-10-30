@@ -105,4 +105,45 @@ final class RealSequenceRunTests: XCTestCase {
             XCTAssertTrue(end.autoSelective, "frame \(i) has the auto selective image")
         }
     }
+
+    /// L7: "Find outliers for this frame" and "Re-process this frame from the start" over a frame of a finished real run: no run is begun (no
+    /// sequence state is announced), the frame is found again to the same groups, ends `.complete`, and its final image was written afresh.
+    func testFindingOutliersInlineRewritesTheFrameWithoutARun() async throws {
+        let env = try environment()
+        let count = 4
+        let session = try await makeSession(from: env.dir, configPath: env.config, first: 600, count: count, cleanMethod: .automatic(true))
+        _ = try await runAndReport(session, count: count, label: "before the inline find")
+        let found = await session.frame(at: 2)
+        let frame = try XCTUnwrap(found)
+        let finalPath = try XCTUnwrap(frame.imageAccessor.nameForImage(frameIndex: 2, ofType: .final, atSize: .original))
+        func modified() throws -> Date {
+            try XCTUnwrap(FileManager.default.attributesOfItem(atPath: finalPath)[.modificationDate] as? Date)
+        }
+        let groupsBefore = await frame.getOutlierGroups()?.members.count
+        XCTAssertNotNil(groupsBefore, "the finished run left the frame's outlier groups")
+
+        let (stream, cont) = AsyncStream<Star_V1_ProgressEvent>.makeStream()
+        let token = await session.addProgressSubscriber(cont)
+
+        for (startOver, type) in [(false, FrameReprocessingType.outliers), (true, FrameReprocessingType.none)] {
+            let label = startOver ? "re-process" : "find outliers"
+            let writtenBefore = try modified()
+            try await session.findOutliers(of: frame, startOver: startOver, type: type)
+            let groups = await frame.getOutlierGroups()?.members.count
+            let state = await frame.processingState()
+            print("REAL-RUN \(label): groups \(String(describing: groupsBefore)) -> \(String(describing: groups)), state=\(state)")
+            XCTAssertEqual(groups, groupsBefore, "\(label): the same frame is found to the same groups")
+            XCTAssertEqual(state, .complete, "\(label): the frame ends complete")
+            XCTAssertGreaterThan(try modified(), writtenBefore, "\(label): the final image was written again")
+        }
+
+        await session.removeProgressSubscriber(token)
+        cont.finish()
+        var announced: [String] = []
+        for await event in stream {
+            if case .sequenceState(let s) = event.kind { announced.append(s.state) }
+        }
+        XCTAssertEqual(announced, [], "no run was begun, so no sequence state was announced")
+        await session.close()
+    }
 }

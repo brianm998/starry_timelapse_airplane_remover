@@ -49,6 +49,10 @@ class FrameRepository(private val clientProvider: () -> StarClient?) {
     suspend fun setCleanMethod(sessionId: String, frameIndex: Int, cleanMethod: CleanMethod): FrameInfo =
         c().setFrameCleanMethod(sessionId, frameIndex, cleanMethod)
 
+    /** Find a frame's outlier groups again inline, with no run (see [StarClient.findFrameOutliers]). */
+    suspend fun findOutliers(sessionId: String, frameIndex: Int, startOver: Boolean, type: com.star.proto.ReprocessingType): FrameInfo =
+        c().findFrameOutliers(sessionId, frameIndex, startOver, type)
+
     /** A frame's own neighbour count of [kind], set or (null) taken away; whether a run began is in the answer. */
     suspend fun setNeighborOverride(sessionId: String, frameIndex: Int, kind: com.star.proto.NeighborKind, count: Int?) =
         c().setNeighborOverride(sessionId, frameIndex, kind, count)

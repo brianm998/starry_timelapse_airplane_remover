@@ -664,14 +664,42 @@ class SequenceViewModel(
         }
     }
 
-    /** Find the outliers of the current frame again, keeping its alignment (macOS `FindOutliersOnCurrentFrameButton`). */
-    fun findOutliersCurrent() = startProcessingRun {
-        processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_OUTLIERS)
-    }
+    /**
+     * Find the outliers of the current frame again, keeping its alignment (macOS `FindOutliersOnCurrentFrameButton`). Done inline, as macOS
+     * does it: no run, so no processing screen; the frame shows its new groups and picture when the daemon answers.
+     */
+    fun findOutliersCurrent() = findOutliersInline(startOver = false, com.star.proto.ReprocessingType.REPROCESS_OUTLIERS)
 
-    /** Reprocess the current frame from scratch (macOS `ReProcessCurrentFrameButton`). */
-    fun reprocessCurrent() = startProcessingRun {
-        processing.reprocessFrames(sessionId, listOf(_currentIndex.value), com.star.proto.ReprocessingType.REPROCESS_EVERYTHING)
+    /**
+     * Reprocess the current frame from the start (macOS `ReProcessCurrentFrameButton`): the same inline path, throwing away first what the
+     * right panel's [reprocessType] says, as macOS does, and the frame's outliers.
+     */
+    fun reprocessCurrent() = findOutliersInline(startOver = true, _reprocessType.value)
+
+    private fun findOutliersInline(startOver: Boolean, type: com.star.proto.ReprocessingType) {
+        if (_rendering.value || isProcessing.value) return
+        val index = _currentIndex.value
+        _rendering.value = true
+        scope.launch {
+            try {
+                frameVMFor(index).applyInfo(frames.findOutliers(sessionId, index, startOver, type))
+                // The daemon rewrote the frame's final image in place and its outlier groups are new.
+                imageCache.invalidateFrame(index)
+                bumpRevision(index)
+                frameDataChanged(index)
+                if (index == _currentIndex.value) {
+                    loadPreview(index, _viewMode.value)
+                    fullResolutionVersion.value++
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Log.w("Sequence") { "find outliers of frame $index failed: ${e.message}" }
+                reportFailure(e)
+            } finally {
+                _rendering.value = false
+            }
+        }
     }
 
     /**
