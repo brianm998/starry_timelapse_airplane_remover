@@ -685,6 +685,9 @@ jobs:
         env:
           # xcodebuild strips TEST_RUNNER_ and hands STAR_TEST_DATA to the UI-test runner
           TEST_RUNNER_STAR_TEST_DATA: ${{ github.workspace }}/.test-data
+          # A hosted macOS VM can have under 2GB free, below star's default memory floor, so it admits nothing; the runner forwards this to the app
+          STAR_SYSTEM_FLOOR_MB: 512
+          TEST_RUNNER_STAR_SYSTEM_FLOOR_MB: 512
           TEST_RUNNER_STAR_FFMPEG_DIR: ${{ github.workspace }}/external_binaries/bin
         run: |
           set -o pipefail
@@ -1214,7 +1217,7 @@ jobs:
           # A 7GB VM with ~2-3GB free: at full resolution one frame's keypoint reservation (2.2GB) exceeds stard's narrowed memory budget, so
           # frames wait minutes each. stard itself defaults to 1.5 on such a machine; pin it so a roomier moment on the VM cannot pick 1.
           # Not coarser: 1.8 and 2 find no usable star alignment on this runner. The cli, gui and other desktop legs run the default.
-          command: cd star-desktop && STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
+          command: cd star-desktop && STAR_SYSTEM_FLOOR_MB=512 STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
 
       - name: Prove the scenario ran (not a vacuous green)
         working-directory: star-desktop

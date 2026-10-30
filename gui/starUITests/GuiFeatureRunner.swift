@@ -167,6 +167,9 @@ final class GuiFeatureRunner {
         let markers = scratch.appendingPathComponent("run-markers")
         try FileManager.default.createDirectory(at: markers, withIntermediateDirectories: true)
         app.launchEnvironment["STAR_RUN_MARKER_DIR"] = markers.path
+        if let floor = ProcessInfo.processInfo.environment["STAR_SYSTEM_FLOOR_MB"], !floor.isEmpty {
+            app.launchEnvironment["STAR_SYSTEM_FLOOR_MB"] = floor
+        }
         // The app keeps its preferences in $HOME/.star.userprefs.json. A test must neither read nor write the real one: a "don't ask me
         // again" answered on this machine once skipped the render prompt and with it the video the feature asked for.
         let home = scratch.appendingPathComponent("home")
