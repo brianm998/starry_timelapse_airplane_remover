@@ -832,6 +832,7 @@
   "ui.render_video_after_processing": "إخراج الفيديو بعد المعالجة؟",
   "ui.render_video_from_n_frames": "أخرج فيديو من {0} إطارًا",
   "ui.render_video_from_n_frames_lower": "أخرج فيديو من {0} إطارًا",
+  "ui.render_video_no_frames": "لا توجد إطارات معالَجة لإنشاء فيديو منها بعد. عالج الإطارات أولاً.",
   "ui.render_video_now": "إخراج الفيديو الآن؟",
   "ui.rendering_error": "خطأ في الإخراج: {0}",
   "ui.rendering_file": "جارٍ إخراج {0}",

@@ -832,6 +832,7 @@
   "ui.render_video_after_processing": "Video nach der Verarbeitung rendern?",
   "ui.render_video_from_n_frames": "Video aus {0} Bildern rendern",
   "ui.render_video_from_n_frames_lower": "Video aus {0} Bildern rendern",
+  "ui.render_video_no_frames": "Es gibt noch keine verarbeiteten Bilder, aus denen ein Video entstehen könnte. Verarbeiten Sie zuerst die Bilder.",
   "ui.render_video_now": "Video jetzt rendern?",
   "ui.rendering_error": "Renderfehler: {0}",
   "ui.rendering_file": "{0} wird gerendert",

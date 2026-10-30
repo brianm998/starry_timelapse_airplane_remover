@@ -1803,6 +1803,8 @@ public final class ImageSequenceViewModel {
     
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
+    /// The sequence's file names in frame order: the output frames carry the same names, and a video is made from those.
+    private(set) var sourceFilenames: [String] = []
 
     var shouldShowInitialInstructions: Bool = false
 
@@ -2216,7 +2218,9 @@ public final class ImageSequenceViewModel {
         
         let callbacks = self.makeCallbacks()
 
-        self.imageSequenceSize = await imageSequence.filenames.count
+        let sourceFilenames = await imageSequence.filenames
+        self.sourceFilenames = sourceFilenames
+        self.imageSequenceSize = sourceFilenames.count
         Log.d("loaded \(imageSequenceSize) images")
         self.set(numberOfFrames: imageSequenceSize)
 
@@ -3802,8 +3806,27 @@ public final class ImageSequenceViewModel {
     }
     
     
-    //private var videoRenderTask: Task<Void>? = nil
-    
+    /// The render in flight, so that Cancel and closing the sequence can stop ffmpeg.
+    private var videoRenderTask: Task<Void, Never>?
+
+    /// Which render `videoRenderTask` is, so that one that was replaced does not put the flag down under its successor.
+    private var videoRenderToken = UUID()
+
+    private func videoRenderEnded(_ token: UUID) {
+        guard token == videoRenderToken else { return }
+        videoRenderTask = nil
+        isRenderingVideo = false
+    }
+
+    /// Stops the render that is going, if any: ffmpeg is terminated, and the partial video is removed.
+    func cancelVideoRender() {
+        videoRenderTask?.cancel()
+    }
+
+    /// Renders the processed frames to `filename` in the output folder, the way the cli and the desktop client do
+    /// (`VideoExport`): the frames reach ffmpeg as a list of exactly the files the sequence expects, in frame order,
+    /// and the run can be cancelled.  `isRenderingVideo` is true for as long as it goes, so Process stays off and
+    /// closing the sequence asks first.
     func renderVideo(named filename: String,
                      frameRate: FrameRate,
                      encoder: FFmpegEncoder,
@@ -3814,57 +3837,75 @@ public final class ImageSequenceViewModel {
                      completion: @escaping @Sendable () -> Void,
                      errorCallback: @escaping @Sendable (Error) -> Void)
     {
-        let totalNumberOfFrames = self.frames.count
-        let rawFrameRate = frameRate.rawString
-
         let realConfig = config.config()
         let outputPath = realConfig.outputPath
-        let basename = realConfig.basename
-
-        /*
-         # this is what the timelapse render daemon uses:
-         
-         my $ffmpeg_cmd = "ffmpeg -y -r $frame_rate -i $image_sequence_full_dirname/$config->{image_name_prefix}%05d$image_type -aspect $aspect_ratio $filter_str -c:v $output_codec -pix_fmt $pix_fmt_str -threads 0 -profile:v 1 -movflags +write_colr -an -color_range $color_range -color_primaries bt709 -colorspace bt709 -color_trc bt709 -timecode 00:00:00:00 ";
- */
-        
-        let hasAudio = realConfig.hasAudio
+        let videoPath = "\(outputPath)/\(filename)"
+        let sourceFilenames = self.sourceFilenames
+        let info = VideoInfo(frameRate: frameRate,
+                             codec: realConfig.codec,
+                             encoder: encoder,
+                             pixelFormat: pixelFormat,
+                             muxer: muxer,
+                             hasAudio: realConfig.hasAudio,
+                             resolution: resolution)
         let audioDirectory = "\(realConfig.imageSequencePath)/\(realConfig.imageSequenceDirname)"
+        let frameDirectory = realConfig.outputSequenceDirname
 
-        /*videoRenderTask = */Task.detached {
+        videoRenderTask?.cancel()
+        isRenderingVideo = true
+        let token = UUID()
+        videoRenderToken = token
+        videoRenderTask = Task.detached { [weak self] in
+            let listPath = "\(NSTemporaryDirectory())/star-export-\(UUID().uuidString).ffconcat"
+            defer { try? FileManager.default.removeItem(atPath: listPath) }
+            var outcome: Result<Void, Error> = .success(())
             do {
+                // A partly processed sequence still renders what it has, as it always did here.
+                let found = VideoExport.finalFrames(outputDir: frameDirectory, sourceFilenames: sourceFilenames)
+                if !found.missing.isEmpty {
+                    Log.w("video render: \(found.missing.count) of \(sourceFilenames.count) frames have no output in \(frameDirectory) and are left out")
+                }
+                guard !found.files.isEmpty else { throw RenderVideoError.noFrames }
+                try VideoExport.concatList(files: found.files, frameRate: frameRate)
+                  .write(toFile: listPath, atomically: true, encoding: .utf8)
+
                 // What the container will take of the video's own sound: as it is, AAC, Opus, or
                 // nothing (see AudioSidecar).  Worked out here, off the main actor, because it asks ffmpeg.
-                let audio = hasAudio
+                let audio = info.hasAudio
                   ? AudioSidecar.plan(in: audioDirectory, formatArguments: ["-f", muxer.rawValue], outputExtension: "")
                   : AudioPlan.none("this video has none")
 
-                var arguments: [String] = [
-                    "-y",                                                              // overwrite
-                    "-framerate", rawFrameRate,                                        // frame rate
-                    "-pattern_type", "glob", "-i",                                    // input image glob
-                    "\(outputPath)/\(basename)/*.\(realConfig.fileExtension)",        // input images
-                ]
-                arguments += audio.inputArguments
-                arguments += resolution.ffmpegArguments // scale, if asked to
-                arguments += [
-                    "-c:v", encoder.rawValue,         // encoder
-                    "-pix_fmt", pixelFormat.rawValue, // pixel format
-                ]
-                arguments += encoder.defaultQualityArguments // for the GPU encoders whose own default is poor
-                arguments += audio.codecArguments
-                arguments += [
-                    "-f", muxer.rawValue,             // muxer
-                    "\(outputPath)/\(filename)"       // output filename
-                ]
-                try runFFmpegWithProgress(
-                  arguments: arguments,
-                  totalFrames: totalNumberOfFrames,
+                try await runCancellableFFmpegWithProgress(
+                  arguments: VideoExport.arguments(listPath: listPath, audio: audio, videoInfo: info, outputVideoPath: videoPath),
+                  totalFrames: found.files.count,
                   outputFolder: outputPath,
                   progress: progress)
-                completion()
             } catch {
-                Log.e("video encoding error: \(error)")
-                errorCallback(error)
+                outcome = .failure(error)
+            }
+            if case .failure(let error) = outcome {
+                if error is CancellationError {
+                    // A cancelled encode leaves a partial file where the video was going to be.
+                    try? FileManager.default.removeItem(atPath: videoPath)
+                    Log.i("video render cancelled")
+                } else {
+                    Log.e("video encoding error: \(error)")
+                }
+            }
+            await self?.videoRenderEnded(token)
+            switch outcome {
+            case .success: completion()
+            case .failure(let error): errorCallback(error)
+            }
+        }
+    }
+
+    /// Why a render did not start; ffmpeg's own failures are reported as they come.
+    enum RenderVideoError: LocalizedError {
+        case noFrames
+        var errorDescription: String? {
+            switch self {
+            case .noFrames: return localized("ui.render_video_no_frames")
             }
         }
     }

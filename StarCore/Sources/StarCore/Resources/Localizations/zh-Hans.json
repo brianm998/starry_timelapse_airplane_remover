@@ -832,6 +832,7 @@
   "ui.render_video_after_processing": "处理后渲染视频吗？",
   "ui.render_video_from_n_frames": "用 {0} 帧渲染视频",
   "ui.render_video_from_n_frames_lower": "用 {0} 帧渲染视频",
+  "ui.render_video_no_frames": "还没有可用来制作视频的已处理帧。请先处理帧。",
   "ui.render_video_now": "立即渲染视频吗？",
   "ui.rendering_error": "渲染错误：{0}",
   "ui.rendering_file": "正在渲染 {0}",

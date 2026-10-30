@@ -832,6 +832,7 @@
   "ui.render_video_after_processing": "¿Renderizar el vídeo tras el procesamiento?",
   "ui.render_video_from_n_frames": "Renderizar un vídeo a partir de {0} fotogramas",
   "ui.render_video_from_n_frames_lower": "renderizar un vídeo a partir de {0} fotogramas",
+  "ui.render_video_no_frames": "Todavía no hay fotogramas procesados con los que hacer un vídeo. Procese primero los fotogramas.",
   "ui.render_video_now": "¿Renderizar el vídeo ahora?",
   "ui.rendering_error": "error de renderizado: {0}",
   "ui.rendering_file": "Renderizando {0}",

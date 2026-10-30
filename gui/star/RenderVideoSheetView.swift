@@ -8,7 +8,6 @@ import logging
  - deal with audio, show audio, checked by default only if present 
  - also notice when the pixelformat or muxer doesn't match the codec and we had to change it
  - if there are initial video settings, say when it's different (have button to revert)
- - add cancel button (keep track of task)
  - show video resolution / aspect ratio
  - include timecode in rendered video so frame numbers show up
  - allow changing filename
@@ -122,7 +121,12 @@ struct RenderVideoSheetView: View {
         } errorCallback: { error in
             Task { @MainActor in
                 self.isRendering = false
-                self.renderingError = error
+                // Cancel put the sheet away already; a stopped render is not an error to report.
+                if error is CancellationError {
+                    self.isVisible = false
+                } else {
+                    self.renderingError = error
+                }
             }
         }
     }
@@ -137,6 +141,10 @@ struct RenderVideoSheetView: View {
                   .font(.title)
                 Text(localized("ui.frame_n_of_m", encodingFrameNumber, totalFrames))
                 ProgressBarView(progress: $encodingProgress, barColor: .green)
+                Button(localized("ui.cancel")) {
+                    viewModel.cancelVideoRender()
+                }
+                  .accessibilityIdentifier("render.cancel")
                 Space(height: 20)
             }
 

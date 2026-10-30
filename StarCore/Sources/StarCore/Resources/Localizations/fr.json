@@ -832,6 +832,7 @@
   "ui.render_video_after_processing": "Rendre la vidéo après le traitement ?",
   "ui.render_video_from_n_frames": "Rendre une vidéo à partir de {0} images",
   "ui.render_video_from_n_frames_lower": "rendre une vidéo à partir de {0} images",
+  "ui.render_video_no_frames": "Il n'y a pas encore d'images traitées avec lesquelles faire une vidéo. Traitez d'abord les images.",
   "ui.render_video_now": "Rendre la vidéo maintenant ?",
   "ui.rendering_error": "erreur de rendu : {0}",
   "ui.rendering_file": "Rendu de {0}",

@@ -435,7 +435,6 @@ struct ProcessingButtonsView: View {
 
             Button() {
                 viewModel.renderVideoSheetShowing = true
-                viewModel.isRenderingVideo = false
             } label: {
                 Text(localized("ui.render_video_from_n_frames_lower", viewModel.frames.count))
             }

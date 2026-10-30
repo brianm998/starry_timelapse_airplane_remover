@@ -525,6 +525,7 @@ public final class ViewModel {
         // awake for a run was never ended, because `deinit` is not reliably called.
         if let closing = imageSequence {
             closing.stopProcessing()
+            closing.cancelVideoRender()
             closing.stopVideo()
             closing.disable()
             // What the user changed in the last few seconds is still waiting for its save: write it out in the

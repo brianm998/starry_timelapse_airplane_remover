@@ -832,6 +832,7 @@
   "ui.render_video_after_processing": "Отрендерить видео после обработки?",
   "ui.render_video_from_n_frames": "Отрендерить видео из {0} кадров",
   "ui.render_video_from_n_frames_lower": "отрендерить видео из {0} кадров",
+  "ui.render_video_no_frames": "Пока нет обработанных кадров, из которых можно сделать видео. Сначала обработайте кадры.",
   "ui.render_video_now": "Отрендерить видео сейчас?",
   "ui.rendering_error": "ошибка рендеринга: {0}",
   "ui.rendering_file": "Рендеринг {0}",

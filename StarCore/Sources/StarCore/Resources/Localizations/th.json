@@ -832,6 +832,7 @@
   "ui.render_video_after_processing": "เรนเดอร์วิดีโอหลังประมวลผลไหม",
   "ui.render_video_from_n_frames": "เรนเดอร์วิดีโอจาก {0} เฟรม",
   "ui.render_video_from_n_frames_lower": "เรนเดอร์วิดีโอจาก {0} เฟรม",
+  "ui.render_video_no_frames": "ยังไม่มีเฟรมที่ประมวลผลแล้วสำหรับสร้างวิดีโอ โปรดประมวลผลเฟรมก่อน",
   "ui.render_video_now": "เรนเดอร์วิดีโอเดี๋ยวนี้ไหม",
   "ui.rendering_error": "เรนเดอร์ผิดพลาด: {0}",
   "ui.rendering_file": "กำลังเรนเดอร์ {0}",
