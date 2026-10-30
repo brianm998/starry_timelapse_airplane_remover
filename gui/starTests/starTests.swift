@@ -3753,6 +3753,51 @@ final class VideoRenderWiringTests: XCTestCase {
     }
 }
 
+/// Layer 0 of the parity plan (§6.2.4), E1 and E2: what a click on an outlier group does is `gherkin/ui/vectors/clickRules.json`, which the
+/// desktop's `ClickRules` and `OutlierDecisions` are held to as well (`ClickRulesVectorTest`).
+final class ClickRuleTests: XCTestCase {
+    private func doc() throws -> [String: Any] {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("gherkin/ui/vectors/clickRules.json")
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    }
+
+    private func reason(_ name: String) throws -> RemoveReason? {
+        switch name {
+        case "undecided": return nil
+        case "classifierRemove": return .fromClassifier(1.0)
+        case "classifierKeep": return .fromClassifier(-1.0)
+        case "userRemove": return .userSelected(true)
+        case "userKeep": return .userSelected(false)
+        default: throw XCTSkip("unknown decision \(name)")
+        }
+    }
+
+    func testAClickLeavesTheOppositeDecision() throws {
+        let cases = try XCTUnwrap(try doc()["toggle"] as? [[String: String]])
+        XCTAssertGreaterThanOrEqual(cases.count, 5)
+        for c in cases {
+            let after = try XCTUnwrap(try reason(try XCTUnwrap(c["after"])))
+            XCTAssertEqual(OutlierGroupView.decisionAfterClick(try reason(try XCTUnwrap(c["decision"]))), after, "\(c)")
+        }
+    }
+
+    func testAClickOnAGroupDoesWhatTheVectorSays() throws {
+        let cases = try XCTUnwrap(try doc()["groupClick"] as? [[String: Any]])
+        // `allCases` leaves out `.none`, which the vector has with the others: every tool, the switch on and off, a decided and an undecided group
+        XCTAssertEqual(Set(cases.compactMap { $0["tool"] as? String }), Set(ToolType.allCases.map(\.rawValue) + [ToolType.none.rawValue]))
+        XCTAssertEqual(cases.count, (ToolType.allCases.count + 1) * 4)
+        for c in cases {
+            let tool = try XCTUnwrap(ToolType(rawValue: try XCTUnwrap(c["tool"] as? String)))
+            let expected: OutlierGroupView.GroupClick = (c["expected"] as? String) == "multiChoiceSheet" ? .openMultiChoice : .applyTool
+            XCTAssertEqual(OutlierGroupView.groupClick(tool: tool,
+                                                      multiChoice: try XCTUnwrap(c["multiChoice"] as? Bool),
+                                                      decided: try XCTUnwrap(c["decided"] as? Bool)),
+                           expected, "\(c)")
+        }
+    }
+}
+
 /// S8: the start screen's controls are the ones `gherkin/ui/vectors/startScreen.json` lists, in that order, each with its hover text; the
 /// desktop's `StartScreenTest` reads its own start screen against the same file.
 final class StartScreenTests: XCTestCase {
