@@ -2312,10 +2312,22 @@ final class UserPreferencesStoreTests: XCTestCase {
         XCTAssertTrue(block.contains("applyUserPreferences()"),
                       "the setter no longer re-applies the preferences: \(block)")
 
-        for setting in ["detectionType", "frameRate", "codec", "encoder", "pixelFormat", "muxer"] {
+        for setting in ["frameRate", "codec", "encoder", "pixelFormat", "muxer"] {
             XCTAssertTrue(src.contains("self.\(setting) = \(setting)"),
                           "applyUserPreferences no longer seeds \(setting)")
         }
+    }
+
+    /// L2 of the parity plan: the detection type is the sequence's own, from its `config.json`.  The preference only seeds a *new*
+    /// sequence (its `Config` is built with it), so a write to any preference must not push it into the one that is open.
+    func testTheDetectionTypeIsTheSequencesOwnAndThePreferenceOnlySeedsANewOne() throws {
+        let src = try source("star/ImageSequenceViewModel.swift")
+        XCTAssertFalse(src.contains("self.detectionType = detectionType"),
+                       "a preference write overwrites the open sequence's detection type again")
+        XCTAssertTrue(src.contains("self.detectionType = config.detectionType"),
+                      "a sequence no longer reads its detection type from its config")
+        XCTAssertTrue(src.contains("detectionType: UserPreferencesStore.shared.preferences.processingType ?? .strong"),
+                      "a new sequence is no longer seeded from the preference")
     }
 
     /// The GPU toggles are remembered across sequences by two halves that have to stay in step,
@@ -2940,5 +2952,376 @@ final class AlignmentDeviationPointTests: XCTestCase {
             XCTAssertEqual(point.signedDeviation > 0, point.offset > 0,
                            "offset \(point.offset)")
         }
+    }
+}
+
+/// M2 of `plans/GUI_CLIENT_PARITY_PLAN.md`: `~/.star.userprefs.json` is written by both clients, so a save has to
+/// change what *this* process changed and nothing else.  Encoding the whole struct dropped every key only the Kotlin
+/// client knows (`outlierTableColumns`) and wrote this process's stale copy of any key the other one changed
+/// meanwhile.
+final class UserPreferencesMergeTests: XCTestCase {
+
+    private var dir: URL!
+
+    override func setUpWithError() throws {
+        dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("star-prefs-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: dir)
+    }
+
+    private var path: String { dir.appendingPathComponent(".star.userprefs.json").path }
+
+    private func obj(_ json: String) throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+    }
+
+    private func written() throws -> [String: Any] {
+        try obj(String(contentsOfFile: path, encoding: .utf8))
+    }
+
+    func testAKeyOnlyTheOtherClientKnowsSurvivesASave() throws {
+        try #"{"recentlyOpenedSequencelist":{},"outlierTableColumns":["rank","area"]}"#
+            .write(toFile: path, atomically: true, encoding: .utf8)
+        let before = try obj(#"{"recentlyOpenedSequencelist":{}}"#)
+        let after = try obj(#"{"recentlyOpenedSequencelist":{},"showHorizonOnMainView":true}"#)
+
+        XCTAssertEqual(try UserPreferences.writeMerged(current: after, previous: before, to: path), .written)
+
+        let file = try written()
+        XCTAssertEqual(file["outlierTableColumns"] as? [String], ["rank", "area"])
+        XCTAssertEqual(file["showHorizonOnMainView"] as? Bool, true)
+    }
+
+    /// The other client changed a key after this process read the file; this process changed a different one.
+    func testAKeyTheOtherClientChangedMeanwhileIsNotUndone() throws {
+        try #"{"recentlyOpenedSequencelist":{},"language":"fr","showProcessingWindow":false}"#
+            .write(toFile: path, atomically: true, encoding: .utf8)
+        // what this process loaded: German, processing window on (nil is a missing key)
+        let before = try obj(#"{"recentlyOpenedSequencelist":{},"language":"de"}"#)
+        let after = try obj(#"{"recentlyOpenedSequencelist":{},"language":"de","showHorizonOnMainView":true}"#)
+
+        _ = try UserPreferences.writeMerged(current: after, previous: before, to: path)
+
+        let file = try written()
+        XCTAssertEqual(file["language"] as? String, "fr", "the other client's language was put back")
+        XCTAssertEqual(file["showProcessingWindow"] as? Bool, false)
+        XCTAssertEqual(file["showHorizonOnMainView"] as? Bool, true)
+    }
+
+    func testAKeyThisProcessClearedIsRemoved() throws {
+        try #"{"recentlyOpenedSequencelist":{},"language":"de","outlierTableColumns":["rank"]}"#
+            .write(toFile: path, atomically: true, encoding: .utf8)
+        let before = try obj(#"{"recentlyOpenedSequencelist":{},"language":"de"}"#)
+        let after = try obj(#"{"recentlyOpenedSequencelist":{}}"#)
+
+        _ = try UserPreferences.writeMerged(current: after, previous: before, to: path)
+
+        let file = try written()
+        XCTAssertNil(file["language"])
+        XCTAssertNotNil(file["outlierTableColumns"])
+    }
+
+    /// Recent files are one object: two clients opening different sequences both keep theirs.
+    func testRecentFilesAddedByTheOtherClientAreKept() throws {
+        try #"{"recentlyOpenedSequencelist":{"/a/config.json":10,"/b/config.json":20}}"#
+            .write(toFile: path, atomically: true, encoding: .utf8)
+        // this process loaded only /a, and has since opened /c
+        let before = try obj(#"{"recentlyOpenedSequencelist":{"/a/config.json":10}}"#)
+        let after = try obj(#"{"recentlyOpenedSequencelist":{"/a/config.json":10,"/c/config.json":30}}"#)
+
+        _ = try UserPreferences.writeMerged(current: after, previous: before, to: path)
+
+        let recent = try XCTUnwrap(written()["recentlyOpenedSequencelist"] as? [String: Double])
+        XCTAssertEqual(recent, ["/a/config.json": 10, "/b/config.json": 20, "/c/config.json": 30])
+    }
+
+    func testARecentFileThisProcessPrunedIsRemovedAndOthersKept() throws {
+        try #"{"recentlyOpenedSequencelist":{"/a/config.json":10,"/b/config.json":20}}"#
+            .write(toFile: path, atomically: true, encoding: .utf8)
+        let before = try obj(#"{"recentlyOpenedSequencelist":{"/a/config.json":10}}"#)
+        let after = try obj(#"{"recentlyOpenedSequencelist":{}}"#)
+
+        _ = try UserPreferences.writeMerged(current: after, previous: before, to: path)
+
+        let recent = try XCTUnwrap(written()["recentlyOpenedSequencelist"] as? [String: Double])
+        XCTAssertEqual(recent, ["/b/config.json": 20])
+    }
+
+    func testNothingChangedWritesTheFileAsItWas() throws {
+        try #"{"recentlyOpenedSequencelist":{},"language":"fr","outlierTableColumns":["rank"]}"#
+            .write(toFile: path, atomically: true, encoding: .utf8)
+        let same = try obj(#"{"recentlyOpenedSequencelist":{},"language":"de"}"#)
+
+        _ = try UserPreferences.writeMerged(current: same, previous: same, to: path)
+
+        let file = try written()
+        XCTAssertEqual(file["language"] as? String, "fr")
+        XCTAssertNotNil(file["outlierTableColumns"])
+    }
+
+    func testAFileThatIsNotAnObjectIsLeftAlone() throws {
+        try "[1, 2".write(toFile: path, atomically: true, encoding: .utf8)
+        let outcome = try UserPreferences.writeMerged(
+            current: try obj(#"{"language":"de"}"#), previous: [:], to: path)
+        XCTAssertEqual(outcome, .unreadable)
+        XCTAssertEqual(try String(contentsOfFile: path, encoding: .utf8), "[1, 2")
+    }
+
+    func testNoFileIsCreatedWithJustTheChange() throws {
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path))
+        _ = try UserPreferences.writeMerged(
+            current: try obj(#"{"recentlyOpenedSequencelist":{},"language":"de"}"#),
+            previous: try obj(#"{"recentlyOpenedSequencelist":{}}"#), to: path)
+        XCTAssertEqual(try written()["language"] as? String, "de")
+    }
+
+    /// Slashes stay readable in the paths the file lists.
+    func testPathsAreNotSlashEscaped() throws {
+        _ = try UserPreferences.writeMerged(
+            current: try obj(#"{"recentlyOpenedSequencelist":{"/a/b/config.json":1}}"#),
+            previous: try obj(#"{"recentlyOpenedSequencelist":{}}"#), to: path)
+        let text = try String(contentsOfFile: path, encoding: .utf8)
+        XCTAssertTrue(text.contains("\"/a/b/config.json\""), text)
+    }
+
+    /// `save()` starts from `defaultObject` when no file was read; it has to be what an empty `UserPreferences` encodes to.
+    func testTheDefaultObjectIsWhatAnEmptyPreferencesEncodesTo() throws {
+        let empty = try JSONDecoder().decode(UserPreferences.self, from: Data(#"{"recentlyOpenedSequencelist":{}}"#.utf8))
+        let encoded = try XCTUnwrap(UserPreferences.jsonObject(of: empty))
+        XCTAssertEqual(NSDictionary(dictionary: encoded), NSDictionary(dictionary: UserPreferences.defaultObject))
+    }
+
+    /// The real struct round-trips through `jsonObject(of:)`, which is what `save()` compares.
+    func testTheStructEncodesToAnObjectWithoutNilKeys() throws {
+        var prefs = UserPreferences()
+        let bare = try XCTUnwrap(UserPreferences.jsonObject(of: prefs))
+        XCTAssertEqual(Set(bare.keys), ["recentlyOpenedSequencelist"])
+        // (a copy that is never saved: `didSet` would write the real file otherwise, so set a field without observers)
+        prefs = (try? JSONDecoder().decode(UserPreferences.self, from: Data(#"{"recentlyOpenedSequencelist":{},"language":"de"}"#.utf8))) ?? prefs
+        let with = try XCTUnwrap(UserPreferences.jsonObject(of: prefs))
+        XCTAssertEqual(with["language"] as? String, "de")
+    }
+}
+
+/// L6 of `plans/GUI_CLIENT_PARITY_PLAN.md`: re-processing frames 2 and 6 used to clear every frame from 2 to 6.
+final class ReprocessClearingTests: XCTestCase {
+    func testOnlyTheSelectedFramesAreCleared() {
+        XCTAssertEqual(ImageSequenceViewModel.framesToClear(in: 2...6, selected: [2, 6]), [2, 6])
+    }
+
+    func testAContiguousRunIsClearedWhole() {
+        XCTAssertEqual(ImageSequenceViewModel.framesToClear(in: 3...5, selected: [3, 4, 5]), [3, 4, 5])
+    }
+
+    func testNoSelectionMeansTheWholeRange() {
+        XCTAssertEqual(ImageSequenceViewModel.framesToClear(in: 4...7, selected: nil), [4, 5, 6, 7])
+    }
+
+    func testASelectionOutsideTheRangeClearsNothingThere() {
+        XCTAssertEqual(ImageSequenceViewModel.framesToClear(in: 4...5, selected: [1, 9]), [])
+    }
+}
+
+/// S6 of `plans/GUI_CLIENT_PARITY_PLAN.md`: a single image dropped on the start screen is a frame, not a video.
+final class DroppedImageTests: XCTestCase {
+    func testTheExtensionsOfAnImageSequence() {
+        for name in ["a.jpg", "a.jpeg", "a.tif", "a.tiff", "a.png"] {
+            XCTAssertTrue(InitialView.isImageFile("/x/\(name)"), name)
+        }
+    }
+
+    func testCaseDoesNotMatter() {
+        for name in ["IMG_0001.JPG", "IMG_0001.Jpeg", "scan.TIF", "scan.TIFF", "shot.PNG"] {
+            XCTAssertTrue(InitialView.isImageFile("/x/\(name)"), name)
+        }
+    }
+
+    func testAVideoIsNotAnImage() {
+        for name in ["clip.mov", "clip.MP4", "clip", "jpg", ".jpg.mov"] {
+            XCTAssertFalse(InitialView.isImageFile("/x/\(name)"), name)
+        }
+    }
+}
+
+/// I1 of `plans/GUI_CLIENT_PARITY_PLAN.md`: nothing the gui says is written into its code.  Every word on screen is a catalogue key
+/// looked up with `localized(...)`, so that it follows the language the user picked.  This is the counterpart of the Kotlin client's
+/// `NoHardCodedStringsTest`: it reads the sources under `gui/star` and fails on a string literal handed to a call that puts text on
+/// screen (`Text(`, `Label(`, `Button(`, `.help(`, `.navigationTitle(` …) that reads as something shown to a person: it starts with a
+/// capital, or has a word, a space and another word.  Keys, symbol names and identifiers are not prose and pass.
+final class NoHardCodedStringsTests: XCTestCase {
+
+    /// "file:literal" -> why it may stay.
+    private static let allowed: [String: String] = [:]
+
+    private static var starDir: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("star")
+    }
+
+    /// The calls that put text on screen.
+    private static let sink = try! NSRegularExpression(
+        pattern: #"(?:\b(?:Text|Label|Button|Toggle|Picker|Section|TextField|GroupBox|Menu|DisclosureGroup)\(|\.(?:help|navigationTitle|accessibilityLabel|alert|confirmationDialog)\()"#)
+    private static let literal = try! NSRegularExpression(pattern: #""((?:[^"\\\n]|\\.)*)""#)
+    private static let symbolArgument = try! NSRegularExpression(
+        pattern: #"(?:systemImage|image|named|id|identifier|name):\s*"[^"]*""#)
+
+    /// The source with comments blanked out, line breaks kept, so a quoted word in a comment is not a literal.
+    static func withoutComments(_ source: String) -> String {
+        let chars = Array(source)
+        var out = [Character]()
+        var i = 0
+        while i < chars.count {
+            if i + 2 < chars.count, chars[i] == "\"", chars[i + 1] == "\"", chars[i + 2] == "\"" {
+                var j = i + 3
+                while j + 2 < chars.count, !(chars[j] == "\"" && chars[j + 1] == "\"" && chars[j + 2] == "\"") { j += 1 }
+                let end = min(j + 3, chars.count)
+                out.append(contentsOf: chars[i..<end]); i = end
+            } else if chars[i] == "\"" {
+                var j = i + 1
+                while j < chars.count, chars[j] != "\"", chars[j] != "\n" {
+                    if chars[j] == "\\" { j += 1 }
+                    j += 1
+                }
+                let end = min(j + 1, chars.count)
+                out.append(contentsOf: chars[i..<end]); i = end
+            } else if i + 1 < chars.count, chars[i] == "/", chars[i + 1] == "/" {
+                var j = i
+                while j < chars.count, chars[j] != "\n" { out.append(" "); j += 1 }
+                i = j
+            } else if i + 1 < chars.count, chars[i] == "/", chars[i + 1] == "*" {
+                var j = i + 2
+                while j + 1 < chars.count, !(chars[j] == "*" && chars[j + 1] == "/") { j += 1 }
+                let end = min(j + 2, chars.count)
+                for c in chars[i..<end] { out.append(c == "\n" ? "\n" : " ") }
+                i = end
+            } else {
+                out.append(chars[i]); i += 1
+            }
+        }
+        return String(out)
+    }
+
+    /// The index of the `)` that closes the `(` at `open`, skipping string literals and what is interpolated into them.
+    static func closingParenthesis(in chars: [Character], from open: Int) -> Int {
+        var depth = 0
+        var j = open
+        while j < chars.count {
+            let c = chars[j]
+            if c == "\"" {
+                j += 1
+                while j < chars.count, chars[j] != "\"", chars[j] != "\n" {
+                    if chars[j] == "\\" {
+                        if j + 1 < chars.count, chars[j + 1] == "(" {
+                            var k = j + 2, d = 1
+                            while k < chars.count, d > 0 {
+                                if chars[k] == "(" { d += 1 } else if chars[k] == ")" { d -= 1 }
+                                k += 1
+                            }
+                            j = k
+                            continue
+                        }
+                        j += 1
+                    }
+                    j += 1
+                }
+            } else if c == "(" {
+                depth += 1
+            } else if c == ")" {
+                depth -= 1
+                if depth == 0 { return j }
+            }
+            j += 1
+        }
+        return chars.count
+    }
+
+    /// What is left of a literal once the values interpolated into it are taken out: the words that are written down.
+    static func words(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\\\([^)]*\)"#, with: "", options: .regularExpression)
+    }
+
+    static func looksLikeProse(_ text: String) -> Bool {
+        let w = words(text)
+        guard w.range(of: "[A-Za-z]{2}", options: .regularExpression) != nil else { return false }
+        if w.range(of: "^[A-Z_0-9]+$", options: .regularExpression) != nil { return false }
+        return w.range(of: "^[A-Z][a-z]", options: .regularExpression) != nil
+            || w.range(of: #"[A-Za-z]\s+[A-Za-z]"#, options: .regularExpression) != nil
+    }
+
+    /// Every prose literal handed to a call that puts text on screen, in `source`.
+    static func hardCodedStrings(in source: String) -> [String] {
+        let text = withoutComments(source)
+        let chars = Array(text)
+        let ns = text as NSString
+        var found: [String] = []
+        for m in sink.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            // NSString offsets are UTF-16, `chars` are characters: both are the same for the ASCII that holds a call.
+            let open = m.range.location + m.range.length - 1
+            guard open < chars.count else { continue }
+            let close = closingParenthesis(in: chars, from: open)
+            var argument = String(chars[(open + 1)..<min(close, chars.count)])
+            argument = symbolArgument.stringByReplacingMatches(
+                in: argument, range: NSRange(location: 0, length: (argument as NSString).length), withTemplate: "")
+            // a `localized(...)` call is a key, whatever it is spelled like
+            argument = argument.replacingOccurrences(
+                of: #"localized\((?:[^()]|\([^()]*\))*\)"#, with: "", options: .regularExpression)
+            let a = argument as NSString
+            for l in literal.matches(in: argument, range: NSRange(location: 0, length: a.length)) {
+                let value = a.substring(with: l.range(at: 1))
+                if looksLikeProse(value) { found.append(value) }
+            }
+        }
+        return found
+    }
+
+    func testNoScreenWritesItsWordsInCode() throws {
+        let names = try FileManager.default.contentsOfDirectory(atPath: Self.starDir.path)
+            .filter { $0.hasSuffix(".swift") && !$0.hasPrefix(".") }
+        XCTAssertGreaterThan(names.count, 20, "found only \(names.count) sources in gui/star")
+        var problems: [String] = []
+        for name in names.sorted() {
+            let source = try String(contentsOf: Self.starDir.appendingPathComponent(name), encoding: .utf8)
+            for value in Self.hardCodedStrings(in: source) where Self.allowed["\(name):\(value)"] == nil {
+                problems.append("\(name): \"\(value)\"")
+            }
+        }
+        XCTAssertTrue(problems.isEmpty,
+                      "text written into the code instead of the catalogue (add a key to every table and call localized):\n"
+                      + problems.joined(separator: "\n"))
+    }
+
+    // MARK: - the scanner itself
+
+    func testItFindsALiteralHandedToText() {
+        XCTAssertEqual(Self.hardCodedStrings(in: #"Text("Process all frames")"#), ["Process all frames"])
+    }
+
+    func testItFindsOneInATernary() {
+        XCTAssertEqual(Self.hardCodedStrings(in: #"Label(hasMore ? "Next" : "Continue", systemImage: "checkmark.circle.fill")"#),
+                       ["Next", "Continue"])
+    }
+
+    func testItFindsOneWithAnInterpolation() {
+        XCTAssertEqual(Self.hardCodedStrings(in: #"Label("Process \(label) (new only)", systemImage: "play.circle")"#),
+                       [#"Process \(label) (new only)"#])
+    }
+
+    func testAKeyASymbolAndAnIdentifierAreNotProse() {
+        XCTAssertEqual(Self.hardCodedStrings(in: #"""
+            Text(localized("ui.save_reference_horizon"))
+            Label(localized(hasMore ? "ui.next" : "ui.continue"), systemImage: "checkmark.circle.fill")
+            Button(action: go) { Image(systemName: "play.fill") }
+              .accessibilityIdentifier("render.all.frames")
+            """#), [])
+    }
+
+    func testACommentIsNotALiteral() {
+        XCTAssertEqual(Self.hardCodedStrings(in: #"// Text("Process all frames")"#), [])
     }
 }
