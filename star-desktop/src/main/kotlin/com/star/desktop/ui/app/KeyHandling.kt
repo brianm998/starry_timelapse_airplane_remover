@@ -8,7 +8,6 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
-import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.ToolType
 
 /**
@@ -26,8 +25,12 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
     // While the horizon painter is open its own keys (brush size, sky/ground, reset, return, escape) are the ones that
     // count; r would otherwise render the frame under it, and the arrows move off the frame being painted.
     if (svm.horizonPaintMode.value) return false
-    // Under the processing screen nothing behind it should answer to a key.
-    if (svm.showProcessingModal.value) return false
+    // Under the processing screen nothing behind it should answer to a key, nor under the panel that reports on a reopened sequence
+    // (the gui's `isProcessingModalUp` covers both; this one used to let the arrows and r through it).
+    if (svm.showProcessingModal.value || app.sequenceProgress.value != null) return false
+    // While the sequence plays the buttons that move through it are gone in the gui, and their keys with them: only the ones that
+    // stop it (w, and space on the menu) still answer.
+    if (svm.isPlaying.value && event.key in TRANSPORT_KEYS) return false
     // Ctrl, Cmd and Alt with a letter are the menu's (Ctrl+R would render the frame, Ctrl+Z skip back), not the plain keys that move and edit.
     if (event.isCtrlPressed || event.isMetaPressed || event.isAltPressed) return false
 
@@ -47,8 +50,9 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
         Key.R -> { svm.renderCurrentFrame(); return true }
         Key.Tab -> { svm.toggleSidePanels(); return true }
         // Decision Tree All on the current frame (macOS ApplyAllDecisionTreeButton's `d`).
+        // In any mode, as the gui does (it was edit mode only here): the decisions are the frame's, whatever is on screen.
         Key.D -> {
-            if (svm.mode.value != InteractionMode.EDIT || !svm.currentFrameUsesOutliers()) return false
+            if (!svm.currentFrameUsesOutliers()) return false
             svm.applyDecisionTreeToCurrentFrame()
             return true
         }
@@ -63,6 +67,11 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
     }
     return false
 }
+
+/** The keys that step through the sequence (the macOS `VideoPlaybackButtons` shortcuts, and Home and End). */
+internal val TRANSPORT_KEYS: Set<Key> = setOf(
+    Key.DirectionLeft, Key.DirectionRight, Key.Home, Key.MoveEnd, Key.B, Key.F, Key.Z, Key.X,
+)
 
 private val DIGIT_KEYS: Map<Key, Int> = mapOf(
     Key.One to 1, Key.Two to 2, Key.Three to 3, Key.Four to 4,
