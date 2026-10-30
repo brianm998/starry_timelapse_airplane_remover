@@ -922,7 +922,7 @@ class AppViewModel(
         if (svm.horizonPaintMode.value) return
         svm.setMode(com.star.desktop.domain.InteractionMode.EDIT)
         autoRenderAfterProcessing = false
-        awaitingProcessingPrompt = false
+        awaitingProcessingPrompt = com.star.desktop.domain.ResumedRun.asksAboutRenderingAtTheEnd(prefs.skipRenderPromptAfterProcessing)
         svm.processAll()
     }
 
@@ -1018,7 +1018,7 @@ class AppViewModel(
                     return@launch
                 }
                 sessions.applySessionInfo(opened)
-                onOpened(path, withGpuPreferences(opened), promptStartup = promptStartup)
+                onOpened(path, withGpuPreferences(opened), promptStartup = promptStartup, showProgress = com.star.desktop.domain.ResumedRun.showsProgressPanel(resuming = afterOpen != null))
                 afterOpen?.invoke()
             } catch (e: CancellationException) {
                 throw e
@@ -1184,7 +1184,7 @@ class AppViewModel(
             if (resume != null && java.io.File(resume).exists()) {
                 _screen.value = AppScreen.Loading("ui.resuming_session", resume, null)
                 try {
-                    onOpened(resume, sessions.openConfig(resume), addToRecent = false)
+                    onOpened(resume, sessions.openConfig(resume), addToRecent = false, showProgress = com.star.desktop.domain.ResumedRun.showsProgressPanel(resuming = wasProcessing))
                     if (wasProcessing) resumeProcessing()
                 } catch (e: Throwable) {
                     fail(e.message ?: localized("ui.failed_to_resume_the_session_after_the_restart"))
@@ -1216,7 +1216,7 @@ class AppViewModel(
 
     suspend fun shutdown() = engine.shutdown()
 
-    private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true, promptStartup: Boolean = false) {
+    private fun onOpened(path: String, info: SessionInfo, addToRecent: Boolean = true, promptStartup: Boolean = false, showProgress: Boolean = true) {
         // Normally the open has already closed what was open; this is for the restart-after-crash route,
         // where the old session died with the engine. Before anything below sets state for the new one.
         teardownSequence()
@@ -1289,7 +1289,8 @@ class AppViewModel(
             // carries the answers. The exception is a hand-painted horizon selection the last
             // session never finished, which has to come before processing rather than after.
             // The panel waits for that: a run started now would fall back to the automatic horizon detection they had declined.
-            if (!resumeStartupHorizonIfUnfinished(svm, info.config)) showSequenceProgress(svm)
+            val painting = resumeStartupHorizonIfUnfinished(svm, info.config)
+            if (!painting && showProgress) showSequenceProgress(svm)
         }
     }
 
