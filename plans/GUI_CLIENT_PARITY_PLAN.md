@@ -667,8 +667,8 @@ Started 2026-10-29 on branch `claude/gui-client-parity-plan-3b6676`. Commits beg
 
 ### 9.1 Done, with a test that fails without the change
 
-Desktop: `./gradlew test`, green (594 tests; the one failure on the first run was the new pixel-threshold row lacking its help entry, fixed).
-gui: `xcodebuild test -scheme star -only-testing:starTests`, green (238 tests after the second round). Daemon: `swift test --filter` on the suites it touches
+Desktop: `./gradlew test`, green (609 tests after the third round).
+gui: `xcodebuild test -scheme star -only-testing:starTests`, green (248 tests after the third round). Daemon: `swift test --filter` on the suites it touches
 (`ExpertConfigFieldsTests|MappingTests|StepProgressReportTests|SessionCloseTests|EnumParityTests`, 96 tests), green.
 StarCore's own test suite and the cli were not run; the StarCore changes are additive (an optional callback, one new method).
 
@@ -704,6 +704,15 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
 | Q10 | gui fast advancement loads a frame's outliers and keeps scanning (D14) | `FastAdvancementSkipTests` (the decision only) |
 | P7, D12 | gui settings sheet has Allow Earth Alignment, Max Keypoint Ops and Merge Streaming MB | `SettingsWiringTests` (the new property); the rows are build-checked |
 | Layer 0 | `gherkin/ui/commands.json` (menu commands both clients must offer, with `knownGaps`) checked by a unit test on each side; `gherkin/ui/vectors/processingHeadline.json` (StarCore's headline text, recorded with `TEST_RUNNER_STAR_VECTORS_RECORD=1`) checked against the Kotlin copy | `CommandTableTest(s)`, `ProcessingHeadlineVectorsTest(s)` |
+| Layer 0 | `gherkin/ui/vectors/constants.json`: the disk-space ratio and the keypoint divisor choices (StarCore's, copied by hand into the desktop), the custom frame rate rule's cases and the playback speed list; each client's test reads it (`SharedConstantsTests` against StarCore and the startup prompt, `SharedConstantsTest` against the desktop's copies). `FrameState.isWorking` has no StarCore counterpart (it is the desktop's stand-in for "frames processing now"), so it has no vector | `SharedConstantsTest(s)` |
+| P12 | gui Render Video uses `VideoExport` (the frames as a concat list of the files the sequence expects, no glob), `runCancellableFFmpegWithProgress`, holds `isRenderingVideo` for the render's whole length (Process off, closing asks first), removes a cancelled render's partial file, has a Cancel button, and closing the sequence stops it; no processed frames is a message (`ui.render_video_no_frames`, 22 tables) | `VideoRenderWiringTests` (source scan + the message in two languages); **not run on a real render** |
+| Q14 (gui) | gui "Processing N more frames" counts the frames not complete (it counted from a number nothing set). **The desktop half (running operations, not working states) needs the daemon to report the count** | `VideoRenderWiringTests.testTheFramesLeftAreTheOnesNotYetComplete` |
+| P14 | gui custom frame rate starts at the rate in force, applies as typed (0.01-1000, red + the existing "Enter a number from a to b" line, Render disabled while invalid) | `SharedConstantsTests.testTheCustomFrameRateRuleIsTheDesktops` and `SharedConstantsTest.theCustomFrameRateRuleIsTheGuis` (same cases), a source scan of the sheet; the sheet itself not looked at |
+| M4 | desktop: under the horizon painter the arrows, b/f and z/x still answer (and `setCurrentIndex` asks "Change frame?" once paint has started); Home/End and the editing keys stay the painter's | `KeyHandlingTest.underThePainterOnlyTheFrameKeysAnswer` (the key set only) |
+| H3 | desktop painter stays in "computing" until a video frame is extracted, then loads its saved horizon | `HorizonPainterWaitTest` (`awaitFrameExtracted`) |
+| Q13 | desktop grid panel: outlier counts only when `FrameInfo.outliers_loaded`; Display toggles in the gui's order; the horizon's Pending/Set row under Mode in Processing | build; nothing tested it |
+| Q8 (part) | desktop hides the mode and view pickers while playing (it greyed them). **Placement (gui: bottom left, "[mode] with [original\|final] frames") is not done** | build |
+| Q7 | desktop playback speed is the gui's Display picker (1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90 fps) in the Display section; the bottom strip's -/+ are gone (`ui.fps`, `ui.transport_slower`, `ui.transport_faster` are now unused by both clients, left in the tables) | `SharedConstantsTest(s)` for the list |
 | I1 | gui: `DetectionType.localizedName` for the three pickers, the transport tooltips use `ui.transport_*`, "Process N (new only)" and the painter's Next/Continue use the existing keys | `NoHardCodedStringsTests` (the gui counterpart of the Kotlin lint, §6.2.3) |
 
 ### 9.2 Looked at, not done, and what the next person needs to know
@@ -718,11 +727,12 @@ StarCore's own test suite and the cli were not run; the StarCore changes are add
 * **P4, P11, S2, S3** change what happens when a run ends or is cancelled; they need a run to confirm which callback fires.
 * **Q1** (placeholder instead of falling back to another mode) should wait for Q3, or the desktop shows the placeholder for modes the daemon
   has not made.
-* **P14** (the gui's custom frame rate picker resets to 24): `FrameRate.custom(24)` is the picker's tag; keeping the current rate needs the tag to carry it.
-* **E6** (outlier window from the menu lists nothing) needs an observer on the current frame in the gui.
-* Not started: Q3, Q5, Q7, Q8, Q11, Q13, Q14, P5, P6, P8–P12 (except P12's reading), M4, M9–M11, H3, the grouping of D9's menu tree, D10–D12 (except the
-  three settings and Decision Tree, All Frames above), the rest of the Layer 0 pieces (the id registry, vectors for `WorkingLocation`, `FrameState.isWorking`
-  and the keypoint-divisor presets), I1's remaining items (outlier-table headers, `FrameProcessingState.shortString` badges — English on purpose for the updatable log, so they need a second property).
+* **Q3** (offer the aligned images the gui can build on demand): the gui asks `FrameAirplaneRemover.canProduceAlignedImage(of:)` (homographies exist);
+  `Mapping.availableModes` asks `imageExists`. Offering them from the daemon is only right if `Frame.GetPreview` (`PreviewFiles.ref` / `fullSizeRef`) builds
+  those two on demand, which I did not check; do that first, with a daemon test, or the desktop will offer modes that answer "not yet generated". Q1 waits for it.
+* **Q8** keeps the pickers in the top bar; the gui's strip is below the image, with "with" and "frames" around the view picker (`ui.with`, `ui.frames`).
+* Not started: Q5, Q11, P5, P6, P8–P11, M9–M11, the grouping of D9's menu tree, D10–D12 (except the three settings and Decision Tree, All Frames above),
+  the id registry of Layer 0, I1's remaining items (outlier-table headers, `FrameProcessingState.shortString` badges — English on purpose for the updatable log, so they need a second property).
 * The strings `tool.help.*` still say a click on Remove/Keep "marks" a group; with D2 a click toggles. Left alone: changing them is 22 translations.
 
 ### 9.3 Blocked on the owner
