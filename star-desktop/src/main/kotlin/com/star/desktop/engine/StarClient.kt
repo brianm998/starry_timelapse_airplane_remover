@@ -67,6 +67,8 @@ import com.star.proto.OutlierFeaturesResponse
 import com.star.proto.OutlierGroupList
 import com.star.proto.Point
 import com.star.proto.PreviewSize
+import com.star.proto.FreeSpaceRequest
+import com.star.proto.FreeSpaceResponse
 import com.star.proto.ProbeVideoRequest
 import com.star.proto.ProbeVideoResponse
 import com.star.proto.ProgressEvent
@@ -199,6 +201,10 @@ class StarClient(private val conn: StdioConnection) {
     /** A video's size and length from its header, and what a frame of each format costs in disk; `known` is false if it cannot be read. */
     suspend fun probeVideo(videoPath: String): ProbeVideoResponse =
         call("Session.ProbeVideo", ProbeVideoRequest.newBuilder().setVideoPath(videoPath).build(), ProbeVideoResponse.parser())
+
+    /** The bytes free on the volume holding [path] as the daemon (StarCore) counts them; `known` is false if the volume would not say. */
+    suspend fun freeSpace(path: String): FreeSpaceResponse =
+        call("Session.GetFreeSpace", FreeSpaceRequest.newBuilder().setPath(path).build(), FreeSpaceResponse.parser())
 
     /** As [openSequence], but streams how the frames are coming, and cancelling the collector cancels the open (no session is left behind). */
     fun openSequenceStream(sequenceDir: String, initialConfig: Config = Config.getDefaultInstance()): Flow<OpenProgress> =

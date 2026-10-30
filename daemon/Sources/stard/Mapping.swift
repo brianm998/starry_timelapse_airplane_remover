@@ -204,6 +204,15 @@ enum Mapping {
         return out
     }
 
+    /// The answer to `Session.GetFreeSpace`: StarCore's own count of what the volume holding `path` has free.
+    static func freeSpaceResponse(for path: String) -> Star_V1_FreeSpaceResponse {
+        var response = Star_V1_FreeSpaceResponse()
+        guard let available = DiskSpaceCheck.availableBytes(forPath: path) else { return response }
+        response.known = true
+        response.availableBytes = available
+        return response
+    }
+
     /// The answer to `Session.ProbeVideo`.
     static func probeVideoResponse(for videoPath: String) -> Star_V1_ProbeVideoResponse {
         var response = Star_V1_ProbeVideoResponse()

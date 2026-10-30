@@ -114,6 +114,15 @@ message OpenVideoRequest {
   ExtractionSettings extraction_settings = 7;
 }
 
+// Session.GetFreeSpace: the bytes free on the volume holding `path` (the nearest folder that exists, since an output folder usually does not yet),
+// counted as StarCore's `DiskSpaceCheck` counts them: on a Mac the capacity "for important usage", which includes what the system would
+// purge to make room for a write.  So a dialog's "available" and the daemon's own low-space warning agree, and agree with the macOS gui.
+message FreeSpaceRequest  { string path = 1; }
+message FreeSpaceResponse {
+  bool   known           = 1;   // false when the volume would not say; nothing else is set then
+  uint64 available_bytes = 2;
+}
+
 // Session.ProbeVideo: what the video's header says, without decoding it, so a dialog can tell the user how much disk the frames will take.
 message ProbeVideoRequest  { string video_path = 1; }
 message ProbeVideoResponse {

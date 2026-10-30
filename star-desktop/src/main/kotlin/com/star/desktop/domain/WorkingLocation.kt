@@ -34,6 +34,14 @@ object WorkingLocation {
         return if (free > 0 || f.totalSpace > 0) free else null
     }
 
+    /**
+     * What the dialogs show as available: what the daemon says, since it counts as StarCore's own disk check does (on a Mac, including what the
+     * system would purge to make room: the JVM does not, and the desktop reported a shortage the gui did not, S9), and this machine's
+     * [freeBytes] when the daemon cannot say, is too old to be asked, or is not there.
+     */
+    suspend fun freeBytesAsTheDaemonCountsThem(path: String, ask: suspend (String) -> Long?): Long? =
+        (try { ask(path) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }) ?: freeBytes(path)
+
     /** The folder the frames, output and working files go under unless the user chooses another: beside the source, as before. */
     fun defaultFolder(source: String): String = File(source).absoluteFile.parent ?: source
 }

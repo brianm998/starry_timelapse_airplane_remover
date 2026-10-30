@@ -67,6 +67,16 @@ enum SessionHandlers {
         }
     }
 
+    /// `Session.GetFreeSpace`: the free space on the volume holding a path, as StarCore counts it.
+    static func freeSpace(id: UInt64, payload: Data, transport: StdioTransport) async {
+        do {
+            let req = try Star_V1_FreeSpaceRequest(serializedBytes: payload)
+            try await transport.respond(id: id, payload: Mapping.freeSpaceResponse(for: req.path).serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     /// `Session.ProbeVideo`: the size and length of a video, from its header, with what each frame format will cost in disk.
     static func probeVideo(id: UInt64, payload: Data, transport: StdioTransport) async {
         do {

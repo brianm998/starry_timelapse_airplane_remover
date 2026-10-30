@@ -78,6 +78,7 @@ fun StarApp(vm: AppViewModel) {
                     probe = { vm.sessions.probeVideo(it) },
                     onImport = vm::confirmVideoImport,
                     onCancel = vm::cancelVideoImport,
+                    freeSpace = { vm.sessions.freeSpace(it) },
                 )
             }
             val pendingSequence by vm.pendingSequence.collectAsState()
@@ -86,6 +87,7 @@ fun StarApp(vm: AppViewModel) {
                     sequenceDir = dir,
                     onOpen = vm::confirmSequenceLocation,
                     onCancel = vm::cancelSequenceLocation,
+                    freeSpace = { vm.sessions.freeSpace(it) },
                 )
             }
             val showInfo by vm.showInfoDialog.collectAsState()

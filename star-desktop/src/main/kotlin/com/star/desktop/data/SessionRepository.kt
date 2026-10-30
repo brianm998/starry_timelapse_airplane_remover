@@ -45,6 +45,9 @@ class SessionRepository(private val clientProvider: () -> StarClient?) {
             tiffCompression = options.tiffCompression.proto, extractInBackground = options.extractInBackground,
         )
 
+    /** Free bytes on the volume holding [path], as the daemon counts them, or null when it would not say. */
+    suspend fun freeSpace(path: String): Long? = client().freeSpace(path).takeIf { it.known }?.availableBytes
+
     /** What the video's header says, for the import dialog's disk estimate. */
     suspend fun probeVideo(videoPath: String): com.star.proto.ProbeVideoResponse = client().probeVideo(videoPath)
 

@@ -414,6 +414,24 @@ final class MappingTests: XCTestCase {
 
     /// The device a GPU toggle would use is named whenever there is one, so the sheet can say which; absent where there is none.  Read-only like
     /// the availability beside it.
+    // MARK: - free space (S9 of the parity plan)
+
+    /// The desktop asked the JVM, which counts less than StarCore does on a Mac (no purgeable space); the daemon answers for it, with the
+    /// number the gui's own disk check uses, and for a folder that is not made yet by the nearest one that is.
+    func testFreeSpaceIsStarCoresCountForTheVolumeHoldingThePath() throws {
+        let dir = NSTemporaryDirectory()
+        let expected = try XCTUnwrap(DiskSpaceCheck.availableBytes(forPath: dir))
+        let answer = Mapping.freeSpaceResponse(for: dir)
+        XCTAssertTrue(answer.known)
+        XCTAssertGreaterThan(answer.availableBytes, 0)
+        // the volume is the same one a moment apart; allow for what other processes write meanwhile
+        let slack: UInt64 = 512 * 1024 * 1024
+        XCTAssertLessThan(answer.availableBytes > expected ? answer.availableBytes - expected : expected - answer.availableBytes, slack)
+
+        let notThereYet = (dir as NSString).appendingPathComponent("no-such-\(UUID().uuidString)/deeper/still")
+        XCTAssertTrue(Mapping.freeSpaceResponse(for: notThereYet).known, "an output folder is not there before the run")
+    }
+
     func testTheGPUDeviceIsNamedWhenThereIsOne() {
         let proto = Mapping.protoConfig(Config())
         if let device = GPUCapability.deviceName() {

@@ -38,10 +38,12 @@ fun WorkingLocationSection(
     onFolder: (String?) -> Unit,
     inputBytes: Long?,
     frameBytes: Long? = null,
+    /** What the daemon says is free on the volume holding a path; without it this machine's own count is shown. */
+    freeSpace: suspend (String) -> Long? = { null },
 ) {
     val effective = folder ?: WorkingLocation.defaultFolder(source)
     // null while it is being read, UNKNOWN_FREE when the volume would not say.
-    val freeOrUnknown by produceState<Long?>(null, effective) { value = withContext(Dispatchers.IO) { WorkingLocation.freeBytes(effective) ?: UNKNOWN_FREE } }
+    val freeOrUnknown by produceState<Long?>(null, effective) { value = withContext(Dispatchers.IO) { WorkingLocation.freeBytesAsTheDaemonCountsThem(effective, freeSpace) ?: UNKNOWN_FREE } }
     val free = freeOrUnknown?.takeIf { it != UNKNOWN_FREE }
     val processing = inputBytes?.let(WorkingLocation::runBytes)
     val total = processing?.let { it + (frameBytes ?: 0L) }

@@ -58,6 +58,7 @@ fun VideoImportDialog(
     probe: suspend (String) -> ProbeVideoResponse?,
     onImport: (VideoImportOptions) -> Unit,
     onCancel: () -> Unit,
+    freeSpace: suspend (String) -> Long? = { null },
 ) {
     var format by remember { mutableStateOf(FrameFormatChoice.TIFF16) }
     var quality by remember { mutableFloatStateOf(VideoImport.DEFAULT_JPEG_QUALITY.toFloat()) }
@@ -140,7 +141,7 @@ fun VideoImportDialog(
 
             // Where the frames, the output and the working files go, and whether the volume has room for them.
             val frameBytes = info?.let { VideoImport.estimatedBytes(it, format, q, compression) }
-            WorkingLocationSection(videoPath, outputDir, { outputDir = it }, inputBytes = frameBytes, frameBytes = frameBytes)
+            WorkingLocationSection(videoPath, outputDir, { outputDir = it }, inputBytes = frameBytes, frameBytes = frameBytes, freeSpace = freeSpace)
 
             // Start working while the frames are still being extracted. The help says why this is off for H.264 and the like.
             Row(

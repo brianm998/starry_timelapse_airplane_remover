@@ -49,6 +49,7 @@ fun SequenceLocationDialog(
     sequenceDir: String,
     onOpen: (outputDir: String?) -> Unit,
     onCancel: () -> Unit,
+    freeSpace: suspend (String) -> Long? = { null },
 ) {
     var outputDir by remember { mutableStateOf<String?>(null) }
     // Stat-ing thousands of images is not for the UI thread.
@@ -68,7 +69,7 @@ fun SequenceLocationDialog(
         ) {
             Text(localized("ui.sequence_location_title"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
             Text(File(sequenceDir).name, color = StarColors.textPrimary, fontSize = 13.sp)
-            WorkingLocationSection(sequenceDir, outputDir, { outputDir = it }, inputBytes = inputBytes)
+            WorkingLocationSection(sequenceDir, outputDir, { outputDir = it }, inputBytes = inputBytes, freeSpace = freeSpace)
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
                 Button(

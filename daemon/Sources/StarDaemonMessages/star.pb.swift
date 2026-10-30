@@ -1231,6 +1231,36 @@ public struct Star_V1_OpenVideoRequest: Sendable {
   fileprivate var _extractionSettings: Star_V1_ExtractionSettings? = nil
 }
 
+/// Session.GetFreeSpace: the bytes free on the volume holding `path` (the nearest folder that exists, since an output folder usually does not yet),
+/// counted as StarCore's `DiskSpaceCheck` counts them: on a Mac the capacity "for important usage", which includes what the system would
+/// purge to make room for a write.  So a dialog's "available" and the daemon's own low-space warning agree, and agree with the macOS gui.
+public struct Star_V1_FreeSpaceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var path: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public struct Star_V1_FreeSpaceResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// false when the volume would not say; nothing else is set then
+  public var known: Bool = false
+
+  public var availableBytes: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// Session.ProbeVideo: what the video's header says, without decoding it, so a dialog can tell the user how much disk the frames will take.
 public struct Star_V1_ProbeVideoRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -5165,6 +5195,71 @@ extension Star_V1_OpenVideoRequest: SwiftProtobuf.Message, SwiftProtobuf._Messag
     if lhs.extractInBackground != rhs.extractInBackground {return false}
     if lhs.tiffCompression != rhs.tiffCompression {return false}
     if lhs._extractionSettings != rhs._extractionSettings {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_FreeSpaceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FreeSpaceRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}path\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.path) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.path.isEmpty {
+      try visitor.visitSingularStringField(value: self.path, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_FreeSpaceRequest, rhs: Star_V1_FreeSpaceRequest) -> Bool {
+    if lhs.path != rhs.path {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_FreeSpaceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FreeSpaceResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}known\0\u{3}available_bytes\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.known) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.availableBytes) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.known != false {
+      try visitor.visitSingularBoolField(value: self.known, fieldNumber: 1)
+    }
+    if self.availableBytes != 0 {
+      try visitor.visitSingularUInt64Field(value: self.availableBytes, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_FreeSpaceResponse, rhs: Star_V1_FreeSpaceResponse) -> Bool {
+    if lhs.known != rhs.known {return false}
+    if lhs.availableBytes != rhs.availableBytes {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
