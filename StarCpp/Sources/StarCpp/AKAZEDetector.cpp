@@ -55,6 +55,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <vector>
 
@@ -450,6 +451,35 @@ bool findNeighborPoint(int x, int y, const cv::Mat &mask, int searchRadius, int 
     return false;
 }
 
+// Calls f(y, x) for every non-zero byte of a CV_8UC1 keypoint map, in row-major order: the
+// order a `for y { for x { if (map.at<uchar>(y, x) == 0) continue; ... } }` visits them, and
+// the only order the callers below may rely on, since each decides what to keep by what it
+// has already kept.
+//
+// Those loops were four passes over every pixel of every evolution level — 24MP at the
+// finest, near 40MP over the pyramid — each pixel through an out-of-line `Mat::at`, for maps
+// that hold a few thousand ones.  Measured on a 24MP moving run (plans/CORE_SPEED_PROPOSAL.md
+// section 1.5) that was 5.1% of all the CPU the first phase spends.  This skips eight zeros
+// per compare, and the callbacks never write the map they are scanning (a pass modifies the
+// neighbouring level's map, never its own), so what it visits is what the plain loop did.
+template <typename F>
+inline void forEachNonzero(const cv::Mat &map, F &&f) {
+    const int cols = map.cols;
+    for (int y = 0; y < map.rows; ++y) {
+        const uchar *row = map.ptr<uchar>(y);
+        int x = 0;
+        for (; x + 8 <= cols; x += 8) {
+            uint64_t word;
+            std::memcpy(&word, row + x, sizeof word);
+            if (word == 0) continue;
+            for (int k = 0; k < 8; ++k)
+                if (row[x + k] != 0) f(y, x + k);
+        }
+        for (; x < cols; ++x)
+            if (row[x] != 0) f(y, x);
+    }
+}
+
 void findScaleSpaceExtrema(std::vector<EvolutionLevel> &evolution, float dthreshold,
                            std::vector<cv::Mat> &keypointsByLayer) {
     keypointsByLayer.resize(evolution.size());
@@ -492,19 +522,16 @@ void findScaleSpaceExtrema(std::vector<EvolutionLevel> &evolution, float dthresh
         const int diffRatio = (int)(evolution[i].octave_ratio / evolution[i - 1].octave_ratio);
         const int searchRadius = evolution[i].sigma_size * diffRatio;
 
-        for (int y = 0; y < kptsHere.rows; y++) {
-            for (int x = 0; x < kptsHere.cols; x++) {
-                if (kptsHere.at<uchar>(y, x) == 0) continue;
-                int idx = 0;
-                const int px = x * diffRatio, py = y * diffRatio;
-                if (findNeighborPoint(px, py, kptsPrev, searchRadius, idx)) {
-                    const int py2 = idx / kptsPrev.cols, px2 = idx % kptsPrev.cols;
-                    if (evolution[i].Ldet.at<float>(y, x) > evolution[i - 1].Ldet.at<float>(py2, px2)) {
-                        kptsPrev.at<uchar>(py2, px2) = 0;
-                    }
+        forEachNonzero(kptsHere, [&](int y, int x) {
+            int idx = 0;
+            const int px = x * diffRatio, py = y * diffRatio;
+            if (findNeighborPoint(px, py, kptsPrev, searchRadius, idx)) {
+                const int py2 = idx / kptsPrev.cols, px2 = idx % kptsPrev.cols;
+                if (evolution[i].Ldet.at<float>(y, x) > evolution[i - 1].Ldet.at<float>(py2, px2)) {
+                    kptsPrev.at<uchar>(py2, px2) = 0;
                 }
             }
-        }
+        });
     }
 
     // Filter with the upper (coarser) scale level, the other direction.
@@ -514,19 +541,16 @@ void findScaleSpaceExtrema(std::vector<EvolutionLevel> &evolution, float dthresh
         const int diffRatio = (int)(evolution[i + 1].octave_ratio / evolution[i].octave_ratio);
         const int searchRadius = evolution[i + 1].sigma_size;
 
-        for (int y = 0; y < kptsHere.rows; y++) {
-            for (int x = 0; x < kptsHere.cols; x++) {
-                if (kptsHere.at<uchar>(y, x) == 0) continue;
-                int idx = 0;
-                const int px = x / diffRatio, py = y / diffRatio;
-                if (findNeighborPoint(px, py, kptsNext, searchRadius, idx)) {
-                    const int py2 = idx / kptsNext.cols, px2 = idx % kptsNext.cols;
-                    if (evolution[i].Ldet.at<float>(y, x) > evolution[i + 1].Ldet.at<float>(py2, px2)) {
-                        kptsNext.at<uchar>(py2, px2) = 0;
-                    }
+        forEachNonzero(kptsHere, [&](int y, int x) {
+            int idx = 0;
+            const int px = x / diffRatio, py = y / diffRatio;
+            if (findNeighborPoint(px, py, kptsNext, searchRadius, idx)) {
+                const int py2 = idx / kptsNext.cols, px2 = idx % kptsNext.cols;
+                if (evolution[i].Ldet.at<float>(y, x) > evolution[i + 1].Ldet.at<float>(py2, px2)) {
+                    kptsNext.at<uchar>(py2, px2) = 0;
                 }
             }
-        }
+        });
     }
 }
 
@@ -541,40 +565,36 @@ void doSubpixelRefinement(std::vector<EvolutionLevel> &evolution,
         const int cols = e.Ldet.cols;
         const cv::Mat &kpts = keypointsByLayer[i];
 
-        for (int y = 0; y < kpts.rows; y++) {
-            for (int x = 0; x < kpts.cols; x++) {
-                if (kpts.at<uchar>(y, x) == 0) continue;
+        forEachNonzero(kpts, [&](int y, int x) {
+            cv::KeyPoint kp;
+            kp.pt.x = x * ratio;
+            kp.pt.y = y * ratio;
+            kp.size = e.esigma * kDerivativeFactor;
+            kp.response = ldet[y * cols + x];
+            kp.octave = e.octave;
+            kp.class_id = (int)i;
 
-                cv::KeyPoint kp;
-                kp.pt.x = x * ratio;
-                kp.pt.y = y * ratio;
-                kp.size = e.esigma * kDerivativeFactor;
-                kp.response = ldet[y * cols + x];
-                kp.octave = e.octave;
-                kp.class_id = (int)i;
+            float Dx = 0.5f * (ldet[y * cols + x + 1] - ldet[y * cols + x - 1]);
+            float Dy = 0.5f * (ldet[(y + 1) * cols + x] - ldet[(y - 1) * cols + x]);
+            float Dxx = ldet[y * cols + x + 1] + ldet[y * cols + x - 1] - 2.0f * ldet[y * cols + x];
+            float Dyy = ldet[(y + 1) * cols + x] + ldet[(y - 1) * cols + x] - 2.0f * ldet[y * cols + x];
+            float Dxy = 0.25f * (ldet[(y + 1) * cols + x + 1] + ldet[(y - 1) * cols + x - 1] -
+                                ldet[(y - 1) * cols + x + 1] - ldet[(y + 1) * cols + x - 1]);
 
-                float Dx = 0.5f * (ldet[y * cols + x + 1] - ldet[y * cols + x - 1]);
-                float Dy = 0.5f * (ldet[(y + 1) * cols + x] - ldet[(y - 1) * cols + x]);
-                float Dxx = ldet[y * cols + x + 1] + ldet[y * cols + x - 1] - 2.0f * ldet[y * cols + x];
-                float Dyy = ldet[(y + 1) * cols + x] + ldet[(y - 1) * cols + x] - 2.0f * ldet[y * cols + x];
-                float Dxy = 0.25f * (ldet[(y + 1) * cols + x + 1] + ldet[(y - 1) * cols + x - 1] -
-                                    ldet[(y - 1) * cols + x + 1] - ldet[(y + 1) * cols + x - 1]);
+            cv::Matx22f A(Dxx, Dxy, Dxy, Dyy);
+            cv::Vec2f b(-Dx, -Dy);
+            cv::Vec2f dst(0.f, 0.f);
+            cv::solve(A, b, dst, cv::DECOMP_LU);
 
-                cv::Matx22f A(Dxx, Dxy, Dxy, Dyy);
-                cv::Vec2f b(-Dx, -Dy);
-                cv::Vec2f dst(0.f, 0.f);
-                cv::solve(A, b, dst, cv::DECOMP_LU);
+            float dx = dst(0), dy = dst(1);
+            if (std::abs(dx) > 1.0f || std::abs(dy) > 1.0f) return;
 
-                float dx = dst(0), dy = dst(1);
-                if (std::abs(dx) > 1.0f || std::abs(dy) > 1.0f) continue;
-
-                kp.pt.x += dx * ratio + 0.5f * (ratio - 1.f);
-                kp.pt.y += dy * ratio + 0.5f * (ratio - 1.f);
-                kp.angle = 0.0f;
-                kp.size *= 2.0f;
-                output.push_back(kp);
-            }
-        }
+            kp.pt.x += dx * ratio + 0.5f * (ratio - 1.f);
+            kp.pt.y += dy * ratio + 0.5f * (ratio - 1.f);
+            kp.angle = 0.0f;
+            kp.size *= 2.0f;
+            output.push_back(kp);
+        });
     }
 }
 

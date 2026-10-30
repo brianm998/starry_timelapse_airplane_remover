@@ -420,6 +420,105 @@ final class HorizonConsensusTests: XCTestCase {
         XCTAssertFalse(HorizonConsensusStore.exists(frameIndex: 7, config: config))
     }
 
+    // MARK: - the line sidecar
+
+    /// A mask on disk, and a sidecar made from it: read back exactly while the mask is as it
+    /// was, and ignored the moment it is not.
+    func testASidecarIsReadBackWhileItsMaskIsUnchangedAndIgnoredAfter() throws {
+        var config = Config()
+        let scratch = FileManager.default.temporaryDirectory
+          .appendingPathComponent("HorizonLineSidecar-\(UUID().uuidString)")
+        config.tempOutputPath = scratch.path
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+
+        let maskPath = scratch.appendingPathComponent("mask.tiff").path
+        try Data(repeating: 7, count: 100).write(to: URL(fileURLWithPath: maskPath))
+        let columns: [Int?] = [10, nil, 0, 799, 400, nil, 3, 3]
+
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 5, width: 8, height: 800,
+                                             maskPath: maskPath, config: config), "none yet")
+        HorizonLineSidecar.write(columns: columns, width: 8, height: 800, frameIndex: 5,
+                                 maskPath: maskPath, config: config)
+        XCTAssertEqual(HorizonLineSidecar.read(frameIndex: 5, width: 8, height: 800,
+                                               maskPath: maskPath, config: config), columns,
+                       "columns with no ground survive as nil")
+
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 5, width: 8, height: 600,
+                                             maskPath: maskPath, config: config),
+                     "a frame of another height")
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 5, width: 16, height: 800,
+                                             maskPath: maskPath, config: config),
+                     "a frame of another width")
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 6, width: 8, height: 800,
+                                             maskPath: maskPath, config: config),
+                     "another frame's")
+
+        // the same bytes written again are a new mask: the time moved
+        let before = try XCTUnwrap(HorizonLineSidecar.fingerprint(ofMaskAt: maskPath))
+        try FileManager.default.setAttributes(
+          [.modificationDate: Date(timeIntervalSince1970: before.modified + 5)],
+          ofItemAtPath: maskPath)
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 5, width: 8, height: 800,
+                                             maskPath: maskPath, config: config),
+                     "the mask has been written since")
+
+        // and a different size at the same time is too
+        HorizonLineSidecar.write(columns: columns, width: 8, height: 800, frameIndex: 5,
+                                 maskPath: maskPath, config: config)
+        let now = try XCTUnwrap(HorizonLineSidecar.fingerprint(ofMaskAt: maskPath))
+        try Data(repeating: 7, count: 101).write(to: URL(fileURLWithPath: maskPath))
+        try FileManager.default.setAttributes(
+          [.modificationDate: Date(timeIntervalSince1970: now.modified)], ofItemAtPath: maskPath)
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 5, width: 8, height: 800,
+                                             maskPath: maskPath, config: config),
+                     "the mask is another size")
+
+        // a torn or foreign file is nothing, not a crash
+        HorizonLineSidecar.write(columns: columns, width: 8, height: 800, frameIndex: 5,
+                                 maskPath: maskPath, config: config)
+        let path = HorizonLineSidecar.path(frameIndex: 5, config: config)
+        let whole = try Data(contentsOf: URL(fileURLWithPath: path))
+        try whole.prefix(whole.count - 3).write(to: URL(fileURLWithPath: path))
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 5, width: 8, height: 800,
+                                             maskPath: maskPath, config: config), "truncated")
+        try Data(repeating: 0, count: whole.count).write(to: URL(fileURLWithPath: path))
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 5, width: 8, height: 800,
+                                             maskPath: maskPath, config: config), "not a sidecar")
+        // no mask, no answer
+        HorizonLineSidecar.write(columns: columns, width: 8, height: 800, frameIndex: 5,
+                                 maskPath: maskPath, config: config)
+        try FileManager.default.removeItem(atPath: maskPath)
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 5, width: 8, height: 800,
+                                             maskPath: maskPath, config: config))
+    }
+
+    /// The writer is the mask's own: saving a first-round mask through the accessor leaves the
+    /// columns the consensus would have decoded from it, and a mask saved over it replaces them.
+    func testSavingAHorizonMaskLeavesItsColumnsBesideIt() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, width: 128, height: 96,
+                                            horizonRow: 60, named: "sidecar-save")
+        harness = h
+        let manager = h.configManager
+        let config = await MainActor.run { manager.config() }
+        let accessor = h.frames[0].imageAccessor
+        let maskPath = try XCTUnwrap(accessor.nameForImage(frameIndex: 0, ofType: .horizon,
+                                                            atSize: .original))
+
+        for row in [60, 33] {
+            let mask = FrameHarness.flatMask(width: 128, height: 96, at: row)
+            try await accessor.save(mask, frameIndex: 0, as: .horizon, atSizes: [.original],
+                                    overwrite: true)
+            let stored = try XCTUnwrap(HorizonLineSidecar.read(frameIndex: 0, width: 128,
+                                                                height: 96, maskPath: maskPath,
+                                                                config: config),
+                                       "saved at row \(row)")
+            let reloaded = try await accessor.load(frameIndex: 0, type: .horizon, atSize: .original)
+            XCTAssertEqual(stored, CombinedHorizonDetector.extractHorizonY(from: try XCTUnwrap(reloaded)))
+            XCTAssertEqual(Set(stored), [row])
+        }
+    }
+
     // MARK: - in the pipeline
 
     /// The final mask — what the outlier subtraction and the merge composite with — is the
@@ -604,6 +703,48 @@ final class HorizonConsensusTests: XCTestCase {
         }
         XCTAssertFalse(h.frames[9].imageAccessor.imageExists(frameIndex: 9, ofType: .consensusHorizon,
                                                             atSize: .original))
+
+        // The masks above were planted, not saved, so there were no sidecars and the build
+        // decoded every mask — and left a sidecar for each, for the next run.  The next run
+        // reads those instead, and must write the very same lines.
+        let firstRun = try targets.map {
+            try Data(contentsOf: URL(fileURLWithPath: HorizonConsensusStore.path(frameIndex: $0,
+                                                                                config: config)))
+        }
+        for frame in [0, 8, 18, 36 - 1] {
+            let maskPath = try XCTUnwrap(h.frames[frame].imageAccessor.nameForImage(
+                                           frameIndex: frame, ofType: .horizon, atSize: .original))
+            let sidecar = try XCTUnwrap(HorizonLineSidecar.read(frameIndex: frame, width: pan.width,
+                                                                 height: pan.height,
+                                                                 maskPath: maskPath, config: config),
+                                        "frame \(frame) was decoded and should have been remembered")
+            let mask = try await h.frames[frame].imageAccessor.load(
+              frameIndex: frame, type: .horizon, atSize: .original)
+            XCTAssertEqual(sidecar, CombinedHorizonDetector.extractHorizonY(from: try XCTUnwrap(mask)),
+                           "frame \(frame)")
+        }
+        for frame in targets { HorizonConsensusStore.delete(frameIndex: frame, config: config) }
+        let again = HorizonConsensusOp.ops(frames: h.frames, targets: targets,
+                                           configManager: h.configManager, rawImageBytes: 0,
+                                           parameters: parameters) { error in
+            XCTFail("the op reported \(error)")
+        }
+        for op in again { try await op.run() }
+        let secondRun = try targets.map {
+            try Data(contentsOf: URL(fileURLWithPath: HorizonConsensusStore.path(frameIndex: $0,
+                                                                                config: config)))
+        }
+        // compared as the records they hold: the encoder does not order a record's keys, so
+        // the same record is not always the same bytes
+        XCTAssertEqual(try secondRun.map { try JSONDecoder().decode(HorizonConsensusStore.Record.self, from: $0) },
+                       try firstRun.map { try JSONDecoder().decode(HorizonConsensusStore.Record.self, from: $0) },
+                       "lines from the sidecars are the lines from the masks")
+
+        // A mask redrawn since is not the one its sidecar describes: the next build decodes it.
+        let redrawn = FrameHarness.flatMask(width: pan.width, height: pan.height, at: 17)
+        let redrawnPath = try h.plantImage(redrawn, ofType: .horizon, frameIndex: 8)
+        XCTAssertNil(HorizonLineSidecar.read(frameIndex: 8, width: pan.width, height: pan.height,
+                                             maskPath: redrawnPath, config: config))
     }
 
     /// A line an earlier run wrote without its image — every run before the view mode — is drawn

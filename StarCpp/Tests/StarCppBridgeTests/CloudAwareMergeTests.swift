@@ -690,6 +690,42 @@ final class CloudAwareMergeTests: XCTestCase {
         XCTAssertEqual(both, reference)
     }
 
+    // MARK: - 7b. the exact remap
+
+    /// The stage's cloud aligned layers are made by `ExactWarp.hpp`'s field remap — the map
+    /// from the star homography and the cloud's displacement field, rounded and interpolated
+    /// the way `cv::remap` does it, with no planes in between and the pixels it wrote marked as
+    /// it goes — where they used to be made by a map lambda and two `cv::remap` calls.  A
+    /// merge through either has to be the same bytes, on every path and with neighbours whose
+    /// star homographies are not the identity.  The stage's box blurs (`BoxBlur.hpp`, an AVX2
+    /// form of integer-sum arithmetic) switch with the same hook, so this holds them to their
+    /// scalar form inside a whole merge too.  (`KernelHarness/remap_bench` and `blur_bench` hold
+    /// the pieces to OpenCV and to the original code over hundreds of millions of values; this
+    /// is the integration.)
+    func testTheExactRemapMakesTheSameMerge() throws {
+        try XCTSkipUnless(ImageAligner.debugExactWarpIsAvailable,
+                          "no exact remap on this machine; nothing to compare")
+        defer { ImageAligner.debugSetExactWarp(enabled: true) }
+
+        let scene = movingCloud
+        var setup = Setup(trailInBase: Trail())
+        setup.shifts = [-2: 3, 1: -2, 3: 5]
+        for streaming in [false, true] {
+            ImageAligner.debugSetExactWarp(enabled: false)
+            let starOnly = try pixels(try merge("cloud", scene, setup, cloudAware: false,
+                                                streaming: streaming).merged)
+            let reference = try pixels(try merge("cloud", scene, setup, cloudAware: true,
+                                                 streaming: streaming).merged)
+            XCTAssertNotEqual(reference, starOnly,
+                              "the stage did nothing here, so there is nothing to compare (streaming \(streaming))")
+            ImageAligner.debugSetExactWarp(enabled: true)
+            let exact = try pixels(try merge("cloud", scene, setup, cloudAware: true,
+                                             streaming: streaming).merged)
+            XCTAssertEqual(exact, reference,
+                           "the exact remap must give OpenCV's bytes (streaming \(streaming))")
+        }
+    }
+
     // MARK: - 8. restricting to a region changes nothing
 
     /// The stage computes only inside the region its weight can reach.  Here the sky is
