@@ -129,9 +129,6 @@ public final class ImageSequenceViewModel {
     /// old stored property did — and by `ViewModel` on a freshly opened sequence, whose
     /// settings start at their defaults until this runs.
     func applyUserPreferences() {
-        if let detectionType = userPreferences.processingType {
-            self.detectionType = detectionType
-        }
         if let frameRate = userPreferences.frameRate {
             self.frameRate = frameRate
         }
@@ -226,7 +223,15 @@ public final class ImageSequenceViewModel {
 
     let finalProcessingCount = CountActor()
     
-    var detectionType = DetectionType.strong
+    /// Which detection type this sequence is processed with: its own, from its `config.json`, so a sequence keeps the
+    /// one it was made with whatever the preference says now.  The preference (`processingType`) only seeds a new one.
+    var detectionType: DetectionType {
+        didSet {
+            var realConfig = config.config()
+            realConfig.detectionType = detectionType
+            config.update(realConfig)
+        }
+    }
 
     var frameSize: CGSize {
         var ret = CGSize()
@@ -2021,6 +2026,7 @@ public final class ImageSequenceViewModel {
 
         var config = Config(
           outputPath: outputDir ?? inputImageSequencePath,
+          detectionType: UserPreferencesStore.shared.preferences.processingType ?? .strong,
           imageSequenceName: inputImageSequenceName,
           imageSequencePath: inputImageSequencePath,
           writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
@@ -2114,6 +2120,7 @@ public final class ImageSequenceViewModel {
         self.cannyUseL2Gradient = config.cannyUseL2Gradient ? .L2norm : .L1norm
         self.numberOfNeighborFrames = config.numberFinalProcessingNeighborsNeeded
         self.cleanMethod = config.cleanMethod
+        self.detectionType = config.detectionType
         self.pixelReplacementOverrides = config.pixelReplacementOverrides
         self.staticNeighborFrameOverrides = config.staticNeighborFrameOverrides
         self.alignedNeighborFrameOverrides = config.alignedNeighborFrameOverrides
@@ -2163,6 +2170,10 @@ public final class ImageSequenceViewModel {
         self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
                     
         Log.d("loaded config \(config.imageSequenceDirname)")
+
+        // The detection type the frames are processed with is read from this global, so it is this sequence's own
+        // each time one is opened, not whatever the last one (or the preference) left in it.
+        await constants.set(detectionType: config.detectionType)
 
         // Drop the previous sequence's keypoint sets. They are keyed by file path, so a
         // new sequence never hits them, and holding them would pin one entry per frame

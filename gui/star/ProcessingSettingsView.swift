@@ -1729,7 +1729,7 @@ struct ProcessingSettingsView: View {
                 HStack {
                     Picker("", selection: $viewModel.detectionType) {
                         ForEach(DetectionType.allCases, id: \.self) { value in
-                            Text(value.rawValue).tag(value)
+                            Text(value.localizedName).tag(value)
                         }
                     }
                       .frame(maxWidth: 120)

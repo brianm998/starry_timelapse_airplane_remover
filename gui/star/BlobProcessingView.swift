@@ -51,13 +51,18 @@ struct BlobProcessingView: View {
                 
                 Picker(localized("ui.current_detection_type"), selection: $imageSequence.detectionType) {
                     ForEach(DetectionType.allCases, id: \.self) { value in
-                        Text(value.rawValue).tag(value)
+                        Text(value.localizedName).tag(value)
                     }
                 }
                   .frame(maxWidth: 240)
                   .onChange(of: imageSequence.detectionType) {
+                      // The sequence's own config.json already has it (`detectionType`'s didSet); this is what the
+                      // frames read it from, and the preference a new sequence starts with, as in the settings sheet
+                      // and the Kotlin client.
+                      let chosen = imageSequence.detectionType
                       Task {
-                          await constants.set(detectionType: imageSequence.detectionType)
+                          await constants.set(detectionType: chosen)
+                          viewModel.userPreferences.processingType = chosen
                       }
                   }
 
@@ -162,7 +167,7 @@ struct BlobProcessingView: View {
                 if value == .custom {
                     Group { }
                 } else {
-                    Text(value.rawValue).tag(value)
+                    Text(value.localizedName).tag(value)
                 }
             }
         }
