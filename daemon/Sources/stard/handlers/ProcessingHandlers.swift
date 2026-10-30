@@ -12,6 +12,18 @@ enum ProcessingHandlers {
         (start > 0 ? Int(start) : 0, end >= 0 ? Int(end) : nil)
     }
 
+    /// What `Processing.Start` does.  A run already going is superseded by this one, as the macOS gui's `processFrames` does: the old run
+    /// is stopped (not announced as cancelled: to a client watching it is replaced, not ended) and this range is run instead.  It used to
+    /// return success and do nothing, so "Process from here" during a run was a button that did nothing (L8).  `force` clears the frames
+    /// first and has always superseded.
+    static func begin(_ session: Session, startIndex: Int, endIndex: Int?, force: Bool) async {
+        if force {
+            await session.forceReprocess(startIndex: startIndex, endIndex: endIndex)
+        } else {
+            await session.restartProcessing(startIndex: startIndex, endIndex: endIndex)
+        }
+    }
+
     static func start(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {
             let req = try Star_V1_StartProcessingRequest(serializedBytes: payload)
@@ -20,11 +32,7 @@ enum ProcessingHandlers {
                 return
             }
             let (startIdx, endIdx) = frameRange(start: req.startIndex, end: req.endIndex)
-            if req.force {
-                await session.forceReprocess(startIndex: startIdx, endIndex: endIdx)
-            } else {
-                await session.startProcessing(startIndex: startIdx, endIndex: endIdx)
-            }
+            await begin(session, startIndex: startIdx, endIndex: endIdx, force: req.force)
             try await transport.respond(id: id, payload: Star_V1_StartProcessingResponse().serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")

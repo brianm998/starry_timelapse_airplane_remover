@@ -34,6 +34,8 @@ actor Session {
     /// stopped, so a completion that arrives late from a run that was stopped or replaced is
     /// recognisably not the current one and does nothing.
     private var runGeneration = 0
+    /// How many runs have been started or stopped: each takes the next number, so a test can tell a run was superseded.
+    var runNumber: Int { runGeneration }
     private var activeRun: Int?
 
     /// The task that builds the frame graph for `activeRun`; a stop waits for it so it never
@@ -382,8 +384,11 @@ actor Session {
         runGeneration += 1
         let generation = runGeneration
         activeRun = generation
-        // The run adopts whatever the settings now are, so this is the baseline the next settings change is compared against.
-        settingsSnapshot = await configManager.config()
+        // The run adopts whatever the settings now are, so this is the baseline the next settings change is compared against: for a run of the
+        // whole sequence, as the macOS gui takes it in `beginProcessing` (Process All). A run of some of the frames (process from here, a frame
+        // again, a re-process) leaves it where it was, so a change made before it is still a change to the frames it did not touch (L11).
+        let wholeSequence = max(0, startIndex) == 0 && (endIndex.map { $0 >= frames.count - 1 } ?? true)
+        if wholeSequence { settingsSnapshot = await configManager.config() }
         await beginStepReports(generation: generation, types: ProcessingSteps.types(for: await configManager.config()))
         // Before the graph is built, which surveys the disk: a horizon reference the user painted and put off
         // applying is taken on by this run, so starting one is a way through it and not a way around it.  Over
