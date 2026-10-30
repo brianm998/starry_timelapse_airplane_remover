@@ -3540,6 +3540,11 @@ final class SharedConstantsTests: XCTestCase {
         }
     }
 
+    /// Q7: the playback speeds the Display picker offers are the same in both clients.
+    func testThePlaybackRatesAreTheDesktops() throws {
+        XCTAssertEqual(try doc()["playbackFrameRates"] as? [Int], LeftPanel.playbackFrameRates)
+    }
+
     func testTheKeypointDivisorChoicesAreTheStartupPromptsAndStarCores() throws {
         let k = try XCTUnwrap(try doc()["keypointDivisor"] as? [String: Any])
         XCTAssertEqual(k["recommendedReduced"] as? Double, Config.recommendedReducedKeypointDivisor)

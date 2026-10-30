@@ -43,13 +43,12 @@ import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.i18n.localized
 
-/** Bottom transport bar: playback buttons, editable frame number, fps, filmstrip toggle. */
+/** Bottom transport bar: playback buttons, editable frame number, filmstrip toggle. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val idx by vm.currentIndex.collectAsState()
     val playing by vm.isPlaying.collectAsState()
-    val fps by vm.playbackFps.collectAsState()
     val showFilmstrip by vm.showFilmstrip.collectAsState()
     val mode by vm.mode.collectAsState()
     val skip by vm.fastSkipAmount.collectAsState()
@@ -92,12 +91,8 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
         // The frame number is not shown while playing (macOS), when it would only blur past.
         if (!playing) EditableFrameNumber(idx, vm.frameCount, onSet = vm::setCurrentIndex)
 
-        // fps + filmstrip toggle
+        // filmstrip toggle (the playback speed is the Display section's picker, as in the gui)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(localized("ui.fps"), color = StarColors.textDisabled, fontSize = 10.sp)
-            GlyphButton("−", localized("ui.transport_slower"), { vm.setPlaybackFps(fps - 1) }, size = 22, fontSize = 14)
-            Text("$fps", color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.width(24.dp))
-            GlyphButton("+", localized("ui.transport_faster"), { vm.setPlaybackFps(fps + 1) }, size = 22, fontSize = 14)
             GlyphButton(if (showFilmstrip) "▥" else "▤", localized("ui.toggle_filmstrip"), vm::toggleFilmstrip, size = 26, fontSize = 14)
             if (mode == com.star.desktop.domain.InteractionMode.EDIT) {
                 com.star.desktop.ui.components.HoverTip(localized("ui.show_settings")) {

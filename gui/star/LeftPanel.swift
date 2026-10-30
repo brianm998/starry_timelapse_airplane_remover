@@ -40,6 +40,10 @@ enum ProcessingButtonRole: Equatable {
 }
 
 struct LeftPanel: View {
+    /// The playback speeds the Display picker offers, in frames per second.  The desktop's picker offers the same
+    /// (`gherkin/ui/vectors/constants.json` holds the list, and a test on each side checks it).
+    static let playbackFrameRates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]
+
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     let foobar = 134.0/255.0 // XXX make a custom color from these
     let foobar2 = 138.0/255.0
@@ -218,12 +222,11 @@ struct LeftPanel: View {
                   .help(localized("ui.show_horizon_line_help"))
 
                 // frame rate
-                let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]
                 Group {
                     Text(localized("ui.frame_rate"))
                       .foregroundColor(.white)
                     Picker("", selection: $viewModel.videoPlaybackFramerate) {
-                        ForEach(frame_rates, id: \.self) {
+                        ForEach(Self.playbackFrameRates, id: \.self) {
                             Text(localized("ui.n_fps", $0))
                         }
                     }.frame(maxWidth: 100)

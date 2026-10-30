@@ -36,6 +36,11 @@ class SharedConstantsTest {
         }
     }
 
+    /** Q7: the playback speeds the Display picker offers are the same in both clients. */
+    @Test fun thePlaybackRatesAreTheGuis() {
+        assertEquals(doc.getAsJsonArray("playbackFrameRates").map { it.asInt }, PlaybackRates.choices)
+    }
+
     @Test fun theKeypointDivisorChoicesAreTheStartupPromptsAndStarCores() {
         val k = doc.getAsJsonObject("keypointDivisor")
         assertEquals(k.getAsJsonArray("presets").map { it.asDouble }, KeypointDivisor.presets.map { it.divisor })

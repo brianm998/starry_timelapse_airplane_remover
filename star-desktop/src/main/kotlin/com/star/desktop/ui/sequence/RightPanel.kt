@@ -180,6 +180,15 @@ internal fun DisplaySection(vm: SequenceViewModel) {
         }
     }
 
+    // How fast the sequence plays (the gui's Display picker; the bottom strip's slower and faster buttons are gone).
+    val playbackFps by vm.playbackFps.collectAsState()
+    HoverTip(localized("ui.frame_rate_help")) {
+        Column {
+            Text(localized("ui.frame_rate"), color = StarColors.textPrimary, fontSize = 11.sp)
+            PlaybackRatePicker(playbackFps, vm::setPlaybackFps)
+        }
+    }
+
     // Not tied to the outliers like the two in the selective tools: it dims the frame itself, which helps in every clean mode.
     val frameOpacity by vm.frameOpacity.collectAsState()
     OpacitySlider(localized("ui.frame_opacity"), localized("ui.frame_opacity_help"), frameOpacity, vm::setFrameOpacity)
@@ -189,6 +198,32 @@ internal fun DisplaySection(vm: SequenceViewModel) {
     }
     val fullResolution by vm.showFullResolution.collectAsState()
     SwitchRow(localized("ui.show_full_resolution"), localized("ui.show_full_resolution_help"), fullResolution, vm::setShowFullResolution)
+}
+
+/** The playback speed as a drop-down of [com.star.desktop.domain.PlaybackRates.choices], "N fps" each. */
+@Composable
+private fun PlaybackRatePicker(selected: Int, onSelect: (Int) -> Unit) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier
+                .width(100.dp)
+                .clip(com.star.desktop.ui.theme.StarShapes.picker)
+                .background(StarColors.cellDefault)
+                .clickable { expanded = true }
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        ) {
+            Text(localized("ui.n_fps", selected), color = StarColors.textPrimary, fontSize = 12.sp)
+        }
+        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            com.star.desktop.domain.PlaybackRates.choices.forEach { fps ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(localized("ui.n_fps", fps), color = if (fps == selected) StarColors.accent else StarColors.textPrimary, fontSize = 12.sp) },
+                    onClick = { onSelect(fps); expanded = false },
+                )
+            }
+        }
+    }
 }
 
 /** What changes how frames are processed: the horizon reference, the clean method, the static merge and rendering. */
