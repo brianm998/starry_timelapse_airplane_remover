@@ -41,6 +41,11 @@
 // window renormalises by the weights it summed and so returns the probe's 255 exactly, and
 // the weights of the corners that exist cannot sum to zero at any of the 1024 positions).
 //
+// The same header also holds `remap` and the cloud stage's field remap, which reproduce
+// `cv::remap(src, dst, mapx, mapy, INTER_LINEAR, BORDER_TRANSPARENT)` from float maps (see the
+// section on them below).  They share the interpolation above and differ only in how the
+// source positions are made.
+//
 // x86-64 only.  OpenCV's arm64 build generates the coordinates with fused multiply-adds
 // (universal intrinsics' v_muladd is a NEON FMA there), which rounds differently from the
 // separate multiply and add used here, so on arm64 `exactWarpApplies` is false and
@@ -108,6 +113,16 @@ inline bool enabled() {
     return allowed && gDisabled.load(std::memory_order_relaxed) == 0;
 }
 
+// The cloud stage's remap alone, for an A/B of that stage: `STAR_REMAP=opencv` keeps cv::remap
+// there while the warp above stays exact.  (`STAR_WARP=opencv` turns both off.)
+inline bool remapEnabled() {
+    static const bool allowed = [] {
+        const char *env = std::getenv("STAR_REMAP");
+        return !(env && std::strcmp(env, "opencv") == 0);
+    }();
+    return allowed && enabled();
+}
+
 // Test hook: run the scalar rows even where AVX2 is available, so that a harness can hold
 // each implementation to OpenCV's.
 inline bool &forceScalarFlag() { static bool flag = false; return flag; }
@@ -133,6 +148,59 @@ inline int blockWidth(int rows, int cols) {
     return std::min(blockSz * blockSz / bh0, cols);
 }
 
+// The pixels of one block, `bw` of them from column `x` of the row `D` / `cov` point at, from
+// their source positions in 32nds of a pixel: `xy` holds the column and row, `alpha` the index
+// into the weight table.  This is `remapBilinear`, and what the warp and the remap have in
+// common: they differ only in how the positions are made.
+template <int CN, bool Pixels>
+inline void interpolateBlock(const uint16_t *S0, size_t sstep, int sw, int sh,
+                             uint16_t *D, uint8_t *cov, int x, int bw,
+                             const short *xy, const unsigned short *alpha, const float *wtab)
+{
+#pragma clang fp contract(off)
+    const unsigned width1 = sw > 1 ? (unsigned)(sw - 1) : 0u;
+    const unsigned height1 = sh > 1 ? (unsigned)(sh - 1) : 0u;
+    for (int x1 = 0; x1 < bw; ++x1) {
+        const int sx = xy[x1 * 2], sy = xy[x1 * 2 + 1];
+        const float *w = wtab + (size_t)alpha[x1] * 4;
+        if ((unsigned)sx < width1 && (unsigned)sy < height1) {
+            if constexpr (Pixels) {
+                uint16_t *Dx = D + (size_t)(x + x1) * CN;
+                const uint16_t *S = S0 + (size_t)sy * sstep + (size_t)sx * CN;
+                for (int c = 0; c < CN; ++c) {
+                    const float t = S[c] * w[0] + S[c + CN] * w[1] + S[sstep + c] * w[2] +
+                                    S[sstep + c + CN] * w[3];
+                    Dx[c] = cv::saturate_cast<uint16_t>(t);
+                }
+            }
+            if (cov) cov[x + x1] = 255;
+        } else if (sx >= 0 && sx <= sw - 1 && sy >= 0 && sy <= sh - 1) {
+            // The last column or row: a window partly outside, from the corners in.
+            float wTot = 0;
+            if (sx >= 0 && sy >= 0) wTot += w[0];
+            if (sy >= 0 && sx < sw - 1) wTot += w[1];
+            if (sx >= 0 && sy < sh - 1) wTot += w[2];
+            if (sx < sw - 1 && sy < sh - 1) wTot += w[3];
+            if (wTot == 0.f) continue;
+            if constexpr (Pixels) {
+                uint16_t *Dx = D + (size_t)(x + x1) * CN;
+                const float wTotIni = (float)w[0] + w[1] + w[2] + w[3];
+                const uint16_t *S = S0 + (size_t)sy * sstep + (size_t)sx * CN;
+                for (int c = 0; c < CN; ++c) {
+                    float t0 = 0;
+                    if (sx >= 0 && sy >= 0) t0 += S[c] * w[0];
+                    if (sy >= 0 && sx < sw - 1) t0 += S[c + CN] * w[1];
+                    if (sx >= 0 && sy < sh - 1) t0 += S[sstep + c] * w[2];
+                    if (sx < sw - 1 && sy < sh - 1) t0 += S[sstep + c + CN] * w[3];
+                    t0 = (float)(t0 * (float)wTotIni / wTot);
+                    Dx[c] = cv::saturate_cast<uint16_t>(t0);
+                }
+            }
+            if (cov) cov[x + x1] = 255;
+        }
+    }
+}
+
 // One destination row of `CN`-channel data.
 template <int CN, bool Pixels>
 inline void warpRow(const uint16_t *S0, size_t sstep, int sw, int sh,
@@ -144,8 +212,6 @@ inline void warpRow(const uint16_t *S0, size_t sstep, int sw, int sh,
 #pragma clang fp contract(off)
     short xy[2 * 1024];
     unsigned short alpha[1024];
-    const unsigned width1 = sw > 1 ? (unsigned)(sw - 1) : 0u;
-    const unsigned height1 = sh > 1 ? (unsigned)(sh - 1) : 0u;
 
     for (int x = 0; x < width; x += bw0) {
         const int bw = std::min(bw0, width - x);
@@ -165,56 +231,90 @@ inline void warpRow(const uint16_t *S0, size_t sstep, int sw, int sh,
             alpha[x1] = (unsigned short)((Y & (kTabSize - 1)) * kTabSize + (X & (kTabSize - 1)));
         }
 
-        for (int x1 = 0; x1 < bw; ++x1) {
-            const int sx = xy[x1 * 2], sy = xy[x1 * 2 + 1];
-            const float *w = wtab + (size_t)alpha[x1] * 4;
-            if ((unsigned)sx < width1 && (unsigned)sy < height1) {
-                if constexpr (Pixels) {
-                    uint16_t *Dx = D + (size_t)(x + x1) * CN;
-                    const uint16_t *S = S0 + (size_t)sy * sstep + (size_t)sx * CN;
-                    for (int c = 0; c < CN; ++c) {
-                        const float t = S[c] * w[0] + S[c + CN] * w[1] + S[sstep + c] * w[2] +
-                                        S[sstep + c + CN] * w[3];
-                        Dx[c] = cv::saturate_cast<uint16_t>(t);
-                    }
-                }
-                if (cov) cov[x + x1] = 255;
-            } else if (sx >= 0 && sx <= sw - 1 && sy >= 0 && sy <= sh - 1) {
-                // The last column or row: a window partly outside, from the corners in.
-                float wTot = 0;
-                if (sx >= 0 && sy >= 0) wTot += w[0];
-                if (sy >= 0 && sx < sw - 1) wTot += w[1];
-                if (sx >= 0 && sy < sh - 1) wTot += w[2];
-                if (sx < sw - 1 && sy < sh - 1) wTot += w[3];
-                if (wTot == 0.f) continue;
-                if constexpr (Pixels) {
-                    uint16_t *Dx = D + (size_t)(x + x1) * CN;
-                    const float wTotIni = (float)w[0] + w[1] + w[2] + w[3];
-                    const uint16_t *S = S0 + (size_t)sy * sstep + (size_t)sx * CN;
-                    for (int c = 0; c < CN; ++c) {
-                        float t0 = 0;
-                        if (sx >= 0 && sy >= 0) t0 += S[c] * w[0];
-                        if (sy >= 0 && sx < sw - 1) t0 += S[c + CN] * w[1];
-                        if (sx >= 0 && sy < sh - 1) t0 += S[sstep + c] * w[2];
-                        if (sx < sw - 1 && sy < sh - 1) t0 += S[sstep + c + CN] * w[3];
-                        t0 = (float)(t0 * (float)wTotIni / wTot);
-                        Dx[c] = cv::saturate_cast<uint16_t>(t0);
-                    }
-                }
-                if (cov) cov[x + x1] = 255;
-            }
-        }
+        interpolateBlock<CN, Pixels>(S0, sstep, sw, sh, D, cov, x, bw, xy, alpha, wtab);
     }
 }
 
 
 #ifdef STAR_X86_AVX2_KERNELS
 
-// The same row, with the coordinates four pixels at a time in AVX2 doubles and the
-// three-channel interpolation four floats at a time.  Every value is the one `warpRow`
-// computes, from the same operations in the same order: the vector lanes are independent
-// pixels (or channels), and none of the arithmetic is fused — AVX2 here means the wide
+// `interpolateBlock` with the three-channel pixel four floats at a time.  Every value is the
+// one the scalar block computes, from the same operations in the same order: the vector lanes
+// are independent channels, and none of the arithmetic is fused — AVX2 here means the wide
 // registers, not FMA, which this target does not enable.
+template <int CN, bool Pixels>
+STAR_AVX2 inline void interpolateBlockAvx2(const uint16_t *S0, size_t sstep, int sw, int sh,
+                                           uint16_t *D, uint8_t *cov, int x, int bw,
+                                           const short *xy, const unsigned short *alpha,
+                                           const float *wtab)
+{
+#pragma clang fp contract(off)
+    const unsigned width1 = sw > 1 ? (unsigned)(sw - 1) : 0u;
+    const unsigned height1 = sh > 1 ? (unsigned)(sh - 1) : 0u;
+    for (int x1 = 0; x1 < bw; ++x1) {
+        const int sx = xy[x1 * 2], sy = xy[x1 * 2 + 1];
+        const float *w = wtab + (size_t)alpha[x1] * 4;
+        if ((unsigned)sx < width1 && (unsigned)sy < height1) {
+            if constexpr (Pixels) {
+                uint16_t *Dx = D + (size_t)(x + x1) * CN;
+                const uint16_t *S = S0 + (size_t)sy * sstep + (size_t)sx * CN;
+                if constexpr (CN == 3) {
+                    // The pixel pair of each of the two rows, six samples = 12 bytes, read as
+                    // 8 + 4 so nothing past them is touched, then one float lane per channel:
+                    // lanes 0-2 are the channels at x, lanes 0-2 of the second vector the
+                    // channels at x + 1.  Lane 3 is whatever it is and is not stored.
+                    auto taps = [](const uint16_t *p, __m128 &left, __m128 &right) {
+                        int tail;
+                        std::memcpy(&tail, p + 4, sizeof tail);
+                        const __m128i six = _mm_unpacklo_epi64(_mm_loadl_epi64((const __m128i *)p),
+                                                               _mm_cvtsi32_si128(tail));
+                        left = _mm_cvtepi32_ps(_mm_cvtepu16_epi32(six));
+                        right = _mm_cvtepi32_ps(_mm_cvtepu16_epi32(_mm_srli_si128(six, 6)));
+                    };
+                    __m128 a0, a1, b0, b1;
+                    taps(S, a0, a1);
+                    taps(S + sstep, b0, b1);
+                    __m128 t = _mm_mul_ps(a0, _mm_load1_ps(w));
+                    t = _mm_add_ps(t, _mm_mul_ps(a1, _mm_load1_ps(w + 1)));
+                    t = _mm_add_ps(t, _mm_mul_ps(b0, _mm_load1_ps(w + 2)));
+                    t = _mm_add_ps(t, _mm_mul_ps(b1, _mm_load1_ps(w + 3)));
+                    const __m128i r = _mm_packus_epi32(_mm_cvtps_epi32(t), _mm_setzero_si128());
+                    const int low = _mm_cvtsi128_si32(r);
+                    std::memcpy(Dx, &low, sizeof low);
+                    Dx[2] = (uint16_t)_mm_extract_epi16(r, 2);
+                } else {
+                    const float t = S[0] * w[0] + S[1] * w[1] + S[sstep] * w[2] + S[sstep + 1] * w[3];
+                    Dx[0] = cv::saturate_cast<uint16_t>(t);
+                }
+            }
+            if (cov) cov[x + x1] = 255;
+        } else if (sx >= 0 && sx <= sw - 1 && sy >= 0 && sy <= sh - 1) {
+            float wTot = 0;
+            if (sx >= 0 && sy >= 0) wTot += w[0];
+            if (sy >= 0 && sx < sw - 1) wTot += w[1];
+            if (sx >= 0 && sy < sh - 1) wTot += w[2];
+            if (sx < sw - 1 && sy < sh - 1) wTot += w[3];
+            if (wTot == 0.f) continue;
+            if constexpr (Pixels) {
+                uint16_t *Dx = D + (size_t)(x + x1) * CN;
+                const float wTotIni = (float)w[0] + w[1] + w[2] + w[3];
+                const uint16_t *S = S0 + (size_t)sy * sstep + (size_t)sx * CN;
+                for (int c = 0; c < CN; ++c) {
+                    float t0 = 0;
+                    if (sx >= 0 && sy >= 0) t0 += S[c] * w[0];
+                    if (sy >= 0 && sx < sw - 1) t0 += S[c + CN] * w[1];
+                    if (sx >= 0 && sy < sh - 1) t0 += S[sstep + c] * w[2];
+                    if (sx < sw - 1 && sy < sh - 1) t0 += S[sstep + c + CN] * w[3];
+                    t0 = (float)(t0 * (float)wTotIni / wTot);
+                    Dx[c] = cv::saturate_cast<uint16_t>(t0);
+                }
+            }
+            if (cov) cov[x + x1] = 255;
+        }
+    }
+}
+
+// The same row as `warpRow`, with the coordinates four pixels at a time in AVX2 doubles.
 template <int CN, bool Pixels>
 STAR_AVX2 inline void warpRowAvx2(const uint16_t *S0, size_t sstep, int sw, int sh,
                                   uint16_t *D, uint8_t *cov, int width, int y,
@@ -223,8 +323,6 @@ STAR_AVX2 inline void warpRowAvx2(const uint16_t *S0, size_t sstep, int sw, int 
 #pragma clang fp contract(off)
     alignas(32) short xy[2 * 1024];
     alignas(32) unsigned short alpha[1024];
-    const unsigned width1 = sw > 1 ? (unsigned)(sw - 1) : 0u;
-    const unsigned height1 = sh > 1 ? (unsigned)(sh - 1) : 0u;
 
     const __m256d vM0 = _mm256_set1_pd(M[0]), vM3 = _mm256_set1_pd(M[3]), vM6 = _mm256_set1_pd(M[6]);
     const __m256d vMax = _mm256_set1_pd((double)INT_MAX), vMin = _mm256_set1_pd((double)INT_MIN);
@@ -269,67 +367,7 @@ STAR_AVX2 inline void warpRowAvx2(const uint16_t *S0, size_t sstep, int sw, int 
             alpha[x1] = (unsigned short)((Yi & (kTabSize - 1)) * kTabSize + (Xi & (kTabSize - 1)));
         }
 
-        for (int x1 = 0; x1 < bw; ++x1) {
-            const int sx = xy[x1 * 2], sy = xy[x1 * 2 + 1];
-            const float *w = wtab + (size_t)alpha[x1] * 4;
-            if ((unsigned)sx < width1 && (unsigned)sy < height1) {
-                if constexpr (Pixels) {
-                    uint16_t *Dx = D + (size_t)(x + x1) * CN;
-                const uint16_t *S = S0 + (size_t)sy * sstep + (size_t)sx * CN;
-                if constexpr (CN == 3) {
-                    // The pixel pair of each of the two rows, six samples = 12 bytes, read as
-                    // 8 + 4 so nothing past them is touched, then one float lane per channel:
-                    // lanes 0-2 are the channels at x, lanes 0-2 of the second vector the
-                    // channels at x + 1.  Lane 3 is whatever it is and is not stored.
-                    auto taps = [](const uint16_t *p, __m128 &left, __m128 &right) {
-                        int tail;
-                        std::memcpy(&tail, p + 4, sizeof tail);
-                        const __m128i six = _mm_unpacklo_epi64(_mm_loadl_epi64((const __m128i *)p),
-                                                               _mm_cvtsi32_si128(tail));
-                        left = _mm_cvtepi32_ps(_mm_cvtepu16_epi32(six));
-                        right = _mm_cvtepi32_ps(_mm_cvtepu16_epi32(_mm_srli_si128(six, 6)));
-                    };
-                    __m128 a0, a1, b0, b1;
-                    taps(S, a0, a1);
-                    taps(S + sstep, b0, b1);
-                    __m128 t = _mm_mul_ps(a0, _mm_load1_ps(w));
-                    t = _mm_add_ps(t, _mm_mul_ps(a1, _mm_load1_ps(w + 1)));
-                    t = _mm_add_ps(t, _mm_mul_ps(b0, _mm_load1_ps(w + 2)));
-                    t = _mm_add_ps(t, _mm_mul_ps(b1, _mm_load1_ps(w + 3)));
-                    const __m128i r = _mm_packus_epi32(_mm_cvtps_epi32(t), _mm_setzero_si128());
-                    const int low = _mm_cvtsi128_si32(r);
-                    std::memcpy(Dx, &low, sizeof low);
-                    Dx[2] = (uint16_t)_mm_extract_epi16(r, 2);
-                } else {
-                    const float t = S[0] * w[0] + S[1] * w[1] + S[sstep] * w[2] + S[sstep + 1] * w[3];
-                    Dx[0] = cv::saturate_cast<uint16_t>(t);
-                }
-                }
-                if (cov) cov[x + x1] = 255;
-            } else if (sx >= 0 && sx <= sw - 1 && sy >= 0 && sy <= sh - 1) {
-                float wTot = 0;
-                if (sx >= 0 && sy >= 0) wTot += w[0];
-                if (sy >= 0 && sx < sw - 1) wTot += w[1];
-                if (sx >= 0 && sy < sh - 1) wTot += w[2];
-                if (sx < sw - 1 && sy < sh - 1) wTot += w[3];
-                if (wTot == 0.f) continue;
-                if constexpr (Pixels) {
-                    uint16_t *Dx = D + (size_t)(x + x1) * CN;
-                    const float wTotIni = (float)w[0] + w[1] + w[2] + w[3];
-                    const uint16_t *S = S0 + (size_t)sy * sstep + (size_t)sx * CN;
-                    for (int c = 0; c < CN; ++c) {
-                        float t0 = 0;
-                        if (sx >= 0 && sy >= 0) t0 += S[c] * w[0];
-                        if (sy >= 0 && sx < sw - 1) t0 += S[c + CN] * w[1];
-                        if (sx >= 0 && sy < sh - 1) t0 += S[sstep + c] * w[2];
-                        if (sx < sw - 1 && sy < sh - 1) t0 += S[sstep + c + CN] * w[3];
-                        t0 = (float)(t0 * (float)wTotIni / wTot);
-                        Dx[c] = cv::saturate_cast<uint16_t>(t0);
-                    }
-                }
-                if (cov) cov[x + x1] = 255;
-            }
-        }
+        interpolateBlockAvx2<CN, Pixels>(S0, sstep, sw, sh, D, cov, x, bw, xy, alpha, wtab);
     }
 }
 
@@ -421,6 +459,308 @@ inline cv::Mat coverage(cv::Size size, const cv::Mat &H) {
     }, stripes);
     return covered;
 }
+
+// --- cv::remap with float maps -------------------------------------------------------------
+//
+// The cloud-aware stage samples each neighbour at a position it computes per pixel (the star
+// homography and a displacement field, see `DisplacementField`) and hands OpenCV two float
+// planes, `cv::remap(src, dst, mapx, mapy, INTER_LINEAR, BORDER_TRANSPARENT)`, then does it
+// again on a solid 8-bit probe to learn which pixels were written.  `RemapInvoker` turns the
+// planes into the same (column, row, weight index) triples the warp does, by
+// `cvRound(f * 32)` per coordinate, and runs the same `remapBilinear` over them — so the
+// interpolation above is shared, and what is new here is the rounding of the coordinates:
+//
+//     X = cvRound(mapx * 32), Y = cvRound(mapy * 32)
+//     column = saturate_cast<short>(X >> 5), row = saturate_cast<short>(Y >> 5)
+//     weight index = (Y & 31) * 32 + (X & 31)
+//
+// A pixel's result depends on its own two floats and nothing else (unlike the warp, whose
+// block structure shows in its coordinates), so any partition of the destination is exact.
+
+// One chunk's positions from its maps.  `mx` and `my` are `n` floats each.
+inline void quantiseScalar(const float *mx, const float *my, int n, short *xy, unsigned short *alpha) {
+    for (int i = 0; i < n; ++i) {
+        const int sx = cvRound(mx[i] * static_cast<float>(kTabSize));
+        const int sy = cvRound(my[i] * static_cast<float>(kTabSize));
+        xy[i * 2] = cv::saturate_cast<short>(sx >> kInterBits);
+        xy[i * 2 + 1] = cv::saturate_cast<short>(sy >> kInterBits);
+        alpha[i] = (unsigned short)((sy & (kTabSize - 1)) * kTabSize + (sx & (kTabSize - 1)));
+    }
+}
+
+#ifdef STAR_X86_AVX2_KERNELS
+// Eight at a time: `cvtps` rounds to nearest-even like `cvRound`, and a multiplication by 32
+// is exact, so the integers are the scalar ones.  Anything the conversion cannot represent
+// (NaN, beyond the int range) comes out as the indefinite integer in both.
+STAR_AVX2 inline void quantiseAvx2(const float *mx, const float *my, int n, short *xy, unsigned short *alpha) {
+    const __m256 v32 = _mm256_set1_ps((float)kTabSize);
+    const __m256i low5 = _mm256_set1_epi32(kTabSize - 1);
+    int i = 0;
+    for (; i + 8 <= n; i += 8) {
+        const __m256i sx = _mm256_cvtps_epi32(_mm256_mul_ps(v32, _mm256_loadu_ps(mx + i)));
+        const __m256i sy = _mm256_cvtps_epi32(_mm256_mul_ps(v32, _mm256_loadu_ps(my + i)));
+        const __m256i a = _mm256_add_epi32(_mm256_slli_epi32(_mm256_and_si256(sy, low5), kInterBits),
+                                           _mm256_and_si256(sx, low5));
+        _mm_storeu_si128((__m128i *)(alpha + i),
+                         _mm_packus_epi32(_mm256_castsi256_si128(a), _mm256_extracti128_si256(a, 1)));
+        const __m256i xs = _mm256_srai_epi32(sx, kInterBits), ys = _mm256_srai_epi32(sy, kInterBits);
+        const __m128i x16 = _mm_packs_epi32(_mm256_castsi256_si128(xs), _mm256_extracti128_si256(xs, 1));
+        const __m128i y16 = _mm_packs_epi32(_mm256_castsi256_si128(ys), _mm256_extracti128_si256(ys, 1));
+        _mm_storeu_si128((__m128i *)(xy + 2 * i), _mm_unpacklo_epi16(x16, y16));
+        _mm_storeu_si128((__m128i *)(xy + 2 * i + 8), _mm_unpackhi_epi16(x16, y16));
+    }
+    quantiseScalar(mx + i, my + i, n - i, xy + 2 * i, alpha + i);
+}
+#endif  // STAR_X86_AVX2_KERNELS
+
+// Pixels per chunk: the maps for this many are made, rounded and interpolated while they are
+// still in cache.
+constexpr int kChunk = 1024;
+
+// One destination row.  `maps(x, n, bufX, bufY, mx, my)` supplies the float maps of the `n`
+// pixels from column `x` as `mx` / `my`, either pointing at maps that exist or into `bufX` /
+// `bufY` (room for a chunk) after filling them.
+template <int CN, bool Pixels, class Maps>
+inline void remapRow(const Source &src, uint16_t *D, uint8_t *cov, int width, const float *wtab,
+                     bool avx2, Maps &&maps)
+{
+    alignas(32) short xy[2 * kChunk];
+    alignas(32) unsigned short alpha[kChunk];
+    alignas(32) float bufX[kChunk], bufY[kChunk];
+    for (int x = 0; x < width; x += kChunk) {
+        const int n = std::min(kChunk, width - x);
+        const float *mx = nullptr, *my = nullptr;
+        maps(x, n, bufX, bufY, mx, my);
+#ifdef STAR_X86_AVX2_KERNELS
+        if (avx2) {
+            quantiseAvx2(mx, my, n, xy, alpha);
+            interpolateBlockAvx2<CN, Pixels>(src.data, src.step, src.cols, src.rows, D, cov, x, n,
+                                             xy, alpha, wtab);
+            continue;
+        }
+#endif
+        (void)avx2;
+        quantiseScalar(mx, my, n, xy, alpha);
+        interpolateBlock<CN, Pixels>(src.data, src.step, src.cols, src.rows, D, cov, x, n, xy, alpha, wtab);
+    }
+}
+
+// Whether `remap` / `remapField` reproduce cv::remap for this source and a destination of
+// this size: the sizes OpenCV accepts, and the depth and channel counts that have a loop here.
+inline bool remapApplies(const cv::Mat &src, cv::Size dsize) {
+    if (src.dims != 2 || src.empty() || src.depth() != CV_16U) return false;
+    if (src.channels() != 1 && src.channels() != 3) return false;
+    return dsize.width > 0 && dsize.height > 0 && dsize.width < SHRT_MAX && dsize.height < SHRT_MAX
+        && src.cols < SHRT_MAX && src.rows < SHRT_MAX;
+}
+
+inline bool useAvx2Rows() {
+#ifdef STAR_X86_AVX2_KERNELS
+    return cpuRunsAvx2() && !forceScalar();
+#else
+    return false;
+#endif
+}
+
+// Rows [r.start, r.end) of the destination from `maps`, which fills in a chunk of row `y`.
+template <class MapsFor>
+inline void remapRows(const Source &src, cv::Mat &dst, cv::Mat *covered, int width, const cv::Range &r,
+                      MapsFor &&mapsFor)
+{
+    const float *wtab = bilinearTable();
+    const bool avx2 = useAvx2Rows();
+    for (int y = r.start; y < r.end; ++y) {
+        uint16_t *D = dst.empty() ? nullptr : dst.ptr<uint16_t>(y);
+        uint8_t *cov = covered ? covered->ptr<uint8_t>(y) : nullptr;
+        auto maps = mapsFor(y);
+        if (src.channels == 1) {
+            if (D) remapRow<1, true>(src, D, cov, width, wtab, avx2, maps);
+            else remapRow<1, false>(src, D, cov, width, wtab, avx2, maps);
+        } else {
+            if (D) remapRow<3, true>(src, D, cov, width, wtab, avx2, maps);
+            else remapRow<3, false>(src, D, cov, width, wtab, avx2, maps);
+        }
+    }
+}
+
+inline Source sourceOf(const cv::Mat &src) {
+    return Source{src.ptr<uint16_t>(), src.step / sizeof(uint16_t), src.cols, src.rows, src.channels()};
+}
+
+// cv::remap(src, dst, mapx, mapy, INTER_LINEAR, BORDER_TRANSPARENT) for CV_32FC1 maps, into a
+// zero-initialised `dst` of the maps' size and src's type, optionally with the pixels written
+// marked 255 in `covered` (CV_8UC1, same size, zero) — what a remap of an all-255 8-bit
+// probe through the same maps gives.  Requires `remapApplies(src, mapx.size())`.
+inline void remap(const cv::Mat &src, const cv::Mat &mapx, const cv::Mat &mapy, cv::Mat &dst,
+                  cv::Mat *covered)
+{
+    const Source source = sourceOf(src);
+    const double stripes = (double)dst.total() / (double)(1 << 16);
+    cv::parallel_for_(cv::Range(0, dst.rows), [&](const cv::Range &r) {
+        remapRows(source, dst, covered, dst.cols, r, [&](int y) {
+            const float *px = mapx.ptr<float>(y), *py = mapy.ptr<float>(y);
+            return [px, py](int x, int, float *, float *, const float *&mx, const float *&my) {
+                mx = px + x;
+                my = py + x;
+            };
+        });
+    }, stripes);
+}
+
+// --- the cloud stage's maps ------------------------------------------------------------------
+//
+// Where, in the neighbour's original frame, a pixel of the cloud stage's region looks: the
+// star homography's inverse applied to the pixel displaced by the cloud field.
+//
+//     d      = bilinear interpolation of the per-tile (dy, dx) grid at the pixel, times `scale`
+//     (qx,qy) = (originX + x, originY + y) + d
+//     w      = hi[6]*qx + hi[7]*qy + hi[8]
+//     mapx   = (hi[0]*qx + hi[1]*qy + hi[2]) / w,   mapy = (hi[3]*qx + hi[4]*qy + hi[5]) / w
+//     (-1e6, -1e6 where |w| < 1e-12)
+//
+// with the interpolation in float and the homography in double, each operation rounded and
+// none fused, as the stage computed them before.  These make the same floats, a row at a time
+// into a chunk buffer, so `remapRow` can round and interpolate them without a pair of
+// region-sized planes in between; the AVX2 form does eight pixels at a time.
+//
+// A fused multiply-add anywhere here would change a coordinate in its last bit and, once in a
+// while, which 32nd of a pixel it rounds to; the stage's own scalar code is compiled without
+// one on x86-64, and a build that enabled FMA would have it fused there and not here, so this
+// is not offered then.
+#if !defined(__FMA__)
+#define STAR_EXACT_FIELD 1
+
+struct DisplacementField {
+    int nx = 0, ny = 0;                  // grid size
+    const float *v[2] = {nullptr, nullptr};   // per tile, row-major ny x nx: dy then dx
+    const int *colIdx = nullptr;         // per region column: the grid cell, and the weight of the next
+    const float *colT = nullptr;
+    const int *rowIdx = nullptr;         // the same per region row
+    const float *rowT = nullptr;
+    int originX = 0, originY = 0;        // the region's top left in the frame
+    float scale = 1.f;                   // grid units to pixels
+    double hi[9] = {};                   // the star homography's inverse, row-major
+};
+
+// The grid's two components blended vertically at region row `y`: for each grid column, the
+// float `v(iy, j) * (1 - ty) + v(iy2, j) * ty` that every pixel of the row in that cell reads.
+inline void fieldRowBlend(const DisplacementField &f, int y, float *rowA0, float *rowA1) {
+#pragma clang fp contract(off)
+    const int iy = f.rowIdx[y], iy2 = std::min(iy + 1, f.ny - 1);
+    const float ty = f.rowT[y];
+    float *out[2] = {rowA0, rowA1};
+    for (int c = 0; c < 2; ++c) {
+        const float *a = f.v[c] + (size_t)iy * f.nx, *b = f.v[c] + (size_t)iy2 * f.nx;
+        for (int j = 0; j < f.nx; ++j) out[c][j] = a[j] * (1.f - ty) + b[j] * ty;
+    }
+}
+
+// One pixel's map, exactly as the stage's lambda wrote it.
+inline void fieldMapOne(const DisplacementField &f, const float *rowA0, const float *rowA1, int y,
+                        int x, float &mx, float &my)
+{
+#pragma clang fp contract(off)
+    const int jx = f.colIdx[x], jx2 = std::min(jx + 1, f.nx - 1);
+    const float tx = f.colT[x];
+    const float dy = (rowA0[jx] * (1.f - tx) + rowA0[jx2] * tx) * f.scale;
+    const float dx = (rowA1[jx] * (1.f - tx) + rowA1[jx2] * tx) * f.scale;
+    const double qx = (double)(f.originX + x) + (double)dx;
+    const double qy = (double)(f.originY + y) + (double)dy;
+    const double wd = f.hi[6] * qx + f.hi[7] * qy + f.hi[8];
+    if (std::fabs(wd) < 1e-12) { mx = -1e6f; my = -1e6f; return; }
+    mx = (float)((f.hi[0] * qx + f.hi[1] * qy + f.hi[2]) / wd);
+    my = (float)((f.hi[3] * qx + f.hi[4] * qy + f.hi[5]) / wd);
+}
+
+inline void fieldMapsScalar(const DisplacementField &f, const float *rowA0, const float *rowA1, int y,
+                            int x0, int n, float *mx, float *my)
+{
+    for (int i = 0; i < n; ++i) fieldMapOne(f, rowA0, rowA1, y, x0 + i, mx[i], my[i]);
+}
+
+#ifdef STAR_X86_AVX2_KERNELS
+STAR_AVX2 inline void fieldMapsAvx2(const DisplacementField &f, const float *rowA0, const float *rowA1,
+                                    int y, int x0, int n, float *mx, float *my)
+{
+#pragma clang fp contract(off)
+    const __m256 one = _mm256_set1_ps(1.f), scale = _mm256_set1_ps(f.scale);
+    const __m256d h0 = _mm256_set1_pd(f.hi[0]), h1 = _mm256_set1_pd(f.hi[1]), h2 = _mm256_set1_pd(f.hi[2]);
+    const __m256d h3 = _mm256_set1_pd(f.hi[3]), h4 = _mm256_set1_pd(f.hi[4]), h5 = _mm256_set1_pd(f.hi[5]);
+    const __m256d h6 = _mm256_set1_pd(f.hi[6]), h7 = _mm256_set1_pd(f.hi[7]), h8 = _mm256_set1_pd(f.hi[8]);
+    const __m256d qyBase = _mm256_set1_pd((double)(f.originY + y));
+    const __m256d tiny = _mm256_set1_pd(1e-12), sign = _mm256_set1_pd(-0.0), fallback = _mm256_set1_pd(-1e6);
+    const __m128i iota = _mm_setr_epi32(0, 1, 2, 3);
+
+    int i = 0;
+    for (; i + 8 <= n; i += 8) {
+        const int x = x0 + i;
+        // A grid cell is hundreds of pixels wide, so nearly every eight share one and the
+        // two values they blend are broadcasts.  (A gather would do for the rest and costs
+        // more than twice the rest of this loop on the Xeon W-2191B it was measured on.)  The few
+        // eights that straddle a boundary are made one pixel at a time.
+        const int cell = f.colIdx[x];
+        if (_mm256_movemask_epi8(_mm256_cmpeq_epi32(_mm256_loadu_si256((const __m256i *)(f.colIdx + x)),
+                                                    _mm256_set1_epi32(cell))) != -1) {
+            for (int k = 0; k < 8; ++k) fieldMapOne(f, rowA0, rowA1, y, x + k, mx[i + k], my[i + k]);
+            continue;
+        }
+        const int next = std::min(cell + 1, f.nx - 1);
+        const __m256 tx = _mm256_loadu_ps(f.colT + x);
+        const __m256 omt = _mm256_sub_ps(one, tx);
+        const __m256 dy = _mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(rowA0[cell]), omt),
+                                                      _mm256_mul_ps(_mm256_set1_ps(rowA0[next]), tx)), scale);
+        const __m256 dx = _mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(_mm256_set1_ps(rowA1[cell]), omt),
+                                                      _mm256_mul_ps(_mm256_set1_ps(rowA1[next]), tx)), scale);
+        __m128 outX[2], outY[2];
+        for (int h = 0; h < 2; ++h) {
+            const __m128 dxh = h ? _mm256_extractf128_ps(dx, 1) : _mm256_castps256_ps128(dx);
+            const __m128 dyh = h ? _mm256_extractf128_ps(dy, 1) : _mm256_castps256_ps128(dy);
+            const __m128i cols = _mm_add_epi32(_mm_set1_epi32(f.originX + x + 4 * h), iota);
+            const __m256d qx = _mm256_add_pd(_mm256_cvtepi32_pd(cols), _mm256_cvtps_pd(dxh));
+            const __m256d qy = _mm256_add_pd(qyBase, _mm256_cvtps_pd(dyh));
+            const __m256d wd = _mm256_add_pd(_mm256_add_pd(_mm256_mul_pd(h6, qx), _mm256_mul_pd(h7, qy)), h8);
+            const __m256d numX = _mm256_add_pd(_mm256_add_pd(_mm256_mul_pd(h0, qx), _mm256_mul_pd(h1, qy)), h2);
+            const __m256d numY = _mm256_add_pd(_mm256_add_pd(_mm256_mul_pd(h3, qx), _mm256_mul_pd(h4, qy)), h5);
+            const __m256d degenerate = _mm256_cmp_pd(_mm256_andnot_pd(sign, wd), tiny, _CMP_LT_OQ);
+            outX[h] = _mm256_cvtpd_ps(_mm256_blendv_pd(_mm256_div_pd(numX, wd), fallback, degenerate));
+            outY[h] = _mm256_cvtpd_ps(_mm256_blendv_pd(_mm256_div_pd(numY, wd), fallback, degenerate));
+        }
+        _mm256_storeu_ps(mx + i, _mm256_insertf128_ps(_mm256_castps128_ps256(outX[0]), outX[1], 1));
+        _mm256_storeu_ps(my + i, _mm256_insertf128_ps(_mm256_castps128_ps256(outY[0]), outY[1], 1));
+    }
+    for (; i < n; ++i) fieldMapOne(f, rowA0, rowA1, y, x0 + i, mx[i], my[i]);
+}
+#endif  // STAR_X86_AVX2_KERNELS
+
+// cv::remap of `src` through the maps `fieldMapOne` describes, over a region of size `dsize`,
+// into a zero-initialised `dst` (dsize, src's type), marking the pixels written in `covered`
+// when it is given.  The maps are never made as planes.
+inline void remapField(const cv::Mat &src, const DisplacementField &f, cv::Size dsize, cv::Mat &dst,
+                       cv::Mat *covered)
+{
+    const Source source = sourceOf(src);
+    const double stripes = (double)dsize.area() / (double)(1 << 16);
+    cv::parallel_for_(cv::Range(0, dsize.height), [&](const cv::Range &r) {
+        std::vector<float> blend(2 * (size_t)std::max(f.nx, 1));
+        float *rowA0 = blend.data(), *rowA1 = blend.data() + std::max(f.nx, 1);
+        const bool avx2 = useAvx2Rows();
+        remapRows(source, dst, covered, dsize.width, r, [&](int y) {
+            fieldRowBlend(f, y, rowA0, rowA1);
+            return [&f, rowA0, rowA1, y, avx2](int x, int n, float *bufX, float *bufY,
+                                              const float *&mx, const float *&my) {
+#ifdef STAR_X86_AVX2_KERNELS
+                if (avx2) fieldMapsAvx2(f, rowA0, rowA1, y, x, n, bufX, bufY);
+                else
+#endif
+                    fieldMapsScalar(f, rowA0, rowA1, y, x, n, bufX, bufY);
+                (void)avx2;
+                mx = bufX;
+                my = bufY;
+            };
+        });
+    }, stripes);
+}
+#endif  // !__FMA__
 
 }  // namespace exactwarp
 

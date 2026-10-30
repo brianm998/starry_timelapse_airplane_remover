@@ -419,6 +419,8 @@ end-to-end A/B are in 6.3.
 | **R5** consensus from line sidecars | `StarCore/Sources/StarCore/HorizonLineSidecar.swift`; written by `ImageAccessor.saveInt`, read (and healed) by `HorizonConsensusBuild.detectedLines` | `HorizonConsensusTests`: sidecar columns equal `extractHorizonY` of the reloaded mask; a rebuilt consensus from sidecars equals the one from masks; a mask rewritten or resized invalidates its sidecar. |
 | **R8** AKAZE keypoint-map scans | `AKAZEDetector.cpp`, `forEachNonzero` | `akazebench.cpp`: old and new passes over random multi-octave level sets (three densities), 270 k keypoints compared bit for bit, **0 differ**; the passes themselves 1.75× at 24 MP scale. |
 | **R8** `StarAlignedHorizonMaskCache` | `StarAlignedHorizonMask.swift` | Same computation, off the actor on the CPU gate, with single-flight for equal keys; `StarAlignedHorizonMaskTests` (counters unchanged for sequential use, new test for concurrent asks). |
+| **R9** cloud stage: map lambda + float-map `remap` + coverage probe | `ExactWarp.hpp` (`remap`, `remapField`, `DisplacementField`, `fieldMapsAvx2`), used by `buildLayer` in `cloudAwareRefine` | `remap_bench` against `cv::remap` (16-bit, 1 and 3 channels, destination size independent of the source's) and the 8-bit probe remap: float maps of ten kinds including exact ties in 32nds, NaN / inf / ±3.4e38, far outside, hugging the frame — 34 M pixel-channels, **0 differ, 0 coverage differ**; random displacement fields (random homography incl. W≡0 and W crossing 0, grids from 1×1 up, regions that do not start on a multiple of 8): 611 M map floats compared **bit for bit** with the stage's lambda, copied verbatim, and 637 M pixel-channels through `remapField` against lambda + `cv::remap` + probe `cv::remap`, **0 differ**. Five mutations of the kernel each fail the sweep (half-up instead of half-even rounding, scalar and AVX2; lerp form of the field blend; no degenerate-W fallback; no last-row renormalisation). In the suite: `CloudAwareMergeTests.testTheExactRemapMakesTheSameMerge` (also fails when the AVX2 rounding is broken). |
+| **R9** cloud stage box blurs | `StarCpp/Sources/StarCpp/BoxBlur.hpp` (the stage's `boxBlurOnce` moved out of `ImageAligner.cpp`, original arithmetic kept as the scalar form) | `blur_bench` against a verbatim copy of the original: 21.8 M elements over widths/heights 1…600 (including narrower than the window), radii 1…48, both scales, luma-sized / weight-sized / signed / NaN / ±inf / ±1e30 / exact-tie values, bitwise, scalar form and AVX2 form: **0 differ**. Mutations that fail it: round toward zero, NaN not zeroed, wrong right-edge padding. (One that does *not*: multiplying by `1/norm` instead of dividing — double rounding differs too rarely for random data to see, so the division stays by construction.) Same hook as R3 (`STAR_WARP=opencv` / `debugSetExactWarp`) selects the scalar form, so `testTheExactRemapMakesTheSameMerge` holds the blurs to it inside a whole merge. |
 | **R10** stall watch | `StarCore/Sources/StarCore/StallWatch.swift`, called from `ResourceGovernor.tick` | `StallWatchTests`. |
 
 Two facts worth keeping from reading OpenCV 4.12.0's `imgwarp.cpp` (the tree has it at
@@ -442,7 +444,7 @@ Two facts worth keeping from reading OpenCV 4.12.0's `imgwarp.cpp` (the tree has
   there anyway.
 
 Kill switches, for an A/B on a real run in one binary: `STAR_MEDIAN_KERNEL=welford`,
-`STAR_WARP=opencv`. Both are read once. The tests flip the same switches in-process
+`STAR_WARP=opencv` (R3 and R9), `STAR_REMAP=opencv` (R9 alone). All are read once. The tests flip the same switches in-process
 (`ImageAligner.debugSetMedianKernel`, `debugSetExactWarp`).
 
 R2's kernel is compiled for AVX2 and chosen at run time (CPUID + XCR0, no `__builtin_cpu_supports`),
@@ -457,6 +459,8 @@ So Q2 was answered "yes" in code — it is one `if` in `mergeKernelForThisMachin
 | median kernel, 17 sources | 191 | 26.7 | **7.2×** |
 | the same old kernel at `-Os` (what the GUI ran) vs `-O2` | 155 / 467–598 ns (9 / 17) | 107–129 / 166–251 | 1.2–2.8× — the 17-source static merge was hit hardest |
 | 16-bit warp + its 8-bit coverage probe, 6000×1000×3 | 21.6 + 36.3 ns/px | 17.7 (scalar), 7.3 (AVX2), one pass | 1.9× scalar, 2.2–5.4× AVX2 |
+| cloud stage layer: map lambda + `cv::remap` 16-bit + 8-bit coverage probe → `remapField`, 6000×1000×3 region, smooth cloud field | 8.2 + 4.3×3 + 5.3 = 26.3 ns/px | 8.3 (AVX2), 17.2 (scalar rows) | **3.2×** AVX2, 1.5× scalar; 2.6× on a noisy ±100 px field |
+| cloud stage box blur, one pass, 6000×3400 plane (r = 6 and 24) | 6.6–6.8 ns/element | 3.3 (3.1–3.4 at strips of 256–512 columns) | **2.0×** (1.6× with the original 64-column strips: the column pass reads a column band down 24 KB-apart rows, so a wider strip is longer runs of the same cache lines) |
 | AKAZE map passes, 24 MP-scale levels | 0.754 s | 0.431 s | 1.75× (the dense extremum scan, unchanged, is most of what is left) |
 
 A first, autovectorised version of the exact-statistics idea measured 1.4–1.9× here, in line with
@@ -510,6 +514,43 @@ step is 3 s shorter on 48 frames, which is 62 ms a frame — the decode that sec
 so the serial gap per run scales as that times the frame count (the section's 124–218 s at
 1,300–2,100 frames); not measured at that size. CPU −29 %, wall −21 %.
 
+#### R9 on cloudy footage
+
+The first probe is mostly clear sky, where the cloud stage is pre-filtered out, so R9 got its own:
+frames 157–186 of a9-3 (05_16, dusk, thick moving cloud), 30 × 24 MP, moving, same release cli and
+flags (`--use light --moving-camera --no-use-gpu --cloud-aware-merge`). The stage ran on all 30
+merges, on a region of about 6000×3400 of the 6000×4000 frame.
+
+* **Identity.** The new remap against `cv::remap` in one binary (`STAR_REMAP=opencv`): all 30 output
+  frames and all 30 `auto-processed` merges byte-identical; of the 182 other kept files, the only
+  differences are logs, SQLite `-shm`/`-wal`, and the mask-mtime field in the header of the R5 line
+  sidecars (the columns are identical). The same 30 outputs came out of every later run, including
+  the one with the AVX2 box blurs in the binary (`STAR_WARP` unset): 30/30 identical to the
+  `cv::remap` run's.
+* **CPU is not resolved at this size.** Whole run, `cv::remap` → exact remap: user 1,928 → 1,815 s,
+  sys 437 → 461 s (−3.8 % of the total), wall 324 → 330 s. Merge stage only (copy the finished temp
+  dir, bump `cloudAwareMergeAlgorithmVersion` so only the merges rebuild, two alternating pairs):
+  user+sys 1,689 → 1,584 s and 1,948 → 1,929 s. The same variant repeated differs by up to 15 %
+  (1,360 vs 1,557 user-s), more than the effect, so these say "no worse, plausibly 4–6 %" and no
+  more. What is known: the layer-building step alone is 3.2× (6.2), and at 8 layers × a 20 M pixel
+  region it was about 4 CPU-s of a ~45 CPU-s merge, so ~6 % is what to expect; the box blurs, 2×
+  on 13.7 % of the busy samples, another ~7 %.
+* **What the merge phase looks like now** (25 s `sample` of the cli, all threads, after R2/R3 and the
+  R9 remap, shares of busy samples): `exactwarp::interpolateBlockAvx2` 19.9 %
+  (the shared bilinear loop, star warps and cloud layers), `madvise` 8.8 %, the R2 median kernel
+  8.4 %, the two box-blur passes 13.7 % (before the blur work), `fieldMapsAvx2` 5.3 %,
+  `cv::OcvDftImpl::colDft` 4.5 %, `lumaDownRows` 4.2 %, `cv::hal::integral` 2.6 %, `medianBlur`
+  2.1 %. System time was 584 s against 1,624 s user (26 % of the CPU in the kernel). Two things in
+  it are not R9: **`madvise` is the free of `matchTemplate`'s DFT temporaries in the velocity search**
+  (`measureGrid` → `matchTemplate` → `~Mat` → `free_medium` → `madvise(MADV_FREE)`), i.e. the per-tile
+  search allocates and returns tens of MB per call and pays page faults to get it back;
+  and `colDft`/`integral`/`mulSpectrums` are that same search's arithmetic (~10 %). Pooling those
+  buffers (or one `matchTemplate` per tile row on a shared scratch) is the next thing this profile
+  points at, and it is independent of everything above.
+* The sample taken after the blur change reads the same kernels at different shares (it landed in a
+  different part of the merge), so shares across the two samples are not a measurement of the blur.
+  The blur's 2× is the harness's.
+
 ### 6.4 Not done, and why
 
 * **R4** needs your decision (Q1) and was not started. The row-range machinery it needs from R3
@@ -523,9 +564,17 @@ so the serial gap per run scales as that times the frame count (the section's 12
   the copy is done would hold them for the life of every level — a memory-footprint change that
   has to be measured on the Vega *and* on Apple Silicon before it ships. Neither is worth doing
   without that measurement, and neither is blocked by anything here.
-* **R8**'s earth gradient-mask cache and the **R9** cloud-stage leftovers (map lambda, `lowPass`,
-  float-map `remap`) — not started. The cloud stage's `cv::remap` takes float maps and would
-  need the same treatment as the warp, from `remap32f`'s own conversion rules.
+* **R8**'s earth gradient-mask cache — not started.
+* **R9**: the map lambda, the float-map `remap` with its coverage probe, and the box blurs are done
+  (6.1). Not done: `lumaDownRows` (4.2 % of busy samples; per-pixel float sums in a fixed order
+  over 4×4 blocks of interleaved 16-bit BGR, so vectorising across pixels needs a deinterleave;
+  not attempted), `medianBlur` (OpenCV's own,
+  already AVX2), and the **Apple Silicon** port of the stack to the Metal merge kernel, which has to
+  be measured on the Mac Studio. On arm64 the cloud stage keeps `cv::remap` and the scalar box blur
+  (`STAR_EXACT_WARP` is x86-64 only), the same as the warps. And one measured thing R9 does not cover:
+  `interpolateBlockAvx2` is now the largest single symbol (about 45 µops a pixel by a count of the
+  code, not measured; a two-row, 6-sample-wide formulation with pre-laid-out weights is the obvious next step, and every pixel of
+  the warp and the remap goes through it, so `warp_bench` and `remap_bench` would hold it).
 * **R10**: hyper-thread width and the ledger's CPU-path estimate need merge-phase runs of ten
   minutes each, back to back; not measured.
 * **Q4** (LZW on the final TIFF) is yours.

@@ -9,6 +9,7 @@
 #include "AKAZEDetector.h"
 #include "logging_impl.hpp"
 #include "MedianMerge.hpp"
+#include "BoxBlur.hpp"
 #include "ExactWarp.hpp"
 
 #include <opencv2/core.hpp>
@@ -2793,60 +2794,17 @@ inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v
 
 // --- exact box blur ---------------------------------------------------------------
 
-// One pass of a (2r+1)x(2r+1) box filter over a CV_32F plane, in place, with
-// BORDER_REPLICATE edges and arithmetic that does not depend on where the window
-// starts: every value is rounded to a multiple of 1/scale first, the sums are integers,
-// and the one division at the end is exactly rounded.  `rowSums` is scratch.
+// One pass of a (2r+1)x(2r+1) box filter over a CV_32F plane, in place, with BORDER_REPLICATE
+// edges and arithmetic that does not depend on where the window starts: every value is rounded
+// to a multiple of 1/scale first, the sums are integers, and the one division at the end is
+// exactly rounded.  BoxBlur.hpp has the code, scalar and AVX2, which agree to the bit.
+// `rowSums` is scratch.
 static void boxBlurOnce(cv::Mat &plane, cv::Mat &rowSums, int r, double scale) {
-    const int h = plane.rows, w = plane.cols, win = 2 * r + 1;
-    // A row sum has to fit an int32; every value this is given is far inside this.
-    const double qmax = (double)(INT32_MAX / win);
-    rowSums.create(h, w, CV_32S);
-
-    cv::parallel_for_(cv::Range(0, h), [&](const cv::Range &rg) {
-        std::vector<int32_t> q((size_t)w);
-        for (int y = rg.start; y < rg.end; ++y) {
-            const float *src = plane.ptr<float>(y);
-            for (int x = 0; x < w; ++x) {
-                double v = std::nearbyint((double)src[x] * scale);
-                if (!(v == v)) v = 0;
-                q[(size_t)x] = (int32_t)std::min(std::max(v, -qmax), qmax);
-            }
-            int32_t *dst = rowSums.ptr<int32_t>(y);
-            int64_t s = 0;
-            for (int x = -r; x <= r; ++x) s += q[(size_t)clampi(x, 0, w - 1)];
-            dst[0] = (int32_t)s;
-            for (int x = 1; x < w; ++x) {
-                s += (int64_t)q[(size_t)std::min(x + r, w - 1)]
-                   - (int64_t)q[(size_t)std::max(x - r - 1, 0)];
-                dst[x] = (int32_t)s;
-            }
-        }
-    });
-
-    const double norm = (double)win * (double)win * scale;
-    const int strip = 64;
-    cv::parallel_for_(cv::Range(0, (w + strip - 1) / strip), [&](const cv::Range &rg) {
-        std::vector<int64_t> acc((size_t)strip);
-        for (int sIdx = rg.start; sIdx < rg.end; ++sIdx) {
-            const int x0 = sIdx * strip, x1 = std::min(w, x0 + strip), n = x1 - x0;
-            for (int i = 0; i < n; ++i) acc[(size_t)i] = 0;
-            for (int y = -r; y <= r; ++y) {
-                const int32_t *row = rowSums.ptr<int32_t>(clampi(y, 0, h - 1)) + x0;
-                for (int i = 0; i < n; ++i) acc[(size_t)i] += row[i];
-            }
-            for (int y = 0; y < h; ++y) {
-                float *out = plane.ptr<float>(y) + x0;
-                for (int i = 0; i < n; ++i) out[i] = (float)((double)acc[(size_t)i] / norm);
-                if (y + 1 < h) {
-                    const int32_t *add = rowSums.ptr<int32_t>(std::min(y + 1 + r, h - 1)) + x0;
-                    const int32_t *sub = rowSums.ptr<int32_t>(std::max(y - r, 0)) + x0;
-                    for (int i = 0; i < n; ++i)
-                        acc[(size_t)i] += (int64_t)add[i] - (int64_t)sub[i];
-                }
-            }
-        }
-    });
+#ifdef STAR_EXACT_WARP
+    boxblur::boxBlurOnce(plane, rowSums, r, scale, exactwarp::enabled());
+#else
+    boxblur::boxBlurOnce(plane, rowSums, r, scale, false);
+#endif
 }
 
 // Three successive box blurs of radius r, which is close to a Gaussian of sigma r.
@@ -3684,34 +3642,55 @@ static bool cloudAwareRefine(cv::Mat &merged, const cv::Mat &base, int baseFrame
         auto buildLayer = [&](size_t k, const cv::Mat &src) {
             const Grid &fld = fields[k];
             const double *hi = nbs[k].Hinv.ptr<double>();
-            cv::Mat mapx(region.size(), CV_32F), mapy(region.size(), CV_32F);
-            cv::parallel_for_(cv::Range(0, region.height), [&](const cv::Range &rg) {
-                for (int y = rg.start; y < rg.end; ++y) {
-                    const int iy = axisY.idx[(size_t)y], iy2 = std::min(iy + 1, fld.ny - 1);
-                    const float ty = axisY.t[(size_t)y];
-                    float *mx = mapx.ptr<float>(y), *my = mapy.ptr<float>(y);
-                    for (int x = 0; x < region.width; ++x) {
-                        const int jx = axisX.idx[(size_t)x], jx2 = std::min(jx + 1, fld.nx - 1);
-                        const float tx = axisX.t[(size_t)x];
-                        float d[2];
-                        for (int c = 0; c < 2; ++c) {
-                            const float a = fld.v[c][fld.at(iy, jx)] * (1.f - ty) + fld.v[c][fld.at(iy2, jx)] * ty;
-                            const float b = fld.v[c][fld.at(iy, jx2)] * (1.f - ty) + fld.v[c][fld.at(iy2, jx2)] * ty;
-                            d[c] = (a * (1.f - tx) + b * tx) * (float)kFactor;
-                        }
-                        const double qx = (double)(region.x + x) + (double)d[1];
-                        const double qy = (double)(region.y + y) + (double)d[0];
-                        const double wd = hi[6] * qx + hi[7] * qy + hi[8];
-                        if (std::fabs(wd) < 1e-12) { mx[x] = -1e6f; my[x] = -1e6f; continue; }
-                        mx[x] = (float)((hi[0] * qx + hi[1] * qy + hi[2]) / wd);
-                        my[x] = (float)((hi[3] * qx + hi[4] * qy + hi[5]) / wd);
-                    }
-                }
-            });
             cv::Mat layer = cv::Mat::zeros(region.size(), base.type());
-            cv::remap(src, layer, mapx, mapy, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
             cv::Mat covered = cv::Mat::zeros(region.size(), CV_8U);
-            cv::remap(probeFull, covered, mapx, mapy, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+#ifdef STAR_EXACT_FIELD
+            // The maps below, rounded and interpolated the way cv::remap does it, a chunk of a
+            // row at a time with no planes in between, and the pixels it writes marked as it
+            // goes instead of by a second remap of a solid probe.  The same bytes in `layer`
+            // and in `covered`, which is what ExactWarp.hpp is held to (KernelHarness/remap_bench,
+            // and CloudAwareMergeTests.testTheExactRemapMakesTheSameMerge).
+            if (exactwarp::remapEnabled() && src.type() == base.type() && src.size() == probeFull.size()
+                && exactwarp::remapApplies(src, region.size())) {
+                exactwarp::DisplacementField field;
+                field.nx = fld.nx; field.ny = fld.ny;
+                field.v[0] = fld.v[0].data(); field.v[1] = fld.v[1].data();
+                field.colIdx = axisX.idx.data(); field.colT = axisX.t.data();
+                field.rowIdx = axisY.idx.data(); field.rowT = axisY.t.data();
+                field.originX = region.x; field.originY = region.y;
+                field.scale = (float)kFactor;
+                std::copy(hi, hi + 9, field.hi);
+                exactwarp::remapField(src, field, region.size(), layer, &covered);
+            } else
+#endif
+            {
+                cv::Mat mapx(region.size(), CV_32F), mapy(region.size(), CV_32F);
+                cv::parallel_for_(cv::Range(0, region.height), [&](const cv::Range &rg) {
+                    for (int y = rg.start; y < rg.end; ++y) {
+                        const int iy = axisY.idx[(size_t)y], iy2 = std::min(iy + 1, fld.ny - 1);
+                        const float ty = axisY.t[(size_t)y];
+                        float *mx = mapx.ptr<float>(y), *my = mapy.ptr<float>(y);
+                        for (int x = 0; x < region.width; ++x) {
+                            const int jx = axisX.idx[(size_t)x], jx2 = std::min(jx + 1, fld.nx - 1);
+                            const float tx = axisX.t[(size_t)x];
+                            float d[2];
+                            for (int c = 0; c < 2; ++c) {
+                                const float a = fld.v[c][fld.at(iy, jx)] * (1.f - ty) + fld.v[c][fld.at(iy2, jx)] * ty;
+                                const float b = fld.v[c][fld.at(iy, jx2)] * (1.f - ty) + fld.v[c][fld.at(iy2, jx2)] * ty;
+                                d[c] = (a * (1.f - tx) + b * tx) * (float)kFactor;
+                            }
+                            const double qx = (double)(region.x + x) + (double)d[1];
+                            const double qy = (double)(region.y + y) + (double)d[0];
+                            const double wd = hi[6] * qx + hi[7] * qy + hi[8];
+                            if (std::fabs(wd) < 1e-12) { mx[x] = -1e6f; my[x] = -1e6f; continue; }
+                            mx[x] = (float)((hi[0] * qx + hi[1] * qy + hi[2]) / wd);
+                            my[x] = (float)((hi[3] * qx + hi[4] * qy + hi[5]) / wd);
+                        }
+                    }
+                });
+                cv::remap(src, layer, mapx, mapy, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+                cv::remap(probeFull, covered, mapx, mapy, cv::INTER_LINEAR, cv::BORDER_TRANSPARENT);
+            }
             cv::bitwise_not(covered, covered);          // 255 where nothing landed
             {
                 std::lock_guard<std::mutex> lock(missesMutex);

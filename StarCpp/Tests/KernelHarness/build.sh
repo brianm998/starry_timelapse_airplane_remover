@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds the kernel differential harnesses next to this script: ./build.sh [-O2|-O3|-Os|...] [extra clang flags]
-# e.g.  ./build.sh -O2 && ./median_bench sweep 3000 && ./warp_bench sweep 2000 && ./akaze_bench 90
+# e.g.  ./build.sh -O2 && ./median_bench sweep 3000 && ./warp_bench sweep 2000 && ./remap_bench sweep 1500 && ./blur_bench sweep 800 && ./akaze_bench 90
 # Add -fsanitize=address,undefined for the sanitiser run.
 # Needs the opencv/ symlinks a worktree build needs (see CLAUDE.md of the checkout) and Eigen, as the package does.
 set -e
@@ -15,6 +15,8 @@ LIBS="$ROOT/opencv/lib/macos/libopencv2.a -framework Accelerate -framework OpenC
 cd "$HERE"
 xcrun clang++ $FLAGS median_bench.cpp -o median_bench $LIBS
 xcrun clang++ $FLAGS warp_bench.cpp   -o warp_bench   $LIBS
+xcrun clang++ $FLAGS remap_bench.cpp  -o remap_bench  $LIBS
+xcrun clang++ $FLAGS blur_bench.cpp   -o blur_bench   $LIBS
 # AKAZEDetector.cpp is included whole, so this one links the few files it needs
 S=$ROOT/StarCpp/Sources/StarCpp
 xcrun clang++ $FLAGS akaze_bench.cpp $S/starcpp_bridge_logging.cpp $S/MatWrapper.cpp $S/ImageCache_C.cpp $S/OCVFeatureSet.cpp $S/GPUOps_C.cpp -o akaze_bench $LIBS

@@ -8,6 +8,7 @@ threaded on this machine's own CPU.
 |---|---|---|---|
 | `median_bench` | `MedianMerge.hpp`, the exact-statistics kernels | the Welford kernel in the same header, picked with `gMedianKernelOverride` | same bytes over random shapes / depths / channel counts / 1–65 sources / thresholds / coverage planes / exact-tie data, and on real 16-bit frames |
 | `warp_bench` | `ExactWarp.hpp` | `cv::warpPerspective` (INTER_LINEAR, BORDER_TRANSPARENT) and the 8-bit probe warp | same pixels *and* same coverage plane, scalar and AVX2 rows, identity … strong perspective, 1–1200 px, 1 and 3 channels |
+| `remap_bench` | `ExactWarp.hpp`'s `remap` and the cloud stage's map generator (`fieldMapsAvx2`) | `cv::remap` with float maps (and on the 8-bit probe), and the stage's map lambda, verbatim | same pixels, same coverage plane, and the generated map floats bit for bit, scalar and AVX2 rows, maps of every awkward kind (ties in 32nds, NaN/inf, far outside, degenerate w) |
 | `akaze_bench` | `forEachNonzero` in `AKAZEDetector.cpp` | the dense scans it replaced, inlined in the harness | same kept maps and keypoints over random level sets |
 
 ```bash
@@ -17,11 +18,13 @@ threaded on this machine's own CPU.
 ./median_bench real a.tiff b.tiff … # >= 2 frames; a 64-row band of each
 ./warp_bench sweep 2000
 ./warp_bench time
+./remap_bench sweep 900
+./remap_bench time                # a smooth cloud field; `time rough` for a noisy one
 ./akaze_bench 90
 ```
 
-The same checks run in the suite as `MedianKernelEquivalenceTests` and `ExactWarpEquivalenceTests`
-(StarCppBridgeTests), through the `ia_debug_set_median_kernel` / `ia_debug_set_exact_warp` hooks;
+The same checks run in the suite as `MedianKernelEquivalenceTests`, `ExactWarpEquivalenceTests` and
+`CloudAwareMergeTests.testTheExactRemapMakesTheSameMerge` (StarCppBridgeTests), through the `ia_debug_set_median_kernel` / `ia_debug_set_exact_warp` hooks;
 these are for when a kernel is being changed and a few thousand cases are not enough, or when the
 speed is the question. Mutation-test a change to a kernel here before trusting a clean sweep:
 remove the near-tie fallback and `median_bench sweep` must fail.

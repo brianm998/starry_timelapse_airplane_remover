@@ -2,3 +2,5 @@ median_bench
 warp_bench
 akaze_bench
 *.dSYM/
+remap_bench
+blur_bench
