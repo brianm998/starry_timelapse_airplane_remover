@@ -312,4 +312,62 @@ class LocalPreferencesBooleansTest {
         assertTrue(prefsFile.readText().contains("\"showHorizonOnMainView\":true"), prefsFile.readText())
         assertEquals(true, LocalPreferences().showHorizonOnMainView)
     }
+
+    // M1 of the parity plan: a file that does not parse is the user's to fix, never ours to overwrite.
+
+    private val garbage = """{"language": "de", """
+
+    @Test fun anUnreadableFileIsLeftAloneWhenAPreferenceChanges() {
+        prefsFile.writeText(garbage)
+        val p = LocalPreferences()
+        p.setBool("showProcessingWindow", false)
+        p.setLanguage("fr")
+        assertEquals(garbage, prefsFile.readText())
+    }
+
+    @Test fun aCopyOfTheUnreadableFileIsKeptBesideIt() {
+        prefsFile.writeText(garbage)
+        LocalPreferences()
+        val copy = File(prefsFile.path + ".undecodable")
+        assertTrue(copy.exists(), "no .undecodable copy")
+        assertEquals(garbage, copy.readText())
+    }
+
+    @Test fun theCopyIsNotReplacedByALaterUnreadableFile() {
+        prefsFile.writeText(garbage)
+        LocalPreferences()
+        prefsFile.writeText("""[1, 2""")
+        LocalPreferences()
+        assertEquals(garbage, File(prefsFile.path + ".undecodable").readText())
+    }
+
+    /** The session still works: a changed preference takes effect, it just is not written down. */
+    @Test fun aPreferenceChangedOverAnUnreadableFileStillHoldsForTheSession() {
+        prefsFile.writeText(garbage)
+        val p = LocalPreferences()
+        p.setLanguage("fr")
+        p.setBool("showProcessingWindow", false)
+        assertEquals("fr", p.language)
+        assertEquals(false, p.showProcessingWindow)
+    }
+
+    @Test fun aFileWhoseRootIsNotAnObjectIsUnreadableToo() {
+        prefsFile.writeText("""["a", "b"]""")
+        LocalPreferences().setLanguage("de")
+        assertEquals("""["a", "b"]""", prefsFile.readText())
+        assertTrue(File(prefsFile.path + ".undecodable").exists())
+    }
+
+    /** Nothing in an empty file to protect: a preference is written, as when there is no file. */
+    @Test fun anEmptyFileIsNotTreatedAsUnreadable() {
+        prefsFile.writeText("")
+        LocalPreferences().setLanguage("de")
+        assertTrue(prefsFile.readText().contains("\"language\":\"de\""), prefsFile.readText())
+        assertTrue(!File(prefsFile.path + ".undecodable").exists())
+    }
+
+    @Test fun aWriteLeavesNoTemporaryFileBehind() {
+        LocalPreferences().setLanguage("de")
+        assertEquals(listOf(".star.userprefs.json"), home.list()!!.toList())
+    }
 }
