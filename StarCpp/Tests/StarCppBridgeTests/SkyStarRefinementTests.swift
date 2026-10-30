@@ -126,9 +126,11 @@ final class SkyStarRefinementTests: XCTestCase {
             (0..<count).map { _ in (x: 20 + rand.unit() * Double(width - 40),
                                     y: 20 + rand.unit() * Double(height - 40)) }
         }
-        let dust = (0..<12).map { i in
-            (x: 80 + Double(i % 4) * 230, y: 110 + Double(i / 4) * 230,
-             sigma: 3.0 + Double(i % 3), peak: 1500 + 300 * Double(i % 5))
+        let dust: [(x: Double, y: Double, sigma: Double, peak: Double)] = (0..<12).map { (i: Int) in
+            let col = Double(i % 4), row = Double(i / 4)
+            let sigma = 3.0 + Double(i % 3)
+            let peak = 1500.0 + 300.0 * Double(i % 5)
+            return (x: 80.0 + col * 230.0, y: 110.0 + row * 230.0, sigma: sigma, peak: peak)
         }
         func frame(stars: [(x: Double, y: Double)], noiseSeed: UInt64) -> MatWrapper {
             var noise = Rand(seed: noiseSeed)
