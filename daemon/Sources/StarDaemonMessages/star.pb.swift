@@ -2313,6 +2313,17 @@ public struct Star_V1_Config: @unchecked Sendable {
   /// Clears the value of `cloudAwareMerge`. Subsequent reads from it will return its default value.
   public mutating func clearCloudAwareMerge() {_uniqueStorage()._cloudAwareMerge = nil}
 
+  /// How far a pixel may differ from the neighbouring frames' (in the merge's own units) before it is thrown out and replaced rather than kept;
+  /// StarCore Config.pixelThreshold, 1.2 unless changed.  The macOS gui offers it as an expert setting and as a slider in the right panel.
+  public var pixelThreshold: Double {
+    get {_storage._pixelThreshold ?? 0}
+    set {_uniqueStorage()._pixelThreshold = newValue}
+  }
+  /// Returns true if `pixelThreshold` has been explicitly set.
+  public var hasPixelThreshold: Bool {_storage._pixelThreshold != nil}
+  /// Clears the value of `pixelThreshold`. Subsequent reads from it will return its default value.
+  public mutating func clearPixelThreshold() {_uniqueStorage()._pixelThreshold = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -6153,7 +6164,7 @@ extension Star_V1_ConfigChangePreview: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{3}resource_profile\0\u{3}reprocess_on_settings_change\0\u{3}max_mat_memory_fraction\0\u{3}gpu_device_name\0\u{3}image_sequence_dirname\0\u{3}cloud_aware_merge\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{3}resource_profile\0\u{3}reprocess_on_settings_change\0\u{3}max_mat_memory_fraction\0\u{3}gpu_device_name\0\u{3}image_sequence_dirname\0\u{3}cloud_aware_merge\0\u{3}pixel_threshold\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -6215,6 +6226,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _gpuDeviceName: String? = nil
     var _imageSequenceDirname: String = String()
     var _cloudAwareMerge: Bool? = nil
+    var _pixelThreshold: Double? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -6284,6 +6296,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _gpuDeviceName = source._gpuDeviceName
       _imageSequenceDirname = source._imageSequenceDirname
       _cloudAwareMerge = source._cloudAwareMerge
+      _pixelThreshold = source._pixelThreshold
     }
   }
 
@@ -6361,6 +6374,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 60: try { try decoder.decodeSingularStringField(value: &_storage._gpuDeviceName) }()
         case 61: try { try decoder.decodeSingularStringField(value: &_storage._imageSequenceDirname) }()
         case 62: try { try decoder.decodeSingularBoolField(value: &_storage._cloudAwareMerge) }()
+        case 63: try { try decoder.decodeSingularDoubleField(value: &_storage._pixelThreshold) }()
         default: break
         }
       }
@@ -6550,6 +6564,9 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       try { if let v = _storage._cloudAwareMerge {
         try visitor.visitSingularBoolField(value: v, fieldNumber: 62)
       } }()
+      try { if let v = _storage._pixelThreshold {
+        try visitor.visitSingularDoubleField(value: v, fieldNumber: 63)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -6618,6 +6635,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._gpuDeviceName != rhs_storage._gpuDeviceName {return false}
         if _storage._imageSequenceDirname != rhs_storage._imageSequenceDirname {return false}
         if _storage._cloudAwareMerge != rhs_storage._cloudAwareMerge {return false}
+        if _storage._pixelThreshold != rhs_storage._pixelThreshold {return false}
         return true
       }
       if !storagesAreEqual {return false}

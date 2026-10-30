@@ -397,6 +397,9 @@ message Config {
   // explains the frame better, with the stars put back, so fast-moving clouds are not banded and repeated. StarCore Config.cloudAwareMerge, off
   // unless asked for. Changing it redoes the star aligned merge of frames already processed, keeping their alignment (see Sequence.PreviewConfigChange).
   optional bool   cloud_aware_merge                                    = 62;
+  // How far a pixel may differ from the neighbouring frames' (in the merge's own units) before it is thrown out and replaced rather than kept;
+  // StarCore Config.pixelThreshold, 1.2 unless changed.  The macOS gui offers it as an expert setting and as a slider in the right panel.
+  optional double pixel_threshold                                      = 63;
 }
 
 enum CleanMethod {

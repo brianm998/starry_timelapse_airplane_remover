@@ -6,6 +6,8 @@ import StarDaemonMessages
 // Bidirectional type mapping between StarCore types and proto types.
 enum Mapping {
     /// What `max_mat_memory_fraction` is clamped to (the macOS settings row's own limits).
+    static let pixelThresholdRange: ClosedRange<Double> = 0.001...10
+
     static let memoryBudgetFractionRange: ClosedRange<Double> = 0.1 ... 0.95
 
 
@@ -404,6 +406,7 @@ enum Mapping {
         out.mergeStreamingThresholdMb = Int32(c.mergeStreamingThresholdMB)
         out.useGpuAcceleration = c.useGPUForMerge
         out.cloudAwareMerge = c.cloudAwareMerge
+        out.pixelThreshold = c.pixelThreshold
         // Read-only: not a Config field, so there is nothing for applyExpertConfig to
         // apply it back onto — computed fresh on every outgoing Config so a client
         // always shows the daemon's own machine's hardware, not a stale answer from
@@ -480,6 +483,10 @@ enum Mapping {
         }
         if p.hasUseGpuAcceleration { c.useGPUForMerge = p.useGpuAcceleration }
         if p.hasCloudAwareMerge { c.cloudAwareMerge = p.cloudAwareMerge }
+        // The range the gui's field accepts: a threshold of 0 throws every pixel out, and a text box with no limits can send it.
+        if p.hasPixelThreshold, p.pixelThreshold.isFinite {
+            c.pixelThreshold = min(max(p.pixelThreshold, Mapping.pixelThresholdRange.lowerBound), Mapping.pixelThresholdRange.upperBound)
+        }
         // Unknown names are ignored rather than rejected: a newer client may know profiles
         // this daemon does not, and keeping the config's own is the safe answer.
         if p.hasResourceProfile, let profile = ResourceProfile(rawValue: p.resourceProfile) {

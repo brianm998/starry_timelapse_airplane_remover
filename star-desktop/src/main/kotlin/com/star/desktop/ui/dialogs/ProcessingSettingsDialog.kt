@@ -456,6 +456,7 @@ internal sealed interface ExpertField {
 internal val FIELD_HELP: Map<String, List<String>> = mapOf(
     "Neighbor frames" to listOf("setting_help.neighbor_frames"),
     "Static neighbor frames" to listOf("setting_help.static_neighbor_frames"),
+    "Pixel threshold" to listOf("setting_help.pixel_threshold"),
     "Max keypoints" to listOf("setting_help.max_keypoints"),
     "Ground horizon extension" to listOf("setting_help.ground_horizon_extension"),
     "Sky horizon extension" to listOf("setting_help.sky_horizon_extension"),
@@ -561,6 +562,9 @@ internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
     // Only a camera that did not move has frames whose horizons can be merged; a moving camera uses the aligned neighbors above.
     IntField("Static neighbor frames", "ui.static_neighbor_frame_count", { it.numberStaticNeighborFrames }, { b, v -> b.setNumberStaticNeighborFrames(v) }, 1, 1000, { it.hasNumberStaticNeighborFrames() },
         enabled = { it.cameraFixed }, maxForFrames = { it - 1 }),
+    // How far a pixel may be from its neighbours' before it is thrown out and replaced.  The macOS gui has had this row (and a right-panel slider) all along.
+    DoubleField("Pixel threshold", "ui.pixel_threshold", { it.pixelThreshold }, { b, v -> b.setPixelThreshold(v) }, { it.hasPixelThreshold() },
+        min = 0.001, max = 10.0),
     IntField("Max keypoints", "ui.max_keypoints", { it.alignmentMaxKeypoints }, { b, v -> b.setAlignmentMaxKeypoints(v) }, 4, 10000, { it.hasAlignmentMaxKeypoints() }),
     IntField("Ground horizon extension", "ui.ground_horizon_extension", { it.alignmentGroundHorizonExtension }, { b, v -> b.setAlignmentGroundHorizonExtension(v) }, 0, 10000, { it.hasAlignmentGroundHorizonExtension() }),
     IntField("Sky horizon extension", "ui.sky_horizon_extension", { it.alignmentSkyHorizonExtension }, { b, v -> b.setAlignmentSkyHorizonExtension(v) }, 0, 10000, { it.hasAlignmentSkyHorizonExtension() }),

@@ -137,6 +137,37 @@ final class ExpertConfigFieldsTests: XCTestCase {
         XCTAssertEqual(config.maxMatMemoryFraction, 0.5, accuracy: 1e-12)
     }
 
+    // MARK: - the pixel threshold (P2 of the parity plan: the Kotlin client had no control for it)
+
+    func testThePixelThresholdRoundTripsAndIsClampedToTheGuisRange() {
+        var config = Config()
+        XCTAssertEqual(config.pixelThreshold, 1.2, accuracy: 1e-12)
+        XCTAssertEqual(Mapping.protoConfig(config).pixelThreshold, 1.2, accuracy: 1e-12)
+        XCTAssertTrue(Mapping.protoConfig(config).hasPixelThreshold, "always sent, so the client's dialog shows the current value")
+
+        var p = Star_V1_Config()
+        p.pixelThreshold = 2.5
+        Mapping.applyExpertConfig(&config, from: p)
+        XCTAssertEqual(config.pixelThreshold, 2.5, accuracy: 1e-12)
+
+        for (sent, kept) in [(0.0, 0.001), (-1.0, 0.001), (0.0001, 0.001), (10.0, 10.0), (11.0, 10.0), (500.0, 10.0)] {
+            p.pixelThreshold = sent
+            Mapping.applyExpertConfig(&config, from: p)
+            XCTAssertEqual(config.pixelThreshold, kept, accuracy: 1e-12, "sent \(sent)")
+        }
+    }
+
+    func testANonNumberOrAnAbsentThresholdLeavesTheConfigAlone() {
+        var config = Config()
+        config.pixelThreshold = 3
+        var p = Star_V1_Config()
+        p.pixelThreshold = .nan
+        Mapping.applyExpertConfig(&config, from: p)
+        XCTAssertEqual(config.pixelThreshold, 3, accuracy: 1e-12)
+        Mapping.applyExpertConfig(&config, from: Star_V1_Config())
+        XCTAssertEqual(config.pixelThreshold, 3, accuracy: 1e-12)
+    }
+
     // MARK: - who chose the divisor
 
     /// `set(imageInfo:)` picks a divisor for a client that did not (`resolveAutomaticKeypointDivisor`), and must not pick one over the
