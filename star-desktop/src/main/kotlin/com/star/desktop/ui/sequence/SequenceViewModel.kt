@@ -697,7 +697,8 @@ class SequenceViewModel(
         fullResolutionJob?.cancel()
         if (wanted == null) return
         fullResolutionJob = scope.launch {
-            val ref = frames.previewPath(sessionId, wanted.first, wanted.second, com.star.proto.PreviewSize.PREVIEW_SIZE_ORIGINAL) ?: return@launch
+            val ref = frames.previewPath(sessionId, wanted.first, wanted.second, com.star.proto.PreviewSize.PREVIEW_SIZE_ORIGINAL, buildIfMissing = true)
+                ?: return@launch
             val bitmap = imageCache.loadUncached(ref.path) ?: return@launch
             if (_currentIndex.value == wanted.first && _viewMode.value == wanted.second) _fullResolution.value = bitmap
         }
@@ -1146,7 +1147,8 @@ class SequenceViewModel(
             var ref: com.star.proto.ImageRef? = null
             var resolvedMode: FrameViewMode? = null
             for (m in order) {
-                ref = frames.previewPath(sessionId, index, m)
+                // The mode asked for may be an aligned one the frame builds from its homographies; the fallbacks are what is already there.
+                ref = frames.previewPath(sessionId, index, m, buildIfMissing = m == mode)
                 if (ref != null) { resolvedMode = m; break }
             }
             if (ref == null) {

@@ -278,13 +278,19 @@ class StarClient(private val conn: StdioConnection) {
             com.star.proto.FrameEtaResponse.parser(),
         )
 
-    /** The frame's image for [viewMode] at [size]: the preview by default, the filmstrip's thumbnail, or an 8-bit copy of the full-size image. */
+    /**
+     * The frame's image for [viewMode] at [size]: the preview by default, the filmstrip's thumbnail, or an 8-bit copy of the full-size image.
+     * With [buildIfMissing] a star or earth aligned image the default mode never wrote is built from the frame's homographies: set it for the
+     * frame being looked at, not for a thumbnail or a prefetch.
+     */
     suspend fun getFramePreview(
         sessionId: String, frameIndex: Int, viewMode: FrameViewMode, size: PreviewSize = PreviewSize.PREVIEW_SIZE_PREVIEW,
+        buildIfMissing: Boolean = false,
     ): ImageRef =
         call(
             "Frame.GetPreview",
-            GetFramePreviewRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setViewMode(viewMode).setSize(size).build(),
+            GetFramePreviewRequest.newBuilder().setSessionId(sessionId).setFrameIndex(frameIndex).setViewMode(viewMode).setSize(size)
+                .setBuildIfMissing(buildIfMissing).build(),
             ImageRef.parser(),
         )
 

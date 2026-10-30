@@ -503,6 +503,11 @@ message GetFramePreviewRequest {
   int32         frame_index = 2;
   FrameViewMode view_mode   = 3;
   PreviewSize   size        = 4;   // default: the preview
+  // The aligned views (VIEW_STAR_ALIGNED, VIEW_EARTH_ALIGNED) are not written in the default mode.  A frame that has the homographies for
+  // one (`available_modes` lists it) builds the image when this is set: a warp of its neighbours and a full-size file, so it is asked
+  // only for the frame the user is looking at (as the macOS gui does when it opens one), never for a thumbnail or a prefetch.
+  // Ignored for every other view mode, and for an aligned image that is already on disk.
+  bool          build_if_missing = 5;
 }
 
 // How large an image Frame.GetPreview returns.  THUMBNAIL is the small one the filmstrip draws (a view mode that has none

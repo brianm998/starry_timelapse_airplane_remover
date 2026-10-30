@@ -230,6 +230,61 @@ final class SessionCloseTests: XCTestCase {
         await session.close()
     }
 
+    // MARK: - Aligned views built on demand (Q3)
+
+    /// The default mode never writes a frame's aligned images, so a processed frame has them only as something it can build from its
+    /// homographies; the picker offers them as the macOS gui's does (`FrameViewModel.hasImage`), the star one and the earth one apart.
+    func testAFrameOffersTheAlignedImagesItCanBuild() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+        let database = await session.configManager.homographyDatabase
+
+        let before = await Mapping.frameInfo(frame: frame, outlierGroups: nil)
+        XCTAssertEqual(before.availableModes, [.viewOriginal], "no homographies, nothing to build from")
+
+        try await database.write(frameIndex: 0, type: .star, results: HomographyResultsCodable(for: 0, with: []))
+        let star = await Mapping.frameInfo(frame: frame, outlierGroups: nil)
+        XCTAssertEqual(star.availableModes, [.viewOriginal, .viewStarAligned])
+
+        try await database.write(frameIndex: 0, type: .earth, results: HomographyResultsCodable(for: 0, with: []))
+        let both = await Mapping.frameInfo(frame: frame, outlierGroups: nil)
+        XCTAssertEqual(Set(both.availableModes), [.viewOriginal, .viewStarAligned, .viewEarthAligned])
+        await session.close()
+    }
+
+    /// A build is asked for only when the image is one of the two the default mode skips, is not there, and the frame can make it:
+    /// anything else is the preview's own business, and a frame with nothing to build from has nothing to start.
+    func testOnlyAMissingAlignedImageThatCanBeBuiltNeedsBuilding() async throws {
+        let session = try await makeSession()
+        try await session.buildFrameGraph()
+        let first = await session.frame(at: 0)
+        let frame = try XCTUnwrap(first)
+        let database = await session.configManager.homographyDatabase
+
+        let originalNeeds = await PreviewFiles.alignedImageNeedsBuilding(for: frame, mode: .original)
+        XCTAssertFalse(originalNeeds, "the original is a file of its own")
+        let withoutHomographies = await PreviewFiles.alignedImageNeedsBuilding(for: frame, mode: .starAligned)
+        XCTAssertFalse(withoutHomographies, "nothing to build it from")
+
+        try await database.write(frameIndex: 0, type: .star, results: HomographyResultsCodable(for: 0, with: []))
+        let withHomographies = await PreviewFiles.alignedImageNeedsBuilding(for: frame, mode: .starAligned)
+        XCTAssertTrue(withHomographies)
+        let otherKind = await PreviewFiles.alignedImageNeedsBuilding(for: frame, mode: .earthAligned)
+        XCTAssertFalse(otherKind, "only the star homographies are stored")
+        let notACache = await PreviewFiles.alignedImageNeedsBuilding(for: frame, mode: .final)
+        XCTAssertFalse(notACache)
+
+        // Once the full-size file is there it is not built again.
+        let path = try XCTUnwrap(frame.imageAccessor.nameForImage(frameIndex: 0, ofType: .starAligned, atSize: .original))
+        try FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: path, contents: Data([0]))
+        let built = await PreviewFiles.alignedImageNeedsBuilding(for: frame, mode: .starAligned)
+        XCTAssertFalse(built)
+        await session.close()
+    }
+
     // MARK: - Per-frame settings (E4)
 
     /// A frame's own clean method is an override in the config, so it is still there when the session is opened again; and the frame's

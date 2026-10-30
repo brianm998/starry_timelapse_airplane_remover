@@ -62,13 +62,19 @@ enum Mapping {
         }
     }
 
-    /// The images [frame] has on disk now that a client can ask for; the original is always among them.
-    static func availableModes(of frame: FrameAirplaneRemover) -> [Star_V1_FrameViewMode] {
-        StarCore.FrameViewMode.allCases.compactMap { type in
-            guard let mode = protoFrameViewMode(type) else { return nil }
-            if type == .original { return mode }
-            return frame.imageAccessor.imageExists(frameIndex: frame.frameIndex, ofType: type, atSize: .original) ? mode : nil
+    /// The images [frame] has on disk now that a client can ask for, and the aligned ones it can build from its homographies (the
+    /// default mode never writes them, so a frame that was processed has them only this way, as the macOS gui offers them: see
+    /// `FrameViewModel.hasImage`); the original is always among them.
+    static func availableModes(of frame: FrameAirplaneRemover) async -> [Star_V1_FrameViewMode] {
+        var modes: [Star_V1_FrameViewMode] = []
+        for type in StarCore.FrameViewMode.allCases {
+            guard let mode = protoFrameViewMode(type) else { continue }
+            var offered = type == .original
+                || frame.imageAccessor.imageExists(frameIndex: frame.frameIndex, ofType: type, atSize: .original)
+            if !offered, type.isRecomputableCache { offered = await frame.canProduceAlignedImage(of: type) }
+            if offered { modes.append(mode) }
         }
+        return modes
     }
 
     // MARK: - FrameProcessingState
@@ -610,7 +616,7 @@ enum Mapping {
             fi.outliersLoaded       = true
         }
         fi.notExtracted = !frame.imageAccessor.imageSequence.source.isAvailable(frame.frameIndex)
-        fi.availableModes = availableModes(of: frame)
+        fi.availableModes = await availableModes(of: frame)
         if let path = frame.imageAccessor.nameForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original) {
             fi.filename = (path as NSString).lastPathComponent
         }

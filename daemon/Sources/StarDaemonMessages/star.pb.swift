@@ -2626,6 +2626,12 @@ public struct Star_V1_GetFramePreviewRequest: Sendable {
   /// default: the preview
   public var size: Star_V1_PreviewSize = .preview
 
+  /// The aligned views (VIEW_STAR_ALIGNED, VIEW_EARTH_ALIGNED) are not written in the default mode.  A frame that has the homographies for
+  /// one (`available_modes` lists it) builds the image when this is set: a warp of its neighbours and a full-size file, so it is asked
+  /// only for the frame the user is looking at (as the macOS gui does when it opens one), never for a thumbnail or a prefetch.
+  /// Ignored for every other view mode, and for an aligned image that is already on disk.
+  public var buildIfMissing: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -7199,7 +7205,7 @@ extension Star_V1_FrameInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
 
 extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetFramePreviewRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}view_mode\0\u{1}size\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}view_mode\0\u{1}size\0\u{3}build_if_missing\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7211,6 +7217,7 @@ extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._
       case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
       case 3: try { try decoder.decodeSingularEnumField(value: &self.viewMode) }()
       case 4: try { try decoder.decodeSingularEnumField(value: &self.size) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.buildIfMissing) }()
       default: break
       }
     }
@@ -7229,6 +7236,9 @@ extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._
     if self.size != .preview {
       try visitor.visitSingularEnumField(value: self.size, fieldNumber: 4)
     }
+    if self.buildIfMissing != false {
+      try visitor.visitSingularBoolField(value: self.buildIfMissing, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7237,6 +7247,7 @@ extension Star_V1_GetFramePreviewRequest: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.frameIndex != rhs.frameIndex {return false}
     if lhs.viewMode != rhs.viewMode {return false}
     if lhs.size != rhs.size {return false}
+    if lhs.buildIfMissing != rhs.buildIfMissing {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

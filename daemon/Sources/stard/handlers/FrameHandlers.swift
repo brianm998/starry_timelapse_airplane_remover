@@ -50,6 +50,9 @@ enum FrameHandlers {
             // would fail and the Kotlin client would show blank frames forever.  For .original this
             // always succeeds (the source frame exists); for processed/aligned types it only
             // succeeds once processing has written that full-resolution image.
+            // An aligned view the default mode never wrote: the frame the client is looking at builds it from its homographies.
+            if req.buildIfMissing { await PreviewFiles.buildAlignedImageIfNeeded(for: frame, mode: starViewMode) }
+
             let ref: Star_V1_ImageRef?
             switch req.size {
             case .original:

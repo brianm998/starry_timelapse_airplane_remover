@@ -21,12 +21,13 @@ class FrameRepository(private val clientProvider: () -> StarClient?) {
 
     suspend fun info(sessionId: String, frameIndex: Int): FrameInfo = c().getFrame(sessionId, frameIndex)
 
-    /** Preview image path for [viewMode], or null if not generated yet. */
+    /** Preview image path for [viewMode], or null if not generated yet. [buildIfMissing]: see [StarClient.getFramePreview]. */
     suspend fun previewPath(
         sessionId: String, frameIndex: Int, viewMode: FrameViewMode, size: PreviewSize = PreviewSize.PREVIEW_SIZE_PREVIEW,
+        buildIfMissing: Boolean = false,
     ): ImageRef? =
         // A frame that is not extracted from its video yet is an answer, not a failure: it has no picture, and the placeholder says why.
-        notReadyToNull { c().getFramePreview(sessionId, frameIndex, viewMode, size) }?.takeUnless { it.notExtracted }
+        notReadyToNull { c().getFramePreview(sessionId, frameIndex, viewMode, size, buildIfMissing) }?.takeUnless { it.notExtracted }
 
     /** Ask for [viewing] and the frames in [nearby] to be extracted first; a failure is not worth telling anyone (the frames come in order anyway). */
     suspend fun prioritize(sessionId: String, viewing: Int, nearby: List<IntRange>) {
