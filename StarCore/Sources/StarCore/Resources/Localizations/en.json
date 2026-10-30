@@ -756,6 +756,7 @@
   "ui.remove": "Remove",
   "ui.remove_all": "Remove All",
   "ui.remove_all_of_the_outlier_groups_in_the": "remove all of the outlier groups in the frame",
+  "ui.remove_from_recent": "Remove this sequence from the recent list",
   "ui.render": "Render",
   "ui.render_all_frames": "Render All Frames",
   "ui.render_all_frames_of_this_sequence_with": "Render all frames of this sequence with current settings",

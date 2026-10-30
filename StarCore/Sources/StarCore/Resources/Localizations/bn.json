@@ -820,6 +820,7 @@
   "ui.remove": "সরান",
   "ui.remove_all": "সব সরান",
   "ui.remove_all_of_the_outlier_groups_in_the": "ফ্রেমের সব আউটলায়ার গ্রুপ সরান",
+  "ui.remove_from_recent": "এই সিকোয়েন্সটি সাম্প্রতিক তালিকা থেকে সরান",
   "ui.render": "রেন্ডার",
   "ui.render_all_frames": "সব ফ্রেম রেন্ডার করুন",
   "ui.render_all_frames_of_this_sequence_with": "বর্তমান সেটিংস দিয়ে এই সিকোয়েন্সের সব ফ্রেম রেন্ডার করুন",

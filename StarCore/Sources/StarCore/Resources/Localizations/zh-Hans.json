@@ -820,6 +820,7 @@
   "ui.remove": "移除",
   "ui.remove_all": "全部移除",
   "ui.remove_all_of_the_outlier_groups_in_the": "移除帧中的所有离群组",
+  "ui.remove_from_recent": "从最近使用列表中移除此序列",
   "ui.render": "渲染",
   "ui.render_all_frames": "渲染所有帧",
   "ui.render_all_frames_of_this_sequence_with": "使用当前设置渲染此序列的所有帧",

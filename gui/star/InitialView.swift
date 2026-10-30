@@ -118,6 +118,14 @@ struct InitialView: View {
                       // appearance is; without this the menu's text is dark on dark
                       .environment(\.colorScheme, .dark)
                       .foregroundColor(.white)
+                    // the desktop client lists the recents with a ✕ on each; here it takes off the one the picker shows
+                    Button(action: self.removeSelectedRecent) {
+                        Image(systemName: "xmark.circle")
+                          .foregroundColor(.white)
+                    }
+                      .buttonStyle(.plain)
+                      .help(localized("ui.remove_from_recent"))
+                      .disabled(previously_opened_sheet_showing_item.isEmpty)
                 }
                 Spacer()
             }
@@ -145,6 +153,13 @@ struct InitialView: View {
               }
         }
           .background(.clear)
+    }
+
+    private func removeSelectedRecent() {
+        let removed = previously_opened_sheet_showing_item
+        let list = viewModel.userPreferences.sortedSequenceList
+        viewModel.userPreferences.removeFromRecent(filename: removed)
+        previously_opened_sheet_showing_item = UserPreferences.recentSelection(afterRemoving: removed, from: list)
     }
 
     func handleDrop(providers: [NSItemProvider]) -> Bool {

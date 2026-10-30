@@ -32,6 +32,17 @@ class StartScreenTest {
         for (c in controls) assertTrue("HoverTip(localized(\"${c["tip"].asString}\"))" in source, "${c["id"]} has no hover text")
     }
 
+    @Test fun aRecentCanBeRemovedAndSaysSo() {
+        val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/initial/InitialView.kt")
+        val key = JsonParser.parseString(read("gherkin/ui/vectors/startScreen.json")).asJsonObject["removeRecent"].asString
+        assertTrue("HoverTip(localized(\"$key\"))" in source, "the remove button has no hover text")
+        Strings.setOverride("en")
+        val english = localized(key)
+        assertNotEquals(key, english, "$key is missing from the catalogue")
+        Strings.setOverride("de")
+        assertNotEquals(english, localized(key), "$key is English in German")
+    }
+
     @Test fun theyAreTranslated() {
         Strings.setOverride("en")
         val english = controls.flatMap { listOf(it["label"].asString, it["tip"].asString) }.associateWith { localized(it) }

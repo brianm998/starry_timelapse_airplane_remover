@@ -1,4 +1,5 @@
 import SwiftUI
+import StarCore
 
 /// A generic “tap to edit” numeric editor supporting Int or Double.
 struct EditableNumberView<Value>: View
@@ -66,6 +67,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
         let currentString = String(value)
 
         if isEditing || alwaysOpen {
+          VStack(alignment: .trailing, spacing: 2) {
             HStack {
                 if let prefix = prefixText {
                     Text(prefix)
@@ -74,6 +76,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
 
                 TextField(currentString, text: $editText)
                   .focused(focusedField, equals: focusField)
+                  .foregroundColor(problem == nil ? nil : .red)
                   .frame(maxWidth: 60)
                   .cursor(.arrow)
                   .onSubmit {
@@ -99,6 +102,14 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
                 Text(suffixTextProvider(value))
                   .foregroundColor(textColor)
             }
+            // The desktop client's inline validation: what is typed is not one this field takes, and what would be (it is put back when
+            // the field is left, as it always was).
+            if let problem {
+                Text(problem)
+                  .font(.caption)
+                  .foregroundColor(.red)
+            }
+          }
         } else {
             Text(fullTextProvider(value))
               .foregroundColor(textColor)
@@ -110,6 +121,26 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
                   isEditing = true
               }
         }
+    }
+
+    /// What is wrong with the text being typed, if anything.
+    private var problem: String? {
+        guard isEditing || alwaysOpen else { return nil }
+        return Self.validationMessage(for: editText, min: minValue, max: maxValue, allowDecimal: allowDecimal)
+    }
+
+    /// "Enter a whole number from 1 to 1000" when [text] is not a number from [min] to [max] (inclusive), else nil: the line the desktop
+    /// client shows under a number field, in the same words (`ui.enter_a_whole_number_from_a_to_b`, `ui.enter_a_number_from_a_to_b`).
+    static func validationMessage(for text: String, min: Value, max: Value, allowDecimal: Bool) -> String? {
+        let allowed: CharacterSet = allowDecimal ? CharacterSet(charactersIn: "0123456789.") : CharacterSet.decimalDigits
+        let filtered = String(text.unicodeScalars.filter { allowed.contains($0) })
+        if let value = Value(filtered), value >= min, value <= max { return nil }
+        // "4" or "0.001", never "4.0"
+        func bound(_ value: Value) -> String {
+            let text = String(value)
+            return text.hasSuffix(".0") ? String(text.dropLast(2)) : text
+        }
+        return localized(allowDecimal ? "ui.enter_a_number_from_a_to_b" : "ui.enter_a_whole_number_from_a_to_b", bound(min), bound(max))
     }
 
     /// Validates and commits the edited text, then exits edit mode.  A value that is not valid is put back, and one that

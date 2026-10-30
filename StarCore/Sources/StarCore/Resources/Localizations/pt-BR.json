@@ -820,6 +820,7 @@
   "ui.remove": "Remover",
   "ui.remove_all": "Remover tudo",
   "ui.remove_all_of_the_outlier_groups_in_the": "remover todos os grupos discrepantes do quadro",
+  "ui.remove_from_recent": "Remover esta sequência da lista de recentes",
   "ui.render": "Renderizar",
   "ui.render_all_frames": "Renderizar todos os quadros",
   "ui.render_all_frames_of_this_sequence_with": "Renderizar todos os quadros desta sequência com os ajustes atuais",

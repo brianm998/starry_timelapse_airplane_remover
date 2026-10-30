@@ -69,8 +69,27 @@ private fun runApp(args: Array<String>) = application {
     val mainTitle = com.star.desktop.domain.WindowTitle.of(
         if (mainScreen is com.star.desktop.ui.app.AppScreen.Sequence) openSession?.config?.imageSequenceDirname else null,
     )
+    // A Mac's window closes and the app stays (the gui's behaviour, D10); the Dock icon, or the app coming to the front, shows it again.
+    val mainVisible by vm.mainWindowVisible.collectAsState()
+    LaunchedEffect(vm) {
+        runCatching {
+            val desktop = java.awt.Desktop.getDesktop()
+            if (java.awt.Desktop.isDesktopSupported() && desktop.isSupported(java.awt.Desktop.Action.APP_EVENT_REOPENED)) {
+                desktop.addAppEventListener(object : java.awt.desktop.AppReopenedListener {
+                    override fun appReopened(e: java.awt.desktop.AppReopenedEvent) { vm.reopenMainWindow() }
+                })
+            }
+            if (java.awt.Desktop.isDesktopSupported() && desktop.isSupported(java.awt.Desktop.Action.APP_EVENT_FOREGROUND)) {
+                desktop.addAppEventListener(object : java.awt.desktop.AppForegroundListener {
+                    override fun appRaisedToForeground(e: java.awt.desktop.AppForegroundEvent) { vm.reopenMainWindow() }
+                    override fun appMovedToBackground(e: java.awt.desktop.AppForegroundEvent) {}
+                })
+            }
+        }
+    }
     Window(
-        onCloseRequest = vm::requestQuit,
+        visible = mainVisible,
+        onCloseRequest = vm::requestCloseWindow,
         title = mainTitle,
         state = rememberWindowState(size = DpSize(1280.dp, 800.dp)),
         onKeyEvent = { handleGlobalKey(it, vm) },

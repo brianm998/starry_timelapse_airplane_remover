@@ -820,6 +820,7 @@
   "ui.remove": "Usuń",
   "ui.remove_all": "Usuń wszystko",
   "ui.remove_all_of_the_outlier_groups_in_the": "usuń wszystkie grupy odstające w klatce",
+  "ui.remove_from_recent": "Usuń tę sekwencję z listy ostatnich",
   "ui.render": "Renderuj",
   "ui.render_all_frames": "Renderuj wszystkie klatki",
   "ui.render_all_frames_of_this_sequence_with": "Renderuj wszystkie klatki tej sekwencji z bieżącymi ustawieniami",

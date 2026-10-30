@@ -820,6 +820,7 @@
   "ui.remove": "Supprimer",
   "ui.remove_all": "Tout supprimer",
   "ui.remove_all_of_the_outlier_groups_in_the": "supprimer tous les groupes aberrants de l'image",
+  "ui.remove_from_recent": "Supprimer cette séquence de la liste des éléments récents",
   "ui.render": "Rendre",
   "ui.render_all_frames": "Rendre toutes les images",
   "ui.render_all_frames_of_this_sequence_with": "Rendre toutes les images de cette séquence avec les réglages actuels",

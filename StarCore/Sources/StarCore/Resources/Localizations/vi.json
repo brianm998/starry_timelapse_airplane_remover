@@ -820,6 +820,7 @@
   "ui.remove": "Loại bỏ",
   "ui.remove_all": "Loại bỏ tất cả",
   "ui.remove_all_of_the_outlier_groups_in_the": "loại bỏ mọi nhóm ngoại lai trong khung",
+  "ui.remove_from_recent": "Loại bỏ chuỗi này khỏi danh sách gần đây",
   "ui.render": "Kết xuất",
   "ui.render_all_frames": "Kết xuất mọi khung",
   "ui.render_all_frames_of_this_sequence_with": "Kết xuất mọi khung của chuỗi này với cài đặt hiện tại",

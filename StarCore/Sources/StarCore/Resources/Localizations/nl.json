@@ -820,6 +820,7 @@
   "ui.remove": "Verwijder",
   "ui.remove_all": "Alles verwijderen",
   "ui.remove_all_of_the_outlier_groups_in_the": "alle uitschietersgroepen in het beeld verwijderen",
+  "ui.remove_from_recent": "Verwijder deze reeks uit de recente lijst",
   "ui.render": "Renderen",
   "ui.render_all_frames": "Alle beelden renderen",
   "ui.render_all_frames_of_this_sequence_with": "Alle beelden van deze reeks renderen met de huidige instellingen",

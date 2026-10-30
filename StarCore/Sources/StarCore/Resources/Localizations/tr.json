@@ -820,6 +820,7 @@
   "ui.remove": "Kaldır",
   "ui.remove_all": "Tümünü kaldır",
   "ui.remove_all_of_the_outlier_groups_in_the": "karedeki tüm aykırı grupları kaldır",
+  "ui.remove_from_recent": "Bu diziyi son kullanılanlar listesinden kaldır",
   "ui.render": "Oluştur",
   "ui.render_all_frames": "Tüm kareleri oluştur",
   "ui.render_all_frames_of_this_sequence_with": "Bu dizinin tüm karelerini geçerli ayarlarla oluştur",
