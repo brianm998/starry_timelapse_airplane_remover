@@ -807,7 +807,7 @@ struct HorizonPainterToolbarView: View {
                 let indices = viewModel.horizonPainterStartupFrameIndices
                 let pos     = viewModel.horizonPainterStartupFramePosition
                 let hasMore = !indices.isEmpty && pos + 1 < indices.count
-                Label(hasMore ? "Next" : "Continue", systemImage: "checkmark.circle.fill")
+                Label(localized(hasMore ? "ui.next" : "ui.continue"), systemImage: "checkmark.circle.fill")
             } else {
                 Label(localized("ui.save_reference_horizon"), systemImage: "checkmark.circle.fill")
             }

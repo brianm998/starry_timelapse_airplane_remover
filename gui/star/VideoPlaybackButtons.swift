@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import StarCore
 
 // an HStack of buttons to advance backwards and fowards through the sequence
 struct VideoPlaybackButtons : View {
@@ -25,10 +26,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "backward.end.fill",
                              shortcutKey: start_shortcut_key,
                              color: button_color,
-                             toolTip: """
-                               go to start of sequence
-                               (keyboard shortcut '\(start_shortcut_key.character)')
-                               """)
+                             toolTip: localized("ui.transport_first_frame"))
                 {
                     viewModel.goToFirstFrameButtonAction()
                 }
@@ -37,10 +35,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "backward.fill",
                             shortcutKey: fast_previous_shortcut_key,
                             color: button_color,
-                            toolTip: """
-                              back \(viewModel.fastSkipAmount) frames
-                              (keyboard shortcut '\(fast_previous_shortcut_key.character)')
-                              """)
+                            toolTip: localized("ui.transport_back_frames", viewModel.fastSkipAmount))
                 {
                     viewModel.fastPreviousButtonAction()
                 }
@@ -49,10 +44,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "backward.frame.fill",
                              shortcutKey: previous_shortcut_key,
                              color: button_color,
-                             toolTip: """
-                               back one frame
-                               (keyboard shortcut left arrow)
-                               """)
+                             toolTip: localized("ui.transport_previous_frame"))
                 {
                     viewModel.transition(numberOfFrames: -1)
                 }
@@ -63,10 +55,7 @@ struct VideoPlaybackButtons : View {
                              color: button_color,
                              size: buttonSize,
                              shortcutEnabled: !viewModel.isShowingHorizonPainter,
-                             toolTip: """
-                               play in reverse
-                               (keyboard shortcut '\(backwards_shortcut_key)')
-                               """)
+                             toolTip: localized("ui.transport_play_reverse"))
                 {
                     viewModel.videoPlayMode = .reverse
                     viewModel.togglePlay()
@@ -90,9 +79,7 @@ struct VideoPlaybackButtons : View {
                              color: viewModel.videoPlaying ? .blue : button_color,
                              size: buttonSize,
                              shortcutEnabled: !viewModel.isShowingHorizonPainter,
-                             toolTip: """
-                               Play / Pause
-                               """)
+                             toolTip: localized(viewModel.videoPlaying ? "ui.transport_pause" : "ui.transport_play"))
                 {
                     viewModel.videoPlayMode = .forward
                     viewModel.togglePlay()
@@ -105,10 +92,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "forward.frame.fill",
                              shortcutKey: .rightArrow,
                              color: button_color,
-                             toolTip: """
-                               forward one frame
-                               (keyboard shortcut right arrow)
-                               """)
+                             toolTip: localized("ui.transport_next_frame"))
                 {
                     viewModel.transition(numberOfFrames: 1)
                 }
@@ -117,10 +101,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "forward.fill",
                              shortcutKey: fast_next_shortcut_key,
                              color: button_color,
-                             toolTip: """
-                               forward \(viewModel.fastSkipAmount) frames
-                               (keyboard shortcut '\(fast_next_shortcut_key.character)')
-                               """)
+                             toolTip: localized("ui.transport_forward_frames", viewModel.fastSkipAmount))
                 {
                     viewModel.fastForwardButtonAction()
                 }
@@ -130,10 +111,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "forward.end.fill",
                              shortcutKey: end_button_shortcut_key,
                              color: button_color,
-                             toolTip: """
-                               advance to end of sequence
-                               (keyboard shortcut '\(end_button_shortcut_key.character)')
-                               """)
+                             toolTip: localized("ui.transport_last_frame"))
                 {
                     viewModel.goToLastFrameButtonAction()
                 }
