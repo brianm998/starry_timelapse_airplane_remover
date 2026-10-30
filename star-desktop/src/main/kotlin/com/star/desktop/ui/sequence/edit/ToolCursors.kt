@@ -36,16 +36,13 @@ object ToolCursors {
     }
 
     /**
-     * The cursor's asset base for hovering a group, or null for the system arrow. It shows what a click does: Remove always removes
-     * and Keep always keeps (this client's tools set a decision rather than toggle it, which is what their help text says), so the
-     * cursor is the tool's own; the tools that toggle show the opposite of the group's present decision.
+     * The cursor's asset base for hovering a group, or null for the system arrow. It shows what a click does: Trash and Information
+     * have their own, and every other tool toggles, so shows the opposite of the group's present decision (macOS `currentCursor`).
      */
     internal fun groupCursorBase(tool: ToolType, willRemove: Boolean?): String? = when (tool) {
         ToolType.NONE -> null
         ToolType.TRASH -> "delete_trash"
         ToolType.INFORMATION -> "info"
-        ToolType.REMOVE -> "remove"
-        ToolType.KEEP -> "keep"
         else -> if (willRemove == true) "keep" else "remove"
     }
 

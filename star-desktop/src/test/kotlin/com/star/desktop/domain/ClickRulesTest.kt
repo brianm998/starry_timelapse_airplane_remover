@@ -13,9 +13,15 @@ class ClickRulesTest {
         }
     }
 
-    @Test fun theMultiToolAlwaysOpensTheSheet() {
-        assertEquals(GroupClick.OPEN_MULTI_CHOICE, ClickRules.groupClick(ToolType.MULTI, multiChoice = false, decided = false))
-        assertEquals(GroupClick.OPEN_MULTI_CHOICE, ClickRules.groupClick(ToolType.MULTI, multiChoice = false, decided = true))
+    /** E2 of the parity plan: with the switch off the Multi tool's click toggles, as in the macOS app; it was always the sheet here. */
+    @Test fun theMultiToolWithTheSwitchOffTogglesLikeAnyOther() {
+        assertEquals(GroupClick.APPLY_TOOL, ClickRules.groupClick(ToolType.MULTI, multiChoice = false, decided = false))
+        assertEquals(GroupClick.APPLY_TOOL, ClickRules.groupClick(ToolType.MULTI, multiChoice = false, decided = true))
+    }
+
+    @Test fun theMultiToolWithTheSwitchOnOpensTheSheetOnADecidedGroup() {
+        assertEquals(GroupClick.OPEN_MULTI_CHOICE, ClickRules.groupClick(ToolType.MULTI, multiChoice = true, decided = true))
+        assertEquals(GroupClick.APPLY_TOOL, ClickRules.groupClick(ToolType.MULTI, multiChoice = true, decided = false))
     }
 
     /** The switch: any tool, but only on a group that has a decision. */
