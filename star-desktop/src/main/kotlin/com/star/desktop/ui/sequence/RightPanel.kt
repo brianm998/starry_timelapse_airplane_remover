@@ -287,7 +287,10 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
     }
 
     // How much of the machine a run may take, between the neighbour count and the render button as in the gui (Q5), pinned to the right.
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) { com.star.desktop.ui.dialogs.ResourceProfileControl(app) }
+    val stepReport by vm.stepProgress.collectAsState()
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+        com.star.desktop.ui.dialogs.ResourceProfileControl(app, com.star.desktop.domain.ResourceStatus.text(stepReport))
+    }
 
     // Writes the frame's decisions into its finished image; there is nothing to write until its outliers are loaded.
     // (macOS dropped the "re-process the next N frames" controls that used to sit above this, so they are gone here too.)

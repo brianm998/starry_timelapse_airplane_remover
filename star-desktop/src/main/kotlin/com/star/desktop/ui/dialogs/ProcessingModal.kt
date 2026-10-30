@@ -112,7 +112,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                     if (overall != null) Text(overall, color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, modifier = Modifier.testTag("processing.overall"))
                     if (headline != null) Text(headline, color = StarColors.white.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.testTag("processing.headline"))
                 }
-                ResourceProfileControl(app)
+                ResourceProfileControl(app, com.star.desktop.domain.ResourceStatus.text(report))
             }
             HorizontalDivider(color = StarColors.cellDefault)
 
@@ -268,7 +268,7 @@ private fun StepBar(step: StepRow, modifier: Modifier = Modifier) {
  * settings sheet, and in the right panel's Processing section, where the gui has it (Q5).
  */
 @Composable
-internal fun ResourceProfileControl(app: AppViewModel) {
+internal fun ResourceProfileControl(app: AppViewModel, status: String? = null) {
     val session by app.sessions.session.collectAsState()
     val current = session?.config?.takeIf { it.hasResourceProfile() }?.resourceProfile ?: "full"
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -289,6 +289,8 @@ internal fun ResourceProfileControl(app: AppViewModel) {
                 )
             }
         }
+        // "Limited by: GPU" while a run is going (the gui samples the governor every five seconds; the daemon reports it with the steps).
+        if (status != null) Text(status, color = StarColors.textDisabled, fontSize = 10.sp)
     }
 }
 

@@ -853,6 +853,8 @@ message StepProgress {
   repeated StepCount steps = 1;   // in the order the modal stacks them
   bool   graph_built       = 2;   // the run's plan is complete, so a step with nothing to do has been left out; until then every step is listed
   string status            = 3;   // what the run is doing when it cannot be counted in operations (a horizon refinement); empty otherwise
+  string limited_by        = 4;   // the resource the governor says is holding the run back (StarCore `LimitingResource.description`: "disk <volume>", "GPU", "CPU", "memory"); empty when none is
+  bool   resources_sampled = 5;   // the governor has sampled the machine, so `limited_by` empty means "not limited" and not "not known yet"
 }
 
 // How far a previous run got on the open sequence, read off what it left on disk at the time of the call (macOS SequenceProgressSurvey,

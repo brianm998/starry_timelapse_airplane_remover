@@ -553,7 +553,8 @@ actor Session {
     private func reportSteps(generation: Int) async {
         guard let context = stepReports, context.generation == generation, activeRun == generation, !closed else { return }
         let report = StepProgressReport.make(types: context.types, now: await StepProgressReport.sample(),
-                                             baseline: context.baseline, status: context.status ?? waitingForFramesStatus())
+                                             baseline: context.baseline, status: context.status ?? waitingForFramesStatus(),
+                                             governor: await ResourceGovernor.shared.latest.map(StepProgressReport.GovernorVerdict.init))
         guard report != lastStepReport else { return }
         lastStepReport = report
         var prog = Star_V1_ProgressEvent()

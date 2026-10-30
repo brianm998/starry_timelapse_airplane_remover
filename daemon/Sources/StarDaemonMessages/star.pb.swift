@@ -3637,6 +3637,12 @@ public struct Star_V1_StepProgress: Sendable {
   /// what the run is doing when it cannot be counted in operations (a horizon refinement); empty otherwise
   public var status: String = String()
 
+  /// the resource the governor says is holding the run back (StarCore `LimitingResource.description`: "disk <volume>", "GPU", "CPU", "memory"); empty when none is
+  public var limitedBy: String = String()
+
+  /// the governor has sampled the machine, so `limited_by` empty means "not limited" and not "not known yet"
+  public var resourcesSampled: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -9145,7 +9151,7 @@ extension Star_V1_StepCount: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
 
 extension Star_V1_StepProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".StepProgress"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}steps\0\u{3}graph_built\0\u{1}status\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}steps\0\u{3}graph_built\0\u{1}status\0\u{3}limited_by\0\u{3}resources_sampled\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9156,6 +9162,8 @@ extension Star_V1_StepProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.steps) }()
       case 2: try { try decoder.decodeSingularBoolField(value: &self.graphBuilt) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.limitedBy) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.resourcesSampled) }()
       default: break
       }
     }
@@ -9171,6 +9179,12 @@ extension Star_V1_StepProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
     if !self.status.isEmpty {
       try visitor.visitSingularStringField(value: self.status, fieldNumber: 3)
     }
+    if !self.limitedBy.isEmpty {
+      try visitor.visitSingularStringField(value: self.limitedBy, fieldNumber: 4)
+    }
+    if self.resourcesSampled != false {
+      try visitor.visitSingularBoolField(value: self.resourcesSampled, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -9178,6 +9192,8 @@ extension Star_V1_StepProgress: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
     if lhs.steps != rhs.steps {return false}
     if lhs.graphBuilt != rhs.graphBuilt {return false}
     if lhs.status != rhs.status {return false}
+    if lhs.limitedBy != rhs.limitedBy {return false}
+    if lhs.resourcesSampled != rhs.resourcesSampled {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
