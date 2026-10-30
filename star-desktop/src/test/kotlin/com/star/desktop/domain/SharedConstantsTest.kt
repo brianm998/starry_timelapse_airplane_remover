@@ -63,6 +63,17 @@ class SharedConstantsTest {
         assertTrue("CleanMethodTexts.autoPreservationDescriptionKey(true)" in dialog)
     }
 
+    /** S9: a byte count reads the same here as in the daemon's warnings (StarCore's `humanReadableBytes`). */
+    @Test fun byteCountsAreFormattedAsStarCoreDoes() {
+        val file = listOf(File("../gherkin/ui/vectors/byteFormat.json"), File("gherkin/ui/vectors/byteFormat.json")).first { it.isFile }
+        val cases = JsonParser.parseString(file.readText()).asJsonObject.getAsJsonArray("cases")
+        assertTrue(cases.size() > 10)
+        for (element in cases) {
+            val c = element.asJsonObject
+            assertEquals(c["expected"].asString, VideoImport.formatBytes(c["bytes"].asLong), "${c["bytes"]} bytes")
+        }
+    }
+
     @Test fun theKeypointDivisorChoicesAreTheStartupPromptsAndStarCores() {
         val k = doc.getAsJsonObject("keypointDivisor")
         assertEquals(k.getAsJsonArray("presets").map { it.asDouble }, KeypointDivisor.presets.map { it.divisor })

@@ -62,12 +62,21 @@ object VideoImport {
      */
     fun extractInBackgroundByDefault(probe: ProbeVideoResponse?): Boolean = probe != null && probe.known && probe.seekable
 
-    /** "1.4 GB": decimal units, as the file manager of the platforms star runs on shows sizes. */
+    /**
+     * "1.4GB": StarCore's `UInt64.humanReadableBytes`, which the daemon's own warnings use (`gherkin/ui/vectors/byteFormat.json` pins both).
+     * Binary units, so the numbers match `df`, in whichever of bytes, KB, MB and GB does not make the count meaningless; GB is the largest.
+     * It was decimal with a space ("1.4 GB"), so the same volume read differently here and in a warning from the daemon (S9).
+     */
     fun formatBytes(bytes: Long): String {
-        val units = listOf("bytes", "KB", "MB", "GB", "TB")
-        var value = bytes.toDouble()
-        var unit = 0
-        while (value >= 1000 && unit < units.size - 1) { value /= 1000; unit++ }
-        return if (unit == 0) "$bytes ${units[0]}" else "%.1f %s".format(java.util.Locale.ROOT, value, units[unit])
+        val kb = 1024.0
+        val mb = kb * 1024
+        val gb = mb * 1024
+        val value = bytes.toDouble()
+        return when {
+            value >= gb -> "%.1fGB".format(java.util.Locale.ROOT, value / gb)
+            value >= mb -> "%.0fMB".format(java.util.Locale.ROOT, value / mb)
+            value >= kb -> "%.0fKB".format(java.util.Locale.ROOT, value / kb)
+            else -> "$bytes bytes"
+        }
     }
 }

@@ -1,0 +1,69 @@
+{
+  "comment": "A byte count for a user to read: StarCore's `UInt64.humanReadableBytes` (binary units, so the numbers match `df`; GB is the largest unit). The desktop's `VideoImport.formatBytes` must say the same, since the dialogs there and the daemon's own warnings talk about the same volume. Each client's test checks its own formatter against these.",
+  "cases": [
+    {
+      "bytes": 0,
+      "expected": "0 bytes"
+    },
+    {
+      "bytes": 1,
+      "expected": "1 bytes"
+    },
+    {
+      "bytes": 512,
+      "expected": "512 bytes"
+    },
+    {
+      "bytes": 1023,
+      "expected": "1023 bytes"
+    },
+    {
+      "bytes": 1024,
+      "expected": "1KB"
+    },
+    {
+      "bytes": 1500,
+      "expected": "1KB"
+    },
+    {
+      "bytes": 2048,
+      "expected": "2KB"
+    },
+    {
+      "bytes": 10240,
+      "expected": "10KB"
+    },
+    {
+      "bytes": 1048576,
+      "expected": "1MB"
+    },
+    {
+      "bytes": 5242880,
+      "expected": "5MB"
+    },
+    {
+      "bytes": 52428800,
+      "expected": "50MB"
+    },
+    {
+      "bytes": 1073741824,
+      "expected": "1.0GB"
+    },
+    {
+      "bytes": 2300000000,
+      "expected": "2.1GB"
+    },
+    {
+      "bytes": 4831838208,
+      "expected": "4.5GB"
+    },
+    {
+      "bytes": 137438953472,
+      "expected": "128.0GB"
+    },
+    {
+      "bytes": 1649267441664,
+      "expected": "1536.0GB"
+    }
+  ]
+}
