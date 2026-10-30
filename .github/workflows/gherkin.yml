@@ -1,6 +1,8 @@
 name: Gherkin
 
-# One .feature file (gherkin/features/*.feature) driven through three Star clients, seven legs:
+# Eight scenario features (gherkin/features/*.feature) driven through three Star clients. ONE JOB PER (client, OS, feature):
+# the matrix of each client is generated (gherkin/generated/features-<client>.json) and every job runs exactly one feature
+# and fetches only the datasets it needs (gherkin/generated/feature-datasets-<client>.json). Legs:
 #   cli-linux, cli-windows, cli-macos  XCTest running the built `star` binary as a subprocess
 #   mac-gui                       XCUITest against Star.app (hosted macOS runners ship with UI automation
 #                                 mode enabled: no `automationmodetool` step here)
@@ -12,6 +14,10 @@ name: Gherkin
 # Every leg ends with a "vacuous green" check: it fails the job unless the log (or the Gradle XML) shows
 # exactly one test that ran, passed and was not skipped. Exit codes alone are not proof: xcodebuild
 # -only-testing matching nothing exits 0 having run nothing.
+#
+# The trail-removal features (removeAirplanes, autoPreservation…, selectiveRemovesOnlyTrails) also run trail_tools'
+# `star-removal-verify` as a subprocess, so those jobs (and only those: the list is the `if:` of the "trail verifier" steps) build
+# trail_tools in release first. Its reports and crops ride on each job's gherkin-artifacts upload. See gherkin/README.md.
 #
 # DUPLICATED ON PURPOSE (collapse into reusable workflows later, see gherkin/README.md): the apt/Eigen/
 # Swift/MSVC/OpenCV/StarDecisionTrees setup of cli.yml's `linux`/`macos`/`windows` jobs, the stard build
@@ -30,6 +36,7 @@ on:
       - 'daemon/**'
       - 'StarCore/**'
       - 'StarCpp/**'
+      - 'trail_tools/**'
       - '.github/workflows/gherkin.yml'
   pull_request:
     branches: [main, develop]
@@ -42,14 +49,45 @@ on:
       - 'daemon/**'
       - 'StarCore/**'
       - 'StarCpp/**'
+      - 'trail_tools/**'
       - '.github/workflows/gherkin.yml'
   workflow_dispatch:
+    inputs:
+      features:
+        description: 'Comma-separated feature names to run (default: all), e.g. autoHorizonJpeg,selectiveHorizonTiff16'
+        required: false
+        default: ''
 
 concurrency:
   group: gherkin-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # ─── The matrix: which features each client runs ─────────────────────────────
+  # From the generated lists, optionally narrowed by the workflow_dispatch `features` input.
+  features:
+    name: feature matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      cli: ${{ steps.m.outputs.cli }}
+      macgui: ${{ steps.m.outputs.macgui }}
+      desktop: ${{ steps.m.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: m
+        env:
+          ONLY: ${{ inputs.features }}
+        run: |
+          for c in cli mac-gui desktop; do
+            if [ -n "$ONLY" ]; then
+              arr=$(jq -c --arg only "$ONLY" '[ .[] | select(. as $f | ($only | split(",") | map(gsub("[ ]";"")) | index($f)) != null) ]' "gherkin/generated/features-$c.json")
+            else
+              arr=$(jq -c . "gherkin/generated/features-$c.json")
+            fi
+            echo "$c: $arr"
+            echo "${c//-/}=$arr" >> "$GITHUB_OUTPUT"
+          done
+
   # ─── Generated files are in sync ─────────────────────────────────────────────
   # A real regeneration with the CURRENT cucumber-gherkin, diffed against what is committed. Safe because
   # the generator keeps only feature/scenario names, tags and step keyword + text, so gherkin 9.0.0 (the
@@ -86,11 +124,24 @@ jobs:
 
   # ─── cli, Linux ──────────────────────────────────────────────────────────────
   cli-linux:
-    name: cli (ubuntu-24.04)
+    name: cli (ubuntu-24.04) · ${{ matrix.feature }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    needs: [features, ffmpeg]
+    if: needs.features.outputs.cli != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: ${{ fromJSON(needs.features.outputs.cli) }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
+      - name: Name of this feature's test
+        id: t
+        shell: bash
+        run: |
+          f="${{ matrix.feature }}"
+          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-cli.txt), never maintained by hand.
@@ -98,10 +149,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .test-data
-          key: testdata-cli-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-cli.txt') }}
+          key: testdata-cli-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-cli.json') }}
 
       - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(cat gherkin/generated/datasets-cli.txt)
+        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-cli.json)
 
       - name: Install apt prerequisites
         run: |
@@ -140,41 +191,89 @@ jobs:
         run: |
           if [ ! -f StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
+      - name: Fetch ffmpeg/ffprobe
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-linux-x64
+          path: external_binaries/bin
+
+      - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
+        shell: bash
+        run: |
+          chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
+          echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      - name: Build the output validator
+        shell: bash
+        run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+          echo "STAR_REMOVAL_REPORTS=${{ runner.temp }}/gherkin-artifacts/removal" >> "$GITHUB_ENV"
+
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
         # is `@testable import star` and --filter still compiles every test target. One release compile.
         # --disable-swift-testing: without it, swift test runs a second (Swift Testing) pass that starts the `star` executable
         # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
-        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
+        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
 
       - name: Prove the scenario ran (not a vacuous green)
         run: |
-          grep -E "testOpenAndProcessFeature.*passed" gherkin-cli.log
+          grep -E "${{ steps.t.outputs.name }}.*passed" gherkin-cli.log
           grep -E "Executed 1 test, with 0 failures" gherkin-cli.log
-          ! grep -E "testOpenAndProcessFeature.*skipped" gherkin-cli.log
+          ! grep -E "${{ steps.t.outputs.name }}.*skipped" gherkin-cli.log
 
   # ─── cli, Windows ────────────────────────────────────────────────────────────
   # Same toolchain pinning and cache keys as cli.yml's `windows` job and desktop-windows below, so the three share caches.
   # Packaging and DLL bundling are not under test here (cli.yml's windows / windows-e2e cover them): star.exe runs from the
   # build tree with the toolchain on PATH.
+
+      - name: Upload the validator reports and run configs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-cli-linux-${{ matrix.feature }}-artifacts
+          path: ${{ runner.temp }}/gherkin-artifacts
+          if-no-files-found: warn
+
   cli-windows:
-    name: cli (windows-2022)
+    name: cli (windows-2022) · ${{ matrix.feature }}
     runs-on: windows-2022
-    timeout-minutes: 150
+    needs: [features, ffmpeg]
+    if: needs.features.outputs.cli != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: ${{ fromJSON(needs.features.outputs.cli) }}
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash  # Git Bash; matches cli.yml's `windows` job
     steps:
       - uses: actions/checkout@v4
 
+      - name: Name of this feature's test
+        id: t
+        shell: bash
+        run: |
+          f="${{ matrix.feature }}"
+          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
+
       - name: Cache test data
         uses: actions/cache@v4
         with:
           path: .test-data
-          key: testdata-cli-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-cli.txt') }}
+          key: testdata-cli-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-cli.json') }}
 
       - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(cat gherkin/generated/datasets-cli.txt)
+        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-cli.json)
 
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
@@ -294,31 +393,82 @@ jobs:
           echo "STAR_CLI_PATH=$(cygpath -w "$BIN/star.exe")" >> "$GITHUB_ENV"
           echo "STAR_TEST_DATA=$(cygpath -w "$GITHUB_WORKSPACE/.test-data")" >> "$GITHUB_ENV"
 
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
+      - name: Fetch ffmpeg/ffprobe
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-windows-x64
+          path: external_binaries/bin
+
+      - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
+        shell: bash
+        run: |
+          chmod +x external_binaries/bin/ffmpeg.exe external_binaries/bin/ffprobe.exe || true
+          echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      - name: Build the output validator
+        shell: bash
+        run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+          BIN="$(swift build -c release --package-path trail_tools --show-bin-path)"
+          ls "$BIN"/star-removal-verify.exe
+          echo "STAR_REMOVAL_VERIFY=$(cygpath -w "$BIN/star-removal-verify.exe")" >> "$GITHUB_ENV"
+          echo "STAR_REMOVAL_REPORTS=$(cygpath -w "$RUNNER_TEMP/gherkin-artifacts/removal")" >> "$GITHUB_ENV"
+
       - name: Run the Gherkin features against the built star
         # Flags as in cli-linux (release, -enable-testing for the other test target, --disable-swift-testing).
-        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
+        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
 
       - name: Prove the scenario ran (not a vacuous green)
         run: |
-          grep -E "testOpenAndProcessFeature.*passed" gherkin-cli.log
+          grep -E "${{ steps.t.outputs.name }}.*passed" gherkin-cli.log
           grep -E "Executed 1 test, with 0 failures" gherkin-cli.log
-          ! grep -E "testOpenAndProcessFeature.*skipped" gherkin-cli.log
+          ! grep -E "${{ steps.t.outputs.name }}.*skipped" gherkin-cli.log
 
       - name: Upload the log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-cli-windows-log
+          name: gherkin-cli-windows-${{ matrix.feature }}-log
           path: gherkin-cli.log
           if-no-files-found: warn
 
   # ─── cli, macOS ──────────────────────────────────────────────────────────────
+
+      - name: Upload the validator reports and run configs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-cli-windows-${{ matrix.feature }}-artifacts
+          path: ${{ runner.temp }}/gherkin-artifacts
+          if-no-files-found: warn
+
   cli-macos:
-    name: cli (macos-15)
+    name: cli (macos-15) · ${{ matrix.feature }}
     runs-on: macos-15
-    timeout-minutes: 120
+    needs: [features, ffmpeg]
+    if: needs.features.outputs.cli != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: ${{ fromJSON(needs.features.outputs.cli) }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
+      - name: Name of this feature's test
+        id: t
+        shell: bash
+        run: |
+          f="${{ matrix.feature }}"
+          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-cli.txt), never maintained by hand.
@@ -326,10 +476,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .test-data
-          key: testdata-cli-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-cli.txt') }}
+          key: testdata-cli-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-cli.json') }}
 
       - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(cat gherkin/generated/datasets-cli.txt)
+        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-cli.json)
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -369,34 +519,81 @@ jobs:
         run: |
           if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
 
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
+      - name: Fetch ffmpeg/ffprobe
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-macos-universal
+          path: external_binaries/bin
+
+      - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
+        shell: bash
+        run: |
+          chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
+          echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      - name: Build the output validator
+        shell: bash
+        run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+          echo "STAR_REMOVAL_REPORTS=${{ runner.temp }}/gherkin-artifacts/removal" >> "$GITHUB_ENV"
+
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
         # is `@testable import star` and --filter still compiles every test target. One release compile.
         # --disable-swift-testing: without it, swift test runs a second (Swift Testing) pass that starts the `star` executable
         # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
-        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter GherkinTests 2>&1 | tee gherkin-cli.log
+        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
 
       - name: Prove the scenario ran (not a vacuous green)
         run: |
-          grep -E "testOpenAndProcessFeature.*passed" gherkin-cli.log
+          grep -E "${{ steps.t.outputs.name }}.*passed" gherkin-cli.log
           grep -E "Executed 1 test, with 0 failures" gherkin-cli.log
-          ! grep -E "testOpenAndProcessFeature.*skipped" gherkin-cli.log
+          ! grep -E "${{ steps.t.outputs.name }}.*skipped" gherkin-cli.log
 
   # ─── macOS gui ───────────────────────────────────────────────────────────────
   # ffmpeg/ffprobe are bundled into Star.app by the Xcode project, so the build needs them (cli.yml's
   # macos-signed-release job fetches the same artifact the same way).
+
+      - name: Upload the validator reports and run configs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-cli-macos-${{ matrix.feature }}-artifacts
+          path: ${{ runner.temp }}/gherkin-artifacts
+          if-no-files-found: warn
+
   ffmpeg:
-    uses: ./.github/workflows/ffmpeg.yml
+    uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
-      platforms: macos
+      platforms: linux windows macos
 
   mac-gui:
-    name: mac gui (macos-15)
+    name: mac gui (macos-15) · ${{ matrix.feature }}
     runs-on: macos-15
-    needs: ffmpeg
-    timeout-minutes: 120
+    needs: [features, ffmpeg]
+    if: needs.features.outputs.macgui != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: ${{ fromJSON(needs.features.outputs.macgui) }}
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+
+      - name: Name of this feature's test
+        id: t
+        shell: bash
+        run: |
+          f="${{ matrix.feature }}"
+          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-mac-gui.txt), never maintained by hand.
@@ -404,10 +601,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .test-data
-          key: testdata-mac-gui-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-mac-gui.txt') }}
+          key: testdata-mac-gui-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-mac-gui.json') }}
 
       - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(cat gherkin/generated/datasets-mac-gui.txt) gui_splash_video
+        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-mac-gui.json) gui_splash_video
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -455,14 +652,30 @@ jobs:
           cp .test-data/gui_splash_video/*.mp4 gui/videos/
           ls -lh gui/videos
 
-      - name: Fetch ffmpeg/ffprobe the GUI bundles
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
+      - name: Fetch ffmpeg/ffprobe
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-macos
+          name: ffmpeg-macos-universal
           path: external_binaries/bin
 
-      - name: Make ffmpeg/ffprobe executable
-        run: chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe
+      - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
+        shell: bash
+        run: |
+          chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
+          echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      - name: Build the output validator
+        shell: bash
+        run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
 
       # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release
       # builds every test target even under -only-testing.
@@ -475,6 +688,7 @@ jobs:
           # A hosted macOS VM can have under 2GB free, below star's default memory floor, so it admits nothing; the runner forwards this to the app
           STAR_SYSTEM_FLOOR_MB: 512
           TEST_RUNNER_STAR_SYSTEM_FLOOR_MB: 512
+          TEST_RUNNER_STAR_FFMPEG_DIR: ${{ github.workspace }}/external_binaries/bin
         run: |
           set -o pipefail
           xcodebuild test \
@@ -482,7 +696,7 @@ jobs:
             -scheme star \
             -configuration Release \
             ENABLE_TESTABILITY=YES \
-            -only-testing:starUITests/GeneratedFeatureUITests \
+            -only-testing:starUITests/GeneratedFeatureUITests/${{ steps.t.outputs.name }} \
             -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             2>&1 | tee gherkin-gui.log
@@ -492,24 +706,47 @@ jobs:
           grep -E "Executed 1 test, with 0 failures" gherkin-gui.log
           # every "Executed N tests" line must be the one-test line: nothing else ran, nothing was skipped
           ! grep -E "Executed [0-9]+ tests?" gherkin-gui.log | grep -v "Executed 1 test, with 0 failures"
-          grep -E "Test [Cc]ase '.*testOpenAndProcessFeature.*' passed" gherkin-gui.log
+          grep -E "Test [Cc]ase '.*${{ steps.t.outputs.name }}.*' passed" gherkin-gui.log
 
       # The screenshots in here are the only evidence of a GUI failure.
       - name: Upload the xcresult
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-gui-xcresult
+          name: gherkin-gui-${{ matrix.feature }}-xcresult
           path: ${{ runner.temp }}/gherkin-gui.xcresult
           if-no-files-found: warn
 
   # ─── desktop, Linux ──────────────────────────────────────────────────────────
+
+      - name: Upload the validator reports and run configs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-gui-${{ matrix.feature }}-artifacts
+          # the sandboxed UI-test runner writes into its own container
+          path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gherkin-artifacts
+          if-no-files-found: warn
+
   desktop-linux:
-    name: desktop (ubuntu-24.04)
+    name: desktop (ubuntu-24.04) · ${{ matrix.feature }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    needs: [features, ffmpeg]
+    if: needs.features.outputs.desktop != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: ${{ fromJSON(needs.features.outputs.desktop) }}
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
+
+      - name: Name of this feature's test
+        id: t
+        shell: bash
+        run: |
+          f="${{ matrix.feature }}"
+          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
@@ -517,10 +754,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .test-data
-          key: testdata-desktop-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-desktop.txt') }}
+          key: testdata-desktop-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-desktop.json') }}
 
       - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(cat gherkin/generated/datasets-desktop.txt)
+        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
 
       - name: Install apt prerequisites
         run: |
@@ -563,6 +800,31 @@ jobs:
         working-directory: daemon
         run: swift build -c release -Xswiftc -static-stdlib
 
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
+      - name: Fetch ffmpeg/ffprobe
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-linux-x64
+          path: external_binaries/bin
+
+      - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
+        shell: bash
+        run: |
+          chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
+          echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      - name: Build the output validator
+        shell: bash
+        run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -577,8 +839,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run the Gherkin features in the Compose UI
+        env:
+          STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
         working-directory: star-desktop
-        run: ./gradlew gherkinTest --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
+        run: ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
 
       - name: Prove the scenario ran (not a vacuous green)
         working-directory: star-desktop
@@ -592,22 +856,44 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-desktop-linux-reports
+          name: gherkin-desktop-linux-reports-${{ matrix.feature }}
           path: star-desktop/build/reports/tests/gherkinTest
           if-no-files-found: warn
 
   # ─── desktop, Windows ────────────────────────────────────────────────────────
   # The slowest leg: stard is built from scratch on Windows (cache permitting). Same toolchain pinning as
   # cli.yml's `windows` job and kotlin-client.yml's `windows-package` job.
+
+      - name: Upload the validator reports and run configs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-desktop-linux-${{ matrix.feature }}-artifacts
+          path: ${{ runner.temp }}/gherkin-artifacts
+          if-no-files-found: warn
+
   desktop-windows:
-    name: desktop (windows-2022)
+    name: desktop (windows-2022) · ${{ matrix.feature }}
     runs-on: windows-2022
-    timeout-minutes: 150
+    needs: [features, ffmpeg]
+    if: needs.features.outputs.desktop != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: ${{ fromJSON(needs.features.outputs.desktop) }}
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash  # Git Bash; matches cli.yml's `windows` job
     steps:
       - uses: actions/checkout@v4
+
+      - name: Name of this feature's test
+        id: t
+        shell: bash
+        run: |
+          f="${{ matrix.feature }}"
+          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
@@ -615,10 +901,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .test-data
-          key: testdata-desktop-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-desktop.txt') }}
+          key: testdata-desktop-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-desktop.json') }}
 
       - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(cat gherkin/generated/datasets-desktop.txt)
+        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
 
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
@@ -733,6 +1019,31 @@ jobs:
         # Do not set CL=/D... globally, it breaks OpenCV's CMake compiler probe (see release_windows.sh).
         run: swift build -c release
 
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
+      - name: Fetch ffmpeg/ffprobe
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-windows-x64
+          path: external_binaries/bin
+
+      - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
+        shell: bash
+        run: |
+          chmod +x external_binaries/bin/ffmpeg.exe external_binaries/bin/ffprobe.exe || true
+          echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      - name: Build the output validator
+        shell: bash
+        run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -746,9 +1057,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run the Gherkin features in the Compose UI
+        env:
+          STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
         working-directory: star-desktop
         # cygpath -m: the JVM wants C:/... , not Git Bash's /d/a/...
-        run: ./gradlew gherkinTest --no-daemon --stacktrace -Pstar.stard.path="$(cygpath -m "$GITHUB_WORKSPACE/daemon/.build/release/stard.exe")"
+        run: ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$(cygpath -m "$GITHUB_WORKSPACE/daemon/.build/release/stard.exe")"
 
       - name: Prove the scenario ran (not a vacuous green)
         working-directory: star-desktop
@@ -762,17 +1075,39 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-desktop-windows-reports
+          name: gherkin-desktop-windows-reports-${{ matrix.feature }}
           path: star-desktop/build/reports/tests/gherkinTest
           if-no-files-found: warn
 
   # ─── desktop, macOS ──────────────────────────────────────────────────────────
+
+      - name: Upload the validator reports and run configs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-desktop-windows-${{ matrix.feature }}-artifacts
+          path: ${{ runner.temp }}/gherkin-artifacts
+          if-no-files-found: warn
+
   desktop-macos:
-    name: desktop (macos-15)
+    name: desktop (macos-15) · ${{ matrix.feature }}
     runs-on: macos-15
-    timeout-minutes: 120
+    needs: [features, ffmpeg]
+    if: needs.features.outputs.desktop != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: ${{ fromJSON(needs.features.outputs.desktop) }}
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
+
+      - name: Name of this feature's test
+        id: t
+        shell: bash
+        run: |
+          f="${{ matrix.feature }}"
+          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
@@ -780,10 +1115,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .test-data
-          key: testdata-desktop-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/datasets-desktop.txt') }}
+          key: testdata-desktop-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-desktop.json') }}
 
       - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(cat gherkin/generated/datasets-desktop.txt)
+        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
 
       - name: Select latest Xcode (Swift 6)
         uses: maxim-lobanov/setup-xcode@v1
@@ -827,6 +1162,31 @@ jobs:
         working-directory: daemon
         run: swift build -c release
 
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
+      - name: Fetch ffmpeg/ffprobe
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-macos-universal
+          path: external_binaries/bin
+
+      - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
+        shell: bash
+        run: |
+          chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
+          echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      - name: Build the output validator
+        shell: bash
+        run: swift build -c release --package-path removal_tools
+
+      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
+      - name: Build the trail verifier (release)
+        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        shell: bash
+        run: |
+          swift build -c release --package-path trail_tools
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -842,9 +1202,11 @@ jobs:
       # Hosted macOS VMs vary: one run had ~2GB free, so stard's memory gate admitted a frame every few minutes and nothing finished in 45
       # (the same leg passes in minutes on a healthier VM). Fail fast per attempt and try once more; the retry kills any stard left behind.
       - name: Run the Gherkin features in the Compose UI
+        env:
+          STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 35
+          timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 20
           polling_interval_seconds: 5
@@ -855,7 +1217,7 @@ jobs:
           # A 7GB VM with ~2-3GB free: at full resolution one frame's keypoint reservation (2.2GB) exceeds stard's narrowed memory budget, so
           # frames wait minutes each. stard itself defaults to 1.5 on such a machine; pin it so a roomier moment on the VM cannot pick 1.
           # Not coarser: 1.8 and 2 find no usable star alignment on this runner. The cli, gui and other desktop legs run the default.
-          command: cd star-desktop && STAR_SYSTEM_FLOOR_MB=512 STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
+          command: cd star-desktop && STAR_SYSTEM_FLOOR_MB=512 STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
 
       - name: Prove the scenario ran (not a vacuous green)
         working-directory: star-desktop
@@ -869,6 +1231,15 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-desktop-macos-reports
+          name: gherkin-desktop-macos-reports-${{ matrix.feature }}
           path: star-desktop/build/reports/tests/gherkinTest
           if-no-files-found: warn
+
+      - name: Upload the validator reports and run configs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-desktop-macos-${{ matrix.feature }}-artifacts
+          path: ${{ runner.temp }}/gherkin-artifacts
+          if-no-files-found: warn
+

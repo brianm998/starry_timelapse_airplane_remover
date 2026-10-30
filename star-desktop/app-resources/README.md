@@ -31,13 +31,13 @@ before packaging:
 Overrides: `-Pstard=/abs/path/to/stard` and `-Pffmpegdir=/abs/dir/containing/ffmpeg+ffprobe`
 (defaults: `daemon/.build/{release,debug}/stard` and repo-root `external_binaries/bin`).
 
-`external_binaries/bin` is where the ffmpeg to bundle goes. It is not committed; build it first, with either of
-the two scripts (see `ffmpeg/README.md`):
+`external_binaries/bin` is where the ffmpeg to bundle goes. It is not committed; build it first
+(see `ffmpeg/README.md`):
 
 ```bash
-./ffmpeg/build_ci.sh external_binaries/bin   # what CI ships: universal on a Mac, x86_64 elsewhere
-./ffmpeg/build.sh --install                  # this machine's own build, with its GPU support: VideoToolbox on a Mac,
+./ffmpeg/build.sh --install                  # what CI ships, for this machine, with its GPU support: VideoToolbox on a Mac,
                                              # NVENC / AMF / Media Foundation / Direct3D on Windows, NVENC / Vulkan on Linux
+./ffmpeg/build_ci.sh external_binaries/bin   # the older, smaller build CI used to ship (no GPU encoders besides VideoToolbox)
 ```
 
 Staging refuses to package an ffmpeg or ffprobe built for a different architecture than the bundle
@@ -79,6 +79,6 @@ it just hasn't been notarized for Gatekeeper on other machines.
 artifacts live only in the main checkout, so CI needs them provisioned first). The cross-platform flow is:
 build `stard` on macOS / Windows / Linux, drop each into the matching `app-resources/<os-arch>/` on that
 runner, then run `packageDistributionForCurrentOS`. ffmpeg/ffprobe must be **portable** builds: CI gets them from
-`ffmpeg/build_ci.sh` through `.github/workflows/ffmpeg.yml` (the macOS ones are universal arm64 + x86_64), which
-checks that they link only system libraries; `ffmpeg/smoke_test.sh` checks the same for `ffmpeg/build.sh`'s
-(`otool -L` / `ldd` / `objdump -p`). Do the same by hand when adding another platform.
+`ffmpeg/build.sh` through `.github/workflows/ffmpeg-gpu.yml` (the macOS ones are universal arm64 + x86_64);
+`ffmpeg/smoke_test.sh` checks that they link only system libraries (`otool -L` / `ldd` / `objdump -p`). Do the
+same by hand when adding another platform.

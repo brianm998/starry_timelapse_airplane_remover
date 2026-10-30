@@ -53,7 +53,9 @@ public enum TemporalHorizonDetector {
     ///
     /// - 1: median of evenly spaced frames, `CombinedHorizonDetector` guess,
     ///      `HorizonBoundaryRefiner`.
-    public static let algorithmVersion = 1
+    /// - 2: the same, then a sequence whose "ground" still holds moving stars is given no
+    ///      horizon at all (`groundStarActivity`).
+    public static let algorithmVersion = 2
 
     /// Width every frame is reduced to before the median.  The refiner's parameters are in
     /// rows of an image this wide; at 1600 a working pixel is 2.6-5 full-resolution pixels on
@@ -153,17 +155,145 @@ public enum TemporalHorizonDetector {
         outputWidth: Int,
         outputHeight: Int
     ) async throws -> [Int] {
+        let line = try await workingLine(inClean: clean)
+        return scaled(line, fromWidth: clean.width, height: clean.height,
+                      toWidth: outputWidth, height: outputHeight)
+    }
+
+    /// `horizon(inClean:outputWidth:outputHeight:)`, except that when the frames show the
+    /// supposed ground to be full of moving stars it is not a horizon: every column is then
+    /// all sky (`outputHeight`) and `noHorizon` is true.  `activity` is what was measured, nil
+    /// when it could not be (see `groundStarActivity`).
+    public static func horizon(
+        inClean clean: PixelatedImage,
+        sampled images: [PixelatedImage],
+        outputWidth: Int,
+        outputHeight: Int
+    ) async throws -> (line: [Int], activity: Double?, noHorizon: Bool) {
+        let line = try await workingLine(inClean: clean)
+        let activity = await NativeWork.run {
+            groundStarActivity(frames: images, median: clean, line: line)
+        }
+        if let activity, activity > maxGroundStarActivity {
+            return (Array(repeating: outputHeight, count: outputWidth), activity, true)
+        }
+        return (scaled(line, fromWidth: clean.width, height: clean.height,
+                       toWidth: outputWidth, height: outputHeight), activity, false)
+    }
+
+    /// The first ground row of every column of `clean`, at its own size.
+    static func workingLine(inClean clean: PixelatedImage) async throws -> [Int] {
         let mask = try await CombinedHorizonDetector.detect(image: clean)
         let guess = CombinedHorizonDetector.extractHorizonY(from: mask.image)
         guard let logLuminance = logLuminance(of: clean) else {
             throw "TemporalHorizonDetector: clean image is not 16-bit"
         }
         let w = clean.width, h = clean.height
-        let line = await NativeWork.run {
+        return await NativeWork.run {
             HorizonBoundaryRefiner.refine(logLuminance: logLuminance, width: w, height: h,
                                           guess: guess)
         }
-        return scaled(line, fromWidth: w, height: h, toWidth: outputWidth, height: outputHeight)
+    }
+
+    // MARK: - Is there a ground at all?
+
+    /// Above this `groundStarActivity` the line is not a horizon.  Measured on the painted
+    /// sequences, 48 frames at 1600 px, 16-bit, measured 2026-10-26: the conifer treeline
+    /// 0.18, the lake with star reflections 0.01, the sky-only crop with a line where the
+    /// detector put it (14-49% of the height) 0.68-0.92.  A count of every bright pixel, not
+    /// only the positive excess, read the conifer at 0.46-0.51: its dark ground is noisy.
+    public static let maxGroundStarActivity = 0.4
+
+    /// Excess of bright over dark pixels in the sky, per frame, before `groundStarActivity`
+    /// compares anything with it.
+    static let minSkyStarRate = 0.002
+
+    /// How much more often a pixel of the supposed ground holds a moving star than a pixel of
+    /// the sky does, from the sampled frames: 0 for a ground that never changes between frames,
+    /// 1 for one that is as full of moving stars as the sky above it.
+    ///
+    /// What a frame has that the median does not, with the slow remainder (cloud, glow)
+    /// blurred away, is the residual.  A star is a residual more than four robust sigmas of
+    /// the sky's own above zero; the median has no stars in it, so they only ever add light.
+    /// Noise is as likely to subtract it, so what is counted is the excess of bright residuals
+    /// over dark ones, which a dark ground full of noise does not have however much noise it
+    /// has.  The terrain does not move, so below a real horizon that excess is almost nothing;
+    /// on a frame that is stars all the way down, the detector still finds an edge in the Milky
+    /// Way, and the ground below it has as much of it as the sky above.
+    ///
+    /// Columns are compared a margin away from the line either side, so the error in the
+    /// line does not leak in.  Nil when there is too little ground or sky to compare, or
+    /// the sky shows too few stars (`minSkyStarRate`) to measure against.
+    static func groundStarActivity(frames: [PixelatedImage], median: PixelatedImage,
+                                   line: [Int]) -> Double? {
+        guard frames.count >= 3, line.count == median.width,
+              let reference = meanLuminance(of: median) else { return nil }
+        var lumas: [[Float]] = []
+        for frame in frames {
+            guard frame.width == median.width, frame.height == median.height,
+                  let luma = meanLuminance(of: frame) else { return nil }
+            lumas.append(luma)
+        }
+        return groundStarActivity(lumas: lumas, median: reference,
+                                  width: median.width, height: median.height, line: line)
+    }
+
+    /// `groundStarActivity` on luminance arrays in [0, 1], row-major.
+    static func groundStarActivity(lumas: [[Float]], median: [Float],
+                                   width w: Int, height h: Int, line: [Int]) -> Double? {
+        guard w > 0, h > 0, line.count == w, median.count == w * h else { return nil }
+        let margin = max(4, h / 90)
+        // The classes of pixels: sky is above the line by the margin, ground below by it.
+        var cls = [Int8](repeating: 0, count: w * h)
+        var skyCount = 0, groundCount = 0
+        for x in 0..<w {
+            let edge = max(0, min(h, line[x]))
+            for y in 0..<h {
+                if y <= edge - margin { cls[y * w + x] = 1; skyCount += 1 }
+                else if y >= edge + margin { cls[y * w + x] = 2; groundCount += 1 }
+            }
+        }
+        // Too little of either to say anything: less than 2% of the frame.
+        guard skyCount > w * h / 50, groundCount > w * h / 50 else { return nil }
+
+        // What each frame has that the median does not, minus its slow part.
+        var stars: [[Float]] = []
+        var skySample: [Float] = []
+        for luma in lumas {
+            guard luma.count == w * h else { return nil }
+            var residual = [Float](repeating: 0, count: w * h)
+            for i in 0..<residual.count { residual[i] = luma[i] - median[i] }
+            let slow = HorizonBoundaryRefiner.gaussianBlurred(residual, width: w, height: h, sigma: 2)
+            for i in 0..<residual.count { residual[i] -= slow[i] }
+            var y = 0
+            while y < h {
+                var x = 0
+                while x < w { if cls[y * w + x] == 1 { skySample.append(abs(residual[y * w + x])) }; x += 4 }
+                y += 4
+            }
+            stars.append(residual)
+        }
+        skySample.sort()
+        guard !skySample.isEmpty else { return nil }
+        let sigma = 1.4826 * skySample[skySample.count / 2]
+        guard sigma > 0 else { return nil }
+        let limit = Float(4 * sigma)
+
+        // bright minus dark, per class
+        var skyExcess = 0, groundExcess = 0
+        for residual in stars {
+            for i in 0..<residual.count where cls[i] != 0 {
+                let step = residual[i] > limit ? 1 : (residual[i] < -limit ? -1 : 0)
+                if step == 0 { continue }
+                if cls[i] == 1 { skyExcess += step } else { groundExcess += step }
+            }
+        }
+        let skyRate = Double(skyExcess) / Double(skyCount * lumas.count)
+        // Without real stars in the sky there is nothing to compare a ground with.  Symmetric
+        // noise has no excess at all; the skies measured had 1.5-3.5%.
+        guard skyRate >= minSkyStarRate else { return nil }
+        let groundRate = Double(groundExcess) / Double(groundCount * lumas.count)
+        return groundRate / skyRate
     }
 
     // MARK: - Internal pieces
@@ -174,9 +304,8 @@ public enum TemporalHorizonDetector {
     /// scaling halves the error on six of them and leaves the rest within 0.03%.
     static let rowOffset = -1.0
 
-    /// Natural log of the mean of the channels, scaled to [0, 1], after a light blur that
-    /// takes the edge of single-pixel noise; 1e-4 keeps a black-clipped ground finite.
-    static func logLuminance(of image: PixelatedImage) -> [Float]? {
+    /// The mean of the channels, scaled to [0, 1].  Nil unless the image is 16-bit.
+    static func meanLuminance(of image: PixelatedImage) -> [Float]? {
         guard case .sixteenBit = image.imageData, let raw = image.mat.dataPtr else { return nil }
         let buffer = raw.assumingMemoryBound(to: UInt16.self)
         let w = image.width, h = image.height, channels = image.componentsPerPixel
@@ -192,7 +321,15 @@ public enum TemporalHorizonDetector {
                 }
             }
         }
-        let blurred = HorizonBoundaryRefiner.gaussianBlurred(luminance, width: w, height: h, sigma: 0.7)
+        return luminance
+    }
+
+    /// Natural log of the mean of the channels, scaled to [0, 1], after a light blur that
+    /// takes the edge of single-pixel noise; 1e-4 keeps a black-clipped ground finite.
+    static func logLuminance(of image: PixelatedImage) -> [Float]? {
+        guard let luminance = meanLuminance(of: image) else { return nil }
+        let blurred = HorizonBoundaryRefiner.gaussianBlurred(
+          luminance, width: image.width, height: image.height, sigma: 0.7)
         return blurred.map { log($0 + 1e-4) }
     }
 

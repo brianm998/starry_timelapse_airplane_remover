@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -80,6 +81,9 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
             }
         }
 
+        // Process / Show Progress and Render Video, which used to sit at the top of the left panel; the left panel is the edit view's.
+        if (mode == com.star.desktop.domain.InteractionMode.EDIT) ProcessingButtons(app, vm)
+
         // What a run is doing, with its Stop, in every mode; scrub and grid hide it while playing (macOS: nothing else competes then).
         if (mode == com.star.desktop.domain.InteractionMode.EDIT || !playing) ProcessingStatus(vm, mode)
         // The rest of the read-outs are the edit view's: what the frame is doing, its outlier counts, and what is being saved.
@@ -101,6 +105,44 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
                 }
             }
         }
+    }
+}
+
+/**
+ * "Process Frames" / "Show Progress" and "Render Video" (macOS `ProcessingButtonsView`). The first is one button in two roles: while a
+ * run is going it puts the processing screen back, otherwise it opens the settings, where a run is started. Render is enabled once
+ * every frame is complete, since there is nothing to render a video from before that.
+ */
+@Composable
+private fun ProcessingButtons(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel) {
+    val processing by vm.isProcessing.collectAsState()
+    val rendering by vm.rendering.collectAsState()
+    val states by vm.frameStates.collectAsState()
+    val refinementPending by vm.refinementPending.collectAsState()
+    val total = vm.frameCount
+    val counts = remember(states, total) { com.star.desktop.domain.FrameStateCounts(states, total) }
+    val role = com.star.desktop.domain.ProcessingButtonRole.current(processing, rendering, counts, total, refinementPending)
+    val colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = StarColors.accent)
+
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        when (role) {
+            com.star.desktop.domain.ProcessingButtonRole.Status -> HoverTip(localized("ui.show_the_processing_status_again")) {
+                androidx.compose.material3.Button(onClick = { vm.reopenProcessingModal() }, colors = colors) { Text(localized("ui.show_progress")) }
+            }
+            is com.star.desktop.domain.ProcessingButtonRole.Process -> HoverTip(localized("ui.choose_settings_and_process_these_frames")) {
+                androidx.compose.material3.Button(
+                    onClick = { app.openSettings() },
+                    enabled = role.enabled,
+                    colors = colors,
+                    modifier = Modifier.testTag("process.frames"),
+                ) { Text(localized("ui.process_frames")) }
+            }
+        }
+        androidx.compose.material3.Button(
+            onClick = { app.openRenderVideo() },
+            enabled = counts.complete == total && !processing && !rendering,
+            colors = colors,
+        ) { Text(localized("ui.render_video_from_n_frames_lower", total), fontSize = 12.sp) }
     }
 }
 

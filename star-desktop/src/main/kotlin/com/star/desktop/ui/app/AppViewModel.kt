@@ -187,9 +187,9 @@ internal fun withRemovalChoices(current: Config, cleanMethod: CleanMethod?, allo
  * `outputFileExistsOnDisk()` check find a previous run's output and report finished frames as complete
  * instead of unprocessed (macOS `inputImageSequencePath`).
  */
-internal fun initialConfigBeside(source: String, detection: com.star.proto.DetectionType? = null): Config =
+internal fun initialConfigBeside(source: String, detection: com.star.proto.DetectionType? = null, outputDir: String? = null): Config =
     SessionRepository.defaultInitialConfig().toBuilder()
-        .setOutputPath(java.io.File(source).parent ?: source)
+        .setOutputPath(outputDir ?: java.io.File(source).parent ?: source)
         .also { b -> detection?.let { b.setDetectionType(it) } }
         .build()
 
@@ -481,6 +481,7 @@ class AppViewModel(
     private val _showAlignmentWindow = MutableStateFlow(false)
     val showAlignmentWindow: StateFlow<Boolean> = _showAlignmentWindow.asStateFlow()
     fun toggleAlignmentWindow() { _showAlignmentWindow.value = !_showAlignmentWindow.value }
+    fun openAlignmentWindow() { _showAlignmentWindow.value = true }
     fun closeAlignmentWindow() { _showAlignmentWindow.value = false }
 
     /** Keeps the machine from sleeping while a sequence is open; a replacement can be given for a test. */
@@ -874,13 +875,27 @@ class AppViewModel(
         if (autoOpenPath != null) {
             when (com.star.desktop.ui.initial.inferOpenKind(autoOpenPath)) {
                 com.star.desktop.ui.initial.OpenKind.SEQUENCE -> openSequence(autoOpenPath)
-                com.star.desktop.ui.initial.OpenKind.VIDEO -> openVideo(autoOpenPath, com.star.desktop.domain.FrameFormatChoice.TIFF16)
+                com.star.desktop.ui.initial.OpenKind.VIDEO -> openVideo(autoOpenPath, com.star.desktop.domain.VideoImportOptions())
                 com.star.desktop.ui.initial.OpenKind.CONFIG -> openConfig(autoOpenPath)
             }
         }
     }
 
-    fun openSequence(dir: String) = launchOpen(dir, video = false, promptStartup = true) { sessions.openSequenceStream(dir, initialConfigBeside(dir, savedDetectionType())) }
+    fun openSequence(dir: String, outputDir: String? = null) =
+        launchOpen(dir, video = false, promptStartup = true) { sessions.openSequenceStream(dir, initialConfigBeside(dir, savedDetectionType(), outputDir)) }
+
+    /** A sequence the user chose, waiting on the dialog that asks where its output and working files go and says what room they need. */
+    private val _pendingSequence = MutableStateFlow<String?>(null)
+    val pendingSequence: StateFlow<String?> = _pendingSequence.asStateFlow()
+
+    /** What the menu and the start screen call: asks about the location first; [openSequence] is the open itself. */
+    fun requestSequence(dir: String) { _pendingSequence.value = dir }
+    fun cancelSequenceLocation() { _pendingSequence.value = null }
+    fun confirmSequenceLocation(outputDir: String?) {
+        val dir = _pendingSequence.value ?: return
+        _pendingSequence.value = null
+        openSequence(dir, outputDir)
+    }
 
     fun openConfig(path: String, thenProcess: Boolean = false) =
         launchOpen(path, video = false, afterOpen = if (thenProcess) ::resumeProcessing else null) { sessions.openConfigStream(path) }
@@ -919,19 +934,25 @@ class AppViewModel(
     val pendingVideo: StateFlow<String?> = _pendingVideo.asStateFlow()
     fun cancelVideoImport() { _pendingVideo.value = null }
 
-    /** The import dialog's answer: decode the pending video to frames in [format] (at [jpegQuality], for JPEG) and open it. */
-    fun confirmVideoImport(format: com.star.desktop.domain.FrameFormatChoice, jpegQuality: Int) {
+    /**
+     * The import dialog's answer: extract the pending video to frames as [options] say (in the format and compression chosen, and in the
+     * background or not) and open it.
+     */
+    fun confirmVideoImport(options: com.star.desktop.domain.VideoImportOptions) {
         val path = _pendingVideo.value ?: return
         _pendingVideo.value = null
-        openVideo(path, format, jpegQuality)
+        openVideo(path, options)
     }
 
+    /**
+     * Open a video. With [com.star.desktop.domain.VideoImportOptions.extractInBackground] the engine answers once the first frame is out, so the
+     * sequence screen comes up while the rest are still being extracted (it marks the frames that are not there yet).
+     */
     fun openVideo(
         path: String,
-        format: com.star.desktop.domain.FrameFormatChoice,
-        jpegQuality: Int = com.star.desktop.domain.VideoImport.DEFAULT_JPEG_QUALITY,
+        options: com.star.desktop.domain.VideoImportOptions = com.star.desktop.domain.VideoImportOptions(),
     ) = launchOpen(path, video = true, promptStartup = true) {
-        sessions.openVideo(path, initialConfigBeside(path, savedDetectionType()), format, jpegQuality)
+        sessions.openVideo(path, initialConfigBeside(path, savedDetectionType(), options.outputDir), options)
     }
 
     private var openJob: Job? = null

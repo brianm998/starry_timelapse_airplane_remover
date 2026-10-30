@@ -146,6 +146,74 @@ A clear frame is not affected: its floor only matters after the early-out, which
   `cloud-error-<n>.tif` (eM, 16-bit) and `cloud-stats-<n>.txt` (outcome, noise, floor, region,
   evidence counts, wall and CPU time per phase).
 
+## 0.2 Flashing between frames (2026-10-29, a9-3, `cloudAwareMergeAlgorithmVersion` 2)
+
+Everything above scores frames one at a time.  On a 1407-frame moving sequence
+(`/op/tmp/LRT_05_16_2026-a9-3`, 24MP, 16 bit, temp dir `star_temp_LRT_05_16_2026-a9-3`) the stage
+made each frame better and the video worse: from about frame 740 to 880 a band of low cloud along
+the right-hand horizon switched between this stage's sharp cloud and the star merge's smeared one
+from one frame to the next (780 on, 782-783 off, 784 on, 785-788 off, 789-790 on, 791 off, ...).
+
+**Cause 1, the frame-level switch: the pre-filter.**  Every frame that switched off was stopped by
+the pre-filter (0 or 1 sparse moving tiles, needs 2) while the full test, on the same frames, counted
+17-40 moving tiles against a threshold of 6.  The pre-filter took a 3x3 median over every other tile,
+which spans five tiles (1920px), and a band of cloud one or two tiles tall loses that median to the
+clear sky above it.  Over the whole sequence (every frame's tile searches dumped and replayed, the
+shipped rule reproduced on 1350 of 1351 frames) it stopped **224 of the 864 frames the full test
+passes**.  It is now the full test's own computation on the one probe neighbour (dense search, the
+same 3x3 median, at least 3 tiles), whose search the full test then reuses:
+
+| pre-filter rule | cloudy frames it wrongly stops | clear frames it stops (of 487) |
+|---|---|---|
+| shipped (sparse, sparse median, >= 2) | 224 | 486 |
+| sparse, no median, >= 2 | 33 | 433 |
+| **dense, 3x3 median, >= 3 (implemented)** | **4 (full counts 6-8)** | **427** |
+| dense, 3x3 median, >= 1 | 0 | 351 |
+
+A frame it stops costs 1.6-2.0 CPU-s at 24MP instead of 0.7-0.9; the stage now also runs on the
+frames the old pre-filter wrongly stopped, at its usual cost.
+
+**Cause 2, the pixel-level shimmer: the relative test.**  With the stage on every frame, the weight
+over faint cloud was still blobs a few hundred pixels across in different places each frame.  Of the
+weight's two factors it is the relative test (`1 - eC/eM` on its 0.2-0.5 ramp) that moves: swapping
+in a nine-frame-stack version of each factor in turn left the shimmer with the per-frame relative test
+and took it away with the stack one.  It is now averaged over 48px (`kRelativeRadius`, a normalised
+box average over trusted, covered pixels) before it is multiplied in; the weight's own blur and reach
+are unchanged.
+
+Measured on frames 777-805 (the lower-right sky, x 3000-6000, y 1400-3000).  *Switching* is the
+weight's change from the mean of the frames either side (warped by the star homographies) times the
+difference between the two merges, at 1/8 resolution, so it counts only change caused by the weight
+moving, not by the cloud moving; *fidelity* is the band-passed correlation with the exposed frame over
+the pixels where the star merge is clearly wrong (eM >= 2 floors).  Python emulation from per-frame
+dumps of the two factors, the cloud-aligned layer at weight 1 and the star merge, except the last row:
+
+| variant | switching mean / max | fidelity |
+|---|---|---|
+| star merge only | 0 / 0 | 0.806 |
+| shipped | 48.2 / 106.3 | 0.835 |
+| pre-filter fixed | 29.4 / 43.1 | 0.853 |
+| + relative test averaged over 32px | 21.8 / 33.6 | 0.850 |
+| **+ averaged over 48px** | **17.9 / 29.1** | **0.848** |
+| + averaged over 64px | 15.2 / 25.9 | 0.845 |
+| + weight blurred over 48px instead (reaches 144px past the trusted sky) | 17.7 / 27.5 | 0.848 |
+| + both factors from the nine-frame stack's spread | 11.2 / 18.7 | 0.835 |
+| **the C++, replayed** | **18.4 / 29.5** | **0.847**, stage ran on 31 of 31 frames (shipped: 21) |
+
+Considered and dropped: a soft gate, scaling the weight from 0 at 6 moving tiles to 1 at 12-20.
+Where the count crosses 6 (frames 548-578 and 700-725) and on the faint cloud the pre-filter used to
+stop (440-460) switching is already at most 5 with a hard gate, because a frame with few moving tiles
+has a small weight; and a count of tiles is absolute, so a frame with little sky (the ground test's
+8 trusted tiles, all moving) was held to 0.14 of its weight.
+
+Changing either part changes the merges, so `ArtifactInputs.cloudAwareMergeAlgorithmVersion` (2) is
+recorded for the merge stage while the stage is on: a sequence merged with the first version redoes its
+star aligned merges, outliers and output once, and keeps its alignment.
+
+The replay harness takes `STAR_CLOUD_REPLAY_PATTERN` (e.g. `image_%04d.tiff`) for sequences not named
+`LRT_%05d.tif`, keeps decodes a run of consecutive frames shares, and skips neighbours whose alignment
+failed.
+
 ---
 
 ## 1. Background
@@ -863,6 +931,8 @@ In StarCore:
   horizon is one it does not touch.
 - **Small clouds** (fewer than 6 trusted 384px tiles of coherent motion) do not trigger the
   stage at all; that is the price of the early-out, and what is skipped is a few tiles of banding.
+  A frame whose count crosses 6 switches the stage on or off whole, but measured on a9-3 the weight
+  on such a frame is small enough that the switch moves little (see 0.2).
 - **A featureless sky is not rejected as well as a real one.** In a synthetic frame with no
   gradient the motion of a cloud spreads to the clear tiles around it, and noise alone gives the
   weight small patches (0.05-0.15) there. Real clear sky never did that on fx3-1 (weight above 0 on

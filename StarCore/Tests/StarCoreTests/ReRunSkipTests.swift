@@ -231,6 +231,28 @@ final class ReRunSkipTests: FrameHarnessTestCase {
         XCTAssertFalse(answer)
     }
 
+    /// A frame whose processed image is still in the temp directory, its output deleted, is
+    /// finished by linking that image back rather than merging.  It has to end up
+    /// `.complete` like a merged frame: the gui enables Render Video only once every frame
+    /// is, and, as the test above pins, a frame that is not goes through the merge again on
+    /// every run.
+    func testAMergeThatOnlyRelinksTheProcessedImageCompletesTheFrame() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, named: "merge-relink")
+        harness = h
+        try plant(at: h.frame.imageAccessor.nameForImage(frameIndex: 0,
+                                                         ofType: .autoProcessed,
+                                                         atSize: .original))
+
+        let op = MergeOp(frame: h.frame) { XCTFail("the merge failed: \($0)") }
+        await op.asyncExecute()
+
+        XCTAssertTrue(h.frame.outputFileExistsOnDisk(), "the processed image is the output")
+        let state = await h.frame.processingState()
+        XCTAssertEqual(state, .complete)
+        let answer = await op.hasWorkToDo()
+        XCTAssertFalse(answer, "every run would link it again")
+    }
+
     // MARK: - the retained mask
 
     /// `cachedFinalHorizonMask` is normally released by the `.complete` transition in

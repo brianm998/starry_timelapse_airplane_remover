@@ -124,11 +124,20 @@ struct InitialView: View {
               .sheet(item: $viewModel.pendingVideoImport) { pending in
                   VideoImportSheetView(
                     pending: pending,
-                    onImport: { format in
+                    onImport: { options in
                         viewModel.pendingVideoImport = nil
-                        startupWithVideoToProcess(pending.path, format: format)
+                        startupWithVideoToProcess(pending.path, options: options)
                     },
                     onCancel: { viewModel.pendingVideoImport = nil })
+              }
+              .sheet(item: $viewModel.pendingSequenceOpen) { pending in
+                  SequenceLocationSheetView(
+                    pending: pending,
+                    onOpen: { outputDir in
+                        viewModel.pendingSequenceOpen = nil
+                        startupWithSequenceDir(pending.path, outputDir: outputDir)
+                    },
+                    onCancel: { viewModel.pendingSequenceOpen = nil })
               }
               .sheet(isPresented: $viewModel.newReleaseSheetShowing) {
                   NewReleaseSheetView(isVisible: $viewModel.newReleaseSheetShowing,
@@ -317,10 +326,12 @@ struct InitialView: View {
         viewModel.pendingVideoImport = PendingVideoImport(path: path)
     }
 
-    func startupWithVideoToProcess(_ path: String, format: FrameDecodeFormat) {
+    func startupWithVideoToProcess(_ path: String, options: VideoImportOptions) {
         viewModel.eraserTask = Task.detached(priority: .userInitiated) {
             do {
-                try await viewModel.startup(withVideoToProcess: path, format: format)
+                try await viewModel.startup(withVideoToProcess: path, format: options.format,
+                                            extractInBackground: options.extractInBackground,
+                                            outputDir: options.outputDir)
                 Task { @MainActor in
                     viewModel.imageSequence?.initialLoadInProgress = true
                 }
@@ -333,10 +344,15 @@ struct InitialView: View {
         }
     }
 
+    /// A sequence has been chosen: ask where its output and working files go, then `startupWithSequenceDir(_:outputDir:)`.
     func startupWithSequenceDir(_ path: String) {
+        viewModel.pendingSequenceOpen = PendingSequenceOpen(path: path)
+    }
+
+    func startupWithSequenceDir(_ path: String, outputDir: String?) {
         viewModel.eraserTask = Task.detached(priority: .userInitiated) {
             do {
-                try await viewModel.startup(withNewImageSequence: path)
+                try await viewModel.startup(withNewImageSequence: path, outputDir: outputDir)
                 Task { @MainActor in
                     viewModel.imageSequence?.initialLoadInProgress = true
                 }

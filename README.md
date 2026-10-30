@@ -99,6 +99,8 @@ Packages available (named `star_cli_*` for the command-line tool, `star_app_*` f
 - **macOS:** `Star.app` (the native GUI) and the `star` command-line tool.
 - **Windows and Linux:** Star Desktop (the graphical client) and the `star` command-line tool.
 
+A video can be opened directly (the GUI and `star` both take one): its frames are extracted to images first, and with "Extract video in background" (`--extract-in-background`; on by default for ProRes and other intra-only formats) processing starts while they are still being extracted. See `plans/STREAMING_FRAME_INTAKE_PLAN.md`.
+
 Either or both can be installed. The installers are self-contained — they bundle OpenCV and ffmpeg (native on Apple silicon and Intel, with VideoToolbox hardware encoding on a Mac) with no external dependencies required. The `star` command-line tool works on image sequences and does not use ffmpeg. See [ffmpeg/README.md](ffmpeg/README.md) for how ffmpeg is built.
 
 Star is under active development. For questions or bug reports, open an issue on GitHub.

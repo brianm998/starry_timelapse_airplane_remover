@@ -384,7 +384,7 @@ public struct Config: Codable, Sendable {
     /// this setting. See `GPUCapability` for how a client shows the user which case
     /// they are in — this flag alone cannot tell them, because "off" and "on but
     /// unsupported" both end up running on the CPU.
-    public var useGPUForMerge: Bool = GPUCapability.isAvailable()
+    public var useGPUForMerge: Bool = GPUCapability.hasFullAcceleration()
 
     /// Whether to use a from-scratch, GPU-accelerated reimplementation of SIFT's
     /// Gaussian scale-space pyramid for sky (star) keypoint detection, in place of
@@ -403,7 +403,7 @@ public struct Config: Codable, Sendable {
     /// not silently opt a sequence into a still-young keypoint detector.
     ///
     /// Still requires `GPUCapability.isAvailable()`, same as `useGPUForMerge`.
-    public var useGPUForSIFT: Bool = GPUCapability.isAvailable()
+    public var useGPUForSIFT: Bool = GPUCapability.hasFullAcceleration()
 
     /// Whether to use a from-scratch, GPU-accelerated reimplementation of
     /// AKAZE's nonlinear diffusion scale-space pyramid for earth (ground)
@@ -418,7 +418,7 @@ public struct Config: Codable, Sendable {
     /// alone must not silently opt a sequence into.
     ///
     /// Still requires `GPUCapability.isAvailable()`, same as `useGPUForMerge`.
-    public var useGPUForAKAZE: Bool = GPUCapability.isAvailable()
+    public var useGPUForAKAZE: Bool = GPUCapability.hasFullAcceleration()
 
     /// A localized, user-facing sentence describing whether this machine has GPU
     /// hardware any of the `useGPUFor*` flags can actually use — independent of
@@ -575,11 +575,11 @@ public struct Config: Codable, Sendable {
         let factor: Double
         switch detector {
         case .sky:
-            gpu = useGPUForSIFT && GPUCapability.isAvailable()
+            gpu = useGPUForSIFT && GPUCapability.hasFullAcceleration()
             fixed = gpu ? 12 : 4
             factor = gpu ? 1.16 : 1.0
         case .earth:
-            gpu = useGPUForAKAZE && GPUCapability.isAvailable()
+            gpu = useGPUForAKAZE && GPUCapability.hasFullAcceleration()
             fixed = gpu ? 8 : 7
             factor = gpu ? 0.87 : 0.61
         }
@@ -1419,10 +1419,10 @@ public struct Config: Codable, Sendable {
     /// "Cloud-aware merge" under Merge Settings in the desktop client's settings sheet (the
     /// daemon carries it as `cloud_aware_merge`).
     ///
-    /// Changing it discards the alignment stage's cached results (`ArtifactInputs`
-    /// records it only while it is on), including that stage's homographies, which are
-    /// recomputed from the cached keypoints. Splitting a separate merge stage so the
-    /// homographies could be kept is not done.
+    /// Changing it discards the star aligned merges and everything made from them — the
+    /// outliers and the output — but keeps the homographies, the horizon consensus and the
+    /// earth aligned merges: `ArtifactInputs` records it under the `alignedMerge` stage,
+    /// which comes after all three.
     public var cloudAwareMerge: Bool = false
 
     mutating public func set(videoInfo: VideoInfo) {
@@ -1890,11 +1890,13 @@ public struct Config: Codable, Sendable {
     // 0.12.4 better ffmpeg support (missing arm arch on macos)
     // 0.12.5 better alignment
     //        cloud merge option
+    // 0.12.6 video decode in background
+    //        UI improvements
 
 
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.12.5"
+    public static let latestVersion = "0.12.6"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil

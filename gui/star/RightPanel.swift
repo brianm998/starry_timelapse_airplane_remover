@@ -22,381 +22,44 @@ struct RightPanel: View {
     let foobar2 = 138.0/255.0
 
     @FocusState private var focusedField: FocusedField?
-    
+
+    // which sections are open; all start open.  Kept here rather than in the
+    // view model: this view stays alive while the panel is hidden, so it survives that
+    @State private var expandedSections = Set(RightPanelSectionKind.allCases)
+    @State private var showingChangeMode = false
+
+    private func isExpanded(_ kind: RightPanelSectionKind) -> Binding<Bool> {
+        Binding(
+          get: { expandedSections.contains(kind) },
+          set: { if $0 { expandedSections.insert(kind) } else { expandedSections.remove(kind) } }
+        )
+    }
+
     var body: some View {
-        @Bindable var viewModel = viewModel
-        @Bindable var loggingViewModel = loggingViewModel
-        let config = viewModel.config.config()
         return Group {
             if viewModel.rightPanelShowing {
                 VStack(alignment: .leading) {
                     ScrollView {
                         VStack(alignment: .leading) {
-
-                            Text(localized("ui.fast_advancement_type"))
-                              .foregroundColor(.white)
-
-                            Picker("", selection: $viewModel.fastAdvancementType) {
-                                ForEach(FastAdvancementType.allCases, id: \.self) { value in
-                                    Text(value.localizedName).tag(value)
-                                }
+                            // the selective tools only do anything when this frame has
+                            // outliers to work on, so they are not shown at all otherwise
+                            if viewModel.currentFrameUsesOutliers {
+                                self.selectiveToolsSection
+                                Divider()
                             }
-                              .help("""
-                                      How the fast forward and fast reverse buttons work:
-
-                                      normal         - move by some fixed number of frames
-                                      skipEmpties    - skip all frames without any outliers
-                                      toNextPositive - skip to the next frame with positive outliers
-                                      toNextNegative - skip to the next frame with negative outliers
-                                      toNextUnknown  - skip to the next frame with unknown outliers
-                                      """)
-                              .frame(maxWidth: 140)
-
-                            switch viewModel.fastAdvancementType {
-                            case .normal:
-                                Text(localized("ui.fast_skip_n_frames", viewModel.fastSkipAmount))
-                                  .frame(maxWidth: 140)
-                                  .multilineTextAlignment(.leading)
-                                  .foregroundColor(.white)
-                            case .skipEmpties:
-                                Text(localized("ui.skip_all_frames_without_outliers"))
-                                  .frame(maxWidth: 140)
-                                  .foregroundColor(.white)
-                            case .toNextPositive:
-                                Text(localized("ui.skip_to_next_frame_with_a_positive_outlier"))
-                                  .frame(maxWidth: 140)
-                                  .foregroundColor(.white)
-                            case .toNextNegative:
-                                Text(localized("ui.skip_to_next_frame_with_a_negative_outlier"))
-                                  .frame(maxWidth: 140)
-                                  .foregroundColor(.white)
-                            case .toNextUnknown:
-                                Text(localized("ui.skip_to_next_frame_with_a_unknown_outlier"))
-                                  .frame(maxWidth: 140)
-                                  .foregroundColor(.white)
-                            }
-
-//                    Toggle(skipEmpties ? "change to # of frames" : "change to skip empties",
-//                           isOn: $skipEmpties)
-
-                    // XXX add advance to has undecided
-                    // XXX add advance to has paintable
-                    // XXX add advance to has not paintable
-                    
-                            if viewModel.fastAdvancementType == .normal {
-                                Text(localized("ui.fast_skip"))
-                                  .foregroundColor(.white)
-                                Picker("", selection: $viewModel.fastSkipAmount) {
-                                    ForEach(0 ..< 51) {
-                                        Text(localized("ui.n_frames_lower", $0))
-                                    }
-                                }.frame(maxWidth: 140)
-                            }
-
-                            HStack {
-                                Text(localized("ui.tool"))
-                                  .foregroundColor(.white)
-                                ToolHelpButton()
-                            }
-                            VerticalStarPicker(nil, selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
-                                HStack {
-                                    if isEnabled {
-                                        Image(value.iconName)
-                                          .resizable()
-                                          .frame(width: 35, height: 35)
-                                    } else {
-                                        Image(value.iconName)
-                                          .resizable()
-                                          .renderingMode(.template)
-                                          .foregroundColor(.gray)
-                                          .frame(width: 35, height: 35)
-                                    }
-                                    Text(value.displayName)
-                                      .foregroundColor(isSelected ?
-                                                         .black :
-                                                         isEnabled ? 
-                                                         .white :
-                                                         .gray)
-                                      .tag(value)
-                                }
-                                  .help(isEnabled ?
-                                          value.helpText :
-                                          localized("tool.help.disabled"))
-                            }
-                              .disabled(!viewModel.currentFrameUsesOutliers)
-
-                            Toggle(localized("ui.multi_choice"), isOn: $viewModel.multiChoice)
-                              .foregroundColor(.white)
-                              .disabled(!viewModel.currentFrameUsesOutliers)
-   
-                            // ── Horizon painting ───────────────────────
-                            Button {
-                                viewModel.isShowingHorizonPainter.toggle()
-                            } label: {
-                                Label(
-                                    viewModel.isShowingHorizonPainter
-                                        ? localized("ui.close_horizon_painter")
-                                        : localized("ui.paint_horizon_reference"),
-                                    systemImage: viewModel.isShowingHorizonPainter
-                                        ? "xmark.circle"
-                                        : "mountain.2"
-                                )
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(viewModel.isShowingHorizonPainter ? .red : .blue)
-                            .help("""
-                                  Open the horizon painting tool to define a reference
-                                  horizon mask for this frame.
-                                  Press H to toggle. Use [ / ] to resize the brush.
-                                  Press - to switch between paint and erase mode.
-                                  """)
-
-                            Button {
-                                viewModel.reprocessHorizonsForUpdatedReferences()
-                            } label: {
-                                Label(localized("ui.re_run_horizon_refinement"), systemImage: "wand.and.stars")
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(.orange)
-                            .help(localized("ui.re_run_brightness_position_refinement_for"))
-                            .disabled(!viewModel.hasPendingHorizonRefinement)
-
-                            Toggle(localized("ui.show_trash"), isOn: $viewModel.shouldShowTrash)
-                              .foregroundColor(.white)
-                              .disabled(!viewModel.currentFrameUsesOutliers)
-
-                            Toggle(localized("ui.show_horizon_line"), isOn: Binding(
-                                get: { viewModel.userPreferences.showHorizonOnMainView ?? false },
-                                set: { viewModel.userPreferences.showHorizonOnMainView = $0 }
-                            ))
-                              .foregroundColor(.white)
-
-                            HorizonLineKindToggles()
-
-                            /*
-                             XXX for some unknown reason, these grab focus and refuse
-                             XXX to let it go :(
-                             
-                            Text(localized("ui.trash_level"))
-                              .foregroundColor(.yellow)
-                            TextField("\(viewModel.trashLevel)",
-                                      text: $viewModel.trashLevelString)
-                              .focused($focusedField, equals: .trashLevel)
-                              .frame(maxWidth: 60)
-                              .onSubmit {
-                                  let filtered = viewModel.trashLevelString.filter { "0123456789.-".contains($0) }
-                                  if let newValue = Double(filtered),
-                                     newValue >= -1,
-                                     newValue <= 1
-                                  {
-                                      viewModel.trashLevel = newValue
-                                      viewModel.trashLevelString = "\(newValue)"
-                                  }
-                                  self.focusedField = nil
-                              }
-
-                              Text(localized("ui.small_trash_max"))
-                              .foregroundColor(.yellow)
-                            TextField("\(viewModel.smallTrashMax)",
-                                      text: $viewModel.smallTrashMaxString)
-                              .frame(maxWidth: 60)
-                              .focused($focusedField, equals: .smallTrashMax)
-                              .onSubmit {
-                                  let filtered = viewModel.smallTrashMaxString.filter { "0123456789".contains($0) }
-                                  if let newValue = Int(filtered) {
-                                      viewModel.smallTrashMax = newValue
-                                      viewModel.smallTrashMaxString = "\(newValue)"
-                                  }
-                                  self.focusedField = nil
-                              }
-                            Text(localized("ui.minimum_classification_size"))
-                              .foregroundColor(.orange)
-                            TextField("\(viewModel.minimumClassificationSize)",
-                                      text: $viewModel.minimumClassificationSizeString)
-                              .frame(maxWidth: 60)
-                              .focused($focusedField, equals: .minimumClassificationSize)
-                              .onSubmit {
-                                  let filtered = viewModel.minimumClassificationSizeString.filter { "0123456789".contains($0) }
-                                  if let newIntValue = Int(filtered),
-                                     newIntValue >= 0
-                                  {
-                                      viewModel.minimumClassificationSize = newIntValue
-                                      viewModel.minimumClassificationSizeString = "\(newIntValue)"
-                                  }
-                                  self.focusedField = nil
-                              }
-
-                             */
-                            
-                            Toggle(localized("ui.only_unclassified"),
-                              isOn: $viewModel.classifyOnlyUnclassified
-                            )
-                              .foregroundColor(.orange)
-                            
-                            // frame rate 
-                            let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]
-                            Text(localized("ui.frame_rate"))
-                              .foregroundColor(.white)
-                            Picker("", selection: $viewModel.videoPlaybackFramerate) {
-                                ForEach(frame_rates, id: \.self) {
-                                    Text(localized("ui.n_fps", $0))
-                                }
-                            }.frame(maxWidth: 100)
-
-
-                            VStack(alignment: .leading) {
-                                // outlier opacity slider
-                                Text(localized("ui.outlier_group_opacity"))
-                                  .foregroundColor(.white)
-                                
-                                Slider(value: $viewModel.outlierOpacity, in : 0...1)
-                                  .frame(maxWidth: 140, alignment: .bottom)
-                                
-                                Text(localized("ui.trash_opacity"))
-                                  .foregroundColor(.white)
-                                
-                                Slider(value: $viewModel.trashOpacity, in : 0...1)
-                                  .frame(maxWidth: 140, alignment: .bottom)
-                                
-                                Text(localized("ui.frame_opacity"))
-                                  .foregroundColor(.white)
-                                
-                                Slider(value: $viewModel.frameOpacity, in : 0...1)
-                                  .frame(maxWidth: 140, alignment: .bottom)
-                            }
-                              .disabled(!viewModel.currentFrameUsesOutliers)
-
-
-                            HStack {
-                                Text(localized("ui.zoom"))
-                                  .foregroundColor(.white)
-                                Spacer()
-                                // Editable max zoom here
-                                EditableMaxZoomView(
-                                  focusedField: $focusedField,
-                                  textColor: .white,
-                                  alwaysOpen: false
-                                )
-                            }
-                              .frame(maxWidth: 140)
-                            Slider(value: $viewModel.currentZoomScale,
-                                   in: viewModel.minZoomScale...viewModel.maxZoomScale)
-                              .frame(maxWidth: 140, alignment: .bottom)
-                            
-                            Toggle(localized("ui.show_full_resolution"), isOn: $viewModel.showFullResolution)
-                              .foregroundColor(.white)
-
-                            self.pixelReplacementModeView
-                            
-                            let frameView = viewModel.currentFrameView
-
-                            if !config.tripodHeadWasMoving {
-                                StaticNeighborFrameOverrideView(
-                                  focusedField: $focusedField
-                                )
-                            }
-
-                            ResourceProfileView(textColor: .white)
-
-                            Picker(localized("ui.redo"), selection: $viewModel.reprocessingType) {
-                                ForEach(FrameReprocessingType.allCases, id: \.self) { value in
-                                    Text(value.rawValue).tag(value)
-                                }
-                            }
-                              .foregroundColor(.white)
-                              .frame(maxWidth: 120)
-                                            
-                            Button() {
-                                Task {
-                                    if let frame = viewModel.currentFrame {
-                                        // XXX reprocess
-                                        viewModel.processFrames(
-                                          from: frame.frameIndex,
-                                          to: frame.frameIndex+viewModel.numberOfFramesToProcess-1,
-                                          performClean: true // uses viewModel.reprocessingType
-                                        )
-                                    }
-                                }
-                            } label: {
-                                switch viewModel.reprocessingType {
-                                case .none:
-                                    Text(localized("ui.process_the_next"))
-                                case .allHorizons:
-                                    Text(localized("ui.re_process_all_horizons"))
-                                default:
-                                    Text(localized("ui.re_process_the_next"))
-                                }
-                            }
-                              .disabled(viewModel.renderingCurrentFrame)
-
-                            if viewModel.reprocessingType != .allHorizons {
-                                EditableNumberOfFramesToProcessView(
-                                  focusedField: $focusedField,
-                                  textColor: .white,
-                                  alwaysOpen: false
-                                )
-
-                                Picker("", selection: $viewModel.detectionType) {
-                                    ForEach(DetectionType.allCases, id: \.self) { value in
-                                        Text(value.rawValue).tag(value)
-                                    }
-                                }
-                                  .frame(maxWidth: 120)
-                                  .onChange(of: viewModel.detectionType) {
-                                      Task {
-                                          await constants.set(detectionType: viewModel.detectionType)
-
-                                          // stick it in user preferences
-                                          self.viewModel.userPreferences.processingType = viewModel.detectionType
-                                      }
-                                  }
-                            }
-
-                            Button() {
-                                Task {
-                                    do {
-                                        if let frame = viewModel.currentFrame {
-                                            try await viewModel.render(frame: frame, now: true)
-                                        }
-                                    } catch {
-                                        viewModel.report(error: localized("ui.render_failed", error))
-                                    }
-                                }
-                            } label: {
-                                Text(localized("ui.render_updates"))
-                            }
-                              .disabled(frameView.outlierViews == nil ||
-                                          viewModel.renderingCurrentFrame)
-
-                            // used for debugging stuck operation queue
-/*
-                            Button {
-                                Task { 
-                                   await frameGraphBuilder.debugPrint()
-                                }
-                            } label: {
-                                Text(localized("ui.log_operation_queue"))
-                            }
-  */                          
-                            // enable logging
-                            HStack(spacing: 0) {
-                                Toggle(isOn: $loggingViewModel.fileLogEnabled) {
-                                    Text("")
-                                      .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
-                                }
-                                Text(localized("ui.log_to_file_at_level_2"))
-                                  .foregroundColor(loggingViewModel.fileLogEnabled ? .green : .white)
-                            }
-                            Picker(selection: $loggingViewModel.fileLogLevel) {
-                                ForEach(Log.Level.allCases, id: \.self) { level in
-                                    Text("\(level.emo) \(level.rawValue)")
-                                }
-                            } label: { }
-                              .pickerStyle(.menu)
-                              .fixedSize(horizontal: true, vertical: false)
-                              .disabled(!loggingViewModel.fileLogEnabled)
-                            
+                            self.processingSection
+                            Divider()
+                            self.debugSection
                         }
+                          // room under the last control, so it can always be scrolled
+                          // clear of the panel's close chevron and stays clickable
+                          .padding(.bottom, 32)
+                          // a floor, so the panel is not a sliver while every section is
+                          // collapsed, and does not jump much as sections open and close
+                          .frame(minWidth: 180, alignment: .leading)
+                          // as wide as its widest control, and no wider: the dividers
+                          // would otherwise stretch the panel across the window
+                          .fixedSize(horizontal: true, vertical: false)
                     }
                       .defaultScrollAnchor(.bottom)
                       .focusable(false)
@@ -435,67 +98,436 @@ struct RightPanel: View {
         }
     }
     
-    var pixelReplacementModeView: some View {
+    // MARK: - Selective Tools
+
+    var selectiveToolsSection: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
-            if viewModel.currentFrameHasOverriddenCleanMethod {
-                Text(localized("ui.custom"))
+            RightPanelSectionHeader(title: localized("ui.section.selective_tools"),
+                                    help: localized("ui.section.selective_tools_help"),
+                                    isExpanded: self.isExpanded(.selectiveTools))
+
+            if expandedSections.contains(.selectiveTools) {
+                HStack {
+                    Text(localized("ui.tool"))
+                      .foregroundColor(.white)
+                    ToolHelpButton()
+                }
+                  .help(localized("ui.tool_help"))
+                VerticalStarPicker(nil, selection: $viewModel.selectionMode) { value, isEnabled, isSelected in
+                    HStack {
+                        if isEnabled {
+                            Image(value.iconName)
+                              .resizable()
+                              .frame(width: 35, height: 35)
+                        } else {
+                            Image(value.iconName)
+                              .resizable()
+                              .renderingMode(.template)
+                              .foregroundColor(.gray)
+                              .frame(width: 35, height: 35)
+                        }
+                        Text(value.displayName)
+                          .foregroundColor(isSelected ?
+                                             .black :
+                                             isEnabled ?
+                                             .white :
+                                             .gray)
+                          .tag(value)
+                    }
+                      .help(isEnabled ?
+                              value.helpText :
+                              localized("tool.help.disabled"))
+                }
+
+                Toggle(localized("ui.multi_choice"), isOn: $viewModel.multiChoice)
                   .foregroundColor(.white)
-            } else {
-                Text(localized("ui.default"))
+                  .help(localized("ui.multi_choice_help"))
+
+                Toggle(localized("ui.show_trash"), isOn: $viewModel.shouldShowTrash)
                   .foregroundColor(.white)
+                  .help(localized("ui.show_trash_help"))
+
+                /*
+                 XXX for some unknown reason, these grab focus and refuse
+                 XXX to let it go :(
+
+                Text(localized("ui.trash_level"))
+                  .foregroundColor(.yellow)
+                TextField("\(viewModel.trashLevel)",
+                          text: $viewModel.trashLevelString)
+                  .focused($focusedField, equals: .trashLevel)
+                  .frame(maxWidth: 60)
+                  .onSubmit {
+                      let filtered = viewModel.trashLevelString.filter { "0123456789.-".contains($0) }
+                      if let newValue = Double(filtered),
+                         newValue >= -1,
+                         newValue <= 1
+                      {
+                          viewModel.trashLevel = newValue
+                          viewModel.trashLevelString = "\(newValue)"
+                      }
+                      self.focusedField = nil
+                  }
+
+                  Text(localized("ui.small_trash_max"))
+                  .foregroundColor(.yellow)
+                TextField("\(viewModel.smallTrashMax)",
+                          text: $viewModel.smallTrashMaxString)
+                  .frame(maxWidth: 60)
+                  .focused($focusedField, equals: .smallTrashMax)
+                  .onSubmit {
+                      let filtered = viewModel.smallTrashMaxString.filter { "0123456789".contains($0) }
+                      if let newValue = Int(filtered) {
+                          viewModel.smallTrashMax = newValue
+                          viewModel.smallTrashMaxString = "\(newValue)"
+                      }
+                      self.focusedField = nil
+                  }
+                Text(localized("ui.minimum_classification_size"))
+                  .foregroundColor(.orange)
+                TextField("\(viewModel.minimumClassificationSize)",
+                          text: $viewModel.minimumClassificationSizeString)
+                  .frame(maxWidth: 60)
+                  .focused($focusedField, equals: .minimumClassificationSize)
+                  .onSubmit {
+                      let filtered = viewModel.minimumClassificationSizeString.filter { "0123456789".contains($0) }
+                      if let newIntValue = Int(filtered),
+                         newIntValue >= 0
+                      {
+                          viewModel.minimumClassificationSize = newIntValue
+                          viewModel.minimumClassificationSizeString = "\(newIntValue)"
+                      }
+                      self.focusedField = nil
+                  }
+
+                 */
+
+                Toggle(localized("ui.only_unclassified"),
+                  isOn: $viewModel.classifyOnlyUnclassified
+                )
+                  .foregroundColor(.orange)
+                  .help(localized("ui.only_unclassified_help"))
+
+                Group {
+                    Text(localized("ui.outlier_group_opacity"))
+                      .foregroundColor(.white)
+                    Slider(value: $viewModel.outlierOpacity, in : 0...1)
+                      .frame(maxWidth: 140, alignment: .bottom)
+                }
+                  .help(localized("ui.outlier_group_opacity_help"))
+
+                Group {
+                    Text(localized("ui.trash_opacity"))
+                      .foregroundColor(.white)
+                    Slider(value: $viewModel.trashOpacity, in : 0...1)
+                      .frame(maxWidth: 140, alignment: .bottom)
+                }
+                  .help(localized("ui.trash_opacity_help"))
             }
-            Picker(localized("ui.clean"),
-                   selection: $viewModel.currentFrameHighLevelCleanMethod)
-            {
+        }
+    }
+
+    // MARK: - Processing
+
+    var processingSection: some View {
+        @Bindable var viewModel = viewModel
+        let config = viewModel.config.config()
+        let frameView = viewModel.currentFrameView
+        return VStack(alignment: .leading) {
+            RightPanelSectionHeader(title: localized("ui.processing"),
+                                    help: localized("ui.section.processing_help"),
+                                    isExpanded: self.isExpanded(.processing))
+
+            if expandedSections.contains(.processing) {
+                // ── Horizon painting ───────────────────────
+                Button {
+                    viewModel.isShowingHorizonPainter.toggle()
+                } label: {
+                    Label(
+                        viewModel.isShowingHorizonPainter
+                            ? localized("ui.close_horizon_painter")
+                            : localized("ui.paint_horizon_reference"),
+                        systemImage: viewModel.isShowingHorizonPainter
+                            ? "xmark.circle"
+                            : "mountain.2"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .tint(viewModel.isShowingHorizonPainter ? .red : .blue)
+                .help(localized("ui.paint_horizon_reference_help"))
+
+                Button {
+                    viewModel.reprocessHorizonsForUpdatedReferences()
+                } label: {
+                    Label(localized("ui.re_run_horizon_refinement"), systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
+                .help(localized("ui.re_run_brightness_position_refinement_for"))
+                .disabled(!viewModel.hasPendingHorizonRefinement)
+
+                self.pixelReplacementModeView
+
+                if !config.tripodHeadWasMoving {
+                    StaticNeighborFrameOverrideView(
+                      focusedField: $focusedField
+                    )
+                      .help(localized("ui.static_merge_help"))
+                }
+
+                ResourceProfileView(textColor: .white)
+
+                Button() {
+                    Task {
+                        do {
+                            if let frame = viewModel.currentFrame {
+                                try await viewModel.render(frame: frame, now: true)
+                            }
+                        } catch {
+                            viewModel.report(error: localized("ui.render_failed", error))
+                        }
+                    }
+                } label: {
+                    Text(localized("ui.render_updates"))
+                }
+                  .disabled(frameView.outlierViews == nil ||
+                              viewModel.renderingCurrentFrame)
+                  .help(localized("ui.render_updates_help"))
+
+                // used for debugging stuck operation queue
+    /*
+                Button {
+                    Task {
+                       await frameGraphBuilder.debugPrint()
+                    }
+                } label: {
+                    Text(localized("ui.log_operation_queue"))
+                }
+      */
+            }
+        }
+    }
+
+    // MARK: - Debug
+
+    var debugSection: some View {
+        @Bindable var loggingViewModel = loggingViewModel
+        return VStack(alignment: .leading) {
+            RightPanelSectionHeader(title: localized("ui.section.debug"),
+                                    help: localized("ui.section.debug_help"),
+                                    isExpanded: self.isExpanded(.debug))
+
+            if expandedSections.contains(.debug) {
+                // enable logging
+                Group {
+                    HStack(spacing: 0) {
+                        Toggle(isOn: $loggingViewModel.fileLogEnabled) {
+                            Text("")
+                              .foregroundColor(loggingViewModel.fileLogEnabled ? .black : .gray)
+                        }
+                        Text(localized("ui.log_to_file_at_level_2"))
+                          .foregroundColor(loggingViewModel.fileLogEnabled ? .green : .white)
+                    }
+                    Picker(selection: $loggingViewModel.fileLogLevel) {
+                        ForEach(Log.Level.allCases, id: \.self) { level in
+                            Text("\(level.emo) \(level.rawValue)")
+                        }
+                    } label: { }
+                      .pickerStyle(.menu)
+                      .fixedSize(horizontal: true, vertical: false)
+                      .disabled(!loggingViewModel.fileLogEnabled)
+                }
+                  .help(localized("ui.log_to_file_help"))
+            }
+        }
+    }
+
+    var pixelReplacementModeView: some View {
+        let method = viewModel.getCleanMethod(forFrame: viewModel.currentIndex)
+        let name = method.frameModeName
+        let text = viewModel.currentFrameHasOverriddenCleanMethod
+          ? localized("ui.processing_mode_current_custom", name)
+          : localized("ui.processing_mode_current_default", name)
+        return HStack {
+            Text(text)
+              .foregroundColor(.white)
+            Spacer(minLength: 8)
+            Button(localized("ui.change_mode")) {
+                showingChangeMode = true
+            }
+              .help(localized("ui.clean_method_help"))
+        }
+          .sheet(isPresented: $showingChangeMode) {
+              ChangeProcessingModeView()
+          }
+    }
+}
+
+extension CleanMethod {
+    /// The name of this mode as the change-mode dialog and the panel show it.
+    var frameModeName: String {
+        switch self {
+        case .automatic(let usesOutliers):
+            localized(usesOutliers ? "ui.frame_mode_auto_selective" : "ui.frame_mode_automatic")
+        case .selective:
+            localized("ui.frame_mode_selective")
+        }
+    }
+
+    var frameModeDescription: String {
+        switch self {
+        case .automatic(let usesOutliers):
+            localized(usesOutliers ? "ui.frame_mode_desc_auto_selective" : "ui.frame_mode_desc_automatic")
+        case .selective:
+            localized("ui.frame_mode_desc_selective")
+        }
+    }
+}
+
+/// Changes the current frame's processing mode.  The two choices are held here and only
+/// reach the frame when OK is pressed; Cancel leaves the frame as it was.
+struct ChangeProcessingModeView: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var clean: HighLevelCleanMethod = .automatic
+    @State private var autoSelect: AutoPreservationMode = .no
+    @State private var loaded = false
+
+    private var currentMethod: CleanMethod {
+        viewModel.getCleanMethod(forFrame: viewModel.currentIndex)
+    }
+
+    private var newMethod: CleanMethod {
+        CleanMethod(highLevelCleanMethod: clean, autoPreservationMode: autoSelect)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(localized("ui.change_mode_title"))
+              .font(.title)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localized("ui.processing_mode_current", currentMethod.frameModeName))
+                  .font(.headline)
+                Text(currentMethod.frameModeDescription)
+                  .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            Picker(localized("ui.clean"), selection: $clean) {
                 ForEach(HighLevelCleanMethod.allCases, id: \.id) { value in
                     HStack {
                         switch value {
-                        case .automatic:
-                            AutoIcon()
-                              .foregroundColor(.white)
-                            Text(localized("ui.automatic"))
-                              .foregroundColor(.white)
-                            
-                        case .selective:
-                            SelectiveIcon()
-                              .foregroundColor(.white)
-                            Text(localized("ui.selective"))
-                              .foregroundColor(.white)
+                        case .automatic: AutoIcon()
+                        case .selective: SelectiveIcon()
                         }
+                        Text(localized(value == .automatic ? "ui.automatic" : "ui.selective"))
                     }
                 }
             }
-              .foregroundColor(.white)
               .pickerStyle(.inline)
+              .help(localized("ui.clean_method_help"))
 
-//            Text(AutoPreservationMode.topTitle)
-//              .foregroundColor(.white)
-            Picker(localized("ui.auto_select"),
-                   selection: $viewModel.currentFrameAutoPreservationMode)
-            {
+            Picker(localized("ui.auto_select"), selection: $autoSelect) {
                 ForEach(AutoPreservationMode.allCases, id: \.id) { value in
                     HStack {
                         switch value {
-                        case .yes:
-                            AutoSelectiveIcon()
-                              .foregroundColor(.white)
-                        case .no:
-                            AutoIcon()
-                              .foregroundColor(.white)
+                        case .yes: AutoSelectiveIcon()
+                        case .no: AutoIcon()
                         }
                         Text(value.titleText)
-                          .foregroundColor(.white)
                     }
                 }
             }
-              .foregroundColor(.white)
               .pickerStyle(.inline)
-              .disabled(viewModel.currentFrameHighLevelCleanMethod != .automatic)
+              .disabled(clean != .automatic)
+              .help(localized("ui.auto_select_help"))
 
+            Group {
+                if newMethod == currentMethod {
+                    Text(localized("ui.change_mode_none"))
+                      .foregroundColor(.secondary)
+                } else {
+                    Text(localized("ui.change_mode_summary",
+                                   currentMethod.frameModeName,
+                                   newMethod.frameModeName,
+                                   newMethod.frameModeDescription))
+                }
+            }
+              .fixedSize(horizontal: false, vertical: true)
 
+            HStack {
+                Button(localized("ui.cancel")) {
+                    dismiss()
+                }
+                  .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button(localized("ui.ok")) {
+                    viewModel.applyCleanMethodToCurrentFrame(newMethod)
+                    dismiss()
+                }
+                  .keyboardShortcut(.defaultAction)
+                  .buttonStyle(.borderedProminent)
+                  .tint(.blue)
+                  .disabled(newMethod == currentMethod)
+            }
         }
-          .fixedSize(horizontal: true, vertical: false)
+          .padding(24)
+          .frame(width: 460)
+          .onAppear {
+              guard !loaded else { return }
+              loaded = true
+              switch currentMethod {
+              case .automatic(let usesOutliers):
+                  clean = .automatic
+                  autoSelect = usesOutliers ? .yes : .no
+              case .selective:
+                  clean = .selective
+                  autoSelect = .no
+              }
+          }
+    }
+}
+
+enum RightPanelSectionKind: Hashable, CaseIterable {
+    case selectiveTools
+    case processing
+    case debug
+}
+
+/// The labeled top of each right panel section; hovering it explains the section,
+/// clicking it opens or closes the section.  The chevron points right while closed
+/// and down while open.
+struct RightPanelSectionHeader: View {
+    let title: String
+    let help: String
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                  .font(.caption.weight(.bold))
+                  .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                  .frame(width: 12)
+                Text(title)
+                  .font(.headline)
+            }
+              .foregroundColor(.white)
+              .contentShape(Rectangle())
+        }
+          .buttonStyle(.plain)
+          .padding(.top, 4)
+          .help(help)
     }
 }
 
@@ -696,19 +728,26 @@ struct ResourceProfileView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(localized("ui.use_of_this_mac"))
-              .foregroundColor(textColor)
-            // Stacked, not a segmented row: the right panel is narrow, and four buttons
-            // side by side made the control wider than everything around it.
-            Picker("", selection: profileBinding) {
-                Text(localized("ui.use_full")).foregroundColor(textColor).tag(ResourceProfile?.some(.full))
-                Text(localized("ui.use_balanced")).foregroundColor(textColor).tag(ResourceProfile?.some(.balanced))
-                Text(localized("ui.use_light")).foregroundColor(textColor).tag(ResourceProfile?.some(.light))
+        // Trailing-aligned so the controls stay pinned to the right edge while the "Limited by"
+        // line below them grows and shrinks to the left, rather than the whole view's left
+        // edge (and so its right-hand controls) shifting with that text's width.
+        VStack(alignment: .trailing, spacing: 4) {
+            // Centre-aligned, so the label sits level with the middle (Balanced) radio.
+            HStack(alignment: .center, spacing: 8) {
+                Text(localized("ui.use_of_this_mac"))
+                  .foregroundColor(textColor)
+                // Stacked, not a segmented row: the right panel is narrow, and four buttons
+                // side by side made the control wider than everything around it.
+                Picker("", selection: profileBinding) {
+                    Text(localized("ui.use_full")).foregroundColor(textColor).tag(ResourceProfile?.some(.full))
+                    Text(localized("ui.use_balanced")).foregroundColor(textColor).tag(ResourceProfile?.some(.balanced))
+                    Text(localized("ui.use_light")).foregroundColor(textColor).tag(ResourceProfile?.some(.light))
+                }
+                  .pickerStyle(.radioGroup)
+                  .colorScheme(.dark)
+                  .labelsHidden()
+                  .fixedSize()
             }
-              .pickerStyle(.radioGroup)
-              .colorScheme(.dark)
-              .labelsHidden()
             Button(localized("ui.use_custom")) {
                 if viewModel.resourceProfile != .custom {
                     viewModel.resourceProfile = .custom
@@ -726,6 +765,7 @@ struct ResourceProfileView: View {
                 Text(status)
                   .font(.caption)
                   .foregroundColor(.gray)
+                  .multilineTextAlignment(.trailing)
             }
         }
         .help(localized("ui.use_of_this_mac_help"))

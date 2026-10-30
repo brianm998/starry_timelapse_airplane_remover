@@ -25,6 +25,9 @@ public class FrameViewModel {
         }
     }
 
+    /// False while this frame's original has not been extracted from its video yet.
+    var isExtracted = true
+
     var existingImages: Set<FrameViewMode> = [] {
         didSet { reportAvailabilityChange(from: oldValue, to: existingImages) }
     }

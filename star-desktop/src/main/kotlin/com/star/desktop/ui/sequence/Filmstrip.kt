@@ -57,6 +57,7 @@ fun Filmstrip(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val states by vm.frameStates.collectAsState()
     val loads by vm.outlierLoadState.collectAsState()
     val revisions by vm.frameRevisions.collectAsState()
+    val extracted by vm.extractedFrames.collectAsState()
     val listState = rememberLazyListState()
 
     LaunchedEffect(current) {
@@ -79,6 +80,7 @@ fun Filmstrip(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 state = states[i],
                 outliersLoading = loads[i] == OUTLIERS_LOADING,
                 revision = revisions[i] ?: 0,
+                extracted = extracted?.contains(i) ?: true,
             )
         }
     }
@@ -96,6 +98,8 @@ private fun FilmstripCell(
     outliersLoading: Boolean,
     /** Changes when a picture of this frame is saved, so the thumbnail is fetched again. */
     revision: Int,
+    /** False while the frame's original has not been extracted from its video yet. */
+    extracted: Boolean = true,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
@@ -190,6 +194,14 @@ private fun FilmstripCell(
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )
+                }
+                // Not extracted from the video yet: dimmed, with a mark, and no thumbnail to show.
+                if (!extracted) {
+                    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                        com.star.desktop.ui.components.HoverTip(localized("ui.frame_not_extracted_short")) {
+                            Text("⏳", fontSize = 16.sp, color = StarColors.white.copy(alpha = 0.8f))
+                        }
+                    }
                 }
                 // The horizon lines the user has switched on, each by kind (the composite's orange while the frame waits for a refinement).
                 overlay?.takeIf { it.exists }?.let { ov ->

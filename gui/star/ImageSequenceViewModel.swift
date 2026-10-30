@@ -385,6 +385,43 @@ public final class ImageSequenceViewModel {
     /// When `true` the horizon-painting overlay is shown over the frame view.
     var isShowingHorizonPainter = false
 
+    /// Whether the user has put any paint on the horizon painter's current frame.  Mirrored
+    /// from the painter's `HorizonPaintState` by `FrameEditView`, because the paint state
+    /// lives in that view and `currentIndex` has to be able to ask.
+    var horizonPaintingStarted = false
+
+    /// The frame a change of `currentIndex` was headed for when it was held back because
+    /// painting had started; non-nil while the "change frame?" alert is up.
+    var pendingHorizonFrameChange: Int?
+
+    /// Set by the callers that move the frame on purpose mid-paint (the startup flow's
+    /// advance), so they are not asked about.
+    private var horizonFrameChangeApproved = false
+
+    /// A modal panel (the processing dialog, the re-open progress panel) is over the window.
+    /// Nothing under it should answer to a key.
+    var isProcessingModalUp: Bool {
+        (processingModalShowing && isProcessingFrames)
+            || (sequenceProgressModalShowing && !isProcessingFrames)
+    }
+
+    /// Whether the single-key menu shortcuts (modes, tools, remove/keep/render ...) act.
+    /// Off under a modal, and off while painting a horizon, where `s` would leave the
+    /// edit aside and `space` or `r` would change what is happening under the brush.
+    var menuHotkeysEnabled: Bool { !isProcessingModalUp && !isShowingHorizonPainter }
+
+    /// The user answered the "change frame?" alert: yes.
+    func confirmHorizonFrameChange() {
+        guard let target = pendingHorizonFrameChange else { return }
+        pendingHorizonFrameChange = nil
+        horizonFrameChangeApproved = true
+        currentIndex = target
+        horizonFrameChangeApproved = false
+    }
+
+    /// The user answered the "change frame?" alert: keep painting.
+    func cancelHorizonFrameChange() { pendingHorizonFrameChange = nil }
+
     /// Differentiates how the horizon painter was opened.
     var horizonPainterMode: HorizonPainterMode = .normal
 
@@ -545,7 +582,9 @@ public final class ImageSequenceViewModel {
         horizonPainterStartupFramePosition += 1
         recordStartupHorizonProgress()
         guard horizonPainterStartupFramePosition < horizonPainterStartupFrameIndices.count else { return }
+        horizonFrameChangeApproved = true
         currentIndex = horizonPainterStartupFrameIndices[horizonPainterStartupFramePosition]
+        horizonFrameChangeApproved = false
         // FrameEditView watches currentIndex while painter is open in startup mode
         // and resets the HorizonPaintState for the new frame automatically.
     }
@@ -640,9 +679,123 @@ public final class ImageSequenceViewModel {
     
     var number_of_frames: Int = 50
 
+    // MARK: frames that are still being extracted
+
+    /// Where this sequence's frames come from; for a video that is still being extracted, which of them are there yet.
+    var frameSource: FrameSource?
+    /// The frames that are extracted.  Everything, for an image sequence.
+    var extractedFrames = IndexSet()
+    /// How far the extraction has got; nil for an image sequence.
+    var extractionProgress: FrameExtractionProgress?
+    /// Why the extraction failed, when it did.
+    var extractionError: String?
+    @ObservationIgnored private var extractionWatch: Task<Void, Never>?
+
+    /// Whether a video is still being extracted (the progress strip is up, and frames may be missing).
+    var isExtractingFrames: Bool {
+        guard let progress = extractionProgress else { return false }
+        return !progress.isComplete || extractionError != nil
+    }
+
+    /// What a run says while the video it works on is still being extracted, so that it is not taken for a hang; nil otherwise.
+    var waitingForFramesText: String? {
+        guard isExtractingFrames, let progress = extractionProgress, progress.total > 0 else { return nil }
+        return localized("ui.processing_waiting_for_frames", progress.extracted * 100 / progress.total)
+    }
+
+    func isExtracted(_ frameIndex: Int) -> Bool {
+        !isExtractingFrames || extractedFrames.contains(frameIndex)
+    }
+
+    var isCurrentFrameExtracted: Bool { isExtracted(currentIndex) }
+
+    /// Subscribes to the source's events, if frames are still arriving.  Frames the video has not given up yet are marked on their view
+    /// models; as they arrive they are marked back, and their previews and thumbnails are queued.
+    func startWatchingExtraction() {
+        guard let source = frameSource, !source.progress.isComplete, extractionWatch == nil else { return }
+        extractedFrames = source.availableFrames
+        extractionProgress = source.progress
+        for index in 0..<frames.count where !extractedFrames.contains(index) { frames[index].isExtracted = false }
+        // The frames the video already had when it was opened never had previews made for them as they arrived.
+        queueMissingPreviews(for: extractedFrames)
+        prioritizeForUser()
+        extractionWatch = Task { [weak self] in
+            for await event in source.events() {
+                guard let self else { return }
+                switch event {
+                case .snapshot: break
+                case .framesAvailable(let set):
+                    self.extractedFrames.formUnion(set)
+                    for index in set where index < self.frames.count { self.frames[index].isExtracted = true }
+                    self.queueMissingPreviews(for: set)
+                case .progress(let progress):
+                    self.extractionProgress = progress
+                case .frameCountSettled, .frameFailed: break
+                case .failed(let message):
+                    self.extractionError = message
+                    self.extractionProgress = source.progress
+                case .finished:
+                    self.extractionProgress = source.progress
+                    self.extractionWatch = nil
+                }
+            }
+        }
+    }
+
+    /// Asks the source for the frame on screen and the ones around it first.  A no-op unless frames are still arriving.
+    func prioritizeForUser() {
+        guard let source = frameSource, isExtractingFrames else { return }
+        let reach = max(8, min(frames.count, 24))
+        let near = Array(max(0, currentIndex - reach)...min(frames.count - 1, currentIndex + reach))
+        source.prioritize([currentIndex], reason: .userViewing)
+        source.prioritize(near.filter { $0 != currentIndex && !extractedFrames.contains($0) }, reason: .userNearby)
+    }
+
+    /// Preview and thumbnail operations for frames that have just been extracted, at the back of the queue like the ones made at open.
+    private func queueMissingPreviews(for indices: IndexSet) {
+        let wanted = indices.filter { $0 < frames.count }.map { frames[$0] }
+        guard !wanted.isEmpty else { return }
+        Task.detached(priority: .utility) { [wanted] in
+            for frameView in wanted {
+                guard let frame = await frameView.frame else { continue }
+                let imageAccessor = frame.imageAccessor
+                let previewUnit = await frame.configManager.config().workingFrameBytes
+                for (mode, size) in [(FrameViewMode.original, ImageDisplaySize.preview), (.original, .thumbnail)]
+                where imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: mode, atSize: .original) != nil
+                        && imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: mode, atSize: size) == nil
+                {
+                    let op = PreviewOp(
+                      frameView: frameView,
+                      imageAccessor: imageAccessor,
+                      frameIndex: frame.frameIndex,
+                      type: mode,
+                      size: size,
+                      rawImageBytes: previewUnit
+                    ) { errorString in
+                        Log.e("frame \(frame.frameIndex) unable to create preview: \(errorString)")
+                    }
+                    op.queuePriority = .veryLow
+                    await frameGraphBuilder.add(operation: op)
+                }
+            }
+        }
+    }
+
     // the frame number of the frame we're currently showing
     var currentIndex = 0 {
         didSet {
+            // Paint on a horizon reference belongs to the frame it was painted on: moving
+            // off it by any route (filmstrip, arrows, playback) is held back and asked about.
+            if oldValue != currentIndex,
+               isShowingHorizonPainter,
+               horizonPaintingStarted,
+               !horizonFrameChangeApproved
+            {
+                pendingHorizonFrameChange = currentIndex
+                currentIndex = oldValue   // assigning in its own didSet does not recurse
+                return
+            }
+            if oldValue != currentIndex { prioritizeForUser() }
             if currentIndex >= 0,
                currentIndex < self.frames.count
             {
@@ -1830,6 +1983,8 @@ public final class ImageSequenceViewModel {
       viewModel: ViewModel,
       withNewImageSequence imageSequenceDirname: String,
       and videoInfo: VideoInfo? = nil,
+      frameSource: FrameSource? = nil,
+      outputDir: String? = nil,
       closure: @Sendable @escaping (Int, Double) -> Void) async throws
     {
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
@@ -1865,7 +2020,7 @@ public final class ImageSequenceViewModel {
         }
 
         var config = Config(
-          outputPath: inputImageSequencePath,
+          outputPath: outputDir ?? inputImageSequencePath,
           imageSequenceName: inputImageSequenceName,
           imageSequencePath: inputImageSequencePath,
           writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
@@ -1887,6 +2042,7 @@ public final class ImageSequenceViewModel {
         try await self.init(
           viewModel: viewModel,
           with: configManager,
+          frameSource: frameSource,
           closure: closure
         )
 
@@ -1911,6 +2067,10 @@ public final class ImageSequenceViewModel {
 
     public func disable() {
         self.appNapDisabler.end()
+        // What is extracted stays, and the folder says it is not complete, so reopening carries on.
+        extractionWatch?.cancel()
+        extractionWatch = nil
+        frameSource?.stop()
     }
     
     deinit {
@@ -1924,6 +2084,7 @@ public final class ImageSequenceViewModel {
     init(
       viewModel: ViewModel,
       with configManager: ConfigManager,
+      frameSource: FrameSource? = nil,
       closure: @Sendable @escaping (Int, Double) -> Void
     ) async throws {
         self.topViewModel = viewModel
@@ -2008,8 +2169,18 @@ public final class ImageSequenceViewModel {
         // per alignment type from every sequence opened this session.
         await keypointCache.clear()
 
-        let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
-                                              supportedImageFileTypes: config.supportedImageFileTypes)
+        // The frames of a video that is still being extracted come from the source the import started; a folder is an image
+        // sequence, or the frames of a video whose extraction was interrupted, which carries on.
+        let source: FrameSource
+        if let frameSource {
+            source = frameSource
+        } else {
+            source = try await FrameSourceFactory.open(
+              directory: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
+              supportedImageFileTypes: config.supportedImageFileTypes)
+        }
+        self.frameSource = source
+        let imageSequence = ImageSequence(source: source)
 
         Log.d("loaded image sequence")
         let imageInfo = try await imageSequence.getImageInfo()
@@ -2082,6 +2253,8 @@ public final class ImageSequenceViewModel {
                 Log.e("startup error: \(error)")
             }
         }.value
+        // Frames that are still arriving: say which are there, and mark the ones that are not.
+        self.startWatchingExtraction()
     }
 
     nonisolated private func setup(
@@ -2712,6 +2885,7 @@ public final class ImageSequenceViewModel {
     }
 
     private func handleProcessingDone() {
+        Log.i("processing done: render after = \(autoRenderAfterProcessing), skip prompts = \(userPreferences.skipRenderPromptAfterProcessing == true)")
         if autoRenderAfterProcessing {
             // user already said yes in the pre-prompt — render directly
             autoRenderAfterProcessing = false
@@ -3457,6 +3631,22 @@ public final class ImageSequenceViewModel {
     var currentFrameAutoPreservationMode: AutoPreservationMode = .no  {
         didSet {
             self.updateCleanMethod()
+        }
+    }
+
+    /// Gives the current frame a new clean method in one step, setting the two published
+    /// choices without their didSets so no intermediate mode is ever applied to the frame.
+    func applyCleanMethodToCurrentFrame(_ method: CleanMethod) {
+        switch method {
+        case .automatic(let useOutliers):
+            self._currentFrameHighLevelCleanMethod = .automatic
+            self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
+        case .selective:
+            self._currentFrameHighLevelCleanMethod = .selective
+            self._currentFrameAutoPreservationMode = .no
+        }
+        if getCleanMethod(forFrame: currentIndex) != method {
+            self.set(cleanMethod: method, forFrame: currentIndex)
         }
     }
 

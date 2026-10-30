@@ -466,8 +466,24 @@
         Resolve. Star App can also work directly on an already-rendered video:
         it decodes the video into a 16-bit image sequence, removes streaks, and
         re-encodes using the same codec — so no extra generation of encoding
-        loss is introduced. This video round-trip is a Star App feature; the
-        CLI works with image sequences only.
+        loss is introduced. The CLI can also take a video directly.
+        <br><br>
+        <strong>Extract in the background.</strong> A video is taken apart into
+        one image per frame first. With &ldquo;Extract video in background&rdquo;
+        (the default for ProRes and other formats that store every frame on its
+        own; <code>--extract-in-background</code> on the CLI) Star starts as soon
+        as the first frame is out and works on the rest as it arrives. The frames
+        you look at are extracted first, frames that are not there yet are
+        marked, and a progress bar says how long the rest will take. For
+        H.264, H.265 and similar formats each jump to a new part of the video
+        costs a few seconds, so extracting everything first is usually quicker
+        if you will paint horizons by hand. The result is identical either way:
+        only when the work happens changes.
+        <br><br>
+        <strong>TIFF compression.</strong> The frames of an imported video can be
+        written uncompressed, which Star reads 1.5 to 2 times as fast, or with
+        PackBits, which only saves disk space where a frame has large flat areas
+        such as a black ground.
       </div>
     </div>
 

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Label trails</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --panel:#f3f3f3; --line:#c8c8c8; --accent:#0a66d6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16181c; --fg:#e8e8e8; --panel:#22262c; --line:#3a3f47; --accent:#5aa2ff; } }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:13px system-ui, sans-serif; }
+  #app { display:grid; grid-template-columns:300px 1fr; height:100%; }
+  aside { background:var(--panel); border-right:1px solid var(--line); overflow:auto; padding:10px; }
+  aside h3 { margin:12px 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+  button, select, input { font:inherit; }
+  button { margin:2px 2px 2px 0; }
+  #stage { position:relative; overflow:hidden; background:#000; }
+  canvas { display:block; width:100%; height:100%; cursor:crosshair; }
+  #status { position:absolute; left:8px; bottom:8px; background:rgba(0,0,0,.65); color:#fff; padding:3px 8px; border-radius:4px; }
+  .obj { border:1px solid var(--line); border-radius:4px; padding:5px; margin:4px 0; background:var(--bg); }
+  .obj.sel { border-color:var(--accent); }
+  .obj .draft { color:#c77700; font-weight:600; }
+  .obj .ok { color:#1a8a3a; font-weight:600; }
+  .frames div { padding:2px 4px; cursor:pointer; }
+  .frames div.cur { background:var(--accent); color:#fff; }
+  small { opacity:.75; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <b>Label trails</b> <small>→ labels.json for the Gherkin removal checks</small>
+    <h3>Files</h3>
+    <label>Frame directory <input id="dir" type="file" webkitdirectory multiple></label><br>
+    <label>Open labels.json <input id="open" type="file" accept=".json"></label><br>
+    <button id="export">Export labels.json</button>
+    <label><input type="checkbox" id="complete"> every trail in every frame is labelled (<code>complete</code>)</label>
+    <small>Browsers other than Safari cannot show TIFF. Use JPEG/PNG previews with the same base names.</small>
+    <h3>Frames</h3>
+    <div id="frames" class="frames"></div>
+    <h3>Objects in this frame</h3>
+    <div>
+      <button id="new">New object (N)</button>
+      <button id="undo">Undo point (Z)</button>
+      <button id="finish">Finish polyline (Enter)</button>
+    </div>
+    <div id="objs"></div>
+    <h3>Sky polygon</h3>
+    <button id="skyStart">Draw sky polygon</button><button id="skyClear">Clear</button>
+    <small>Optional. Click corners, Enter to close.</small>
+    <h3>Keys</h3>
+    <small>Wheel: zoom · drag (no click): pan · click: add point · ←/→: frame · C: toggle confirmed on selection.<br>
+    <b>Confirmed is your call.</b> Drafts (orange) are never checked.</small>
+  </aside>
+  <div id="stage"><canvas id="cv"></canvas><div id="status"></div></div>
+</div>
+<script>
+"use strict";
+const state = { files: [], urls: {}, idx: -1, img: null, labels: { version: 1, frames: {}, sky: null, complete: false },
+                sel: -1, drawing: null, skyDrawing: null, view: { x: 0, y: 0, k: 1 } };
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const CLASSES = ['airplane', 'satellite', 'meteor', 'other'];
+
+function fit() { cv.width = cv.clientWidth; cv.height = cv.clientHeight; draw(); }
+window.addEventListener('resize', fit);
+
+function curName() { return state.files[state.idx]?.name; }
+function curObjs() { const n = curName(); if (!n) return []; return state.labels.frames[n] ||= []; }
+function toImg(px, py) { return [(px - state.view.x) / state.view.k, (py - state.view.y) / state.view.k]; }
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!state.img) return;
+  const v = state.view;
+  ctx.setTransform(v.k, 0, 0, v.k, v.x, v.y);
+  ctx.imageSmoothingEnabled = v.k < 1;
+  ctx.drawImage(state.img, 0, 0);
+  const lw = 1.5 / v.k;
+  const poly = (pts, close) => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); if (close) ctx.closePath(); ctx.stroke(); };
+  if (state.labels.sky) { ctx.strokeStyle = '#3cf'; ctx.lineWidth = lw; ctx.setLineDash([8 / v.k, 6 / v.k]); poly(state.labels.sky, true); ctx.setLineDash([]); }
+  if (state.skyDrawing) { ctx.strokeStyle = '#3cf'; ctx.lineWidth = lw; poly(state.skyDrawing, false); }
+  curObjs().forEach((o, i) => {
+    ctx.strokeStyle = o.confirmed ? '#3d6' : '#f90';
+    ctx.lineWidth = Math.max(lw, o.width * (i === state.sel ? 1 : 1) ); // true width: shows what the verifier measures
+    ctx.globalAlpha = 0.28; poly(o.points, false); ctx.globalAlpha = 1;
+    ctx.lineWidth = lw * (i === state.sel ? 2 : 1); poly(o.points, false);
+    o.points.forEach(p => { ctx.fillStyle = ctx.strokeStyle; ctx.fillRect(p[0] - 2 / v.k, p[1] - 2 / v.k, 4 / v.k, 4 / v.k); });
+  });
+  if (state.drawing) { ctx.strokeStyle = '#fff'; ctx.lineWidth = lw; poly(state.drawing.points, false); }
+}
+
+function renderPanels() {
+  $('frames').innerHTML = '';
+  state.files.forEach((f, i) => {
+    const n = (state.labels.frames[f.name] || []).length;
+    const d = document.createElement('div');
+    d.textContent = f.name + (n ? `  (${n})` : '');
+    if (i === state.idx) d.className = 'cur';
+    d.onclick = () => showFrame(i);
+    $('frames').appendChild(d);
+  });
+  const box = $('objs'); box.innerHTML = '';
+  curObjs().forEach((o, i) => {
+    const d = document.createElement('div'); d.className = 'obj' + (i === state.sel ? ' sel' : '');
+    d.onclick = e => { if (e.target.closest('input,select,button')) return; state.sel = i; renderPanels(); draw(); };
+    const cls = CLASSES.map(c => `<option${c === o.class ? ' selected' : ''}>${c}</option>`).join('');
+    d.innerHTML = `<b>${o.id}</b> <span class="${o.confirmed ? 'ok' : 'draft'}">${o.confirmed ? 'confirmed' : 'draft'}</span>
+      <select data-k="class">${cls}</select>
+      w <input data-k="width" type="number" min="1" step="0.5" value="${o.width}" style="width:52px">
+      <label><input data-k="confirmed" type="checkbox"${o.confirmed ? ' checked' : ''}> confirmed</label><br>
+      <input data-k="note" placeholder="note" value="${(o.note || '').replace(/"/g, '&quot;')}" style="width:96%">
+      <br><small>${o.points.length} points</small> <button data-k="del">delete</button>`;
+    d.querySelectorAll('[data-k]').forEach(el => el.onchange = el.onclick = ev => {
+      const k = el.dataset.k;
+      if (k === 'del') { if (ev.type === 'click') { curObjs().splice(i, 1); state.sel = -1; renderPanels(); draw(); } return; }
+      if (ev.type !== 'change') return;
+      o[k] = k === 'confirmed' ? el.checked : k === 'width' ? parseFloat(el.value) || 1 : el.value;
+      renderPanels(); draw();
+    });
+    box.appendChild(d);
+  });
+}
+
+function nextId() { const used = new Set(curObjs().map(o => o.id)); const b = (curName() || 'f').replace(/\.[^.]+$/, '').replace(/\D+/g, '') || 'f'; let n = 1; while (used.has(`${b}-${n}`)) n++; return `${b}-${n}`; }
+
+function showFrame(i) {
+  state.idx = i; state.sel = -1; state.drawing = null;
+  const f = state.files[i];
+  const img = new Image();
+  img.onload = () => { state.img = img; const k = Math.min(cv.width / img.width, cv.height / img.height); state.view = { x: 0, y: 0, k }; renderPanels(); draw(); status(); };
+  img.onerror = () => { state.img = null; status('cannot display ' + f.name + ' in this browser'); renderPanels(); draw(); };
+  img.src = state.urls[f.name] ||= URL.createObjectURL(f);
+}
+function status(m) { $('status').textContent = m || `${curName() || ''}  ${state.img ? state.img.width + '×' + state.img.height : ''}  zoom ${state.view.k.toFixed(2)}`; }
+
+$('dir').onchange = e => {
+  state.files = [...e.target.files].filter(f => /\.(jpe?g|png|tiff?|webp)$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name));
+  state.urls = {}; if (state.files.length) showFrame(0);
+};
+$('open').onchange = async e => {
+  const t = JSON.parse(await e.target.files[0].text());
+  if (t.version !== 1) return alert('labels version ' + t.version + ' unsupported');
+  state.labels = { version: 1, frames: t.frames || {}, sky: t.sky || null, complete: !!t.complete };
+  $('complete').checked = state.labels.complete; renderPanels(); draw();
+};
+$('complete').onchange = () => state.labels.complete = $('complete').checked;
+$('export').onclick = () => {
+  const out = { version: 1, frames: {}, ...(state.labels.sky ? { sky: state.labels.sky } : {}), complete: !!state.labels.complete };
+  for (const [k, v] of Object.entries(state.labels.frames)) if (v.length) out.frames[k] = v.filter(o => o.points.length >= 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+  a.download = 'labels.json'; a.click();
+};
+$('new').onclick = () => { if (!state.img) return; state.drawing = { id: nextId(), class: 'airplane', points: [], width: 8, confirmed: false, note: '' }; status('click polyline points; Enter to finish'); };
+$('undo').onclick = () => { state.drawing?.points.pop(); state.skyDrawing?.pop(); draw(); };
+$('finish').onclick = finish;
+$('skyStart').onclick = () => { state.skyDrawing = []; };
+$('skyClear').onclick = () => { state.labels.sky = null; draw(); };
+function finish() {
+  if (state.skyDrawing) { if (state.skyDrawing.length >= 3) state.labels.sky = state.skyDrawing; state.skyDrawing = null; }
+  else if (state.drawing) { if (state.drawing.points.length >= 2) { curObjs().push(state.drawing); state.sel = curObjs().length - 1; } state.drawing = null; }
+  renderPanels(); draw();
+}
+
+let drag = null;
+cv.onmousedown = e => { drag = { x: e.offsetX, y: e.offsetY, vx: state.view.x, vy: state.view.y, moved: false }; };
+cv.onmousemove = e => {
+  if (drag) { const dx = e.offsetX - drag.x, dy = e.offsetY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true; if (drag.moved) { state.view.x = drag.vx + dx; state.view.y = drag.vy + dy; draw(); } }
+  if (state.img) { const [x, y] = toImg(e.offsetX, e.offsetY); $('status').textContent = `${curName()}  (${x.toFixed(0)}, ${y.toFixed(0)})  zoom ${state.view.k.toFixed(2)}`; }
+};
+cv.onmouseup = e => {
+  const d = drag; drag = null; if (!d || d.moved || !state.img) return;
+  const [x, y] = toImg(e.offsetX, e.offsetY), p = [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+  if (state.skyDrawing) state.skyDrawing.push(p); else if (state.drawing) state.drawing.points.push(p); else return;
+  draw();
+};
+cv.onwheel = e => {
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY * 0.0015), v = state.view, [ix, iy] = toImg(e.offsetX, e.offsetY);
+  v.k = Math.max(0.02, Math.min(40, v.k * f)); v.x = e.offsetX - ix * v.k; v.y = e.offsetY - iy * v.k; draw();
+};
+window.onkeydown = e => {
+  if (e.target.matches('input,select')) return;
+  if (e.key === 'Enter') finish();
+  else if (e.key === 'n') $('new').click();
+  else if (e.key === 'z') $('undo').click();
+  else if (e.key === 'ArrowRight' && state.idx < state.files.length - 1) showFrame(state.idx + 1);
+  else if (e.key === 'ArrowLeft' && state.idx > 0) showFrame(state.idx - 1);
+  else if (e.key === 'c' && state.sel >= 0) { const o = curObjs()[state.sel]; o.confirmed = !o.confirmed; renderPanels(); draw(); }
+  else if (e.key === 'Escape') { state.drawing = null; state.skyDrawing = null; draw(); }
+};
+fit(); renderPanels();
+</script>
+</body>
+</html>

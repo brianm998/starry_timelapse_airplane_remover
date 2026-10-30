@@ -26,6 +26,14 @@ public struct FrameView: View {
                 EmptyView()
             }
         }
+          // A frame that is not extracted yet has nothing to show: say how long it will be.  Over the frame, so the tools that
+          // need the original (the horizon painter, the outlier tools) cannot be used on it; it goes when the frame lands.
+          .overlay {
+              if viewModel.interactionMode != .grid, !viewModel.isCurrentFrameExtracted {
+                  FrameWaitPanelView()
+                    .help(localized("ui.tool_needs_extracted_frame"))
+              }
+          }
     }
 
     // initial view for when we've not loaded images yet

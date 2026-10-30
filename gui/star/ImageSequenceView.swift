@@ -79,6 +79,9 @@ struct ImageSequenceView: View {
                     Spacer().frame(minHeight: 15, maxHeight: 25)
                 }
 
+                // how far extracting the video has got, while it is
+                ExtractionProgressStripView()
+
                 // scrub slider at the bottom (not needed in grid mode)
                 if viewModel.imageSequenceSize > 0,
                    viewModel.interactionMode != .grid
@@ -98,6 +101,7 @@ struct ImageSequenceView: View {
         // cannot become part of this window's minimum size — the same reason the warning
         // banner in `ContentView` is one.  Conditioned on the run still being live, so a
         // run that finishes or is stopped takes the modal with it.
+          .environment(\.hotkeysEnabled, !viewModel.isProcessingModalUp)
           .overlay {
               if viewModel.processingModalShowing,
                  viewModel.isProcessingFrames

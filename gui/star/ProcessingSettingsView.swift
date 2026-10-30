@@ -459,16 +459,24 @@ struct ProcessingSettingsView: View {
               Space(height: 20)
               
               ScrollView {
+                // Two columns, so the sheet is not taller than a screen: what the footage is
+                // and how it is processed on the left, the optional and expert settings on
+                // the right.
+                HStack(alignment: .top, spacing: 20) {
                   Grid {
                       self.sceneTypeGridRow
                       Divider()
                       self.cameraMotionGridRow
                       Divider()
                       self.processingMethodGridRow
+                  }
+                  .frame(maxWidth: .infinity, alignment: .top)
 
+                  Divider()
+
+                  Grid {
                       // Not an expert setting: whether clouds come out banded is something
                       // anyone shooting a moving sky wants to be able to turn on.
-                      Divider()
                       self.cloudAwareMergeView
 
                       Divider()
@@ -610,6 +618,8 @@ struct ProcessingSettingsView: View {
                           .tint(.orange)
                       }
                   }
+                  .frame(maxWidth: .infinity, alignment: .top)
+                }
               }
               
               Space(height: 20)
@@ -687,7 +697,7 @@ struct ProcessingSettingsView: View {
                   }
               }
           }
-          .frame(minWidth: 800)
+          .frame(minWidth: 1400)
           .padding(20)
           .background(.gray)
           .onAppear {
@@ -1228,7 +1238,7 @@ struct ProcessingSettingsView: View {
 
     /// `Config.cloudAwareMerge`: a second merge aligned to the motion of the clouds, blended in
     /// where it explains the frame better. Off by default; see the property's doc comment for
-    /// what it does, what it costs, and why changing it re-does the alignment stage.
+    /// what it does, what it costs, and why changing it re-does the star aligned merge.
     private var cloudAwareMergeView: some View {
         @Bindable var viewModel = viewModel
         return InfoTextInstructionGridRow(

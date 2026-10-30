@@ -42,9 +42,9 @@ final class HorizonMergeOp: AsyncOperation, @unchecked Sendable {
     ///
     /// Note a frame with a painted reference horizon is *also* a no-op here — the
     /// reference wins over the merged file in `loadOrCreateMergedHorizonMask` and
-    /// nothing is written either way — but that case is left to run rather than
-    /// predicted, since the builder already handles the sequence-wide form of it via
-    /// `Config.hasStaticReferenceHorizon`.
+    /// nothing is written either way.  The builder predicts that on a moving camera
+    /// (`horizonMergeIsDone`) and builds no op for such a frame; this is only the
+    /// backstop.
     override func hasWorkToDo() async -> Bool {
         !frame.mergedHorizonMaskExistsOnDisk()
     }

@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
@@ -133,6 +134,13 @@ class SequenceViewModel(
     val rightPanelShowing: StateFlow<Boolean> = _rightPanelShowing.asStateFlow()
     fun setLeftPanel(showing: Boolean) { _leftPanelShowing.value = showing }
     fun setRightPanel(showing: Boolean) { _rightPanelShowing.value = showing }
+    /** Which right panel sections are open; all start open. Here, not in the panel, because the panel is dropped while hidden. */
+    private val _expandedRightPanelSections = MutableStateFlow(RightPanelSection.entries.toSet())
+    val expandedRightPanelSections: StateFlow<Set<RightPanelSection>> = _expandedRightPanelSections.asStateFlow()
+    fun toggleRightPanelSection(section: RightPanelSection) {
+        val open = _expandedRightPanelSections.value
+        _expandedRightPanelSections.value = if (section in open) open - section else open + section
+    }
     /** macOS `toggleSidePanels` (Tab): both shown → both hide; otherwise → both show. */
     fun toggleSidePanels() {
         val hide = _leftPanelShowing.value && _rightPanelShowing.value
@@ -149,7 +157,22 @@ class SequenceViewModel(
     // Edit sub-mode: when on, the center view is the horizon painter instead of the outlier overlay.
     private val _horizonPaintMode = MutableStateFlow(false)
     val horizonPaintMode: StateFlow<Boolean> = _horizonPaintMode.asStateFlow()
-    fun toggleHorizonPaint() { _horizonPaintMode.value = !_horizonPaintMode.value }
+    fun toggleHorizonPaint() { _horizonPaintMode.value = !_horizonPaintMode.value; _horizonPaintStarted.value = false }
+
+    // Paint on a horizon reference belongs to the frame it was painted on: once there is any, moving off the frame is held back and asked
+    // about (macOS `horizonPaintingStarted` / `pendingHorizonFrameChange`).
+    private val _horizonPaintStarted = MutableStateFlow(false)
+    fun setHorizonPaintStarted(started: Boolean) { _horizonPaintStarted.value = started }
+    private val _pendingHorizonFrameChange = MutableStateFlow<Int?>(null)
+    /** The frame a change was headed for when it was held back; non-null while the "change frame?" dialog is up. */
+    val pendingHorizonFrameChange: StateFlow<Int?> = _pendingHorizonFrameChange.asStateFlow()
+    fun confirmHorizonFrameChange() {
+        val target = _pendingHorizonFrameChange.value ?: return
+        _pendingHorizonFrameChange.value = null
+        _horizonPaintStarted.value = false
+        setCurrentIndex(target, confirmed = true)
+    }
+    fun cancelHorizonFrameChange() { _pendingHorizonFrameChange.value = null }
 
     // ---- startup horizon flow (macOS horizonPainterMode == .startup + startup frame indices/position) ----
     // When true the painter shows "i / N" progress + Next/Continue and the AppViewModel routes the
@@ -176,7 +199,7 @@ class SequenceViewModel(
         _startupHorizonIndices.value = indices
         _startupHorizonPosition.value = position
         _horizonPainterStartup.value = true
-        indices.getOrNull(position)?.let { setCurrentIndex(it) }
+        indices.getOrNull(position)?.let { setCurrentIndex(it, confirmed = true) }
         _mode.value = InteractionMode.EDIT
         _horizonPaintMode.value = true
     }
@@ -193,7 +216,7 @@ class SequenceViewModel(
         val next = _startupHorizonPosition.value + 1
         if (next >= idx.size) return
         _startupHorizonPosition.value = next
-        setCurrentIndex(idx[next])
+        setCurrentIndex(idx[next], confirmed = true)
     }
 
     /** Leave startup horizon-painting and close the painter (macOS resets horizonPainterMode to .normal). */
@@ -202,6 +225,7 @@ class SequenceViewModel(
         _startupHorizonIndices.value = emptyList()
         _startupHorizonPosition.value = 0
         _horizonPaintMode.value = false
+        _horizonPaintStarted.value = false
         _mode.value = InteractionMode.SCRUB
     }
 
@@ -327,9 +351,47 @@ class SequenceViewModel(
      */
     private val _horizonVersion = MutableStateFlow(0)
     val horizonVersion: StateFlow<Int> = _horizonVersion.asStateFlow()
+    // ---- frames that are still being extracted from a video ----
+
+    /** How far the extraction has got; null for an image sequence. Complete when every frame is there. */
+    val extraction: StateFlow<com.star.proto.FrameExtraction?> = processing.extraction
+
+    /** The frames that are extracted, while the video is still being extracted; null when every frame is there. */
+    val extractedFrames: StateFlow<com.star.desktop.domain.ExtractedFrames?> = processing.extractedFrames
+
+    /** Whether frame [index] is extracted (an image sequence's frames all are). */
+    fun isFrameExtracted(index: Int): Boolean = processing.extractedFrames.value?.contains(index) ?: true
+
+    /** Whether the video is still being extracted (the progress bar is up, and frames may be missing). */
+    val isExtracting: StateFlow<Boolean> = combine(processing.extraction, processing.extractedFrames) { e, frames ->
+        e != null && (!e.complete && frames != null || e.error.isNotEmpty())
+    }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** How long until [index] is extracted, for the wait panel; null when the engine could not say. */
+    suspend fun frameEta(index: Int): com.star.proto.FrameEtaResponse? = frames.eta(sessionId, index)
+
     init {
         // Subscribe to progress BEFORE any Processing.Start (the daemon attaches its continuation lazily).
         processing.subscribe(sessionId)
+        processing.seedExtraction(info.extraction)
+
+        // The frame on screen, and the ones around it, are what a video that is still being extracted fetches first (where its format
+        // allows it). Settled for a moment first, so a scrub that is moving does not ask for every frame it passes over.
+        scope.launch {
+            _currentIndex.collectLatest { idx ->
+                delay(PRIORITIZE_DEBOUNCE_MS)   // a newer frame cancels this one before it asks
+                if (processing.extractedFrames.value == null) return@collectLatest
+                val reach = PRIORITIZE_REACH
+                frames.prioritize(sessionId, idx, listOf((idx - reach).coerceAtLeast(0)..(idx + reach).coerceAtMost(frameCount - 1)))
+            }
+        }
+
+        // The frame on screen was not there and now is: show it.
+        processing.extractedFrames
+            .map { it?.contains(_currentIndex.value) ?: true }
+            .distinctUntilChanged()
+            .onEach { here -> if (here) loadPreview(_currentIndex.value, _viewMode.value) }
+            .launchIn(scope)
 
         // (Re)load the current preview whenever the index or view mode changes.
         combine(_currentIndex, _viewMode) { idx, mode -> idx to mode }
@@ -484,8 +546,12 @@ class SequenceViewModel(
     }
     fun toggleFilmstrip() { _showFilmstrip.value = !_showFilmstrip.value }
 
-    fun setCurrentIndex(i: Int) {
+    fun setCurrentIndex(i: Int, confirmed: Boolean = false) {
         val clamped = i.coerceIn(0, (frameCount - 1).coerceAtLeast(0))
+        if (!confirmed && _horizonPaintMode.value && _horizonPaintStarted.value && clamped != _currentIndex.value) {
+            _pendingHorizonFrameChange.value = clamped
+            return
+        }
         _currentIndex.value = clamped
     }
 
@@ -1102,6 +1168,12 @@ class SequenceViewModel(
     }
 
     companion object {
+        /** A scrub that has not moved for this long (milliseconds) has stopped: that frame is the one the extractor is asked for. */
+        private const val PRIORITIZE_DEBOUNCE_MS = 80L
+
+        /** How many frames either side of the one on screen are asked for as its neighbourhood. */
+        private const val PRIORITIZE_REACH = 24
+
         /** How often at most the alignment results are fetched again while they are showing and the frames are changing. */
         private const val ALIGNMENT_REFRESH_MS = 1000L
 

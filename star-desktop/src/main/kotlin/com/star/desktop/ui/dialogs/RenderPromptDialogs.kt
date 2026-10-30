@@ -51,6 +51,7 @@ fun PreProcessingRenderPrompt(app: AppViewModel) {
                 Button(
                     onClick = { app.confirmStartProcessing(autoRender = true, dontAskAgain = false) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    modifier = Modifier.testTag("prompt.pre.yes"),
                 ) { Text(localized("ui.yes")) }
             }
         }

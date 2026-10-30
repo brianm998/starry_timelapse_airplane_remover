@@ -22,6 +22,7 @@ import logging
 struct ProcessingModalView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @Environment(FrameGraphViewModel.self) var frameGraphViewModel: FrameGraphViewModel
+    @Environment(\.openWindow) private var openWindow
 
     private var steps: [ProcessingStepProgress] {
         // `alreadyDone` describes whichever graph was built last, so until this run's is
@@ -62,13 +63,41 @@ struct ProcessingModalView: View {
     /// `.numberOfFramesToProcessConcurrently` without fighting over the keyboard.
     @FocusState private var focusedField: FocusedField?
 
+    /// How fast each step is going, for the estimate in the header.  A reference type that
+    /// `body` feeds each time the counts change: it is not state the view draws, so
+    /// updating it does not ask for another pass.
+    @State private var rates = StepRateTracker()
+
+    /// What star is doing now, across every running step.
+    private func headline(for steps: [ProcessingStepProgress]) -> String? {
+        return ProcessingHeadline.text(
+          steps: steps,
+          extraction: viewModel.extractionProgress,
+          hasPlan: frameGraphViewModel.graphBuildsCompleted > viewModel.processingBuildCount,
+          framesComplete: viewModel.count(for: .complete),
+          frameCount: viewModel.frames.count
+        )
+    }
+
     var body: some View {
+        let steps = self.steps
+        // Feed the rates before anything asks them for an estimate.
+        let _ = rates.observe(steps)
+        let estimates = Dictionary(uniqueKeysWithValues: steps.compactMap { step in
+            rates.secondsRemaining(for: step).map { (step.type, $0) }
+        })
         ProcessingModalPanel(
           framesComplete: viewModel.count(for: .complete),
           frameCount: viewModel.frames.count,
           steps: steps,
-          statusText: viewModel.processingStatusText,
+          extraction: viewModel.extractionProgress,
+          statusText: viewModel.processingStatusText ?? viewModel.waitingForFramesText,
+          headline: headline(for: steps),
+          overall: ProcessingHeadline.overallText(steps: steps, secondsRemaining: { rates.secondsRemaining(for: $0) }),
+          stepEstimates: estimates,
           showAlignment: showAlignment,
+          cameraMoving: viewModel.cameraMotion == .moving,
+          openAlignmentWindow: { openWindow(id: StarApp.alignmentWindowName) },
           stop: { viewModel.stopProcessing() },
           dismiss: { viewModel.processingModalShowing = false },
           concurrencyContent: {
@@ -132,15 +161,38 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     let frameCount: Int
     let steps: [ProcessingStepProgress]
 
+    /// How far extracting the video's frames has got; nil when the frames did not come from a video being extracted,
+    /// which is when the extraction row is not shown.
+    var extraction: FrameExtractionProgress? = nil
+
     /// What the run is doing, for a run that cannot yet be counted in operations — shown
     /// under the title in place of the frames-complete line.  Normally `nil`: a run that
     /// builds a frame graph has operations to count from the start, and the frames-complete
     /// line is the more useful of the two.
     var statusText: String? = nil
 
+    /// One sentence on what is happening right now and why, with a time estimate when one
+    /// can be given; drawn directly under the frames-complete line.
+    var headline: String? = nil
+
+    /// How long the whole run has left, shown first under the title.
+    var overall: String? = nil
+
+    /// Seconds left for each step that has a measured rate, shown beside its bar.
+    var stepEstimates: [OperationType: TimeInterval] = [:]
+
     /// Whether the alignment charts are drawn.  Off is what the toggle in the alignment
     /// heading gives, and it takes the tallest part of the panel with it.
     @Binding var showAlignment: Bool
+
+    /// Whether the camera moved during the sequence; picks the wording of the alignment explanation.
+    var cameraMoving: Bool = false
+
+    /// Opens the alignment window; nil leaves the button out.
+    var openAlignmentWindow: (() -> Void)? = nil
+
+    /// Whether the explanation of the alignment charts is up over the panel.
+    @State private var showingAlignmentInfo = false
 
     let stop: () -> Void
     let dismiss: () -> Void
@@ -188,18 +240,31 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
               .cornerRadius(14)
               .shadow(radius: 24)
               .padding(20)
+
+            if showingAlignmentInfo {
+                AlignmentInfoOverlay(cameraMoving: cameraMoving) { showingAlignmentInfo = false }
+            }
         }
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ProcessingStepsView(steps: steps)
+            ProcessingStepsView(steps: steps, extraction: extraction, estimates: stepEstimates)
             Divider()
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(localized("ui.alignment_2"))
                       .font(.headline)
                       .foregroundColor(.white)
+                    AlignmentInfoButton { showingAlignmentInfo = true }
+                    if let openAlignmentWindow {
+                        Button(action: openAlignmentWindow) {
+                            Image(systemName: "arrow.up.forward.app")
+                        }
+                          .buttonStyle(.borderless)
+                          .foregroundColor(.gray)
+                          .help(localized("ui.open_alignment_window_help"))
+                    }
                     Spacer()
                     Toggle(localized("ui.show_alignment_results"), isOn: $showAlignment)
                       .toggleStyle(.checkbox)
@@ -235,6 +300,18 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
                                              framesComplete, frameCount))
                   .font(.caption)
                   .foregroundColor(.gray)
+                if let overall {
+                    Text(overall)
+                      .font(.caption.weight(.semibold))
+                      .foregroundColor(.white)
+                      .fixedSize(horizontal: false, vertical: true)
+                }
+                if let headline {
+                    Text(headline)
+                      .font(.caption)
+                      .foregroundColor(.white.opacity(0.85))
+                      .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer()
             concurrencyContent()
@@ -257,9 +334,17 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
 
             Spacer()
 
-            Button(localized("ui.dismiss"), action: dismiss)
-              .keyboardShortcut(.defaultAction)
-              .help(localized("ui.keep_processing_and_go_back_to_the_frames"))
+            HStack(spacing: 12) {
+                Text(localized("ui.preview_while_processing_help"))
+                  .font(.caption)
+                  .foregroundColor(.white)
+                  .multilineTextAlignment(.trailing)
+                  .fixedSize(horizontal: false, vertical: true)
+                  .frame(maxWidth: 320, alignment: .trailing)
+                Button(localized("ui.preview"), action: dismiss)
+                  .keyboardShortcut(.defaultAction)
+                  .help(localized("ui.preview_while_processing_help"))
+            }
         }
           .padding(20)
     }
@@ -268,23 +353,61 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
 /// One bar per processing step, stacked in the order `ProcessingSteps.types` gives them.
 struct ProcessingStepsView: View {
     let steps: [ProcessingStepProgress]
+    /// The video extraction, shown as the first row, above the horizon; nil for frames that are not being extracted from a video.
+    var extraction: FrameExtractionProgress? = nil
+    /// Seconds left per step, for the column beside the bars.
+    var estimates: [OperationType: TimeInterval] = [:]
 
     private let doneColor: Color = .green
     private let runningColor: Color = .yellow
     private let queuedColor = Color(white: 0.32)
+    /// For what is finished, or has nothing left: quieter than the white of what is live.
+    private let settledColor = Color(white: 0.68)
 
     /// Wide enough for the longest translated step name at this font — "Zusammengeführter
     /// Horizont" in German — over two lines.
     private let labelWidth: CGFloat = 180
-    private let countWidth: CGFloat = 140
+    private let countWidth: CGFloat = 138
+    /// One of the three queued / running / done number columns.
+    private let numberWidth: CGFloat = 46
+    /// The time-left column between each bar and its counts.
+    private let etaWidth: CGFloat = 56
+
+    private func etaText(_ seconds: TimeInterval?) -> String {
+        guard let seconds, seconds.isFinite else { return "" }
+        return ProcessingHeadline.duration(seconds)
+    }
+
+    private func etaColumn(_ text: String, color: Color = .white) -> some View {
+        Text(text)
+          .font(.caption)
+          .monospacedDigit()
+          .foregroundColor(color)
+          .lineLimit(1)
+          .frame(width: etaWidth, alignment: .trailing)
+    }
+
+    /// Steps with something to count and nothing left queued or running.  A step with no
+    /// operations yet is still being planned, which is not done.
+    private var doneSteps: [ProcessingStepProgress] {
+        steps.filter { $0.hasWork && $0.queued == 0 && $0.running == 0 }
+    }
+
+    private var processingSteps: [ProcessingStepProgress] {
+        steps.filter { !($0.hasWork && $0.queued == 0 && $0.running == 0) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(localized("ui.processing_steps"))
+            Text(localized("ui.steps"))
               .font(.headline)
               .foregroundColor(.white)
 
-            if steps.isEmpty {
+            if let extraction {
+                extractionRow(extraction)
+            }
+
+            if steps.isEmpty && extraction == nil {
                 // Every step this configuration takes turned out to have nothing left to
                 // do — a re-run over a sequence that is already finished.  Rare, and over
                 // quickly, but a lone heading with nothing under it looks broken.
@@ -292,40 +415,122 @@ struct ProcessingStepsView: View {
                   .foregroundColor(.gray)
             }
 
-            ForEach(steps) { step in
-                stepRow(step)
+            // Done above, Processing beneath it.  Each heading is there only while it has
+            // rows, so a finishing step moves from one list to the other, bringing the Done
+            // heading with it the first time and taking the Processing one away the last.
+            if !doneSteps.isEmpty {
+                columnHeader(localized("ui.done"), showsCounts: true)
+                ForEach(doneSteps) { step in
+                    stepRow(step, isDone: true)
+                }
+            }
+            if !processingSteps.isEmpty {
+                columnHeader(localized("ui.processing"), showsCounts: doneSteps.isEmpty)
+                ForEach(processingSteps) { step in
+                    stepRow(step, isDone: false)
+                }
             }
         }
     }
 
-    private func stepRow(_ step: ProcessingStepProgress) -> some View {
+    /// A sub-label over a group of rows.  The first one on screen also carries the names of
+    /// the three number columns, which line up with every row beneath it.
+    private func columnHeader(_ title: String, showsCounts: Bool) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+              .font(.subheadline)
+              .foregroundColor(.gray)
+              .frame(width: labelWidth, alignment: .leading)
+            Spacer()
+            if showsCounts {
+                etaColumn(localized("ui.time_left"), color: .gray)
+                countColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"),
+                             colors: [.gray, .gray, .gray])
+            }
+        }
+          .padding(.top, 4)
+    }
+
+    private func countColumns(_ queued: String, _ running: String, _ done: String,
+                              colors: [Color]) -> some View {
+        HStack(spacing: 0) {
+            ForEach(Array([queued, running, done].enumerated()), id: \.offset) { index, text in
+                Text(text)
+                  .font(.caption)
+                  .monospacedDigit()
+                  .foregroundColor(colors[index])
+                  .lineLimit(1)
+                  .frame(width: numberWidth, alignment: .trailing)
+            }
+        }
+    }
+
+    /// The frames the video has given up so far, in the same bar and count as the steps below.
+    private func extractionRow(_ progress: FrameExtractionProgress) -> some View {
+        let total = max(1, progress.total)
+        let name = localized("ui.processing_step_extracting_video")
+        return HStack(spacing: 12) {
+            Text(name)
+              .font(.callout)
+              .foregroundColor(.white)
+              .lineLimit(2)
+              .fixedSize(horizontal: false, vertical: true)
+              .frame(width: labelWidth, alignment: .leading)
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(queuedColor)
+                    Rectangle().fill(doneColor)
+                      .frame(width: geometry.size.width * CGFloat(progress.extracted) / CGFloat(total))
+                }
+                  .cornerRadius(4)
+            }
+              .frame(height: 14)
+            etaColumn(progress.isComplete ? "" : etaText(progress.estimatedSecondsRemaining))
+            Text(localized("ui.n_of_m_complete", progress.extracted, progress.total))
+              .font(.caption)
+              .monospacedDigit()
+              .foregroundColor(.white)
+              .lineLimit(2)
+              .fixedSize(horizontal: false, vertical: true)
+              .frame(width: countWidth, alignment: .trailing)
+        }
+          .contentShape(Rectangle())
+          .help(name)
+          .accessibilityIdentifier("processing.extraction")
+    }
+
+    private func stepRow(_ step: ProcessingStepProgress, isDone: Bool) -> some View {
         HStack(spacing: 12) {
             // Two lines because these are translated, and no single-line column this
             // panel can afford would hold every language's version of every name.
             Text(step.type.stepName)
               .font(.callout)
-              .foregroundColor(step.hasWork ? .white : .gray)
+              .foregroundColor(!step.hasWork ? .gray : isDone ? settledColor : .white)
               .lineLimit(2)
               .fixedSize(horizontal: false, vertical: true)
               .frame(width: labelWidth, alignment: .leading)
 
             stepBar(step)
 
+            etaColumn(isDone ? "" : etaText(estimates[step.type]))
+
             // A step with no operations is only ever on screen while the plan is still
             // being worked out — once it is, `ProcessingSteps.visible` drops it — so this
             // says "not known yet", which no wording says as plainly as leaving it out.
-            Text(step.hasWork
-                   ? localized("ui.n_of_m_complete", step.completed, step.total)
-                   : "—")
-              .font(.caption)
-              .monospacedDigit()
-              .foregroundColor(step.hasWork ? .white : .gray)
-              // Wraps rather than shrinking.  `minimumScaleFactor` was scaling one row and
-              // not the row above it with the very same text in it — measured — which
-              // reads as a rendering fault; wrapping is at least the same on every row.
-              .lineLimit(2)
-              .fixedSize(horizontal: false, vertical: true)
-              .frame(width: countWidth, alignment: .trailing)
+            if step.hasWork {
+                // A column goes quiet when it has nothing to say: nothing queued, nothing
+                // running, or everything done.
+                let total = step.queued + step.running + step.completed
+                countColumns("\(step.queued)", "\(step.running)", "\(step.completed)",
+                             colors: [step.queued == 0 ? settledColor : .white,
+                                      step.running == 0 ? settledColor : .white,
+                                      step.completed == total ? settledColor : .white])
+            } else {
+                Text("—")
+                  .font(.caption)
+                  .foregroundColor(.gray)
+                  .frame(width: numberWidth * 3, alignment: .trailing)
+            }
         }
           // Over the whole row, gaps included, rather than over the label alone: the bar
           // is the part of the row the eye is on, and it is the part being explained.

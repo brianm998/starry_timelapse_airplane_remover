@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -30,6 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -90,8 +94,8 @@ private fun StartupCard(content: @Composable () -> Unit) {
 private fun HorizonPrompt(app: AppViewModel) {
     Title(localized("ui.does_this_video_include_a_horizon"))
     AnswerRow(advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton(localized("ui.no")) { app.startupAnswerHorizon(false) }
-        PrimaryButton(localized("ui.yes")) { app.startupAnswerHorizon(true) }
+        SecondaryButton(localized("ui.no"), "startup.horizon.no") { app.startupAnswerHorizon(false) }
+        PrimaryButton(localized("ui.yes"), "startup.horizon.yes") { app.startupAnswerHorizon(true) }
     }
 }
 
@@ -101,8 +105,8 @@ private fun MovingPrompt(app: AppViewModel) {
     Title(localized("ui.or"), small = true)
     Title(localized("ui.was_it_stationary_on_a_tripod_the_entire"))
     AnswerRow(back = { app.startupGoBack(StartupStep.MOVING) }, advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton(localized("ui.static")) { app.startupAnswerMoving(false) }
-        PrimaryButton(localized("ui.moving")) { app.startupAnswerMoving(true) }
+        SecondaryButton(localized("ui.static"), "startup.moving.static") { app.startupAnswerMoving(false) }
+        PrimaryButton(localized("ui.moving"), "startup.moving.moving") { app.startupAnswerMoving(true) }
     }
 }
 
@@ -111,8 +115,8 @@ private fun SelectHorizonPrompt(app: AppViewModel) {
     Title(localized("ui.do_you_want_to_select_the_horizon_yourself"))
     Body(localized("ui.star_allows_you_to_tell_it_where_the_horizon"))
     AnswerRow(back = { app.startupGoBack(StartupStep.SELECT_HORIZON) }) {
-        SecondaryButton(localized("ui.no")) { app.startupAnswerSelectHorizon(false) }
-        PrimaryButton(localized("ui.yes")) { app.startupAnswerSelectHorizon(true) }
+        SecondaryButton(localized("ui.no"), "startup.selecthorizon.no") { app.startupAnswerSelectHorizon(false) }
+        PrimaryButton(localized("ui.yes"), "startup.selecthorizon.yes") { app.startupAnswerSelectHorizon(true) }
     }
 }
 
@@ -130,7 +134,7 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         BackButton { app.startupGoBack(StartupStep.SELECT_MOVING_HORIZONS) }
         Spacer(Modifier.weight(1f))
-        SecondaryButton(localized("ui.no")) { app.startupAnswerSelectHorizon(false) }
+        SecondaryButton(localized("ui.no"), "startup.selectmovinghorizons.no") { app.startupAnswerSelectHorizon(false) }
         Spacer(Modifier.width(28.dp))
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // every step records the preference: only a user change reaches this callback
@@ -146,36 +150,34 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
 
 @Composable
 private fun RemovalPrompt(app: AppViewModel) {
-    var airplanes by remember { mutableStateOf(true) }
-    var satellites by remember { mutableStateOf(true) }
-    var meteors by remember { mutableStateOf(true) }
-    var cars by remember { mutableStateOf(true) }
-    val cleanMethod = removalCleanMethod(airplanes, satellites, meteors)
+    var selective by remember { mutableStateOf(false) }
+    var autoSelective by remember { mutableStateOf(false) }
+    var groundAlignment by remember { mutableStateOf(true) }
+    val cleanMethod = when {
+        selective -> CleanMethod.CLEAN_SELECTIVE
+        autoSelective -> CleanMethod.CLEAN_AUTOMATIC_TRUE
+        else -> CleanMethod.CLEAN_AUTOMATIC
+    }
 
-    Title(localized("ui.what_do_you_want_star_to_remove"))
-    Body(localized("ui.star_can_remove_some_or_all_of_these_things"))
+    Title(localized("ui.startup_mode_title"))
     HorizontalDivider(color = StarColors.cellDefault)
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(localized("ui.star_should_remove"), color = StarColors.textPrimary, fontSize = 15.sp)
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            ToggleRow(localized("ui.airplanes"), airplanes) { airplanes = it }
-            ToggleRow(localized("ui.satellites"), satellites) { satellites = it }
-            ToggleRow(localized("ui.meteors"), meteors) { meteors = it }
-            ToggleRow(localized("ui.cars"), cars) { cars = it }
+    ModeChoice(localized("ui.startup_mode_automatic"), localized("ui.startup_mode_automatic_desc"), !selective, "startup.removal.automatic") { selective = false }
+    if (!selective) {
+        Column(Modifier.padding(start = 34.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            ToggleRow(localized("ui.startup_auto_selective_toggle"), autoSelective, "startup.removal.autoselective") { autoSelective = it }
+            Body(localized("ui.startup_auto_selective_desc"))
         }
     }
+    ModeChoice(localized("ui.startup_mode_selective"), localized("ui.startup_mode_selective_desc"), selective, "startup.removal.selective") { selective = true }
     HorizontalDivider(color = StarColors.cellDefault)
-    Body(removalDescription(cleanMethod))
+    ToggleRow(localized("ui.startup_ground_alignment_toggle"), groundAlignment, "startup.removal.groundalignment") { groundAlignment = it }
+    Body(localized("ui.startup_ground_alignment_desc"))
     HorizontalDivider(color = StarColors.cellDefault)
     KeypointDivisorSection(app)
     HorizontalDivider(color = StarColors.cellDefault)
     AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
         SecondaryButton(localized("ui.close")) { app.dismissStartup() }
-        PrimaryButton(localized("ui.start_processing")) { app.startupStartProcessing(cleanMethod, allowEarthAlignment = cars) }
+        PrimaryButton(localized("ui.start_processing"), "startup.removal.start") { app.startupStartProcessing(cleanMethod, allowEarthAlignment = groundAlignment) }
     }
 }
 
@@ -317,15 +319,15 @@ private fun BackButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun PrimaryButton(text: String, onClick: () -> Unit) {
-    Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
+private fun PrimaryButton(text: String, tag: String? = null, onClick: () -> Unit) {
+    Button(onClick = onClick, modifier = tag?.let { Modifier.testTag(it) } ?: Modifier, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
         Text(text, color = Color.White)
     }
 }
 
 @Composable
-private fun SecondaryButton(text: String, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick) { Text(text) }
+private fun SecondaryButton(text: String, tag: String? = null, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = tag?.let { Modifier.testTag(it) } ?: Modifier) { Text(text) }
 }
 
 @Composable
@@ -352,32 +354,23 @@ private fun Stepper(label: String, value: Int, min: Int, max: Int, onChange: (In
 }
 
 @Composable
-private fun ToggleRow(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
+private fun ToggleRow(label: String, value: Boolean, tag: String, onChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Switch(checked = value, onCheckedChange = onChange)
+        Switch(checked = value, onCheckedChange = onChange, modifier = Modifier.testTag(tag))
         Text(label, color = StarColors.textPrimary, fontSize = 14.sp)
     }
 }
 
-// ---- removal → clean-method mapping (macOS RemovalView.cleanMethod) ----
-
-/**
- * Maps the three removal toggles to a clean method, matching macOS `RemovalView`:
- * remove everything → automatic (no outliers); any partial selection that keeps outlier review
- * → auto-selective; airplane-centric / nothing → selective.
- */
-private fun removalCleanMethod(airplanes: Boolean, satellites: Boolean, meteors: Boolean): CleanMethod = when {
-    airplanes && satellites && meteors -> CleanMethod.CLEAN_AUTOMATIC      // remove all
-    airplanes && satellites && !meteors -> CleanMethod.CLEAN_AUTOMATIC_TRUE
-    airplanes && !satellites -> CleanMethod.CLEAN_SELECTIVE                // airplanes (± meteors)
-    !airplanes && !satellites && !meteors -> CleanMethod.CLEAN_SELECTIVE   // nothing
-    else -> CleanMethod.CLEAN_AUTOMATIC_TRUE                               // satellite/meteor-centric
+@Composable
+private fun ModeChoice(title: String, description: String, selected: Boolean, tag: String, onSelect: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton, onClick = onSelect).testTag(tag).padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, color = StarColors.textPrimary, fontSize = 17.sp)
+            Body(description)
+        }
+    }
 }
-
-private fun removalDescription(method: CleanMethod): String = localized(
-    when (method) {
-        CleanMethod.CLEAN_AUTOMATIC -> "ui.mode_desc_automatic"
-        CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.mode_desc_auto_selective"
-        else -> "ui.mode_desc_selective"
-    },
-)

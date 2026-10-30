@@ -14,5 +14,6 @@ struct RenderAllFramesButton: View {
             Text(localized("ui.render_all_frames"))
         }
           .help(localized("ui.render_all_frames_of_this_sequence_with"))
+          .accessibilityIdentifier("render.all.frames")
     }    
 }

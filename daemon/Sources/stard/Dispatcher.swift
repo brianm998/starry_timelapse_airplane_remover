@@ -118,6 +118,8 @@ extension Dispatcher {
         // Frame
         register(method: "Frame.Get")                 { id, payload, transport in await FrameHandlers.get(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Frame.GetPreview")          { id, payload, transport in await FrameHandlers.getPreview(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Frame.Prioritize")          { id, payload, transport in await FrameHandlers.prioritize(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Frame.GetEta")              { id, payload, transport in await FrameHandlers.eta(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Frame.GetOutlierLabelImage"){ id, payload, transport in await FrameHandlers.getOutlierLabelImage(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Frame.GetOutlierTrashImage"){ id, payload, transport in await FrameHandlers.getOutlierTrashImage(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Frame.SetNeighborOverride") { id, payload, transport in await FrameHandlers.setNeighborOverride(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }

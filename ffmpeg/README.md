@@ -13,13 +13,12 @@ video that will not load), and gave Windows and Linux nothing at all.
 
 | Script | Builds | Used by |
 |---|---|---|
-| `build_ci.sh` | FFmpeg 7.1.1, GPL, x264/x265/libvpx/lame/opus; macOS universal (VideoToolbox), Linux and Windows x86_64 | **the installers**: `.github/workflows/ffmpeg.yml`, reused by `cli.yml` and `kotlin-client.yml`. It has been through CI on all three platforms |
-| `build.sh` (with `lib/`, `versions.env`, `smoke_test.sh`) | FFmpeg 9.0.2 with the GPU encoders compiled in (NVENC/AMF/D3D/Media Foundation/Vulkan; the rest of this file), plus Linux arm64 | local builds (`./ffmpeg/build.sh --install`) and `.github/workflows/ffmpeg-gpu.yml`, which validates the recipe but ships nothing |
+| `build.sh` (with `lib/`, `versions.env`, `smoke_test.sh`) | FFmpeg 9.0.2 with the GPU encoders compiled in (NVENC/AMF/D3D/Media Foundation/Vulkan; the rest of this file), plus Linux arm64 | **the installers**: `.github/workflows/ffmpeg-gpu.yml`, reused by `cli.yml`, `kotlin-client.yml` and `gherkin.yml`; and local builds (`./ffmpeg/build.sh --install`) |
+| `build_ci.sh` | FFmpeg 7.1.1, GPL, x264/x265/libvpx/lame/opus; macOS universal (VideoToolbox), Linux and Windows x86_64 | **nothing in CI any more**: it was the installers' build (`.github/workflows/ffmpeg.yml`) until they moved to `build.sh`. Kept only for local use until it is removed |
 
-The rest of this file describes `build.sh`. Its Linux and Windows recipes have not yet run in CI; once
-`ffmpeg-gpu.yml` is green on all three, `cli.yml` and `kotlin-client.yml` can switch to its artifacts
-(`ffmpeg-macos-universal`, `ffmpeg-linux-x64`, `ffmpeg-windows-x64`) and `build_ci.sh` can go. Either way
-Star finds the runtime's encoders by asking the binary (`FFmpegCapabilities`), so the app works with both.
+The rest of this file describes `build.sh`. `ffmpeg-gpu.yml` was green on all three platforms (2026-10-14) before
+the installers switched to its artifacts (`ffmpeg-macos-universal`, `ffmpeg-linux-x64`, `ffmpeg-windows-x64`).
+Star finds the runtime's encoders by asking the binary (`FFmpegCapabilities`), so the app works with either build.
 
 ## Where it is used
 
@@ -121,9 +120,11 @@ x86_64 targets (without it the codecs fall back to C and encode several times sl
 
 ### CI
 
-`.github/workflows/ffmpeg.yml` builds and smoke-tests every platform, caches the result on a hash of
+`.github/workflows/ffmpeg-gpu.yml` builds and smoke-tests every platform, caches the result on a hash of
 `versions.env`, `build.sh` and `lib/`, and runs whenever `ffmpeg/` changes. `cli.yml` (the signed macOS
-release) and `kotlin-client.yml` call it and download the universal macOS artifact.
+release), `kotlin-client.yml` (the desktop installers) and `gherkin.yml` (the scenario runs) call it and download
+the artifact for their platform, so the binaries the scenarios run against are the ones that ship. Linux arm64
+is built only when asked for (`include-arm64`).
 
 ### Verification status
 
@@ -131,7 +132,7 @@ release) and `kotlin-client.yml` call it and download the universal macOS artifa
 |---|---|
 | macOS arm64 | Built here and smoke-tested (`smoke_test.sh`, 54 checks incl. VideoToolbox encode and decode on an M5 Max), and exercised through StarCore's decode and encode paths. |
 | macOS x86_64 slice | Cross-compiled here and checked structurally (architecture, linkage); **not run**, the machine has no Rosetta. CI tries it under Rosetta. |
-| Linux, Windows | Recipes and CI jobs are written, **not yet run**. They are exercised by `ffmpeg.yml`; expect a first run to need a fix or two. |
+| Linux, Windows | Built and smoke-tested in CI by `ffmpeg-gpu.yml` (green on all platforms, 2026-10-14). No NVIDIA or AMD GPU is available there, so the hardware encoders are checked to be built in and to report cleanly, not to encode. |
 
 ## Changing it
 

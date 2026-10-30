@@ -140,4 +140,14 @@ final class DiskSpaceCheckTests: XCTestCase {
         XCTAssertNotNil(estimate)
         XCTAssertTrue(estimate?.fits ?? false)
     }
+
+    func testASequenceIsSizedByItsImagesOnly() throws {
+        let dir = NSTemporaryDirectory() + "seqsize_\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        FileManager.default.createFile(atPath: dir + "/a.tif", contents: Data(count: 100))
+        FileManager.default.createFile(atPath: dir + "/b.JPG", contents: Data(count: 50))
+        FileManager.default.createFile(atPath: dir + "/notes.txt", contents: Data(count: 999))
+        XCTAssertEqual(DiskSpaceCheck.sequenceInputBytes(inDirectory: dir), 150)
+    }
 }

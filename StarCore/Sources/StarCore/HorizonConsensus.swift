@@ -780,50 +780,59 @@ public enum HorizonConsensus {
 
     // MARK: - Running it
 
-    /// Consensus lines for `targets`, from every frame's detection in `lines` (grid lines,
-    /// see `gridLine`) and the stored ground fits in `similarityRecords` (frame index →
-    /// neighbour index → the row-major 3x3 carrying that neighbour into the frame).
+    /// Everything about a sequence the frames' lines are built from — the calibrated focal
+    /// length, the ground fits as camera rotations, which frames vote, and the consensus at
+    /// the painted frames — with which each frame's line can then be built on its own.
     ///
-    /// The frames that vote are every `Parameters.neighbourStride`th one counted from
-    /// `voterOrigin` — the sequence's first frame, so the same frames vote whichever part of
-    /// it is being written — or from the first frame in `lines` when it is not given.
-    ///
-    /// Nil when the focal length cannot be calibrated; a target is absent when it has no
-    /// detection of its own.
-    public static func run(
-      lines: [Int: [Float]],
-      similarityRecords: [Int: [Int: [Double]]],
-      targets: [Int],
-      width: Int,
-      height: Int,
-      voterOrigin: Int? = nil,
-      references: [Int: [Float]] = [:],
-      parameters: Parameters = Parameters()
-    ) -> Outcome? {
-        guard let bandTop = bandTop(of: lines, height: height),
-              let calibration = calibrateFocalLength(lines: lines,
-                                                     similarityRecords: similarityRecords,
-                                                     width: width, height: height,
-                                                     bandTop: bandTop, voterOrigin: voterOrigin,
-                                                     parameters: parameters)
-        else { return nil }
-        let records = rotationRecords(similarityRecords, width: width, height: height,
-                                      focalLength: calibration.focalLength, bandTop: bandTop,
-                                      maxResidual: parameters.maxRotationResidual).records
-        let hop = maxHop(of: records)
-        let frames = lines.keys.sorted()
-        guard let first = voterOrigin ?? frames.first else { return nil }
-        let stride = max(1, parameters.neighbourStride)
-        let voters = Set(frames.filter { ($0 - first) % stride == 0 })
+    /// The sequence-wide half of `run`.  Split off so a frame's line can be written, and
+    /// composited with, as soon as it is built rather than after every other frame's
+    /// (`HorizonConsensusOp`): what one frame's line reads is all here, and nothing here
+    /// depends on any other frame's line.
+    public struct Prepared: Sendable {
+        public let calibration: Calibration
+        let lines: [Int: [Float]]
+        let references: [Int: [Float]]
+        let records: [Int: [Int: [Double]]]
+        let hop: Int
+        let voters: Set<Int>
+        /// The consensus at each painted frame within reach, which its painting corrects.
+        fileprivate(set) var anchorConsensus: [Int: [Float]]
+        let width: Int
+        let height: Int
+        let parameters: Parameters
 
-        // The consensus at the painted frames near a target is what each painting corrects,
-        // so those go first.  A painted frame is not detected at all — its painting stands in
-        // for the detection — so its consensus is its neighbours' alone.
-        let reach = parameters.longSpan
-        let wantedReferences = Set(references.keys.filter { painted in
-            targets.contains { abs($0 - painted) <= reach }
-        }).sorted()
-        @Sendable func consensus(of target: Int, chain: [Int: [Double]],
+        /// A frame's line before `temporalSmoothingRadius` averages it with its
+        /// neighbours': the consensus, corrected by the painted frames near it, or the
+        /// painting itself.  Nil for a frame with neither a detection nor a painting.
+        public struct Unsmoothed: Sendable {
+            public let line: [Float]
+            /// Columns where the long-span answer replaced the short one.
+            public let overridden: Int
+            /// Whether a painted reference corrected it.
+            public let corrected: Bool
+        }
+
+        /// How many frames' detections, and how many paintings, the lines are built from.
+        public var detections: Int { lines.count }
+        public var paintedReferences: Int { references.count }
+
+        /// Whether `frame` has a line to build: a detection or a painting.
+        public func hasLine(_ frame: Int) -> Bool {
+            lines[frame] != nil || references[frame] != nil
+        }
+
+        /// The frames whose unsmoothed lines `target`'s line is averaged from, `target`
+        /// among them.  Empty when `target` has no line.
+        public func smoothingSources(of target: Int) -> [Int] {
+            guard hasLine(target) else { return [] }
+            let radius = max(0, parameters.temporalSmoothingRadius)
+            return ((target - radius)...(target + radius)).filter(hasLine)
+        }
+
+        /// The consensus at `target` from the voters within `longSpan` of it, carried in
+        /// along `chain`.  `withoutOwn` for a painted frame that was not detected: its
+        /// consensus is its neighbours' alone.
+        func consensus(of target: Int, chain: [Int: [Double]],
                        withoutOwn: Bool = false) -> (line: [Float], overridden: Int)? {
             // NaN rows do not vote; a column no neighbour reaches stays NaN, and corrects nothing
             let own = withoutOwn ? [Float](repeating: .nan, count: parameters.gridWidth)
@@ -845,55 +854,133 @@ public enum HorizonConsensus {
                                      overridden: &overridden)
             return (line, overridden)
         }
-        let anchorResults = Results<[Float]?>(nil, count: wantedReferences.count)
-        DispatchQueue.concurrentPerform(iterations: wantedReferences.count) { index in
-            let painted = wantedReferences[index]
-            let chain = chains(into: painted, span: parameters.longSpan,
-                               records: records, maxHop: hop)
-            anchorResults.set(index, consensus(of: painted, chain: chain,
-                                               withoutOwn: lines[painted] == nil)?.line)
-        }
-        let anchorConsensus: [Int: [Float]] = {
-            var found: [Int: [Float]] = [:]
-            for (index, line) in anchorResults.all.enumerated() {
-                if let line { found[wantedReferences[index]] = line }
-            }
-            return found
-        }()
 
-        // Every frame a target's smoothed line is averaged from, and the targets themselves.
-        let radius = max(0, parameters.temporalSmoothingRadius)
-        let hasLine = { (frame: Int) in lines[frame] != nil || references[frame] != nil }
-        let targetSet = Set(targets.filter(hasLine))
-        var neededSet = targetSet
-        if radius > 0 {
-            for target in targetSet {
-                for frame in (target - radius)...(target + radius) where hasLine(frame) {
-                    neededSet.insert(frame)
-                }
-            }
-        }
-        let needed = neededSet.sorted()
-        let results = Results<(line: [Float], overridden: Int, corrected: Bool)?>(nil, count: needed.count)
-        DispatchQueue.concurrentPerform(iterations: needed.count) { index in
-            let frame = needed[index]
+        /// `frame`'s unsmoothed line; see `Unsmoothed`.
+        public func unsmoothed(_ frame: Int) -> Unsmoothed? {
             // A painted frame's horizon is its painting.
             if let painting = references[frame] {
-                results.set(index, (painting, 0, false))
-                return
+                return Unsmoothed(line: painting, overridden: 0, corrected: false)
             }
             let chain = chains(into: frame, span: parameters.longSpan,
                                records: records, maxHop: hop)
-            guard let (line, overridden) = consensus(of: frame, chain: chain) else { return }
+            guard let (line, overridden) = consensus(of: frame, chain: chain) else { return nil }
             if let corrected = referenceCorrected(line, at: frame, chain: chain,
                                                   references: references,
                                                   anchorConsensus: anchorConsensus,
                                                   width: width, height: height,
                                                   parameters: parameters) {
-                results.set(index, (corrected, overridden, true))
-            } else {
-                results.set(index, (line, overridden, false))
+                return Unsmoothed(line: corrected, overridden: overridden, corrected: true)
             }
+            return Unsmoothed(line: line, overridden: overridden, corrected: false)
+        }
+
+        /// `target`'s finished line, from the unsmoothed lines of `smoothingSources(of:)`
+        /// (the ones missing from `unsmoothed` simply do not count).  Nil when `target` has
+        /// no unsmoothed line.
+        public func smoothed(_ target: Int, unsmoothed: [Int: [Float]]) -> [Float]? {
+            guard let own = unsmoothed[target] else { return nil }
+            let radius = max(0, parameters.temporalSmoothingRadius)
+            // a painting is the truth, and nothing is averaged into it
+            if radius == 0 || references[target] != nil { return own }
+            let chain = chains(into: target, span: radius, records: records, maxHop: hop)
+            return temporalMean(of: unsmoothed, around: target, radius: radius,
+                                chain: chain, width: width, height: height)
+        }
+
+        /// Whether `target` was painted, so its line is its painting.
+        public func isPainted(_ target: Int) -> Bool { references[target] != nil }
+    }
+
+    /// The sequence-wide half of `run`: see `Prepared`.  `targets` are only used to decide
+    /// which painted frames' consensus is needed, so a `Prepared` serves any frame within
+    /// `Parameters.longSpan` of them.  Nil when the focal length cannot be calibrated.
+    public static func prepare(
+      lines: [Int: [Float]],
+      similarityRecords: [Int: [Int: [Double]]],
+      targets: [Int],
+      width: Int,
+      height: Int,
+      voterOrigin: Int? = nil,
+      references: [Int: [Float]] = [:],
+      parameters: Parameters = Parameters()
+    ) -> Prepared? {
+        guard let bandTop = bandTop(of: lines, height: height),
+              let calibration = calibrateFocalLength(lines: lines,
+                                                     similarityRecords: similarityRecords,
+                                                     width: width, height: height,
+                                                     bandTop: bandTop, voterOrigin: voterOrigin,
+                                                     parameters: parameters)
+        else { return nil }
+        let records = rotationRecords(similarityRecords, width: width, height: height,
+                                      focalLength: calibration.focalLength, bandTop: bandTop,
+                                      maxResidual: parameters.maxRotationResidual).records
+        let hop = maxHop(of: records)
+        let frames = lines.keys.sorted()
+        guard let first = voterOrigin ?? frames.first else { return nil }
+        let stride = max(1, parameters.neighbourStride)
+        let voters = Set(frames.filter { ($0 - first) % stride == 0 })
+
+        var prepared = Prepared(calibration: calibration, lines: lines, references: references,
+                                records: records, hop: hop, voters: voters,
+                                anchorConsensus: [:], width: width, height: height,
+                                parameters: parameters)
+
+        // The consensus at the painted frames near a target is what each painting corrects,
+        // so those go first.  A painted frame is not detected at all — its painting stands in
+        // for the detection — so its consensus is its neighbours' alone.
+        let reach = parameters.longSpan
+        let wantedReferences = Set(references.keys.filter { painted in
+            targets.contains { abs($0 - painted) <= reach }
+        }).sorted()
+        let anchorResults = Results<[Float]?>(nil, count: wantedReferences.count)
+        let unanchored = prepared
+        DispatchQueue.concurrentPerform(iterations: wantedReferences.count) { index in
+            let painted = wantedReferences[index]
+            let chain = chains(into: painted, span: parameters.longSpan,
+                               records: records, maxHop: hop)
+            anchorResults.set(index, unanchored.consensus(of: painted, chain: chain,
+                                                          withoutOwn: lines[painted] == nil)?.line)
+        }
+        for (index, line) in anchorResults.all.enumerated() {
+            if let line { prepared.anchorConsensus[wantedReferences[index]] = line }
+        }
+        return prepared
+    }
+
+    /// Consensus lines for `targets`, from every frame's detection in `lines` (grid lines,
+    /// see `gridLine`) and the stored ground fits in `similarityRecords` (frame index →
+    /// neighbour index → the row-major 3x3 carrying that neighbour into the frame).
+    ///
+    /// The frames that vote are every `Parameters.neighbourStride`th one counted from
+    /// `voterOrigin` — the sequence's first frame, so the same frames vote whichever part of
+    /// it is being written — or from the first frame in `lines` when it is not given.
+    ///
+    /// Nil when the focal length cannot be calibrated; a target is absent when it has no
+    /// detection of its own.
+    public static func run(
+      lines: [Int: [Float]],
+      similarityRecords: [Int: [Int: [Double]]],
+      targets: [Int],
+      width: Int,
+      height: Int,
+      voterOrigin: Int? = nil,
+      references: [Int: [Float]] = [:],
+      parameters: Parameters = Parameters()
+    ) -> Outcome? {
+        guard let prepared = prepare(lines: lines, similarityRecords: similarityRecords,
+                                     targets: targets, width: width, height: height,
+                                     voterOrigin: voterOrigin, references: references,
+                                     parameters: parameters)
+        else { return nil }
+
+        // Every frame a target's smoothed line is averaged from, and the targets themselves.
+        let targetSet = Set(targets.filter(prepared.hasLine))
+        var neededSet = Set<Int>()
+        for target in targetSet { neededSet.formUnion(prepared.smoothingSources(of: target)) }
+        let needed = neededSet.sorted()
+        let results = Results<Prepared.Unsmoothed?>(nil, count: needed.count)
+        DispatchQueue.concurrentPerform(iterations: needed.count) { index in
+            results.set(index, prepared.unsmoothed(needed[index]))
         }
         var gathered: [Int: [Float]] = [:]
         var overridden = 0
@@ -911,26 +998,17 @@ public enum HorizonConsensus {
         let wanted = targetSet.sorted().filter { unsmoothed[$0] != nil }
         let smoothed = Results<[Float]?>(nil, count: wanted.count)
         DispatchQueue.concurrentPerform(iterations: wanted.count) { index in
-            let target = wanted[index]
-            guard let own = unsmoothed[target] else { return }
-            // a painting is the truth, and nothing is averaged into it
-            if radius == 0 || references[target] != nil {
-                smoothed.set(index, own)
-                return
-            }
-            let chain = chains(into: target, span: radius, records: records, maxHop: hop)
-            smoothed.set(index, temporalMean(of: unsmoothed, around: target, radius: radius,
-                                             chain: chain, width: width, height: height))
+            smoothed.set(index, prepared.smoothed(wanted[index], unsmoothed: unsmoothed))
         }
         var outcome: [Int: [Float]] = [:]
         for (index, line) in smoothed.all.enumerated() {
             if let line { outcome[wanted[index]] = line }
         }
-        var result = Outcome(lines: outcome, calibration: calibration,
+        var result = Outcome(lines: outcome, calibration: prepared.calibration,
                              overriddenColumns: overridden,
                              columns: wanted.count * parameters.gridWidth)
         result.correctedTargets = corrected
-        result.paintedTargets = wanted.filter { references[$0] != nil }.count
+        result.paintedTargets = wanted.filter(prepared.isPainted).count
         return result
     }
 

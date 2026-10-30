@@ -304,6 +304,7 @@ struct StarApp: App {
                   setupKHTLogging()
                   appDelegate.viewModel = viewModel
                   viewModel.openSequenceFromUITestArgument()
+                  viewModel.openVideoFromUITestArgument()
               }
               .onChange(of: loggingViewModel.level) {
                   enableGUILogs()

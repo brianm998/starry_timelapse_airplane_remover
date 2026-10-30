@@ -2,7 +2,7 @@ import SwiftUI
 import StarCore
 import logging
 
-/// What the left panel's top button offers.
+/// What the Process / Show Progress button (bottom right) offers.
 ///
 /// A value rather than a pair of conditions spelled out in the view, because it is two
 /// different buttons sharing one place on screen and the rule for which one it is has to
@@ -41,45 +41,13 @@ enum ProcessingButtonRole: Equatable {
 
 struct LeftPanel: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    @Environment(FrameGraphViewModel.self) var frameGraphViewModel: FrameGraphViewModel
-    
     let foobar = 134.0/255.0 // XXX make a custom color from these
     let foobar2 = 138.0/255.0
 
-    @State private var isVisible: Bool = false
-    @State private var imageCacheHits: UInt = 0
-    @State private var imageCacheMisses: UInt = 0
-    @State private var imageCacheMap: [Int: Int] = [:]
+    @FocusState private var focusedField: FocusedField?
+    // kept here rather than in the view model: this view stays alive while the panel is hidden
+    @State private var displayExpanded = true
 
-    var basicImageStats: (Int, Int) { // memory usage, number of images
-        var totalImageCount: Int = 0
-        var totalByteCount: Int = 0
-        for (size, count) in imageCacheMap {
-            totalByteCount += size * count
-            totalImageCount += count
-        }
-        return (totalByteCount, totalImageCount)
-    }
-
-    func string(for byteCount: Int) -> String {
-        //Log.d("string(for: byteCount \(byteCount))")
-        if byteCount < 0 {
-            return localized("ui.bytes_zero")    // can go negative because of temporarily mismatched data
-        } else if byteCount < 1024 {
-            return localized("ui.bytes", byteCount)
-        } else if byteCount < (1024*1024) {
-            return localized("ui.kilobytes", byteCount/1024)
-        } else if byteCount < (1024*1024*1024) {
-            return localized("ui.megabytes", byteCount/(1024*1024))
-        } else if byteCount < (1024*1024*1024*1024) {
-            let str = String(format: "%.1f", Double(byteCount)/(1024*1024*1024))
-            return localized("ui.gigabytes", str)
-        } else {// if byteCount < 1024^5 {
-            let str = String(format: "%.2f", Double(byteCount)/(1024*1024*1024*1024))
-            return localized("ui.terabytes", str)
-        }
-    }
-    
     var body: some View {
         Group {
             if viewModel.leftPanelShowing {
@@ -97,56 +65,15 @@ struct LeftPanel: View {
             ScrollView() {
                 VStack(alignment: .leading) {
 
-                    self.processingButtons
+                    ProcessingProgressMarker()
 
-                    ProcessingProgressBarView()
-                      .frame(maxWidth: 200, alignment: .leading)
-                     //.frame(maxWidth: .none)
-                    
-                    Space(height: 10)
 
-                    AlignmentDeviationChart(
-                      frames: viewModel.starAlignmentInfo,
-                      foregroundColor: .white
-                    )
-                      .frame(width: 200, height: 200)
-                    
-
-                    Space(height: 10)
-                    
-                    self.processingStateView
-
-                    Space(height: 10)
-
-                    self.imageCacheView
-
-                    Space(height: 10)
-
-                    self.operationQueueView
-                    
-                    Space(height: 10)
-                    /*
-
-                     add
-
-                     imageCache.receiveUpdates() { hits, misses, map
-                     }
-
-                     in didAppear
-
-                     and 
-
-                     imageCache.receiveUpdates(nil)
-
-                     on disappear
-
-                     then show a collapsable view here that shows only number and
-                     size when collapsed, and full details when opened.
-
-                     */
-                    
                     self.frameModeView
-                    
+
+                    Space(height: 10)
+
+                    self.displaySection
+
                 }
                 //                          .frame(maxWidth: 200)
             }
@@ -154,13 +81,6 @@ struct LeftPanel: View {
               .focusable(false)
            //   .frame(maxHeight: .infinity, alignment: .bottom)
 
-              .onAppear {
-                  isVisible = true
-                  self.updateImageCacheStats()
-              }
-              .onDisappear() {
-                  isVisible = false
-              }
             Spacer()
             
             Button() {
@@ -178,347 +98,6 @@ struct LeftPanel: View {
         
     }
 
-    func updateImageCacheStats() {
-        guard self.isVisible else { return }
-        Task.detached {
-            let (hits, misses, map) = await imageCache.prepareUpdate()
-            Task { @MainActor in
-                // update values
-                self.imageCacheHits = hits
-                self.imageCacheMisses = misses
-                self.imageCacheMap = map
-                
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // XXX make a param
-                self.updateImageCacheStats()
-            }
-        }
-    }
-    
-    /// The processing modal's Dismiss button hands the window back with the run still
-    /// going, and there was no way back to it — dismissing it was a one-way door.  While a
-    /// run is live this button is that way back, which is also the only thing it could
-    /// usefully be: starting a second run over the same frames is exactly what it must not
-    /// do.
-    var processingButtonRole: ProcessingButtonRole {
-        ProcessingButtonRole.current(
-          isProcessingFrames: viewModel.isProcessingFrames,
-          isRenderingVideo: viewModel.isRenderingVideo,
-          unprocessedCount: viewModel.frameStateMap[.unprocessed]?.count ?? 0,
-          horizonDetectedCount: viewModel.frameStateMap[.horizonDetected]?.count ?? 0,
-          frameCount: viewModel.frames.count,
-          pendingHorizonRefinement: viewModel.hasPendingHorizonRefinement
-        )
-    }
-
-    var processButtonDisabled: Bool {
-        if case .process(let enabled) = processingButtonRole { return !enabled }
-        return false
-    }
-
-    var updateButtonDisabled: Bool {
-        let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
-        return userModified == 0 || viewModel.isProcessingFrames || viewModel.isRenderingVideo 
-    }
-
-    var renderButtonDisabled: Bool {
-        let complete = viewModel.frameStateMap[.complete]?.count ?? 0
-        return complete != viewModel.frames.count || viewModel.isProcessingFrames || viewModel.isRenderingVideo
-    }
-    
-    var processingButtons: some View {
-        VStack(alignment: .leading) {
-            let unprocessed = viewModel.frameStateMap[.unprocessed]?.count ?? 0
-            let horizonCount = viewModel.frameStateMap[.horizonDetected]?.count ?? 0
-
-            let role = processingButtonRole
-
-            Button() {
-                switch role {
-                case .status:  viewModel.processingModalShowing = true
-                case .process: viewModel.shouldShowProcessingSettings = true
-                }
-            } label: {
-                Text(role == .status
-                       ? localized("ui.status")
-                       : localized("ui.process_frames"))
-            }
-              .disabled(processButtonDisabled)
-              .if(!processButtonDisabled) {
-                  $0.buttonStyle(.borderedProminent)
-                    .tint(.blue)
-              }
-              .help(role == .status
-                      ? localized("ui.show_the_processing_status_again")
-                      : localized("ui.choose_settings_and_process_these_frames"))
-            
-            
-            let userModified = viewModel.frameStateMap[.userModified]?.count ?? 0
-            /*
-            Button() {
-                // XXX this has no max number of processes :(
-                Task {
-                  await viewModel.processAll()
-                }
-            } label: {
-                Text(localized("ui.update_n_frames", userModified))
-            }
-              .disabled(updateButtonDisabled)
-              .if(!updateButtonDisabled) { view in
-                  view
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue)
-              }
-*/
-            let complete = viewModel.frameStateMap[.complete]?.count ?? 0
-
-            Button() {
-                Log.d("render video")
-                viewModel.renderVideoSheetShowing = true
-                /*
-
-                 need to keep track of ffmpeg parameters when we load a video
-                 (get rid of script to render)
-
-                 default ffmpeg parameters to prores high quailty in config
-
-                 have ui that allows users to change codec and frame rate, etc.
-
-                 show render progress in UI somehow
-                 
-                 */
-
-                viewModel.isRenderingVideo = false
-                
-            } label: {
-                Text(localized("ui.render_video_from_n_frames_lower", viewModel.frames.count))
-            }
-              .disabled(renderButtonDisabled)
-              .if(!renderButtonDisabled) { view in
-                  view
-                    .buttonStyle(.borderedProminent)
-                    .tint(.blue)
-              }
-        }
-    }
-
-    var operationQueueView: some View {
-        VStack(alignment: .leading) {
-            let hasHorizonOps = frameGraphViewModel.hasOperations(
-              ofType: .horizon,
-              atMax: viewModel.frames.count
-            )
-            let hasMergedHorizonOps = frameGraphViewModel.hasOperations(
-              ofType: .mergedHorizon,
-              atMax: viewModel.frames.count
-            )
-            let hasStarKeypointOps = frameGraphViewModel.hasOperations(
-              ofType: .starKeypoints,
-              atMax: viewModel.frames.count
-            )
-            let hasEarthKeypointOps = frameGraphViewModel.hasOperations(
-              ofType: .earthKeypoints,
-              atMax: viewModel.frames.count
-            )
-            let hasStarHomographyOps = frameGraphViewModel.hasOperations(
-              ofType: .starHomography,
-              atMax: viewModel.frames.count
-            )
-            let hasEarthHomographyOps = frameGraphViewModel.hasOperations(
-              ofType: .earthHomography,
-              atMax: viewModel.frames.count
-            )
-            let hasOutlierOps = frameGraphViewModel.hasOperations(
-              ofType: .outliers,
-              atMax: viewModel.frames.count
-            )
-            let hasMergeOps = frameGraphViewModel.hasOperations(
-              ofType: .merge,
-              atMax: viewModel.frames.count
-            )
-
-            if hasHorizonOps ||
-               hasMergedHorizonOps ||
-               hasStarKeypointOps ||
-               hasEarthKeypointOps ||
-               hasEarthKeypointOps ||
-               hasStarHomographyOps ||
-               hasEarthHomographyOps ||
-               hasOutlierOps ||
-               hasMergeOps
-            {
-                Grid(alignment: .trailing) {
-                    GridRow {
-                        HStack {
-                            Text(localized("ui.step"))
-                              .foregroundColor(.white)
-                            Spacer()
-                        }
-                        ForEach(OperationState.allCases, id: \.self) { state in
-                            Text(state.rawValue)
-                              .foregroundColor(.white)
-                        }
-                    }
-                    Divider()
-                      .foregroundColor(.white)
-                      .frame(maxWidth: .infinity)
-
-                    if hasHorizonOps {
-                        operationView(of: .horizon)
-                    }
-                    if hasMergedHorizonOps {
-                        operationView(of: .mergedHorizon)
-                    }
-                    if hasStarKeypointOps {
-                        operationView(of: .starKeypoints)
-                    }
-                    if hasEarthKeypointOps {
-                        operationView(of: .earthKeypoints)
-                    }
-
-                    if hasStarHomographyOps {
-                        operationView(of: .starHomography)
-                    }
-                    if hasEarthHomographyOps {
-                        operationView(of: .earthHomography)
-                    }
-                    if hasOutlierOps {
-                        operationView(of: .outliers)
-                    }
-                    if hasMergeOps {
-                        operationView(of: .merge)
-                    }
-                }
-            }
-        }
-          .fixedSize(horizontal: true, vertical: false)
-    }
-
-    func operationView(of type: OperationType) -> some View {
-        GridRow {
-            HStack {
-                Text(type.rawValue)
-                  .foregroundColor(.white)
-                Spacer()
-            }  
-            ForEach(OperationState.allCases, id: \.self) { state in
-                let num = frameGraphViewModel.numberOfOperations(
-                  ofType: type,
-                  in: state
-                )
-                Text("\(num)")
-                  .foregroundColor(.white)
-                  .opacity(num == 0 ? 0 : 1)
-            }
-        }
-    }
-    
-    var imageCacheView: some View {
-        @Bindable var viewModel = viewModel
-        return VStack(alignment: .leading) {
-            Text(localized("ui.non_cached_image_stats"))
-              .foregroundColor(.white)
-            Space(height: 4)
-
-            let (memoryBytesUsed, imageCount) = self.basicImageStats
-
-            let memoryString = string(for: memoryBytesUsed)
-            
-            Text(localized("ui.memory_used_by_images_other", string(for: viewModel.totalMatBytes-memoryBytesUsed), viewModel.totalMatInstances - imageCount))
-              .foregroundColor(viewModel.totalMatInstances == 0 ? .gray : .green)
-            Space(height: 6)
-            
-            Text(localized("ui.cached_image_stats"))
-              .foregroundColor(.white)
-            Space(height: 4)
-
-            if viewModel.showAllImageCacheStats {
-                // show all image cache stats
-                Text(localized("ui.memory_used_by_images", memoryString, imageCount))
-                  .foregroundColor(imageCount == 0 ? .gray : .green)
-
-                Text(localized("ui.n_cache_hits", imageCacheHits))
-                  .foregroundColor(imageCacheHits == 0 ? .gray : .green)
-                Text(localized("ui.n_cache_misses", imageCacheMisses))
-                  .foregroundColor(imageCacheMisses == 0 ? .gray : .red)
-                ForEach(imageCacheMap.keys.sorted { $0 > $1 }, id: \.self) { key in
-                    let sizeString = string(for: key)
-                    if let count = imageCacheMap[key] {
-                        Text(localized("ui.n_sized_images", count, sizeString))
-                          .foregroundColor(.yellow)
-                    }
-                }
-                
-                // XXX add more here
-            } else {
-                // not all stats, just basics
-                Text(localized("ui.memory_used_by_images", memoryString, imageCount))
-                  .foregroundColor(.gray)
-            }
-            
-            Spacer()
-              .frame(maxHeight: 10)
-            
-            ExpandUpButton($viewModel.showAllImageCacheStats)
-        }
-    }
-    
-    var processingStateView: some View {
-        @Bindable var viewModel = viewModel
-        return VStack(alignment: .leading) {
-            Text(localized("ui.processing_stats"))
-              .foregroundColor(.white)
-            Spacer()
-              .frame(maxHeight: 4)
-            Grid(alignment: .leading) {
-                if viewModel.showAllFrameProcessingStates {
-                    // show all the detailed processing states
-                    ForEach(FrameProcessingState.allCases, id: \.self) { state in
-                        GridRow {
-                            let count = viewModel.frameStateMap[state]?.count ?? 0
-                            let color: Color = count == 0 ? .gray : .white
-                            Text("\(count)")
-                              .foregroundColor(color)
-                            Text(state.message)
-                              .foregroundColor(color)
-                        }
-                    }
-                } else {
-                    // just show unprocessed, processing, and complete
-                    GridRow {
-                        let count = viewModel.frameStateMap[.unprocessed]?.count ?? 0
-                        let color: Color = count == 0 ? .gray : .white
-                        Text("\(count)")
-                          .foregroundColor(color)
-                        Text(FrameProcessingState.unprocessed.message)
-                          .foregroundColor(color)
-                    }
-
-                    GridRow {
-                        let color: Color = viewModel.numberOfFramesProcessingNow == 0 ? .gray : .white
-                        Text("\(viewModel.numberOfFramesProcessingNow)")
-                          .foregroundColor(color)
-                        Text(localized("ui.processing_2"))
-                          .foregroundColor(color)
-                    }
-
-                    GridRow {
-                        let count = viewModel.frameStateMap[.complete]?.count ?? 0
-                        let color: Color = count == 0 ? .gray : .white
-                        Text("\(count)")
-                          .foregroundColor(color)
-                        Text(FrameProcessingState.complete.message)
-                          .foregroundColor(color)
-                    }
-                }
-            }
-
-            Spacer()
-              .frame(maxHeight: 10)
-            
-            ExpandUpButton($viewModel.showAllFrameProcessingStates)
-        }
-    }
-    
     var frameModeView: some View {
         @Bindable var viewModel = viewModel
         return VStack(alignment: .leading) {
@@ -562,6 +141,132 @@ struct LeftPanel: View {
         }
     }
     
+    var displaySection: some View {
+        @Bindable var viewModel = viewModel
+        return VStack(alignment: .leading) {
+            RightPanelSectionHeader(title: localized("ui.display"),
+                                    help: localized("ui.section.display_help"),
+                                    isExpanded: $displayExpanded)
+
+            if displayExpanded {
+                Group {
+                    Text(localized("ui.fast_advancement_type"))
+                      .foregroundColor(.white)
+
+                    Picker("", selection: $viewModel.fastAdvancementType) {
+                        ForEach(FastAdvancementType.allCases, id: \.self) { value in
+                            Text(value.localizedName).tag(value)
+                        }
+                    }
+                      .frame(maxWidth: 140)
+
+                    switch viewModel.fastAdvancementType {
+                    case .normal:
+                        Text(localized("ui.fast_skip_n_frames", viewModel.fastSkipAmount))
+                          .frame(maxWidth: 140)
+                          .multilineTextAlignment(.leading)
+                          .foregroundColor(.white)
+                    case .skipEmpties:
+                        Text(localized("ui.skip_all_frames_without_outliers"))
+                          .frame(maxWidth: 140)
+                          .foregroundColor(.white)
+                    case .toNextPositive:
+                        Text(localized("ui.skip_to_next_frame_with_a_positive_outlier"))
+                          .frame(maxWidth: 140)
+                          .foregroundColor(.white)
+                    case .toNextNegative:
+                        Text(localized("ui.skip_to_next_frame_with_a_negative_outlier"))
+                          .frame(maxWidth: 140)
+                          .foregroundColor(.white)
+                    case .toNextUnknown:
+                        Text(localized("ui.skip_to_next_frame_with_a_unknown_outlier"))
+                          .frame(maxWidth: 140)
+                          .foregroundColor(.white)
+                    }
+                }
+                  .help(localized("ui.fast_advancement_type_help"))
+
+    //                    Toggle(skipEmpties ? "change to # of frames" : "change to skip empties",
+    //                           isOn: $skipEmpties)
+
+                // XXX add advance to has undecided
+                // XXX add advance to has paintable
+                // XXX add advance to has not paintable
+
+                if viewModel.fastAdvancementType == .normal {
+                    Group {
+                        Text(localized("ui.fast_skip"))
+                          .foregroundColor(.white)
+                        Picker("", selection: $viewModel.fastSkipAmount) {
+                            ForEach(0 ..< 51) {
+                                Text(localized("ui.n_frames_lower", $0))
+                            }
+                        }.frame(maxWidth: 140)
+                    }
+                      .help(localized("ui.fast_skip_help"))
+                }
+
+                Group {
+                    Toggle(localized("ui.show_horizon_line"), isOn: Binding(
+                        get: { viewModel.userPreferences.showHorizonOnMainView ?? false },
+                        set: { viewModel.userPreferences.showHorizonOnMainView = $0 }
+                    ))
+                      .foregroundColor(.white)
+
+                    HorizonLineKindToggles()
+                }
+                  .help(localized("ui.show_horizon_line_help"))
+
+                // frame rate
+                let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30, 60, 90]
+                Group {
+                    Text(localized("ui.frame_rate"))
+                      .foregroundColor(.white)
+                    Picker("", selection: $viewModel.videoPlaybackFramerate) {
+                        ForEach(frame_rates, id: \.self) {
+                            Text(localized("ui.n_fps", $0))
+                        }
+                    }.frame(maxWidth: 100)
+                }
+                  .help(localized("ui.frame_rate_help"))
+
+                // not disabled with the overlays: it dims the frame itself, so it
+                // is useful in every clean mode
+                Group {
+                    Text(localized("ui.frame_opacity"))
+                      .foregroundColor(.white)
+                    Slider(value: $viewModel.frameOpacity, in : 0...1)
+                      .frame(maxWidth: 140, alignment: .bottom)
+                }
+                  .help(localized("ui.frame_opacity_help"))
+
+                Group {
+                    HStack {
+                        Text(localized("ui.zoom"))
+                          .foregroundColor(.white)
+                        Spacer()
+                        // Editable max zoom here
+                        EditableMaxZoomView(
+                          focusedField: $focusedField,
+                          textColor: .white,
+                          alwaysOpen: false
+                        )
+                    }
+                      .frame(maxWidth: 140)
+                    Slider(value: $viewModel.currentZoomScale,
+                           in: viewModel.minZoomScale...viewModel.maxZoomScale)
+                      .frame(maxWidth: 140, alignment: .bottom)
+                }
+                  .help(localized("ui.zoom_help"))
+
+                Toggle(localized("ui.show_full_resolution"), isOn: $viewModel.showFullResolution)
+                  .foregroundColor(.white)
+                  .help(localized("ui.show_full_resolution_help"))
+            }
+        }
+    }
+
+
     var closedView: some View {
         VStack(alignment: .leading) {
             // hidden with arrow to allow showing it
@@ -594,49 +299,17 @@ extension View {                // XXX move this
     }
 }
 
-struct ProcessingProgressBarView: View {
+/// Not drawn: the progress bar it replaced is redundant with the processing modal, but the
+/// Gherkin UI tests still wait on this element's label.
+struct ProcessingProgressMarker: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    
-    let unprocessedColor: Color = .gray
-    let processingColor: Color = .yellow
-    let completeColor: Color = .green
 
     var body: some View {
-        return GeometryReader { geometry in
-            let totalWidth = geometry.size.width
-            let totalFrames = max(1, viewModel.frames.count)
-            
-            let unprocessed = CGFloat(viewModel.frameStateMap[.unprocessed]?.count ?? 0)
-            let processing = CGFloat(viewModel.numberOfFramesProcessingNow)
-            let complete = CGFloat(viewModel.frameStateMap[.complete]?.count ?? 0)
-
-            
-            let unprocessedWidth = totalWidth * (unprocessed / CGFloat(totalFrames))
-            let processingWidth = totalWidth * (processing / CGFloat(totalFrames))
-            let completeWidth = totalWidth * (complete / CGFloat(totalFrames))
-
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(completeColor)
-                    .frame(width: completeWidth)
-
-                Rectangle()
-                    .fill(processingColor)
-                    .frame(width: processingWidth)
-
-                Rectangle()
-                    .fill(unprocessedColor)
-                    .frame(width: unprocessedWidth)
-
-            }
-            .cornerRadius(4)
-            .frame(height: 10)
-        }
-        .frame(height: 10)
+        Color.clear
+          .frame(width: 0, height: 0)
           // What the Gherkin UI tests wait on: "<complete>/<total>/<running|idle>" in the label (the value comes through empty for an ignored-children element).
           .accessibilityElement(children: .ignore)
           .accessibilityIdentifier("processing.progress")
           .accessibilityLabel("\(viewModel.frameStateMap[.complete]?.count ?? 0)/\(viewModel.frames.count)/\(viewModel.isProcessingFrames ? "running" : "idle")")
     }
 }
-

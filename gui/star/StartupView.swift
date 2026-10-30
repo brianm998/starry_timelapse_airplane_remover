@@ -86,6 +86,7 @@ struct HorizonView: View {
                 }
                   .fixedSize(horizontal: true, vertical: true)
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.horizon.no")
 
                 Space(width: 20)
                 
@@ -193,6 +194,7 @@ struct MovingView: View {
                       )
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.moving.moving")
                   .fixedSize(horizontal: true, vertical: true)
                 Spacer()
                 
@@ -255,6 +257,7 @@ struct SelectMovingHorizonsView: View {
                 }
                   .fixedSize(horizontal: true, vertical: true)
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.selectmovinghorizons.no")
 
                 Space(width: 30)
 
@@ -357,71 +360,56 @@ struct SelectHorizonView: View {
     }
 }
 
+/// One of the two top-level processing modes: a radio-style row with a short description beneath it.
+private struct ModeChoice: View {
+    let title: String
+    let description: String
+    let selected: Bool
+    let identifier: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                  .font(.title2)
+                  .foregroundColor(.white)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                      .font(.title)
+                      .foregroundColor(.white)
+                    Text(description)
+                      .font(.callout)
+                      .foregroundColor(.white)
+                      .opacity(0.8)
+                      .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+              .padding(.vertical, 6)
+              .contentShape(Rectangle())
+        }
+          .buttonStyle(PlainButtonStyle())
+          .accessibilityIdentifier(identifier)
+          .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
 struct RemovalView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @Binding fileprivate var state: StartupState
 
-    @State private var removeAirplanes: Bool = true
-    @State private var removeSatellites: Bool = true
-    @State private var removeMeteors: Bool = true
-    @State private var removeCars: Bool = true
+    @State private var selectiveMode: Bool = false
+    @State private var autoSelective: Bool = false
+    @State private var groundAlignment: Bool = true
 
     /// Owned here rather than inside `KeypointDivisorStartupView` so that view can set the
     /// initial state from the machine's advice and still be collapsed by the user.
     @State private var showKeypointDivisor: Bool = false
 
     private var cleanMethod: CleanMethod {
-        if removeAirplanes {
-            if removeSatellites {
-                if removeMeteors {
-                    // remove all
-                    .automatic(false)
-                } else {
-                    // remove all but meteors
-                    .automatic(true)
-                }
-            } else {
-                if removeMeteors {
-                    // remove meteors and airplanes but not satellites
-                    .selective
-                } else {
-                    // remove airplanes only
-                    .selective
-                }
-            }
-        } else {
-            if removeSatellites {
-                if removeMeteors {
-                    // remove all but airplanes
-                    .automatic(true)
-                } else {
-                    // remove only satellites
-                    .automatic(true)
-                }
-            } else {
-                if removeMeteors {
-                    // remove meteors only
-                    .automatic(true)
-                } else {
-                    // remove nothing
-                    .selective
-                }
-            }
-        }
-    }
-
-    private var descriptionText: String {
-
-        switch cleanMethod {
-        case .automatic(let usesOutliers):
-            if usesOutliers {
-                localized("ui.mode_desc_auto_selective")
-            } else {
-                localized("ui.mode_desc_automatic")
-            }
-        case .selective:
-            localized("ui.mode_desc_selective")
-        }
+        if selectiveMode { return .selective }
+        return .automatic(autoSelective)
     }
 
     /// Which question screen "Back" should return to — derived from the answers already given
@@ -434,41 +422,48 @@ struct RemovalView: View {
 
     var body: some View {
         VStack {
-            Text(localized("ui.what_do_you_want_star_to_remove"))
+            Text(localized("ui.startup_mode_title"))
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 10)
-            Text(localized("ui.star_can_remove_some_or_all_of_these_things"))
-              .font(.body)
-              .foregroundColor(.white)
-
-            Space(height: 10)
             Divider()
-            HStack {
-                Text(localized("ui.star_should_remove"))
-                  .font(.title)
-                  .foregroundColor(.white)
-                
-                VStack(alignment: .leading) {
-                    Toggle(localized("ui.airplanes"), isOn: $removeAirplanes)
-                      .font(.title)
+
+            ModeChoice(title: localized("ui.startup_mode_automatic"),
+                       description: localized("ui.startup_mode_automatic_desc"),
+                       selected: !selectiveMode,
+                       identifier: "startup.removal.automatic") { selectiveMode = false }
+            if !selectiveMode {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(localized("ui.startup_auto_selective_toggle"), isOn: $autoSelective)
+                      .accessibilityIdentifier("startup.removal.autoselective")
+                      .font(.title3)
                       .foregroundColor(.white)
-                    Toggle(localized("ui.satellites"), isOn: $removeSatellites)
-                      .font(.title)
+                    Text(localized("ui.startup_auto_selective_desc"))
+                      .font(.callout)
                       .foregroundColor(.white)
-                    Toggle(localized("ui.meteors"), isOn: $removeMeteors)
-                      .font(.title)
-                      .foregroundColor(.white)
-                    Toggle(localized("ui.cars"), isOn: $removeCars)
-                      .font(.title)
-                      .foregroundColor(.white)
+                      .opacity(0.8)
+                      .fixedSize(horizontal: false, vertical: true)
                 }
+                  .padding(.leading, 34)
             }
-            Divider()
+            ModeChoice(title: localized("ui.startup_mode_selective"),
+                       description: localized("ui.startup_mode_selective_desc"),
+                       selected: selectiveMode,
+                       identifier: "startup.removal.selective") { selectiveMode = true }
 
-            Text(self.descriptionText)
-              .font(.body)
-              .foregroundColor(.white)
+            Divider()
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(localized("ui.startup_ground_alignment_toggle"), isOn: $groundAlignment)
+                  .accessibilityIdentifier("startup.removal.groundalignment")
+                  .font(.title3)
+                  .foregroundColor(.white)
+                Text(localized("ui.startup_ground_alignment_desc"))
+                  .font(.callout)
+                  .foregroundColor(.white)
+                  .opacity(0.8)
+                  .fixedSize(horizontal: false, vertical: true)
+            }
+              .frame(maxWidth: .infinity, alignment: .leading)
 
             Space(height: 14)
             Divider()
@@ -504,7 +499,7 @@ struct RemovalView: View {
                     withAnimation {
                         viewModel.shouldShowInitialInstructions = false
                         viewModel.cleanMethod = self.cleanMethod
-                        viewModel.allowEarthAlignment = removeCars
+                        viewModel.allowEarthAlignment = groundAlignment
                         viewModel.processAll()
                     }
                 } label: {

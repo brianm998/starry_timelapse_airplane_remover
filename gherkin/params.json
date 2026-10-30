@@ -1,9 +1,58 @@
 {
   "default": {
-    "sequence": "data:a7sii_10",
-    "expected_outputs": "19"
+    "frame_format": "tiff16"
   },
   "cli": {},
   "mac-gui": {},
-  "desktop": {}
+  "desktop": {},
+  "features": {
+    "autoSkyOnlyTiff16": {
+      "sequence": "data:a7sii_10_sky_tiff16"
+    },
+    "autoHorizonJpeg": {
+      "sequence": "data:a7sii_10"
+    },
+    "autoHorizonVideo": {
+      "video": "data:a7sii_10_h264"
+    },
+    "autoHorizonTiff16": {
+      "sequence": "data:a7sii_10_16bit"
+    },
+    "autoMovingTiff16": {
+      "sequence": "data:moving_a7iv_1_aurora_tiff16"
+    },
+    "selectiveHorizonTiff16": {
+      "sequence": "data:a7sii_10_16bit"
+    },
+    "autoSelectiveHorizonTiff16": {
+      "sequence": "data:a7sii_10_16bit"
+    },
+    "autoHorizonJpegVideoOut": {
+      "sequence": "data:a7sii_10"
+    },
+    "removeAirplanes": {
+      "sequence": "data:a7sii_10"
+    },
+    "autoPreservationKeepsAirplanesOutJpeg": {
+      "sequence": "data:a7sii_10"
+    },
+    "autoPreservationKeepsAirplanesOutBit16": {
+      "sequence": "data:a7sii_10_16bit"
+    },
+    "selectiveRemovesOnlyTrails": {
+      "sequence": "data:a7sii_10_16bit"
+    },
+    "syntheticSatellites": {
+      "sequence": "data:trails_synth_sky500"
+    },
+    "syntheticAirplanes": {
+      "sequence": "data:trails_synth_sky500"
+    },
+    "autoHorizonVideoBackground": {
+      "video": "data:a7sii_10_h264"
+    },
+    "videoBackgroundIdentical": {
+      "video": "data:a7sii_10_h264"
+    }
+  }
 }

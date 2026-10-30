@@ -90,6 +90,8 @@ public enum GPUOps {
         activeBackend?.trimOutputPool()
         activeBackend?.trimReadbackPool()
         #endif
+        // the wgpu backend's buffer pool, when it has been started (a no-op otherwise)
+        wgpu_ops_trim_pool()
     }
 
     /// Pool hits and misses so far, and the bytes it is holding. Diagnostics and tests.
@@ -165,7 +167,11 @@ public enum GPUOps {
         Log.i("GPU acceleration registered (\(GPUCapability.deviceName() ?? "unknown device")).")
         return true
         #else
-        return false
+        // Only the warp and the aligned merge, through wgpu-native, and only when STAR_WGPU is set. The
+        // handlers start the device on their first call, so registering touches no driver.
+        let registered = wgpu_ops_register()
+        if registered { Log.i("GPU acceleration for the merge step is registered through wgpu (STAR_WGPU).") }
+        return registered
         #endif
     }()
 

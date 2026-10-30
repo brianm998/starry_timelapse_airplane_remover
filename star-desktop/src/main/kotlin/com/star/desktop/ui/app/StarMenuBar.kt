@@ -26,11 +26,15 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
     val screen by app.screen.collectAsState()
     val svm = (screen as? AppScreen.Sequence)?.vm
     val hasSession = svm != null
+    // Under the processing screen no key should act on what is behind it; while painting a horizon, the keys that change what is going on don't either.
+    val modalUp = svm?.showProcessingModal?.collectAsState()?.value == true
+    val keys = hasSession && !modalUp
+    val paintingHorizon = svm?.horizonPaintMode?.collectAsState()?.value == true
 
     MenuBar {
         Menu(localized("ui.file"), mnemonic = 'F') {
             Item(localized("ui.open_image_sequence"), shortcut = primaryShortcut(Key.O)) {
-                chooseDirectory()?.let { app.openSequence(it) }
+                chooseDirectory()?.let { app.requestSequence(it) }
             }
             Item(localized("ui.open_video")) {
                 chooseFile(localized("ui.open_video_title"))?.let { app.openVideo(it) }
@@ -51,14 +55,14 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             // to the view, so E would switch mode instead of selecting ground, and S or G during the startup painting
             // would leave the painter without its startup flow (macOS disables S there).
             val painting = svm?.horizonPaintMode?.collectAsState()?.value == true
-            Item(localized("ui.edit_mode"), enabled = hasSession && !painting, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
-            Item(localized("ui.scrub_mode"), enabled = hasSession && !painting, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
-            Item(localized("ui.grid_mode"), enabled = hasSession && !painting, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
+            Item(localized("ui.edit_mode"), enabled = keys && !painting, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
+            Item(localized("ui.scrub_mode"), enabled = keys && !painting, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
+            Item(localized("ui.grid_mode"), enabled = keys && !painting, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
             Separator()
             Item(localized("ui.toggle_filmstrip"), enabled = hasSession) { svm?.toggleFilmstrip() }
             // Tab also does this, but a focused control can take Tab for focus traversal before it gets here, so the menu is the way that always works.
             Item(localized("ui.toggle_side_panels"), enabled = hasSession) { svm?.toggleSidePanels() }
-            Item(localized("ui.play_pause"), enabled = hasSession, shortcut = KeyShortcut(Key.Spacebar)) { svm?.playForward() }
+            Item(localized("ui.play_pause"), enabled = keys && !painting, shortcut = KeyShortcut(Key.Spacebar)) { svm?.playForward() }
         }
 
         Menu(localized("ui.process"), mnemonic = 'P') {
@@ -94,8 +98,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             Item(localized("ui.debug_window"), shortcut = windowShortcut(Key.D, IS_MAC)) { app.toggleDebugWindow() }
             Separator()
             // The same item closes the painter while it is open, and says so (macOS).
-            val paintingHorizon = svm?.horizonPaintMode?.collectAsState()?.value == true
-            Item(localized(if (paintingHorizon) "ui.close_horizon_painter" else "ui.paint_reference_horizon"), enabled = hasSession, shortcut = KeyShortcut(Key.H)) {
+            Item(localized(if (paintingHorizon) "ui.close_horizon_painter" else "ui.paint_reference_horizon"), enabled = keys, shortcut = KeyShortcut(Key.H)) {
                 svm?.let { if (it.mode.value != InteractionMode.EDIT) it.setMode(InteractionMode.EDIT); it.toggleHorizonPaint() }
             }
         }
@@ -126,13 +129,13 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
         Menu(localized("ui.outliers"), mnemonic = 'O') {
             // Accelerators per the authoritative Swift source (StarCommands.swift): 'a' removes all,
             // 'k' keeps all, 'u' clears undecided. (KOTLIN_CLIENT_SPEC §5.8's prose had a/k swapped.)
-            Item(localized("ui.keep_all"), enabled = hasSession, shortcut = KeyShortcut(Key.K)) {
+            Item(localized("ui.keep_all"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.K)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).keepAll(it.showTrash.value) }
             }
-            Item(localized("ui.remove_all"), enabled = hasSession, shortcut = KeyShortcut(Key.A)) {
+            Item(localized("ui.remove_all"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.A)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).removeAll(it.showTrash.value) }
             }
-            Item(localized("ui.clear_undecided"), enabled = hasSession, shortcut = KeyShortcut(Key.U)) {
+            Item(localized("ui.clear_undecided"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.U)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).clearUndecided(it.showTrash.value) }
             }
             Separator()

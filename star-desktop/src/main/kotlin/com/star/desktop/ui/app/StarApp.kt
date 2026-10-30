@@ -78,6 +78,14 @@ fun StarApp(vm: AppViewModel) {
                     onCancel = vm::cancelVideoImport,
                 )
             }
+            val pendingSequence by vm.pendingSequence.collectAsState()
+            pendingSequence?.let { dir ->
+                com.star.desktop.ui.dialogs.SequenceLocationDialog(
+                    sequenceDir = dir,
+                    onOpen = vm::confirmSequenceLocation,
+                    onCancel = vm::cancelSequenceLocation,
+                )
+            }
             val showInfo by vm.showInfoDialog.collectAsState()
             if (showInfo) {
                 val infoType by vm.currentInfoType.collectAsState()
@@ -104,6 +112,12 @@ fun StarApp(vm: AppViewModel) {
                 val sequenceVm = (screen as AppScreen.Sequence).vm
                 val showProcessingModal by sequenceVm.showProcessingModal.collectAsState()
                 if (showProcessingModal) com.star.desktop.ui.dialogs.ProcessingModal(vm, sequenceVm)
+            }
+
+            if (screen is AppScreen.Sequence) {
+                val svm = (screen as AppScreen.Sequence).vm
+                val pending by svm.pendingHorizonFrameChange.collectAsState()
+                pending?.let { ConfirmHorizonFrameChange(it, onConfirm = svm::confirmHorizonFrameChange, onCancel = svm::cancelHorizonFrameChange) }
             }
 
             // Over everything but the engine's own failure: leaving with work going is asked about wherever the user happens to be.
@@ -303,6 +317,22 @@ private fun ConfirmCloseOverlay(confirmation: com.star.desktop.domain.CloseConfi
             OutlinedButton(onClick = onConfirm, colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red)) {
                 Text(localized(confirmation.action.confirmKey))
             }
+        }
+    }
+}
+
+/** Moving to another frame with a horizon half painted (macOS alert): the painting is for the frame it is on, and goes if the frame changes. */
+@Composable
+private fun ConfirmHorizonFrameChange(frame: Int, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    PromptCard(onScrimClick = null, onDefaultAction = onCancel, onEscape = onCancel) {
+        Text(localized("ui.horizon_change_frame.title"), color = StarColors.textPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 18.sp)
+        Text(localized("ui.horizon_change_frame.message", frame + 1), color = StarColors.textSecondary, fontSize = 13.sp)
+        androidx.compose.foundation.layout.Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp, Alignment.End),
+        ) {
+            OutlinedButton(onClick = onConfirm, colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red)) { Text(localized("ui.horizon_change_frame.confirm")) }
+            Button(onClick = onCancel, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.horizon_change_frame.keep")) }
         }
     }
 }

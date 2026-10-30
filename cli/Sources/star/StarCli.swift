@@ -277,6 +277,32 @@ struct StarCli: AsyncParsableCommand {
           help: ArgumentHelp(localized("cli.help.use_gpu_for_akaze")))
     var useGPUForAKAZE: Bool?
 
+    @Option(name: [.customLong("frame-format")], help: ArgumentHelp(localized("cli.help.frame_format")))
+    var frameFormat: FrameDecodeFormat?
+
+    @Option(name: [.customLong("tiff-compression")], help: ArgumentHelp(localized("cli.help.tiff_compression")))
+    var tiffCompression: FrameDecodeFormat.TIFFCompression?
+
+    // Tri-state: unset means "on for a video that gives up any frame cheaply (ProRes and other intra-only formats), off for
+    // H.264 and the like", the same rule the import dialogs default by.
+    @Flag(name: [.customLong("extract-in-background")],
+          inversion: .prefixedNo,
+          help: ArgumentHelp(localized("cli.help.extract_in_background")))
+    var extractInBackground: Bool?
+
+    @Option(name: [.customLong("extraction-jump-workers")], help: ArgumentHelp(localized("cli.help.extraction_jump_workers")))
+    var extractionJumpWorkers: Int?
+
+    @Option(name: [.customLong("extraction-long-gop-jump-workers")],
+            help: ArgumentHelp(localized("cli.help.extraction_long_gop_jump_workers")))
+    var extractionLongGOPJumpWorkers: Int?
+
+    @Flag(name: [.customLong("render-video")], help: ArgumentHelp(localized("cli.help.render_video")))
+    var renderVideo: Bool = false
+
+    @Option(name: [.customLong("video-path")], help: ArgumentHelp(localized("cli.help.video_path")))
+    var videoPath: String?
+
     @Flag(name: [.customLong("cloud-aware-merge")],
           inversion: .prefixedNo,
           help: ArgumentHelp(localized("cli.help.cloud_aware_merge")))
@@ -330,6 +356,24 @@ struct StarCli: AsyncParsableCommand {
     }
 
     func validate() throws {
+        if videoPath != nil, !renderVideo {
+            throw ValidationError(localized("cli.errors.video_path_needs_render_video"))
+        }
+        if let input = imageSequenceDirname, frameFormat != nil, !isVideoFile(path: input) {
+            throw ValidationError(localized("cli.errors.frame_format_needs_video"))
+        }
+        if let input = imageSequenceDirname, !isVideoFile(path: input),
+           tiffCompression != nil || extractInBackground != nil
+             || extractionJumpWorkers != nil || extractionLongGOPJumpWorkers != nil
+        {
+            throw ValidationError(localized("cli.errors.extraction_option_needs_video"))
+        }
+        if let extractionJumpWorkers, extractionJumpWorkers < 0 {
+            throw ValidationError("--extraction-jump-workers must be 0 or more, not \(extractionJumpWorkers)")
+        }
+        if let extractionLongGOPJumpWorkers, extractionLongGOPJumpWorkers < 0 {
+            throw ValidationError("--extraction-long-gop-jump-workers must be 0 or more, not \(extractionLongGOPJumpWorkers)")
+        }
         // A negative last frame selects nothing at all.  FrameGraphBuilder reports that
         // and exits cleanly, but by then it has loaded the whole sequence, so say it
         // here as the usage error it is.
@@ -399,6 +443,59 @@ struct StarCli: AsyncParsableCommand {
             
             var inputImageSequencePath: String = ""
             var inputImageSequenceName: String = ""
+
+            // A video is decoded to one image per frame next to itself (the same place and names the gui and
+            // desktop use), and that directory is then processed like any other sequence.
+            var decodedVideoInfo: VideoInfo?
+            // A video whose frames are still being extracted when processing begins (see `startVideoExtraction`).
+            var extractingSource: VideoFrameSource?
+            let extractionStarted = Date()
+            let extractionFinishedAt = LockedDate()
+            if !inputImageSequenceDirname.hasSuffix("config.json"), isVideoFile(path: inputImageSequenceDirname) {
+                guard ToolPaths.isAvailable else {
+                    throw ValidationError(localized("cli.errors.ffmpeg_not_found", ToolPaths.directoryOverrideVariable))
+                }
+                var format = frameFormat ?? .tiff16
+                if let tiffCompression { format.tiffCompression = tiffCompression }
+                let inBackground = extractInBackground
+                  ?? (VideoProbe.probe(videoAt: inputImageSequenceDirname)?.extractInBackgroundByDefault ?? false)
+                let lastReported = DecileTracker()
+                if inBackground {
+                    let settings = FrameExtractionSettings(
+                      maxJumpWorkers: extractionJumpWorkers ?? FrameExtractionSettings.defaultMaxJumpWorkers,
+                      maxLongGOPJumpWorkers: extractionLongGOPJumpWorkers ?? FrameExtractionSettings.defaultMaxLongGOPJumpWorkers)
+                    let (source, info) = try await startVideoExtraction(
+                      named: inputImageSequenceDirname, format: format, settings: settings)
+                    extractingSource = source
+                    inputImageSequenceDirname = source.outputFolder
+                    decodedVideoInfo = info
+                    // The deciles go on while the run is under way; when the last frame is out, the time is kept for the line at the end.
+                    Task {
+                        for await event in source.events() {
+                            switch event {
+                            case .snapshot(_, _, let state), .progress(let state):
+                                if state.total > 0, lastReported.advance(to: state.extracted * 10 / state.total) {
+                                    FileHandle.standardError.write(Data(
+                                      localized("cli.decoding_video_progress", state.extracted, state.total).appending("\n").utf8))
+                                }
+                            case .finished: extractionFinishedAt.set(Date())
+                            default: break
+                            }
+                        }
+                    }
+                } else {
+                    let (dir, info) = try await decodeVideo(
+                      named: inputImageSequenceDirname,
+                      format: format
+                    ) { current, total, _ in
+                        guard total > 0, lastReported.advance(to: current * 10 / total) else { return }
+                        FileHandle.standardError.write(Data(localized("cli.decoding_video_progress", current, total).appending("\n").utf8))
+                    }
+                    inputImageSequenceDirname = dir
+                    decodedVideoInfo = info
+                }
+            }
+
             if inputImageSequenceDirname.hasSuffix("config.json") {
                 // here we are reading a previously saved config
                 inputImageSequencePath = inputImageSequenceDirname
@@ -474,6 +571,7 @@ struct StarCli: AsyncParsableCommand {
                 )
 
                 configOverrides.apply(to: &config)
+                if let decodedVideoInfo { config.set(videoInfo: decodedVideoInfo) }
 
                 // ConfigManager holds a copy of this struct, so all mutations
                 // to config must happen before it is constructed here
@@ -626,7 +724,8 @@ struct StarCli: AsyncParsableCommand {
                 let processor = try await Processor(
                   with: configManager,
                   callbacks: callbacks,
-                  maxResidentImages: 40 // XXX
+                  maxResidentImages: 40, // XXX
+                  frameSource: extractingSource
                 )
 
                 // Processor.init is what calls Config.set(imageInfo:), so this is the first
@@ -686,6 +785,17 @@ struct StarCli: AsyncParsableCommand {
 
                 Log.i("done")
 
+                // Said so the gain from extracting in the background can be measured from the cli alone: how long the video took
+                // to come out, and how long the run went on after its last frame did.
+                if extractingSource != nil {
+                    let finished = extractionFinishedAt.get() ?? Date()
+                    let line = localized("cli.waited_for_frames",
+                                         Self.durationText(finished.timeIntervalSince(extractionStarted)),
+                                         Self.durationText(max(0, Date().timeIntervalSince(finished))))
+                    FileHandle.standardError.write(Data((line + "\n").utf8))
+                    Log.i(line)
+                }
+
                 let config = await configManager.config()
                 if frameErrors.isEmpty, let updatable = callbacks.updatable {
                     let message = "star processing was successful, output sequence is in \(config.outputSequenceDirname)"
@@ -703,6 +813,21 @@ struct StarCli: AsyncParsableCommand {
                 // to: the temp dir is what `star <temp>/config.json` resumes from, and
                 // removing it after a partial failure destroys the one thing that would let
                 // the user finish the frames that did not make it.
+                // Not rendered for a run with any failed frame: the video would silently skip them.
+                if renderVideo, frameErrors.isEmpty {
+                    do {
+                        let written = try await renderOutputVideo(
+                          config: config,
+                          sourceFilenames: await processor.imageSequence.filenames,
+                          videoPath: videoPath)
+                        Log.i("rendered video \(written)")
+                        print(localized("cli.rendered_video", written))
+                    } catch {
+                        Log.e("\(error)")
+                        thrownFailure = error
+                    }
+                }
+
                 if !self.keepTempFiles, frameErrors.isEmpty {
                     // rm temp unless told not to, but leave the saved config behind:
                     // it is the only thing under there that a later
@@ -802,6 +927,31 @@ extension ResourceProfile: @retroactive ExpressibleByArgument { }
 
 extension DetectionType: @retroactive ExpressibleByArgument { }
 
+extension FrameDecodeFormat: @retroactive ExpressibleByArgument { }
+
+extension FrameDecodeFormat.TIFFCompression: ExpressibleByArgument {
+    public init?(argument: String) {
+        guard let value = FrameDecodeFormat.tiffCompression(argument: argument) else { return nil }
+        self = value
+    }
+}
+
+/// A date that two tasks read and write.
+final class LockedDate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var date: Date?
+    func set(_ value: Date) { lock.lock(); date = value; lock.unlock() }
+    func get() -> Date? { lock.lock(); defer { lock.unlock() }; return date }
+}
+
+extension StarCli {
+    /// "93s", "4m 12s".
+    static func durationText(_ seconds: TimeInterval) -> String {
+        let whole = Int(seconds.rounded())
+        return whole >= 60 ? "\(whole / 60)m \(whole % 60)s" : "\(whole)s"
+    }
+}
+
 extension CleanMethod: ExpressibleByArgument {
     public init?(argument: String) {
         let lowercased = argument.lowercased()
@@ -897,5 +1047,18 @@ func removeTempFiles(at path: String, sparing sparedPath: String) throws {
 
     if !sparedAnything {
         try fileManager.removeItem(at: tempURL)
+    }
+}
+
+/// Lets a progress callback report once per tenth of the way through, from whichever thread it is called on.
+final class DecileTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var last = -1
+    /// True the first time `decile` is passed.
+    func advance(to decile: Int) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard decile > last else { return false }
+        last = decile
+        return true
     }
 }

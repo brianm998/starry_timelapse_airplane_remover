@@ -8,6 +8,16 @@ import Foundation
 /// chosen with `jpegQuality`.
 public struct FrameDecodeFormat: Sendable, Equatable, Codable {
 
+    /// How the tiff frames are compressed.  Both are lossless and decode to identical pixels.
+    public enum TIFFCompression: String, Sendable, Codable, CaseIterable {
+        /// Read about 1.5 to 2 times as fast while star processes the frames (`MatWrapper` has a fast path for it).  On a noisy night sky it
+        /// is also no bigger than PackBits (measured: PackBits is 0.8% larger); PackBits only wins where there are large flat areas, such
+        /// as a black ground, where it takes about half the space (see `TiffCompressionMeasurement`).
+        case none
+        /// What ffmpeg's tiff encoder does by default, and what every import before the choice existed wrote.
+        case packBits
+    }
+
     public enum Kind: String, Sendable, Codable, CaseIterable {
         case tiff16
         case tiff8
@@ -23,10 +33,28 @@ public struct FrameDecodeFormat: Sendable, Equatable, Codable {
     public var kind: Kind
     /// 1 (smallest) ... 100 (best).  Only jpeg looks at it.
     public var jpegQuality: Int
+    /// Only the tiff kinds look at it, as only jpeg looks at `jpegQuality`.
+    public var tiffCompression: TIFFCompression
 
-    public init(kind: Kind = .tiff16, jpegQuality: Int = FrameDecodeFormat.defaultJPEGQuality) {
+    public static let defaultTIFFCompression = TIFFCompression.packBits
+
+    public init(kind: Kind = .tiff16,
+                jpegQuality: Int = FrameDecodeFormat.defaultJPEGQuality,
+                tiffCompression: TIFFCompression = FrameDecodeFormat.defaultTIFFCompression) {
         self.kind = kind
         self.jpegQuality = min(max(jpegQuality, Self.jpegQualityRange.lowerBound), Self.jpegQualityRange.upperBound)
+        self.tiffCompression = tiffCompression
+    }
+
+    private enum CodingKeys: String, CodingKey { case kind, jpegQuality, tiffCompression }
+
+    /// A value stored before the compression was a choice has no `tiffCompression`: it keeps meaning what it always did.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(kind: try container.decode(Kind.self, forKey: .kind),
+                  jpegQuality: try container.decodeIfPresent(Int.self, forKey: .jpegQuality) ?? Self.defaultJPEGQuality,
+                  tiffCompression: try container.decodeIfPresent(TIFFCompression.self, forKey: .tiffCompression)
+                    ?? Self.defaultTIFFCompression)
     }
 
     /// 16 bit tiff, what star has always written.
@@ -45,11 +73,13 @@ public struct FrameDecodeFormat: Sendable, Equatable, Codable {
 
     /// The ffmpeg arguments that turn the decoded video into this format, ending in the output pattern
     /// inside `folder`, and not including the input.
-    func ffmpegOutputArguments(in folder: String) -> [String] {
-        let pattern = "\(folder)/image_%04d.\(fileExtension)"
+    func ffmpegOutputArguments(in folder: String, digits: Int = 4) -> [String] {
+        let pattern = "\(folder)/\(FrameNaming.pattern(digits: digits, fileExtension: fileExtension))"
+        // Said both ways: ffmpeg's own default is packbits, and a default can change.
+        let compression = ["-compression_algo", tiffCompression == .none ? "raw" : "packbits"]
         switch kind {
-        case .tiff16: return ["-pix_fmt", "rgb48le", pattern]
-        case .tiff8:  return ["-pix_fmt", "rgb24", pattern]
+        case .tiff16: return ["-pix_fmt", "rgb48le"] + compression + [pattern]
+        case .tiff8:  return ["-pix_fmt", "rgb24"] + compression + [pattern]
         // yuvj444p: full range, and chroma is not subsampled, which would smear the colour of a star.
         case .jpeg:   return ["-pix_fmt", "yuvj444p", "-q:v", "\(ffmpegQualityScale)", pattern]
         }
@@ -59,14 +89,14 @@ public struct FrameDecodeFormat: Sendable, Equatable, Codable {
 
     /// Roughly how many bytes one pixel of a frame takes on disk.
     ///
-    /// The tiffs are exact (ffmpeg's tiff encoder hardly compresses a noisy sky, measured 3.03 and 5.9
-    /// bytes a pixel).  Jpeg depends on what is in the frame, so this is a measurement of night sky
+    /// Uncompressed tiffs are exact (6 and 3 bytes a pixel, plus a header).  PackBits barely compresses a noisy sky
+    /// (measured 3.03 and 5.9 bytes a pixel), and the estimate keeps the values that lean high.  Jpeg depends on what is in the frame, so this is a measurement of night sky
     /// frames at each quality, with half as much again on top so that the estimate errs towards
     /// more space than is needed.
     public var estimatedBytesPerPixel: Double {
         switch kind {
-        case .tiff16: return 6.1
-        case .tiff8:  return 3.1
+        case .tiff16: return tiffCompression == .none ? 6.0 : 6.1
+        case .tiff8:  return tiffCompression == .none ? 3.0 : 3.1
         case .jpeg:   return Self.jpegBytesPerPixel(quality: jpegQuality) * 1.5
         }
     }
@@ -102,11 +132,26 @@ public struct VideoProbe: Sendable, Equatable {
     public let height: Int
     /// The frames in the video, or nil if the file does not say and has no duration to work it out from.
     public let frameCount: Int?
+    /// Whether `frameCount` is the header's own count (true) or an estimate from the duration and the rate (false).
+    public let frameCountIsExact: Bool
+    /// The codec's name, as ffprobe says it.
+    public let codecName: String?
+    /// Whether every frame is a keyframe, so that any one can be extracted on its own; nil when that could not be told.
+    public let seekable: Bool?
 
-    public init(width: Int, height: Int, frameCount: Int?) {
+    public init(width: Int, height: Int, frameCount: Int?, frameCountIsExact: Bool = false,
+                codecName: String? = nil, seekable: Bool? = nil) {
         self.width = width
         self.height = height
         self.frameCount = frameCount
+        self.frameCountIsExact = frameCountIsExact
+        self.codecName = codecName
+        self.seekable = seekable
+    }
+
+    /// The default for "extract in the background": on where any frame can be had cheaply.
+    public var extractInBackgroundByDefault: Bool {
+        seekable ?? (VideoAccess.guess(fromCodecName: codecName) == .seekable)
     }
 
     /// nil when the size of the video is not known.
@@ -122,11 +167,14 @@ public struct VideoProbe: Sendable, Equatable {
           to: ToolPaths.ffprobe,
           arguments: [
             "-v", "error", "-select_streams", "v:0",
-            "-show_entries", "stream=width,height,nb_frames,duration,r_frame_rate",
+            "-show_entries", "stream=width,height,nb_frames,duration,r_frame_rate,codec_name",
             "-of", "default=noprint_wrappers=1",
             path
           ]) else { return nil }
-        return parse(ffprobeOutput: output)
+        guard let probe = parse(ffprobeOutput: output) else { return nil }
+        return VideoProbe(width: probe.width, height: probe.height, frameCount: probe.frameCount,
+                          frameCountIsExact: probe.frameCountIsExact, codecName: probe.codecName,
+                          seekable: VideoAccess.isIntraOnly(videoAt: path))
     }
 
     /// Parses `key=value` lines as ffprobe prints them.
@@ -141,8 +189,10 @@ public struct VideoProbe: Sendable, Equatable {
               width > 0, height > 0 else { return nil }
 
         var frames = values["nb_frames"].flatMap { Int($0) }
+        var exact = true
         if frames == nil || frames == 0 {
             frames = nil
+            exact = false
             if let duration = values["duration"].flatMap({ Double($0) }),
                let rateText = values["r_frame_rate"] {
                 let parts = rateText.split(separator: "/").compactMap { Double($0) }
@@ -150,6 +200,31 @@ public struct VideoProbe: Sendable, Equatable {
                 if rate > 0, duration > 0 { frames = Int((duration * rate).rounded()) }
             }
         }
-        return VideoProbe(width: width, height: height, frameCount: frames)
+        return VideoProbe(width: width, height: height, frameCount: frames, frameCountIsExact: exact && frames != nil,
+                          codecName: values["codec_name"])
+    }
+}
+
+extension FrameDecodeFormat {
+    /// Parses the command line spelling of the tiff compression: `none` or `packbits`.
+    public static func tiffCompression(argument: String) -> TIFFCompression? {
+        switch argument.lowercased() {
+        case "none", "raw", "uncompressed": return TIFFCompression.none
+        case "packbits": return .packBits
+        default: return nil
+        }
+    }
+
+    /// Parses the command line spelling: `tiff16`, `tiff8`, `jpeg`, or `jpeg:<quality>` with the quality 1...100.
+    /// Case-insensitive; nil for anything else, including a quality out of range (silently clamping would hide a typo).
+    public init?(argument: String) {
+        let parts = argument.lowercased().split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        guard let kind = Kind(rawValue: parts[0]) else { return nil }
+        if parts.count == 1 {
+            self.init(kind: kind)
+        } else {
+            guard kind == .jpeg, let quality = Int(parts[1]), Self.jpegQualityRange.contains(quality) else { return nil }
+            self.init(kind: .jpeg, jpegQuality: quality)
+        }
     }
 }

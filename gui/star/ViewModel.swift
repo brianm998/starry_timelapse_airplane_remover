@@ -125,6 +125,19 @@ public final class ViewModel {
         }
     }
 
+    /// The video to open at launch, when run by the UI tests; nil in every other launch.
+    static var uiTestOpenVideoPath: String? {
+        UserDefaults.standard.string(forKey: "StarUITestOpenVideo").flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// Test seam: `-StarUITestOpenVideo <file>` does what picking the file in "Load Video"'s open panel does
+    /// (`InitialView.startupWithVideoToProcess`): raises the import sheet, which asks how the frames are written.
+    func openVideoFromUITestArgument() {
+        guard let path = Self.uiTestOpenVideoPath, imageSequence == nil, !isLoadingImageSequence else { return }
+        Log.i("UI test: opening video \(path)")
+        pendingVideoImport = PendingVideoImport(path: path)
+    }
+
 //    @Environment(\.openWindow) private var openWindow
     
     func report(error: String) {
@@ -385,6 +398,9 @@ public final class ViewModel {
     /// A video the user has chosen but not yet said how to decode; the initial view asks.
     var pendingVideoImport: PendingVideoImport? = nil
 
+    /// An image sequence waiting on the sheet that asks where its output and working files go.
+    var pendingSequenceOpen: PendingSequenceOpen? = nil
+
     var showUserPreferencesSheet = false
 
     func pushCursor(_ cursor: NSCursor) {
@@ -545,7 +561,9 @@ public final class ViewModel {
     }
 
     func startup(withNewImageSequence imageSequenceDirname: String,
-                 and videoInfo: VideoInfo? = nil) async throws
+                 and videoInfo: VideoInfo? = nil,
+                 frameSource: FrameSource? = nil,
+                 outputDir: String? = nil) async throws
     {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = imageSequenceDirname
@@ -559,7 +577,9 @@ public final class ViewModel {
           try await ImageSequenceViewModel(
             viewModel: self, 
             withNewImageSequence: imageSequenceDirname,
-            and: videoInfo
+            and: videoInfo,
+            frameSource: frameSource,
+            outputDir: outputDir
           ) { numberLoaded, amountLoaded in
             Task { @MainActor in
                 if amountLoaded != 0 {
@@ -582,13 +602,29 @@ public final class ViewModel {
         }
     }
 
-    func startup(withVideoToProcess path: String, format: FrameDecodeFormat = .tiff16) async throws {
+    /// `outputDir`, when the user chose one, is where the frames, the output and the working files go (the frames in a folder named for the
+    /// video inside it), instead of beside the video.
+    func startup(withVideoToProcess path: String, format: FrameDecodeFormat = .tiff16, extractInBackground: Bool = false,
+                 outputDir: String? = nil) async throws {
         isLoadingImageSequence = true
         let generation = beginLoad()
 
         isProbingImageSequence = true
-        let (outputDir, videoInfo) = try await Task.detached() {
-            try await decodeVideo(named: path, format: format) { currentFrame, totalFrames, outputDir in
+
+        if extractInBackground {
+            // Go to the main screen once the first frame is out; the rest are extracted while the sequence is open.  Extraction
+            // belongs to the source, which the sequence's view model holds and stops when it closes.
+            let (source, videoInfo) = try await Task.detached() {
+                try await startVideoExtraction(named: path, format: format, framesParentFolder: outputDir)
+            }.value
+            isProbingImageSequence = false
+            guard generation == loadGeneration else { source.stop(); return }
+            try await startup(withNewImageSequence: source.outputFolder, and: videoInfo, frameSource: source, outputDir: outputDir)
+            return
+        }
+
+        let (frames, videoInfo) = try await Task.detached() {
+            try await decodeVideo(named: path, format: format, framesParentFolder: outputDir) { currentFrame, totalFrames, outputDir in
                 Task { @MainActor in
                     self.isExtractingImageSequence = true
                     self.isProbingImageSequence = false
@@ -608,11 +644,11 @@ public final class ViewModel {
 
         isExtractingImageSequence = false
         
-        Log.d("outputDir \(outputDir)")
+        Log.d("frames in \(frames)")
 
         // Cancelled while the video was being taken apart: do not go on to open what came out.
         guard generation == loadGeneration else { return }
-        try await startup(withNewImageSequence: outputDir, and: videoInfo)
+        try await startup(withNewImageSequence: frames, and: videoInfo, outputDir: outputDir)
     }
 }
 

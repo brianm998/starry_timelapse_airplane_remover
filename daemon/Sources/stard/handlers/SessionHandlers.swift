@@ -58,7 +58,9 @@ enum SessionHandlers {
             let scratchDir = await sessions.scratchDir(for: sessionID)
             await streamOpen(id: id, transport: transport, sessions: sessions, scratchDir: scratchDir) { report in
                 try await Session.openVideo(sessionID: sessionID, scratchSessionDir: scratchDir, videoPath: req.videoPath,
-                                            protoConfig: req.initialConfig, frameFormat: Mapping.frameDecodeFormat(from: req), report: report)
+                                            protoConfig: req.initialConfig, frameFormat: Mapping.frameDecodeFormat(from: req),
+                                            extractInBackground: req.extractInBackground,
+                                            extractionSettings: Mapping.extractionSettings(from: req), report: report)
             }
         } catch {
             await transport.sendError(id: id, message: "\(error)")

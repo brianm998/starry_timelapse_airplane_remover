@@ -221,6 +221,46 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                   atSize: .original)
     }
 
+    /// True when the user has painted this frame's horizon: `horizonReference/` beside the
+    /// merged masks, under the same file name, which is where `loadHorizonReferenceMask`
+    /// looks first.
+    nonisolated public func horizonReferenceExistsOnDisk() -> Bool {
+        guard let mergedPath = imageAccessor.nameForImage(frameIndex: frameIndex,
+                                                          ofType: .mergedHorizon,
+                                                          atSize: .original)
+        else { return false }
+        let merged = URL(fileURLWithPath: mergedPath)
+        let reference = merged
+          .deletingLastPathComponent()
+          .deletingLastPathComponent()
+          .appendingPathComponent("horizonReference")
+          .appendingPathComponent(merged.lastPathComponent)
+        return FileManager.default.fileExists(atPath: reference.path)
+    }
+
+    /// Whether this frame's first-round horizon needs nothing more done to it, for the
+    /// builder's survey and the progress shown on open.
+    ///
+    /// A painted frame of a moving sequence counts as done without a mask on disk: its
+    /// detection returns the painting and writes nothing, so asked by file alone it was
+    /// never done, and every reopen of a finished sequence put one op per painted frame
+    /// back on the horizon step — ten "horizons to redo" on a sequence with ten references,
+    /// each of which loaded its reference and stopped.  Not on a fixed camera, where the
+    /// painted reference is the whole sequence's and the masks feed the merge's vote.
+    nonisolated public func horizonDetectionIsDone(config: Config) -> Bool {
+        horizonMaskExistsOnDisk()
+          || (config.tripodHeadWasMoving && horizonReferenceExistsOnDisk())
+    }
+
+    /// `horizonDetectionIsDone`'s counterpart for the merged mask, for the same reason:
+    /// `loadOrCreateMergedHorizonMask` returns a painted frame's reference without merging
+    /// or writing anything.  On a fixed camera one merge serves the whole sequence and is
+    /// asked about on one frame, which a single painted frame must not answer for.
+    nonisolated public func horizonMergeIsDone(config: Config) -> Bool {
+        mergedHorizonMaskExistsOnDisk()
+          || (config.tripodHeadWasMoving && horizonReferenceExistsOnDisk())
+    }
+
     /// True when this frame's persisted OpenCV feature set for `type` is already on
     /// disk.  Takes the config rather than reading it, so this stays synchronous and
     /// nonisolated; the caller already has one.
@@ -252,6 +292,22 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         imageAccessor.imageExists(frameIndex: frameIndex,
                                   ofType: .final,
                                   atSize: .original)
+    }
+
+    /// True when anything `deleteMergeOutput` deletes is on disk: the output image, or any
+    /// of the processed images it is linked from.
+    ///
+    /// Not `outputFileExistsOnDisk`, which is the question for "is this frame done".  The
+    /// output lives in the user's output directory and the processed images in the temp
+    /// one, so deleting the output directory by hand leaves the processed images behind,
+    /// and `finishAuto` links them straight back as the new output.  Asked that way, the
+    /// `output` stage's invalidation passed over every frame of a sequence whose output
+    /// directory was gone, and a reprocess under a new merge put the old merge back.
+    nonisolated public func mergeOutputExistsOnDisk() -> Bool {
+        [FrameViewMode.final, .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed]
+          .contains { imageAccessor.imageExists(frameIndex: frameIndex,
+                                                ofType: $0,
+                                                atSize: .original) }
     }
 
     // populated by pruning
@@ -525,6 +581,23 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // rather than reusing the stale cached values.
         await alignmentProcessor.clearHomographyCache()
         self.state = .unprocessed
+        return true
+    }
+
+    /// Deletes this frame's star aligned merge and the subtraction image made from it, keeping
+    /// the homographies they were warped by, so the next merge rebuilds both from the stored
+    /// alignment.  Returns whether there was anything to delete.
+    ///
+    /// For the `alignedMerge` stage: a setting that changes how the warped neighbours are
+    /// combined, which `invalidateAlignmentIfExists` would answer by refitting every one.
+    nonisolated public func discardStarAlignedMerge() -> Bool {
+        let types: [FrameViewMode] = [.starAligned, .subtraction]
+        guard types.contains(where: {
+            imageAccessor.imageExists(frameIndex: frameIndex, ofType: $0, atSize: .original)
+        }) else { return false }
+        imageAccessor.deleteImages(frameIndex: frameIndex,
+                                   ofTypes: types,
+                                   atSizes: [.original, .preview])
         return true
     }
 
@@ -1796,6 +1869,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
               as: .autoProcessed,
               atSizes: outputSizes
             )
+            // The frame is as finished as the branch below leaves it.  Without this it
+            // stayed where `MergeOp` found it, so the gui never counted it complete: Render
+            // Video stayed disabled and every Process Frames linked it again.
+            self.set(state: .complete)
             return
         }
 

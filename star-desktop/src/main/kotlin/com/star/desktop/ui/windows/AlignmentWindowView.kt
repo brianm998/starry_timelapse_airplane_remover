@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.AlignmentCharts
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.AlignmentInfoButton
+import com.star.desktop.ui.components.AlignmentInfoOverlay
 import com.star.desktop.ui.components.DeviationChart
 import com.star.desktop.ui.components.KeypointChart
 import com.star.desktop.ui.components.OffsetLegend
@@ -41,7 +43,17 @@ import com.star.desktop.ui.theme.StarColors
  * See [com.star.desktop.ui.components.DeviationChart] for what the pointer does on a chart.
  */
 @Composable
-fun AlignmentWindowView(@Suppress("UNUSED_PARAMETER") app: AppViewModel, svm: SequenceViewModel) {
+fun AlignmentWindowView(app: AppViewModel, svm: SequenceViewModel) {
+    var showingInfo by remember { mutableStateOf(false) }
+    val session by app.sessions.session.collectAsState()
+    Box(Modifier.fillMaxSize()) {
+        AlignmentWindowContent(svm) { showingInfo = true }
+        if (showingInfo) AlignmentInfoOverlay(session?.config?.tripodHeadWasMoving == true) { showingInfo = false }
+    }
+}
+
+@Composable
+private fun AlignmentWindowContent(svm: SequenceViewModel, showInfo: () -> Unit) {
     val data by svm.alignment.collectAsState()
     val current by svm.currentIndex.collectAsState()
     val count = svm.frameCount
@@ -90,7 +102,10 @@ fun AlignmentWindowView(@Suppress("UNUSED_PARAMETER") app: AppViewModel, svm: Se
 
         // Which charts show, then the legend of the lines on the ones that do.
         Column(Modifier.width(190.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(localized("ui.show_2"), color = StarColors.textPrimary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(localized("ui.show_2"), color = StarColors.textPrimary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+                AlignmentInfoButton(showInfo)
+            }
             Toggle(localized("ui.star_deviation"), showStarDeviation) { showStarDeviation = it }
             Toggle(localized("ui.star_keypoints"), showStarKeypoints) { showStarKeypoints = it }
             if (alignment.allowEarth) {

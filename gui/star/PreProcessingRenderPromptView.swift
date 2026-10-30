@@ -30,6 +30,7 @@ struct PreProcessingRenderPromptView: View {
                     viewModel.confirmStartProcessing(autoRender: true, dontAskAgain: false)
                 }
                   .keyboardShortcut(.defaultAction)
+                  .accessibilityIdentifier("prompt.pre.yes")
             }
         }
           .padding(20)

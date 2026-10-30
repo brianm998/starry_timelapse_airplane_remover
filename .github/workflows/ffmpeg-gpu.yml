@@ -1,14 +1,19 @@
 name: FFmpeg (GPU build)
 
-# The GPU-enabled ffmpeg build: ffmpeg/build.sh (FFmpeg 9, static GPL, x264/x265/SVT-AV1/dav1d/libvpx, with
-# VideoToolbox on macOS, NVENC/AMF/D3D/Media Foundation/Vulkan on Windows, NVENC/Vulkan on Linux),
-# smoke-tested on each platform.  See ffmpeg/README.md for what is in them and why.
+# The one place ffmpeg + ffprobe are built in CI, for every platform Star ships on: ffmpeg/build.sh
+# (FFmpeg 9, static GPL, x264/x265/SVT-AV1/dav1d/libvpx, with VideoToolbox on macOS, NVENC/AMF/D3D/Media
+# Foundation/Vulkan on Windows, NVENC/Vulkan on Linux), smoke-tested on each platform.  See ffmpeg/README.md
+# for what is in them and why.
 #
-# This is NOT what ships.  The installers get their ffmpeg from ffmpeg.yml (ffmpeg/build_ci.sh), which
-# has been through CI on every platform; this build's Linux and Windows recipes have not yet, so this
-# workflow only validates the recipe, and runs when it changes.  Switching a release over to it means
-# pointing cli.yml and kotlin-client.yml at this workflow's artifacts (ffmpeg-macos-universal,
-# ffmpeg-linux-x64, ffmpeg-windows-x64) after a green run here.
+# Reused with `uses:` by cli.yml (macOS GUI package), kotlin-client.yml (desktop installers) and gherkin.yml
+# (the binaries the scenarios run against), so what the tests run is what ships.  Artifacts:
+#   ffmpeg-macos-universal   arm64 + x86_64 in one binary   ffmpeg, ffprobe
+#   ffmpeg-linux-x64         x86_64                          ffmpeg, ffprobe
+#   ffmpeg-windows-x64       x86_64                          ffmpeg.exe, ffprobe.exe
+# each with LICENSE-ffmpeg.txt and BUILDINFO.txt beside them.  Linux arm64 is built only on request
+# (`include-arm64`), because it needs the arm64 runner and nothing ships it yet.
+#
+# This replaces ffmpeg.yml (ffmpeg/build_ci.sh, FFmpeg 7.1.1, VideoToolbox only), which nothing calls now.
 #
 # A cold build takes a while (x265, SVT-AV1 and FFmpeg itself on every platform).  Results are
 # cached on a hash of the recipe, the same pattern as OpenCV in cli.yml.
@@ -20,7 +25,16 @@ on:
         description: 'Which to build: any of "macos linux windows", space separated'
         type: string
         default: 'macos linux windows'
+      include-arm64:
+        description: 'Also build Linux arm64 (nothing consumes it yet, so callers leave this off)'
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      include-arm64:
+        description: 'Also build Linux arm64'
+        type: boolean
+        default: true
   push:
     branches: [main, develop]
     paths:
@@ -124,40 +138,40 @@ jobs:
             automatic: false
     steps:
       - uses: actions/checkout@v4
-        if: ${{ matrix.automatic || github.event_name == 'workflow_dispatch' }}
+        if: ${{ matrix.automatic || inputs.include-arm64 }}
 
       - name: Cache the built binaries
         id: cache
-        if: ${{ matrix.automatic || github.event_name == 'workflow_dispatch' }}
+        if: ${{ matrix.automatic || inputs.include-arm64 }}
         uses: actions/cache@v4
         with:
           path: ffmpeg/dist/${{ matrix.target }}
           key: ffmpeg-${{ matrix.target }}-${{ hashFiles('ffmpeg/versions.env', 'ffmpeg/build.sh', 'ffmpeg/lib/**') }}
 
       - name: Install build tools
-        if: ${{ (matrix.automatic || github.event_name == 'workflow_dispatch') && steps.cache.outputs.cache-hit != 'true' }}
+        if: ${{ (matrix.automatic || inputs.include-arm64) && steps.cache.outputs.cache-hit != 'true' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential nasm pkg-config cmake meson ninja-build git curl xz-utils ca-certificates
 
       - name: Build
-        if: ${{ (matrix.automatic || github.event_name == 'workflow_dispatch') && steps.cache.outputs.cache-hit != 'true' }}
+        if: ${{ (matrix.automatic || inputs.include-arm64) && steps.cache.outputs.cache-hit != 'true' }}
         run: ./ffmpeg/build.sh ${{ matrix.target }}
 
       # No GPU here: NVENC and the other hardware encoders are checked to be built in, and
       # their start-up reports instead of failing.
       - name: Smoke test
-        if: ${{ matrix.automatic || github.event_name == 'workflow_dispatch' }}
+        if: ${{ matrix.automatic || inputs.include-arm64 }}
         run: ./ffmpeg/smoke_test.sh --target ${{ matrix.target }} ffmpeg/dist/${{ matrix.target }}
 
       # The supplement StarCore's tables carry for NVENC must be something the real encoders accept.
       - name: Check the NVENC entries in StarCore's tables against this build
-        if: ${{ (matrix.automatic || github.event_name == 'workflow_dispatch') && matrix.target == 'linux-x64' }}
+        if: ${{ (matrix.automatic || inputs.include-arm64) && matrix.target == 'linux-x64' }}
         run: ./ffmpeg/check_extra_encoders.sh ffmpeg/dist/${{ matrix.target }}
 
       - uses: actions/upload-artifact@v4
-        if: ${{ matrix.automatic || github.event_name == 'workflow_dispatch' }}
+        if: ${{ matrix.automatic || inputs.include-arm64 }}
         with:
           name: ffmpeg-${{ matrix.target }}
           path: ffmpeg/dist/${{ matrix.target }}

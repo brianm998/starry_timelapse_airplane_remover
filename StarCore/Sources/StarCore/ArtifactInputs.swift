@@ -23,12 +23,19 @@ You should have received a copy of the GNU General Public License along with sta
 /// `horizonConsensus` reads the first-round masks and the alignment, and is read by both
 /// stages after it: the outlier subtraction and the output composite the two aligned layers
 /// across the horizon.
+///
+/// `alignedMerge` is the star aligned merge on its own, apart from the homographies it warps
+/// by: a setting that changes only how the warped neighbours are combined redoes the merge
+/// and keeps the alignment, which is the expensive half.  After `horizonConsensus` because
+/// the cloud-aware merge keeps itself off the ground with the final horizon mask, which is
+/// the consensus line where there is one.
 public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
     case horizon
     case mergedHorizon
     case keypoints
     case alignment
     case horizonConsensus
+    case alignedMerge
     case outliers
     case output
 
@@ -53,6 +60,7 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
         case .keypoints:     return "keypoint sets"
         case .alignment:     return "alignment results"
         case .horizonConsensus: return "horizon consensus lines"
+        case .alignedMerge:  return "star aligned merges"
         case .outliers:      return "outlier groups"
         case .output:        return "output images"
         }
@@ -79,6 +87,8 @@ public enum ArtifactStage: String, Codable, CaseIterable, Sendable {
         case .horizonConsensus:
             return "<temp>/horizonConsensus/<frame>.json, the calibration.json beside them, " +
               "and <temp>/consensusHorizon*/ (the lines drawn as masks)"
+        case .alignedMerge:
+            return "the starAligned and subtraction images, rebuilt from the stored homographies"
         case .outliers:
             return "<outliers>/<frame>/, the classified outlier group binary"
         case .output:
@@ -191,7 +201,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     /// and horizon detection on has earth homographies (`FrameGraphBuilder` builds no
     /// earth homography op otherwise), and bumping the shared lever would re-fit every
     /// static sequence's sky for a change that cannot reach it.  So this is recorded only
-    /// where the ground is fitted, the way `cloudAwareMerge` is recorded only while on: a
+    /// where the ground is fitted, the way `cloudAwareMerge` once was only while on: a
     /// record that predates the key, from a sequence that does fit its ground, counts as
     /// changed and is re-aligned once; every other record is the one it always was.
     ///
@@ -220,6 +230,21 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     ///      `TemporalHorizonDetector.workingWidth` wide (6804f8f3).
     public static let movingHorizonDetectionAlgorithmVersion = 2
 
+    /// Which version of the cloud-aware stage (ImageAligner.cpp, cloudAwareRefine) made the
+    /// stored star aligned merges.
+    ///
+    /// Recorded only while the stage is on, like `earthAlignmentAlgorithmVersion` only where
+    /// the ground is fitted: a merge made with it off never ran this code.  A record from a
+    /// run with it on that predates the key counts as changed, and its merges, outliers and
+    /// output are rebuilt once; the alignment is kept.
+    ///
+    /// - 1: the first version.  Never written.
+    /// - 2: the pre-filter runs the full test on one neighbour instead of a median over
+    ///      every other tile, which stopped frames with a band of cloud along the horizon on
+    ///      some frames and not the next, so the band flashed; and the relative test is
+    ///      averaged over 48px, which steadies the weight from one frame to the next.
+    public static let cloudAwareMergeAlgorithmVersion = 2
+
     public let version: Int
 
     /// stage rawValue → setting name → value.  Nested rather than flat so a stage can be
@@ -241,6 +266,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             ArtifactStage.keypoints.rawValue:     keypointInputs(config),
             ArtifactStage.alignment.rawValue:     alignmentInputs(config),
             ArtifactStage.horizonConsensus.rawValue: horizonConsensusInputs(config),
+            ArtifactStage.alignedMerge.rawValue: alignedMergeInputs(config),
             ArtifactStage.outliers.rawValue:      outlierInputs(config),
             ArtifactStage.output.rawValue:        outputInputs(config),
         ])
@@ -420,15 +446,22 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         {
             inputs["earthAlignmentAlgorithmVersion"] = str(earthAlignmentAlgorithmVersion)
         }
-        // The cloud-aware merge changes the star aligned image this stage writes, so it
-        // is an input to it, but it is recorded only while it is on.  A record that lacks
-        // a key counts as changed, so adding the key unconditionally would make every
-        // existing temp dir throw away its alignment, outliers and output on the first
-        // run after upgrading, with the flag off.  Recorded only when on, a flag-off
-        // record is the one it always was, turning it on invalidates, and turning it off
-        // again invalidates too, since the record differs from the one that had it.
+        return inputs
+    }
+
+    /// What the star aligned merge reads beyond the homographies it warps by: whether the
+    /// cloud-aware stage runs, and while it does, the version of its code.
+    ///
+    /// It used to be recorded under `alignment`, and only while on, which threw away every
+    /// homography — and the horizon consensus fitted along them — to change how the warped
+    /// frames are combined.  Recorded here unconditionally: every record written before this
+    /// stage existed is given it by `load` (`movingMergeInputsToTheirOwnStage`), so the key
+    /// appearing is not a change to any of them.  See `cloudAwareMergeAlgorithmVersion` for
+    /// the other key.
+    private static func alignedMergeInputs(_ config: Config) -> [String: String] {
+        var inputs = ["cloudAwareMerge": str(config.cloudAwareMerge)]
         if config.cloudAwareMerge {
-            inputs["cloudAwareMerge"] = str(config.cloudAwareMerge)
+            inputs["cloudAwareMergeAlgorithmVersion"] = str(cloudAwareMergeAlgorithmVersion)
         }
         return inputs
     }
@@ -475,8 +508,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         inputs["numberFinalProcessingNeighborsNeeded"] =
           str(config.numberFinalProcessingNeighborsNeeded)
         // How far the line connector follows neighbours decides which blobs get joined. Recorded
-        // only when it is not the default, for the reason `cloudAwareMerge` is above: a record
-        // that lacks a key counts as changed, so an unconditional key would throw away every
+        // only when it is not the default: a record that lacks a key counts as changed, so an unconditional key would throw away every
         // existing temp dir's outliers once. Off the default (including 0, the old unbounded
         // behaviour) it invalidates, and so does returning to the default.
         if config.linearConnectorNeighborHops != Config().linearConnectorNeighborHops {
@@ -591,10 +623,33 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: path))
             return try JSONDecoder().decode(ArtifactInputs.self, from: data)
+              .movingMergeInputsToTheirOwnStage()
         } catch {
             Log.w("could not read \(path): \(error) — treating it as absent")
             return nil
         }
+    }
+
+    /// A record written before `alignedMerge` existed, in the shape that stage's inputs
+    /// would have had: `cloudAwareMerge` taken out of `alignment`, where it was recorded only
+    /// while on, and put in a stage of its own, `false` where it was absent.
+    ///
+    /// Left as it was, such a record would cost twice.  Its `alignment` still holds the key
+    /// the current one no longer does, which reads as a change and re-aligns the whole
+    /// sequence once for nothing; and it has no `alignedMerge` at all, which reads as no
+    /// change whatever the flag now says (a stage missing from either side is skipped), so
+    /// turning the cloud-aware merge on would not redo a single merge.  Moved, it compares
+    /// as the record it would have been, and only the merge follows the flag.
+    func movingMergeInputsToTheirOwnStage() -> ArtifactInputs {
+        guard stages[ArtifactStage.alignedMerge.rawValue] == nil,
+              var alignment = stages[ArtifactStage.alignment.rawValue]
+        else { return self }
+        let merge = ["cloudAwareMerge":
+                       alignment.removeValue(forKey: "cloudAwareMerge") ?? Self.str(false)]
+        var moved = stages
+        moved[ArtifactStage.alignment.rawValue] = alignment
+        moved[ArtifactStage.alignedMerge.rawValue] = merge
+        return ArtifactInputs(version: version, stages: moved)
     }
 
     /// Persist this record, overwriting any existing one.
