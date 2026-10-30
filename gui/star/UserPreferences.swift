@@ -239,11 +239,7 @@ struct UserPreferences: Codable, Sendable {
             // The file is there but could not be read (a hand edit, a newer format written by the
             // other client). Saving the defaults over it later would destroy whatever it holds,
             // so nothing is saved this session; a copy is kept beside it for the user.
-            Self.loadFailed = true
-            let copy = fullPath + ".undecodable"
-            if FileManager.default.fileExists(atPath: fullPath), !FileManager.default.fileExists(atPath: copy) {
-                try? FileManager.default.copyItem(atPath: fullPath, toPath: copy)
-            }
+            Self.markUnreadable(path: fullPath)
         }
         return instance
     }
@@ -251,12 +247,33 @@ struct UserPreferences: Codable, Sendable {
     /// Set when the preferences file exists but did not decode: `save()` then leaves it alone.
     nonisolated(unsafe) static var loadFailed = false
 
+    /// Stop writing to the file at `path` for the rest of this run, and keep a copy of it beside it, once, for the user.
+    static func markUnreadable(path: String) {
+        loadFailed = true
+        let copy = path + ".undecodable"
+        if FileManager.default.fileExists(atPath: path), !FileManager.default.fileExists(atPath: copy) {
+            try? FileManager.default.copyItem(atPath: path, toPath: copy)
+        }
+    }
+
+    /// What this process last read from, or wrote to, the file, as a JSON object: the baseline `save()` compares the
+    /// preferences against, so that it writes only what this process changed (see `merged`).
+    nonisolated(unsafe) static var lastSaved: [String: Any]?
+
+    /// What a `UserPreferences` with nothing set encodes to: only the recent list, empty.  Written out rather than made by
+    /// constructing one, which only the store is to do (`UserPreferencesStoreTests`); a test pins it to the real thing.
+    nonisolated(unsafe) static let defaultObject: [String: Any] = ["recentlyOpenedSequencelist": [String: Any]()]
+
+    private static let saveLock = NSLock()
+
 //    private static var instance: UserPreferences?
 
     private static func load() throws -> UserPreferences? {
         if FileManager.default.fileExists(atPath: fullPath) {
             let url = NSURL(fileURLWithPath: fullPath, isDirectory: false) as URL
             let data = try Data(contentsOf: url)
+            // Nothing in a blank file to protect, and nothing to decode: it reads as no file at all.
+            if data.allSatisfy({ $0 == 0x20 || $0 == 0x0a || $0 == 0x0d || $0 == 0x09 }) { return nil }
             //let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
             let decoder = JSONDecoder()
             decoder.nonConformingFloatDecodingStrategy = .convertFromString(
@@ -265,6 +282,7 @@ struct UserPreferences: Codable, Sendable {
               nan: "nan")
             
             var preferences = try decoder.decode(UserPreferences.self, from: data)
+            lastSaved = jsonObject(of: preferences)
 
             if preferences.processingType == nil {
                 preferences.processingType = .strong
@@ -274,21 +292,98 @@ struct UserPreferences: Codable, Sendable {
         }
         return nil
     }
-    
+
+    /// The JSON object `value` encodes to: the keys this process knows, with a nil left out.
+    static func jsonObject(of value: UserPreferences) -> [String: Any]? {
+        guard let data = try? JSONEncoder().encode(value) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    private static func jsonEqual(_ a: Any, _ b: Any) -> Bool {
+        (a as AnyObject).isEqual(b)
+    }
+
+    /// `onDisk` with this process's changes applied.  Every key whose value in `current` differs from its value in
+    /// `previous` is set to the new one, or removed when `current` no longer has it; objects are compared member by
+    /// member, so two processes that each added a different recent file both keep theirs.  Everything else is left as
+    /// the file has it: the keys only the Kotlin client knows, and what it changed since `previous` was taken.
+    /// (`save()` used to write the whole struct, which dropped the first and undid the second.)
+    static func merged(onDisk: [String: Any], previous: [String: Any], current: [String: Any]) -> [String: Any] {
+        var result = onDisk
+        for key in Set(previous.keys).union(current.keys) {
+            let was = previous[key]
+            switch (was, current[key]) {
+            case (nil, nil):
+                continue
+            case let (was?, now?) where jsonEqual(was, now):
+                continue
+            case (_, nil):
+                result.removeValue(forKey: key)
+            case let (was, now?):
+                if let nowObject = now as? [String: Any],
+                   was == nil || was is [String: Any],
+                   onDisk[key] == nil || onDisk[key] is [String: Any] {
+                    result[key] = merged(onDisk: onDisk[key] as? [String: Any] ?? [:],
+                                         previous: was as? [String: Any] ?? [:],
+                                         current: nowObject)
+                } else {
+                    result[key] = now
+                }
+            }
+        }
+        return result
+    }
+
+    enum SaveOutcome: Equatable {
+        case written
+        /// The file is there but is not a JSON object, so it was left as it is.
+        case unreadable
+    }
+
+    /// Apply the difference between `previous` and `current` to the file at `path`, atomically, as it is *now*.
+    static func writeMerged(current: [String: Any], previous: [String: Any], to path: String) throws -> SaveOutcome {
+        var onDisk: [String: Any] = [:]
+        if FileManager.default.fileExists(atPath: path) {
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            if !data.allSatisfy({ $0 == 0x20 || $0 == 0x0a || $0 == 0x0d || $0 == 0x09 }) {
+                guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+                    return .unreadable
+                }
+                onDisk = object
+            }
+        }
+        let out = try JSONSerialization.data(
+            withJSONObject: merged(onDisk: onDisk, previous: previous, current: current),
+            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        // Atomically: removing the file and then creating it left a window with no file at all
+        // (and an empty one if the process died in it), and the Kotlin client reads the same
+        // file.
+        try out.write(to: URL(fileURLWithPath: path), options: .atomic)
+        return .written
+    }
+
     private func save() {
         guard !Self.loadFailed else {
             Log.w("not saving preferences: the existing file could not be read and would be overwritten")
             return
         }
+        Self.saveLock.lock()
+        defer { Self.saveLock.unlock() }
+        guard let current = Self.jsonObject(of: self) else {
+            Log.e("could not encode the preferences")
+            return
+        }
+        // No file was read at startup: what this process started from is the defaults.
+        let previous = Self.lastSaved ?? Self.defaultObject
         do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            let data = try encoder.encode(self)
-
-            // Atomically: removing the file and then creating it left a window with no file at all
-            // (and an empty one if the process died in it), and the Kotlin client reads the same
-            // file.
-            try data.write(to: URL(fileURLWithPath: UserPreferences.fullPath), options: .atomic)
+            switch try Self.writeMerged(current: current, previous: previous, to: UserPreferences.fullPath) {
+            case .written:
+                Self.lastSaved = current
+            case .unreadable:
+                // Edited into something unreadable while this ran: it is the user's to fix.
+                Log.w("not saving preferences: the file changed into something that cannot be read")
+                Self.markUnreadable(path: UserPreferences.fullPath)
+            }
         } catch {
             Log.e("\(error)")
         }
