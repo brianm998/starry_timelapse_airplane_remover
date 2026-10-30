@@ -130,7 +130,7 @@ struct GridRightPanel: View {
             }
 
             if let state = frame.frameState {
-                infoRow(localized("ui.state"), value: state.shortString)
+                infoRow(localized("ui.state"), value: state.badgeText)
                     .foregroundColor(state.color)
             }
         }

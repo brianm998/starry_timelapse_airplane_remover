@@ -3753,6 +3753,60 @@ final class VideoRenderWiringTests: XCTestCase {
     }
 }
 
+/// Q2 (the owner's answer): the badges on the gui's grid and filmstrip cells and in its grid panel read the catalogue, as the desktop's do. They
+/// were `shortString`, English words in every language ("class 1", "write values", "combine star align").
+final class FrameStateBadgeTests: XCTestCase {
+    override func tearDown() {
+        StarLocalization.shared.languageOverride = nil
+    }
+
+    func testAFinishedFrameHasNoBadgeAndEveryOtherSaysItsCataloguePhrase() {
+        StarLocalization.shared.languageOverride = "en"
+        XCTAssertEqual(FrameProcessingState.complete.badgeText, "")
+        for state in FrameProcessingState.allCases where state != .complete {
+            XCTAssertEqual(state.badgeText, state.message, "\(state)")
+            XCTAssertFalse(state.badgeText.isEmpty, "\(state)")
+            XCTAssertFalse(state.badgeText.hasPrefix("frame_state."), "\(state) is missing from the catalogue")
+        }
+    }
+
+    func testTheBadgeIsInTheUsersLanguageAndTheLogsKeyIsNot() {
+        StarLocalization.shared.languageOverride = "en"
+        let english = FrameProcessingState.detectingBlobs.badgeText
+        let logKey = FrameProcessingState.detectingBlobs.shortString
+        StarLocalization.shared.languageOverride = "de"
+        XCTAssertNotEqual(FrameProcessingState.detectingBlobs.badgeText, english, "the badge is German in German")
+        XCTAssertEqual(FrameProcessingState.detectingBlobs.shortString, logKey, "the updatable log's key does not change with the language")
+    }
+
+    func testTheThreeViewsAskForTheBadge() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        for file in ["GridView", "FilmstripImageView", "GridRightPanel"] {
+            let source = try String(contentsOf: root.appendingPathComponent("gui/star/\(file).swift"), encoding: .utf8)
+            XCTAssertTrue(source.contains(".badgeText"), file)
+            XCTAssertFalse(source.contains("frameState.shortString") || source.contains("state.shortString"), "\(file) still shows the English key")
+        }
+    }
+}
+
+/// L9 (the owner's answer): a horizon refinement waits for the run that is going, in the gui as in the desktop.
+final class HorizonRefinementWaitsTests: XCTestCase {
+    func testItNeedsSomethingPendingAndNoRunGoing() {
+        XCTAssertTrue(ImageSequenceViewModel.canRefineHorizonsNow(isProcessingFrames: false, hasPending: true))
+        XCTAssertFalse(ImageSequenceViewModel.canRefineHorizonsNow(isProcessingFrames: true, hasPending: true), "a run is going")
+        XCTAssertFalse(ImageSequenceViewModel.canRefineHorizonsNow(isProcessingFrames: false, hasPending: false), "nothing to refine")
+    }
+
+    func testTheButtonAndTheNowAnswerBothWait() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let model = try String(contentsOf: root.appendingPathComponent("gui/star/ImageSequenceViewModel.swift"), encoding: .utf8)
+        let body = model.components(separatedBy: "func reprocessHorizonsForUpdatedReferences() {").last ?? ""
+        XCTAssertTrue(body.prefix(400).contains("guard !isProcessingFrames"), "\"Now\" during a run claims nothing")
+        let panel = try String(contentsOf: root.appendingPathComponent("gui/star/RightPanel.swift"), encoding: .utf8)
+        XCTAssertTrue(panel.contains(".disabled(!viewModel.canRefineHorizonsNow)"))
+    }
+}
+
 /// Layer 0 of the parity plan (§6.2.4), E1 and E2: what a click on an outlier group does is `gherkin/ui/vectors/clickRules.json`, which the
 /// desktop's `ClickRules` and `OutlierDecisions` are held to as well (`ClickRulesVectorTest`).
 final class ClickRuleTests: XCTestCase {

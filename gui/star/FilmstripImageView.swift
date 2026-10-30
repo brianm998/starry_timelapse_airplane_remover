@@ -139,8 +139,10 @@ struct FilmstripImageView: View {
                             HStack {
                                 Spacer()
                                   .frame(width: 8)
-                                Text(frameState.shortString)
+                                Text(frameState.badgeText)
                                   .font(.system(size: 12))
+                                  .lineLimit(1)
+                                  .truncationMode(.tail)
                                   .foregroundColor(frameState.color)
                                 Spacer()
                             }

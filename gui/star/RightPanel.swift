@@ -265,7 +265,7 @@ struct RightPanel: View {
                 .buttonStyle(.bordered)
                 .tint(.orange)
                 .help(localized("ui.re_run_brightness_position_refinement_for"))
-                .disabled(!viewModel.hasPendingHorizonRefinement)
+                .disabled(!viewModel.canRefineHorizonsNow)
 
                 self.pixelReplacementModeView
 

@@ -1276,6 +1276,17 @@ public final class ImageSequenceViewModel {
         horizonRefinement.hasPending(hasOutput: frameHasHorizonOutput)
     }
 
+    /// A refinement is a run of its own, so it waits for the one that is going: what is pending stays pending, and the next run takes it on
+    /// (`applyPendingHorizonRefinementToRun`), or the button does once the run has ended. It used to start alongside, which the daemon behind
+    /// the desktop refuses (one run at a time), and the two clients did different things.
+    nonisolated static func canRefineHorizonsNow(isProcessingFrames: Bool, hasPending: Bool) -> Bool {
+        hasPending && !isProcessingFrames
+    }
+
+    var canRefineHorizonsNow: Bool {
+        Self.canRefineHorizonsNow(isProcessingFrames: isProcessingFrames, hasPending: hasPendingHorizonRefinement)
+    }
+
 
     /// Give back what a stopped run had claimed, so the user can run it again.
     ///
@@ -1466,6 +1477,11 @@ public final class ImageSequenceViewModel {
     /// output (star/earth aligned images), its alignment is invalidated and it
     /// is re-queued for a full reprocess using the updated horizon.
     func reprocessHorizonsForUpdatedReferences() {
+        // Nothing is claimed while a run is going, so what is pending is still pending afterwards.
+        guard !isProcessingFrames else {
+            Log.i("horizon refinement waits for the run that is going")
+            return
+        }
         // Claims everything pending: the sets are emptied, so a reference painted while this
         // runs starts a fresh one, and a run that is stopped gives them back.  Frames a
         // previous "Later" already stripped need a merge just as much as the ones that still
