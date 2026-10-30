@@ -466,9 +466,12 @@ struct Source {
     int cols, rows, channels;
 };
 
+// Rows [yStart, yEnd) of the destination.  `dst` and `covered` hold the whole destination, or, with
+// `rowOffset` = yStart, only these rows (their row 0 is destination row `rowOffset`): the
+// coordinates of a row depend on its own y alone, so a band is exactly the rows of the whole.
 template <bool Pixels>
 inline void warpRows(const Source &src, cv::Mat *dst, cv::Mat *covered, const double *M,
-                     int yStart, int yEnd, int cols, int rows)
+                     int yStart, int yEnd, int cols, int rows, int rowOffset = 0)
 {
     const int cn = src.channels;
     const int width = cols;
@@ -482,8 +485,8 @@ inline void warpRows(const Source &src, cv::Mat *dst, cv::Mat *covered, const do
     const bool avx2 = false;
 #endif
     for (int y = yStart; y < yEnd; ++y) {
-        uint16_t *D = Pixels ? dst->ptr<uint16_t>(y) : nullptr;
-        uint8_t *cov = covered ? covered->ptr<uint8_t>(y) : nullptr;
+        uint16_t *D = Pixels ? dst->ptr<uint16_t>(y - rowOffset) : nullptr;
+        uint8_t *cov = covered ? covered->ptr<uint8_t>(y - rowOffset) : nullptr;
 #ifdef STAR_X86_AVX2_KERNELS
         if (avx2) {
             if (cn == 1)
@@ -515,6 +518,25 @@ inline void warp(const cv::Mat &src, const cv::Mat &H, cv::Mat &dst, cv::Mat *co
     const double stripes = (double)dst.total() / (double)(1 << 16);
     cv::parallel_for_(cv::Range(0, dst.rows), [&](const cv::Range &r) {
         warpRows<true>(source, &dst, covered, M, r.start, r.end, dst.cols, dst.rows);
+    }, stripes);
+}
+
+// The rows [yStart, yEnd) of `warp(src, H, ...)`, into a `dst` of just those rows (and `covered`
+// likewise), each byte what the whole warp gives that row.  `src` is the whole frame, which is
+// also the destination's size.  Requires `applies(src, H)`.
+inline void warpBand(const cv::Mat &src, const cv::Mat &H, cv::Mat &dst, cv::Mat *covered,
+                     int yStart, int yEnd)
+{
+    double M[9];
+    cv::Mat matM(3, 3, CV_64F, M);
+    H.convertTo(matM, matM.type());
+    cv::invert(matM, matM);
+
+    const Source source{src.ptr<uint16_t>(), src.step / sizeof(uint16_t), src.cols, src.rows,
+                        src.channels()};
+    const double stripes = (double)dst.total() / (double)(1 << 16);
+    cv::parallel_for_(cv::Range(yStart, yEnd), [&](const cv::Range &r) {
+        warpRows<true>(source, &dst, covered, M, r.start, r.end, src.cols, src.rows, yStart);
     }, stripes);
 }
 
