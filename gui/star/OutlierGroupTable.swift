@@ -466,6 +466,12 @@ struct OutlierGroupTable: View {
                     }
                 } .onChange(of: sortOrder) {
                     viewModel.outlierGroupTableRows.sort(using: sortOrder)
+                } .task(id: viewModel.currentIndex) {
+                    // the window follows the frame (E6)
+                    await viewModel.fillOutlierGroupTableForCurrentFrame()
+                } .task(id: viewModel.currentFrameView.outlierViews?.count) {
+                    // ...and fills in once the frame's groups have been loaded
+                    await viewModel.fillOutlierGroupTableForCurrentFrame()
                 } .onDisappear() {
                     // without this selection will persist 
                     if let frame = viewModel.outlierGroupWindowFrame {

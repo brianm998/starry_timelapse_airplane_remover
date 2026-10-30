@@ -153,7 +153,7 @@ struct OutlierWindowView: View {
                 Toggle(localized("ui.neighborlinesizescore"), isOn: $outlierWindowViewModel.showNeighborLineSizeScore)
                 Toggle(localized("ui.neighborlinebrightnessscore"), isOn: $outlierWindowViewModel.showNeighborLineBrightnessScore)
                 Toggle(localized("ui.neighborlinedistancescore"), isOn: $outlierWindowViewModel.showNeighborLineDistanceScore)
-                Toggle(localized("ui.neighborlinedistancescore"), isOn: $outlierWindowViewModel.showClassificationScore)
+                Toggle(localized("ui.classification_score"), isOn: $outlierWindowViewModel.showClassificationScore)
             }
         }
     }

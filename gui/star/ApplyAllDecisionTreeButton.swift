@@ -39,3 +39,15 @@ struct ApplyAllDecisionTreeButton: View {
           .help(localized("ui.apply_the_outlier_group_decision_tree_to_all"))
     }
 }
+
+/// "Decision Tree, All Frames": the decision tree over every frame at once (the desktop client's, ported).
+struct ApplyDecisionTreeToAllFramesButton: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    var body: some View {
+        Button(action: { viewModel.applyDecisionTreeToAllFrames() }) {
+            Text(localized("ui.decision_tree_all_frames"))
+        }
+          .help(localized("ui.decision_tree_all_frames_help"))
+    }
+}

@@ -3495,6 +3495,43 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    /// The outlier window's rows when no Information-tool box picked them (E6 of the parity plan): every group the current frame draws,
+    /// largest first, and again when the frame changes, as the desktop client's window does.  The window opened from the menu listed
+    /// nothing until the tool had filled it.  Rows an Information drag made for this frame are left alone.
+    func fillOutlierGroupTableForCurrentFrame() async {
+        let frameView = currentFrameView
+        guard let frame = frameView.frame, let views = frameView.outlierViews else { return }
+        if outlierGroupWindowFrame?.frameIndex == frame.frameIndex, !outlierGroupTableRows.isEmpty { return }
+        var rows: [OutlierGroupTableRow] = []
+        for view in views {
+            rows.append(await OutlierGroupTableRow(view.group))
+        }
+        rows.sort { $0.size > $1.size }
+        outlierGroupWindowFrame = frame
+        outlierGroupTableRows = rows
+    }
+
+    /// Run the decision tree over every frame that has outliers, with the settings the one-frame command uses (the desktop client's
+    /// "Decision Tree, All Frames", which the gui now has too).  Each frame it changes is marked as changed, which queues its save and
+    /// with it the new final image, as the daemon does for the same command.
+    func applyDecisionTreeToAllFrames() {
+        let overwrite = !classifyOnlyUnclassified
+        let minimumSize = minimumClassificationSize
+        Task.detached(priority: .userInitiated) { [self] in
+            let all = await MainActor.run { self.frames.compactMap { $0.frame } }
+            for frame in all {
+                if await frame.getOutlierGroups() == nil {
+                    try? await frame.loadOutliers(loadOnly: true)
+                }
+                guard await frame.getOutlierGroups() != nil else { continue } // no outliers on disk: nothing to decide
+                await frame.applyDecisionTreeToAllOutliers(overwrite: overwrite, minimumSize: minimumSize)
+                await frame.markAsChanged()
+            }
+            let current = await MainActor.run { self.currentFrameView }
+            await current.setOutlierGroups(forced: true)
+        }
+    }
+
     /// Write out every edit still waiting for its save (the sequence is being closed), and return once they are on disk.
     func flushSaves() async {
         let edited = self.frames.compactMap { $0.frame }
