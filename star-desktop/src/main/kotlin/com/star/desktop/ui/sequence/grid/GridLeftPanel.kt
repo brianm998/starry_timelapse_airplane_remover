@@ -11,12 +11,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.ViewModes
 import com.star.desktop.ui.components.PanelChevron
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
@@ -27,17 +32,21 @@ import com.star.desktop.i18n.localized
 @Composable
 fun GridLeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val viewMode by vm.viewMode.collectAsState()
+    val current by vm.currentIndex.collectAsState()
+    val states by vm.frameStates.collectAsState()
+    var available by remember { mutableStateOf<List<FrameViewMode>>(emptyList()) }
+    // Recompute when the frame changes or its processing state advances (new images may now exist).
+    LaunchedEffect(current, states[current]) { available = vm.availableViewModes(current) }
     Column(modifier.width(160.dp).fillMaxHeight().background(StarColors.gridLeftPanel)) {
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(localized("ui.show"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            val labels = SHOW_MODES.toMap()
             com.star.desktop.ui.components.VerticalStarPicker(
-                options = SHOW_MODES.map { it.first },
+                options = ViewModes.gridShown(available),
                 selected = viewMode,
-                label = { labels[it]?.let { key -> localized(key) } ?: "" },
+                label = { ViewModes.longName(it) },
                 onSelect = { vm.setViewMode(it) },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -45,10 +54,3 @@ fun GridLeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         PanelChevron("«", { vm.setLeftPanel(false) }, Modifier.padding(6.dp))
     }
 }
-
-private val SHOW_MODES = listOf(
-    FrameViewMode.VIEW_ORIGINAL to "view_mode.original",
-    FrameViewMode.VIEW_PROCESSED to "view_mode.final",
-    FrameViewMode.VIEW_SUBTRACTION to "view_mode.subtraction",
-    FrameViewMode.VIEW_VALIDATION to "view_mode.validation",
-)

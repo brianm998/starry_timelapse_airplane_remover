@@ -22,6 +22,13 @@ object ViewModes {
     fun shown(available: Collection<FrameViewMode>, expanded: Boolean): List<FrameViewMode> =
         all.filter { it in available && (expanded || it in BASIC) }
 
+    /**
+     * The grid's "Show" list (macOS `GridLeftPanel.visibleModes`): the original and the final frame always, then every other mode there is
+     * an image of. It was a fixed four, which never offered the aligned images, the horizon lines or the masks.
+     */
+    fun gridShown(available: Collection<FrameViewMode>): List<FrameViewMode> =
+        all.filter { it == FrameViewMode.VIEW_ORIGINAL || it == FrameViewMode.VIEW_PROCESSED || it in available }
+
     /** The catalogue entry for the mode's name (`view_mode.<macOS case name>`). */
     private fun key(mode: FrameViewMode): String? = when (mode) {
         FrameViewMode.VIEW_ORIGINAL -> "original"
