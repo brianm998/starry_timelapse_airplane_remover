@@ -1,0 +1,390 @@
+{
+  "comment": "StepRateTracker: how long a step has left at the rate it has been going (the processing screen's \"about N left\"). StarCore's (the gui) and the desktop's `domain/StepRateTracker` are held to these scenarios: observations in order (time in ms, every step's counts), then the step asked about and the seconds it has left, or null while there is no rate (fewer than `minimumOperations` finished, or less than `minimumSeconds` since the step was first seen working).",
+  "minimumOperations": 2,
+  "minimumSeconds": 3,
+  "scenarios": [
+    {
+      "name": "nothing observed",
+      "observations": [],
+      "query": {
+        "type": "merge",
+        "queued": 10,
+        "running": 0,
+        "done": 0,
+        "alreadyDone": 0
+      },
+      "expected": null
+    },
+    {
+      "name": "one look is no rate",
+      "observations": [
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 9,
+              "running": 1,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        }
+      ],
+      "query": {
+        "type": "merge",
+        "queued": 9,
+        "running": 1,
+        "done": 0,
+        "alreadyDone": 0
+      },
+      "expected": null
+    },
+    {
+      "name": "five done in ten seconds, seventeen left",
+      "observations": [
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 20,
+              "running": 2,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 10000,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 15,
+              "running": 2,
+              "done": 5,
+              "alreadyDone": 0
+            }
+          ]
+        }
+      ],
+      "query": {
+        "type": "merge",
+        "queued": 15,
+        "running": 2,
+        "done": 5,
+        "alreadyDone": 0
+      },
+      "expected": 34.0
+    },
+    {
+      "name": "one operation is too few",
+      "observations": [
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 9,
+              "running": 1,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 10000,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 8,
+              "running": 1,
+              "done": 1,
+              "alreadyDone": 0
+            }
+          ]
+        }
+      ],
+      "query": {
+        "type": "merge",
+        "queued": 8,
+        "running": 1,
+        "done": 1,
+        "alreadyDone": 0
+      },
+      "expected": null
+    },
+    {
+      "name": "two seconds is too short",
+      "observations": [
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 9,
+              "running": 1,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 2000,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 5,
+              "running": 1,
+              "done": 4,
+              "alreadyDone": 0
+            }
+          ]
+        }
+      ],
+      "query": {
+        "type": "merge",
+        "queued": 5,
+        "running": 1,
+        "done": 4,
+        "alreadyDone": 0
+      },
+      "expected": null
+    },
+    {
+      "name": "exactly two operations over exactly three seconds",
+      "observations": [
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "outliers",
+              "queued": 10,
+              "running": 0,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "outliers",
+              "queued": 8,
+              "running": 1,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 3000,
+          "steps": [
+            {
+              "type": "outliers",
+              "queued": 6,
+              "running": 1,
+              "done": 2,
+              "alreadyDone": 0
+            }
+          ]
+        }
+      ],
+      "query": {
+        "type": "outliers",
+        "queued": 6,
+        "running": 1,
+        "done": 2,
+        "alreadyDone": 0
+      },
+      "expected": 10.5
+    },
+    {
+      "name": "a step is timed from when it was first seen working, not from when it was queued",
+      "observations": [
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 10,
+              "running": 0,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 5000,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 10,
+              "running": 0,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 10000,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 9,
+              "running": 1,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 14000,
+          "steps": [
+            {
+              "type": "merge",
+              "queued": 6,
+              "running": 1,
+              "done": 3,
+              "alreadyDone": 0
+            }
+          ]
+        }
+      ],
+      "query": {
+        "type": "merge",
+        "queued": 6,
+        "running": 1,
+        "done": 3,
+        "alreadyDone": 0
+      },
+      "expected": 9.333333333333334
+    },
+    {
+      "name": "work already done before the run is not this run's rate",
+      "observations": [
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "horizon",
+              "queued": 4,
+              "running": 1,
+              "done": 0,
+              "alreadyDone": 20
+            }
+          ]
+        },
+        {
+          "timeMs": 10000,
+          "steps": [
+            {
+              "type": "horizon",
+              "queued": 0,
+              "running": 0,
+              "done": 5,
+              "alreadyDone": 20
+            }
+          ]
+        }
+      ],
+      "query": {
+        "type": "horizon",
+        "queued": 0,
+        "running": 0,
+        "done": 5,
+        "alreadyDone": 20
+      },
+      "expected": 0.0
+    },
+    {
+      "name": "steps are tracked separately",
+      "observations": [
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "horizon",
+              "queued": 8,
+              "running": 2,
+              "done": 0,
+              "alreadyDone": 0
+            },
+            {
+              "type": "merge",
+              "queued": 9,
+              "running": 1,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 10000,
+          "steps": [
+            {
+              "type": "horizon",
+              "queued": 0,
+              "running": 0,
+              "done": 10,
+              "alreadyDone": 0
+            },
+            {
+              "type": "merge",
+              "queued": 5,
+              "running": 1,
+              "done": 4,
+              "alreadyDone": 0
+            }
+          ]
+        }
+      ],
+      "query": {
+        "type": "merge",
+        "queued": 5,
+        "running": 1,
+        "done": 4,
+        "alreadyDone": 0
+      },
+      "expected": 15.0
+    },
+    {
+      "name": "a step with nothing to it is ignored",
+      "observations": [
+        {
+          "timeMs": 0,
+          "steps": [
+            {
+              "type": "earthKeypoints",
+              "queued": 0,
+              "running": 0,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        },
+        {
+          "timeMs": 10000,
+          "steps": [
+            {
+              "type": "earthKeypoints",
+              "queued": 0,
+              "running": 0,
+              "done": 0,
+              "alreadyDone": 0
+            }
+          ]
+        }
+      ],
+      "query": {
+        "type": "earthKeypoints",
+        "queued": 0,
+        "running": 0,
+        "done": 0,
+        "alreadyDone": 0
+      },
+      "expected": null
+    }
+  ]
+}
