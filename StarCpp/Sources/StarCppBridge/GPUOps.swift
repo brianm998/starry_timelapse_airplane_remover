@@ -109,6 +109,64 @@ public enum GPUOps {
         stateLock.withLock { _busyNanoseconds &+= busyNanoseconds }
     }
 
+    /// Whether the pyramid builders hand the CPU tail a Mat that IS the readback buffer
+    /// (`false`) or copy each level into a Mat of its own, as they did before (`true`).
+    /// `STAR_READBACK=copy` in the environment selects the copy for the whole process; the
+    /// setter below flips it at run time so one binary can build a pyramid both ways.
+    nonisolated(unsafe) private static var _readbackCopyOverride: Bool?
+    private static let readbackCopyFromEnvironment: Bool =
+        ProcessInfo.processInfo.environment["STAR_READBACK"] == "copy"
+    static var readbackCopies: Bool {
+        stateLock.withLock { _readbackCopyOverride } ?? readbackCopyFromEnvironment
+    }
+    /// Test hook; `nil` goes back to the environment's choice.
+    static func setReadbackCopies(_ copies: Bool?) {
+        stateLock.withLock { _readbackCopyOverride = copies }
+    }
+
+    /// Test hooks: the pyramid builders on the registered backend, without the detector.
+    static func debugBuildSiftPyramid(base: MatWrapperRef, doubleImageSize: Bool, sigma: Double,
+                                      nOctaves: Int, nOctaveLayers: Int,
+                                      outPyramid: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
+        #if canImport(Metal) && os(macOS)
+        _ = didRegister
+        return activeBackend?.buildSiftPyramid(base: base, doubleImageSize: doubleImageSize, sigma: sigma,
+                                               nOctaves: nOctaves, nOctaveLayers: nOctaveLayers,
+                                               outPyramid: outPyramid) ?? false
+        #else
+        return false
+        #endif
+    }
+
+    static func debugBuildAkazePyramid(img: MatWrapperRef, soffset: Float,
+                                       levels: UnsafePointer<GPUAkazeLevelInfo>, levelCount: Int,
+                                       stepCounts: UnsafePointer<Int32>, tsteps: UnsafePointer<Float>?,
+                                       tstepsCount: Int, kcontrastBase: Float,
+                                       outLt: UnsafeMutablePointer<MatWrapperRef?>,
+                                       outLsmooth: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
+        #if canImport(Metal) && os(macOS)
+        _ = didRegister
+        return activeBackend?.buildAkazePyramid(img: img, soffset: soffset, levels: levels,
+                                                levelCount: levelCount, stepCounts: stepCounts,
+                                                tsteps: tsteps, tstepsCount: tstepsCount,
+                                                kcontrastBase: kcontrastBase,
+                                                outLt: outLt, outLsmooth: outLsmooth) ?? false
+        #else
+        return false
+        #endif
+    }
+
+    /// Readback buffers the pool had to make because it had none of that size, since launch,
+    /// and how many it handed back out of the pool. Diagnostics for the zero-copy readback,
+    /// where a buffer comes back only when the CPU tail drops its Mat.
+    static func readbackPoolCounts() -> (made: Int, reused: Int, returned: Int, dropped: Int) {
+        #if canImport(Metal) && os(macOS)
+        return MetalGPUBackend.readbackPoolCounts()
+        #else
+        return (0, 0, 0, 0)
+        #endif
+    }
+
     /// Registers the Metal backend with the C++ layer if this machine has one, and
     /// reports whether it did. Idempotent and safe to call from every client's
     /// startup path — `StarCore.ImageCache.init()` is where it is actually called,
@@ -1129,14 +1187,8 @@ private final class MetalGPUBackend: @unchecked Sendable {
                                  nOctaves: nOctaves, nOctaveLayers: nOctaveLayers)
         }
         guard let pending else { return false }
-        defer { giveReadbackBuffers(pending) }
-        for (index, readback) in pending.enumerated() {
-            guard let mat = matWrapper(fromReadback: readback) else {
-                for i in 0..<index { if let m = outPyramid[i] { mat_wrapper_release(m); outPyramid[i] = nil } }
-                return false
-            }
-            outPyramid[index] = mat
-        }
+        guard let mats = matWrappers(fromReadbacks: pending) else { return false }
+        for (index, mat) in mats.enumerated() { outPyramid[index] = mat }
         return true
     }
 
@@ -1395,16 +1447,8 @@ private final class MetalGPUBackend: @unchecked Sendable {
                                   kcontrastBase: kcontrastBase)
         }
         guard let pending else { return false }
-        defer { giveReadbackBuffers(pending) }
         // lt levels first, then lsmooth levels (see the impl)
-        var made: [MatWrapperRef] = []
-        for readback in pending {
-            guard let mat = matWrapper(fromReadback: readback) else {
-                made.forEach { mat_wrapper_release($0) }
-                return false
-            }
-            made.append(mat)
-        }
+        guard let made = matWrappers(fromReadbacks: pending) else { return false }
         for i in 0..<levelCount {
             outLt[i] = made[i]
             outLsmooth[i] = made[levelCount + i]
@@ -1628,20 +1672,37 @@ private final class MetalGPUBackend: @unchecked Sendable {
             var list = Self.readbackPool[length] ?? []
             let buffer = list.popLast()
             Self.readbackPool[length] = list
+            if buffer == nil { Self.readbackMade += 1 } else { Self.readbackReused += 1 }
             return buffer
         }
         return reused ?? device.makeBuffer(length: length, options: .storageModeShared)
     }
 
     fileprivate func giveReadbackBuffers(_ readbacks: [PendingReadback]) {
-        guard GPUOps.poolingAllowed else { return }
-        Self.readbackPoolLock.withLock {
-            for readback in readbacks {
-                var list = Self.readbackPool[readback.buffer.length] ?? []
-                if list.count < 2 { list.append(readback.buffer) }
-                Self.readbackPool[readback.buffer.length] = list
-            }
+        for readback in readbacks { Self.giveReadbackBuffer(readback.buffer) }
+    }
+
+    /// Hands one buffer back: to the pool, or nowhere when pooling is off or the pool already
+    /// holds two of that size. Runs on whichever thread drops the last reference to a Mat made
+    /// over the buffer, so it takes only the pool's lock and never touches the GPU.
+    fileprivate static func giveReadbackBuffer(_ buffer: MTLBuffer) {
+        guard GPUOps.poolingAllowed else {
+            readbackPoolLock.withLock { readbackDropped += 1 }
+            return
         }
+        readbackPoolLock.withLock {
+            var list = readbackPool[buffer.length] ?? []
+            if list.count < 2 { list.append(buffer); readbackReturned += 1 } else { readbackDropped += 1 }
+            readbackPool[buffer.length] = list
+        }
+    }
+
+    nonisolated(unsafe) private static var readbackMade = 0
+    nonisolated(unsafe) private static var readbackReused = 0
+    nonisolated(unsafe) private static var readbackReturned = 0
+    nonisolated(unsafe) private static var readbackDropped = 0
+    static func readbackPoolCounts() -> (made: Int, reused: Int, returned: Int, dropped: Int) {
+        readbackPoolLock.withLock { (readbackMade, readbackReused, readbackReturned, readbackDropped) }
     }
 
     /// Encodes a GPU copy of every texture into its own linear buffer, in `cmdBuf`'s blit stage.
@@ -1671,7 +1732,8 @@ private final class MetalGPUBackend: @unchecked Sendable {
 
     /// Copies one finished readback buffer into a newly allocated, tightly-packed CV_32FC1
     /// MatWrapper (`mat_wrapper_new`: one allocation, no zero fill, no clone). Needs no GPU slot.
-    fileprivate func matWrapper(fromReadback readback: PendingReadback) -> MatWrapperRef? {
+    /// The buffer stays the caller's to give back.
+    fileprivate func matWrapperByCopy(fromReadback readback: PendingReadback) -> MatWrapperRef? {
         let rowBytes = readback.width * MemoryLayout<Float>.size
         let cvType = mat_wrapper_cv_type_for(32, 1)
         guard let ref = mat_wrapper_new(Int64(readback.width), Int64(readback.height), cvType) else { return nil }
@@ -1687,6 +1749,54 @@ private final class MetalGPUBackend: @unchecked Sendable {
             memcpy(UnsafeMutableRawPointer(mutating: data), readback.buffer.contents(), rowBytes * readback.height)
         }
         return ref
+    }
+
+    /// A MatWrapper whose Mat IS the readback buffer: no copy. The buffer goes back to the pool
+    /// when OpenCV's refcount says the last copy of the Mat is gone (the detectors copy the Mat
+    /// out of the wrapper and release the wrapper at once, so the wrapper cannot own the
+    /// buffer). On failure the buffer has already been handed back, so the caller must not.
+    fileprivate func matWrapperOverReadback(_ readback: PendingReadback) -> MatWrapperRef? {
+        let cvType = mat_wrapper_cv_type_for(32, 1)
+        // The pointer is an inner pointer of the buffer: take it in a pool of its own, and keep
+        // the buffer alive ourselves (the +1 below) for as long as the Mat lives, not
+        // for as long as Swift's autorelease pool happens to.
+        let context = Unmanaged.passRetained(readback.buffer)
+        let data = autoreleasepool { readback.buffer.contents() }
+        return mat_wrapper_create_external(Int64(readback.width), Int64(readback.height), cvType, data,
+                                           { context in
+                                               guard let context else { return }
+                                               let buffer = Unmanaged<MTLBuffer>.fromOpaque(context).takeRetainedValue()
+                                               MetalGPUBackend.giveReadbackBuffer(buffer)
+                                           }, context.toOpaque())
+    }
+
+    /// Turns finished readbacks into Mats, by copy or over the buffers (see `GPUOps.readbackCopies`),
+    /// returning `nil` after releasing whatever it made. In copy mode every buffer is given back
+    /// here; over the buffers, each goes back when its Mat dies.
+    fileprivate func matWrappers(fromReadbacks readbacks: [PendingReadback]) -> [MatWrapperRef]? {
+        var made: [MatWrapperRef] = []
+        made.reserveCapacity(readbacks.count)
+        if GPUOps.readbackCopies {
+            defer { giveReadbackBuffers(readbacks) }
+            for readback in readbacks {
+                guard let mat = matWrapperByCopy(fromReadback: readback) else {
+                    made.forEach { mat_wrapper_release($0) }
+                    return nil
+                }
+                made.append(mat)
+            }
+            return made
+        }
+        for (index, readback) in readbacks.enumerated() {
+            guard let mat = matWrapperOverReadback(readback) else {
+                made.forEach { mat_wrapper_release($0) }
+                // The failed one returned its own buffer; the ones not yet wrapped never had an owner.
+                giveReadbackBuffers(Array(readbacks[(index + 1)...]))
+                return nil
+            }
+            made.append(mat)
+        }
+        return made
     }
 
     // MARK: - Shared dispatch

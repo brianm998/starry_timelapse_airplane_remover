@@ -44,6 +44,18 @@ MatWrapperRef mat_wrapper_create(int64_t width, int64_t height, int cvType,
 // zero-filled staging array and the clone that mat_wrapper_create(takeOwnership) costs.
 MatWrapperRef mat_wrapper_new(int64_t width, int64_t height, int cvType);
 
+// A continuous Mat over `data` (tight rows, step = width * elemSize) that owns nothing itself but
+// whose buffer's lifetime follows OpenCV's refcount: `release(context)` is called exactly once, on
+// whichever thread drops the last copy of the Mat (the detectors copy the Mat out of the wrapper and
+// release the wrapper at once, so a wrapper-level callback would fire too early). The release function
+// must not block. Returns null (and calls `release` itself) if the Mat cannot be made.
+MatWrapperRef mat_wrapper_create_external(int64_t width, int64_t height, int cvType,
+                                          void *data, void (*release)(void *context), void *context);
+
+// True when the wrapper's Mat has a refcounted buffer (u != nullptr), i.e. MatWrapperImpl shared it
+// rather than cloning it. The thing the zero-copy readback depends on; asserted by tests.
+bool mat_wrapper_has_refcounted_buffer(MatWrapperRef ref);
+
 // --- Properties ---
 int64_t    mat_wrapper_rows(MatWrapperRef ref);
 int64_t    mat_wrapper_cols(MatWrapperRef ref);

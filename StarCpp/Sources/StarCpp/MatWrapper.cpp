@@ -417,6 +417,87 @@ MatWrapperRef mat_wrapper_new(int64_t width, int64_t height, int cvType) {
     return nullptr;
 }
 
+// A cv::MatAllocator whose memory belongs to somebody else (a pooled Metal buffer). The Mat
+// it backs is an ordinary refcounted one: copies of it share the UMatData, and `deallocate`
+// runs when the LAST copy drops, which is when the caller's release function may hand the
+// memory on. (A Mat over bare external memory has u == nullptr, so its copies keep nothing alive.)
+namespace {
+struct ExternalOwner {
+    void (*release)(void *context);
+    void *context;
+};
+
+thread_local ExternalOwner *g_pendingExternal = nullptr;
+thread_local void *g_pendingData = nullptr;
+
+class ExternalMatAllocator final : public cv::MatAllocator {
+public:
+    cv::UMatData *allocate(int dims, const int *sizes, int type, void *data0, size_t *step,
+                           cv::AccessFlag, cv::UMatUsageFlags) const override {
+        void *data = data0 ? data0 : g_pendingData;
+        CV_Assert(data && g_pendingExternal && dims == 2);
+        size_t total = CV_ELEM_SIZE(type);
+        if (step) { step[1] = total; }
+        total *= sizes[1];
+        if (step) { step[0] = total; }
+        total *= sizes[0];
+        auto *u = new cv::UMatData(this);
+        u->data = u->origdata = static_cast<uchar *>(data);
+        u->size = total;
+        u->flags |= cv::UMatData::USER_ALLOCATED;
+        u->userdata = g_pendingExternal;
+        g_pendingExternal = nullptr;
+        g_pendingData = nullptr;
+        return u;
+    }
+    bool allocate(cv::UMatData *u, cv::AccessFlag, cv::UMatUsageFlags) const override { return u != nullptr; }
+    void deallocate(cv::UMatData *u) const override {
+        if (!u) return;
+        auto *owner = static_cast<ExternalOwner *>(u->userdata);
+        delete u;
+        if (owner) {
+            if (owner->release) owner->release(owner->context);
+            delete owner;
+        }
+    }
+};
+
+ExternalMatAllocator &externalAllocator() {
+    static ExternalMatAllocator instance;
+    return instance;
+}
+} // namespace
+
+// A continuous Mat over `data` whose lifetime is tied to OpenCV's own refcount: `release(context)`
+// runs once, on whichever thread drops the last copy of the Mat.
+MatWrapperRef mat_wrapper_create_external(int64_t width, int64_t height, int cvType,
+                                          void *data, void (*release)(void *context), void *context) {
+    if (!data || width <= 0 || height <= 0) { if (release) release(context); return nullptr; }
+    auto *owner = new ExternalOwner{release, context};
+    try {
+        cv::Mat mat;
+        g_pendingExternal = owner;
+        g_pendingData = data;
+        mat.allocator = &externalAllocator();
+        mat.create((int)height, (int)width, cvType);
+        g_pendingExternal = nullptr;
+        g_pendingData = nullptr;
+        // refcount 1, allocator-backed, continuous: shared by the wrapper, not cloned.
+        return new MatWrapperImpl(MatWrapperImpl::Adopt{}, mat);
+    } catch (...) {
+        // If allocate() ran, the Mat's destructor already released `owner`; if it did not, do it here.
+        if (g_pendingExternal == owner) {
+            g_pendingExternal = nullptr;
+            g_pendingData = nullptr;
+            delete owner;
+            if (release) release(context);
+        }
+    }
+    return nullptr;
+}
+
+bool mat_wrapper_has_refcounted_buffer(MatWrapperRef ref) { return ref && ref->mat.u != nullptr; }
+
 // --- Properties ---
 
 int64_t    mat_wrapper_rows(MatWrapperRef ref) { return ref ? ref->mat.rows : 0; }
