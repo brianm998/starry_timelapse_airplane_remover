@@ -46,7 +46,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             Separator()
             // Preferences are in the app menu on a Mac (see Main.kt, which hooks the system's), and have no app menu to be in anywhere else.
             if (!IS_MAC) Item(localized("menu.preferences"), shortcut = primaryShortcut(Key.Comma)) { app.openPreferences() }
-            Item(localized("ui.close_session"), enabled = hasSession, shortcut = primaryShortcut(Key.W)) {
+            Item(localized("ui.close"), enabled = hasSession, shortcut = primaryShortcut(Key.W)) {
                 app.requestCloseSession()
             }
         }
@@ -68,7 +68,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
 
         Menu(localized("ui.process"), mnemonic = 'P') {
             // Through the app, not straight to the session: it is what asks about rendering a video before and after.
-            Item(localized("ui.process_all_frames_2"), enabled = hasSession) { app.requestProcessAll() }
+            Item(localized("ui.process_all_frames"), enabled = hasSession) { app.requestProcessAll() }
             Item(localized("ui.process_frames_from_here_to_the_end"), enabled = hasSession) { svm?.processRemaining() }
             Item(localized("ui.process_current_frame"), enabled = hasSession) { svm?.processCurrent() }
             Item(localized("ui.re_process_this_frame_from_the_start"), enabled = hasSession) { svm?.reprocessCurrent() }
@@ -96,12 +96,12 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
 
         Menu(localized("ui.window"), mnemonic = 'W') {
             Item(localized("ui.blob_processing_window"), shortcut = windowShortcut(Key.P, IS_MAC)) { app.toggleBlobWindow() }
-            Item(localized("ui.outlier_table"), enabled = hasSession, shortcut = windowShortcut(Key.O, IS_MAC)) { app.toggleOutlierWindow() }
-            Item(localized("ui.alignment_2"), enabled = hasSession, shortcut = windowShortcut(Key.A, IS_MAC)) { app.toggleAlignmentWindow() }
+            Item(localized("ui.outlier_information_window"), enabled = hasSession, shortcut = windowShortcut(Key.O, IS_MAC)) { app.toggleOutlierWindow() }
+            Item(localized("ui.alignment_information_window"), enabled = hasSession, shortcut = windowShortcut(Key.A, IS_MAC)) { app.toggleAlignmentWindow() }
             Item(localized("ui.debug_window"), shortcut = windowShortcut(Key.D, IS_MAC)) { app.toggleDebugWindow() }
             Separator()
             // The same item closes the painter while it is open, and says so (macOS).
-            Item(localized(if (paintingHorizon) "ui.close_horizon_painter" else "ui.paint_reference_horizon"), enabled = keys, shortcut = KeyShortcut(Key.H)) {
+            Item(localized(if (paintingHorizon) "ui.close_horizon_painter" else "ui.paint_horizon_reference"), enabled = keys, shortcut = KeyShortcut(Key.H)) {
                 svm?.let { if (it.mode.value != InteractionMode.EDIT) it.setMode(InteractionMode.EDIT); it.toggleHorizonPaint() }
             }
         }
