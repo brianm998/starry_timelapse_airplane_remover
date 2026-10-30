@@ -83,7 +83,9 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             Item(localized("ui.decision_tree_all_frames"), enabled = hasSession) { svm?.applyDecisionTreeAll() }
             Item(localized("ui.dt_auto_only"), enabled = hasSession && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame(autoOnly = true) }
             Item(localized("ui.render_this_frame"), enabled = hasSession) { svm?.renderCurrentFrame() }
-            Item(localized("ui.render_all_frames"), enabled = hasSession) { svm?.renderAllFrames() }
+            // As the gui's: a run over the sequence with the question about rendering the video (frames already written are skipped), not
+            // a separate pass that finished every frame from what was on disk (L4, D7).
+            Item(localized("ui.render_all_frames"), enabled = hasSession) { app.requestProcessAll() }
         }
 
         Menu(localized("menu.tools"), mnemonic = 'T') {

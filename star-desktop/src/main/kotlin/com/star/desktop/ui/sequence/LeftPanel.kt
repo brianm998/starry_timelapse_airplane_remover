@@ -40,14 +40,14 @@ import com.star.desktop.ui.components.VerticalStarPicker
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameViewMode
 
-/** Left panel (macOS `LeftPanel`): the per-frame processing commands, and the images to show. */
+/**
+ * Left panel (macOS `LeftPanel`): the images to show and how they are shown. The Processing and Render blocks that used to be here are menu
+ * commands, as in the gui (owner decision D8): Actions has every one of them.
+ */
 @Composable
 fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val processing by vm.isProcessing.collectAsState()
-    val rendering by vm.rendering.collectAsState()
-    val renderProgress by vm.renderProgress.collectAsState()
     val states by vm.frameStates.collectAsState()
-    val busy = processing || rendering
 
     val total = vm.frameCount
     val counts = remember(states, total) { FrameStateCounts(states, total) }
@@ -61,45 +61,6 @@ fun LeftPanel(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier = Mod
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(localized("ui.processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-
-        OutlinedButton(onClick = { vm.processRemaining() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(localized("ui.process_frames_from_here_to_the_end"))
-        }
-        OutlinedButton(onClick = { vm.processCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(localized("ui.process_current_frame"))
-        }
-        OutlinedButton(onClick = { vm.reprocessCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(localized("ui.reprocess_current_force"))
-        }
-        OutlinedButton(onClick = { vm.findOutliersCurrent() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(localized("ui.find_outliers_for_this_frame"))
-        }
-
-        if (processing) {
-            OutlinedButton(
-                onClick = { vm.cancelProcessing() },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red),
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(localized("ui.cancel")) }
-        }
-
-        Text(localized("ui.render"), color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
-        OutlinedButton(onClick = { vm.renderCurrentFrame() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(localized("ui.render_current_frame"))
-        }
-        OutlinedButton(onClick = { vm.renderAllFrames() }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("render.all.frames")) {
-            Text(localized("ui.render_all_frames"))
-        }
-        if (rendering) {
-            LinearProgressIndicator(
-                progress = { renderProgress ?: 0f },
-                modifier = Modifier.fillMaxWidth(),
-                color = StarColors.accent,
-                trackColor = StarColors.cellDefault,
-            )
-        }
-
         // Not drawn: the progress bar is redundant with the processing screen, but the Gherkin desktop tests wait on this node.
         // What they wait on: "<complete>/<total>", with the run over (not locale text).
         Box(Modifier.size(0.dp).testTag("processing.progress").semantics { stateDescription = "${counts.complete}/$total/${if (processing) "running" else "idle"}" })

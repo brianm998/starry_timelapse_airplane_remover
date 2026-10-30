@@ -302,8 +302,6 @@ class SequenceViewModel(
     // ---- render (Outlier.RenderFrame / Export.RenderSequence) ----
     private val _rendering = MutableStateFlow(false)
     val rendering: StateFlow<Boolean> = _rendering.asStateFlow()
-    private val _renderProgress = MutableStateFlow<Float?>(null) // null = current-frame (indeterminate)
-    val renderProgress: StateFlow<Float?> = _renderProgress.asStateFlow()
 
     private var previewJob: Job? = null
 
@@ -987,7 +985,6 @@ class SequenceViewModel(
         if (_rendering.value || isProcessing.value) return@launch
         val idx = _currentIndex.value
         _rendering.value = true
-        _renderProgress.value = null // indeterminate: a single frame
         try {
             val ref = outliers.renderFrame(sessionId, idx)
             // The daemon rewrote the frame's final image in place, so the bitmap cached for that path is
@@ -998,32 +995,6 @@ class SequenceViewModel(
             Log.w("Sequence") { "render current frame failed: ${e.message}" }
             reportFailure(e) { localized("ui.render_failed", e.message ?: e) }
         } finally {
-            _rendering.value = false
-        }
-    }
-
-    /**
-     * Render every frame's final output (`Export.RenderSequence`). The render stream is its own
-     * subscriber on the daemon, so the long-lived progress subscription keeps running throughout.
-     */
-    fun renderAllFrames() = scope.launch {
-        if (_rendering.value || isProcessing.value) return@launch
-        _rendering.value = true
-        _renderProgress.value = 0f
-        try {
-            export.renderSequence(sessionId).collect { ev ->
-                if (ev.kindCase == ProgressEvent.KindCase.IO_PROGRESS) {
-                    val io = ev.ioProgress
-                    _renderProgress.value = if (io.total > 0) io.current.toFloat() / io.total else null
-                }
-            }
-            imageCache.clear() // every output frame changed; reload the visible one fresh
-            loadPreview(_currentIndex.value, _viewMode.value)
-        } catch (e: Throwable) {
-            Log.w("Sequence") { "render all frames failed: ${e.message}" }
-            reportFailure(e) { localized("ui.render_failed", e.message ?: e) }
-        } finally {
-            _renderProgress.value = null
             _rendering.value = false
         }
     }
