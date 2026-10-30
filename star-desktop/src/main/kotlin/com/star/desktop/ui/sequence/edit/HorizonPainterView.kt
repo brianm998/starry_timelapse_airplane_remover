@@ -80,6 +80,8 @@ import com.star.desktop.ui.theme.StarColors
 import com.star.proto.HorizonBandMethod
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
@@ -156,6 +158,12 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
         hover = null
         savedAlready = false
         state.resetForNewFrame()
+        // A frame the video has not given up yet has nothing to paint on or to load a horizon for: wait for it, still computing (as the
+        // gui does), rather than starting a session on a blank frame. Moving to another frame ends this effect, and so the wait.
+        if (!vm.isFrameExtracted(current)) {
+            state.phase = HorizonPhase.COMPUTING
+            awaitFrameExtracted(vm.extractedFrames, current)
+        }
         val existing = runCatching { app.horizonRepo.bestExisting(vm.sessionId, current, imgW, imgH) }.getOrNull()
         if (existing != null && existing.any { it >= 0 }) {
             state.loadExistingHorizon(existing, margin = max(50, imgH / 10))
@@ -766,4 +774,9 @@ private fun SkyGroundToggle(state: HorizonPaintState) {
 @Composable
 private fun DividerDot() {
     Text("·", color = StarColors.textDisabled, fontSize = 14.sp)
+}
+
+/** Returns once frame [index] is extracted: at once for an image sequence (nothing is being extracted) or a frame that is already there. */
+internal suspend fun awaitFrameExtracted(frames: StateFlow<com.star.desktop.domain.ExtractedFrames?>, index: Int) {
+    frames.first { it?.contains(index) ?: true }
 }
