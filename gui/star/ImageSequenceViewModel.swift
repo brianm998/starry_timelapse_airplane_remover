@@ -3162,9 +3162,19 @@ public final class ImageSequenceViewModel {
     func processSelectedFrames(with type: FrameReprocessingType) {
         let indices = isMultiSelecting ? sortedSelectedIndices : [currentIndex]
         guard let minIndex = indices.min(), let maxIndex = indices.max() else { return }
+        // Only the frames that were selected are cleared: with frames 2 and 6 selected the run still spans 2...6, but
+        // frame 4's decisions are not the user's to lose (the daemon resets exactly the indices it is sent).
         processFrames(from: minIndex, to: maxIndex,
                       performClean: type != .none,
-                      overrideReprocessingType: type)
+                      overrideReprocessingType: type,
+                      onlyClearing: indices)
+    }
+
+    /// Which frames of `range` a re-process clears: all of them, or only those the user selected.
+    nonisolated static func framesToClear(in range: ClosedRange<Int>, selected: [Int]?) -> [Int] {
+        guard let selected else { return Array(range) }
+        let wanted = Set(selected)
+        return range.filter { wanted.contains($0) }
     }
 
     /// The frames a run will actually touch, or nil if that is none of them.
@@ -3194,7 +3204,8 @@ public final class ImageSequenceViewModel {
       from startIndex: Int,
       to endIndex: Int? = nil,
       performClean: Bool = false,
-      overrideReprocessingType: FrameReprocessingType? = nil
+      overrideReprocessingType: FrameReprocessingType? = nil,
+      onlyClearing selectedFrames: [Int]? = nil
     ) {
         Log.d("processing frames from \(startIndex) to \(endIndex)")
         //if isProcessingFrames { return }
@@ -3247,7 +3258,7 @@ public final class ImageSequenceViewModel {
             Log.d("processAllFrames 1")
 
             if performClean {
-                for i in range {
+                for i in Self.framesToClear(in: range, selected: selectedFrames) {
                     if let frame = await frames[i].frame {
                         // What each type throws away is StarCore's, shared with the daemon
                         // behind the Kotlin client; the view has only its own state to refresh.
