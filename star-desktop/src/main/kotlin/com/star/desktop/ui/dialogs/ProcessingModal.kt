@@ -263,9 +263,12 @@ private fun StepBar(step: StepRow, modifier: Modifier = Modifier) {
     }
 }
 
-/** "Use of this Mac": Full, Balanced, Light, or Custom (whose limits are in the settings). Changing it reaches a run in progress. */
+/**
+ * "Use of this Mac": Full, Balanced, Light, or Custom (whose limits are in the settings). Changing it reaches a run in progress. Here, in the
+ * settings sheet, and in the right panel's Processing section, where the gui has it (Q5).
+ */
 @Composable
-private fun ResourceProfileControl(app: AppViewModel) {
+internal fun ResourceProfileControl(app: AppViewModel) {
     val session by app.sessions.session.collectAsState()
     val current = session?.config?.takeIf { it.hasResourceProfile() }?.resourceProfile ?: "full"
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
