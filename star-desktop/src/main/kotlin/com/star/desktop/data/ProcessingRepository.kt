@@ -196,9 +196,19 @@ class ProcessingRepository(
 
     /**
      * Start a run the daemon claims some other way than `Processing.Start` (a horizon refinement): [start] asks for it and
-     * says whether one began. Until it does, and for the length of it, this is a run like any other.
+     * says whether one began. Until it does, and for the length of it, this is a run like any other. When none began (there was nothing to
+     * refine, or the daemon is already running one and will not start two) what was showing is put back: a refused start used to clear the
+     * busy flag, and the step bars, of the run that was still going (L9).
      */
     suspend fun startClaimedRun(start: suspend () -> Boolean) {
+        val before = Triple(_sequenceState.value, _stepProgress.value, _processing.value)
+        val startedBefore = startedSinceCancel
+        fun putBack() {
+            _sequenceState.value = before.first
+            _stepProgress.value = before.second
+            _processing.value = before.third
+            startedSinceCancel = startedBefore
+        }
         _sequenceState.value = null
         _stepProgress.value = null
         _processing.value = true
@@ -206,10 +216,10 @@ class ProcessingRepository(
         val started = try {
             start()
         } catch (e: Throwable) {
-            _processing.value = false
+            putBack()
             throw e
         }
-        if (!started) _processing.value = false
+        if (!started) putBack()
     }
 
     /** A frame's horizon lines changed: a mask written or deleted, a reference painted or cleared, a refinement finished (`horizon_updated`). */

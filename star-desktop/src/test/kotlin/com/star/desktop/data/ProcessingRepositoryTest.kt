@@ -51,6 +51,40 @@ class ProcessingRepositoryTest {
         assertFalse(r.processing.value)
     }
 
+    private fun steps(done: Int) = ProgressEvent.newBuilder()
+        .setStepProgress(com.star.proto.StepProgress.newBuilder().addSteps(com.star.proto.StepCount.newBuilder().setType("merge").setDone(done))).build()
+
+    /** L9: "Now" asked while a run is going is refused by the daemon; that must not read as the run having stopped. */
+    @Test
+    fun aRefusedClaimedRunLeavesTheRunThatIsGoingShowingAsGoing() = runBlocking {
+        val r = repo()
+        r.startClaimedRun { true }               // a run is going
+        r.fold(steps(done = 3))
+        assertEquals(true, r.processing.value)
+
+        r.startClaimedRun { false }              // the daemon will not start a second
+        assertEquals(true, r.processing.value, "the first run is still going")
+        assertEquals(3, r.stepProgress.value?.getSteps(0)?.done, "and its bars are still its own")
+
+        runCatching { r.startClaimedRun { error("RPC error") } }
+        assertEquals(true, r.processing.value, "a failed ask is no different")
+        assertEquals(3, r.stepProgress.value?.getSteps(0)?.done)
+    }
+
+    @Test
+    fun aClaimedRunThatBeginsIsARunLikeAnyOther() = runBlocking {
+        val r = repo()
+        r.fold(steps(done = 9))                  // the last run's bars
+        r.startClaimedRun { true }
+        assertEquals(true, r.processing.value)
+        assertNull(r.stepProgress.value, "cleared as a run starts")
+        r.fold(seq("done"))
+        assertFalse(r.processing.value)
+
+        r.startClaimedRun { false }              // nothing to refine, and no run was going
+        assertFalse(r.processing.value, "nothing began")
+    }
+
     @Test
     fun aCancelledThatArrivesAfterTheNextStartIsNotAboutTheNewRun() = runBlocking {
         val r = repo()
