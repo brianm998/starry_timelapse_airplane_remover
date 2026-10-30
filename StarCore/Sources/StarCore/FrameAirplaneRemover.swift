@@ -2010,6 +2010,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     Log.d("frame \(self.frameIndex) done writing output files")
                 }
             }
+            // As finishSelective ends: the frame is finished.  This branch used to stop at the last state it had set
+            // (.creatingRemovalMask) with the final image written, so an auto selective run left every frame short of
+            // .complete: the desktop read 0/N complete and the gui's progress line never read N/N (L5), while a
+            // frame reopened from disk, whose state comes from its final image existing, was complete.
+            self.set(state: .complete)
+            await MemoryMonitor.shared.memoryFreed()
+            if let completion { await completion() }
         } else if !autoAlreadyDone {
             // The same gate the useOutliers branch above applies, and the reason it is
             // repeated rather than hoisted to the top of the method: writing the outlier
