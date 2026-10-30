@@ -1,0 +1,422 @@
+{
+  "comment" : "Inputs and expected English output of StarCore's ProcessingHeadline (the reference). The gui's StarCore test evaluates it and checks 'expected'; set TEST_RUNNER_STAR_VECTORS_RECORD=1 to rewrite them. The Kotlin client's ProcessingHeadline.kt is a copy of it and its test reads this same file, so the two cannot drift apart unnoticed. Step types are the proto's names.",
+  "duration" : [
+    {
+      "expected" : "5s",
+      "seconds" : 0
+    },
+    {
+      "expected" : "5s",
+      "seconds" : 1
+    },
+    {
+      "expected" : "5s",
+      "seconds" : 2
+    },
+    {
+      "expected" : "5s",
+      "seconds" : 3
+    },
+    {
+      "expected" : "5s",
+      "seconds" : 7
+    },
+    {
+      "expected" : "10s",
+      "seconds" : 12
+    },
+    {
+      "expected" : "30s",
+      "seconds" : 29.399999999999999
+    },
+    {
+      "expected" : "30s",
+      "seconds" : 30
+    },
+    {
+      "expected" : "60s",
+      "seconds" : 59
+    },
+    {
+      "expected" : "1m",
+      "seconds" : 60
+    },
+    {
+      "expected" : "1m",
+      "seconds" : 89
+    },
+    {
+      "expected" : "2m",
+      "seconds" : 90
+    },
+    {
+      "expected" : "2m",
+      "seconds" : 119
+    },
+    {
+      "expected" : "10m",
+      "seconds" : 600
+    },
+    {
+      "expected" : "1h 0m",
+      "seconds" : 3599
+    },
+    {
+      "expected" : "1h 0m",
+      "seconds" : 3600
+    },
+    {
+      "expected" : "1h 1m",
+      "seconds" : 3661
+    },
+    {
+      "expected" : "2h 2m",
+      "seconds" : 7325
+    }
+  ],
+  "headline" : [
+    {
+      "expected" : "Planning the run: working out which steps each frame still needs.",
+      "extraction" : null,
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : false,
+      "name" : "planning: the plan is not built yet",
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 3,
+          "running" : 0,
+          "type" : "horizon"
+        }
+      ]
+    },
+    {
+      "expected" : "Planning the run: working out which steps each frame still needs.",
+      "extraction" : null,
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : false,
+      "name" : "planning: no steps and no plan",
+      "steps" : [
+
+      ]
+    },
+    {
+      "expected" : "Working on: finding the horizon, finding stars.",
+      "extraction" : null,
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : true,
+      "name" : "two steps running are both named",
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 5,
+          "queued" : 3,
+          "running" : 2,
+          "type" : "horizon"
+        },
+        {
+          "alreadyDone" : 0,
+          "done" : 3,
+          "queued" : 5,
+          "running" : 2,
+          "type" : "starKeypoints"
+        },
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 4,
+          "running" : 0,
+          "type" : "earthHomography"
+        },
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 10,
+          "running" : 0,
+          "type" : "merge"
+        }
+      ]
+    },
+    {
+      "expected" : "Finding the stars in each frame, so frames can be lined up with their neighbours. This is usually the slowest step.",
+      "extraction" : null,
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : true,
+      "name" : "nothing running: the first queued step is about to start",
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 10,
+          "queued" : 0,
+          "running" : 0,
+          "type" : "horizon"
+        },
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 10,
+          "running" : 0,
+          "type" : "starKeypoints"
+        }
+      ]
+    },
+    {
+      "expected" : "Finding the stars in each frame, so frames can be lined up with their neighbours. This is usually the slowest step.",
+      "extraction" : null,
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : true,
+      "name" : "only a step finished earlier counts as having work",
+      "steps" : [
+        {
+          "alreadyDone" : 10,
+          "done" : 0,
+          "queued" : 0,
+          "running" : 0,
+          "type" : "horizon"
+        },
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 4,
+          "running" : 0,
+          "type" : "starKeypoints"
+        }
+      ]
+    },
+    {
+      "expected" : "Working on: painting out trails and writing frames.",
+      "extraction" : null,
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : true,
+      "name" : "a step with nothing at all is ignored",
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 0,
+          "running" : 0,
+          "type" : "horizon"
+        },
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 2,
+          "running" : 1,
+          "type" : "merge"
+        }
+      ]
+    },
+    {
+      "expected" : "Finishing up: writing the last of the frames.",
+      "extraction" : null,
+      "frameCount" : 10,
+      "framesComplete" : 5,
+      "hasPlan" : true,
+      "name" : "finishing while frames remain",
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 5,
+          "queued" : 0,
+          "running" : 0,
+          "type" : "merge"
+        }
+      ]
+    },
+    {
+      "expected" : null,
+      "extraction" : null,
+      "frameCount" : 10,
+      "framesComplete" : 10,
+      "hasPlan" : true,
+      "name" : "quiet once every frame is done",
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 10,
+          "queued" : 0,
+          "running" : 0,
+          "type" : "merge"
+        }
+      ]
+    },
+    {
+      "expected" : null,
+      "extraction" : null,
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : true,
+      "name" : "no steps with a plan says nothing",
+      "steps" : [
+
+      ]
+    },
+    {
+      "expected" : "Extracting the video's frames, so processing can start on them. About 2m left.",
+      "extraction" : {
+        "error" : "",
+        "etaKnown" : true,
+        "etaSeconds" : 125
+      },
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : false,
+      "name" : "extracting, with an estimate",
+      "steps" : [
+
+      ]
+    },
+    {
+      "expected" : "Extracting the video's frames, so processing can start on them.",
+      "extraction" : {
+        "error" : "",
+        "etaKnown" : false,
+        "etaSeconds" : 0
+      },
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : false,
+      "name" : "extracting, no rate yet",
+      "steps" : [
+
+      ]
+    },
+    {
+      "expected" : "Working on: finding the horizon.",
+      "extraction" : {
+        "error" : "",
+        "etaKnown" : true,
+        "etaSeconds" : 40
+      },
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : true,
+      "name" : "extraction gives way to a running step",
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 3,
+          "running" : 1,
+          "type" : "horizon"
+        }
+      ]
+    },
+    {
+      "expected" : "Planning the run: working out which steps each frame still needs.",
+      "extraction" : {
+        "error" : "ffmpeg exited",
+        "etaKnown" : true,
+        "etaSeconds" : 40
+      },
+      "frameCount" : 10,
+      "framesComplete" : 0,
+      "hasPlan" : false,
+      "name" : "a failed extraction is not announced",
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 3,
+          "running" : 0,
+          "type" : "horizon"
+        }
+      ]
+    }
+  ],
+  "overall" : [
+    {
+      "expected" : "About 5m left in all, until every merged frame is written.",
+      "name" : "every working step measured: about",
+      "secondsRemaining" : {
+        "horizon" : 40,
+        "merge" : 300
+      },
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 3,
+          "running" : 2,
+          "type" : "horizon"
+        },
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 10,
+          "running" : 0,
+          "type" : "merge"
+        }
+      ]
+    },
+    {
+      "expected" : "At least 40s left in all; steps that have not started will add to it.",
+      "name" : "one step not measured yet: at least",
+      "secondsRemaining" : {
+        "horizon" : 40
+      },
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 3,
+          "running" : 2,
+          "type" : "horizon"
+        },
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 10,
+          "running" : 0,
+          "type" : "merge"
+        }
+      ]
+    },
+    {
+      "expected" : null,
+      "name" : "nothing measured: nothing said",
+      "secondsRemaining" : {
+
+      },
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 3,
+          "running" : 2,
+          "type" : "horizon"
+        }
+      ]
+    },
+    {
+      "expected" : "About 2m left in all, until every merged frame is written.",
+      "name" : "finished steps are not waited for",
+      "secondsRemaining" : {
+        "merge" : 95
+      },
+      "steps" : [
+        {
+          "alreadyDone" : 0,
+          "done" : 10,
+          "queued" : 0,
+          "running" : 0,
+          "type" : "horizon"
+        },
+        {
+          "alreadyDone" : 0,
+          "done" : 0,
+          "queued" : 10,
+          "running" : 0,
+          "type" : "merge"
+        }
+      ]
+    }
+  ]
+}
