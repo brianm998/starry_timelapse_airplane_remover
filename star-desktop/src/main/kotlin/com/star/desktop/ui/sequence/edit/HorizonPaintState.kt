@@ -372,6 +372,8 @@ class HorizonPaintState(val imageWidth: Int, val imageHeight: Int) {
         for (i in 0 until imageWidth) solvedHorizon[i] = horizonY[i]
         phase = HorizonPhase.REFINEMENT
         preStrokeHorizon = null
+        // The band's strokes are spent: the gui drops them here, so a change of frame is not asked about until a refinement stroke.
+        hasStrokes = false
         resetGesture()
         endStroke()
         bump()

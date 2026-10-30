@@ -165,6 +165,18 @@ class HorizonPainterDetailsTest {
         assertEquals(15, s.brushRadius)
     }
 
+    /** H2 of the parity plan: painting the band is not paint to lose; the "change frame?" question starts with the first refinement stroke. */
+    @Test fun completingTheBandClearsTheFrameChangeFlag() {
+        val s = HorizonPaintState(w, h)
+        s.beginStroke(); s.paint(200, 300); s.endStroke()
+        assertTrue(s.hasStrokes, "a band stroke is paint")
+        s.transitionToRefinement(List(w) { 300 })
+        assertEquals(false, s.hasStrokes, "the spent band still asked about a change of frame")
+        s.brushRadius = 40
+        s.beginStroke(); s.paint(200, 400); s.endStroke()
+        assertTrue(s.hasStrokes, "a refinement stroke is paint again")
+    }
+
     /** A stroke nudges the shown horizon at once; what is saved is the solver's answer, which has not come yet. */
     @Test fun whatIsSavedIsTheSolversAnswerNotTheStrokesNudge() {
         val s = refining(300)
