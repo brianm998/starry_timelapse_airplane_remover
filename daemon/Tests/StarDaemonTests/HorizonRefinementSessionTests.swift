@@ -158,4 +158,22 @@ final class HorizonRefinementSessionTests: XCTestCase {
         XCTAssertEqual(after.markedFrames, 4)
         await session.close()
     }
+
+    /// P10: a refinement run says "Clearing the renders…" while it prepares, and the line goes once its operations are queued, as the gui's
+    /// does; it used to stay for the whole run, so the bars never showed what was happening.
+    func testThePreparingLineGoesOnceTheRunIsQueued() async throws {
+        let session = try await makeSession(frames: 2)
+        await session.beginStepReports(generation: 7, types: [.mergedHorizon], status: "Clearing the renders")
+        var status = await session.stepReportStatus
+        XCTAssertEqual(status, "Clearing the renders")
+
+        await session.stepsQueued(generation: 6)      // another run's
+        status = await session.stepReportStatus
+        XCTAssertEqual(status, "Clearing the renders", "a run that is not this one must not clear it")
+
+        await session.stepsQueued(generation: 7)
+        status = await session.stepReportStatus
+        XCTAssertNil(status)
+        await session.close()
+    }
 }

@@ -525,15 +525,18 @@ actor Session {
         let generation: Int
         let types: [OperationType]
         let baseline: StepProgressReport.Sample
-        let status: String?
+        /// What the run is doing when there is nothing to count yet; cleared once its operations are queued (`stepsQueued`).
+        var status: String?
     }
     private var stepReports: StepReports?
+    /// The line the current run's reports carry in place of counts, nil once there is nothing to say (read by the tests).
+    var stepReportStatus: String? { stepReports?.status }
     private var stepReportTask: Task<Void, Never>?
     private var lastStepReport: Star_V1_StepProgress?
 
     /// Report each step of the run `generation` about four times a second for as long as it changes (`ProgressEvent.step_progress`), measured
     /// from now.  `status` is for a run that cannot be counted in operations.
-    private func beginStepReports(generation: Int, types: [OperationType], status: String? = nil) async {
+    func beginStepReports(generation: Int, types: [OperationType], status: String? = nil) async {
         stepReportTask?.cancel()
         let baseline = await StepProgressReport.sample()
         stepReports = StepReports(generation: generation, types: types, baseline: baseline, status: status)
@@ -564,6 +567,13 @@ actor Session {
         let progress = source.progress
         guard !progress.isComplete, progress.error == nil, progress.total > 0 else { return nil }
         return localized("ui.processing_waiting_for_frames", progress.extracted * 100 / progress.total)
+    }
+
+    /// The run `generation` has put its operations on the queue: there is something to count, so the bars say more than the line that
+    /// covered the wait did.  macOS clears its `processingStatusText` here; this kept the line up for the whole run (P10).
+    func stepsQueued(generation: Int) {
+        guard stepReports?.generation == generation else { return }
+        stepReports?.status = nil
     }
 
     /// The run is over: one last report, so the bars end where the run did, and no more.
@@ -788,6 +798,7 @@ actor Session {
             ) { errors in
                 Task { await weakSelf.session?.refinementCompleted(generation: generation, errors: errors, mergedFrames: merged) }
             }
+            await weakSelf.session?.stepsQueued(generation: generation)
         }
         buildTask = build
         await build.value
