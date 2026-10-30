@@ -424,6 +424,7 @@ struct ProcessingButtonsView: View {
                        ? localized("ui.show_progress")
                        : localized("ui.process_frames"))
             }
+              .accessibilityIdentifier("process.frames")
               .disabled(processButtonDisabled)
               .if(!processButtonDisabled) {
                   $0.buttonStyle(.borderedProminent)

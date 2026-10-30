@@ -694,6 +694,7 @@ struct ProcessingSettingsView: View {
                       }
                         .buttonStyle(PlainButtonStyle()) // XXX these styles suck
                         .fixedSize(horizontal: true, vertical: true)
+                        .accessibilityIdentifier("settings.process")
 
                       Spacer()
                       Button() {

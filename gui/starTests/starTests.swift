@@ -3677,7 +3677,7 @@ final class ViewModeNameTests: XCTestCase {
 }
 
 /// Layer 0 (plan §6.2.1): the identifiers a UI step may use, `gherkin/ui/ids.json`, against what `gui/star` carries as
-/// `.accessibilityIdentifier("...")`. The desktop's `IdRegistryTest` scans `Modifier.testTag("...")` against the same file.
+/// id-shaped literals. The desktop's `IdRegistryTest` scans `star-desktop/src/main` against the same file.
 final class IdRegistryTests: XCTestCase {
     private static var repoRoot: URL {
         URL(fileURLWithPath: #filePath)
@@ -3693,10 +3693,18 @@ final class IdRegistryTests: XCTestCase {
         return (try XCTUnwrap(object["ids"] as? [String]), Set(gaps["gui"]?.keys ?? [:].keys), Set(gaps["desktop"]?.keys ?? [:].keys))
     }
 
-    /// Every id the gui's views set with a literal.
+    /// The first segment of every id the registry lists: the namespaces the scan looks for.
+    private func namespaces() throws -> Set<String> {
+        let (ids, guiGaps, desktopGaps) = try registry()
+        return Set((ids + Array(guiGaps) + Array(desktopGaps)).compactMap { $0.split(separator: ".").first.map(String.init) })
+    }
+
+    /// Every string literal in `gui/star` shaped like an id in one of those namespaces, so an id handed to a helper that tags the control
+    /// is seen as well as one written at `.accessibilityIdentifier("...")`.
     private func found() throws -> Set<String> {
         let dir = Self.repoRoot.appendingPathComponent("gui/star")
-        let pattern = try NSRegularExpression(pattern: #"accessibilityIdentifier\("([^"]+)"\)"#)
+        let names = try namespaces().sorted().joined(separator: "|")
+        let pattern = try NSRegularExpression(pattern: "\"((?:\(names))\\.[a-z0-9_.]*[a-z0-9_*])\"")
         var ids = Set<String>()
         for name in try FileManager.default.contentsOfDirectory(atPath: dir.path) where name.hasSuffix(".swift") && !name.hasPrefix(".") {
             let text = try String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)

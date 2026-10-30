@@ -354,6 +354,7 @@ struct SelectHorizonView: View {
                 }
                   .buttonStyle(PlainButtonStyle())
                   .fixedSize(horizontal: true, vertical: true)
+                  .accessibilityIdentifier("startup.selecthorizon.yes")
                 Spacer()
             }
         }

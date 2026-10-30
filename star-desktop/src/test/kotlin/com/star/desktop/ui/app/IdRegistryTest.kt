@@ -7,9 +7,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Layer 0 of the parity plan (§6.2.1): `gherkin/ui/ids.json` lists the identifiers a UI step may use. This scans the `Modifier.testTag("...")`
- * calls under `star-desktop/src/main` (a template such as `"videoimport.format.${choice}"` counts as the family `videoimport.format.*`) and
- * checks them against it; the gui's `IdRegistryTests` scans `.accessibilityIdentifier("...")` against the same file.
+ * Layer 0 of the parity plan (§6.2.1): `gherkin/ui/ids.json` lists the identifiers a UI step may use. This scans the id-shaped
+ * string literals under `star-desktop/src/main` (a template such as `"videoimport.format.${choice}"` counts as the family
+ * `videoimport.format.*`) and checks them against it; the gui's `IdRegistryTests` scans `gui/star` against the same file.
  */
 class IdRegistryTest {
     private fun repoDir(relative: String): File = listOf(File("../$relative"), File(relative)).first { it.exists() }
@@ -20,8 +20,15 @@ class IdRegistryTest {
     private val desktopGaps: Set<String> = gaps.getAsJsonObject("desktop").keySet()
     private val guiGaps: Set<String> = gaps.getAsJsonObject("gui").keySet()
 
+    /** The first segment of every id the registry lists: the namespaces the scan looks for. */
+    private val namespaces: Set<String> = (ids + desktopGaps + guiGaps).map { it.substringBefore('.') }.toSet()
+
+    /**
+     * Every string literal under `star-desktop/src/main` shaped like an id in one of those namespaces, so an id handed to a helper that
+     * tags the control (`ToggleRow(..., "startup.removal.autoselective")`) is seen as well as one written at `testTag("...")`.
+     */
     private val found: Set<String> = run {
-        val pattern = Regex("""testTag\("([^"]+)"\)""")
+        val pattern = Regex("\"((?:${namespaces.sorted().joinToString("|")})\\.(?:[a-z0-9_.]|\\$\\{[^}]*})*)\"")
         repoDir("star-desktop/src/main").walkTopDown().filter { it.isFile && it.extension == "kt" }
             .flatMap { pattern.findAll(it.readText()).map { m -> m.groupValues[1].replace(Regex("""\$\{[^}]*}"""), "*") } }
             .toSet()
