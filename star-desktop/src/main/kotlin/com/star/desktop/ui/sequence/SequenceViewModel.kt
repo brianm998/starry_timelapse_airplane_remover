@@ -1103,20 +1103,17 @@ class SequenceViewModel(
         modeBeforePlayback = null
     }
 
-    /** Preview path for [index] in [mode], falling back through the other view modes. Null if none exist. */
+    /**
+     * Preview path for [index] in exactly [mode]; null when the frame has no picture of that kind. It used to fall back through the other
+     * modes, so a frame that was not processed showed its original under "final"; the macOS gui shows "image not found" there (Q1).
+     */
     suspend fun previewRefPath(
         index: Int, mode: FrameViewMode = FrameViewMode.VIEW_ORIGINAL,
         size: com.star.proto.PreviewSize = com.star.proto.PreviewSize.PREVIEW_SIZE_PREVIEW,
     ): String? {
-        val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
-        for (m in order) {
-            frames.previewPath(sessionId, index, m, size)?.let {
-                Log.d("Sequence") { "previewRefPath(frame=$index): resolved via $m -> ${it.path}" }
-                return it.path
-            }
-        }
-        Log.d("Sequence") { "previewRefPath(frame=$index): no preview for any mode (tried $order)" }
-        return null
+        val ref = frames.previewPath(sessionId, index, mode, size)
+        if (ref == null) Log.d("Sequence") { "previewRefPath(frame=$index): no $mode picture" }
+        return ref?.path
     }
 
     /**
@@ -1141,24 +1138,17 @@ class SequenceViewModel(
     private suspend fun loadPreview(index: Int, mode: FrameViewMode) {
         previewJob?.cancel()
         previewJob = scope.launch {
-            // Try the requested mode, then fall back through the others (PREVIEW_FALLBACK), so we
-            // show whatever exists: a frame that is not processed yet shows its original.
-            val order = (listOf(mode) + PREVIEW_FALLBACK).distinct()
-            var ref: com.star.proto.ImageRef? = null
-            var resolvedMode: FrameViewMode? = null
-            for (m in order) {
-                // The mode asked for may be an aligned one the frame builds from its homographies; the fallbacks are what is already there.
-                ref = frames.previewPath(sessionId, index, m, buildIfMissing = m == mode)
-                if (ref != null) { resolvedMode = m; break }
-            }
+            // Exactly the mode asked for. An aligned one the frame builds from its homographies is built by the daemon first (the request
+            // waits, and the picture on screen stays until it is done); any other that is missing is the placeholder's "image not found".
+            val ref = frames.previewPath(sessionId, index, mode, buildIfMissing = true)
             if (ref == null) {
-                Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): no preview available (tried $order)" }
+                Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): no preview available" }
                 _previewAvailable.value = false
                 _currentPreview.value = null
                 return@launch
             }
             val bmp = imageCache.load(ref.path, index)
-            Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): using $resolvedMode -> ${ref.path} (decoded=${bmp != null})" }
+            Log.d("Sequence") { "loadPreview(frame=$index, want=$mode): ${ref.path} (decoded=${bmp != null})" }
             if (_currentIndex.value == index) {
                 _currentPreview.value = bmp
                 _previewAvailable.value = bmp != null
@@ -1197,17 +1187,6 @@ class SequenceViewModel(
 
         /** How many frames ahead of the one showing playback keeps loaded (macOS `videoPrefetchLookahead`). */
         const val PLAYBACK_LOOKAHEAD = 30
-
-        /**
-         * What to show when the wanted mode has no preview yet. The original comes before the debug
-         * images: a frame that is not finished shows its own picture, never its subtraction.
-         */
-        private val PREVIEW_FALLBACK = listOf(
-            FrameViewMode.VIEW_PROCESSED,
-            FrameViewMode.VIEW_ORIGINAL,
-            FrameViewMode.VIEW_SUBTRACTION,
-            FrameViewMode.VIEW_VALIDATION,
-        )
     }
 
     /**

@@ -124,10 +124,15 @@ private fun GridCell(
     horizonVersion: Int,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
+    // True once the daemon has been asked for this mode's picture and has none: the cell says so rather than showing another mode (Q1).
+    var missing by remember(index, viewMode) { mutableStateOf(false) }
     var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
     var overlay by remember(index) { mutableStateOf<GetHorizonOverlayResponse?>(null) }
     val visibleHorizonKinds by vm.visibleHorizonLineKinds.collectAsState()
-    LaunchedEffect(index, viewMode, state, revision) { thumb = vm.loadThumb(index, viewMode) }
+    LaunchedEffect(index, viewMode, state, revision) {
+        thumb = vm.loadThumb(index, viewMode)
+        missing = thumb == null
+    }
     LaunchedEffect(index, state, horizonVersion) { info = vm.frameInfo(index) }
     LaunchedEffect(index, showHorizon, state, horizonVersion) {
         overlay = if (showHorizon) {
@@ -179,6 +184,8 @@ private fun GridCell(
             val t = thumb
             if (t != null) {
                 Image(bitmap = t, contentDescription = localized("ui.frame_n", index), modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else if (missing) {
+                com.star.desktop.ui.sequence.ImageNotFound(com.star.desktop.ui.sequence.imageNotFoundText(viewMode), fontSize = 10.sp, modifier = Modifier.fillMaxSize())
             }
             // Per-cell horizon lines of the kinds switched on (the composite's orange while pending), scaled from the overlay's draw space.
             val ov = overlay
