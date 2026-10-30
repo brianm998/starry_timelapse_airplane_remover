@@ -39,6 +39,9 @@ enum class CloseAction(val messageKey: String, val confirmKey: String) {
 
     /** File ▸ Close: the sequence goes, the app stays. */
     CLOSE_SESSION("ui.work_in_progress.closing", "ui.stop_and_close"),
+
+    /** File ▸ Open…, Resume…: another source is about to replace the sequence, which closes it. */
+    OPEN("ui.work_in_progress.opening", "ui.stop_and_open"),
 }
 
 /** The question put to the user before work is interrupted: what is going on, and what is about to happen to it. */

@@ -1059,17 +1059,43 @@ class AppViewModel(
         if (work.isPending) _closeConfirmation.value = CloseConfirmation(CloseAction.CLOSE_SESSION, work.description()) else closeSession()
     }
 
+    /** What File ▸ Open… was going to do, held while the question about the work it would interrupt is up. */
+    private var pendingOpen: (() -> Unit)? = null
+
+    /**
+     * File ▸ Open Image Sequence…, Open Video…, Resume…: run [open], which asks the user what to open, once it is clear that nothing is
+     * going to be interrupted, or the user has said it may be. Opening closes the sequence that is open, so it is held to the same question
+     * as File ▸ Close (it used to close the session, run and all, without asking). Asked before the chooser, not after it, so no one picks
+     * a file to be told it cannot be opened.
+     */
+    fun requestOpen(open: () -> Unit) {
+        val work = pendingWork()
+        if (!work.isPending) {
+            open()
+            return
+        }
+        pendingOpen = open
+        _closeConfirmation.value = CloseConfirmation(CloseAction.OPEN, work.description())
+    }
+
     /** The question's yes: do what was asked, interrupting what is going. */
     fun confirmClose() {
         val asked = _closeConfirmation.value ?: return
         _closeConfirmation.value = null
+        val open = pendingOpen
+        pendingOpen = null
         when (asked.action) {
             CloseAction.QUIT -> quitNow()
             CloseAction.CLOSE_SESSION -> closeSession()
+            CloseAction.OPEN -> open?.invoke()
         }
     }
 
-    fun cancelClose() { _closeConfirmation.value = null }
+    /** The question's no: nothing is interrupted, and what was asked for is dropped with it. */
+    fun cancelClose() {
+        _closeConfirmation.value = null
+        pendingOpen = null
+    }
 
     /**
      * Quit: ask the engine to shut down first, so it writes out what is pending and clears its run marker. Killing it instead leaves the marker,

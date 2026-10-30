@@ -33,14 +33,15 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
 
     MenuBar {
         Menu(localized("ui.file"), mnemonic = 'F') {
+            // Each is behind the work-in-progress question (`requestOpen`): opening replaces the sequence that is open.
             Item(localized("ui.open_image_sequence"), shortcut = primaryShortcut(Key.O)) {
-                chooseDirectory()?.let { app.requestSequence(it) }
+                app.requestOpen { chooseDirectory()?.let { app.requestSequence(it) } }
             }
             Item(localized("ui.open_video")) {
-                chooseFile(localized("ui.open_video_title"))?.let { app.openVideo(it) }
+                app.requestOpen { chooseFile(localized("ui.open_video_title"))?.let { app.openVideo(it) } }
             }
             Item(localized("ui.resume_from_config_json")) {
-                chooseFile(localized("ui.resume_from_config_title"), setOf("json"))?.let { app.openConfig(it) }
+                app.requestOpen { chooseFile(localized("ui.resume_from_config_title"), setOf("json"))?.let { app.openConfig(it) } }
             }
             Separator()
             // Preferences are in the app menu on a Mac (see Main.kt, which hooks the system's), and have no app menu to be in anywhere else.
