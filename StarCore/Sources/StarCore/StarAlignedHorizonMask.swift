@@ -81,13 +81,18 @@ public enum StarAlignedHorizonMask {
 /// interior answer would pin full-frame masks for no hits.  Moving sequences have a
 /// different homography set per frame and simply compute every time.
 ///
-/// The computation runs inside the actor on purpose, for the same reason the
-/// reference-mask cache decodes inside its actor: frames arrive in batches that all
-/// want the same answer, and serialising the one cold computation is what collapses
-/// the batch into a single set of warps.
+/// What has to be serialised is the one cold computation, not the cache: frames arrive in
+/// batches that all want the same answer, and a lookup that finds the same answer already
+/// being computed waits for it instead of starting a second, which is what collapses a batch
+/// into a single set of warps.  The computation itself, and the fingerprint that keys it,
+/// run on the CPU gate outside the actor.  They used to run inside it, and that made every
+/// frame of a *moving* sequence — where no two frames share an answer — queue behind the
+/// others' eight full-frame warps and their fingerprints, one at a time for the whole merge
+/// phase, which is a ceiling on how many frames a minute the merge can finish however many
+/// cores there are.  Now frames with different answers compute at once.
 public actor StarAlignedHorizonMaskCache {
 
-    private struct Key: Equatable {
+    private struct Key: Equatable, Sendable {
         let width: Int
         let height: Int
         let maskDigest: UInt64
@@ -96,42 +101,71 @@ public actor StarAlignedHorizonMaskCache {
 
     private var entry: (key: Key, mask: PixelatedImage)?
 
+    /// Answers being computed, so that a second ask for one waits for it.
+    private var inFlight: [(key: Key, task: Task<PixelatedImage?, Never>)] = []
+
     private var computes = 0
     private var hits = 0
+
+    private enum Lookup {
+        case ready(PixelatedImage)
+        case computing(Task<PixelatedImage?, Never>)
+    }
 
     /// The intersection of `baseMask` with itself warped by each of `homographies`,
     /// computed or served from the slot.  An empty homography list means nothing was
     /// warped into this frame's merge, so the mask needs no adjusting and comes back
     /// unchanged.  `nil` only when the underlying OpenCV work fails.
-    public func mask(
+    public nonisolated func mask(
       from baseMask: PixelatedImage,
       homographies: [[Double]]
-    ) -> PixelatedImage? {
+    ) async -> PixelatedImage? {
         guard !homographies.isEmpty else { return baseMask }
 
+        let digest = await NativeWork.run { Self.digest(of: baseMask) }
         let key = Key(width: baseMask.width,
                       height: baseMask.height,
-                      maskDigest: Self.digest(of: baseMask),
+                      maskDigest: digest,
                       homographies: homographies)
+        switch await lookup(key, baseMask: baseMask, homographies: homographies) {
+        case .ready(let mask): return mask
+        case .computing(let task): return await task.value
+        }
+    }
 
+    /// The slot's answer, the computation already under way for it, or a new one.  Synchronous
+    /// on purpose: nothing between the check and the claim can interleave.
+    private func lookup(_ key: Key, baseMask: PixelatedImage,
+                        homographies: [[Double]]) -> Lookup {
         if let entry, entry.key == key {
             hits += 1
-            return entry.mask
+            return .ready(entry.mask)
         }
+        if let pending = inFlight.first(where: { $0.key == key }) {
+            hits += 1
+            return .computing(pending.task)
+        }
+        let task = Task<PixelatedImage?, Never> {
+            let computed = await NativeWork.run {
+                StarAlignedHorizonMask.compute(from: baseMask, homographies: homographies)
+            }
+            await self.finished(key, computed, baseMask: baseMask, homographies: homographies)
+            return computed
+        }
+        inFlight.append((key, task))
+        return .computing(task)
+    }
 
-        guard let computed = StarAlignedHorizonMask.compute(
-                from: baseMask,
-                homographies: homographies
-              )
-        else { return nil }
-
+    private func finished(_ key: Key, _ computed: PixelatedImage?, baseMask: PixelatedImage,
+                          homographies: [[Double]]) {
+        inFlight.removeAll { $0.key == key }
+        guard let computed else { return }
         computes += 1
         entry = (key, computed)
         Log.i("StarAlignedHorizonMaskCache: computed " +
               "\(baseMask.width)×\(baseMask.height) mask over " +
               "\(homographies.count) homographies " +
               "(\(computes) computed so far, \(hits) hit(s) served)")
-        return computed
     }
 
     /// Drop whatever is held.

@@ -501,6 +501,18 @@ public struct ImageAccessor: Sendable {
             let ok = await IOWork.run(path: filename, bytes: image.byteCount) {
                 image.writeTIFFEncoding(toFilename: filename)
             }
+            if ok, type == .horizon {
+                // The one row per column the horizon consensus reads out of this mask,
+                // kept beside it so that it need not decode every mask to get it: the
+                // detector that made this one has the answer in hand.  See
+                // `HorizonLineSidecar`.
+                let columns = await NativeWork.run {
+                    CombinedHorizonDetector.extractHorizonY(from: image)
+                }
+                HorizonLineSidecar.write(columns: columns, width: image.width,
+                                         height: image.height, frameIndex: frameIndex,
+                                         maskPath: filename, config: config)
+            }
             if ok, type.isHorizonMask {
                 horizonLinesChanged(frameIndex: frameIndex)
             }

@@ -196,6 +196,7 @@ public actor ResourceGovernor {
     private var tuner = AutoTuner()
     private var last: Snapshot?
     private var sinceLog = 0.0
+    private var stallWatch = StallWatch()
     private var profileIsFull = true
     private var autoTune = true
 
@@ -226,6 +227,11 @@ public actor ResourceGovernor {
 
     public func start() {
         guard task == nil else { return }
+        // A governor started again after a stop (another run in the same process) has no
+        // previous sample worth comparing with: the gap is the time it was stopped, which the
+        // stall watch would take for the process not running.
+        last = nil
+        stallWatch = StallWatch()
         task = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: ResourceGovernor.sampleInterval)
@@ -290,6 +296,11 @@ public actor ResourceGovernor {
 
         let report = ResourceReport.make(from: sample)
         latest = report
+
+        // Silence the log cannot otherwise explain: see StallWatch.
+        for finding in stallWatch.observe(sample) {
+            Log.w(StallWatch.message(for: finding, report: report))
+        }
 
         let active = sample.throughputPerMinute > 0
             || volumes.contains { $0.bytesPerSecond > 0 || $0.waiting > 0 }

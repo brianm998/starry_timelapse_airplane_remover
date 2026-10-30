@@ -348,6 +348,27 @@ public enum ImageAligner {
         return r.map { MatWrapper(ref: $0) }
     }
 
+    /// Test-only: the CPU warp the merge uses for 16-bit frames (`true`, the default) or
+    /// cv::warpPerspective itself (`false`).  See `ia_debug_set_exact_warp`; process-wide,
+    /// restore it when done.
+    public static func debugSetExactWarp(enabled: Bool) {
+        ia_debug_set_exact_warp(enabled)
+    }
+
+    /// Test-only: whether there is an exact CPU warp on this machine for the other to be
+    /// compared with.
+    public static var debugExactWarpIsAvailable: Bool { ia_debug_exact_warp_is_available() }
+
+    /// Test-only: force the Welford reference median kernel (`true`) or let the machine pick
+    /// (`false`).  See `ia_debug_set_median_kernel`; process-wide, restore it when done.
+    public static func debugSetMedianKernel(forceReference: Bool) {
+        ia_debug_set_median_kernel(forceReference)
+    }
+
+    /// Test-only: whether the machine's own choice is the exact-statistics kernel, i.e.
+    /// whether there is a second kernel for the reference to be compared with.
+    public static var debugMedianKernelIsExact: Bool { ia_debug_median_kernel_is_exact() }
+
     /// Test-only: the raw merge of `sources` (the base first), with the coverage
     /// plane given rather than derived. See `ia_debug_median_merge`'s comment.
     public static func debugMedianMerge(_ sources: [MatWrapper], misses: MatWrapper?,

@@ -330,6 +330,27 @@ MatWrapperRef ia_debug_median_merge(MatWrapperRef *sources, int count, MatWrappe
 // meant to be a stable part of the C API otherwise.
 void ia_debug_set_cloud_region_restriction(bool restrictToRegion);
 
+// --- Test-only: the CPU warp ---
+
+// The CPU warp the merge uses for 16-bit frames is a reimplementation of cv::warpPerspective
+// that returns OpenCV's bytes (x86-64 only; see ExactWarp.hpp), and the merge's coverage plane
+// is derived from its coordinates instead of from a second warp of a solid probe.  This turns
+// both off so a test can hold them to OpenCV's own in one process; `..._is_available` says
+// whether there is anything to compare on this machine.  Process-wide, on by default.
+void ia_debug_set_exact_warp(bool enabled);
+bool ia_debug_exact_warp_is_available(void);
+
+// --- Test-only: which median kernel runs ---
+
+// The CPU merge has two kernels that must return the same bytes: the Welford reference and,
+// on x86-64 with AVX2, an exact-integer-statistics one that falls back to the reference on
+// any pixel it cannot decide with certainty (see MedianMerge.hpp).  This forces the
+// reference so a test can hold the one to the other in one process; `ia_debug_median_kernel_is_exact`
+// says whether there is another kernel on this machine to compare it with at all.
+// Process-wide, off by default: restore it when done.
+void ia_debug_set_median_kernel(bool forceReference);
+bool ia_debug_median_kernel_is_exact(void);
+
 #ifdef __cplusplus
 }
 #endif

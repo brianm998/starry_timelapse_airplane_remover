@@ -248,19 +248,31 @@ let wgpuLinkerSettings: [LinkerSetting] = haveWGPU ? [
 let wgpuLinkerSettings: [LinkerSetting] = []
 #endif
 
+// How hot the C++ is compiled in a release build.  SwiftPM's own release configuration (the cli, the
+// daemon) is -O2, but the macOS gui is built by Xcode, whose Release configuration compiles a package's
+// C++ at -Os — optimise for size — and the loops that spend a run's CPU (the median merge's fallback
+// kernel, the cloud-aware stage, the SIFT and AKAZE tails, the Random Walker, the DP horizon, KHT) are
+// all in this package.  Measured on the median kernel, same source, same machine: 80 ns per
+// pixel-channel at -O2 against 135 at -Os, the sort inside it 3.4x slower.  Stating the level here makes
+// the two builds the same; clang takes the last -O it is given, and the check that this one is the last
+// is the compile line Xcode logs for ImageAligner.cpp.  Release only: a debug build stays -O0.
+let optimizationCXXSettings: [CXXSetting] = [
+    .unsafeFlags(["-O2"], .when(configuration: .release)),
+]
+
 // Each piece is declared and typed on its own: one big array literal with a closure in it was more than
 // the manifest's type-checker would take.
 let libraryTargets: [Target] = [
     .target(name: "kht",             // C++ Hough Transform implementation
             path: "Sources/kht",
-            cxxSettings: starcppCXXSettings,
+            cxxSettings: starcppCXXSettings + optimizationCXXSettings,
             linkerSettings: platformLinkerSettings + wgpuLinkerSettings
     ),
     .target(name: "StarCpp",         // C++ OpenCV / StarCpp bridge (all .cpp)
             dependencies: ["kht"],
             path: "Sources/StarCpp",
             publicHeadersPath: "include",
-            cxxSettings: bridgeCXXSettings + wgpuCXXSettings
+            cxxSettings: bridgeCXXSettings + wgpuCXXSettings + optimizationCXXSettings
     ),
     .target(name: "StarCppBridge",   // Swift wrapper
             dependencies: [

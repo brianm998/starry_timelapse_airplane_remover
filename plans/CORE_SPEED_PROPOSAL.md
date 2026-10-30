@@ -401,3 +401,131 @@ R2 and R3 cover its median (26% of the stage) and remaps (63% of its layer build
    R2–R4 and R9 are the merge phase's speed for now.
 4. **Output compression.** LZW on the final TIFF is 12.7% of the cli's merge CPU and saves
    0–8% of disk on this data. Keep it, make uncompressed an option, or change the default?
+
+## 6. Implementation log (2026-10-29, branch `claude/core-speed-proposal-8df3ba`)
+
+What was built from sections 2 and 4, how it was held to "identical", and what was left. Every
+speed figure below is single-threaded on this iMac Pro with its own user's GUI job running
+beside it (load average 50–70), so read the *ratios*, not the nanoseconds; CPU-seconds from the
+end-to-end A/B are in 6.3.
+
+### 6.1 Done
+
+| item | where | held to identical by |
+|---|---|---|
+| **R1** StarCpp at `-O2` in the GUI | `StarCpp/Package.swift`, `optimizationCXXSettings` (`.when(configuration: .release)`) | Xcode's own response file for `StarCpp.build/Release/…/*common-args.resp` now has `-Os` at argument 10 and `-O2` at 34; clang takes the last. (`-O3` was no better than `-O2` on the old median kernel.) |
+| **R2** median kernel | `StarCpp/Sources/StarCpp/MedianMerge.hpp` (moved out of `ImageAligner.cpp`, Welford kernel verbatim as `mergeRowsWelford`) | `bench.cpp` harness: the pre-change kernel textually renamed beside the shipped one, 3,000+ random shapes × both depths, 1/3 channels, 2…65 sources, both `includeAll`, honest and garbage coverage, exact-tie data: **0 differ**; real 24 MP bands (9 and 17 sources, holes down one edge) **0 differ**; ASan + UBSan clean; mutation tests (band removed, fallback removed) fail as they should. In the suite: `MedianKernelEquivalenceTests`. |
+| **R3** exact 16-bit warp + analytic coverage | `StarCpp/Sources/StarCpp/ExactWarp.hpp`, used by `warpInto`, `warpCoverage` and the aligned merge's `warpNeighbour` | `warpbench.cpp` against `cv::warpPerspective` and the 8-bit probe warp: 93 M pixel-channels, identity / integer and fractional shifts / near-identity fits / rotation / strong perspective / mirror / zoom / half-pixel and 32nd-exact positions / degenerate W=0, 1–1200 px wide, 1 and 3 channels, scalar and AVX2 rows: **0 differ, 0 coverage differ**; ASan + UBSan clean. In the suite: `ExactWarpEquivalenceTests`. |
+| **R5** consensus from line sidecars | `StarCore/Sources/StarCore/HorizonLineSidecar.swift`; written by `ImageAccessor.saveInt`, read (and healed) by `HorizonConsensusBuild.detectedLines` | `HorizonConsensusTests`: sidecar columns equal `extractHorizonY` of the reloaded mask; a rebuilt consensus from sidecars equals the one from masks; a mask rewritten or resized invalidates its sidecar. |
+| **R8** AKAZE keypoint-map scans | `AKAZEDetector.cpp`, `forEachNonzero` | `akazebench.cpp`: old and new passes over random multi-octave level sets (three densities), 270 k keypoints compared bit for bit, **0 differ**; the passes themselves 1.75× at 24 MP scale. |
+| **R8** `StarAlignedHorizonMaskCache` | `StarAlignedHorizonMask.swift` | Same computation, off the actor on the CPU gate, with single-flight for equal keys; `StarAlignedHorizonMaskTests` (counters unchanged for sequential use, new test for concurrent asks). |
+| **R10** stall watch | `StarCore/Sources/StarCore/StallWatch.swift`, called from `ResourceGovernor.tick` | `StallWatchTests`. |
+
+Two facts worth keeping from reading OpenCV 4.12.0's `imgwarp.cpp` (the tree has it at
+`opencv/opencv/`), because section 2 R3 had them slightly differently:
+
+* **BORDER_TRANSPARENT touches a pixel iff its floor coordinates are inside the source
+  (`0 ≤ sx ≤ w−1`, `0 ≤ sy ≤ h−1`).** Pixels strictly inside (`sx < w−1`, `sy < h−1`) are
+  interpolated; the last column and row are interpolated from the corners that exist and
+  rescaled by `Σw_all / Σw_present`; a pixel that floors to −1 is left alone even though one of
+  its corners is real. The weights present can never sum to 0, so "touched" is a function of the
+  integer maps alone — which is why the 8-bit probe warp of `warpCoverage` can be replaced by a
+  pass over the maps, and why S16's "every tap with non-zero weight is inside" is not the rule.
+* **The coordinates are not a function of the pixel alone.** `warpPerspective` walks the
+  destination in blocks `min(1024 / min(16, rows), cols)` wide from column 0, each row of a block
+  starting from `M0·x + M1·y + M2` at the block's first column and adding `M0·x1`. Rows do not
+  matter (each starts from its absolute y), so a row range is exact — what R4 needs — but the
+  block width has to be OpenCV's. The runtime path on x86-64 is the SSE4.1 line generator,
+  separate multiplies and adds in double with no FMA, which is also what the scalar tail does.
+  On arm64 OpenCV uses fused multiply-adds there, so the exact warp is x86-64 only
+  (`STAR_EXACT_WARP`) and arm64 keeps `cv::warpPerspective`; the GPU merge is the default
+  there anyway.
+
+Kill switches, for an A/B on a real run in one binary: `STAR_MEDIAN_KERNEL=welford`,
+`STAR_WARP=opencv`. Both are read once. The tests flip the same switches in-process
+(`ImageAligner.debugSetMedianKernel`, `debugSetExactWarp`).
+
+R2's kernel is compiled for AVX2 and chosen at run time (CPUID + XCR0, no `__builtin_cpu_supports`),
+on x86-64 only; everything else, and `k` outside 0…1e6, runs the Welford kernel unchanged.
+So Q2 was answered "yes" in code — it is one `if` in `mergeKernelForThisMachine` to say no.
+
+### 6.2 Measured (single thread, loaded machine)
+
+| | before | after | ratio |
+|---|---|---|---|
+| median kernel, 9 sources, 3 ch, real 64×6000 band | 124 ns / pixel-channel | 18.6 | **6.7×** |
+| median kernel, 17 sources | 191 | 26.7 | **7.2×** |
+| the same old kernel at `-Os` (what the GUI ran) vs `-O2` | 155 / 467–598 ns (9 / 17) | 107–129 / 166–251 | 1.2–2.8× — the 17-source static merge was hit hardest |
+| 16-bit warp + its 8-bit coverage probe, 6000×1000×3 | 21.6 + 36.3 ns/px | 17.7 (scalar), 7.3 (AVX2), one pass | 1.9× scalar, 2.2–5.4× AVX2 |
+| AKAZE map passes, 24 MP-scale levels | 0.754 s | 0.431 s | 1.75× (the dense extremum scan, unchanged, is most of what is left) |
+
+A first, autovectorised version of the exact-statistics idea measured 1.4–1.9× here, in line with
+section 2 R2's 2.1×; the register kernel (sorting network and block held in YMM registers per
+source count 2…17, exact sums in double, integer bounds counted in 16-bit lanes) is what gets to
+~7×.
+
+### 6.3 End-to-end identity and CPU
+
+Probe: frames 645–674 of a9-1 07_11 (30 × 24 MP, moving), release cli built from this worktree and
+from a pristine checkout of `develop` at `05d8c1b7`, `--use light --moving-camera --no-use-gpu
+--cloud-aware-merge --keep-temp-files`, `nice 10`, the painted reference linked in as in section
+1.1, the machine otherwise idle. (Light, so the CPU gate is 4 wide and wall clock is gate-limited;
+read CPU-seconds.)
+
+| run | wall | user | sys | CPU-s | peak footprint |
+|---|---:|---:|---:|---:|---:|
+| baseline binary | 324 s | 1,628 | 245 | 1,873 | 13.1 GB |
+| new binary, `STAR_MEDIAN_KERNEL=welford STAR_WARP=opencv` | 327 s | 1,603 | 248 | 1,851 | |
+| **new binary** | **254 s** | **1,076** | 282 | **1,358** | 13.3 GB |
+
+* **Identical.** All 30 output frames are byte-identical (`cmp`) between the baseline and the new
+  binary, and between the baseline and the new binary with the switches on; so are all 150
+  intermediate files kept with `--keep-temp-files` — SIFT and AKAZE keypoint files (the AKAZE
+  map-scan change), horizon, merged-horizon and auto-processed images — and the 60 rows of
+  `homography.db`, compared as parsed JSON (the encoder does not order keys, so the raw blobs
+  differ between runs even though every value is the same).
+* **−27 % CPU (−493 of 1,851 CPU-s), −22 % wall** end to end on this probe, which is 9-source,
+  clear-sky, with the cloud stage nearly filtered out. The switch-off run says all of it is R2 + R3:
+  R5 and R8 are on in both runs and cost nothing measurable on 30 frames. sys time rises by 34 s;
+  not investigated. This run was not split by phase, so what is left of the merge phase's CPU
+  (decode, the output TIFF's LZW encode — Q4 — OpenCV's other calls) is not measured here; profile
+  a run (`sample`, section 4) before choosing the next item.
+* Section 1.3's GUI profile, where the median kernel was 48.6 % of busy CPU at `-Os`, should gain
+  more than this cli probe did; that has not been run (it needs the GUI build and a cloudy
+  sequence).
+
+A 30-frame sequence is too short for the horizon consensus to calibrate (it needs 36 and logs
+"could not calibrate … keeping the merged horizons"), so R5 was checked separately on frames
+645–692 (48 frames, `LRT_probe_a9_48`), same settings:
+
+| run | wall | user | sys | CPU-s | horizon consensus |
+|---|---:|---:|---:|---:|---:|
+| baseline binary | 514 s | 2,656 | 414 | 3,070 | 7.8 s |
+| new binary | 408 s | 1,693 | 497 | 2,190 | 4.8 s |
+
+All 48 outputs, all 288 other kept files and the 96 `homography.db` rows are identical (as in
+the 30-frame run), and so are the 49 files in `horizonConsensus/` (47 lines, the calibration and
+one more), compared as parsed JSON; the new run wrote 47 sidecars and read them. The consensus
+step is 3 s shorter on 48 frames, which is 62 ms a frame — the decode that section 2 R5 removes —
+so the serial gap per run scales as that times the frame count (the section's 124–218 s at
+1,300–2,100 frames); not measured at that size. CPU −29 %, wall −21 %.
+
+### 6.4 Not done, and why
+
+* **R4** needs your decision (Q1) and was not started. The row-range machinery it needs from R3
+  exists (`exactwarp::warpRows` takes a destination row range), and the median kernel already
+  works on bands.
+* **R6** (match each pair once) and **R7** (pyramid readback without the copy) were left.
+  R6's saving is half of one matcher's 16 % of phase A, behind a cross-op cache whose
+  occupancy is bounded by nothing but the order the ops happen to run in, and a tie rule that
+  has to match `BFMatcher::knnMatch` on real descriptors; R7 needs a `cv::Mat` over Metal
+  readback storage with a release callback, and a pool that today recycles buffers the moment
+  the copy is done would hold them for the life of every level — a memory-footprint change that
+  has to be measured on the Vega *and* on Apple Silicon before it ships. Neither is worth doing
+  without that measurement, and neither is blocked by anything here.
+* **R8**'s earth gradient-mask cache and the **R9** cloud-stage leftovers (map lambda, `lowPass`,
+  float-map `remap`) — not started. The cloud stage's `cv::remap` takes float maps and would
+  need the same treatment as the warp, from `remap32f`'s own conversion rules.
+* **R10**: hyper-thread width and the ledger's CPU-path estimate need merge-phase runs of ten
+  minutes each, back to back; not measured.
+* **Q4** (LZW on the final TIFF) is yours.

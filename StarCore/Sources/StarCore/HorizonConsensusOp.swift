@@ -326,7 +326,7 @@ actor HorizonConsensusBuild {
             references[$0.frameIndex] != nil && !sourceIndices.contains($0.frameIndex)
         }
 
-        let lines = try await detectedLines(of: allSources, height: height)
+        let lines = try await detectedLines(of: allSources, height: height, config: config)
         try Task.checkCancellation()
         let records = await groundFits(of: allSources)
         try Task.checkCancellation()
@@ -377,8 +377,13 @@ actor HorizonConsensusBuild {
 
     /// Each frame's detected horizon, as a grid line, for the frames whose first-round mask
     /// is on disk.  A frame without one simply does not vote.
-    private func detectedLines(of frames: [FrameAirplaneRemover],
-                               height: Int) async throws -> [Int: [Float]] {
+    ///
+    /// The line is cut from one row per column, which `HorizonLineSidecar` keeps beside the
+    /// mask so that this need not decode a full-resolution plane per frame; the mask is read
+    /// for a frame with no sidecar, or one its mask has moved on from, and the sidecar made
+    /// from it then for the next run.
+    private func detectedLines(of frames: [FrameAirplaneRemover], height: Int,
+                               config: Config) async throws -> [Int: [Float]] {
         let gridWidth = parameters.gridWidth
         var lines: [Int: [Float]] = [:]
         try await withThrowingTaskGroup(of: (Int, [Float]?).self) { group in
@@ -386,16 +391,33 @@ actor HorizonConsensusBuild {
             func addNext() {
                 guard let frame = pending.popFirst() else { return }
                 group.addTask {
-                    guard frame.horizonMaskExistsOnDisk(),
-                          let mask = try await frame.imageAccessor.load(
+                    guard frame.horizonMaskExistsOnDisk() else { return (frame.frameIndex, nil) }
+                    let maskPath = frame.imageAccessor.nameForImage(
+                      frameIndex: frame.frameIndex, ofType: .horizon, atSize: .original)
+                    if let maskPath,
+                       let columns = HorizonLineSidecar.read(
+                         frameIndex: frame.frameIndex, width: frame.width, height: height,
+                         maskPath: maskPath, config: config)
+                    {
+                        return (frame.frameIndex,
+                                HorizonConsensus.gridLine(fromColumns: columns, height: height,
+                                                          gridWidth: gridWidth))
+                    }
+                    guard let mask = try await frame.imageAccessor.load(
                             frameIndex: frame.frameIndex, type: .horizon, atSize: .original)
                     else { return (frame.frameIndex, nil) }
-                    let line = await NativeWork.run {
-                        HorizonConsensus.gridLine(
-                          fromColumns: CombinedHorizonDetector.extractHorizonY(from: mask),
-                          height: height, gridWidth: gridWidth)
+                    let columns = await NativeWork.run {
+                        CombinedHorizonDetector.extractHorizonY(from: mask)
                     }
-                    return (frame.frameIndex, line)
+                    if let maskPath {
+                        HorizonLineSidecar.write(columns: columns, width: mask.width,
+                                                 height: mask.height,
+                                                 frameIndex: frame.frameIndex,
+                                                 maskPath: maskPath, config: config)
+                    }
+                    return (frame.frameIndex,
+                            HorizonConsensus.gridLine(fromColumns: columns, height: height,
+                                                      gridWidth: gridWidth))
                 }
             }
             for _ in 0..<Self.concurrentDecodes { addNext() }

@@ -178,6 +178,38 @@ final class StarAlignedHorizonMaskTests: XCTestCase {
         XCTAssertEqual(stats.hits, 2)
     }
 
+    /// A batch of frames that all want the same answer, arriving together, shares one
+    /// computation; frames that want different answers each compute — at once, not one behind
+    /// the other.
+    func testConcurrentAsksForOneAnswerShareItAndDifferentAnswersEachCompute() async throws {
+        let cache = StarAlignedHorizonMaskCache()
+        let mask = flatMask()
+        let same = [translation(ty: -20)]
+
+        let shared = await withTaskGroup(of: PixelatedImage?.self) { group -> [PixelatedImage?] in
+            for _ in 0..<6 { group.addTask { await cache.mask(from: mask, homographies: same) } }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+        let first = try XCTUnwrap(shared.first ?? nil)
+        XCTAssertTrue(shared.allSatisfy { $0 === first }, "every ask got the one computed mask")
+        var stats = await cache.stats()
+        XCTAssertEqual(stats.computes, 1)
+        XCTAssertEqual(stats.hits, 5)
+
+        let different = (1...5).map { [translation(ty: -Double($0))] }
+        let results = await withTaskGroup(of: (Int, PixelatedImage?).self) { group -> [(Int, PixelatedImage?)] in
+            for (index, set) in different.enumerated() {
+                group.addTask { (index, await cache.mask(from: mask, homographies: set)) }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+        for (index, result) in results {
+            XCTAssertEqual(boundary(of: try XCTUnwrap(result))[50], horizonY - (index + 1))
+        }
+        stats = await cache.stats()
+        XCTAssertEqual(stats.computes, 6, "five more, one for each set")
+    }
+
     func testADifferentHomographySetRecomputes() async throws {
         let cache = StarAlignedHorizonMaskCache()
         let mask = flatMask()
