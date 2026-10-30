@@ -1,0 +1,403 @@
+# Core speed: where a run's time goes now, and what to do about it
+
+A proposal and handoff, written 2026-10-29 on `develop` at `961a52f5` (0.12.6 plus that day's
+cloud-aware merge work). It assumes no memory of the session that produced it. Every number
+was measured on this iMac Pro (18-core Xeon W-2191B, 36 threads, 128 GB, Vega 64) unless it
+says *estimate*.
+
+Read first, for what is already done and why: `CODE_REVIEW_PROPOSAL.md` (S1–S16; everything
+but S6 steps 2–3, S15 and S16 landed), `RESOURCE_SCHEDULING_DESIGN.md` (gates, ledger,
+`IOWork`, `DecodedFrameStore`) and `GPU_ACCELERATION_PROPOSAL.md`. Nothing below repeats an
+item those cover, except where a new measurement changes its priority.
+
+## Summary
+
+The user's real workload is long **moving** sequences at 24 MP (6000×4000 16-bit TIFF,
+1,300–2,100 frames) driven from the macOS GUI, with GPU keypoints on and, on this Vega,
+**GPU merges off** (`useGPUForMerge: false` in `~/.star.userprefs.json`). On that workload:
+
+* A run is phase A (horizons, keypoints, homographies, ~63 min for 1,407 frames), then
+  **2–4 min of horizon consensus with the CPU idle**, then merges. Merges now run at
+  **10.2 frames/min, ~120 CPU-s per frame** on the CPU path with the cloud stage on — about
+  140 min for 1,407 frames, ~70% of the run.
+* **The macOS GUI compiles all of StarCpp at `-Os`**; the cli and daemon get `-O2`. The median
+  kernel is **1.7x slower at `-Os`**, its sort 3.4x. This is the cheapest win in the codebase.
+* **~93% of merge-phase CPU is five C++ kernels**: the sigma-clip median, OpenCV's
+  `warpPerspective` (whose 16-bit path is scalar and mallocs per row block), the cloud
+  stage's `remap`, and the cloud stage's map and blur loops. Decodes are 0.8%.
+* The median kernel can be made **2.1x faster, bit for bit** (prototype; 0 of 3.07M
+  adversarial pixel-channels differ) with exact integer statistics plus AVX2 dispatch.
+* The composite **discards ~75% of the earth merge and ~10% of the star merge**. Not
+  computing those rows is identical for final frames: *estimate* ~25% of the merge phase.
+* In phase A, **brute-force descriptor matching is 16% and is done twice per pair** on moving
+  sequences, and **~10% is one `memcpy`** of the GPU SIFT/AKAZE pyramids into fresh Mats.
+
+Order, by payoff over risk:
+
+| # | what | identical? | effort | expected win |
+|---|---|---|---|---|
+| R1 | GUI: StarCpp at `-O2`/`-O3` | verify | hours | 15–25% of GUI merge CPU, plus every StarCpp loop in phase A |
+| R2 | median kernel: exact stats + AVX2 | yes | 1–2 d | ~25% of merge CPU (x86) |
+| R3 | exact SIMD 16-bit warp, analytic coverage, row ranges | yes | 2–3 d | 25–35% of merge CPU (cli profile) |
+| R4 | merge only the rows the composite reads | final frames yes | 2–3 d, after R3 | ~25% of merge CPU, moving; more on static earth |
+| R5 | horizon consensus from per-frame line sidecars | yes | 1 d | 2–4 min serial gap per run |
+| R6 | match each neighbour pair once | yes | 2 d | ~8% of phase A |
+| R7 | SIFT/AKAZE pyramid readback without the copy | yes | 1 d | ~10% of phase A |
+| R8 | AKAZE port sparse scans; mask caches | yes | 1–2 d | ~6% of phase A |
+| R9 | cloud stage leftovers; GPU port on Apple Silicon | yes | 2 d+ | most of the cloud stage's CPU |
+| R10 | stall watchdog, HT width, ledger estimate | n/a | small each | diagnosis and headroom |
+
+Plus one decision for Brian: the final output's LZW compression costs **12.7% of the cli's
+merge-phase CPU** for a 0–8% size saving (§1.4, Q4).
+
+## 1. What was measured
+
+### 1.1 Sources
+
+| run | where | settings | used for |
+|---|---|---|---|
+| a9-3, 1,407 × 24 MP, 10-28 | `~/Library/Logs/star/Star-logs-2026-10-28-16-14-58.txt` | Full, moving, GPU SIFT/AKAZE, GPU merge configured on, cloud v1 | run structure |
+| a9-3 re-merge, 10-29 | `…2026-10-29-16-49-25.txt` + a 15 s `sample` of the live GUI at 17:11 (Full) | Full, CPU merges, cloud v2 | GUI merge profile |
+| a9-1, 1,865 × 24 MP, 10-29 | `…2026-10-29-11-33-12.txt` | Full → Balanced → Light | consensus under Light |
+| probe: frames 645–674 of a9-1 07_11 | release cli from this worktree, `--use light --moving-camera --no-use-gpu --cloud-aware-merge`, `nice 10`, `sample` every ~16 s | cli phase-A and merge profiles |
+
+The probe's inputs are hard links in `/Volumes/sp/tmp/claude_speed_probe/LRT_probe_a9_30`
+(no extra disk). Before each run, link the painted reference into a fresh temp dir so the
+horizon prior takes the production path — a run's cleanup deletes it:
+`mkdir -p …/claude_speed_probe/star_temp_LRT_probe_a9_30/horizonReference && ln
+/Volumes/sp/tmp/star_temp_LRT_07_11_2026-a9-1/horizonReference/image_0657.tiff` into it.
+Delete the generated `-star-v-*` output dir after each run (it is real data, ~4 GB), and the
+whole `claude_speed_probe` directory when the work is done.
+
+Probe totals: 1,077 s wall (phase A 462 s, merges 609 s), **2,992 s user + 525 s sys ≈ 117
+CPU-s per frame**, 13.7 GB peak footprint. Sys time is 15% of the CPU.
+
+Attribution note: `cv::parallel_for_` bodies run on GCD worker threads whose stacks do not
+include the caller, so CPU was attributed by the kernel's own symbol, not by caller.
+
+### 1.2 Run structure (a9-3, 10-28, Full)
+
+| stretch | time | |
+|---|---|---|
+| phase A | 63.0 min | CPU 77–100%, GPU 10–30% |
+| validation | ~3 s | |
+| **horizon consensus** | **184 s** | CPU ~20%; no merge can start before it |
+| merges | 67 min | 21.7 frames/min, CPU 100% |
+
+Phase-A per-op wall medians (18 ops in flight): horizon detection 17.8 s, merged horizon
+13.3 s, sky keypoints ~62 s, each homography set ~2 s.
+
+Consensus at Full across five runs: 124, 134, 184, 218 s (1,312–2,122 frames). On the a9-1
+run under Light (one disk stream) it took **618 s**.
+
+Unexplained: on 10-28 the log is **silent from 16:52:10 to 16:54:37** — governor at CPU 0%,
+GPU 0%, 0 MB/s, disk gate 8/8 held with 41 waiting — then frames trickle one at a time until
+~16:57:36. It looks like the process was stopped from outside (project memory
+`processes-sigstopped-on-this-mac`), but nothing in the log can say. See R10.
+
+### 1.3 Merge phase in the GUI (10-29, Full, CPU path, cloud stage on, StarCpp at `-Os`)
+
+114 frames completed 17:04:27–17:15:35: **10.2 frames/min**, governor "CPU 100% (gate 18/18)",
+`ps` ~2,050% → **~120 CPU-s per frame**. The same phase on 10-28 (GPU merge on, cloud v1) was
+21.7 frames/min, ~57 CPU-s per frame.
+
+| kernel (by own symbol) | share of busy CPU |
+|---|---:|
+| `medianMergeTyped<uint16_t>` (star, cloud stack and earth merges) | **48.6%** |
+| `WarpPerspectiveInvoker` (16-bit warps + 8-bit coverage probes) | 17.0% |
+| `RemapInvoker` (cloud layers + their probes) | 13.4% |
+| cloud map/field lambda (`ImageAligner.cpp:4046`) | 8.2% |
+| cloud box blur / luma / low-pass (`cloudaware::`) | 6.0% |
+| GUI main thread (SwiftUI; a quarter of it `AlignmentDeviationChart`) | 3.4% |
+| decodes | 0.8% |
+
+Inside the cloud stage (35% of the phase, inclusive): per-neighbour layer build 53% (of
+which `cv::remap` 63%, the map lambda 35%), the cloud-stack median 26%, `lowPass` 15%, box
+blurs 11%.
+
+### 1.4 Merge phase in the cli probe (`-O2`, CPU path, cloud stage mostly pre-filtered out)
+
+| kernel | share |
+|---|---:|
+| `WarpPerspectiveInvoker` | **52.0%** |
+| `medianMergeTyped` | 28.5% |
+| **LZW encode of the output TIFF** (`TIFFWriteScanline` ← `cv::imwrite`) | **12.7%** |
+| cloud stage | 2.4% |
+| decodes | 0.7% |
+
+Inside `warpPerspective`, in both builds: ~36% `remapBilinear<Cast<float,ushort>, RemapNoVec>`
+(OpenCV's 16-bit bilinear is **scalar**), ~17% map generation
+(`WarpPerspectiveLine_SSE4_Impl`), ~14% the 8-bit coverage-probe warps, **~10% malloc/free**
+churn per row block, 4% the NEAREST mask warps of `StarAlignedHorizonMask`.
+
+The GUI and cli differ mostly because of `-Os` (§1.6) and because the GUI's sequence is
+cloudy. Expect the GUI to look like the cli — warp-dominated — once R1 lands.
+
+### 1.5 Phase A in the cli probe (GPU SIFT and AKAZE on)
+
+721,515 busy samples over horizon detection, keypoints and homographies:
+
+| step | share | notes |
+|---|---:|---|
+| AKAZE CPU tail (Hessian, extrema, refine, orient, describe) | 16.8% | 5.1% of phase A is out-of-line `Mat::at<uchar>` in `AKAZEDetector.cpp:457–550` |
+| **descriptor matching, `BFMatcher::knnMatch`** | **16.1%** | SIFT L2 ~8.2%, AKAZE Hamming ~6.2% (`ImageAligner.cpp:2649`) |
+| SIFT CPU tail (DoG subtract, extrema, descriptors) | 14.0% | |
+| horizon detection, other | 10.3% | detector, Lab, refinement, despike |
+| **SIFT pyramid readback `memcpy`** | **8.1%** | `GPUOps.swift:1687` |
+| keypoint preprocessing (masks, CLAHE, stretch, dilate, `distanceTransform`) | 6.9% | |
+| Random Walker solve | 5.6% | `gaussSeidelWithData` |
+| decode | 4.1% | |
+| bilateral ×3 | 3.6% | `RandomWalkerHorizon.cpp:373` |
+| AKAZE pyramid readback `memcpy` | 1.7% | |
+| other | ~13% | |
+
+(An earlier window of only the first 14 samples, horizon-heavy, had the Random Walker at
+15.7%. The table is the whole phase.)
+
+### 1.6 Build flags
+
+`gui/DerivedData/…/ArchiveIntermediates/Star Release/…/StarCpp.build/Release/{StarCpp,kht}.build/Objects-normal/{x86_64,arm64}/*common-args.resp`
+says **`-Os`**, both architectures. SwiftPM release (cli, daemon, `cli/.build/release.yaml`):
+`-O2`. Neither has `-march`; x86 is the SSE2 baseline. OpenCV is prebuilt with its own flags
+and its own runtime dispatch, so this affects only star's C++.
+
+Median kernel body, same source: 567 instructions (GUI) vs 1,075 (cli). Standalone, single
+thread, 9 real 24 MP sources, a 6000×1600 band:
+
+| flags | ns per pixel-channel | sort alone |
+|---|---:|---:|
+| `-O2` | 80.5 | 16.0 |
+| `-Os` | **135.4** | **54.7** |
+
+The machine was loaded (the user's own run and a build): read ±20% as noise, the 1.7x as
+real. The codegen difference says the same.
+
+## 2. Recommendations
+
+**Identical** = output byte-identical before and after. **Changes output** = needs an A/B
+with the removal oracle, the homography harnesses or the horizon reference masks.
+
+### R1 — Build StarCpp at `-O2` or `-O3` in the GUI (verify identical, hours)
+
+* **What.** Make Xcode's Release build compile the `StarCpp` and `kht` targets at `-O2`
+  or better. First try `.unsafeFlags(["-O3"], .when(configuration: .release))` in
+  `StarCpp/Package.swift`'s `cxxSettings` (it already uses `unsafeFlags`; local packages may)
+  and check the `.resp`: clang takes the last `-O`. Fall back to a project-level setting if
+  Xcode puts its `-Os` after the package's flags.
+* **Why.** §1.6. The median kernel, the cloud stage, the SIFT/AKAZE CPU tails, the Random
+  Walker, the DP horizon and KHT all run at `-Os` in the GUI.
+* **Win.** StarCpp-owned kernels are ~63% of the GUI's merge phase; at 1.3–1.7x that is
+  **15–25% of GUI merge-phase CPU** (*estimate*), plus a share of phase A.
+* **Identity.** Integer kernels cannot change. Float code (cloud stage, RW, AKAZE port) can
+  change only if contraction or reassociation differs between optimisation levels; with no
+  `-ffast-math` it should not. Prove it: the same 20 frames through a GUI-built StarCore and
+  through the cli, `cmp` every output, before and after. If they already differ before,
+  record that as a finding.
+* Pick `-O2` vs `-O3` by timing both on the median kernel and the RW solve.
+
+### R2 — Median kernel: exact integer statistics + ISA dispatch (identical, 1–2 days)
+
+* **Where.** `medianMergeTyped`, `ImageAligner.cpp:263`, the blocked path.
+* **What.** Keep the sorting network. Replace the per-lane Welford pass (a double divide
+  per source per lane) with exact sums: every value is < 2¹⁶, so `S = Σv` and `Q = Σv²` over
+  the counted sources are integers below 2⁵³ and exact in `double`. `D = c·Q − S²` is
+  exact; `threshold = (S + k·√D)/c` is one sqrt and one divide per lane. Count "below"
+  against it. Per lane, fall back to the existing Welford only when a counted value lies
+  within `1e-6·(1+|threshold|)` of it, and short-circuit lanes whose counted values are all
+  equal (every index gives the same value). Compile the function for AVX2
+  (`__attribute__((target("avx2")))`) and dispatch on `__builtin_cpu_supports("avx2")`;
+  arm64 has NEON as its baseline — measure it there. Also: for `uint16_t`, sort in 16-bit
+  lanes biased by `0x8000` (`pminsw`/`pmaxsw`): the sort alone measured 12.5 vs 26.9 ns at SSE2.
+* **Evidence.** Prototype in this session's scratchpad (`mergebench/bench.cpp`; rebuild from
+  this description — it copies the blocked kernel verbatim and adds the variant). 400
+  randomised trials × 5 thresholds — full range, 4-value ranges, zeros mixed in, saturated,
+  equal runs, random coverage misses: **3,072,000 pixel-channels, 0 differ**. Real 9-source
+  24 MP band: 0 differ; fallback 0.005% of lanes, all-equal shortcut 0.5%. Single thread:
+
+  | ISA | current | exact stats | speedup |
+  |---|---:|---:|---:|
+  | SSE2 (shipped x86) | 80–109 ns | 72–118 ns | 0.9–1.1x |
+  | SSE4.1 | 92.9 | 75.3 | 1.2x |
+  | **AVX2** | 86.5 | **40.9** | **2.1x** |
+
+  Exact statistics only pay with a wider ISA; the dispatch is the point.
+* **Win.** ~48% (GUI) / ~29% (cli) of merge CPU × (1 − 1/2.1): **14–25% of the merge phase**
+  on x86. Arm64 unmeasured.
+* **Verify.** The `#include`-the-real-`ImageAligner.cpp` differential harness (project memory
+  `merge-step-cost-breakdown`): full 24 and 42 MP frames, 9 and 17 sources, 8- and 16-bit,
+  both `includeAll` values, the randomised sweep above; then a 20-frame cli `cmp` A/B.
+
+### R3 — Exact SIMD 16-bit warp, analytic coverage, row ranges (identical, 2–3 days)
+
+* **What.** Replace `warpInto`'s CPU branch (`ImageAligner.cpp:2786`) and the cloud stage's
+  `cv::remap` calls (`:4070–4072`) for 16-bit 1- and 3-channel data with code that reproduces
+  OpenCV bit for bit: `WarpPerspectiveInvoker`'s fixed-point map generation, the same float
+  interpolation table, the same left-to-right `S0·w0 + S1·w1 + S2·w2 + S3·w3` in float,
+  `saturate_cast<ushort>`, and `BORDER_TRANSPARENT`'s skip rule. No per-block heap
+  allocation. Vectorise over pixels. Take a destination row range (R4 needs it).
+* **FP contraction.** Compile that file with `-ffp-contract=off` on x86, and on arm64 match
+  whatever the vendored OpenCV was built with (it may contract into FMA there); the identity
+  test decides.
+* **Coverage.** `warpCoverage` warps a 255 plane per neighbour only to learn where the warp
+  lands, and the cloud stage remaps a probe per neighbour for the same reason. Derive it from
+  the integer maps instead: a pixel is covered iff every bilinear tap with non-zero weight is
+  inside the source. This is S16, done exactly.
+* **Win.** 52% (cli) / ~30% (GUI, warps + cloud remaps) of merge CPU; at 2–3x on the 16-bit
+  path, removing the malloc churn and the probe warps: **25–35% of the cli merge phase**
+  (*estimate*).
+* **Verify.** Byte-compare against `cv::warpPerspective`/`cv::remap` over 1,000+ random
+  near-identity and real stored homographies (`homography.db`), with coverage edges, on both
+  architectures. One differing pixel is a failure.
+
+### R4 — Merge only the rows the composite reads (identical for final frames, 2–3 days after R3; one decision)
+
+* **What.** The final frame — and the subtraction image in outlier modes
+  (`FrameAirplaneRemover.swift:2110–2160`) — is `skyImage.blend(mask: feathered, with:
+  earthImage)` with `feathered = starAlignedMask.raiseMaskBy(24)`. Where the mask is 255 the
+  earth pixel is unused; where it is 0 the sky pixel is. Compute the feathered mask first (it
+  needs only the homographies and the horizon) and derive each merge's row range from it,
+  exactly:
+  * earth merge: from the first row where the mask is < 255, to the bottom;
+  * star merge: from the top to the last row where the mask is > 0, **plus the cloud stage's
+    `kRegionMargin` (300)** so its blurs read the same pixels.
+  Check the blend's arithmetic returns exactly the sky value at 255 and the earth value at 0.
+* **Win.** *Estimate* for a9-3 (horizon at rows 3,090–3,250 of 4,000): earth merge to ~24%
+  of the frame, star merge to ~89%. The two base merges are about equal and together ~56% of
+  the GUI's merge CPU, so **~25% of the merge phase**. The static 17-source earth merge
+  (`FrameAlignmentProcessor.swift`, the `!config.tripodHeadWasMoving` branch) saves more.
+* **Needs R3.** `cv::warpPerspective` cannot do a row sub-range bit-identically (translating
+  the homography changes the rounding of each row's coordinates).
+* **Decision for Brian (Q1).** The star-/earth-aligned intermediates (previews always,
+  full-size files in outlier modes) would no longer be full merges outside their band.
+
+### R5 — Horizon consensus without decoding every mask (identical, 1 day)
+
+* **What.** `HorizonConsensusOp.detectedLines` (`HorizonConsensusOp.swift:380`) decodes each
+  frame's full-resolution `.horizon` mask (24 MB, LZW) only to run `extractHorizonY` and make
+  a grid line. Write that line when the mask is written (detection already has it in memory)
+  as a small per-frame sidecar or a `homography.db` table, and read it, falling back to the
+  mask when it is missing or stale. Key it on the mask file (size + mtime or a digest) so an
+  edited mask invalidates it.
+* **Win.** **2–4 min of serial, CPU-idle time per run at Full; 10 min under Light.**
+* **Verify.** `HorizonConsensusStore` output byte-identical with and without sidecars on a
+  full sequence.
+
+### R6 — Match each neighbour pair once (identical, 2 days)
+
+* **What.** On moving sequences each frame's homography op matches against ±1…±4, so every
+  unordered pair is matched twice: `knnMatch(B→A)` in A's op and `knnMatch(A→B)` in B's. Both
+  are the 2-nearest along the rows or the columns of the same distance matrix, and OpenCV's
+  L2 and Hamming distances are symmetric bit for bit. Compute the matrix once per pair,
+  derive both directions with OpenCV's tie rule (lowest index wins), and hand the reverse
+  result to the other frame's op through a small cache keyed by (pair, type).
+* **Win.** Half of 16.1%: **~8% of phase A**.
+* **Verify.** Identical `DMatch` lists for both directions over a full sequence's pairs, and
+  an identical `homography.db`.
+
+### R7 — Pyramid readback without the copy (identical, 1 day)
+
+* **What.** `matWrapper(fromReadback:)` (`GPUOps.swift:1674`) allocates a Mat and `memcpy`s
+  each level out of the pooled readback buffer, single-threaded: ~1.4 GB per sky op at divisor
+  1.5 (`firstOctave = -1`). Instead make the readback buffer the Mat's storage (a `cv::Mat`
+  over external memory, owned by a `MatWrapper` with a release callback) and give the buffer
+  back to the pool when the wrapper is released. Keep the `autoreleasepool` around
+  `contents()` (project memory `gpu-inner-pointer-autorelease-leak`).
+* **Win.** 8.1% + 1.7%: **~10% of phase A**.
+* **Watch.** Pool sizing: levels now live as long as the SIFT tail reads them. Measure footprint
+  with that memory's `findFeatures` harness, on this Vega and on Apple Silicon.
+* **Later.** DoG and the extremum scan on the GPU would remove most of the SIFT CPU tail (14%)
+  too; only after R7.
+
+### R8 — Smaller phase-A items (identical, 1–2 days)
+
+* **AKAZE port keypoint maps** (`AKAZEDetector.cpp:457–550`): four passes over every pixel of
+  every evolution level through out-of-line `at<uchar>`, for maps that are almost all zero —
+  5.1% of phase A. Keep a sparse row-major list of `(y, x)` per level and walk that; keep the
+  order and it is identical.
+* **Earth gradient mask** (`createGradientMaskIntoSky` → `distanceTransform`): built per earth
+  keypoint op from the same horizon mask the composite's `raiseMaskBy` uses. Cache per frame.
+* **`StarAlignedHorizonMaskCache`** (`StarAlignedHorizonMask.swift`): one process-wide actor
+  that runs 8 full-frame NEAREST mask warps per frame. It only ever hits on static sequences;
+  on moving ones it serialises that work for the whole merge phase. Compute outside the actor
+  when the key cannot repeat, and time a call: its wall time per call caps merge throughput.
+
+### R9 — Cloud stage (identical, 2 days; after R2/R3)
+
+R2 and R3 cover its median (26% of the stage) and remaps (63% of its layer building). Left:
+
+* the map lambda (`ImageAligner.cpp:4046–4068`, 8.2% of the GUI merge phase): a bilinear field
+  and a homography in `double` per pixel. Vectorise with the same operation order, or emit
+  R3's integer maps directly;
+* `lowPass` and the box blurs (6%): separable passes over the region — check whether the
+  algorithm allows them at the low-res grid;
+* **Apple Silicon.** Once star and earth merges run on the GPU there, this CPU-only stage is
+  the merge phase's CPU floor. Port its stack (remap + median) onto the existing Metal merge
+  kernel; measure on the Mac Studio, not here (memory `apple-silicon-mac-studio-plans`).
+
+### R10 — Scheduling and diagnostics
+
+* **Stall watchdog.** When no op changes state for 60 s while gates hold slots, log which ops
+  hold which gates and the process state. §1.2's freeze cannot be diagnosed from today's log.
+* **Hyper-threads.** At Full the CPU gate is 18 (physical cores) and star keeps ~20–26 of 36
+  logical CPUs busy. Measure a Custom CPU width of 24 and 36 on the merge phase, frames/min
+  over 10 min, back to back (`perf-measurement-noise-floor`); make Full whichever wins.
+* **Ledger in the merge phase.** Footprint 3–6 GB against a 107–109 GB ledger on the CPU path,
+  20–30x over. It does not bind at Full on 128 GB (the CPU does), but it does under Light
+  (44.8 GB) and on the 36 GB Mac Studio, and the realized ratio is floored at 0.25 so it can
+  correct only 4x. Re-measure the CPU-path merge reservation (13× working frame plus the cloud
+  stage's term) with `--log-op-memory` and fix the estimate, not the floor.
+* **Light is not light in merges.** The probe at `--use light` (CPU width 4) ran at ~950% CPU
+  during merges: each op's `parallel_for_` fans out regardless of the gate. Worth knowing
+  before promising users Light leaves the machine alone.
+* **Phase overlap (later, changes output at window edges).** Merges wait for validation and
+  consensus over the whole sequence, though both are windowed in nature. Per-window
+  validation/consensus would start merges while phase A finishes. Only after R5.
+
+## 3. Not proposed
+
+* `mergeLoadConcurrency`, the streaming threshold, OpenCL, the ANE: measured and rejected
+  before (`merge-step-cost-breakdown`, `merge-streaming-threshold-cost`,
+  `gpu-acceleration-survey`, `apple-silicon-mac-studio-plans`).
+* Decode work: 0.7–0.8% of the merge phase. `DecodedFrameStore` did its job.
+* Exact integer statistics *without* the near-tie fallback: changes output (4 samples in
+  126.5M, max delta 26,368; comment at `ImageAligner.cpp:422`). R2 keeps the fallback.
+* Random Walker solver speed (S15), FLANN or GEMM matching: output-changing; they stay on
+  `CODE_REVIEW_PROPOSAL.md`'s A/B list. R6 is the identical part of matching.
+* The GUI main thread redrawing `AlignmentDeviationChart` during processing (3.4%): real, but a
+  client item.
+
+## 4. Working on this
+
+* **One heavy job at a time** (memory `one-heavy-job-at-a-time`). The user runs long GUI jobs
+  here; check `ps` before a cli run, a test suite or a build, and use `--use light` plus `nice`
+  for profiling runs.
+* **Measure kernels, not runs.** End-to-end wall clock has a ~90 s noise floor
+  (`perf-measurement-noise-floor`). Use min-of-K single-thread kernel timings on real frames,
+  and CPU-seconds for runs.
+* **Profiling.** `sample <pid> 10 -mayDie -file …` in a loop. Attribute by the kernel's own
+  symbol (`medianMergeTyped`, `WarpPerspectiveInvoker`, `RemapInvoker`,
+  `__func<cloudAwareRefine`, `cloudaware::`, `gaussSeidel`, `FilterBilateral`,
+  `findScaleSpaceExtrema`, `normL2Sqr`, `normHamming`, `LZWEncode`), then walk callers of a
+  leaf such as `_platform_memmove`. Beware Swift frame names: `findFeatures(…useGPUForAKAZE:)`
+  contains "AKAZE", so a substring rule on "AKAZE" sweeps in all keypoint work.
+* **Worktree build.** Symlink `opencv/{include,lib,opencv2.framework}`,
+  `StarDecisionTrees/{include,lib}` and `external_binaries/bin` from the main checkout, then
+  `cd cli && swift build -c release -j 8` (~8 min cold). The cli Xcode project does not link
+  (`cli-xcodeproj-ld-broken`). For R1, the GUI's flags are in
+  `gui/DerivedData/…/Objects-normal/<arch>/*common-args.resp`.
+* **Identity.** Kernels: the `#include`-the-real-`.cpp` harness. Runs: 20 frames through the
+  cli, `cmp` every output; `magick compare -metric AE` when they differ.
+* **Both clients.** R1 is GUI-only by nature. Everything else is StarCore/StarCpp and reaches
+  the daemon and the Kotlin client unchanged; nothing here is user-facing, so CLAUDE.md's
+  "Swift and Kotlin change together" has nothing to mirror.
+
+## 5. Questions for Brian
+
+1. **R4.** With band-limited merges, what should the star-/earth-aligned intermediates show
+   outside their band: base-frame pixels, or a full merge built on demand when viewed?
+2. **R2.** Is runtime AVX2 dispatch acceptable in the shipped x86 binary? Every Intel Mac
+   that runs macOS 13 has AVX2; the Windows/Linux daemon builds would dispatch at runtime too.
+3. **GPU merges** are off in your prefs on this Vega. Permanent until the Mac Studio? If so,
+   R2–R4 and R9 are the merge phase's speed for now.
+4. **Output compression.** LZW on the final TIFF is 12.7% of the cli's merge CPU and saves
+   0–8% of disk on this data. Keep it, make uncompressed an option, or change the default?
