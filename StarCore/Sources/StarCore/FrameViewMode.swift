@@ -99,42 +99,9 @@ public enum FrameViewMode: String,
         }
     }
 
+    /// The mode's name in the user's language, from the catalogue (`view_mode.<case name>`, which the desktop client reads too).
+    /// It was a switch of English literals, so every picker and "not found" line of the gui said "final processed frame" in any language.
     public var longName: String {
-        switch self {
-        case .original:
-            "original frame"
-        case .subtraction:
-            "subtracted frame"
-        case .blobs:
-            "initially detected blobs"
-        case .removeMask:
-            "computed removal mask"
-        case .validation:
-            "validation data"
-        case .autoProcessed:
-            "auto processed"
-        case .autoSelectiveProcessed:
-            "auto processed with selection"
-        case .selectiveProcessed:
-            "selective processed"
-        case .final:
-            "final processed frame"
-        case .earthAligned:
-            "earth aligned frame"
-        case .failedEarthAligned:
-            "failed earth aligned frame"
-        case .starAligned:
-            "star aligned frame"
-        case .failedStarAligned:
-            "failed star align frame"
-        case .horizon:
-            "horizon mask"
-        case .mergedHorizon:
-            "merged horizon"
-        case .userHorizon:
-            "user defined horizon"
-        case .consensusHorizon:
-            "horizon consensus"
-        }
+        localized("view_mode.\(rawValue)")
     }
 }

@@ -3625,3 +3625,36 @@ final class VideoRenderWiringTests: XCTestCase {
         XCTAssertNotEqual(german, english)
     }
 }
+
+/// Q1: the mode names the pickers and the "image not found" line use come from the catalogue (the desktop reads the same keys);
+/// `longName` was a switch of English literals.
+final class ViewModeNameTests: XCTestCase {
+    override func tearDown() {
+        StarLocalization.shared.languageOverride = nil
+    }
+
+    func testTheEnglishNamesAreTheOnesTheSwitchHad() {
+        StarLocalization.shared.languageOverride = "en"
+        XCTAssertEqual(FrameViewMode.final.longName, "final processed frame")
+        XCTAssertEqual(FrameViewMode.original.longName, "original frame")
+        XCTAssertEqual(FrameViewMode.starAligned.longName, "star aligned frame")
+        XCTAssertEqual(FrameViewMode.failedStarAligned.longName, "failed star align frame")
+        XCTAssertEqual(FrameViewMode.consensusHorizon.longName, "horizon consensus")
+    }
+
+    func testEveryModeHasAGermanName() {
+        StarLocalization.shared.languageOverride = "en"
+        let english = FrameViewMode.allCases.map(\.longName)
+        StarLocalization.shared.languageOverride = "de"
+        for (mode, inEnglish) in zip(FrameViewMode.allCases, english) {
+            let german = mode.longName
+            XCTAssertFalse(german.hasPrefix("view_mode."), "\(mode): the key is missing from the catalogue")
+            XCTAssertNotEqual(german, inEnglish, "\(mode) is still English in German")
+        }
+    }
+
+    func testTheNotFoundLineNamesTheMode() throws {
+        let source = try String(contentsOfFile: #filePath.replacingOccurrences(of: "starTests/starTests.swift", with: "star/FrameViewModel.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("localized(\"ui.image_not_found_for_frame\", type.longName)"))
+    }
+}
