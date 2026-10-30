@@ -329,6 +329,68 @@ public final class ViewModel {
     var showCloseConfirmation = false
     var closeConfirmationMessage: String = ""
     var closeConfirmationAction: (() -> Void)?
+    /// The label of the question's confirm button: "Stop and Close", or "Stop and Open" when it is File ▸ Open that would interrupt.
+    var closeConfirmationConfirmKey = "ui.stop_and_close"
+
+    /// What File ▸ Open can open.
+    enum OpenKind { case imageSequence, video, config }
+
+    /// File ▸ Open Image Sequence…, Open Video…, Resume from config.json…: ask what to open, behind the same work-in-progress question
+    /// as Close, since opening replaces the sequence that is open (M3 of the parity plan; the desktop client has always had these items,
+    /// and now asks too).  Asked before the file chooser, so no one picks a file to be refused.
+    func requestOpen(_ kind: OpenKind) {
+        guard let seq = imageSequence, seq.hasPendingWork else {
+            chooseSourceToOpen(kind)
+            return
+        }
+        closeConfirmationMessage = localized("ui.work_in_progress.opening", seq.pendingWorkDescription)
+        closeConfirmationConfirmKey = "ui.stop_and_open"
+        closeConfirmationAction = { [weak self] in self?.chooseSourceToOpen(kind) }
+        showCloseConfirmation = true
+    }
+
+    private func chooseSourceToOpen(_ kind: OpenKind) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        switch kind {
+        case .imageSequence:
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+        case .video:
+            panel.canChooseDirectories = false
+            panel.canChooseFiles = true
+        case .config:
+            panel.allowedContentTypes = [.json]
+            panel.canChooseDirectories = false
+            panel.canChooseFiles = true
+        }
+        guard panel.runModal() == .OK, let path = panel.url?.path else { return }
+
+        // What is chosen replaces the open sequence: close it the way File ▸ Close does, back to the start screen, which is
+        // where the sheets that ask about a video or a sequence are shown.
+        if imageSequence != nil { unloadSequence() }
+        switch kind {
+        case .imageSequence:
+            pendingSequenceOpen = PendingSequenceOpen(path: path)
+        case .video:
+            pendingVideoImport = PendingVideoImport(path: path)
+        case .config:
+            eraserTask = Task.detached(priority: .userInitiated) { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.startup(withConfigFile: path)
+                    await MainActor.run { self.imageSequence?.initialLoadInProgress = true }
+                } catch {
+                    Log.e("\(error)")
+                    await MainActor.run {
+                        self.report(error: "\(error)")
+                        self.imageSequence = nil
+                        self.isLoadingImageSequence = false
+                    }
+                }
+            }
+        }
+    }
     
     var showInfoDialog = false
     var currentInfoType: InfoType = .about

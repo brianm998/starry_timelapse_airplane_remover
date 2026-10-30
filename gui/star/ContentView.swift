@@ -102,11 +102,13 @@ struct ContentView: View {
                     Button(localized("ui.cancel")) {
                         viewModel.showCloseConfirmation = false
                         viewModel.closeConfirmationAction = nil
+                        viewModel.closeConfirmationConfirmKey = "ui.stop_and_close"
                     }
-                    Button(localized("ui.stop_and_close")) {
+                    Button(localized(viewModel.closeConfirmationConfirmKey)) {
                         let action = viewModel.closeConfirmationAction
                         viewModel.showCloseConfirmation = false
                         viewModel.closeConfirmationAction = nil
+                        viewModel.closeConfirmationConfirmKey = "ui.stop_and_close"
                         action?()
                     }
                     .foregroundColor(.red)

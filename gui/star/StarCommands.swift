@@ -59,6 +59,24 @@ struct StarCommands: Commands {
                   .environment(viewModel)
                 ProcessRemainingFramesButton()
                   .environment(viewModel)
+                // Process Current Frame: the desktop client's command, which the gui lacked (owner decision D9).
+                Button(localized("ui.process_current_frame")) {
+                    viewModel.processFrames(from: viewModel.currentIndex, to: viewModel.currentIndex)
+                }
+                  .disabled(viewModel.isProcessingModalUp)
+                Button(localized("ui.cancel_processing")) {
+                    viewModel.stopProcessing()
+                }
+                  .disabled(!viewModel.isProcessingFrames)
+                Button(localized("ui.processing_settings_2")) {
+                    viewModel.shouldShowProcessingSettings = true
+                }
+                  .keyboardShortcut(",", modifiers: [.command, .shift])
+                  .disabled(viewModel.isProcessingModalUp)
+                Button(localized("ui.render_video_2")) {
+                    viewModel.renderVideoSheetShowing = true
+                }
+                  .disabled(viewModel.isProcessingModalUp || viewModel.isRenderingVideo)
                 ReProcessCurrentFrameButton()
                   .environment(viewModel)
                 FindOutliersOnCurrentFrameButton()            
@@ -167,12 +185,36 @@ struct StarCommands: Commands {
                     viewModel.toggleSidePanels()
                 }
                 .environment(viewModel)
+
+                // Toggle Filmstrip and Play / Pause: desktop-client menu items the gui lacked (D9).  Space still plays and
+                // pauses from the transport buttons; this is the menu's way to the same thing.
+                Button(localized("ui.toggle_filmstrip")) {
+                    viewModel.showFilmstrip.toggle()
+                }
+                .environment(viewModel)
+                Button(localized("ui.play_pause")) {
+                    viewModel.videoPlayMode = .forward
+                    viewModel.togglePlay()
+                }
+                .environment(viewModel)
+                .disabled(!viewModel.menuHotkeysEnabled)
             }
             
         }
 
-        // remove File -> New Window
-        CommandGroup(replacing: .newItem) { }
+        // File -> New Window is replaced by the ways to open a source, which the desktop client's File menu has always had (D9)
+        CommandGroup(replacing: .newItem) {
+            Button(localized("ui.open_image_sequence")) {
+                viewModel.requestOpen(.imageSequence)
+            }
+              .keyboardShortcut("o", modifiers: [.command])
+            Button(localized("ui.open_video")) {
+                viewModel.requestOpen(.video)
+            }
+            Button(localized("ui.resume_from_config_json")) {
+                viewModel.requestOpen(.config)
+            }
+        }
 
         // replace File -> Close
         CommandGroup(replacing: .saveItem) {
@@ -191,6 +233,7 @@ struct StarCommands: Commands {
                     }
                 }
             }
+              .keyboardShortcut("w", modifiers: [.command])
         }
 
         // Add Preferences to the app menu
