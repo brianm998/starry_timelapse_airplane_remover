@@ -2845,6 +2845,29 @@ public struct Star_V1_SetFrameCleanMethodRequest: Sendable {
   public init() {}
 }
 
+/// Frame.FindOutliers: find one frame's outlier groups again, inline: no processing run and no processing screen, as the macOS gui's "Find outliers
+/// for this frame" and "Re-process this frame from the start" do. The frame's own steps: empty groups, find them, the decision tree over them, and
+/// the finished image written at once. Its progress is the frame's own state events. Answered, with the frame, when it is done. Refused while a
+/// run is going (the run is working on the same frames). With `start_over` what `reprocessing_type` throws away is deleted first, and the frame's
+/// outlier data with it ("re-process"); without it the frame's alignment and the rest are kept ("find outliers").
+public struct Star_V1_FindFrameOutliersRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var frameIndex: Int32 = 0
+
+  public var startOver: Bool = false
+
+  public var reprocessingType: Star_V1_ReprocessingType = .reprocessNone
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct Star_V1_OutlierGroupList: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -7673,6 +7696,51 @@ extension Star_V1_SetFrameCleanMethodRequest: SwiftProtobuf.Message, SwiftProtob
     if lhs.sessionID != rhs.sessionID {return false}
     if lhs.frameIndex != rhs.frameIndex {return false}
     if lhs.cleanMethod != rhs.cleanMethod {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension Star_V1_FindFrameOutliersRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FindFrameOutliersRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_index\0\u{3}start_over\0\u{3}reprocessing_type\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.frameIndex) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.startOver) }()
+      case 4: try { try decoder.decodeSingularEnumField(value: &self.reprocessingType) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if self.frameIndex != 0 {
+      try visitor.visitSingularInt32Field(value: self.frameIndex, fieldNumber: 2)
+    }
+    if self.startOver != false {
+      try visitor.visitSingularBoolField(value: self.startOver, fieldNumber: 3)
+    }
+    if self.reprocessingType != .reprocessNone {
+      try visitor.visitSingularEnumField(value: self.reprocessingType, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Star_V1_FindFrameOutliersRequest, rhs: Star_V1_FindFrameOutliersRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.frameIndex != rhs.frameIndex {return false}
+    if lhs.startOver != rhs.startOver {return false}
+    if lhs.reprocessingType != rhs.reprocessingType {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

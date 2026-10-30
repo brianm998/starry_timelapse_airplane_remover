@@ -266,6 +266,25 @@ enum FrameHandlers {
         }
     }
 
+    /// `Frame.FindOutliers`: find a frame's outlier groups again, inline (see the proto).
+    static func findOutliers(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
+        do {
+            let req = try Star_V1_FindFrameOutliersRequest(serializedBytes: payload)
+            guard let session = await sessions.get(id: req.sessionID) else {
+                await transport.sendError(id: id, message: "session not found", code: 404); return
+            }
+            guard let frame = await session.frame(at: Int(req.frameIndex)) else {
+                await transport.sendError(id: id, message: "frame index out of range", code: 404); return
+            }
+            try await session.findOutliers(of: frame, startOver: req.startOver, type: Mapping.reprocessingType(req.reprocessingType))
+            let groups = await frame.getOutlierGroups()
+            let fi = await session.frameInfo(frame, outlierGroups: groups)
+            try await transport.respond(id: id, payload: fi.serializedData())
+        } catch {
+            await transport.sendError(id: id, message: "\(error)")
+        }
+    }
+
     // A frame's own neighbour count: set, or taken away so the sequence's applies again.
     static func setNeighborOverride(id: UInt64, payload: Data, transport: StdioTransport, sessions: SessionManager) async {
         do {

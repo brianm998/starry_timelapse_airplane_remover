@@ -125,6 +125,7 @@ extension Dispatcher {
         register(method: "Frame.GetOutlierTrashImage"){ id, payload, transport in await FrameHandlers.getOutlierTrashImage(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Frame.SetNeighborOverride") { id, payload, transport in await FrameHandlers.setNeighborOverride(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
         register(method: "Frame.SetCleanMethod")      { id, payload, transport in await FrameHandlers.setCleanMethod(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
+        register(method: "Frame.FindOutliers")      { id, payload, transport in await FrameHandlers.findOutliers(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
 
         // Outlier
         register(method: "Outlier.List")         { id, payload, transport in await OutlierHandlers.list(id: id, payload: payload, transport: transport, sessions: s); await t.taskCompleted(id: id) }
