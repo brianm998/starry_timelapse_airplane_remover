@@ -42,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.modalScrim
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.domain.RenderState
 import com.star.desktop.domain.RenderVideo
 import com.star.desktop.i18n.localized
@@ -71,7 +73,9 @@ fun RenderVideoDialog(app: AppViewModel) {
     val rendering = state is RenderState.Rendering
 
     Box(
-        Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = !rendering, onClick = app::closeRenderVideo),
+        // Esc closes it, except while a render is going (its own Cancel is what stops that); a click outside the card does not.
+        Modifier.fillMaxSize().background(StarColors.scrim).modalScrim()
+            .defaultAction({}, onEscape = { if (!rendering) app.closeRenderVideo() }),
         contentAlignment = Alignment.Center,
     ) {
         Column(

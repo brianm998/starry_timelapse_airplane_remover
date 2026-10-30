@@ -48,6 +48,7 @@ import com.star.desktop.ui.components.AlignmentInfoButton
 import com.star.desktop.ui.components.AlignmentInfoOverlay
 import com.star.desktop.ui.components.DeviationChart
 import com.star.desktop.ui.components.HoverTip
+import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -89,7 +90,8 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     val cameraMoving = session?.config?.tripodHeadWasMoving == true
     var showingInfo by remember { mutableStateOf(false) }
 
-    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
+    // Return is the Preview button, the sheet's default one in the gui.
+    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}.defaultAction(svm::dismissProcessingModal), contentAlignment = Alignment.Center) {
         Column(
             Modifier
                 .widthIn(min = 480.dp, max = 640.dp)
@@ -134,9 +136,14 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                     )
                 }
                 Box(Modifier.weight(1f))
-                Text(localized("ui.preview_while_processing_help"), color = StarColors.white.copy(alpha = 0.7f), fontSize = 11.sp, modifier = Modifier.widthIn(max = 320.dp))
-                Button(onClick = svm::dismissProcessingModal, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
-                    Text(localized("ui.preview"))
+                Text(
+                    localized("ui.preview_while_processing_help"), color = StarColors.white, fontSize = 11.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(max = 320.dp),
+                )
+                HoverTip(localized("ui.preview_while_processing_help")) {
+                    Button(onClick = svm::dismissProcessingModal, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
+                        Text(localized("ui.preview"))
+                    }
                 }
             }
         }
