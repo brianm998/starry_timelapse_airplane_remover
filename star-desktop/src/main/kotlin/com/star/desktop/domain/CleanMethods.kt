@@ -35,3 +35,24 @@ object CleanMethodChoice {
         HighLevelClean.AUTOMATIC -> if (autoPreservation) CleanMethod.CLEAN_AUTOMATIC_TRUE else CleanMethod.CLEAN_AUTOMATIC
     }
 }
+
+/**
+ * The catalogue keys under the settings sheet's two clean-method rows, as the macOS sheet's `HighLevelCleanMethod` and `AutoPreservationMode`
+ * read them (`gherkin/ui/vectors/constants.json`, `cleanMethod.texts`): a hover text on each choice and the paragraph under the row's (i).
+ * The paragraphs were already the desktop's; the hover texts are the gui's, which were English paragraphs written in StarCore.
+ */
+object CleanMethodTexts {
+    fun tipKey(choice: HighLevelClean): String = when (choice) {
+        HighLevelClean.AUTOMATIC -> "ui.clean_method_tip.automatic"
+        HighLevelClean.SELECTIVE -> "ui.clean_method_tip.selective"
+    }
+
+    fun descriptionKey(choice: HighLevelClean): String = when (choice) {
+        HighLevelClean.AUTOMATIC -> "ui.mode_desc_automatic"
+        HighLevelClean.SELECTIVE -> "ui.mode_desc_selective"
+    }
+
+    fun autoPreservationTipKey(yes: Boolean): String = if (yes) "ui.selective_auto_clean_tip.yes" else "ui.selective_auto_clean_tip.no"
+
+    fun autoPreservationDescriptionKey(yes: Boolean): String = if (yes) "ui.mode_desc_auto_selective" else "ui.mode_desc_automatic"
+}

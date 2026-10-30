@@ -3617,6 +3617,41 @@ final class SharedConstantsTests: XCTestCase {
         }
     }
 
+    /// I1: the title, hover text and paragraph under each clean-method row are catalogue keys the desktop's sheet reads too (they were English
+    /// paragraphs written in StarCore, so a German gui showed English under a German heading).
+    func testTheCleanMethodTextsAreTheDesktopsAndTranslated() throws {
+        defer { StarLocalization.shared.languageOverride = nil }
+        let texts = try XCTUnwrap(try XCTUnwrap(try doc()["cleanMethod"] as? [String: Any])["texts"] as? [String: Any])
+        let clean = try XCTUnwrap(texts["cleanMethod"] as? [String: [String: String]])
+        let auto = try XCTUnwrap(texts["selectiveAutoClean"] as? [String: [String: String]])
+        for language in ["en", "de"] {
+            StarLocalization.shared.languageOverride = language
+            for (name, option) in [("automatic", HighLevelCleanMethod.automatic), ("selective", .selective)] {
+                let keys = try XCTUnwrap(clean[name])
+                XCTAssertEqual(option.titleText, localized(try XCTUnwrap(keys["title"])), "\(name) in \(language)")
+                XCTAssertEqual(option.helpText, localized(try XCTUnwrap(keys["tip"])), "\(name) in \(language)")
+                XCTAssertEqual(option.descriptionText, localized(try XCTUnwrap(keys["description"])), "\(name) in \(language)")
+            }
+            for (name, option) in [("yes", AutoPreservationMode.yes), ("no", .no)] {
+                let keys = try XCTUnwrap(auto[name])
+                XCTAssertEqual(option.titleText, localized(try XCTUnwrap(keys["title"])), "\(name) in \(language)")
+                XCTAssertEqual(option.helpText, localized(try XCTUnwrap(keys["tip"])), "\(name) in \(language)")
+                XCTAssertEqual(option.descriptionText, localized(try XCTUnwrap(keys["description"])), "\(name) in \(language)")
+            }
+        }
+        // Every one of them is a real catalogue entry, and German is not English.
+        for keys in Array(clean.values) + Array(auto.values) {
+            for key in ["tip", "description"] {
+                let name = try XCTUnwrap(keys[key])
+                StarLocalization.shared.languageOverride = "en"
+                let english = localized(name)
+                StarLocalization.shared.languageOverride = "de"
+                XCTAssertNotEqual(english, name, "\(name) is missing from the catalogue")
+                XCTAssertNotEqual(localized(name), english, "\(name) is English in German")
+            }
+        }
+    }
+
     /// P6: the two questions behind a clean method, as the desktop's `CleanMethodChoice` puts them together.
     func testTheCleanMethodChoiceIsTheDesktops() throws {
         let rule = try XCTUnwrap(try doc()["cleanMethod"] as? [String: Any])

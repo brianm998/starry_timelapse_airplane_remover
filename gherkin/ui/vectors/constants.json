@@ -119,6 +119,33 @@
         "method": "selective",
         "expected": true
       }
-    ]
+    ],
+    "texts": {
+      "comment": "The catalogue keys under the two rows: the choice's title, its hover text, and the paragraph under the row's (i). Both clients read these.",
+      "cleanMethod": {
+        "automatic": {
+          "title": "ui.automatic",
+          "tip": "ui.clean_method_tip.automatic",
+          "description": "ui.mode_desc_automatic"
+        },
+        "selective": {
+          "title": "ui.selective",
+          "tip": "ui.clean_method_tip.selective",
+          "description": "ui.mode_desc_selective"
+        }
+      },
+      "selectiveAutoClean": {
+        "yes": {
+          "title": "ui.yes",
+          "tip": "ui.selective_auto_clean_tip.yes",
+          "description": "ui.mode_desc_auto_selective"
+        },
+        "no": {
+          "title": "ui.no",
+          "tip": "ui.selective_auto_clean_tip.no",
+          "description": "ui.mode_desc_automatic"
+        }
+      }
+    }
   }
 }

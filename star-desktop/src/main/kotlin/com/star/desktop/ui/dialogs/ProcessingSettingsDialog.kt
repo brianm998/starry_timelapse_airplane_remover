@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.CleanMethodChoice
+import com.star.desktop.domain.CleanMethodTexts
 import com.star.desktop.domain.FieldInput
 import com.star.desktop.domain.HighLevelClean
 import com.star.desktop.domain.SettingsChange
@@ -138,8 +139,8 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
             SettingGroup(
                 localized("ui.clean_method"), info = info, infoId = "clean",
                 help = choicesHelp(
-                    localized("ui.automatic") to localized("ui.mode_desc_automatic"),
-                    localized("ui.selective") to localized("ui.mode_desc_selective"),
+                    localized("ui.automatic") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.AUTOMATIC)),
+                    localized("ui.selective") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.SELECTIVE)),
                 ),
             ) {
                 Segmented(
@@ -147,6 +148,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                         HighLevelClean.AUTOMATIC to localized("ui.automatic"),
                         HighLevelClean.SELECTIVE to localized("ui.selective"),
                     ),
+                    tip = { localized(CleanMethodTexts.tipKey(it)) },
                     selected = CleanMethodChoice.highLevel(clean),
                     onSelect = { clean = CleanMethodChoice.method(it, autoPreserve) },
                 )
@@ -228,12 +230,13 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                     localized("ui.selective_auto_clean").removeSuffix(":"), enabled = clean != CleanMethod.CLEAN_SELECTIVE,
                     info = info, infoId = "autoselective",
                     help = choicesHelp(
-                        localized("ui.yes") to localized("ui.mode_desc_auto_selective"),
-                        localized("ui.no") to localized("ui.mode_desc_automatic"),
+                        localized("ui.yes") to localized(CleanMethodTexts.autoPreservationDescriptionKey(true)),
+                        localized("ui.no") to localized(CleanMethodTexts.autoPreservationDescriptionKey(false)),
                     ),
                 ) {
                     Segmented(
                         options = listOf(true to localized("ui.yes"), false to localized("ui.no")),
+                        tip = { localized(CleanMethodTexts.autoPreservationTipKey(it)) },
                         selected = autoPreserve,
                         onSelect = {
                             autoPreserve = it

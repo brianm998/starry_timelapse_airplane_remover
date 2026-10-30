@@ -60,21 +60,23 @@ public enum HighLevelCleanMethod: InstructionOption,
     /// The row's heading, from the catalogue: the same "Clean Method" the desktop's settings sheet has, with the colon the other rows' headings carry.
     public static var topTitle: String { localized("ui.clean_method") + ":" }
     
+    /// The hover text on the choice and the text under the row's (i), from the catalogue. The desktop's settings sheet reads the same keys
+    /// (`gherkin/ui/vectors/constants.json`, `cleanMethod.texts`); these were English paragraphs written here.
     public var helpText: String {
         switch self {
         case .automatic:
-            "Fully automatic removal of airplanes/satellites; replaces each frame with a clean median composite."
+            localized("ui.clean_method_tip.automatic")
         case .selective:
-            "Selective Clean – Detects only streak-like outliers and lets you decide which to remove; good for clouds or when you want control."
+            localized("ui.clean_method_tip.selective")
         }
     }
 
     public var descriptionText: String {
         switch self {
         case .automatic:
-            "This mode automatically builds a clean “best version” of every frame using neighboring frames. It removes streaks extremely well when skies are clear. It requires almost no user input and is faster to use, but it can struggle around dawn/dusk and may distort fast-moving clouds."
+            localized("ui.mode_desc_automatic")
         case .selective:
-            "This mode compares each original frame to a clean reference frame and highlights only the differences that look like airplane or satellite streaks. You can review and approve these changes. It works better when clouds are present or when you want to keep certain objects (like meteors). It takes more interaction but gives you finer control."
+            localized("ui.mode_desc_selective")
         }
     }
 }
@@ -107,9 +109,9 @@ public enum AutoPreservationMode: String, InstructionOption, Identifiable {
     public var helpText: String {
         switch self {
         case .yes:
-            "Apply Selective Clean after Auto Clean to keep important objects from the original frame."
+            localized("ui.selective_auto_clean_tip.yes")
         case .no:
-            "Use pure Auto Clean with full automatic replacement."
+            localized("ui.selective_auto_clean_tip.no")
         }
     }
 
@@ -132,9 +134,9 @@ public enum AutoPreservationMode: String, InstructionOption, Identifiable {
     public var descriptionText: String {
         switch self {
         case .yes:
-            "After Auto Clean creates a streak-free frame, Selective Clean can be run in reverse to restore specific bright events—such as meteors or flares—from the original footage. This lets you keep rare celestial events while still removing planes and satellites."
+            localized("ui.mode_desc_auto_selective")
         case .no:
-            "The processor will use the fully automatic method only. This gives the cleanest sky possible but removes all bright moving objects, including meteors."
+            localized("ui.mode_desc_automatic")
         }
     }
 }

@@ -5,6 +5,7 @@ import com.google.gson.JsonParser
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Layer 0 of the parity plan (§6.2.4): `WorkingLocation` and `KeypointDivisor` hold numbers StarCore owns, copied by hand.
@@ -39,6 +40,27 @@ class SharedConstantsTest {
     /** Q7: the playback speeds the Display picker offers are the same in both clients. */
     @Test fun thePlaybackRatesAreTheGuis() {
         assertEquals(doc.getAsJsonArray("playbackFrameRates").map { it.asInt }, PlaybackRates.choices)
+    }
+
+    /** I1: the hover text and the paragraph under each clean-method row are the gui's (the same catalogue keys), and the sheet uses them. */
+    @Test fun theCleanMethodTextsAreTheGuis() {
+        val texts = doc.getAsJsonObject("cleanMethod").getAsJsonObject("texts")
+        val clean = texts.getAsJsonObject("cleanMethod")
+        for ((name, choice) in listOf("automatic" to HighLevelClean.AUTOMATIC, "selective" to HighLevelClean.SELECTIVE)) {
+            assertEquals(clean.getAsJsonObject(name)["tip"].asString, CleanMethodTexts.tipKey(choice), name)
+            assertEquals(clean.getAsJsonObject(name)["description"].asString, CleanMethodTexts.descriptionKey(choice), name)
+        }
+        val auto = texts.getAsJsonObject("selectiveAutoClean")
+        for ((name, yes) in listOf("yes" to true, "no" to false)) {
+            assertEquals(auto.getAsJsonObject(name)["tip"].asString, CleanMethodTexts.autoPreservationTipKey(yes), name)
+            assertEquals(auto.getAsJsonObject(name)["description"].asString, CleanMethodTexts.autoPreservationDescriptionKey(yes), name)
+        }
+        val dialog = listOf(File("src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingSettingsDialog.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingSettingsDialog.kt"))
+            .first { it.isFile }.readText()
+        assertTrue("tip = { localized(CleanMethodTexts.tipKey(it)) }" in dialog)
+        assertTrue("tip = { localized(CleanMethodTexts.autoPreservationTipKey(it)) }" in dialog)
+        assertTrue("CleanMethodTexts.descriptionKey(HighLevelClean.AUTOMATIC)" in dialog)
+        assertTrue("CleanMethodTexts.autoPreservationDescriptionKey(true)" in dialog)
     }
 
     @Test fun theKeypointDivisorChoicesAreTheStartupPromptsAndStarCores() {
