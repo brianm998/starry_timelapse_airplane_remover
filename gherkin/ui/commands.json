@@ -1,0 +1,137 @@
+{
+  "comment": "Every menu command both clients must offer, by the catalogue key of its label (the gui's wording, owner decision D9). Each client's unit test checks that its menu code uses the key; a command added to one client only fails the other's test until it is added here and there. A command one client genuinely cannot offer goes in knownGaps with the reason, and the entry must be removed when it is no longer true.",
+  "commands": [
+    {
+      "id": "closeSequence",
+      "label": "ui.close"
+    },
+    {
+      "id": "openImageSequence",
+      "label": "ui.open_image_sequence"
+    },
+    {
+      "id": "openVideo",
+      "label": "ui.open_video"
+    },
+    {
+      "id": "resumeFromConfig",
+      "label": "ui.resume_from_config_json"
+    },
+    {
+      "id": "editMode",
+      "label": "ui.edit_mode"
+    },
+    {
+      "id": "scrubMode",
+      "label": "ui.scrub_mode"
+    },
+    {
+      "id": "gridMode",
+      "label": "ui.grid_mode"
+    },
+    {
+      "id": "toggleSidePanels",
+      "label": "ui.toggle_side_panels"
+    },
+    {
+      "id": "toggleFilmstrip",
+      "label": "ui.toggle_filmstrip"
+    },
+    {
+      "id": "playPause",
+      "label": "ui.play_pause"
+    },
+    {
+      "id": "processAllFrames",
+      "label": "ui.process_all_frames"
+    },
+    {
+      "id": "processFramesFromHere",
+      "label": "ui.process_frames_from_here_to_the_end"
+    },
+    {
+      "id": "processCurrentFrame",
+      "label": "ui.process_current_frame"
+    },
+    {
+      "id": "reprocessCurrentFrame",
+      "label": "ui.re_process_this_frame_from_the_start"
+    },
+    {
+      "id": "findOutliersCurrentFrame",
+      "label": "ui.find_outliers_for_this_frame"
+    },
+    {
+      "id": "decisionTreeAll",
+      "label": "ui.decision_tree_all"
+    },
+    {
+      "id": "decisionTreeAutoOnly",
+      "label": "ui.dt_auto_only"
+    },
+    {
+      "id": "decisionTreeAllFrames",
+      "label": "ui.decision_tree_all_frames"
+    },
+    {
+      "id": "renderThisFrame",
+      "label": "ui.render_this_frame"
+    },
+    {
+      "id": "renderAllFrames",
+      "label": "ui.render_all_frames"
+    },
+    {
+      "id": "cancelProcessing",
+      "label": "ui.cancel_processing"
+    },
+    {
+      "id": "processingSettings",
+      "label": "ui.processing_settings_2"
+    },
+    {
+      "id": "renderVideo",
+      "label": "ui.render_video_2"
+    },
+    {
+      "id": "blobWindow",
+      "label": "ui.blob_processing_window"
+    },
+    {
+      "id": "outlierWindow",
+      "label": "ui.outlier_information_window"
+    },
+    {
+      "id": "alignmentWindow",
+      "label": "ui.alignment_information_window"
+    },
+    {
+      "id": "debugWindow",
+      "label": "ui.debug_window"
+    },
+    {
+      "id": "paintHorizon",
+      "label": "ui.paint_horizon_reference"
+    },
+    {
+      "id": "closeHorizonPainter",
+      "label": "ui.close_horizon_painter"
+    },
+    {
+      "id": "keepAll",
+      "label": "ui.keep_all"
+    },
+    {
+      "id": "removeAll",
+      "label": "ui.remove_all"
+    },
+    {
+      "id": "clearUndecided",
+      "label": "ui.clear_undecided"
+    }
+  ],
+  "knownGaps": {
+    "gui": {},
+    "desktop": {}
+  }
+}

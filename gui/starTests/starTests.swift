@@ -3325,3 +3325,84 @@ final class NoHardCodedStringsTests: XCTestCase {
         XCTAssertEqual(Self.hardCodedStrings(in: #"// Text("Process all frames")"#), [])
     }
 }
+
+/// Q10 of the parity plan (owner decision D14): fast advancement loads a frame's outliers when their counts are not known and goes on
+/// scanning, instead of stopping on the first such frame.
+final class FastAdvancementSkipTests: XCTestCase {
+    private func skips(_ type: FastAdvancementType, _ p: Int?, _ n: Int?, _ u: Int?, views: Int? = nil) -> Bool? {
+        ImageSequenceViewModel.skipsFrame(type, positive: p, negative: n, undecided: u, viewCount: views)
+    }
+
+    func testNormalNeverSkips() {
+        XCTAssertEqual(skips(.normal, 0, 0, 0), false)
+        XCTAssertEqual(skips(.normal, nil, nil, nil), false)
+    }
+
+    func testUnknownCountsAreNotNothing() {
+        for type in [FastAdvancementType.skipEmpties, .toNextPositive, .toNextNegative, .toNextUnknown] {
+            XCTAssertNil(skips(type, nil, nil, nil), "\(type)")
+        }
+    }
+
+    func testEachTypeLooksAtItsOwnCount() {
+        XCTAssertEqual(skips(.toNextPositive, 0, 3, 3), true)
+        XCTAssertEqual(skips(.toNextPositive, 1, 0, 0), false)
+        XCTAssertEqual(skips(.toNextNegative, 3, 0, 3), true)
+        XCTAssertEqual(skips(.toNextUnknown, 3, 3, 0), true)
+        XCTAssertEqual(skips(.toNextUnknown, 0, 0, 2), false)
+    }
+
+    func testSkipEmptiesAddsThemUpAndFallsBackToTheViews() {
+        XCTAssertEqual(skips(.skipEmpties, 0, 0, 0), true)
+        XCTAssertEqual(skips(.skipEmpties, 0, 1, 0), false)
+        XCTAssertEqual(skips(.skipEmpties, nil, nil, nil, views: 0), true)
+        XCTAssertEqual(skips(.skipEmpties, nil, nil, nil, views: 4), false)
+    }
+}
+
+/// Layer 0 of the parity plan: `gherkin/ui/commands.json` lists the menu commands both clients offer, by the catalogue key of the label.
+/// The gui's menu code has to use every one (a command added to the desktop client only is a failure here), and a known gap has to
+/// still be a gap.  The Kotlin client's `CommandTableTest` reads the same file.
+final class CommandTableTests: XCTestCase {
+    private static var repoRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // starTests
+            .deletingLastPathComponent()   // gui
+            .deletingLastPathComponent()   // repo
+    }
+
+    private func table() throws -> (commands: [(id: String, label: String)], gaps: Set<String>) {
+        let url = Self.repoRoot.appendingPathComponent("gherkin/ui/commands.json")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let list = try XCTUnwrap(object["commands"] as? [[String: String]])
+        let gaps = (object["knownGaps"] as? [String: Any])?["gui"] as? [String: Any] ?? [:]
+        return (list.map { ($0["id"] ?? "", $0["label"] ?? "") }, Set(gaps.keys))
+    }
+
+    /// Where the gui's menus are built: the commands, the app's window list, and the buttons the menus hold.
+    private func menuSource() throws -> String {
+        let dir = Self.repoRoot.appendingPathComponent("gui/star")
+        let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+            .filter { ($0 == "StarCommands.swift" || $0 == "StarApp.swift" || ($0.contains("Button") && $0.hasSuffix(".swift"))) && !$0.hasPrefix(".") }
+        XCTAssertTrue(names.contains("StarCommands.swift"), "the menu source moved")
+        return try names.map { try String(contentsOf: dir.appendingPathComponent($0), encoding: .utf8) }.joined(separator: "\n")
+    }
+
+    func testEveryCommandIsInTheGuisMenuOrIsAKnownGap() throws {
+        let (commands, gaps) = try table()
+        let source = try menuSource()
+        let missing = commands.filter { !source.contains("\"\($0.label)\"") && !gaps.contains($0.id) }.map { "\($0.id) (\($0.label))" }
+        XCTAssertEqual(missing, [], "menu commands the desktop client has and the gui's menu lacks")
+    }
+
+    func testAKnownGapIsStillAGap() throws {
+        let (commands, gaps) = try table()
+        let source = try menuSource()
+        let stale = commands.filter { gaps.contains($0.id) && source.contains("\"\($0.label)\"") }.map { $0.id }
+        XCTAssertEqual(stale, [], "known gaps that are closed, to be removed from commands.json")
+    }
+
+    func testTheTableIsNotEmpty() throws {
+        XCTAssertGreaterThan(try table().commands.count, 20)
+    }
+}
