@@ -63,7 +63,7 @@ object ProcessingHeadline {
     /** What [type] is doing and why, as one sentence; the longer account is the step's hover help. */
     fun activity(type: String): String = ACTIVITY[type]?.let { localized(it) } ?: ""
 
-    /** [hasPlan] is whether the daemon has reported the run's operations yet; until then every step reads as empty, which is planning, not nothing to do. */
+    /** [hasPlan] is whether the run's plan is complete (the report's `graph_built`); until then every step reads as empty, which is planning, not nothing to do. */
     fun text(
         steps: List<StepRow>,
         extraction: FrameExtraction?,

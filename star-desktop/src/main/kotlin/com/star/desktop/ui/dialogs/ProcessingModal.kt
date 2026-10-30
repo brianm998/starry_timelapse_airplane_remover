@@ -61,6 +61,13 @@ private val SETTLED = Color(0.68f, 0.68f, 0.68f)
 private val COUNT_WIDTH = NUMBER_WIDTH * 3
 
 /**
+ * Whether this run's plan is complete, which is what the report's `graph_built` says. A report arrives as soon as the run starts, with every
+ * step listed and nothing done, so having one is not having a plan: until the plan is built the headline reads "planning", not "finishing up"
+ * (macOS: `graphBuildsCompleted > processingBuildCount`).
+ */
+internal fun hasPlan(report: com.star.proto.StepProgress?): Boolean = report?.graphBuilt == true
+
+/**
  * Processing progress screen (macOS `ProcessingModalView`): what each step of the run is doing, in one bar each (done, running, still
  * queued) with "N of M complete" and what the step is on hover, how many frames are finished, how much of this Mac the run may use,
  * a Stop (cancels the run) and a Dismiss that only hides this screen: the run keeps going, so the user can look at the frames that are done.
@@ -75,7 +82,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     // Fed each time the counts change; not state the screen draws, so updating it asks for no further pass.
     val rates = remember { StepRateTracker() }
     rates.observe(rows)
-    val headline = ProcessingHeadline.text(rows, extraction, report != null, counts.complete, svm.frameCount)
+    val headline = ProcessingHeadline.text(rows, extraction, hasPlan(report), counts.complete, svm.frameCount)
     val overall = ProcessingHeadline.overallText(rows) { rates.secondsRemaining(it) }
     val estimates = rows.mapNotNull { row -> rates.secondsRemaining(row)?.let { row.type to it } }.toMap()
     val session by app.sessions.session.collectAsState()
