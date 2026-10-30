@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.numberFieldRules
 import com.star.desktop.domain.FastAdvancementType
 import com.star.desktop.domain.ToolType
 import com.star.desktop.domain.usesOutliers
@@ -377,12 +378,7 @@ private fun NeighborCountEditor(
                     .clip(RoundedCornerShape(3.dp))
                     .background(StarColors.cellDefault)
                     .padding(horizontal = 4.dp, vertical = 2.dp)
-                    .onPreviewKeyEvent { e ->
-                        if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
-                            (e.key == androidx.compose.ui.input.key.Key.Enter || e.key == androidx.compose.ui.input.key.Key.NumPadEnter)
-                        ) { commit(); true } else false
-                    }
-                    .onFocusChanged { if (!it.isFocused) commit() },
+                    .numberFieldRules(commit = { commit() }, revert = { text = count.toString() }),
             )
             Text(localized(suffixKey), color = color, fontSize = 11.sp)
         }
@@ -473,10 +469,7 @@ private fun ZoomControls(vm: SequenceViewModel) {
             Text(localized("ui.slider.max_zoom_prefix"), color = StarColors.textSecondary, fontSize = 11.sp)
             androidx.compose.foundation.text.BasicTextField(
                 value = maxText,
-                onValueChange = {
-                    maxText = it
-                    it.toFloatOrNull()?.let { v -> if (v >= fit && v <= FrameTransform.MAX_SCALE_LIMIT) t.setMaxScale(v, canvas) }
-                },
+                onValueChange = { maxText = it },
                 singleLine = true,
                 textStyle = androidx.compose.ui.text.TextStyle(color = if (valid) StarColors.white else StarColors.red, fontSize = 11.sp),
                 cursorBrush = SolidColor(StarColors.white),
@@ -484,7 +477,15 @@ private fun ZoomControls(vm: SequenceViewModel) {
                     .width(40.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(StarColors.cellDefault)
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    // Applied on Return or leaving the field, not on each key (the gui's rule): a number is not the user's answer until it is done.
+                    .numberFieldRules(
+                        commit = {
+                            if (valid && parsed != null) { if (parsed != t.maxScale) t.setMaxScale(parsed, canvas) }
+                            else maxText = formatScale(t.maxScale)
+                        },
+                        revert = { maxText = formatScale(t.maxScale) },
+                    ),
             )
         }
     }
