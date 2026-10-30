@@ -398,8 +398,9 @@ R2 and R3 cover its median (26% of the stage) and remaps (63% of its layer build
    outside their band: base-frame pixels, or a full merge built on demand when viewed?
 2. **R2.** Is runtime AVX2 dispatch acceptable in the shipped x86 binary? Every Intel Mac
    that runs macOS 13 has AVX2; the Windows/Linux daemon builds would dispatch at runtime too.
-3. **GPU merges** are off in your prefs on this Vega. Permanent until the Mac Studio? If so,
-   R2–R4 and R9 are the merge phase's speed for now.
+3. **GPU merges** *(Answered 2026-10-30: they stay off on the Vega until the Mac Studio is the main
+   machine, so R2–R4 and R9 are the merge phase's speed for now.)* Off in your prefs on this Vega.
+   Permanent until the Mac Studio? If so, R2–R4 and R9 are the merge phase's speed for now.
 4. **Output compression.** *(Answered 2026-10-30: adaptive — uncompressed unless LZW takes a tenth
    off. Built; see 6.1.)* LZW on the final TIFF is 12.7% of the cli's merge CPU and saves
    0–8% of disk on this data. Keep it, make uncompressed an option, or change the default?
@@ -641,8 +642,9 @@ night-sky noise does not compress. Q4 in section 5 is therefore sharper than it 
 
 ### 6.4 Not done, and why
 
-* **R4** is done for the earth merge (6.1), moving and static. Not attempted: the *star* merge's
-  band (skip the ground rows below the horizon plus the cloud stage's 300-row margin). It is the
+* **R4** is done for the earth merge (6.1), moving and static. **Dropped by Brian, 2026-10-30:** the
+  *star* merge's band (skip the ground rows below the horizon plus the cloud stage's 300-row margin);
+  not worth the audit below for what it saves. It is the
   smaller half — about 10 % of that merge's rows — and unlike the earth band it sits under the cloud
   stage, whose noise sigma is taken from the base frame's sky alone (so unaffected) but whose error
   map, trusted region, blurs and relative test read merged rows across the sky and a margin; showing
@@ -653,7 +655,9 @@ night-sky noise does not compress. Q4 in section 5 is therefore sharper than it 
   readback storage with a release callback, and a pool that today recycles buffers the moment
   the copy is done would hold them for the life of every level — a memory-footprint change that
   has to be measured on the Vega *and* on Apple Silicon before it ships. Neither is worth doing
-  without that measurement, and neither is blocked by anything here.
+  without that measurement, and neither is blocked by anything here. Instructions for the Apple
+  Silicon machine are in `plans/R7_APPLE_SILICON_HANDOFF.md` (its step 0: the pyramid textures
+  are created `.managed`, which Apple Silicon does not have, so the GPU path may not run there yet).
 * **R8**'s earth gradient-mask cache — declined on measurement: `createGradientMaskIntoSky` is
   already the tuned form (its own comment: 308 ms a call at 42 MP, ~0.2 s at 24 MP) against
   ~60 CPU-s a frame, and the two uses take different gradient distances (100 and 24), so a cache
@@ -661,10 +665,11 @@ night-sky noise does not compress. Q4 in section 5 is therefore sharper than it 
 * **R9**: the map lambda, the float-map `remap` with its coverage probe, and the box blurs are done
   (6.1). Not done: `lumaDownRows` (4.2 % of busy samples; per-pixel float sums in a fixed order
   over 4×4 blocks of interleaved 16-bit BGR, so vectorising across pixels needs a deinterleave;
-  not attempted), `medianBlur` (OpenCV's own,
+  declined: 2.8 % of busy samples over the whole run, a measured ~0.5 % of a frame's CPU),
+  `medianBlur` (OpenCV's own,
   already AVX2), and the **Apple Silicon** port of the stack to the Metal merge kernel, which has to
   be measured on the Mac Studio. On arm64 the cloud stage keeps `cv::remap` and the scalar box blur
   (`STAR_EXACT_WARP` is x86-64 only), the same as the warps. And `interpolateBlockAvx2` got its eight-pixel form (6.1): 1.15–1.2×, less than a count of its µops promised.
 * **R10**: measured (6.3) — no change to Full's width or to the ledger's merge estimate. The
   3½-minute silence is not explained; the stall watch's rule was the thing that could be fixed.
-* **Q4** (LZW on the final TIFF) is yours.
+* **Q4** (LZW on the final TIFF) was answered 2026-10-30 (adaptive) and is built; see 6.1.
