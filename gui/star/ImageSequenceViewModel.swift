@@ -290,7 +290,9 @@ public final class ImageSequenceViewModel {
     var renderingCurrentFrame = false
 
     var isProcessingFrames = false
-    var numberOfFramesProcessed = 0
+    /// What "Processing N more frames" says: the frames that are not complete yet.  It counted from a number nothing ever
+    /// set, so it said the whole sequence's length for the whole run.
+    var framesLeftToProcess: Int { max(0, frames.count - count(for: .complete)) }
 
     var isRenderingVideo = false
 

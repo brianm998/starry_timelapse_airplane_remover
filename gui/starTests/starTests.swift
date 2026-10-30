@@ -3583,6 +3583,15 @@ final class VideoRenderWiringTests: XCTestCase {
         XCTAssertTrue(try source("ViewModel.swift").contains("closing.cancelVideoRender()"))
     }
 
+    /// Q14: "Processing N more frames" counted down from a number nothing set.
+    func testTheFramesLeftAreTheOnesNotYetComplete() throws {
+        let model = try source("ImageSequenceViewModel.swift")
+        XCTAssertTrue(model.contains("var framesLeftToProcess: Int { max(0, frames.count - count(for: .complete)) }"))
+        XCTAssertFalse(model.contains("numberOfFramesProcessed"), "the counter nothing updated")
+        let view = try source("BottomRightView.swift")
+        XCTAssertTrue(view.contains("localized(\"ui.processing_n_more_frames\", viewModel.framesLeftToProcess)"))
+    }
+
     func testTheNoFramesErrorIsInTheUsersLanguage() {
         defer { StarLocalization.shared.languageOverride = nil }
         StarLocalization.shared.languageOverride = "en"

@@ -330,7 +330,7 @@ struct BottomRightView: View {
                     if viewModel.isProcessingFrames {
                         ProgressView()
                           .colorScheme(.dark)
-                        Text(localized("ui.processing_n_more_frames", viewModel.frames.count - viewModel.numberOfFramesProcessed))
+                        Text(localized("ui.processing_n_more_frames", viewModel.framesLeftToProcess))
                           .foregroundColor(.white)
                         Button {
                             viewModel.stopProcessing()
