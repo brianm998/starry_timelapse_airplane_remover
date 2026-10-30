@@ -46,9 +46,11 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     var overlayExists by remember(current) { mutableStateOf<Boolean?>(null) }
     var pending by remember(current) { mutableStateOf(false) }
     val states by vm.frameStates.collectAsState()
-    var info by remember(current) { mutableStateOf<FrameInfo?>(null) }
-    LaunchedEffect(current, states[current], horizonVersion) {
-        info = vm.frameInfo(current)
+    val dataVersions by vm.frameDataVersions.collectAsState()
+    // The frame's counts as the view model has them, which an edit made anywhere changes (Q11).
+    val info by vm.frameInfoFlow(current.coerceAtLeast(0)).collectAsState()
+    LaunchedEffect(current, states[current], dataVersions[current], horizonVersion) {
+        vm.refreshFrameInfo(current.coerceAtLeast(0))
         val overlay = vm.horizonOverlay(current, 16, 16)
         overlayExists = overlay?.exists
         pending = overlay?.refinementPending ?: info?.refinementPending ?: false

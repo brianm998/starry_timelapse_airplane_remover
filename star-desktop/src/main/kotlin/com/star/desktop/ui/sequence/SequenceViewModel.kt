@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -327,6 +328,25 @@ class SequenceViewModel(
         _frameRevisions.value = _frameRevisions.value.let { it + (index to ((it[index] ?: 0) + 1)) }
     }
 
+    /**
+     * Bumped for a frame each time what this client holds of it is marked out of date ([frameDataChanged]): a processing state change,
+     * its outliers loading, or a bulk edit. The filmstrip and grid cells fetch the frame's counts again on it.
+     */
+    private val _frameDataVersions = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val frameDataVersions: StateFlow<Map<Int, Int>> = _frameDataVersions.asStateFlow()
+
+    /**
+     * The state, counts and clean method of frame [index], live. Every edit made to the frame lands in this one flow (the edit view's
+     * decisions, Keep All, a clean-method change, a bulk edit), so a cell that draws from it follows them; a cell that kept its own copy,
+     * fetched when the frame's index or state changed, went on showing the outlier ticks it had before the edit (Q11).
+     */
+    fun frameInfoFlow(index: Int): StateFlow<com.star.proto.FrameInfo?> = frameVMFor(index).info
+
+    /** Fetch frame [index]'s info from the daemon into [frameInfoFlow]. */
+    suspend fun refreshFrameInfo(index: Int) {
+        frameInfo(index)?.let { frameVMFor(index).applyInfo(it) }
+    }
+
     // State the `init` block's collectors read the moment they start; a property declared below it would still be null then.
     private val _showFullResolution = MutableStateFlow(false)
     val showFullResolution: StateFlow<Boolean> = _showFullResolution.asStateFlow()
@@ -471,6 +491,7 @@ class SequenceViewModel(
      * fetched again right away if it is the frame on screen.
      */
     private fun frameDataChanged(index: Int) {
+        _frameDataVersions.update { it + (index to ((it[index] ?: 0) + 1)) }
         val vm = frameVMs[index] ?: return
         vm.invalidate()
         if (index == _currentIndex.value) vm.load(force = true)

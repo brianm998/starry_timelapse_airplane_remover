@@ -75,6 +75,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val showHorizon by vm.showHorizonOnMainView.collectAsState()
     val horizonVersion by vm.horizonVersion.collectAsState()
     val revisions by vm.frameRevisions.collectAsState()
+    val dataVersions by vm.frameDataVersions.collectAsState()
 
     val cellWidth = (vm.info.imageWidth * scale).coerceIn(70f, 1000f)
     val gridState = rememberLazyGridState()
@@ -101,6 +102,7 @@ fun GridView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 viewMode = viewMode,
                 showHorizon = showHorizon,
                 revision = revisions[i] ?: 0,
+                dataVersion = dataVersions[i] ?: 0,
                 horizonVersion = horizonVersion,
             )
         }
@@ -120,20 +122,23 @@ private fun GridCell(
     showHorizon: Boolean,
     /** Changes when a picture of this frame is saved, so the thumbnail is fetched again. */
     revision: Int,
+    /** Changes when what the client holds of this frame is out of date, so its counts are fetched again. */
+    dataVersion: Int,
     /** Changes when a horizon (or a frame's being pending refinement) may have changed, so the line is fetched again. */
     horizonVersion: Int,
 ) {
     var thumb by remember(index) { mutableStateOf<ImageBitmap?>(null) }
     // True once the daemon has been asked for this mode's picture and has none: the cell says so rather than showing another mode (Q1).
     var missing by remember(index, viewMode) { mutableStateOf(false) }
-    var info by remember(index) { mutableStateOf<FrameInfo?>(null) }
+    // The frame's counts as the view model has them, which an edit made anywhere changes (Q11); fetched when the frame's data goes stale.
+    val info by vm.frameInfoFlow(index).collectAsState()
     var overlay by remember(index) { mutableStateOf<GetHorizonOverlayResponse?>(null) }
     val visibleHorizonKinds by vm.visibleHorizonLineKinds.collectAsState()
     LaunchedEffect(index, viewMode, state, revision) {
         thumb = vm.loadThumb(index, viewMode)
         missing = thumb == null
     }
-    LaunchedEffect(index, state, horizonVersion) { info = vm.frameInfo(index) }
+    LaunchedEffect(index, state, dataVersion, horizonVersion) { vm.refreshFrameInfo(index) }
     LaunchedEffect(index, showHorizon, state, horizonVersion) {
         overlay = if (showHorizon) {
             val h = (256f * vm.info.imageHeight / vm.info.imageWidth.coerceAtLeast(1)).toInt().coerceAtLeast(1)
