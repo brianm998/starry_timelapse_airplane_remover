@@ -42,4 +42,30 @@ class CommandTableTest {
         val unknown = table.getAsJsonArray("commands").map { it.asJsonObject["label"].asString }.filter { !english.has(it) }
         assertTrue(unknown.isEmpty(), "labels that are not catalogue keys: $unknown")
     }
+
+    /** The menu bar's code cut at each `Menu(localized("<title key>")`: the title key and the text of that menu. */
+    private fun menuBlocks(): Map<String, String> {
+        val starts = Regex("""Menu\(localized\("([^"]+)"\)""").findAll(menu).toList()
+        return starts.mapIndexed { i, m -> m.groupValues[1] to menu.substring(m.range.last, starts.getOrNull(i + 1)?.range?.first ?: menu.length) }.toMap()
+    }
+
+    /** M12 / D9: each command is in the menu the table says (the gui's tree: File, Actions, Tools, Window), and in no other. */
+    @Test fun everyCommandIsInItsMenuAndNoOther() {
+        val blocks = menuBlocks()
+        val titles = table.getAsJsonObject("menus").entrySet().associate { it.key to it.value.asString }
+        val wrong = table.getAsJsonArray("commands").map { it.asJsonObject }
+            .filter { it["id"].asString !in gaps }
+            .mapNotNull { c ->
+                val label = "\"${c["label"].asString}\""
+                val inMenus = blocks.filterValues { it.contains(label) }.keys
+                val expected = titles.getValue(c["menu"].asString)
+                if (inMenus == setOf(expected)) null else "${c["id"].asString}: in $inMenus, expected $expected"
+            }
+        assertTrue(wrong.isEmpty(), "commands in the wrong menu: $wrong")
+    }
+
+    @Test fun theMenusAreTheGuisAndTheLanguageMenu() {
+        val titles = menuBlocks().keys.toList()
+        assertTrue(titles == listOf("ui.file", "menu.actions", "menu.tools", "ui.window", "language.menu"), "menus: $titles")
+    }
 }

@@ -1,133 +1,171 @@
 {
-  "comment": "Every menu command both clients must offer, by the catalogue key of its label (the gui's wording, owner decision D9). Each client's unit test checks that its menu code uses the key; a command added to one client only fails the other's test until it is added here and there. A command one client genuinely cannot offer goes in knownGaps with the reason, and the entry must be removed when it is no longer true.",
+  "comment": "Every menu command both clients must offer, by the catalogue key of its label (the gui's wording, owner decision D9). Each client's unit test checks that its menu code uses the key; a command added to one client only fails the other's test until it is added here and there. A command one client genuinely cannot offer goes in knownGaps with the reason, and the entry must be removed when it is no longer true. `menu` is the menu the command is in (the gui's tree, D9) and `menus` the catalogue key of each menu's title (File and Window are the system's on a Mac): each client's test checks the command's label is in that menu's code.",
+  "menus": {
+    "file": "ui.file",
+    "actions": "menu.actions",
+    "tools": "menu.tools",
+    "window": "ui.window"
+  },
   "commands": [
     {
       "id": "closeSequence",
-      "label": "ui.close"
+      "label": "ui.close",
+      "menu": "file"
     },
     {
       "id": "openImageSequence",
-      "label": "ui.open_image_sequence"
+      "label": "ui.open_image_sequence",
+      "menu": "file"
     },
     {
       "id": "openVideo",
-      "label": "ui.open_video"
+      "label": "ui.open_video",
+      "menu": "file"
     },
     {
       "id": "resumeFromConfig",
-      "label": "ui.resume_from_config_json"
+      "label": "ui.resume_from_config_json",
+      "menu": "file"
     },
     {
       "id": "editMode",
-      "label": "ui.edit_mode"
+      "label": "ui.edit_mode",
+      "menu": "tools"
     },
     {
       "id": "scrubMode",
-      "label": "ui.scrub_mode"
+      "label": "ui.scrub_mode",
+      "menu": "tools"
     },
     {
       "id": "gridMode",
-      "label": "ui.grid_mode"
+      "label": "ui.grid_mode",
+      "menu": "tools"
     },
     {
       "id": "toggleSidePanels",
-      "label": "ui.toggle_side_panels"
+      "label": "ui.toggle_side_panels",
+      "menu": "tools"
     },
     {
       "id": "toggleFilmstrip",
-      "label": "ui.toggle_filmstrip"
+      "label": "ui.toggle_filmstrip",
+      "menu": "tools"
     },
     {
       "id": "playPause",
-      "label": "ui.play_pause"
+      "label": "ui.play_pause",
+      "menu": "tools"
     },
     {
       "id": "processAllFrames",
-      "label": "ui.process_all_frames"
+      "label": "ui.process_all_frames",
+      "menu": "actions"
     },
     {
       "id": "processFramesFromHere",
-      "label": "ui.process_frames_from_here_to_the_end"
+      "label": "ui.process_frames_from_here_to_the_end",
+      "menu": "actions"
     },
     {
       "id": "processCurrentFrame",
-      "label": "ui.process_current_frame"
+      "label": "ui.process_current_frame",
+      "menu": "actions"
     },
     {
       "id": "reprocessCurrentFrame",
-      "label": "ui.re_process_this_frame_from_the_start"
+      "label": "ui.re_process_this_frame_from_the_start",
+      "menu": "actions"
     },
     {
       "id": "findOutliersCurrentFrame",
-      "label": "ui.find_outliers_for_this_frame"
+      "label": "ui.find_outliers_for_this_frame",
+      "menu": "actions"
     },
     {
       "id": "decisionTreeAll",
-      "label": "ui.decision_tree_all"
+      "label": "ui.decision_tree_all",
+      "menu": "actions"
     },
     {
       "id": "decisionTreeAutoOnly",
-      "label": "ui.dt_auto_only"
+      "label": "ui.dt_auto_only",
+      "menu": "actions"
     },
     {
       "id": "decisionTreeAllFrames",
-      "label": "ui.decision_tree_all_frames"
+      "label": "ui.decision_tree_all_frames",
+      "menu": "actions"
     },
     {
       "id": "renderThisFrame",
-      "label": "ui.render_this_frame"
+      "label": "ui.render_this_frame",
+      "menu": "actions"
     },
     {
       "id": "renderAllFrames",
-      "label": "ui.render_all_frames"
+      "label": "ui.render_all_frames",
+      "menu": "actions"
     },
     {
       "id": "cancelProcessing",
-      "label": "ui.cancel_processing"
+      "label": "ui.cancel_processing",
+      "menu": "actions"
     },
     {
       "id": "processingSettings",
-      "label": "ui.processing_settings_2"
+      "label": "ui.processing_settings_2",
+      "menu": "actions"
     },
     {
       "id": "renderVideo",
-      "label": "ui.render_video_2"
+      "label": "ui.render_video_2",
+      "menu": "actions"
     },
     {
       "id": "blobWindow",
-      "label": "ui.blob_processing_window"
+      "label": "ui.blob_processing_window",
+      "menu": "window"
     },
     {
       "id": "outlierWindow",
-      "label": "ui.outlier_information_window"
+      "label": "ui.outlier_information_window",
+      "menu": "window"
     },
     {
       "id": "alignmentWindow",
-      "label": "ui.alignment_information_window"
+      "label": "ui.alignment_information_window",
+      "menu": "window"
     },
     {
       "id": "debugWindow",
-      "label": "ui.debug_window"
+      "label": "ui.debug_window",
+      "menu": "window"
     },
     {
       "id": "paintHorizon",
-      "label": "ui.paint_horizon_reference"
+      "label": "ui.paint_horizon_reference",
+      "menu": "tools"
     },
     {
       "id": "closeHorizonPainter",
-      "label": "ui.close_horizon_painter"
+      "label": "ui.close_horizon_painter",
+      "menu": "tools"
     },
     {
       "id": "keepAll",
-      "label": "ui.keep_all"
+      "label": "ui.keep_all",
+      "menu": "actions"
     },
     {
       "id": "removeAll",
-      "label": "ui.remove_all"
+      "label": "ui.remove_all",
+      "menu": "actions"
     },
     {
       "id": "clearUndecided",
-      "label": "ui.clear_undecided"
+      "label": "ui.clear_undecided",
+      "menu": "actions"
     }
   ],
   "knownGaps": {

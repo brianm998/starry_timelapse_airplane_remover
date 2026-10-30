@@ -3402,6 +3402,75 @@ final class CommandTableTests: XCTestCase {
         XCTAssertEqual(stale, [], "known gaps that are closed, to be removed from commands.json")
     }
 
+    // MARK: which menu
+
+    private func guiFile(_ name: String) throws -> String {
+        try String(contentsOf: Self.repoRoot.appendingPathComponent("gui/star/\(name)"), encoding: .utf8)
+    }
+
+    /// The text of the `{ ... }` that follows `marker`, braces matched.
+    private func block(after marker: String, in text: String) throws -> String {
+        let start = try XCTUnwrap(text.range(of: marker), "\(marker) is not in the source")
+        let open = try XCTUnwrap(text[start.upperBound...].firstIndex(of: "{"))
+        var depth = 0
+        var index = open
+        while index < text.endIndex {
+            if text[index] == "{" { depth += 1 } else if text[index] == "}" { depth -= 1; if depth == 0 { break } }
+            index = text.index(after: index)
+        }
+        return String(text[open...index])
+    }
+
+    private func catalogueKeys(in text: String) throws -> Set<String> {
+        let pattern = try NSRegularExpression(pattern: #"localized\("([^"]+)""#)
+        return Set(pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap {
+            Range($0.range(at: 1), in: text).map { String(text[$0]) }
+        })
+    }
+
+    /// The keys a menu block uses, its own and those of the `...Button()` views it holds (a view's keys are the file it is declared in).
+    private func menuKeys(_ block: String) throws -> Set<String> {
+        var keys = try catalogueKeys(in: block)
+        let dir = Self.repoRoot.appendingPathComponent("gui/star")
+        let files = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasSuffix(".swift") && !$0.hasPrefix(".") }
+        let named = try NSRegularExpression(pattern: #"\b([A-Z][A-Za-z]+Button)\("#)
+        for match in named.matches(in: block, range: NSRange(block.startIndex..., in: block)) {
+            guard let range = Range(match.range(at: 1), in: block) else { continue }
+            let name = String(block[range])
+            for file in files {
+                let text = try guiFile(file)
+                // The view's own declaration, up to the `}` in the first column that closes it: a file can hold others (a help sheet).
+                if let start = text.range(of: "struct \(name)") {
+                    let end = text.range(of: "\n}\n", range: start.upperBound..<text.endIndex)?.upperBound ?? text.endIndex
+                    keys.formUnion(try catalogueKeys(in: String(text[start.lowerBound..<end])))
+                }
+            }
+        }
+        return keys
+    }
+
+    /// M12 / D9: each command is in the menu the table says (File, Actions, Tools, Window), and in no other.
+    func testEveryCommandIsInItsMenuAndNoOther() throws {
+        let commandsText = try guiFile("StarCommands.swift")
+        let appText = try guiFile("StarApp.swift")
+        let menus: [String: Set<String>] = [
+            "file": try menuKeys(try block(after: "CommandGroup(replacing: .newItem)", in: commandsText))
+                .union(try menuKeys(try block(after: "CommandGroup(replacing: .saveItem)", in: commandsText))),
+            "actions": try menuKeys(try block(after: #"CommandMenu(localized("menu.actions"))"#, in: commandsText)),
+            "tools": try menuKeys(try block(after: #"CommandMenu(localized("menu.tools"))"#, in: commandsText)),
+            "window": try menuKeys(try block(after: "CommandGroup(after: .windowList)", in: appText)),
+        ]
+        let url = Self.repoRoot.appendingPathComponent("gherkin/ui/commands.json")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let (_, gaps) = try table()
+        var wrong: [String] = []
+        for c in try XCTUnwrap(object["commands"] as? [[String: String]]) where !gaps.contains(c["id"] ?? "") {
+            let inMenus = menus.filter { $0.value.contains(c["label"] ?? "") }.keys.sorted()
+            if inMenus != [c["menu"] ?? ""] { wrong.append("\(c["id"] ?? ""): in \(inMenus), expected \(c["menu"] ?? "")") }
+        }
+        XCTAssertEqual(wrong, [], "commands in the wrong menu")
+    }
+
     func testTheTableIsNotEmpty() throws {
         XCTAssertGreaterThan(try table().commands.count, 20)
     }
