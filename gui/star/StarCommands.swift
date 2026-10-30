@@ -146,6 +146,11 @@ struct StarCommands: Commands {
                 Button(viewModel.isShowingHorizonPainter
                        ? localized("ui.close_horizon_painter")
                        : localized("ui.paint_horizon_reference")) {
+                    // The painter is drawn over the edit view: opened from scrub or grid it showed nothing, and every
+                    // key that belongs to the edit view (E/S/G/A/K/U/R/D/1-8) went dead behind it.
+                    if !viewModel.isShowingHorizonPainter, viewModel.interactionMode != .edit {
+                        viewModel.interactionMode = .edit
+                    }
                     viewModel.isShowingHorizonPainter.toggle()
                 }
                 .environment(viewModel)
