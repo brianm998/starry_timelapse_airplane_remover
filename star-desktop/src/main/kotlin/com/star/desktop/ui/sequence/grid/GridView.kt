@@ -187,12 +187,12 @@ private fun GridCell(
                     drawHorizonLines(ov, visibleHorizonKinds, size.width, size.height, 1.5.dp.toPx()) { it }
                 }
             }
-            if (state != null) {
+            // What the frame is doing, in the state's own colour, and nothing on a finished one (macOS: a complete frame has no badge). It
+            // used to say "complete" on every finished cell, and turned orange while a horizon refinement was pending, which the gui does not.
+            if (state != null && state != com.star.proto.FrameProcessingState.FPS_COMPLETE) {
                 val s = FrameState.shortString(state)
                 if (s.isNotEmpty()) {
-                    // In the state's own colour, orange while the frame waits for its horizon to be refined (macOS).
-                    val color = if (info?.refinementPending == true) StarColors.orange else StarColors.stateColor(state)
-                    Text(s, color = color, fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+                    Text(s, color = StarColors.stateColor(state), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
                 }
             }
         }
