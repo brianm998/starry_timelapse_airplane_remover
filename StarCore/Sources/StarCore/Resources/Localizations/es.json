@@ -550,6 +550,7 @@
   "ui.initial_blob_detection": "Detección inicial de manchas",
   "ui.initial_blob_detection_desc": "Este primer paso analiza tanto la imagen original del fotograma como la imagen de sustracción para intentar encontrar grupos contiguos de píxeles (manchas) que sean más brillantes en la imagen de sustracción según los criterios indicados.\nTras este paso, las manchas encontradas pueden seguir procesándose para separar la señal del ruido.\nLa señal que queremos son las estelas transitoriamente más brillantes de aviones y satélites.\nEl ruido abarca muchas categorías, ya que es todo aquello que no queremos modificar.\nPuede deberse a nubes en movimiento, a una alineación imperfecta de las estrellas, a que el suelo gire por la alineación de las estrellas, a meteoros y a otros muchos factores.",
   "ui.intensity_score": "IntensityScore",
+  "ui.interaction_mode_help": "Elige entre desplazarte rápidamente por el vídeo y editar un fotograma individual.",
   "ui.jpeg_quality": "Calidad: {0}%",
   "ui.keep": "Conservar",
   "ui.keep_all": "Conservar todo",

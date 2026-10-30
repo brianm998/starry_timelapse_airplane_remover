@@ -550,6 +550,7 @@
   "ui.initial_blob_detection": "初始斑点检测",
   "ui.initial_blob_detection_desc": "这一初始步骤会同时分析原始帧图像和差值图像，按给定的条件在差值图像中寻找更亮的相邻像素组（斑点）。\n此步骤之后，这里找到的斑点可以继续处理，以便把信号与噪声分开。\n我们想要的信号来自飞机和卫星造成的短暂变亮的条纹。\n噪声有很多类别，因为凡是我们不想修改的都是噪声。\n它可能由移动的云、不完美的星点对齐、星点对齐导致的地面旋转、流星以及其他许多因素造成。",
   "ui.intensity_score": "IntensityScore",
+  "ui.interaction_mode_help": "选择快速拖动浏览视频，或编辑单个帧。",
   "ui.jpeg_quality": "质量：{0}%",
   "ui.keep": "保留",
   "ui.keep_all": "全部保留",

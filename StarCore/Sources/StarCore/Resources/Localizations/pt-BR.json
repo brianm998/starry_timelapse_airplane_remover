@@ -550,6 +550,7 @@
   "ui.initial_blob_detection": "Detecção inicial de manchas",
   "ui.initial_blob_detection_desc": "Esta primeira etapa analisa tanto a imagem original do quadro quanto a imagem de subtração para tentar encontrar grupos vizinhos de pixels (manchas) que sejam mais brilhantes na imagem de subtração segundo os critérios dados.\nDepois desta etapa, as manchas encontradas podem ser processadas mais para separar o sinal do ruído.\nO sinal que queremos vem de rastros transitoriamente mais brilhantes de aviões e satélites.\nO ruído se divide em muitas categorias, pois é tudo o que não queremos modificar.\nPode ser causado por nuvens em movimento, alinhamento imperfeito das estrelas, o solo girado pelo alinhamento das estrelas, meteoros e vários outros fatores.",
   "ui.intensity_score": "IntensityScore",
+  "ui.interaction_mode_help": "Escolha entre navegar rapidamente pelo vídeo e editar um quadro individual.",
   "ui.jpeg_quality": "Qualidade: {0}%",
   "ui.keep": "Manter",
   "ui.keep_all": "Manter tudo",

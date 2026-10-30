@@ -38,7 +38,7 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
     val playing by vm.isPlaying.collectAsState()
 
     Column(modifier.fillMaxSize().background(StarColors.appBackground)) {
-        TopBar(app, vm, mode)
+        TopBar(app)
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (mode) {
@@ -101,60 +101,18 @@ fun SequenceScreen(app: AppViewModel, vm: SequenceViewModel, modifier: Modifier 
     multiSelect?.let { com.star.desktop.ui.dialogs.MultiSelectSheet(vm, it) }
 }
 
+/**
+ * What is left of the top bar once the pickers have moved to the bottom left, where the gui has them (Q8): the engine badge, which only
+ * the desktop has (it is the daemon's state), and no chip for painting the horizon (the right panel's button and the menu do that).
+ */
 @Composable
-private fun TopBar(app: AppViewModel, vm: SequenceViewModel, mode: InteractionMode) {
-    val viewMode by vm.viewMode.collectAsState()
-    val playing by vm.isPlaying.collectAsState()
-    val current by vm.currentIndex.collectAsState()
-    val states by vm.frameStates.collectAsState()
-    // The images the frame has: a pill for one it lacks is greyed out.
-    var available by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(setOf(FrameViewMode.VIEW_ORIGINAL)) }
-    androidx.compose.runtime.LaunchedEffect(current, states[current]) { available = vm.availableViewModes(current).toSet() }
+private fun TopBar(app: AppViewModel) {
     Row(
-        Modifier.fillMaxWidth().background(StarColors.sidePanel.copy(alpha = 0.5f)).padding(horizontal = 12.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().background(StarColors.sidePanel.copy(alpha = 0.5f)).padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.End,
     ) {
-        // The pickers are not there while the sequence plays (the gui hides them: there is nothing to choose between until it stops).
-        // Mode segmented control
-        if (!playing) com.star.desktop.ui.components.StarPicker(
-            options = InteractionMode.entries,
-            selected = mode,
-            label = { localized(it.labelKey) },
-            onSelect = { vm.setMode(it) },
-        )
-        Box(Modifier.weight(1f))
-        // View-mode toggle
-        if (!playing) com.star.desktop.ui.components.StarPicker(
-            options = listOf(FrameViewMode.VIEW_ORIGINAL, FrameViewMode.VIEW_PROCESSED),
-            selected = viewMode, // grid 'Show' may set SUBTRACTION/VALIDATION → no pill highlights (matches old chips)
-            label = { localized(if (it == FrameViewMode.VIEW_PROCESSED) "ui.view_processed" else "ui.view_original") },
-            onSelect = { vm.setViewMode(it) },
-            isEnabled = { it in available },
-        )
-        if (mode == InteractionMode.EDIT) {
-            val painting by vm.horizonPaintMode.collectAsState()
-            Chip(localized("ui.paint_horizon_reference"), selected = painting) { vm.toggleHorizonPaint() }
-        }
-        // No Align chip here: the alignment window is already reachable from the Window menu
-        // (StarMenuBar's "ui.alignment_2" item), so a duplicate top-bar button just adds confusion.
-        // No Close chip either: closing this window already ends the session (Main.kt's
-        // onCloseRequest = ::exitApplication), so a button that duplicates it isn't needed.
-        // Engine status badge, laid out in the top bar (no longer a floating bottom-right overlay).
         com.star.desktop.ui.app.EngineBadge(app)
-    }
-}
-
-@Composable
-private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(5.dp))
-            .background(if (selected) StarColors.accent else StarColors.cellDefault)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-    ) {
-        Text(label, color = if (selected) Color.White else StarColors.textPrimary, fontSize = 13.sp) // match StarPicker label size
     }
 }
 

@@ -511,6 +511,7 @@
   "ui.initial_blob_detection": "Initial Blob Detection",
   "ui.initial_blob_detection_desc": "This initial step analyses both the original frame image and the subtraction image to try to find neighboring groups (blobs) of pixels that are brighter in the subtraction image by the given criteria.\nAfter this step, the blobs found here can be processed further so that we can separate signal from noise.\nThe signal we want is from transiently brighter streaks coming from airplanes and satellites.\nNoise falls into many categories, as it's anything that we don't want to modify.\nThis can be caused by moving clouds, imperfect star alignment, ground being rotated due to star alignment, meteors, and a number of other factors.",
   "ui.intensity_score": "IntensityScore",
+  "ui.interaction_mode_help": "Choose between quickly scrubbing around the video and editing an individual frame.",
   "ui.keep": "Keep",
   "ui.keep_all": "Keep All",
   "ui.keep_all_of_the_outlier_groups_in_the_frame": "keep all of the outlier groups in the frame",

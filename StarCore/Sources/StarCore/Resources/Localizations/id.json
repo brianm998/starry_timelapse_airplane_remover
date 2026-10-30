@@ -550,6 +550,7 @@
   "ui.initial_blob_detection": "Deteksi bercak awal",
   "ui.initial_blob_detection_desc": "Langkah awal ini menganalisis citra bingkai asli sekaligus citra pengurangan untuk mencari kelompok piksel yang bertetangga (bercak) yang lebih terang pada citra pengurangan menurut kriteria yang diberikan.\nSetelah langkah ini, bercak yang ditemukan dapat diproses lebih lanjut agar sinyal dapat dipisahkan dari derau.\nSinyal yang kita inginkan berasal dari goresan yang sesaat lebih terang akibat pesawat dan satelit.\nDerau terbagi dalam banyak kategori, karena derau adalah apa pun yang tidak ingin kita ubah.\nPenyebabnya bisa awan yang bergerak, penyelarasan bintang yang tidak sempurna, tanah yang terputar akibat penyelarasan bintang, meteor, dan sejumlah faktor lain.",
   "ui.intensity_score": "IntensityScore",
+  "ui.interaction_mode_help": "Pilih antara menggeser video dengan cepat dan menyunting satu bingkai.",
   "ui.jpeg_quality": "Kualitas: {0}%",
   "ui.keep": "Pertahankan",
   "ui.keep_all": "Pertahankan semua",

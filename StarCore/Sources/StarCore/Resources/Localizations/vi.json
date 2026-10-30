@@ -550,6 +550,7 @@
   "ui.initial_blob_detection": "Phát hiện đốm ban đầu",
   "ui.initial_blob_detection_desc": "Bước đầu tiên này phân tích cả ảnh khung gốc lẫn ảnh trừ để tìm các nhóm điểm ảnh liền kề (đốm) sáng hơn trong ảnh trừ theo các tiêu chí đã cho.\nSau bước này, các đốm tìm được có thể được xử lý tiếp để tách tín hiệu khỏi nhiễu.\nTín hiệu chúng ta cần là các vệt thoáng sáng hơn do máy bay và vệ tinh tạo ra.\nNhiễu thuộc nhiều loại, vì đó là mọi thứ chúng ta không muốn chỉnh sửa.\nNó có thể do mây di chuyển, việc căn chỉnh sao chưa hoàn hảo, mặt đất bị xoay do căn chỉnh sao, sao băng và nhiều yếu tố khác.",
   "ui.intensity_score": "IntensityScore",
+  "ui.interaction_mode_help": "Chọn giữa tua nhanh qua video và chỉnh sửa từng khung.",
   "ui.jpeg_quality": "Chất lượng: {0}%",
   "ui.keep": "Giữ",
   "ui.keep_all": "Giữ tất cả",

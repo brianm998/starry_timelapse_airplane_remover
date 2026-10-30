@@ -550,6 +550,7 @@
   "ui.initial_blob_detection": "Rilevamento iniziale delle macchie",
   "ui.initial_blob_detection_desc": "Questo primo passaggio analizza sia l'immagine originale del fotogramma sia l'immagine di sottrazione per cercare gruppi contigui di pixel (macchie) più luminosi nell'immagine di sottrazione secondo i criteri indicati.\nDopo questo passaggio, le macchie trovate possono essere elaborate ulteriormente per separare il segnale dal rumore.\nIl segnale che vogliamo è quello delle scie temporaneamente più luminose di aerei e satelliti.\nIl rumore rientra in molte categorie, perché è tutto ciò che non vogliamo modificare.\nPuò essere causato da nuvole in movimento, da un allineamento imperfetto delle stelle, dal terreno ruotato a causa dell'allineamento delle stelle, da meteore e da molti altri fattori.",
   "ui.intensity_score": "IntensityScore",
+  "ui.interaction_mode_help": "Scegli tra lo scorrimento rapido del video e la modifica di un singolo fotogramma.",
   "ui.jpeg_quality": "Qualità: {0}%",
   "ui.keep": "Mantieni",
   "ui.keep_all": "Mantieni tutto",

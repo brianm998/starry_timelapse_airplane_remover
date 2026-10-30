@@ -550,6 +550,7 @@
   "ui.initial_blob_detection": "Erste Fleckenerkennung",
   "ui.initial_blob_detection_desc": "Dieser erste Schritt analysiert sowohl das Originalbild als auch das Differenzbild und versucht, benachbarte Gruppen von Pixeln (Flecken) zu finden, die im Differenzbild nach den angegebenen Kriterien heller sind.\nNach diesem Schritt können die hier gefundenen Flecken weiterverarbeitet werden, um Signal von Rauschen zu trennen.\nDas gewünschte Signal stammt von vorübergehend helleren Streifen von Flugzeugen und Satelliten.\nRauschen fällt in viele Kategorien, denn es ist alles, was wir nicht verändern wollen.\nEs kann durch ziehende Wolken, eine ungenaue Sternausrichtung, durch die Sternausrichtung gedrehten Boden, Meteore und eine Reihe weiterer Faktoren entstehen.",
   "ui.intensity_score": "IntensityScore",
+  "ui.interaction_mode_help": "Wählen Sie zwischen schnellem Scrubben durch das Video und dem Bearbeiten eines einzelnen Bildes.",
   "ui.jpeg_quality": "Qualität: {0} %",
   "ui.keep": "Behalten",
   "ui.keep_all": "Alle behalten",

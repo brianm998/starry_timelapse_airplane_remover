@@ -60,6 +60,9 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        // "[edit] with [original] frames" at the left, as the gui has it; not there while the sequence plays.
+        if (!playing) ModeAndViewPickers(vm, mode)
+
         // transport — 8 buttons when stopped; collapses to just play/pause while playing (macOS)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             if (playing) {
@@ -100,6 +103,46 @@ fun BottomControls(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewMo
                 }
             }
         }
+    }
+}
+
+/** The label on the view picker's two choices (the gui's `BottomLeftView.viewLabel`, the same two keys). */
+fun viewPickerLabel(mode: com.star.proto.FrameViewMode): String =
+    localized(if (mode == com.star.proto.FrameViewMode.VIEW_PROCESSED) "ui.view_processed" else "ui.view_original")
+
+/** The two images the picker chooses between (the gui's picker lists the original and the final frame and no other). */
+val VIEW_PICKER_MODES = listOf(com.star.proto.FrameViewMode.VIEW_ORIGINAL, com.star.proto.FrameViewMode.VIEW_PROCESSED)
+
+/**
+ * The mode picker, "with", the view picker and "frames" (macOS `BottomLeftView`), which sat in the top bar. A choice the frame has no
+ * image of is greyed out and does nothing; one it can build (an aligned image, Q3) counts as having it.
+ */
+@Composable
+private fun ModeAndViewPickers(vm: SequenceViewModel, mode: com.star.desktop.domain.InteractionMode) {
+    val viewMode by vm.viewMode.collectAsState()
+    val current by vm.currentIndex.collectAsState()
+    val states by vm.frameStates.collectAsState()
+    // The images the frame has, fetched again when the frame or what it is doing changes.
+    var available by remember { mutableStateOf(setOf(com.star.proto.FrameViewMode.VIEW_ORIGINAL)) }
+    LaunchedEffect(current, states[current]) { available = vm.availableViewModes(current).toSet() }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        HoverTip(localized("ui.interaction_mode_help")) {
+            com.star.desktop.ui.components.StarPicker(
+                options = com.star.desktop.domain.InteractionMode.entries,
+                selected = mode,
+                label = { localized(it.labelKey) },
+                onSelect = { vm.setMode(it) },
+            )
+        }
+        Text(localized("ui.with"), color = StarColors.textPrimary, fontSize = 13.sp)
+        com.star.desktop.ui.components.StarPicker(
+            options = VIEW_PICKER_MODES,
+            selected = viewMode, // grid 'Show' may set SUBTRACTION/VALIDATION → no pill highlights (matches old chips)
+            label = ::viewPickerLabel,
+            onSelect = { vm.setViewMode(it) },
+            isEnabled = { it in available },
+        )
+        Text(localized("ui.frames"), color = StarColors.textPrimary, fontSize = 13.sp)
     }
 }
 

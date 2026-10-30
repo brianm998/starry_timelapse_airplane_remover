@@ -550,6 +550,7 @@
   "ui.initial_blob_detection": "İlk leke algılama",
   "ui.initial_blob_detection_desc": "Bu ilk adım, verilen ölçütlere göre fark görüntüsünde daha parlak olan komşu piksel gruplarını (lekeleri) bulmak için hem özgün kare görüntüsünü hem de fark görüntüsünü çözümler.\nBu adımdan sonra, burada bulunan lekeler sinyali gürültüden ayırmak için daha fazla işlenebilir.\nİstediğimiz sinyal, uçaklardan ve uydulardan gelen, geçici olarak daha parlak çizgilerdir.\nGürültü, değiştirmek istemediğimiz her şey olduğundan birçok kategoriye ayrılır.\nHareket eden bulutlar, kusurlu yıldız hizalaması, yıldız hizalaması yüzünden dönen zemin, meteorlar ve başka birçok etken buna yol açabilir.",
   "ui.intensity_score": "IntensityScore",
+  "ui.interaction_mode_help": "Videoda hızlıca gezinmek ile tek bir kareyi düzenlemek arasında seçim yapın.",
   "ui.jpeg_quality": "Kalite: %{0}",
   "ui.keep": "Koru",
   "ui.keep_all": "Tümünü koru",

@@ -3653,6 +3653,23 @@ final class ViewModeNameTests: XCTestCase {
         }
     }
 
+    /// Q8: the pickers at the bottom left read the catalogue (they showed `rawValue` and `shortName`, English in every language), with the
+    /// same keys as the desktop's `ModePickersTest`.
+    func testTheBottomLeftPickersReadTheCatalogue() throws {
+        StarLocalization.shared.languageOverride = "en"
+        XCTAssertEqual(BottomLeftView.viewLabel(.original), "Original")
+        XCTAssertEqual(BottomLeftView.viewLabel(.final), "Processed")
+        XCTAssertEqual(InteractionMode.edit.localizedName, "Edit")
+        StarLocalization.shared.languageOverride = "de"
+        XCTAssertEqual(BottomLeftView.viewLabel(.final), "Bearbeitet")
+        XCTAssertEqual(InteractionMode.edit.localizedName, "Bearbeiten")
+        XCTAssertNotEqual(localized("ui.interaction_mode_help"), "ui.interaction_mode_help")
+        let source = try String(contentsOfFile: #filePath.replacingOccurrences(of: "starTests/starTests.swift", with: "star/BottomLeftView.swift"), encoding: .utf8)
+        XCTAssertFalse(source.contains("value.rawValue"), "the mode names were English")
+        XCTAssertFalse(source.contains("value.shortName"), "the view names were English")
+        XCTAssertTrue(source.contains("localized(\"ui.interaction_mode_help\")"))
+    }
+
     func testTheNotFoundLineNamesTheMode() throws {
         let source = try String(contentsOfFile: #filePath.replacingOccurrences(of: "starTests/starTests.swift", with: "star/FrameViewModel.swift"), encoding: .utf8)
         XCTAssertTrue(source.contains("localized(\"ui.image_not_found_for_frame\", type.longName)"))
