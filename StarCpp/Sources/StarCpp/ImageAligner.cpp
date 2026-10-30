@@ -11,6 +11,7 @@
 #include "MedianMerge.hpp"
 #include "BoxBlur.hpp"
 #include "ExactWarp.hpp"
+#include "PairMatch.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
@@ -2271,7 +2272,17 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                     break;
                 }
                 case FeatureMatchMethodKNNLowes: {
-                    matcher.knnMatch(descNeighbor, descBase, knnMatches, 2);
+                    pairmatch::knn2(descNeighbor, descBase, matchNorm, knnMatches);
+                    {
+                        const auto &st = pairmatch::stats();
+                        const uint64_t calls = st.calls.load(std::memory_order_relaxed);
+                        if (calls % 100 == 0)
+                            Log_d("pair match: %llu matches asked for, %llu answered from the partner's pass, %llu computed, %d waiting",
+                                  (unsigned long long)calls,
+                                  (unsigned long long)st.hits.load(std::memory_order_relaxed),
+                                  (unsigned long long)st.computed.load(std::memory_order_relaxed),
+                                  (int)pairmatch::waiting().count());
+                    }
                     for (size_t i = 0; i < knnMatches.size(); i++) {
                         if (knnMatches[i].size() == 2) {
                             const auto &m1 = knnMatches[i][0], &m2 = knnMatches[i][1];
@@ -2291,7 +2302,7 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
                         // them.  LSH would be the FLANN-side answer, but it brings
                         // tuning parameters nothing here can validate, so binary
                         // descriptors take the exact matcher instead.
-                        matcher.knnMatch(descNeighbor, descBase, knnMatches, 2);
+                        pairmatch::knn2(descNeighbor, descBase, matchNorm, knnMatches);
                     } else {
                         cv::Mat dn32, db32;
                         descNeighbor.convertTo(dn32, CV_32F);
@@ -4230,6 +4241,23 @@ extern "C" bool ia_debug_exact_warp_is_available(void) {
 #else
     return false;
 #endif
+}
+
+extern "C" void ia_debug_set_pair_match(bool enabled) {
+    pairmatch::gDisabled.store(enabled ? 0 : 1);
+}
+
+extern "C" bool ia_debug_pair_match_is_enabled(void) {
+    return pairmatch::enabled();
+}
+
+extern "C" int ia_debug_pair_match_waiting(bool clear) {
+    if (clear) pairmatch::waiting().clear();
+    return (int)pairmatch::waiting().count();
+}
+
+extern "C" int ia_debug_pair_match_selftest(int trials, unsigned int seed) {
+    return pairmatch::selfTest(trials, seed);
 }
 
 extern "C" void ia_debug_set_median_kernel(bool forceReference) {

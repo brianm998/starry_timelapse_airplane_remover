@@ -4,3 +4,4 @@ akaze_bench
 *.dSYM/
 remap_bench
 blur_bench
+match_bench

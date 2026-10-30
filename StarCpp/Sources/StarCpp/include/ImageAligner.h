@@ -340,6 +340,20 @@ void ia_debug_set_cloud_region_restriction(bool restrictToRegion);
 void ia_debug_set_exact_warp(bool enabled);
 bool ia_debug_exact_warp_is_available(void);
 
+// --- Test-only: descriptor matching ---
+
+// The alignment's descriptor matching (`knnMatch` of a neighbour's descriptors against the base's)
+// computes the match of the pair the other way round in the same pass and hands it to the
+// partner frame's op, which finds it waiting (see PairMatch.hpp).  This turns that off so a test
+// can hold it to OpenCV's BFMatcher; process-wide, on by default.  The self-test runs random
+// descriptor sets through it and BFMatcher in both directions and returns how many results
+// differ: 0 is a pass.
+void ia_debug_set_pair_match(bool enabled);
+bool ia_debug_pair_match_is_enabled(void);
+int ia_debug_pair_match_selftest(int trials, unsigned int seed);
+// How many pair matches are waiting for their partner's op (emptying them first, if asked).
+int ia_debug_pair_match_waiting(bool clear);
+
 // --- Test-only: which median kernel runs ---
 
 // The CPU merge has two kernels that must return the same bytes: the Welford reference and,

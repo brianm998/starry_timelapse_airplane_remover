@@ -359,6 +359,25 @@ public enum ImageAligner {
     /// compared with.
     public static var debugExactWarpIsAvailable: Bool { ia_debug_exact_warp_is_available() }
 
+    /// Test-only: the pair-shared descriptor matching the alignment ops use (`true`, the default)
+    /// or OpenCV's BFMatcher on its own (`false`).  See `ia_debug_set_pair_match`; process-wide,
+    /// restore it when done.
+    public static func debugSetPairMatch(enabled: Bool) {
+        ia_debug_set_pair_match(enabled)
+    }
+
+    /// Test-only: how many pair matches are waiting for their partner's op; `clear` empties
+    /// them first.
+    public static func debugPairMatchWaiting(clear: Bool = false) -> Int {
+        Int(ia_debug_pair_match_waiting(clear))
+    }
+
+    /// Test-only: random descriptor sets through the pair matcher and BFMatcher in both
+    /// directions; the number of results that differ (0 is a pass).
+    public static func debugPairMatchSelfTest(trials: Int, seed: UInt32) -> Int {
+        Int(ia_debug_pair_match_selftest(Int32(trials), seed))
+    }
+
     /// Test-only: force the Welford reference median kernel (`true`) or let the machine pick
     /// (`false`).  See `ia_debug_set_median_kernel`; process-wide, restore it when done.
     public static func debugSetMedianKernel(forceReference: Bool) {
