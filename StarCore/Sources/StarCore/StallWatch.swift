@@ -22,10 +22,17 @@ You should have received a copy of the GNU General Public License along with sta
 ///
 ///  * **The process was not running.**  The governor samples every 5 seconds from inside the
 ///    process.  A sample that arrives far later than that, over a window in which star used
-///    next to no CPU, is a process that was not scheduled: `SIGSTOP` from outside (a debugger,
-///    a job-control stop, a tool run against it), or a sleeping machine.  The governor cannot
-///    watch it happen — it is stopped too — but it is the first thing to run afterwards, and
-///    it can say how long the gap was.
+///    little CPU, is a process that was not scheduled: `SIGSTOP` from outside (a debugger,
+///    a job-control stop, a tool run against it), a sleeping machine, or every thread stuck in
+///    the kernel (a volume that stopped answering).  The governor cannot watch it happen — it
+///    is stopped too — but it is the first thing to run afterwards, and it can say how long
+///    the gap was.  "Little" is a tenth of the machine, not none: a window that is mostly the
+///    gap still averages the work done before and after it, and a run on 2026-10-30 that went
+///    silent for 3m29s after half a minute of work averaged 2%, which a threshold of 1% let
+///    through.
+///  * **The governor was starved.**  The same late sample over a window the CPU was busy in is
+///    a process that ran, whose timer did not get a thread: the Swift pool held by blocking
+///    calls.  Quieter, but a timer that is 20 seconds late is worth one line.
 ///  * **The run is wedged.**  Gates are holding work — a CPU slot running, a disk stream in
 ///    flight or waiting, callers queued for the GPU or for memory — and for a minute nothing
 ///    has used CPU, GPU or disk or finished an operation.  A wait that never ends (a lock
@@ -38,16 +45,20 @@ You should have received a copy of the GNU General Public License along with sta
 struct StallWatch: Sendable, Equatable {
 
     enum Finding: Sendable, Equatable {
-        /// The sample covered `seconds` of wall clock in which the process used `cpuSeconds`.
+        /// The sample covered `seconds` of wall clock in which the process used little CPU.
         case processNotRunning(seconds: Double, cpuPercent: Double)
+        /// The sample came `seconds` after the last while the CPU was busy.
+        case governorLate(seconds: Double, cpuPercent: Double)
         /// Work has been held, with nothing using any resource, for `seconds`.
         case noProgress(seconds: Double)
     }
 
-    /// A sample this much later than it was due, with the CPU idle, is a process that did not run.
+    /// A sample this much later than it was due (the governor runs every 5 seconds).
     static let lateSampleSeconds = 20.0
-    /// A process that used more of the machine than this over such a window was running; the
-    /// governor itself was just slow to get a thread.
+    /// Over such a window, less than this is a process that was mostly not running; more is one
+    /// that was, whose governor was slow to get a thread.
+    static let pausedCPUPercent = 10.0
+    /// Over an ordinary window, less than this is idle (for the wedge count).
     static let idleCPUPercent = 1.0
     static let wedgedAfterSeconds = 60.0
     static let repeatEverySeconds = 300.0
@@ -59,12 +70,15 @@ struct StallWatch: Sendable, Equatable {
     mutating func observe(_ sample: ResourceSample) -> [Finding] {
         let window = sample.windowSeconds
 
-        // A window this long with the CPU idle is the process having been away, not the run
-        // having nothing to do: say so and do not count it toward a wedge.
-        if window >= Self.lateSampleSeconds && sample.cpuPercent < Self.idleCPUPercent {
+        // A window this long is a sample that did not run on time.  With little CPU in it that is
+        // the process having been away, not the run having nothing to do; with a lot, a timer
+        // that starved.  Either way it does not count toward a wedge.
+        if window >= Self.lateSampleSeconds {
             quietSeconds = 0
             lastReportedQuiet = nil
-            return [.processNotRunning(seconds: window, cpuPercent: sample.cpuPercent)]
+            return sample.cpuPercent < Self.pausedCPUPercent
+                ? [.processNotRunning(seconds: window, cpuPercent: sample.cpuPercent)]
+                : [.governorLate(seconds: window, cpuPercent: sample.cpuPercent)]
         }
 
         guard Self.holdsWorkWithoutUsingAnything(sample) else {
@@ -98,8 +112,15 @@ struct StallWatch: Sendable, Equatable {
         switch finding {
         case .processNotRunning(let seconds, let cpuPercent):
             seen = String(format: "stall watch: the governor's sample came %.0fs after the last "
-                          + "with the CPU %.1f%% busy — star was not running for that long (stopped "
-                          + "by a signal or a debugger, or the machine slept)", seconds, cpuPercent)
+                          + "(it runs every 5s) with the CPU %.1f%% busy over that time — star was "
+                          + "not running for most of it (stopped by a signal or a debugger, the "
+                          + "machine slept, or every thread was stuck in the kernel, e.g. on a "
+                          + "volume that stopped answering)", seconds, cpuPercent)
+        case .governorLate(let seconds, let cpuPercent):
+            seen = String(format: "stall watch: the governor's sample came %.0fs after the last "
+                          + "(it runs every 5s) with the CPU %.1f%% busy over that time — star was "
+                          + "running, but nothing gave this timer a thread for that long (the "
+                          + "Swift pool held by blocking calls)", seconds, cpuPercent)
         case .noProgress(let seconds):
             seen = String(format: "stall watch: %.0fs with work held at a gate and no CPU, GPU "
                           + "or disk in use and no operation finished", seconds)

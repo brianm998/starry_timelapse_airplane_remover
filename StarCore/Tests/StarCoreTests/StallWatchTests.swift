@@ -67,10 +67,32 @@ final class StallWatchTests: XCTestCase {
         for _ in 0..<11 { XCTAssertEqual(watch.observe(sample(volumes: [disk()])), []) }
     }
 
-    /// A governor that was merely slow to get a thread, while star used the machine, is not.
-    func testALateSampleWhileTheProcessWasBusyIsNotReported() {
+    /// The 2026-10-30 run: half a minute of work, then 3m29s of nothing, in one sample window —
+    /// which averages 2%, not 0.  It was not running for most of it all the same.
+    func testALateSampleThatAveragedAFewPercentIsStillAProcessThatWasNotRunning() {
         var watch = StallWatch()
-        XCTAssertEqual(watch.observe(sample(window: 40, cpu: 85, cpuRunning: 18)), [])
+        XCTAssertEqual(watch.observe(sample(window: 209, cpu: 2, cpuRunning: 18)),
+                       [.processNotRunning(seconds: 209, cpuPercent: 2)])
+        XCTAssertEqual(watch.observe(sample(window: 209, cpu: 9.9, cpuRunning: 18)),
+                       [.processNotRunning(seconds: 209, cpuPercent: 9.9)])
+    }
+
+    /// A governor that was merely slow to get a thread, while star used the machine, is said once
+    /// as what it is.
+    func testALateSampleWhileTheProcessWasBusyIsAStarvedGovernor() {
+        var watch = StallWatch()
+        XCTAssertEqual(watch.observe(sample(window: 40, cpu: 85, cpuRunning: 18)),
+                       [.governorLate(seconds: 40, cpuPercent: 85)])
+        XCTAssertEqual(watch.observe(sample(window: 40, cpu: 10, cpuRunning: 18)),
+                       [.governorLate(seconds: 40, cpuPercent: 10)])
+    }
+
+    /// An ordinary sample, however busy or idle, is never a late one.
+    func testAnOrdinarySampleIsNeverLate() {
+        var watch = StallWatch()
+        for window in [5.0, 6.0, 19.9] {
+            XCTAssertEqual(watch.observe(sample(window: window, cpu: 85, cpuRunning: 18)), [])
+        }
     }
 
     func testTheMessageNamesTheGapTheResourcesAndTheProcessState() {
@@ -79,6 +101,9 @@ final class StallWatchTests: XCTestCase {
                                       report: report)
         XCTAssertTrue(line.contains("147s"), line)
         XCTAssertTrue(line.contains("not running"), line)
+        XCTAssertTrue(line.contains("every 5s"), line)
+        let starved = StallWatch.message(for: .governorLate(seconds: 40, cpuPercent: 85), report: report)
+        XCTAssertTrue(starved.contains("40s") && starved.contains("a thread"), starved)
         XCTAssertTrue(line.contains("resources: CPU"), line)
         XCTAssertTrue(line.contains("process state:"), line)
         // this process, asking about itself, is running

@@ -341,11 +341,11 @@ R2 and R3 cover its median (26% of the stage) and remaps (63% of its layer build
 * **Hyper-threads.** At Full the CPU gate is 18 (physical cores) and star keeps ~20–26 of 36
   logical CPUs busy. Measure a Custom CPU width of 24 and 36 on the merge phase, frames/min
   over 10 min, back to back (`perf-measurement-noise-floor`); make Full whichever wins.
-* **Ledger in the merge phase.** Footprint 3–6 GB against a 107–109 GB ledger on the CPU path,
-  20–30x over. It does not bind at Full on 128 GB (the CPU does), but it does under Light
-  (44.8 GB) and on the 36 GB Mac Studio, and the realized ratio is floored at 0.25 so it can
-  correct only 4x. Re-measure the CPU-path merge reservation (13× working frame plus the cloud
-  stage's term) with `--log-op-memory` and fix the estimate, not the floor.
+  **Measured (6.3): neither wins; Full stays at 18.**
+* **Ledger in the merge phase.** *(Withdrawn, see 6.3.)* As first written: footprint 3–6 GB
+  against a 107–109 GB ledger on the CPU path, 20–30x over. Measured with `--log-op-memory`: a
+  merge reserves 1.9 GB and ~18 running merges peak at 20 GB of footprint against 34 GB reserved;
+  the rest of the ledger is queued ops' reservations. The estimate stands.
 * **Light is not light in merges.** The probe at `--use light` (CPU width 4) ran at ~950% CPU
   during merges: each op's `parallel_for_` fans out regardless of the gate. Worth knowing
   before promising users Light leaves the machine alone.
@@ -421,6 +421,7 @@ end-to-end A/B are in 6.3.
 | **R8** `StarAlignedHorizonMaskCache` | `StarAlignedHorizonMask.swift` | Same computation, off the actor on the CPU gate, with single-flight for equal keys; `StarAlignedHorizonMaskTests` (counters unchanged for sequential use, new test for concurrent asks). |
 | **R9** cloud stage: map lambda + float-map `remap` + coverage probe | `ExactWarp.hpp` (`remap`, `remapField`, `DisplacementField`, `fieldMapsAvx2`), used by `buildLayer` in `cloudAwareRefine` | `remap_bench` against `cv::remap` (16-bit, 1 and 3 channels, destination size independent of the source's) and the 8-bit probe remap: float maps of ten kinds including exact ties in 32nds, NaN / inf / ±3.4e38, far outside, hugging the frame — 34 M pixel-channels, **0 differ, 0 coverage differ**; random displacement fields (random homography incl. W≡0 and W crossing 0, grids from 1×1 up, regions that do not start on a multiple of 8): 611 M map floats compared **bit for bit** with the stage's lambda, copied verbatim, and 637 M pixel-channels through `remapField` against lambda + `cv::remap` + probe `cv::remap`, **0 differ**. Five mutations of the kernel each fail the sweep (half-up instead of half-even rounding, scalar and AVX2; lerp form of the field blend; no degenerate-W fallback; no last-row renormalisation). In the suite: `CloudAwareMergeTests.testTheExactRemapMakesTheSameMerge` (also fails when the AVX2 rounding is broken). |
 | **R9** cloud stage box blurs | `StarCpp/Sources/StarCpp/BoxBlur.hpp` (the stage's `boxBlurOnce` moved out of `ImageAligner.cpp`, original arithmetic kept as the scalar form) | `blur_bench` against a verbatim copy of the original: 21.8 M elements over widths/heights 1…600 (including narrower than the window), radii 1…48, both scales, luma-sized / weight-sized / signed / NaN / ±inf / ±1e30 / exact-tie values, bitwise, scalar form and AVX2 form: **0 differ**. Mutations that fail it: round toward zero, NaN not zeroed, wrong right-edge padding. (One that does *not*: multiplying by `1/norm` instead of dividing — double rounding differs too rarely for random data to see, so the division stays by construction.) Same hook as R3 (`STAR_WARP=opencv` / `debugSetExactWarp`) selects the scalar form, so `testTheExactRemapMakesTheSameMerge` holds the blurs to it inside a whole merge. |
+| **R9 follow-up** `interpolateBlockAvx2` eight pixels at a time | `ExactWarp.hpp` (`interpolateBlockAvx2` over `interpolateRangeAvx2`, `bilinearTable3`) | The bilinear loop every warp and cloud-layer pixel goes through, and the largest single symbol in the merge-phase profile (19.9 %). For three-channel frames, eight pixels whose windows are all interior (and not on the second-to-last row, so a 16-byte load cannot leave the frame) get their offsets and weight-table indices in registers; each pixel is two 16-byte loads, one multiply per row against a laid-out weight pair, and the same left-to-right sum, `((p0+p1)+p2)+p3`, with p1/p3 moved from lanes 3–5 to 0–2 first. Anything else goes through the old per-pixel code. `warp_bench` 92.9 M pixel-channels and `remap_bench` 54 M + 1.07 G, **0 differ, 0 coverage differ**; mutations that fail: sum order changed (153 of 13 M pixels differ — the sensitivity this needs), no coverage store, interior test one row too generous. |
 | **R10** stall watch | `StarCore/Sources/StarCore/StallWatch.swift`, called from `ResourceGovernor.tick` | `StallWatchTests`. |
 
 Two facts worth keeping from reading OpenCV 4.12.0's `imgwarp.cpp` (the tree has it at
@@ -460,6 +461,7 @@ So Q2 was answered "yes" in code — it is one `if` in `mergeKernelForThisMachin
 | the same old kernel at `-Os` (what the GUI ran) vs `-O2` | 155 / 467–598 ns (9 / 17) | 107–129 / 166–251 | 1.2–2.8× — the 17-source static merge was hit hardest |
 | 16-bit warp + its 8-bit coverage probe, 6000×1000×3 | 21.6 + 36.3 ns/px | 17.7 (scalar), 7.3 (AVX2), one pass | 1.9× scalar, 2.2–5.4× AVX2 |
 | cloud stage layer: map lambda + `cv::remap` 16-bit + 8-bit coverage probe → `remapField`, 6000×1000×3 region, smooth cloud field | 8.2 + 4.3×3 + 5.3 = 26.3 ns/px | 8.3 (AVX2), 17.2 (scalar rows) | **3.2×** AVX2, 1.5× scalar; 2.6× on a noisy ±100 px field |
+| bilinear loop alone: warp + coverage, 6000×1000×3; cloud remap | 2.5–2.7 ns/pc; 8.7–9.0 ns/px | 2.1–2.4; 7.5–7.6 | **1.15–1.2×**, alternating runs. The count of the code (45 µops a pixel → ~30) said 1.5×; the loop is not simply issue-bound, so what it bought is 15–20 % of a kernel that was a fifth of the busy samples |
 | cloud stage box blur, one pass, 6000×3400 plane (r = 6 and 24) | 6.6–6.8 ns/element | 3.3 (3.1–3.4 at strips of 256–512 columns) | **2.0×** (1.6× with the original 64-column strips: the column pass reads a column band down 24 KB-apart rows, so a wider strip is longer runs of the same cache lines) |
 | AKAZE map passes, 24 MP-scale levels | 0.754 s | 0.431 s | 1.75× (the dense extremum scan, unchanged, is most of what is left) |
 
@@ -551,6 +553,49 @@ merges, on a region of about 6000×3400 of the 6000×4000 frame.
   different part of the merge), so shares across the two samples are not a measurement of the blur.
   The blur's 2× is the harness's.
 
+#### R10 measurements (2026-10-30)
+
+Probe: frames 157–246 of a9-3 (90 × 24 MP, moving, cloud stage on), the finished temp dir copied for
+each run, the cloud-aware merge version bumped so only the merges (and what follows) rebuild, resumed
+from `config.json` as a Custom profile with Full's pipeline depth of 72 and the CPU gate width set.
+
+* **Hyper-threads: no win; Full stays at the physical-core count.**
+
+  | CPU gate | wall | user + sys CPU-s | gate slots in use (avg) | peak resident |
+  |---|---|---|---|---|
+  | 18 | 334 s, 372 s | 5,357, 5,835 | 12.6–13.0 | 54.5–55.6 GB |
+  | 24 | 321 s | 5,525 | 14.9 | 65.5 GB |
+  | 36 | 476 s, 381 s | 6,820, 6,033 | 23.0–24.8 | 73.6–76.1 GB |
+
+  The same width differs by 10 % between repeats, so 24 cannot be told from 18, and 36 is no faster
+  and spends more CPU (once 1,864 s of system time). The governor's own reading at every width is
+  "limited by disk" in 30–50 % of its samples (the rest "by CPU"), which fits a volume that does not
+  read faster for more merges at once — each reads its base and eight neighbours — though the disk
+  was not measured on its own. The memory fraction was raised for the wider runs but
+  `maxMatMemoryFraction` is capped at 0.95 (ledger peak 122–123 GB), so these runs were not free of
+  the ledger — but the ledger is not what held them back (next item).
+* **The ledger's merge estimate is about right; the "20–30× over" in section 2 R10 is withdrawn.**
+  `--log-op-memory` on the same merges: each reserves **1,922 MB** (1,647 near the ends of the
+  sequence) — 13 × a 148 MB working frame — while the process footprint peaked at **+20.1 GB with
+  ~18 merges running**, i.e. 34 GB reserved against 20 GB used, 1.7× to spare. The ratio in section
+  2 divided a footprint gauge, sampled at quiet moments, by the *whole* ledger, which at 107–109 GB
+  is mostly the reservations of ops queued behind the CPU gate (72 deep × 1.9 GB); the gate, not
+  the ledger, paces the running ones. The per-op lines' "OVER RESERVATION by 18 GB" is an artifact
+  of the probe: each op's "peak" is the whole process's growth while it lived, so every overlapping
+  merge prints the same 20,137 MB. No change to the estimate or the 0.25 floor on this evidence.
+* **A 3½-minute silence in a Full run, cause not found.** The first 90-frame Full run logged nothing
+  between 9:44:36 and 9:47:37 — no op, no governor line — then a `MemoryMonitor` line "forcing
+  waiter 6 … waited 223 s", and the governor's first line since, in the same millisecond. The
+  monitor polls twice a second, and the waiter's 60 s deadline fell at 9:44:54, so for the 160 s
+  between that and the force the monitor was not running: the process (or all of its cooperative
+  threads) was stopped from outside, or stuck in the kernel on `/Volumes/op` (the disk gate was
+  full, 8 MB/s). A rerun with an external poller (process state every 2 s, a `sample` when the log
+  went 40 s quiet) never stalled — the longest quiet stretch was 30 s — so the cause is unknown.
+  What was wrong in star is that its own stall watch stayed silent: the window averaged 2 % CPU
+  (half a minute of work either side of the gap) and the rule wanted under 1 %. It now says "not
+  running" under 10 % and, separately, "governor late" for a late sample the CPU was busy in;
+  three new tests, one of them this run.
+
 ### 6.4 Not done, and why
 
 * **R4** needs your decision (Q1) and was not started. The row-range machinery it needs from R3
@@ -564,17 +609,17 @@ merges, on a region of about 6000×3400 of the 6000×4000 frame.
   the copy is done would hold them for the life of every level — a memory-footprint change that
   has to be measured on the Vega *and* on Apple Silicon before it ships. Neither is worth doing
   without that measurement, and neither is blocked by anything here.
-* **R8**'s earth gradient-mask cache — not started.
+* **R8**'s earth gradient-mask cache — declined on measurement: `createGradientMaskIntoSky` is
+  already the tuned form (its own comment: 308 ms a call at 42 MP, ~0.2 s at 24 MP) against
+  ~60 CPU-s a frame, and the two uses take different gradient distances (100 and 24), so a cache
+  would have to hold the 96 MB float distance map per frame across phases. Not worth it.
 * **R9**: the map lambda, the float-map `remap` with its coverage probe, and the box blurs are done
   (6.1). Not done: `lumaDownRows` (4.2 % of busy samples; per-pixel float sums in a fixed order
   over 4×4 blocks of interleaved 16-bit BGR, so vectorising across pixels needs a deinterleave;
   not attempted), `medianBlur` (OpenCV's own,
   already AVX2), and the **Apple Silicon** port of the stack to the Metal merge kernel, which has to
   be measured on the Mac Studio. On arm64 the cloud stage keeps `cv::remap` and the scalar box blur
-  (`STAR_EXACT_WARP` is x86-64 only), the same as the warps. And one measured thing R9 does not cover:
-  `interpolateBlockAvx2` is now the largest single symbol (about 45 µops a pixel by a count of the
-  code, not measured; a two-row, 6-sample-wide formulation with pre-laid-out weights is the obvious next step, and every pixel of
-  the warp and the remap goes through it, so `warp_bench` and `remap_bench` would hold it).
-* **R10**: hyper-thread width and the ledger's CPU-path estimate need merge-phase runs of ten
-  minutes each, back to back; not measured.
+  (`STAR_EXACT_WARP` is x86-64 only), the same as the warps. And `interpolateBlockAvx2` got its eight-pixel form (6.1): 1.15–1.2×, less than a count of its µops promised.
+* **R10**: measured (6.3) — no change to Full's width or to the ledger's merge estimate. The
+  3½-minute silence is not explained; the stall watch's rule was the thing that could be fixed.
 * **Q4** (LZW on the final TIFF) is yours.

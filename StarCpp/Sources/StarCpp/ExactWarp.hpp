@@ -243,15 +243,15 @@ inline void warpRow(const uint16_t *S0, size_t sstep, int sw, int sh,
 // are independent channels, and none of the arithmetic is fused — AVX2 here means the wide
 // registers, not FMA, which this target does not enable.
 template <int CN, bool Pixels>
-STAR_AVX2 inline void interpolateBlockAvx2(const uint16_t *S0, size_t sstep, int sw, int sh,
-                                           uint16_t *D, uint8_t *cov, int x, int bw,
+STAR_AVX2 inline void interpolateRangeAvx2(const uint16_t *S0, size_t sstep, int sw, int sh,
+                                           uint16_t *D, uint8_t *cov, int x, int from, int to,
                                            const short *xy, const unsigned short *alpha,
                                            const float *wtab)
 {
 #pragma clang fp contract(off)
     const unsigned width1 = sw > 1 ? (unsigned)(sw - 1) : 0u;
     const unsigned height1 = sh > 1 ? (unsigned)(sh - 1) : 0u;
-    for (int x1 = 0; x1 < bw; ++x1) {
+    for (int x1 = from; x1 < to; ++x1) {
         const int sx = xy[x1 * 2], sy = xy[x1 * 2 + 1];
         const float *w = wtab + (size_t)alpha[x1] * 4;
         if ((unsigned)sx < width1 && (unsigned)sy < height1) {
@@ -312,6 +312,88 @@ STAR_AVX2 inline void interpolateBlockAvx2(const uint16_t *S0, size_t sstep, int
             if (cov) cov[x + x1] = 255;
         }
     }
+}
+
+// The weights as the three-channel AVX2 pixel wants them, per weight-table index: eight floats
+// {w0,w0,w0,w1,w1,w1,0,0} (the two columns of the upper source row, one lane per channel) and
+// eight {w2,w2,w2,w3,w3,w3,0,0} (the lower).  The same four floats `bilinearTable` holds.
+inline const float *bilinearTable3() {
+    static const std::vector<float> table = [] {
+        const float *t = bilinearTable();
+        std::vector<float> v((size_t)kTabSize * kTabSize * 16, 0.f);
+        for (size_t i = 0; i < (size_t)kTabSize * kTabSize; ++i) {
+            const float *w = t + i * 4;
+            float *o = v.data() + i * 16;
+            for (int c = 0; c < 3; ++c) { o[c] = w[0]; o[3 + c] = w[1]; o[8 + c] = w[2]; o[11 + c] = w[3]; }
+        }
+        return v;
+    }();
+    return table.data();
+}
+
+// A block of pixels, eight at a time where all eight are interior (and of a three-channel
+// frame): what `interpolateRangeAvx2` does for each, with the integer work done for the eight
+// in registers and a pixel's six samples of each row taken by one 16-byte load.
+//
+//  * The load reads 4 bytes past the pixel pair, so a pixel qualifies only if its lower row is
+//    not the frame's last (`sy < sh - 2`): the 4 bytes are then in the next row.
+//  * The products are the ones the scalar sum forms, `S0*w0`, `S1*w1`, `S2*w2`, `S3*w3`, each
+//    rounded once; the sum is the same left to right, ((p0 + p1) + p2) + p3, with p1 and p3 moved
+//    from lanes 3-5 to lanes 0-2 first.  Nothing is fused.
+// Blocks with any pixel outside that, and the tail, go through the per-pixel code.
+template <int CN, bool Pixels>
+STAR_AVX2 inline void interpolateBlockAvx2(const uint16_t *S0, size_t sstep, int sw, int sh,
+                                           uint16_t *D, uint8_t *cov, int x, int bw,
+                                           const short *xy, const unsigned short *alpha,
+                                           const float *wtab)
+{
+#pragma clang fp contract(off)
+    int x1 = 0;
+    if constexpr (CN == 3 && Pixels) {
+        if (sw > 1 && sh > 2 && (double)sstep * (double)sh < 2.0e9) {
+            const float *wtab3 = bilinearTable3();
+            const __m256i vW1 = _mm256_set1_epi32(sw - 1), vH2 = _mm256_set1_epi32(sh - 2);
+            const __m256i vMinus1 = _mm256_set1_epi32(-1), vStep = _mm256_set1_epi32((int)sstep);
+            const __m256i vThree = _mm256_set1_epi32(3);
+            const __m256i shiftDown = _mm256_setr_epi32(3, 4, 5, 6, 7, 7, 7, 7);
+            for (; x1 + 8 <= bw; x1 += 8) {
+                const __m256i p = _mm256_loadu_si256((const __m256i *)(xy + 2 * x1));
+                const __m256i sx = _mm256_srai_epi32(_mm256_slli_epi32(p, 16), 16);
+                const __m256i sy = _mm256_srai_epi32(p, 16);
+                const __m256i inside = _mm256_and_si256(
+                    _mm256_and_si256(_mm256_cmpgt_epi32(sx, vMinus1), _mm256_cmpgt_epi32(vW1, sx)),
+                    _mm256_and_si256(_mm256_cmpgt_epi32(sy, vMinus1), _mm256_cmpgt_epi32(vH2, sy)));
+                if (_mm256_movemask_epi8(inside) != -1) {
+                    interpolateRangeAvx2<CN, Pixels>(S0, sstep, sw, sh, D, cov, x, x1, x1 + 8, xy, alpha, wtab);
+                    continue;
+                }
+                alignas(32) int offs[8], widx[8];
+                _mm256_store_si256((__m256i *)offs, _mm256_add_epi32(_mm256_mullo_epi32(sy, vStep),
+                                                                      _mm256_mullo_epi32(sx, vThree)));
+                _mm256_store_si256((__m256i *)widx, _mm256_slli_epi32(
+                    _mm256_cvtepu16_epi32(_mm_loadu_si128((const __m128i *)(alpha + x1))), 4));
+                uint16_t *Dx = D + (size_t)(x + x1) * 3;
+                for (int k = 0; k < 8; ++k, Dx += 3) {
+                    const uint16_t *S = S0 + offs[k];
+                    const float *w = wtab3 + widx[k];
+                    const __m256 rowA = _mm256_cvtepi32_ps(_mm256_cvtepu16_epi32(_mm_loadu_si128((const __m128i *)S)));
+                    const __m256 rowB = _mm256_cvtepi32_ps(_mm256_cvtepu16_epi32(_mm_loadu_si128((const __m128i *)(S + sstep))));
+                    const __m256 top = _mm256_mul_ps(rowA, _mm256_loadu_ps(w));
+                    const __m256 bottom = _mm256_mul_ps(rowB, _mm256_loadu_ps(w + 8));
+                    __m128 t = _mm_add_ps(_mm256_castps256_ps128(top),
+                                          _mm256_castps256_ps128(_mm256_permutevar8x32_ps(top, shiftDown)));
+                    t = _mm_add_ps(t, _mm256_castps256_ps128(bottom));
+                    t = _mm_add_ps(t, _mm256_castps256_ps128(_mm256_permutevar8x32_ps(bottom, shiftDown)));
+                    const __m128i r = _mm_packus_epi32(_mm_cvtps_epi32(t), _mm_setzero_si128());
+                    const int low = _mm_cvtsi128_si32(r);
+                    std::memcpy(Dx, &low, sizeof low);
+                    Dx[2] = (uint16_t)_mm_extract_epi16(r, 2);
+                }
+                if (cov) _mm_storel_epi64((__m128i *)(cov + x + x1), _mm_set1_epi8(-1));
+            }
+        }
+    }
+    interpolateRangeAvx2<CN, Pixels>(S0, sstep, sw, sh, D, cov, x, x1, bw, xy, alpha, wtab);
 }
 
 // The same row as `warpRow`, with the coordinates four pixels at a time in AVX2 doubles.
