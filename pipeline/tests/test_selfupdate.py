@@ -344,3 +344,22 @@ def test_a_failed_kickstart_is_an_error_too(tmp_path: Path) -> None:
     plist = fake_plist(tmp_path, str(selfupdate.current_shim()))  # already pointing at `current`: only a kickstart is needed
     with pytest.raises(RuntimeError, match="kickstart"):
         selfupdate.switch(selfupdate.build(repo, sha, noop_sync), plist, lambda _a: 1, now=1.0, sleep=lambda _s: None)
+
+
+def test_the_shim_resolves_symlinks_so_one_runtime_supplies_the_code_and_the_environment(tmp_path: Path) -> None:
+    """launchd runs the shim through the `current` symlink. `uv run --project <symlink>` mixed the new runtime's code with the old
+    one's virtualenv (seen live), so the shim must hand uv the physical directory."""
+    real = tmp_path / "runtime-abc123" / "pipeline"
+    (real / "bin").mkdir(parents=True)
+    shim = real / "bin" / "starpipe"
+    shim.write_text((Path(__file__).resolve().parents[1] / "bin" / "starpipe").read_text())
+    shim.chmod(0o755)
+    (tmp_path / "current").symlink_to(tmp_path / "runtime-abc123")
+    fake_bin = tmp_path / "fakebin"
+    fake_bin.mkdir()
+    (fake_bin / "uv").write_text('#!/bin/sh\necho "$@"\n')
+    (fake_bin / "uv").chmod(0o755)
+    out = subprocess.run([str(tmp_path / "current" / "pipeline" / "bin" / "starpipe"), "daemon", "run"], capture_output=True,
+                         text=True, check=True, env={"PATH": f"{fake_bin}:/usr/bin:/bin"}).stdout
+    assert f"--project {(tmp_path / 'runtime-abc123' / 'pipeline').resolve()}" in out
+    assert "current" not in out and out.strip().endswith("starpipe daemon run")
