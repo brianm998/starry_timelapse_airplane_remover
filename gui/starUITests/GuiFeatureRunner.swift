@@ -468,18 +468,23 @@ final class GuiFeatureRunner {
         guard entry.isEnabled == enabled else { throw RunnerError("\"\(item.label)\" is \(entry.isEnabled ? "enabled" : "disabled"), not \(enabled ? "enabled" : "disabled")") }
     }
 
-    /// The titles the secondary windows go by.
-    private func windowTitle(_ name: String) throws -> String {
+    /// What the secondary windows' titles look like: the exact titles, and the beginnings of the ones that carry a number.
+    private func windowTitles(_ name: String) throws -> (exact: [String], prefixes: [String]) {
         switch name {
-        case "debug": return try english("ui.star_debug")
-        case "outlier": return "Outliers Group Information"   // the window sets its own title (its view's, not the scene's)
+        case "debug": return ([try english("ui.star_debug")], [])
+        case "outlier":
+            // the window sets its own title (its view's, not the scene's): the generic one until it lists a frame, then "Outliers for frame N"
+            let forFrame = try english("ui.outliers_for_frame")
+            return ([try english("ui.outlier_group_information")], [String(forFrame.prefix { $0 != "{" })])
         default: throw RunnerError("no window called \"\(name)\" (debug, outlier)")
         }
     }
 
     private func expectWindow(_ name: String, open: Bool) throws {
-        let title = try windowTitle(name)
-        func count() -> Int { app.windows.matching(NSPredicate(format: "title == %@", title)).count }
+        let (titles, prefixes) = try windowTitles(name)
+        func count() -> Int {
+            app.windows.allElementsBoundByIndex.filter { w in titles.contains(w.title) || prefixes.contains { w.title.hasPrefix($0) } }.count
+        }
         try waitFor("the \(name) window to be \(open ? "open" : "closed")", timeout: 15,
                     detail: { "(windows: \(self.app.windows.allElementsBoundByIndex.map { $0.title }))" }) { count() == (open ? 1 : 0) }
     }
