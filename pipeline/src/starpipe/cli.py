@@ -344,8 +344,10 @@ def daemon_install() -> None:
     """Write the launchd agent and load it (KeepAlive, starts at login)."""
     from . import daemon as daemon_mod
 
-    shim = Path(__file__).resolve().parents[2] / "bin" / "starpipe"
     checkout = daemon_mod.checkout_root(config_mod.load(), Path.cwd())
+    # run from the main checkout, not a worktree that will be deleted; self-update (§14.4) will pin it later
+    main_shim = checkout / "pipeline" / "bin" / "starpipe"
+    shim = main_shim if main_shim.exists() else Path(__file__).resolve().parents[2] / "bin" / "starpipe"
     template = (Path(__file__).resolve().parents[2] / "launchd" / f"{LABEL}.plist.in").read_text()
     out = (template.replace("@SHIM@", str(shim)).replace("@CHECKOUT@", str(checkout))
            .replace("@HOME@", str(config_mod.home())).replace("@PATH@", os.environ.get("PATH", "/usr/bin:/bin")))
