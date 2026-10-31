@@ -140,6 +140,7 @@ struct SequenceProgressPanel: View {
     private var footer: some View {
         HStack(spacing: 12) {
             Button(localized("ui.close"), action: dismiss)
+              .accessibilityIdentifier("sequenceprogress.close")
               .help(localized("ui.close_this_and_go_to_the_frames"))
 
             Spacer()

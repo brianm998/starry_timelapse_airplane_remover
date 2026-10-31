@@ -13,6 +13,9 @@ struct OutlierGroupView: View {
 
     @State var groupViewModel: OutlierGroupViewModel
 
+    /// The id a UI test finds this group by (`gherkin/ui/ids.json`), for the one group that carries it, and only under `-StarUITestProbes YES`.
+    var probeId: String? = nil
+
     @Environment(\.openWindow) private var openWindow
 
     /// What a click on a group does once the trash and information tools have had theirs.
@@ -140,7 +143,8 @@ struct OutlierGroupView: View {
             }
 
             self.outlierView
-            
+              .tagged(probeId)
+
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
                   if viewModel.selectionMode == .trash {
@@ -379,3 +383,9 @@ struct OutlierGroupView: View {
     }
 }
 
+private extension View {
+    /// The accessibility identifier, when there is one.
+    @ViewBuilder func tagged(_ identifier: String?) -> some View {
+        if let identifier { self.accessibilityIdentifier(identifier) } else { self }
+    }
+}

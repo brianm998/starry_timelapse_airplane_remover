@@ -107,6 +107,7 @@ struct InitialView: View {
                         Text(localized("ui.open_recent")).font(.largeTitle)
                     }.buttonStyle(ShrinkingButton(.clear))
                       .help(localized("ui.open_a_recently_processed_sequence"))
+                      .accessibilityIdentifier("startup.recent.open")
                     Picker("\u{27F6}", selection: $previously_opened_sheet_showing_item) {
                         let array = viewModel.userPreferences.sortedSequenceList
                         ForEach(array, id: \.self) { option in

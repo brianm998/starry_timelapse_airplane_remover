@@ -10,6 +10,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameState
 import com.star.desktop.domain.SavingCounts
@@ -55,8 +57,8 @@ fun BottomStatus(vm: SequenceViewModel) {
         // They only apply to frames that use outliers: selective, or automatic with auto-select.
         info?.takeIf { it.outliersLoaded && it.cleanMethod != com.star.proto.CleanMethod.CLEAN_AUTOMATIC }?.let { i ->
             Column {
-                Line(localized("ui.n_will_remove", i.numPositiveOutliers), if (i.numPositiveOutliers == 0) StarColors.white else StarColors.red)
-                Line(localized("ui.n_will_keep", i.numNegativeOutliers), if (i.numNegativeOutliers == 0) StarColors.white else StarColors.green)
+                Line(localized("ui.n_will_remove", i.numPositiveOutliers), if (i.numPositiveOutliers == 0) StarColors.white else StarColors.red, "status.remove")
+                Line(localized("ui.n_will_keep", i.numNegativeOutliers), if (i.numNegativeOutliers == 0) StarColors.white else StarColors.green, "status.keep")
                 if (i.numUndecidedOutliers > 0) Line(localized("ui.n_undecided", i.numUndecidedOutliers), StarColors.orange)
                 if (i.numTrashOutliers > 0) Line(localized("ui.n_in_trash", i.numTrashOutliers), StarColors.yellow)
             }
@@ -65,6 +67,6 @@ fun BottomStatus(vm: SequenceViewModel) {
 }
 
 @Composable
-private fun Line(text: String, color: androidx.compose.ui.graphics.Color) {
-    Text(text, color = color, fontSize = 11.sp)
+private fun Line(text: String, color: androidx.compose.ui.graphics.Color, tag: String? = null) {
+    Text(text, color = color, fontSize = 11.sp, modifier = tag?.let { Modifier.testTag(it) } ?: Modifier)
 }
