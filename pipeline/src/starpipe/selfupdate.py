@@ -28,7 +28,7 @@ CRASH_WINDOW_S = 300.0
 CRASH_LIMIT = 3  # starts beyond the first after a switch, inside the window
 
 Sync = Callable[[Path], None]
-Launchctl = Callable[[list[str]], None]
+Launchctl = Callable[[list[str]], int]  # runs launchctl, returns its exit code
 
 
 def runtime_root() -> Path:
@@ -137,11 +137,35 @@ def repoint(plist: Path) -> bool:
     return True
 
 
-def real_launchctl(args: list[str]) -> None:
-    subprocess.run(["launchctl", *args], check=False, capture_output=True)
+def real_launchctl(args: list[str]) -> int:
+    return subprocess.run(["launchctl", *args], check=False, capture_output=True, timeout=60).returncode
 
 
-def switch(rt: Path, plist: Path, launchctl: Launchctl = real_launchctl, now: float | None = None, restart: bool = True) -> None:
+def restart_agent(plist: Path, changed: bool, launchctl: Launchctl, sleep: Callable[[float], None]) -> None:
+    """Restart the launchd agent and check that it is loaded again; raise rather than leave the daemon down.
+
+    bootout is asynchronous: bootstrapping straight after it fails with an I/O error while the job is still being torn down (this
+    took the daemon down for minutes the first time), so wait until `launchctl print` no longer finds it, then bootstrap, retrying."""
+    domain = f"gui/{os.getuid()}"
+    target = f"{domain}/{LABEL}"
+    if not changed:
+        if launchctl(["kickstart", "-k", target]) != 0:
+            raise RuntimeError(f"launchctl kickstart -k {target} failed")
+        return
+    launchctl(["bootout", target])
+    for _ in range(40):
+        if launchctl(["print", target]) != 0:
+            break  # unloaded
+        sleep(0.5)
+    for _ in range(10):
+        if launchctl(["bootstrap", domain, str(plist)]) == 0:
+            return
+        sleep(1)
+    raise RuntimeError(f"launchctl could not bootstrap {plist}: the daemon is NOT loaded; run `launchctl bootstrap {domain} {plist}`")
+
+
+def switch(rt: Path, plist: Path, launchctl: Launchctl = real_launchctl, now: float | None = None, restart: bool = True,
+           sleep: Callable[[float], None] = time.sleep) -> None:
     """Make `rt` current (the old one becomes previous) and restart the agent on it.
 
     The first time, the plist is repointed at the `current` symlink and the agent re-bootstrapped (from the CLI, which survives it).
@@ -155,14 +179,8 @@ def switch(rt: Path, plist: Path, launchctl: Launchctl = real_launchctl, now: fl
     (root / "switched_at").write_text(str(now if now is not None else time.time()))
     (root / "starts.json").write_text("[]")
     changed = repoint(plist)
-    if not restart:
-        return
-    domain = f"gui/{os.getuid()}"
-    if changed:
-        launchctl(["bootout", f"{domain}/{LABEL}"])
-        launchctl(["bootstrap", domain, str(plist)])
-    else:
-        launchctl(["kickstart", "-k", f"{domain}/{LABEL}"])
+    if restart:
+        restart_agent(plist, changed, launchctl, sleep)
 
 
 def _relink(path: Path, target: Path) -> None:
@@ -221,7 +239,7 @@ def update(repo: Path, ref: str, plist: Path, *, sessions: Callable[[], int], wa
         if clock() >= deadline:
             return Report(sha, True, True, False, f"{busy} stage session(s) still running after the wait; use --now to switch anyway")
         sleep(10)
-    switch(rt, plist, launchctl, clock())
+    switch(rt, plist, launchctl, clock(), sleep=sleep)
     return Report(sha, True, True, True, f"switched to {sha[:12]}")
 
 

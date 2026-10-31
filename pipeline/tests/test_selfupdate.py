@@ -17,7 +17,7 @@ from .test_engine import Rig
 from .test_ship import ready_ticket
 
 
-def make_pipeline_repo(tmp: Path) -> tuple[Path, str]:
+def make_pipeline_repo(tmp: Path, salt: str = "") -> tuple[Path, str]:
     """A repo whose pipeline/ looks enough like the real one for `build`: a shim, a project file, and a monitor to leave out."""
     repo = tmp / "src-repo"
     sh(tmp, "git", "init", "-q", "-b", "develop", str(repo))
@@ -30,6 +30,7 @@ def make_pipeline_repo(tmp: Path) -> tuple[Path, str]:
     (repo / "pipeline" / "monitor").mkdir()
     (repo / "pipeline" / "monitor" / "Package.swift").write_text("// big and not needed by the daemon\n")
     (repo / "README.md").write_text("not part of the runtime\n")
+    (repo / "pipeline" / "salt.txt").write_text(salt)  # two repos made in the same second must not share a commit sha
     sh(repo, "git", "add", "-A")
     sh(repo, "git", "commit", "-q", "-m", "pipeline")
     return repo, sh(repo, "git", "rev-parse", "HEAD").strip()
@@ -42,11 +43,37 @@ def fake_plist(tmp: Path, program: str = "/old/checkout/pipeline/bin/starpipe") 
 
 
 class Launchctl:
-    def __init__(self) -> None:
-        self.calls: list[list[str]] = []
+    """A launchctl that behaves like the real one where it matters: bootout takes a moment, and bootstrap fails (exit 5, I/O
+    error) while the job is still loaded. `slow_unload` is how many `print` polls still find it after the bootout."""
 
-    def __call__(self, args: list[str]) -> None:
+    def __init__(self, slow_unload: int = 0, bootstrap_always_fails: bool = False) -> None:
+        self.calls: list[list[str]] = []
+        self.loaded = True
+        self.pending_unload = 0
+        self.slow_unload = slow_unload
+        self.fails = bootstrap_always_fails
+
+    def __call__(self, args: list[str]) -> int:
         self.calls.append(args)
+        verb = args[0]
+        if verb == "bootout":
+            self.pending_unload = self.slow_unload
+            if self.slow_unload == 0:
+                self.loaded = False
+            return 0
+        if verb == "print":
+            if self.pending_unload > 0:
+                self.pending_unload -= 1
+                if self.pending_unload == 0:
+                    self.loaded = False
+                return 0
+            return 0 if self.loaded else 113
+        if verb == "bootstrap":
+            if self.fails or self.loaded:
+                return 5
+            self.loaded = True
+            return 0
+        return 0 if verb == "kickstart" else 1
 
 
 def ok_test(_rt: Path) -> tuple[bool, str]:
@@ -102,11 +129,11 @@ def test_the_first_switch_repoints_launchd_and_later_ones_only_flip_the_symlink(
     repo, sha = make_pipeline_repo(tmp_path)
     plist, lc = fake_plist(tmp_path), Launchctl()
     first = selfupdate.build(repo, sha, noop_sync)
-    selfupdate.switch(first, plist, lc, now=100.0)
+    selfupdate.switch(first, plist, lc, now=100.0, sleep=lambda _s: None)
     assert selfupdate.link("current") == first.resolve() and selfupdate.link("previous") is None
     program = plistlib.loads(plist.read_bytes())["ProgramArguments"]
     assert program == [str(selfupdate.current_shim()), "daemon", "run"], "launchd now follows the `current` symlink"
-    assert [c[0] for c in lc.calls] == ["bootout", "bootstrap"]
+    assert [c[0] for c in lc.calls if c[0] != "print"] == ["bootout", "bootstrap"]
 
     (tmp_path / "src-repo" / "pipeline" / "new.txt").write_text("v2")
     sh(tmp_path / "src-repo", "git", "add", "-A")
@@ -159,7 +186,7 @@ def test_update_waits_for_the_sessions_to_finish_and_gives_up_after_the_wait(tmp
     assert ok.switched and clock["t"] == 20.0, "it polled until the sessions were gone"
 
     (tmp_path / "again").mkdir()
-    repo2, _ = make_pipeline_repo(tmp_path / "again")
+    repo2, _ = make_pipeline_repo(tmp_path / "again", salt="second")
     stuck = selfupdate.update(repo2, "develop", fake_plist(tmp_path / "again"), sessions=lambda: 3, sync=noop_sync, test=ok_test,
                               launchctl=lc, wait_s=60, sleep=sleep, clock=lambda: clock["t"])
     assert not stuck.switched and "3 stage session(s) still running" in stuck.detail
@@ -291,3 +318,29 @@ def test_the_runtime_command_says_when_nothing_is_pinned() -> None:
     result = CliRunner().invoke(cli.main, ["runtime"])
     assert result.exit_code == 0 and "the daemon runs from the checkout" in result.output
     assert json.dumps({"current": "-"})  # the output format is for people; nothing else parses it
+
+
+def test_a_slow_bootout_is_waited_out_before_bootstrapping(tmp_path: Path) -> None:
+    """The bug that took the live daemon down: bootstrap straight after bootout fails while the job is still loaded."""
+    repo, sha = make_pipeline_repo(tmp_path)
+    lc = Launchctl(slow_unload=3)
+    slept: list[float] = []
+    selfupdate.switch(selfupdate.build(repo, sha, noop_sync), fake_plist(tmp_path), lc, now=1.0, sleep=slept.append)
+    verbs = [c[0] for c in lc.calls]
+    assert verbs[0] == "bootout" and verbs[-1] == "bootstrap" and verbs.count("bootstrap") == 1, "bootstrapped once, after it unloaded"
+    assert verbs.count("print") >= 3 and lc.loaded and slept
+
+
+def test_a_bootstrap_that_never_works_is_an_error_not_a_silent_dead_daemon(tmp_path: Path) -> None:
+    repo, sha = make_pipeline_repo(tmp_path)
+    lc = Launchctl(bootstrap_always_fails=True)
+    with pytest.raises(RuntimeError, match="the daemon is NOT loaded"):
+        selfupdate.switch(selfupdate.build(repo, sha, noop_sync), fake_plist(tmp_path), lc, now=1.0, sleep=lambda _s: None)
+    assert [c[0] for c in lc.calls].count("bootstrap") == 10
+
+
+def test_a_failed_kickstart_is_an_error_too(tmp_path: Path) -> None:
+    repo, sha = make_pipeline_repo(tmp_path)
+    plist = fake_plist(tmp_path, str(selfupdate.current_shim()))  # already pointing at `current`: only a kickstart is needed
+    with pytest.raises(RuntimeError, match="kickstart"):
+        selfupdate.switch(selfupdate.build(repo, sha, noop_sync), plist, lambda _a: 1, now=1.0, sleep=lambda _s: None)
