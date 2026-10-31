@@ -6,6 +6,7 @@ GitHub, clock and sleep, so this runs under fakes and a local bare origin.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -135,7 +136,7 @@ async def ci_fix(eng: Engine, t: Ticket, verdict: ci.Verdict) -> bool:
     result, _ = await eng.model_stage(t, "ci-fix", prompt, fresh=True)
     if not result.ok:
         return False
-    failure = eng._run_verification(t, Path(t.worktree or ""))  # pyright: ignore[reportPrivateUsage]
+    failure = await asyncio.to_thread(eng._run_verification, t, Path(t.worktree or ""))  # pyright: ignore[reportPrivateUsage]
     if failure:
         eng.park(t, f"CI-FIX did not pass local verification: {failure[:300]}")
         return False
@@ -190,7 +191,7 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
         shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
         eng.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
         return False
-    failure = eng._run_verification(t, wt)  # pyright: ignore[reportPrivateUsage]
+    failure = await asyncio.to_thread(eng._run_verification, t, wt)  # pyright: ignore[reportPrivateUsage]
     if failure:
         eng.park(t, f"after catching up with develop, verification failed: {failure[:300]}")
         return False
