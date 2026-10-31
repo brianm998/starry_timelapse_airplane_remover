@@ -34,6 +34,19 @@ final class FixtureTests: XCTestCase {
     }
 }
 
+final class DetailTests: XCTestCase {
+    func testARealTicketDetailDecodes() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "detail", withExtension: "json", subdirectory: "Fixtures"))
+        let d = try JSONDecoder().decode(TicketDetail.self, from: Data(contentsOf: url))
+        XCTAssertEqual(d.number, 28)
+        XCTAssertFalse(try XCTUnwrap(d.plan).summary.isEmpty)
+        XCTAssertEqual(d.plan?.acceptance.first?.id, "A1")
+        XCTAssertEqual(d.checks.first?.checkId, "t0:diff-check")
+        XCTAssertEqual(d.checks.first?.result, "pass")
+        XCTAssertNil(d.question)
+    }
+}
+
 @MainActor
 final class StoreTests: XCTestCase {
     func testTheMenuBarCountMatchesTheNeedsYouGroup() throws {
