@@ -1,10 +1,12 @@
 package com.star.desktop.ui.app
 
 import com.star.desktop.ui.app.RenderQuestion.Outcome
+import com.star.proto.VideoEncodeSettings
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -22,6 +24,28 @@ class RenderQuestionTest {
 
         q.arm(forRun = 3, render = true, ask = false)
         assertEquals(Outcome.RENDER, q.done(runsStarted = 3), "'don't ask again' with 'render after' still renders, as the gui does")
+    }
+
+    /** The options chosen after Yes belong to the run armed with them, and go with the question when it is used up or dropped. */
+    @Test fun theChosenSettingsReachTheRenderAndAreDroppedWithTheQuestion() {
+        val chosen = VideoEncodeSettings.newBuilder().setCodec("prores").setFrameRate(25.0).setOutputHeight(720).build()
+        val q = RenderQuestion()
+        q.arm(forRun = 1, render = true, ask = true, settings = chosen)
+        assertEquals(chosen, q.renderSettings)
+        assertEquals(720, q.renderSettings?.outputHeight)
+        assertEquals(Outcome.RENDER, q.done(runsStarted = 1))
+        assertNull(q.renderSettings, "used up with the question")
+
+        q.arm(forRun = 2, render = true, ask = true, settings = chosen)
+        q.disarm()
+        assertNull(q.renderSettings, "a stopped run leaves none behind")
+
+        q.arm(forRun = 3, render = true, ask = true, settings = chosen)
+        q.arm(forRun = 4, render = false, ask = true)
+        assertNull(q.renderSettings, "arming again for another answer replaces them")
+
+        q.arm(forRun = 5, render = false, ask = true, settings = chosen)
+        assertNull(q.renderSettings, "settings with no render are not kept")
     }
 
     @Test fun noQuestionAtAllIsNotArming() {

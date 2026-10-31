@@ -183,7 +183,7 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
   the open panel does, and `-StarUITestOpenVideo <file>` raises the video import sheet as "Load Video" does; both suppress
   the GitHub release check. Accessibility identifiers: `startup.horizon.yes/.no`, `startup.moving.static/.moving`,
   `startup.selecthorizon.no`, `startup.selectmovinghorizons.no`, `startup.removal.automatic/.autoselective/.selective/.groundalignment/.start`,
-  `videoimport.format.tiff16/.tiff8/.jpeg`, `videoimport.import`, `prompt.pre.yes/.no`, `render.done`/`render.error`, and
+  `videoimport.format.tiff16/.tiff8/.jpeg`, `videoimport.import`, `prompt.pre.yes/.no`, `prompt.options.confirm` (the render options Yes leads to), `render.done`/`render.error`, and
   `processing.progress` whose label reads `<complete>/<total>/<running|idle>`.
 * desktop: `Modifier.testTag`s with the same names for the startup prompts, the import dialog and the pre-prompt, plus
   `process.frames`, `settings.process` and `processing.progress` (same `stateDescription`). The runner does **not** use the

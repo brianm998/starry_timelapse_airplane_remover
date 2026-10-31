@@ -25,6 +25,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -107,6 +108,22 @@ fun RenderVideoDialog(app: AppViewModel) {
     }
 }
 
+/** The pickers' state: the choice, and the state of the custom frame rate field. */
+@Stable
+internal class RenderOptionsState(val caps: VideoCapabilities, start: VideoEncodeSettings?) {
+    var choice by mutableStateOf(resolveVideoChoice(caps, start))
+    // Whether Custom is the picked entry.  Not derivable from the rate: Custom starts at the current rate, which is usually a standard one, and
+    // looking the entry up by rate would read that as the standard entry again and put the picker (and the field) back.
+    var customPicked by mutableStateOf(RenderVideo.rateEntry(caps, choice.frameRate)?.custom == true)
+    var customText by mutableStateOf(RenderVideo.rateText(choice.frameRate))
+
+    val customRate: Double? get() = RenderVideo.customRate(customText)
+    val rateEntry get() = RenderVideo.shownRateEntry(caps, choice.frameRate, customPicked)
+
+    /** There is an encoder, and the custom rate field, if it is the one in use, holds a rate. */
+    val usable: Boolean get() = choice.encoder.isNotEmpty() && (rateEntry?.custom != true || customRate != null)
+}
+
 /** The pickers, with what each choice is, and the Cancel and Render buttons. */
 @Composable
 private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
@@ -114,12 +131,54 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
     val frameCount = info?.frameCount ?: 0
 
     // Start from what the config holds (an import's own settings are there), not the first entry of every list, as the gui does (L12); each
-    // level is checked against what the one above allows.
-    val start = remember(c) { storedVideoSettings(info) }
-    var choice by remember(c) { mutableStateOf(resolveVideoChoice(c, start)) }
+    // level is checked against what the one above allows.  A render the pre-processing prompt asked for starts from what was chosen there.
+    val start = remember(c) { app.pendingRenderSettings ?: storedVideoSettings(info) }
+    val state = remember(c) { RenderOptionsState(c, start) }
+    val choice = state.choice
+
+    Text(localized("ui.render_video_from_n_frames", frameCount), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+
+    RenderOptions(app, state, frameCount)
+
+    HorizontalDivider(color = StarColors.cellDefault)
+
+    // What the video will be called, which depends on the container: asked of the daemon, which names it.
+    val fileName by produceState<String?>(null, choice.muxer) {
+        value = app.sessions.sessionId?.let { sid -> runCatching { RenderVideo.fileName(app.export.defaultVideoPath(sid, choice.muxer)) }.getOrNull() }
+    }
+    Text(fileName ?: "…", color = StarColors.textPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+
+    val canRender = state.usable
+    fun doRender() {
+        if (!canRender) return
+        app.startRender(choice.toSettings(), fileName ?: "")
+    }
+    // Auto-start when opened from the render prompt's "Yes" (once codecs and a default encoder load). Starting clears the flag, so changing the
+    // codec afterwards does not start another.
+    val autoStart by app.renderVideoAutoStart.collectAsState()
+    LaunchedEffect(autoStart, choice.encoder) { if (autoStart && choice.encoder.isNotEmpty()) doRender() }
+
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+        OutlinedButton(onClick = app::closeRenderVideo) { Text(localized("ui.cancel")) }
+        Button(
+            enabled = canRender,
+            onClick = { doRender() },
+            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+        ) { Text(localized("ui.render")) }
+    }
+}
+
+/**
+ * The render options: frame rate, codec, encoder, pixel format, resolution and container, each with what it is. Shared by this dialog and
+ * the pre-processing prompt's options step, which differ in what is around it.
+ */
+@Composable
+internal fun RenderOptions(app: AppViewModel, state: RenderOptionsState, frameCount: Int) {
+    val c = state.caps
+    val choice = state.choice
     /** A choice the user made: kept in the Mac's preferences, which the macOS gui seeds a new sequence from; this client starts from the config. */
     fun choose(next: VideoChoice) {
-        choice = next
+        state.choice = next
         app.prefs.videoFrameRate = next.frameRate
         app.prefs.videoCodec = next.codec.takeIf { it.isNotEmpty() }
         app.prefs.videoEncoder = next.encoder.takeIf { it.isNotEmpty() }
@@ -135,24 +194,18 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
     val muxers = encCaps?.muxersList.orEmpty()
     val pixelCaps = encCaps?.pixelFormatCapsList?.firstOrNull { it.name == choice.pixelFormat }
     val muxerCaps = encCaps?.muxerCapsList?.firstOrNull { it.name == choice.muxer }
-    // Whether Custom is the picked entry.  Not derivable from the rate: Custom starts at the current rate, which is usually a standard one, and
-    // looking the entry up by rate would read that as the standard entry again and put the picker (and the field) back.
-    var customPicked by remember(c) { mutableStateOf(RenderVideo.rateEntry(c, choice.frameRate)?.custom == true) }
-    val rateEntry = RenderVideo.shownRateEntry(c, choice.frameRate, customPicked)
-
-    Text(localized("ui.render_video_from_n_frames", frameCount), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+    val rateEntry = state.rateEntry
 
     // Frame rate: a standard one, or Custom with a field for any rate up to 1000.
     val rateOptions = c.frameRateCapsList.map { (if (it.custom) "custom" else RenderVideo.rateText(it.value)) to (if (it.custom) localized("ui.custom_2") else RenderVideo.rateText(it.value)) }
     val rateKey = if (rateEntry?.custom == true) "custom" else RenderVideo.rateText(choice.frameRate)
-    var customText by remember(c) { mutableStateOf(RenderVideo.rateText(choice.frameRate)) }
-    val customRate = RenderVideo.customRate(customText)
+    val customRate = state.customRate
     Picker(localized("ui.frame_rate"), rateOptions, rateKey) { key ->
-        customPicked = key == "custom"
+        state.customPicked = key == "custom"
         if (key == "custom") {
             // Kept at what it was, or a rate to start from; the field takes over from here.
             val rate = customRate ?: RenderVideo.customRate(RenderVideo.rateText(choice.frameRate)) ?: 24.0
-            customText = RenderVideo.rateText(rate)
+            state.customText = RenderVideo.rateText(rate)
             choose(choice.copy(frameRate = rate))
         } else {
             key.toDoubleOrNull()?.let { choose(choice.copy(frameRate = it)) }
@@ -168,11 +221,11 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
                 )
             }
             BasicTextField(
-                value = customText,
+                value = state.customText,
                 onValueChange = { text ->
-                    customText = text.filter { it.isDigit() || it == '.' }
-                    // Applied as it is typed, so Render is never one keystroke behind what the field says.
-                    RenderVideo.customRate(customText)?.let { choose(choice.copy(frameRate = it)) }
+                    state.customText = text.filter { it.isDigit() || it == '.' }
+                    // Applied as it is typed, so the button is never one keystroke behind what the field says.
+                    RenderVideo.customRate(state.customText)?.let { choose(choice.copy(frameRate = it)) }
                 },
                 singleLine = true,
                 textStyle = TextStyle(fontSize = 12.sp, color = StarColors.textPrimary),
@@ -218,39 +271,12 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
 
     // Resolution: scaled to a height (the width follows the aspect ratio), or as the frames are.
     val resolutionOptions = RenderVideo.RESOLUTIONS.map { it.toString() to RenderVideo.resolutionText(it) }
-    Picker(localized("ui.resolution"), resolutionOptions, choice.outputHeight.toString()) { choice = choice.copy(outputHeight = it.toInt()) }
+    Picker(localized("ui.resolution"), resolutionOptions, choice.outputHeight.toString()) { state.choice = choice.copy(outputHeight = it.toInt()) }
 
     HorizontalDivider(color = StarColors.cellDefault)
 
     Picker(localized("ui.container"), muxers.map { it to it }, choice.muxer) { choose(choice.copy(muxer = it)) }
     muxerCaps?.let { Description("${it.description} - (.${it.fileExtension})") }
-
-    HorizontalDivider(color = StarColors.cellDefault)
-
-    // What the video will be called, which depends on the container: asked of the daemon, which names it.
-    val fileName by produceState<String?>(null, choice.muxer) {
-        value = app.sessions.sessionId?.let { sid -> runCatching { RenderVideo.fileName(app.export.defaultVideoPath(sid, choice.muxer)) }.getOrNull() }
-    }
-    Text(fileName ?: "…", color = StarColors.textPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-
-    val canRender = choice.encoder.isNotEmpty() && (rateEntry?.custom != true || customRate != null)
-    fun doRender() {
-        if (!canRender) return
-        app.startRender(choice.toSettings(), fileName ?: "")
-    }
-    // Auto-start when opened from the render prompt's "Yes" (once codecs and a default encoder load). Starting clears the flag, so changing the
-    // codec afterwards does not start another.
-    val autoStart by app.renderVideoAutoStart.collectAsState()
-    LaunchedEffect(autoStart, choice.encoder) { if (autoStart && choice.encoder.isNotEmpty()) doRender() }
-
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-        OutlinedButton(onClick = app::closeRenderVideo) { Text(localized("ui.cancel")) }
-        Button(
-            enabled = canRender,
-            onClick = { doRender() },
-            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-        ) { Text(localized("ui.render")) }
-    }
 }
 
 /** What the render has got to: the file, the frame, a bar, and a Cancel that makes the daemon terminate ffmpeg. */

@@ -10,12 +10,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import com.star.proto.VideoCapabilities
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,11 +37,11 @@ import com.star.desktop.i18n.localized
 /**
  * Pre-processing prompt (macOS `PreProcessingRenderPromptView`): auto-render after processing? Like the macOS
  * sheet it cannot be dismissed by clicking outside it (that used to cancel starting the run without a word), and
- * Return is "Yes".
+ * Return is "Yes", which goes on to the render options ([PreRenderOptionsDialog]) and starts nothing yet.
  */
 @Composable
 fun PreProcessingRenderPrompt(app: AppViewModel) {
-    PromptCard(onScrimClick = null, onDefaultAction = { app.confirmStartProcessing(autoRender = true, dontAskAgain = false) }) {
+    PromptCard(onScrimClick = null, onDefaultAction = app::chooseRenderOptions) {
         Text(localized("ui.render_video_after_processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
         Text(
             localized("ui.once_frame_processing_finishes_would_you"),
@@ -49,10 +55,43 @@ fun PreProcessingRenderPrompt(app: AppViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = { app.confirmStartProcessing(autoRender = false, dontAskAgain = false) }, modifier = Modifier.testTag("prompt.pre.no")) { Text(localized("ui.no")) }
                 Button(
-                    onClick = { app.confirmStartProcessing(autoRender = true, dontAskAgain = false) },
+                    onClick = app::chooseRenderOptions,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     modifier = Modifier.testTag("prompt.pre.yes"),
                 ) { Text(localized("ui.yes")) }
+            }
+        }
+    }
+}
+
+/**
+ * The second step of the pre-processing prompt (macOS `PreProcessingRenderOptionsView`), after Yes: how the video is to be rendered once the
+ * frames are processed. The options are the Render Video dialog's. Cancel (and Esc) goes back to the question; Return is "Use These Settings".
+ */
+@Composable
+fun PreRenderOptionsDialog(app: AppViewModel) {
+    val caps by produceState<VideoCapabilities?>(null) { value = runCatching { app.export.capabilities() }.getOrNull() }
+    val c = caps
+    val state = remember(c) { c?.let { RenderOptionsState(it, storedVideoSettings(app.sessions.session.value)) } }
+    fun confirm() { state?.takeIf { it.usable }?.let { app.confirmRenderOptions(it.choice.toSettings()) } }
+    PromptCard(onScrimClick = null, onDefaultAction = ::confirm, onEscape = app::cancelRenderOptions) {
+        Text(localized("ui.render_options_after_processing_title"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        if (state == null) {
+            Text(localized("ui.loading_codecs"), color = StarColors.textSecondary, fontSize = 13.sp)
+        } else {
+            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                RenderOptions(app, state, app.sessions.session.value?.frameCount ?: 0)
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+            OutlinedButton(onClick = app::cancelRenderOptions) { Text(localized("ui.cancel")) }
+            if (state != null) {
+                Button(
+                    enabled = state.usable,
+                    onClick = ::confirm,
+                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    modifier = Modifier.testTag("prompt.options.confirm"),
+                ) { Text(localized("ui.use_these_settings")) }
             }
         }
     }

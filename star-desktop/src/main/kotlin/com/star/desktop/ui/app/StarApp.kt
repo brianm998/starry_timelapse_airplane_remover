@@ -110,7 +110,12 @@ fun StarApp(vm: AppViewModel) {
             val sequenceProgress by vm.sequenceProgress.collectAsState()
             sequenceProgress?.let { if (screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.SequenceProgressDialog(vm, it) }
             val showPre by vm.showPreRenderPrompt.collectAsState()
-            if (showPre && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PreProcessingRenderPrompt(vm)
+            val preStep by vm.preRenderStep.collectAsState()
+            if (showPre && screen is AppScreen.Sequence) {
+                // Yes swaps the question for the render options, in the same place.
+                if (preStep == com.star.desktop.ui.app.PreRenderPromptFlow.Step.CHOOSING) com.star.desktop.ui.dialogs.PreRenderOptionsDialog(vm)
+                else com.star.desktop.ui.dialogs.PreProcessingRenderPrompt(vm)
+            }
             val showPost by vm.showPostRenderPrompt.collectAsState()
             if (showPost && screen is AppScreen.Sequence) com.star.desktop.ui.dialogs.PostProcessingRenderPrompt(vm)
             if (screen is AppScreen.Sequence) {
