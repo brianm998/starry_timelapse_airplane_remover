@@ -73,7 +73,7 @@ final class GuiFeatureRunner {
         // the @ui vocabulary
         .copySequence: { try $0.copySequenceStep() },
         .openCopied: { try $0.openCopiedSequence() },
-        .clickId: { try $0.tap($0.args[0], timeout: 60) },
+        .clickId: { try $0.clickId($0.args[0]) },
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
@@ -81,6 +81,7 @@ final class GuiFeatureRunner {
         .idNotSelected: { try $0.expectSelected($0.args[0], selected: false) },
         .idOn: { try $0.expectOn($0.args[0], on: true) },
         .idOff: { try $0.expectOn($0.args[0], on: false) },
+        .idReads: { try $0.expectReads($0.args[0], key: $0.args[1]) },
     ]
 
     func run(_ feature: Feature) throws {
@@ -205,6 +206,8 @@ final class GuiFeatureRunner {
         let markers = scratch.appendingPathComponent("run-markers")
         try FileManager.default.createDirectory(at: markers, withIntermediateDirectories: true)
         app.launchEnvironment["STAR_RUN_MARKER_DIR"] = markers.path
+        // a @ui feature may compare what the app says with the English catalogue
+        if feature?.tags.contains("@ui") == true { app.launchEnvironment["STAR_LANG"] = "en" }
         if let floor = ProcessInfo.processInfo.environment["STAR_SYSTEM_FLOOR_MB"], !floor.isEmpty {
             app.launchEnvironment["STAR_SYSTEM_FLOOR_MB"] = floor
         }
@@ -241,6 +244,23 @@ final class GuiFeatureRunner {
         try launch(arguments: ["-StarUITestOpenSequence", copy.path])
     }
 
+    /// Clicks the control once it can be hit: a control that is there for a moment while a screen is still being put up (the startup questions
+    /// come up over the loading view) is not one to click, and a click on one that has gone fails the whole test.
+    private func clickId(_ identifier: String) throws {
+        let e = element(identifier)
+        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { "\n\(self.app.debugDescription)" }) { e.exists && e.isHittable }
+        // ...and one that is still moving into place takes a click that is lost: wait until its frame has stopped changing
+        var frame = e.frame
+        var steady = 0
+        while steady < 2 {
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.4)
+            let now = e.frame
+            steady = now == frame ? steady + 1 : 0
+            frame = now
+        }
+        e.click()
+    }
+
     private func expectShown(_ identifier: String, shown: Bool) throws {
         if shown {
             guard element(identifier).waitForExistence(timeout: 60) else {
@@ -258,6 +278,24 @@ final class GuiFeatureRunner {
         try expectShown(identifier, shown: true)
         let e = element(identifier)
         try waitFor("\(identifier) \(selected ? "selected" : "not selected")", timeout: 20, detail: { "(isSelected \(e.isSelected))" }) { e.isSelected == selected }
+    }
+
+    /// The English text of a catalogue key: the runs of a @ui feature are in English (`STAR_LANG=en`).
+    private func english(_ key: String) throws -> String {
+        let url = Self.repoRoot.appendingPathComponent("StarCore/Sources/StarCore/Resources/Localizations/en.json")
+        guard let table = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: String], let text = table[key] else {
+            throw RunnerError("\(key) is not in the English catalogue")
+        }
+        return text
+    }
+
+    /// The element's text is the catalogue's text for [key].
+    private func expectReads(_ identifier: String, key: String) throws {
+        try expectShown(identifier, shown: true)
+        let expected = try english(key)
+        let e = element(identifier)
+        func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
+        try waitFor("\(identifier) to read \"\(expected)\"", timeout: 20, detail: { "(it reads \(texts()))" }) { texts().contains(expected) }
     }
 
     /// A switch or check box: its value is 1 when it is on.

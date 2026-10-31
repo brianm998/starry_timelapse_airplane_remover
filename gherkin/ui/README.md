@@ -37,7 +37,8 @@ The shared expectations for the macOS gui and the desktop client (see `plans/GUI
 `gherkin/features/ui*.feature`, run by the same two runners as the processing features (`GuiFeatureRunner` with XCUITest, `DesktopFeatureRunner` with
 the Compose test host over a real `stard`). A `@ui` feature carries `@mac-gui` and `@desktop` both, never `@cli`, and needs no settings steps or
 sequence of its own; `@ui-mac-gui-only` or `@ui-desktop-only` (with `@ui`, and the reason in the text under the `Feature:` line) is the way to
-say that one client is deliberate. The generator checks all of that.
+say that one client is deliberate. The generator checks all of that, and that every `"<id>"` a step names is in `ids.json` and every `"<key>"` of `reads` is in
+the English catalogue, so a feature cannot name a control nobody has.
 
 **Rules** (plan §6.1). A runner may differ from the other in how it clicks, types and waits, never in what the user does. A step asserts what
 the user can see (an element by its id) or what lands on disk. Features are short, and one is one launch of the app.
@@ -57,6 +58,11 @@ are different: they stay literal in the feature and the runner supplies their va
 | `"<id>" is shown` / `is not shown` | the id is in the window (waited for, in both directions) |
 | `"<id>" is selected` / `is not selected` | a radio choice (gui: the selected trait; desktop: `selectable`) |
 | `"<id>" is on` / `is off` | a switch or check box |
+| `"<id>" reads "<key>"` | the control's text is the English catalogue's text for the key (`STAR_LANG=en` in both runners) |
+
+The features so far (all pass on both clients): `uiStartupDefaults`, `uiStartupReturnStarts`, `uiStartupHorizonQuestion`, `uiStartupMovingHorizonQuestion`,
+`uiStartupNoHorizonSkips`, `uiStartupBackToHorizon`, `uiStartupBackFromRemoval`, `uiRemovalSelectiveChoice`, `uiSettingsFromStartup`, `uiSettingsExpertToggle`,
+`uiSettingsProcessNow`. The settings sheet is reached through the Advanced gear on a startup question, which both clients have, so no seam is needed.
 
 Run one with `./gradlew gherkinTest -Pstar.stard.path=$PWD/../daemon/.build/debug/stard --tests '*.uiStartupDefaultsFeature'` in `star-desktop` (one feature
 per Gradle run: a second in the same JVM trips over the first one's leftover coroutines) and with `xcodebuild test … -only-testing:starUITests/GeneratedFeatureUITests/testUiStartupDefaultsFeature`

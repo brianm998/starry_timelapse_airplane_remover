@@ -41,6 +41,16 @@ struct StepDef {
         self.parts = parseStepParts(text)
     }
 
+    /// The names of the inline arguments, in order (`id` in `I click "<id>"`).
+    var argumentNames: [String] {
+        parts.compactMap { part -> String? in
+            switch part {
+            case .literal: return nil
+            case .quoted(let name), .integer(let name): return name
+            }
+        }
+    }
+
     /// The arguments `featureText` gives this step, or nil when it is not this step. A step with no inline arguments matches only its own text.
     func match(_ featureText: String) -> [String]? {
         var rest = Substring(featureText)
@@ -345,7 +355,30 @@ func validateUITags(_ f: ParsedFeature) throws {
     }
 }
 
-func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], featureParams: [String: String]) throws {
+/// What a UI step may name: an argument called `id` is an identifier in `gherkin/ui/ids.json` (or in one of its `prefix*` families), and one called `key`
+/// is a key of the English catalogue. A feature that names a control neither client has is a failure here, not a timeout in a runner.
+struct UIReferences {
+    let ids: [String]
+    let catalogueKeys: Set<String>
+
+    func covers(id: String) -> Bool {
+        ids.contains { $0.hasSuffix("*") ? id.hasPrefix(String($0.dropLast())) : $0 == id }
+    }
+}
+
+func loadUIReferences(root: URL) throws -> UIReferences {
+    let idsURL = root.appendingPathComponent("gherkin/ui/ids.json")
+    guard let obj = try JSONSerialization.jsonObject(with: Data(contentsOf: idsURL)) as? [String: Any], let ids = obj["ids"] as? [String] else {
+        throw GenError("gherkin/ui/ids.json must be an object with an \"ids\" array")
+    }
+    let enURL = root.appendingPathComponent("StarCore/Sources/StarCore/Resources/Localizations/en.json")
+    guard let en = try JSONSerialization.jsonObject(with: Data(contentsOf: enURL)) as? [String: String] else {
+        throw GenError("the English catalogue (en.json) must be a flat object")
+    }
+    return UIReferences(ids: ids, catalogueKeys: Set(en.keys))
+}
+
+func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], featureParams: [String: String], references: UIReferences) throws {
     try validateUITags(f)
     if !f.tags.contains("@ui") { try validateSettings(f, steps: steps) }
     if !isLowerCamel(f.basename) { throw GenError("\(f.file): basename `\(f.basename)` must be lowerCamelCase") }
@@ -355,8 +388,16 @@ func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], 
         guard stepKeywords.contains(s.keyword) else {
             throw GenError("\(f.file):\(s.line): step keyword `\(s.keyword)` is not one of \(stepKeywords.joined(separator: ", "))")
         }
-        guard lookup(s, in: steps) != nil else {
+        guard let found = lookup(s, in: steps) else {
             throw GenError("\(f.file):\(s.line): step text has no match in steps.json: \"\(s.text)\"")
+        }
+        for (name, arg) in zip(found.def.argumentNames, found.args) {
+            if name == "id" && !references.covers(id: arg) {
+                throw GenError("\(f.file):\(s.line): \"\(arg)\" is not in gherkin/ui/ids.json: a control a step names is one both clients carry (add it there, and to each client)")
+            }
+            if name == "key" && found.def.caseName == "idReads" && !references.catalogueKeys.contains(arg) {
+                throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a key of the English catalogue")
+            }
         }
         for p in placeholders(in: s.text) where featureParams[p] == nil && defaults[p] == nil {
             throw GenError("\(f.file):\(s.line): {\(p)} has no value for feature \(f.basename) and no default in params.json")
@@ -666,7 +707,8 @@ func generate() throws {
     for name in featureParams.keys where !features.contains(where: { $0.basename == name }) {
         throw GenError("gherkin/params.json: features.\(name) has no matching feature file")
     }
-    for f in features { try validate(f, steps: steps, defaults: defaults, featureParams: featureParams[f.basename] ?? [:]) }
+    let references = try loadUIReferences(root: root)
+    for f in features { try validate(f, steps: steps, defaults: defaults, featureParams: featureParams[f.basename] ?? [:], references: references) }
 
     let (outputs, clean) = emit(features: features, steps: steps, params: params, featureParams: featureParams, hash: hash)
     for c in clean { try? fm.removeItem(at: root.appendingPathComponent(c)) }

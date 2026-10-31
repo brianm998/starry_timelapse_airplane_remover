@@ -660,6 +660,7 @@ struct ProcessingSettingsView: View {
                       }
                         .buttonStyle(PlainButtonStyle()) // XXX these styles suck
                         .fixedSize(horizontal: true, vertical: true)
+                        .accessibilityIdentifier("settings.dismiss")
                   }
 
                   HStack {
@@ -713,6 +714,7 @@ struct ProcessingSettingsView: View {
                       }
                         .buttonStyle(PlainButtonStyle())
                         .fixedSize(horizontal: true, vertical: true)
+                        .accessibilityIdentifier("settings.expert")
                   }
               }
           }
