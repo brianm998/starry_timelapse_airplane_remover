@@ -166,6 +166,7 @@ def run(
     keep_display_awake: bool = False,
     cwd: str | None = None,
     stdout: int | None = None,
+    env: dict[str, str] | None = None,
 ) -> tuple[int, float]:
     """Wait for a slot, run argv in its own process group, release. Returns (exit code, lock wait s)."""
     cmd = " ".join(argv)
@@ -177,7 +178,7 @@ def run(
         }))
         if keep_display_awake:  # XCUITest / Compose UI freeze when the display sleeps
             argv = ["caffeinate", "-d", "-u", *argv]
-        proc = subprocess.Popen(argv, process_group=0, cwd=cwd, stdout=stdout,
+        proc = subprocess.Popen(argv, process_group=0, cwd=cwd, stdout=stdout, env=env,
                                 stderr=subprocess.STDOUT if stdout is not None else None)
 
         def forward(signum: int, _frame: object) -> None:

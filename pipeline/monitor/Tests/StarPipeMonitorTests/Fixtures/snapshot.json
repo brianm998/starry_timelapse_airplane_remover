@@ -11,7 +11,7 @@
     },
     "known_red": 1
   },
-  "events_cursor": 12,
+  "events_cursor": 14,
   "groups": [
     "needs_you",
     "running",
@@ -46,6 +46,16 @@
   "landing": {
     "paused": false,
     "stop_line": null
+  },
+  "nightly": {
+    "at": 1500.0,
+    "id": 1,
+    "line": "Sat 03:00 \u00b7 aaaaaaaa \u00b7 1 red",
+    "reds": 1,
+    "ref": "origin/develop",
+    "running": false,
+    "sha": "aaaaaaaaaaaa",
+    "status": "done"
   },
   "now": 2000.0,
   "pause": null,

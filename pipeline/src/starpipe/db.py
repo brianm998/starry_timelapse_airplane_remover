@@ -230,6 +230,43 @@ class Database:
         self._exec("INSERT INTO ci_runs(ticket,sha,verdict,detail,at) VALUES (?,?,?,?,?)",
                    (ticket, sha, verdict, json.dumps(detail), self.clock()))
 
+    # nightly --------------------------------------------------------------------------------------------------------
+    def nightly_begin(self, ref: str, sha: str) -> int:
+        cur = self._exec("INSERT INTO nightly_runs(started,ref,sha) VALUES (?,?,?)", (self.clock(), ref, sha))
+        assert cur.lastrowid is not None
+        self.event("nightly-start", None, run=cur.lastrowid, ref=ref, sha=sha[:12])
+        return cur.lastrowid
+
+    def nightly_result(self, run: int, check_id: str, status: str, executed: int, failed: int, skipped: int,
+                       seconds: float, lock_wait_s: float, log: str) -> None:
+        self._exec("INSERT INTO nightly_results(run,check_id,status,executed,failed,skipped,seconds,lock_wait_s,log) "
+                   "VALUES (?,?,?,?,?,?,?,?,?)", (run, check_id, status, executed, failed, skipped, seconds, lock_wait_s, log))
+
+    def nightly_end(self, run: int, status: str, summary: dict[str, Any]) -> None:
+        self._exec("UPDATE nightly_runs SET ended=?, status=?, summary=? WHERE id=?",
+                   (self.clock(), status, json.dumps(summary), run))
+        self.event("nightly-end", None, run=run, status=status)
+
+    def nightly_run(self, run: int | None = None) -> dict[str, Any] | None:
+        """One run (default: the latest) with its results."""
+        rows = (self._all("SELECT * FROM nightly_runs WHERE id=?", (run,)) if run
+                else self._all("SELECT * FROM nightly_runs ORDER BY id DESC LIMIT 1"))
+        if not rows:
+            return None
+        out = dict(rows[0])
+        out["summary"] = json.loads(out["summary"])
+        out["results"] = [dict(r) for r in self._all("SELECT * FROM nightly_results WHERE run=? ORDER BY id", (out["id"],))]
+        return out
+
+    def previous_nightly_status(self, check_id: str, before_run: int) -> str | None:
+        """The status of `check_id` in the most recent earlier run that ran it (so a partial run does not erase history)."""
+        rows = self._all("SELECT status FROM nightly_results WHERE check_id=? AND run<? ORDER BY run DESC LIMIT 1",
+                         (check_id, before_run))
+        return rows[0]["status"] if rows else None
+
+    def nightly_running(self) -> bool:
+        return bool(self._all("SELECT 1 FROM nightly_runs WHERE ended IS NULL"))
+
     # checks / interventions / alerts ---------------------------------------------------------------------------------
     def record_check(self, ticket: int, sha: str, check_id: str, result: str, counts: dict[str, Any], log: str) -> None:
         self._exec("INSERT INTO checks(ticket,sha,check_id,result,counts,log,at) VALUES (?,?,?,?,?,?,?)",

@@ -6,6 +6,7 @@ live in config.toml, not here.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,6 +36,59 @@ HEAVY_PATTERN = re.compile(
     r"|\.build/[\w-]+/(?:star|stard)\b|star-gherkin\b)"
 )
 
+# The nightly (plan §8.1 T4): every local suite, then the Gherkin features, against origin/develop's tip. Which features exist
+# is read from the worktree being tested (gherkin/generated/*.json), so a new feature is picked up without touching this file.
+def gherkin_test_name(feature: str) -> str:
+    return "test" + feature[:1].upper() + feature[1:] + "Feature"
+
+
+NIGHTLY_ENV = (("STAR_TEST_DATA", "{test_data}"), ("STAR_FFMPEG_DIR", "{root}/external_binaries/bin"),
+               ("STAR_REMOVAL_REPORTS", "{build}/removal-reports"))
+
+
+def nightly_setup() -> list[CheckSpec]:
+    """Builds the Gherkin cli leg's Then steps shell out to."""
+    return [
+        CheckSpec("setup:removal_tools", "swift build removal_tools (release)",
+                  ("swift", "build", "-c", "release", "--package-path", "removal_tools")),
+        CheckSpec("setup:trail_tools", "swift build trail_tools (release)",
+                  ("swift", "build", "-c", "release", "--package-path", "trail_tools")),
+    ]
+
+
+def nightly_gherkin_cli(root: Path, env: tuple[tuple[str, str], ...]) -> list[CheckSpec]:
+    features: list[str] = json.loads((root / "gherkin/generated/features-cli.json").read_text())
+    return [
+        CheckSpec(
+            f"gherkin:cli/{f}", f"gherkin cli: {f}",
+            ("swift", "test", "-c", "release", "-Xswiftc", "-enable-testing", "--disable-swift-testing", "--package-path", "cli",
+             "--filter", f"GherkinTests.GeneratedFeatureTests/{gherkin_test_name(f)}"),
+            parser="xctest", expect=1, env=env,
+        )
+        for f in features
+    ]
+
+
+def nightly_gherkin_ui(root: Path, env: tuple[tuple[str, str], ...]) -> CheckSpec | None:
+    """The mac gui's @ui features as one xcodebuild run under caffeinate (needs UI automation and the display)."""
+    features = [f for f in json.loads((root / "gherkin/generated/features-mac-gui.json").read_text()) if f.startswith("ui")]
+    if not features:
+        return None
+    only = tuple(f"-only-testing:starUITests/GeneratedFeatureUITests/{gherkin_test_name(f)}" for f in features)
+    return CheckSpec(
+        "gherkin:gui-ui", f"gherkin mac gui @ui ({len(features)} features)",
+        ("xcodebuild", "test", "-project", "gui/star.xcodeproj", "-scheme", "star", "-configuration", "Release",
+         "-derivedDataPath", "{build}/gui-ui-dd", "ENABLE_TESTABILITY=YES", *only,
+         "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM="),
+        parser="xctest", expect=len(features), ui=True, env=tuple((("TEST_RUNNER_" + k, v) for k, v in env)) + env,
+    )
+
+
+def nightly_local_checks() -> list[str]:
+    """Every local test suite the impact map knows."""
+    return [cid for cid in CHECKS if cid.startswith("test:")]
+
+
 # Top-level directories that hold no source the impact map needs to know about.
 IGNORED_TOP_LEVEL = {
     ".claude", ".git", ".github", "docs", "plans", "demo_videos", "test_data", "ffmpeg", "opencv",
@@ -54,6 +108,8 @@ class CheckSpec:
     heavy: bool = True
     ui: bool = False  # keep the display awake (caffeinate -d -u)
     results_glob: str | None = None  # gradle JUnit XML directory, relative to cwd
+    env: tuple[tuple[str, str], ...] = ()  # extra environment; values may use {root}
+    expect: int | None = None  # exactly this many tests must have executed (a partial run is not green)
 
 
 def _swift_build(pkg: str, *extra: str) -> CheckSpec:
@@ -115,7 +171,7 @@ CHECKS: dict[str, CheckSpec] = {
         ),
         CheckSpec(
             "test:pipeline", "pytest pipeline",
-            ("uv", "run", "--project", "pipeline", "pytest", "-q"), parser="pytest", heavy=False,
+            ("uv", "run", "pytest", "-q"), cwd="pipeline", parser="pytest", heavy=False,  # from pipeline/, so its pytest ini applies
         ),
         CheckSpec(
             "t0:pipeline-static", "pyright + ruff pipeline",

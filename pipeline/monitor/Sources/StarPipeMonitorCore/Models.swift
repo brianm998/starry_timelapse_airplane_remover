@@ -19,13 +19,26 @@ public struct Snapshot: Codable, Sendable, Equatable {
     public var now: Double
     public var version: String
     public var repo: String
+    public var nightly: NightlyInfo?
 
     enum CodingKeys: String, CodingKey {
-        case daemon, pause, heavy, tickets, groups, runtime, landing, develop, now, version, repo
+        case daemon, pause, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
         case usagePauseUntil = "usage_pause_until"
         case interventionsWeek = "interventions_week"
         case eventsCursor = "events_cursor"
     }
+}
+
+/// The latest nightly (plan §8.1 T4): `line` is the daemon's one-line summary, so the app never composes its own.
+public struct NightlyInfo: Codable, Sendable, Equatable {
+    public var id: Int
+    public var at: Double
+    public var running: Bool
+    public var status: String
+    public var ref: String
+    public var sha: String
+    public var reds: Int
+    public var line: String
 }
 
 public struct DaemonInfo: Codable, Sendable, Equatable {

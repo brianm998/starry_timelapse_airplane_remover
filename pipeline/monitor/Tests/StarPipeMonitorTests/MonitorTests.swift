@@ -21,6 +21,9 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(s.develop.gate, ["linux": "success"])
         XCTAssertEqual(s.develop.knownRed, 1)
         XCTAssertEqual(s.interventionsWeek, ["answer": 1])
+        XCTAssertEqual(s.nightly?.reds, 1)
+        XCTAssertEqual(s.nightly?.line, "Sat 03:00 · aaaaaaaa · 1 red")
+        XCTAssertEqual(s.nightly?.running, false)
         XCTAssertNil(s.usagePauseUntil)
     }
 
