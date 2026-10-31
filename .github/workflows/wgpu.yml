@@ -10,7 +10,9 @@ name: wgpu GPU backend
 # the existing Metal kernels (the tests skip that comparison where there is no Metal backend).
 #
 # The build setup is cli.yml's, deliberately the same (toolchain pins, OpenCV cache keys) so the caches
-# are shared; only StarCpp is built, not the whole CLI. wgpu-native itself comes from wgpu/fetch.sh.
+# are shared; only StarCpp is built, not the whole CLI. The macOS leg runs on macos-15 like cli.yml's `macos`
+# job and uses its opencv-macos15- key, not the plain key the remaining macos-14 release jobs save under.
+# wgpu-native itself comes from wgpu/fetch.sh.
 #
 # Opt-in at run time: nothing touches a GPU driver unless STAR_WGPU is set, and these jobs set it.
 
@@ -105,7 +107,7 @@ jobs:
   # ─── macOS: Metal, and the byte-for-byte comparison with the Metal kernels ───
   macos:
     name: macOS · Metal
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -123,7 +125,7 @@ jobs:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos15-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
 
       - name: Build OpenCV (if not cached)
         run: |
