@@ -437,8 +437,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Same cache keys as cli.yml's macos jobs (also macos-14) so the universal
-      # OpenCV / StarDecisionTrees builds are shared instead of rebuilt.
+      # Same cache keys as cli.yml's macos-signed-release (also macos-14) so the
+      # universal OpenCV / StarDecisionTrees builds are shared instead of rebuilt.
+      # cli.yml's PR `macos` job moved to macos-15 and its own macos15 keys.
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
