@@ -5,12 +5,16 @@
     "extraction.error",
     "extraction.progress",
     "extraction.waitpanel",
+    "frame.number",
     "location.available",
     "location.choose",
     "location.folder",
     "location.needed",
     "location.reset",
     "location.short",
+    "mode.edit",
+    "mode.grid",
+    "mode.scrub",
     "process.frames",
     "processing.extraction",
     "processing.headline",
@@ -44,7 +48,9 @@
     "videoimport.background",
     "videoimport.compression.*",
     "videoimport.format.*",
-    "videoimport.import"
+    "videoimport.import",
+    "view.final",
+    "view.original"
   ],
   "knownGaps": {
     "gui": {},

@@ -89,6 +89,15 @@
     },
     "uiSequenceWindowsGoWithIt": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiModePickers": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiViewPickerNeedsAnImage": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiFrameKeys": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }

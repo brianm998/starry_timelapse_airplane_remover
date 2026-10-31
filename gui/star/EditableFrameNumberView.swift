@@ -37,6 +37,7 @@ struct EditableFrameNumberView: View {
         } else {
             Text(localized("ui.frame_n_lower", frameNumberString))
               .foregroundColor(.white)
+              .accessibilityIdentifier("frame.number")
               .cursor(.iBeam)
               .onTapGesture(count: 1) {
                   self.editFrameNumberMode = true

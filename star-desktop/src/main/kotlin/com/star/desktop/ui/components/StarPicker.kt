@@ -2,6 +2,9 @@ package com.star.desktop.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +39,8 @@ fun <T> StarPicker(
     enabled: Boolean = true,
     /** Whether one option can be chosen: a mode the frame has no image for is greyed out and does nothing. */
     isEnabled: (T) -> Boolean = { true },
+    /** What an option is called for tests (`mode.edit`); the option also says whether it is the selected one, as a radio button does. */
+    tag: (T) -> String? = { null },
 ) {
     Row(
         modifier.alpha(if (enabled) 1f else 0.5f).clip(StarShapes.picker).background(StarColors.pickerTrack).padding(2.dp),
@@ -48,7 +53,8 @@ fun <T> StarPicker(
                 Modifier
                     .clip(StarShapes.picker)
                     .background(if (sel) StarColors.white else Color.Transparent)
-                    .clickable(enabled = usable) { onSelect(opt) }
+                    .selectable(selected = sel, enabled = usable, role = Role.RadioButton) { onSelect(opt) }
+                    .then(tag(opt)?.let { Modifier.testTag(it) } ?: Modifier)
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
                 Text(

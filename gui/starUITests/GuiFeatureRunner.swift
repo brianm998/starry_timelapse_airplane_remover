@@ -73,6 +73,7 @@ final class GuiFeatureRunner {
         // the @ui vocabulary
         .copySequence: { try $0.copySequenceStep() },
         .openCopied: { try $0.openCopiedSequence() },
+        .openCopiedNoQuestions: { try $0.openCopiedSequence(askingTheStartupQuestions: false) },
         .clickId: { try $0.clickId($0.args[0]) },
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
@@ -82,6 +83,7 @@ final class GuiFeatureRunner {
         .idOn: { try $0.expectOn($0.args[0], on: true) },
         .idOff: { try $0.expectOn($0.args[0], on: false) },
         .idReads: { try $0.expectReads($0.args[0], key: $0.args[1]) },
+        .idSays: { try $0.expectSays($0.args[0], text: $0.args[1]) },
         .appNoSequence: { try $0.launch(arguments: []) },
         .prefsRecents: { try $0.seedRecents(Int($0.args[0]) ?? 0) },
         .prefsListRecents: { try $0.expectRecents(Int($0.args[0]) ?? -1) },
@@ -247,9 +249,9 @@ final class GuiFeatureRunner {
     }
 
     /// Opens the copy as the open panel would, and stops there: the startup questions are the feature's to answer.
-    private func openCopiedSequence() throws {
+    private func openCopiedSequence(askingTheStartupQuestions: Bool = true) throws {
         guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
-        try launch(arguments: ["-StarUITestOpenSequence", copy.path])
+        try launch(arguments: ["-StarUITestOpenSequence", copy.path] + (askingTheStartupQuestions ? [] : ["-StarUITestSkipStartupQuestions", "YES"]))
     }
 
     /// Clicks the control once it can be hit: a control that is there for a moment while a screen is still being put up (the startup questions
@@ -295,6 +297,14 @@ final class GuiFeatureRunner {
             throw RunnerError("\(key) is not in the English catalogue")
         }
         return text
+    }
+
+    /// The element's text is exactly [text] (English: the runs of a @ui feature are in English).
+    private func expectSays(_ identifier: String, text expected: String) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
+        try waitFor("\(identifier) to say \"\(expected)\"", timeout: 20, detail: { "(it says \(texts()))" }) { texts().contains(expected) }
     }
 
     /// The element's text is the catalogue's text for [key].
