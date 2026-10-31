@@ -39,6 +39,42 @@ enum ProcessingButtonRole: Equatable {
     }
 }
 
+/// Which of the bottom bar's two buttons are on screen.
+///
+/// "Render Video" is there only once processing is complete — every frame finished, no run
+/// going, no horizon reference still waiting to be applied — because before that there is
+/// nothing to make a video from.  The Process button gives its place up to it at the same
+/// moment: a finished sequence has nothing left to process, and the two side by side took
+/// more of the bar than a disabled button is worth.
+///
+/// A sequence with no frames is never complete; there is nothing to render, and the
+/// Process button is where the user starts.
+struct ProcessingButtonsLayout: Equatable {
+    var showsProcess: Bool
+    var showsRender: Bool
+
+    /// A video being written holds off a second one, so Render stays on screen but off.
+    var renderEnabled: Bool
+
+    static func current(
+      isProcessingFrames: Bool,
+      isRenderingVideo: Bool,
+      completeCount: Int,
+      frameCount: Int,
+      pendingHorizonRefinement: Bool = false
+    ) -> ProcessingButtonsLayout {
+        let complete = frameCount > 0
+          && completeCount == frameCount
+          && !isProcessingFrames
+          && !pendingHorizonRefinement
+        return ProcessingButtonsLayout(
+          showsProcess: !complete,
+          showsRender: complete,
+          renderEnabled: complete && !isRenderingVideo
+        )
+    }
+}
+
 struct LeftPanel: View {
     /// The playback speeds the Display picker offers, in frames per second.  The desktop's picker offers the same
     /// (`gherkin/ui/vectors/constants.json` holds the list, and a test on each side checks it).

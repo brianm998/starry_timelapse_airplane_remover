@@ -148,8 +148,8 @@ private fun ModeAndViewPickers(vm: SequenceViewModel, mode: com.star.desktop.dom
 
 /**
  * "Process Frames" / "Show Progress" and "Render Video" (macOS `ProcessingButtonsView`). The first is one button in two roles: while a
- * run is going it puts the processing screen back, otherwise it opens the settings, where a run is started. Render is enabled once
- * every frame is complete, since there is nothing to render a video from before that.
+ * run is going it puts the processing screen back, otherwise it opens the settings, where a run is started. Render is on screen only
+ * once processing is complete, since there is nothing to render a video from before that, and the first button gives its place up to it.
  */
 @Composable
 private fun ProcessingButtons(app: com.star.desktop.ui.app.AppViewModel, vm: SequenceViewModel) {
@@ -160,27 +160,32 @@ private fun ProcessingButtons(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
     val total = vm.frameCount
     val counts = remember(states, total) { com.star.desktop.domain.FrameStateCounts(states, total) }
     val role = com.star.desktop.domain.ProcessingButtonRole.current(processing, rendering, counts, total, refinementPending)
+    val layout = com.star.desktop.domain.ProcessingButtonsLayout.current(processing, rendering, counts.complete, total, refinementPending)
     val colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = StarColors.accent)
 
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        when (role) {
-            com.star.desktop.domain.ProcessingButtonRole.Status -> HoverTip(localized("ui.show_the_processing_status_again")) {
-                androidx.compose.material3.Button(onClick = { vm.reopenProcessingModal() }, colors = colors) { Text(localized("ui.show_progress")) }
-            }
-            is com.star.desktop.domain.ProcessingButtonRole.Process -> HoverTip(localized("ui.choose_settings_and_process_these_frames")) {
-                androidx.compose.material3.Button(
-                    onClick = { app.openSettings() },
-                    enabled = role.enabled,
-                    colors = colors,
-                    modifier = Modifier.testTag("process.frames"),
-                ) { Text(localized("ui.process_frames")) }
+        if (layout.showsProcess) {
+            when (role) {
+                com.star.desktop.domain.ProcessingButtonRole.Status -> HoverTip(localized("ui.show_the_processing_status_again")) {
+                    androidx.compose.material3.Button(onClick = { vm.reopenProcessingModal() }, colors = colors) { Text(localized("ui.show_progress")) }
+                }
+                is com.star.desktop.domain.ProcessingButtonRole.Process -> HoverTip(localized("ui.choose_settings_and_process_these_frames")) {
+                    androidx.compose.material3.Button(
+                        onClick = { app.openSettings() },
+                        enabled = role.enabled,
+                        colors = colors,
+                        modifier = Modifier.testTag("process.frames"),
+                    ) { Text(localized("ui.process_frames")) }
+                }
             }
         }
-        androidx.compose.material3.Button(
-            onClick = { app.openRenderVideo() },
-            enabled = counts.complete == total && !processing && !rendering,
-            colors = colors,
-        ) { Text(localized("ui.render_video_from_n_frames_lower", total), fontSize = 12.sp) }
+        if (layout.showsRender) {
+            androidx.compose.material3.Button(
+                onClick = { app.openRenderVideo() },
+                enabled = layout.renderEnabled,
+                colors = colors,
+            ) { Text(localized("ui.render_video")) }
+        }
     }
 }
 

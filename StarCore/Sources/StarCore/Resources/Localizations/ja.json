@@ -835,7 +835,6 @@
   "ui.render_video_2": "動画をレンダリング…",
   "ui.render_video_after_processing": "処理後に動画をレンダリングしますか?",
   "ui.render_video_from_n_frames": "{0} フレームから動画をレンダリング",
-  "ui.render_video_from_n_frames_lower": "{0} フレームから動画をレンダリング",
   "ui.render_video_no_frames": "動画にできる処理済みのフレームがまだありません。先にフレームを処理してください。",
   "ui.render_video_now": "今すぐ動画をレンダリングしますか?",
   "ui.rendering_error": "レンダリングエラー: {0}",
