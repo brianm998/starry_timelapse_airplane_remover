@@ -263,7 +263,10 @@ STAR_AVX2 inline void interpolateRangeAvx2(const uint16_t *S0, size_t sstep, int
                     // 8 + 4 so nothing past them is touched, then one float lane per channel:
                     // lanes 0-2 are the channels at x, lanes 0-2 of the second vector the
                     // channels at x + 1.  Lane 3 is whatever it is and is not stored.
-                    auto taps = [](const uint16_t *p, __m128 &left, __m128 &right) {
+                    // STAR_AVX2 on the lambda too: clang does not give a lambda its enclosing
+                    // function's target features, so without it _mm_cvtepu16_epi32 (SSE4.1)
+                    // fails to inline on a baseline x86-64 Linux build.
+                    auto taps = [](const uint16_t *p, __m128 &left, __m128 &right) STAR_AVX2 {
                         int tail;
                         std::memcpy(&tail, p + 4, sizeof tail);
                         const __m128i six = _mm_unpacklo_epi64(_mm_loadl_epi64((const __m128i *)p),
