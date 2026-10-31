@@ -125,6 +125,8 @@ class DesktopFeatureRunner {
         StepAction.MENU_CHOOSE to { t -> chooseMenuCommand(t, args[0]) },
         StepAction.MENU_ENABLED to { t -> expectMenuCommand(t, args[0], enabled = true) },
         StepAction.MENU_DISABLED to { t -> expectMenuCommand(t, args[0], enabled = false) },
+        StepAction.MENU_THERE to { t -> expectMenu(t, args[0], there = true) },
+        StepAction.MENU_NOT_THERE to { t -> expectMenu(t, args[0], there = false) },
         StepAction.WINDOW_OPEN to { t -> expectWindow(t, args[0], open = true) },
         StepAction.WINDOW_NOT_OPEN to { t -> expectWindow(t, args[0], open = false) },
     )
@@ -826,6 +828,18 @@ class DesktopFeatureRunner {
         val (title, label) = menuItem(command)
         val model = vm ?: return null
         return t.runOnUiThread { starMenusNow(model) }.firstOrNull { it.title == title }?.entries?.filterIsInstance<MenuEntry.Command>()?.firstOrNull { it.label == label }
+    }
+
+    /** The menu is in the menu bar, or not: the title is the catalogue's text for the key `gherkin/ui/commands.json` gives the menu. */
+    private fun expectMenu(t: ComposeUiTest, menu: String, there: Boolean) {
+        val table = JsonParser.parseString(File(repoRoot(), "gherkin/ui/commands.json").readText()).asJsonObject
+        val titleKey = table.getAsJsonObject("menus")[menu]?.asString ?: throw RunnerError("no menu \"$menu\" in gherkin/ui/commands.json")
+        val title = com.star.desktop.i18n.localized(titleKey)
+        fun isThere(): Boolean {
+            val model = vm ?: return false
+            return t.runOnUiThread { starMenusNow(model) }.any { it.title == title }
+        }
+        waitFor(t, "the \"$title\" menu to be ${if (there) "in" else "out of"} the menu bar", 20_000) { isThere() == there }
     }
 
     private fun expectMenuCommand(t: ComposeUiTest, command: String, enabled: Boolean) {

@@ -7,7 +7,9 @@ Feature: With a sequence open and nothing running, the menu commands are on, exc
   Scenario: The commands of an open sequence
     Given a fresh copy of the sequence {sequence}
     When  I open the copied sequence without its startup questions
-    Then  the menu command "processAllFrames" is enabled
+    Then  the menu "actions" is there
+      And the menu "tools" is there
+      And the menu command "processAllFrames" is enabled
       And the menu command "processFramesFromHere" is enabled
       And the menu command "processCurrentFrame" is enabled
       And the menu command "reprocessCurrentFrame" is enabled
