@@ -282,7 +282,7 @@ class Engine:
                 if not await self._review(t):
                     return
             elif t.state == "ready":
-                if not ship.publish(self, t):
+                if not await asyncio.to_thread(ship.publish, self, t):
                     return
             elif t.state == "ci":
                 if not await ship.run_ci(self, t):

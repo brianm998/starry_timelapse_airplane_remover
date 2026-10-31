@@ -22,8 +22,14 @@ class GitHubError(RuntimeError):
     pass
 
 
+GH_TIMEOUT_S = 120.0
+
+
 def gh_runner(args: Sequence[str], stdin: str | None) -> str:
-    done = subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True, check=False)
+    try:
+        done = subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True, check=False, timeout=GH_TIMEOUT_S)
+    except subprocess.TimeoutExpired as exc:  # a hung call must not hang the daemon with it
+        raise GitHubError(f"gh {' '.join(args)} timed out after {GH_TIMEOUT_S:.0f}s") from exc
     if done.returncode != 0:
         raise GitHubError(f"gh {' '.join(args)} failed: {(done.stderr or done.stdout).strip()}")
     return done.stdout
