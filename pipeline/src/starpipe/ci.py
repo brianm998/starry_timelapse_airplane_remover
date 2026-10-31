@@ -97,8 +97,8 @@ def judge(jobs: list[Job], baseline: Baseline, *, now: float, head_pushed_at: fl
         elif j.red:
             if baseline(*j.key) != "success":
                 verdict.known_red.append(j)  # already failing on develop (or never seen): does not block
-            elif infra(j) and j.key not in reran:
-                verdict.rerun.append(j)
+            elif j.key not in reran:
+                verdict.rerun.append(j)  # a new red outside the gate gets one rerun first (a flaky test is not worth a model session): it may be a flake
             elif infra(j):
                 verdict.known_red.append(j)  # infrastructure twice (e.g. a runner-image brownout): not this PR's fault
             else:
