@@ -1229,5 +1229,7 @@
   "settings_tab.gpu": "Использование GPU",
   "settings_tab.alignment": "Выравнивание",
   "settings_tab.horizon": "Горизонт",
-  "settings_tab.memory": "Память"
+  "settings_tab.memory": "Память",
+  "ui.render_options_after_processing_title": "Выберите настройки видео",
+  "ui.use_these_settings": "Использовать эти настройки"
 }

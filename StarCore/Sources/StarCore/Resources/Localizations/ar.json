@@ -1229,5 +1229,7 @@
   "settings_tab.gpu": "استخدام GPU",
   "settings_tab.alignment": "المحاذاة",
   "settings_tab.horizon": "الأفق",
-  "settings_tab.memory": "الذاكرة"
+  "settings_tab.memory": "الذاكرة",
+  "ui.render_options_after_processing_title": "اختيار إعدادات الفيديو",
+  "ui.use_these_settings": "استخدام هذه الإعدادات"
 }
