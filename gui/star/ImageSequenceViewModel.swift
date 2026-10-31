@@ -941,12 +941,14 @@ public final class ImageSequenceViewModel {
         getCleanMethod(forFrame: currentIndex)
     }
     
+    /// A frame's own override is read from `pixelReplacementOverrides`, which the views observe and which holds what the config does (they are set
+    /// together in `set(cleanMethod:forFrame:)`); the config is not observable, so the right panel's mode label read from it stayed as it was after
+    /// the mode was changed.
     func getCleanMethod(forFrame frame: Int) -> CleanMethod {
-        let realConfig = config.config()
-        if let value = realConfig.pixelReplacementOverrides[frame] {
+        if let value = pixelReplacementOverrides[frame] {
             return value
         } else {
-            return realConfig.cleanMethod
+            return config.config().cleanMethod
         }
     }
 
@@ -955,12 +957,7 @@ public final class ImageSequenceViewModel {
     }
     
     func hasOverriddenCleanMethod(forFrame frame: Int) -> Bool {
-        let realConfig = config.config()
-        if let value = realConfig.pixelReplacementOverrides[frame] {
-            return true
-        } else {
-            return false
-        }
+        pixelReplacementOverrides[frame] != nil
     }
     
     func set(cleanMethod: CleanMethod, forFrame frameIndex: Int) {

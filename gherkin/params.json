@@ -146,6 +146,15 @@
     },
     "uiMultiSelectSheet": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiFrameModeChange": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiFindOutliersInline": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiOutlierClickUndecided": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }

@@ -292,6 +292,7 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
                 Text(localized("ui.processing_frames"))
                   .font(.title2)
                   .foregroundColor(.white)
+                  .accessibilityIdentifier("processing.modal")
                 // The status line wins while there is one: it says what star is doing,
                 // where the count would be describing a sequence this run is in the middle
                 // of taking apart — "40 / 40 frames complete" over a run that has just
