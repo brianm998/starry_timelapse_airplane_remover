@@ -1,0 +1,69 @@
+name: Release stats
+
+# Once a day, snapshots the release download counts, stars and repo traffic onto the `stats` branch, so GitHub's running
+# totals and 14-day traffic window become a history. The branch is separate from develop to keep these commits out of it,
+# and its README.md is the latest report. See tools/release-stats/README.md.
+#
+# Scheduled workflows only run from the default branch (develop), so this does nothing until it is merged there.
+# Run it by hand from the Actions tab to take a snapshot right away.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-stats
+
+jobs:
+  snapshot:
+    name: Snapshot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # The traffic API needs push access, which github.token does not have. Optional: without this secret the
+      # downloads and stars are still kept and the run says traffic was skipped. See the README, "Traffic".
+      STATS_TOKEN: ${{ secrets.STATS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Does the stats branch exist yet?
+        id: branch
+        run: echo "exists=$(git ls-remote --heads origin refs/heads/stats | wc -l)" >> "$GITHUB_OUTPUT"
+
+      # An empty ref checks out the default branch, which the first run turns into a fresh `stats` branch below.
+      - name: Check out the stats branch
+        uses: actions/checkout@v4
+        with:
+          path: stats-data
+          ref: ${{ steps.branch.outputs.exists == '1' && 'stats' || '' }}
+
+      - name: Start the stats branch
+        if: steps.branch.outputs.exists != '1'
+        working-directory: stats-data
+        run: |
+          git checkout --orphan stats
+          git rm -rf --quiet .
+
+      - name: Collect
+        run: python3 tools/release-stats/stats.py collect --data stats-data
+
+      - name: Report
+        run: python3 tools/release-stats/stats.py report --data stats-data | tee stats-data/README.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the snapshot
+        working-directory: stats-data
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing changed."
+            exit 0
+          fi
+          git commit -m "Snapshot $(date -u +%F)"
+          git push origin HEAD:stats
