@@ -125,6 +125,9 @@
     },
     "uiTranslatedScreen": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiMenusNeedASequence": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }

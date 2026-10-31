@@ -99,6 +99,8 @@ final class GuiFeatureRunner {
         .menuChoose: { try $0.chooseMenuCommand($0.args[0]) },
         .menuEnabled: { try $0.expectMenuCommand($0.args[0], enabled: true) },
         .menuDisabled: { try $0.expectMenuCommand($0.args[0], enabled: false) },
+        .menuThere: { try $0.expectMenu($0.args[0], there: true) },
+        .menuNotThere: { try $0.expectMenu($0.args[0], there: false) },
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
         .windowNotOpen: { try $0.expectWindow($0.args[0], open: false) },
     ]
@@ -367,6 +369,24 @@ final class GuiFeatureRunner {
             throw RunnerError("\(command) is not a command of gherkin/ui/commands.json")
         }
         return (try english(titleKey), try english(labelKey))
+    }
+
+    /// The menu's title in the feature's language: from `gherkin/ui/commands.json` (`menus`) and the catalogue.
+    private func menuTitle(_ menu: String) throws -> String {
+        let url = Self.repoRoot.appendingPathComponent("gherkin/ui/commands.json")
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any],
+              let menus = object["menus"] as? [String: String], let titleKey = menus[menu] else {
+            throw RunnerError("\(menu) is not a menu of gherkin/ui/commands.json")
+        }
+        return try english(titleKey)
+    }
+
+    /// The menu is in the menu bar, or not (the gui builds Actions and Tools for a sequence and has neither without one).
+    private func expectMenu(_ menu: String, there: Bool) throws {
+        let title = try menuTitle(menu)
+        try waitFor("the \"\(title)\" menu to be \(there ? "in" : "out of") the menu bar", timeout: 20, interval: 1) {
+            app.menuBars.menuBarItems[title].exists == there
+        }
     }
 
     private func chooseMenuCommand(_ command: String) throws {

@@ -357,7 +357,7 @@ func validateUITags(_ f: ParsedFeature) throws {
 
 /// What a UI step may name: an argument called `id` is an identifier in `gherkin/ui/ids.json` (or in one of its `prefix*` families), one called `key`
 /// is a key of the English catalogue, one called `command` is a command of `gherkin/ui/commands.json`, and one called `fixture` is a file of
-/// `gherkin/ui/fixtures/prefs/` (without `.json`), and one called `code` is a language of the catalogue (`de`, `pt-BR`). A feature that names a control neither client has is a failure here, not a timeout in a runner.
+/// `gherkin/ui/fixtures/prefs/` (without `.json`), one called `code` is a language of the catalogue (`de`, `pt-BR`), and one called `menu` is a menu of `gherkin/ui/commands.json` (`actions`). A feature that names a control neither client has is a failure here, not a timeout in a runner.
 struct UIReferences {
     let ids: [String]
     let catalogueKeys: Set<String>
@@ -367,6 +367,8 @@ struct UIReferences {
     let prefsFixtures: Set<String>
     /// The languages of the catalogue (the files of `StarCore/.../Localizations/` but `languages.json`): what an argument called `code` may name.
     let languages: Set<String>
+    /// The menus of `gherkin/ui/commands.json`: what an argument called `menu` may name.
+    let menus: Set<String>
 
     func covers(id: String) -> Bool {
         ids.contains { $0.hasSuffix("*") ? id.hasPrefix(String($0.dropLast())) : $0 == id }
@@ -383,15 +385,16 @@ func loadUIReferences(root: URL) throws -> UIReferences {
         throw GenError("the English catalogue (en.json) must be a flat object")
     }
     let commandsURL = root.appendingPathComponent("gherkin/ui/commands.json")
-    guard let commands = (try JSONSerialization.jsonObject(with: Data(contentsOf: commandsURL)) as? [String: Any])?["commands"] as? [[String: String]] else {
-        throw GenError("gherkin/ui/commands.json must be an object with a \"commands\" array")
+    let commandsObject = try JSONSerialization.jsonObject(with: Data(contentsOf: commandsURL)) as? [String: Any]
+    guard let commands = commandsObject?["commands"] as? [[String: String]], let menus = commandsObject?["menus"] as? [String: String] else {
+        throw GenError("gherkin/ui/commands.json must be an object with a \"commands\" array and a \"menus\" object")
     }
     let fixturesURL = root.appendingPathComponent("gherkin/ui/fixtures/prefs")
     let fixtureFiles = (try? FileManager.default.contentsOfDirectory(atPath: fixturesURL.path)) ?? []
     let prefsFixtures = Set(fixtureFiles.filter { $0.hasSuffix(".json") }.map { String($0.dropLast(".json".count)) })
     let languageFiles = (try? FileManager.default.contentsOfDirectory(atPath: enURL.deletingLastPathComponent().path)) ?? []
     let languages = Set(languageFiles.filter { $0.hasSuffix(".json") && $0 != "languages.json" }.map { String($0.dropLast(".json".count)) })
-    return UIReferences(ids: ids, catalogueKeys: Set(en.keys), commandIds: Set(commands.compactMap { $0["id"] }), prefsFixtures: prefsFixtures, languages: languages)
+    return UIReferences(ids: ids, catalogueKeys: Set(en.keys), commandIds: Set(commands.compactMap { $0["id"] }), prefsFixtures: prefsFixtures, languages: languages, menus: Set(menus.keys))
 }
 
 func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], featureParams: [String: String], references: UIReferences) throws {
@@ -413,6 +416,9 @@ func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], 
             }
             if name == "command" && !references.commandIds.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a command of gherkin/ui/commands.json")
+            }
+            if name == "menu" && !references.menus.contains(arg) {
+                throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a menu of gherkin/ui/commands.json (\(references.menus.sorted().joined(separator: ", ")))")
             }
             if name == "code" && !references.languages.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a language of the catalogue (a file of StarCore/Sources/StarCore/Resources/Localizations/)")

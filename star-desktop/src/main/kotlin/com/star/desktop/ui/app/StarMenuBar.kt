@@ -10,7 +10,6 @@ import androidx.compose.ui.window.MenuBar
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.ToolType
 import com.star.desktop.domain.isRendering
-import com.star.desktop.domain.usesOutliers
 import com.star.desktop.ui.initial.OpenKind
 import com.star.desktop.ui.initial.chooseDirectory
 import com.star.desktop.ui.initial.chooseFile
@@ -91,8 +90,6 @@ class MenuState(
     val processing: Boolean = false,
     /** A video is rendering. */
     val renderingVideo: Boolean = false,
-    /** The open frame's clean method reviews outliers (the desktop's own refinement: the gui leaves the decision-tree items on). */
-    val usesOutliers: Boolean = true,
 ) {
     /** The gui's `!isProcessingModalUp`: Process Current Frame, Processing Settings, the horizon painter. */
     val notUnderModal: Boolean get() = hasSession && !modalUp
@@ -116,15 +113,12 @@ class MenuState(
 fun starMenus(app: AppViewModel): List<MenuSpec> {
     val screen by app.screen.collectAsState()
     val svm = (screen as? AppScreen.Sequence)?.vm
-    val currentFrame = svm?.currentIndex?.collectAsState()?.value ?: 0
-    val currentMethod = svm?.frameVMFor(currentFrame)?.info?.collectAsState()?.value?.cleanMethod
     val state = MenuState(
         hasSession = svm != null,
         modalUp = svm?.showProcessingModal?.collectAsState()?.value == true,
         paintingHorizon = svm?.horizonPaintMode?.collectAsState()?.value == true,
         processing = svm?.isProcessing?.collectAsState()?.value == true,
         renderingVideo = app.renderState.collectAsState().value.isRendering,
-        usesOutliers = currentMethod?.usesOutliers ?: true,
     )
     return starMenus(app, svm, state)
 }
@@ -135,14 +129,12 @@ fun starMenus(app: AppViewModel): List<MenuSpec> {
  */
 fun starMenusNow(app: AppViewModel): List<MenuSpec> {
     val svm = (app.screen.value as? AppScreen.Sequence)?.vm
-    val currentMethod = svm?.frameVMFor(svm.currentIndex.value)?.info?.value?.cleanMethod
     val state = MenuState(
         hasSession = svm != null,
         modalUp = svm?.showProcessingModal?.value == true,
         paintingHorizon = svm?.horizonPaintMode?.value == true,
         processing = svm?.isProcessing?.value == true,
         renderingVideo = app.isRendering,
-        usesOutliers = currentMethod?.usesOutliers ?: true,
     )
     return starMenus(app, svm, state)
 }
@@ -150,7 +142,6 @@ fun starMenusNow(app: AppViewModel): List<MenuSpec> {
 private fun starMenus(app: AppViewModel, svm: SequenceViewModel?, state: MenuState): List<MenuSpec> {
     val hasSession = state.hasSession
     val hotkeys = state.hotkeys
-    val usesOutliers = state.usesOutliers
 
     return MenuBuilder().apply {
         Menu(localized("ui.file"), mnemonic = 'F') {
@@ -174,7 +165,9 @@ private fun starMenus(app: AppViewModel, svm: SequenceViewModel?, state: MenuSta
 
         // The gui's tree (owner decision D9): File, Actions, Tools and Window, with the items in its order. The desktop used to have View, Process,
         // Export and Outliers menus instead; `gherkin/ui/commands.json` says which menu each command is in, and a test per client holds both to it.
-        Menu(localized("menu.actions"), mnemonic = 'A') {
+        // Without a sequence there is nothing for Actions and Tools to act on, and the gui has neither menu then (it builds them for a sequence): so
+        // here too, and the menu bar is File, Window and Language until one is open.
+        if (hasSession) Menu(localized("menu.actions"), mnemonic = 'A') {
             // Accelerators per the authoritative Swift source (StarCommands.swift): 'a' removes all,
             // 'k' keeps all, 'u' clears undecided. (KOTLIN_CLIENT_SPEC §5.8's prose had a/k swapped.)
             Item(localized("ui.remove_all"), enabled = hotkeys, shortcut = KeyShortcut(Key.A)) {
@@ -195,17 +188,17 @@ private fun starMenus(app: AppViewModel, svm: SequenceViewModel?, state: MenuSta
             Item(localized("ui.render_video_2"), enabled = state.canRenderVideo) { app.openRenderVideo() }
             Item(localized("ui.re_process_this_frame_from_the_start"), enabled = hasSession) { svm?.reprocessCurrent() }
             Item(localized("ui.find_outliers_for_this_frame"), enabled = hasSession) { svm?.findOutliersCurrent() }
-            Item(localized("ui.decision_tree_all"), enabled = hotkeys && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame() }
+            Item(localized("ui.decision_tree_all"), enabled = hotkeys) { svm?.applyDecisionTreeToCurrentFrame() }
             // Every frame at once: this was a button in the right panel, which the gui's panel never had (owner decision D8), so it is a command.
             Item(localized("ui.decision_tree_all_frames"), enabled = hotkeys) { svm?.applyDecisionTreeAll() }
-            Item(localized("ui.dt_auto_only"), enabled = hasSession && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame(autoOnly = true) }
+            Item(localized("ui.dt_auto_only"), enabled = hasSession) { svm?.applyDecisionTreeToCurrentFrame(autoOnly = true) }
             Item(localized("ui.render_this_frame"), enabled = hotkeys) { svm?.renderCurrentFrame() }
             // As the gui's: a run over the sequence with the question about rendering the video (frames already written are skipped), not
             // a separate pass that finished every frame from what was on disk (L4, D7).
             Item(localized("ui.render_all_frames"), enabled = hasSession) { app.requestProcessAll() }
         }
 
-        Menu(localized("menu.tools"), mnemonic = 'T') {
+        if (hasSession) Menu(localized("menu.tools"), mnemonic = 'T') {
             ToolType.selectable.forEachIndexed { i, t ->
                 Item(localized("ui.tool_n", t.displayName, i + 1), enabled = hotkeys) { svm?.setTool(t) }
             }
