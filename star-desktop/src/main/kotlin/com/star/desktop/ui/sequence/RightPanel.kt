@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.components.numberFieldRules
@@ -282,6 +283,7 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
                     count = i.staticNeighborCount, overridden = i.staticNeighborOverridden, max = vm.frameCount - 1, frame = current,
                     onCommit = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_STATIC, it) },
                     onReset = { vm.setNeighborOverride(com.star.proto.NeighborKind.NEIGHBOR_STATIC, null) },
+                    tag = "right.neighbors",
                 )
             }
         }
@@ -357,6 +359,8 @@ private fun SwitchRow(label: String, help: String?, checked: Boolean, onChange: 
 private fun NeighborCountEditor(
     prefixKey: String, suffixKey: String, count: Int, overridden: Boolean, max: Int, frame: Int,
     onCommit: (Int) -> Unit, onReset: () -> Unit,
+    /** The id a UI test finds the field by (`gherkin/ui/ids.json`). */
+    tag: String? = null,
 ) {
     var text by androidx.compose.runtime.remember(frame, count) { androidx.compose.runtime.mutableStateOf(count.toString()) }
     fun commit() {
@@ -386,6 +390,7 @@ private fun NeighborCountEditor(
                     .clip(RoundedCornerShape(3.dp))
                     .background(StarColors.cellDefault)
                     .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .then(tag?.let { Modifier.testTag(it) } ?: Modifier)
                     .numberFieldRules(commit = { commit() }, revert = { text = count.toString() }),
             )
             Text(localized(suffixKey), color = color, fontSize = 11.sp)

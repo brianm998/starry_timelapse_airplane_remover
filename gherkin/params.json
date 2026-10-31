@@ -119,6 +119,9 @@
     },
     "uiKeysWhilePainting": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiNumberFields": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }

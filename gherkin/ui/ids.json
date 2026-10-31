@@ -26,6 +26,7 @@
     "render.custom_frame_rate",
     "render.done",
     "render.error",
+    "right.neighbors",
     "sequencelocation.open",
     "settings.dismiss",
     "settings.process",

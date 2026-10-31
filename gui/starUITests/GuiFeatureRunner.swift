@@ -84,6 +84,10 @@ final class GuiFeatureRunner {
         .idOff: { try $0.expectOn($0.args[0], on: false) },
         .idReads: { try $0.expectReads($0.args[0], key: $0.args[1]) },
         .idSays: { try $0.expectSays($0.args[0], text: $0.args[1]) },
+        .typeInto: { try $0.typeInto($0.args[0], into: $0.args[1]) },
+        .idHolds: { try $0.expectHolds($0.args[0], number: Int($0.args[1]) ?? -1) },
+        .idFocused: { try $0.expectFocus($0.args[0], focused: true) },
+        .idNotFocused: { try $0.expectFocus($0.args[0], focused: false) },
         .appNoSequence: { try $0.launch(arguments: []) },
         .prefsRecents: { try $0.seedRecents(Int($0.args[0]) ?? 0) },
         .prefsListRecents: { try $0.expectRecents(Int($0.args[0]) ?? -1) },
@@ -305,6 +309,31 @@ final class GuiFeatureRunner {
     }
 
     /// The element's text is exactly [text] (English: the runs of a @ui feature are in English).
+    /// Clicks the field (which opens a tap-to-edit one), replaces what it holds with [text] and leaves it focused, as a user does before pressing Return.
+    private func typeInto(_ text: String, into identifier: String) throws {
+        try clickId(identifier)
+        app.typeKey("a", modifierFlags: .command)
+        app.typeText(text)
+    }
+
+    /// The control has the keyboard (a text field being typed into), or not.
+    private func expectFocus(_ identifier: String, focused: Bool) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        // `hasKeyboardFocus` is the attribute the accessibility API reports for it; XCUIElement has no public property on macOS.
+        func hasKeyboard() -> Bool { (e.value(forKey: "hasKeyboardFocus") as? Bool) ?? false }
+        try waitFor("\(identifier) \(focused ? "to have" : "not to have") the keyboard", timeout: 20, detail: { "(hasKeyboardFocus: \(hasKeyboard()))" }) { hasKeyboard() == focused }
+    }
+
+    /// The first whole number in the control's text is [number]: "7" in an open field, "merge with 7 static neighbors" in one that is not.
+    private func expectHolds(_ identifier: String, number: Int) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
+        func firstNumber(_ text: String) -> Int? { text.range(of: "[0-9]+", options: .regularExpression).flatMap { Int(text[$0]) } }
+        try waitFor("\(identifier) to hold \(number)", timeout: 20, detail: { "(it says \(texts()))" }) { texts().contains { firstNumber($0) == number } }
+    }
+
     private func expectSays(_ identifier: String, text expected: String) throws {
         try expectShown(identifier, shown: true)
         let e = element(identifier)

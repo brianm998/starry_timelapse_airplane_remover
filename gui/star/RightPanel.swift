@@ -690,6 +690,7 @@ struct StaticNeighborFrameOverrideView: View {
               focusedField: focusedField,
               focusField: .frameStaticNeighborFrames,
               alwaysOpen: false,
+              identifier: "right.neighbors",
               commitAction: { newVal in
                   viewModel.set(staticNeighborFrames: newVal, forFrame: viewModel.currentIndex)
               }

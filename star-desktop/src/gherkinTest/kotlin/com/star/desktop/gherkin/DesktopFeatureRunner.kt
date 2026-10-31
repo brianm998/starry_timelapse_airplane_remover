@@ -2,12 +2,15 @@ package com.star.desktop.gherkin
 
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -104,6 +107,10 @@ class DesktopFeatureRunner {
         StepAction.ID_OFF to { t -> expectOn(t, args[0], on = false) },
         StepAction.ID_READS to { t -> expectReads(t, args[0], args[1]) },
         StepAction.ID_SAYS to { t -> expectSays(t, args[0], args[1]) },
+        StepAction.TYPE_INTO to { t -> typeInto(t, args[0], args[1]) },
+        StepAction.ID_HOLDS to { t -> expectHolds(t, args[0], args[1].toInt()) },
+        StepAction.ID_FOCUSED to { t -> expectFocus(t, args[0], focused = true) },
+        StepAction.ID_NOT_FOCUSED to { t -> expectFocus(t, args[0], focused = false) },
         // What the Compose test host has no AWT for. The menu bar and the secondary windows are AWT, so these steps work on what the app draws
         // them from: the menus as data (`starMenus`, which `StarMenuBar` draws and nothing else builds; `starMenusNow` reads them without composing) and the view model's window flags (which
         // `Main.kt` hangs each `Window` on, and `MainWindowsTest` reads it to hold it to).
@@ -346,6 +353,29 @@ class DesktopFeatureRunner {
         }
     }
 
+    /** Clicks the field and replaces what it holds with [text], leaving it focused, as a user does before pressing Return. */
+    private fun typeInto(t: ComposeUiTest, text: String, id: String) {
+        clickId(t, id)
+        t.onAllNodes(hasTestTag(id))[0].performTextReplacement(text)
+    }
+
+    /** The control has the keyboard (a text field being typed into), or not. */
+    private fun expectFocus(t: ComposeUiTest, id: String, focused: Boolean) {
+        expectShown(t, id, shown = true)
+        waitFor(t, "\"$id\" ${if (focused) "to have" else "not to have"} the keyboard", 20_000, { "(Focused: ${semanticsOf(t, id)?.getOrNull(SemanticsProperties.Focused)})" }) {
+            (semanticsOf(t, id)?.getOrNull(SemanticsProperties.Focused) ?: false) == focused
+        }
+    }
+
+    /** The first whole number in the control's text is [number]: what an open field holds, or the text of a control that shows it. */
+    private fun expectHolds(t: ComposeUiTest, id: String, number: Int) {
+        expectShown(t, id, shown = true)
+        fun texts(): List<String> = semanticsOf(t, id)?.let { c ->
+            listOfNotNull(c.getOrNull(SemanticsProperties.EditableText)?.text) + c.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
+        }.orEmpty()
+        waitFor(t, "\"$id\" to hold $number", 20_000, { "(it says ${texts()})" }) { texts().any { Regex("[0-9]+").find(it)?.value?.toIntOrNull() == number } }
+    }
+
     /** The control's text is exactly [expected]. */
     private fun expectSays(t: ComposeUiTest, id: String, expected: String) {
         expectShown(t, id, shown = true)
@@ -390,7 +420,13 @@ class DesktopFeatureRunner {
             }
         }
         t.waitForIdle()
-        t.onRoot().performKeyInput {
+        // A hover tip that is up (a click on a field with one shows it) is a second root, and keys must go to the window's: the pointer is moved
+        // off the tip's control, which closes it.
+        if (t.onAllNodes(isRoot()).fetchSemanticsNodes().size > 1) {
+            t.onAllNodes(isRoot())[0].performMouseInput { moveTo(Offset(1f, 1f)) }
+            runCatching { waitFor(t, "a hover tip to close", 5_000) { t.onAllNodes(isRoot()).fetchSemanticsNodes().size == 1 } }
+        }
+        t.onAllNodes(isRoot())[0].performKeyInput {
             modifiers.forEach { keyDown(it) }
             keyDown(key); keyUp(key)
             modifiers.asReversed().forEach { keyUp(it) }
