@@ -356,12 +356,15 @@ func validateUITags(_ f: ParsedFeature) throws {
 }
 
 /// What a UI step may name: an argument called `id` is an identifier in `gherkin/ui/ids.json` (or in one of its `prefix*` families), one called `key`
-/// is a key of the English catalogue, and one called `command` is a command of `gherkin/ui/commands.json`. A feature that names a control neither client has is a failure here, not a timeout in a runner.
+/// is a key of the English catalogue, one called `command` is a command of `gherkin/ui/commands.json`, and one called `fixture` is a file of
+/// `gherkin/ui/fixtures/prefs/` (without `.json`). A feature that names a control neither client has is a failure here, not a timeout in a runner.
 struct UIReferences {
     let ids: [String]
     let catalogueKeys: Set<String>
     /// The `id`s of `gherkin/ui/commands.json`: what an argument called `command` may name.
     let commandIds: Set<String>
+    /// The preference files of `gherkin/ui/fixtures/prefs/`, by name without `.json`: what an argument called `fixture` may name.
+    let prefsFixtures: Set<String>
 
     func covers(id: String) -> Bool {
         ids.contains { $0.hasSuffix("*") ? id.hasPrefix(String($0.dropLast())) : $0 == id }
@@ -381,7 +384,10 @@ func loadUIReferences(root: URL) throws -> UIReferences {
     guard let commands = (try JSONSerialization.jsonObject(with: Data(contentsOf: commandsURL)) as? [String: Any])?["commands"] as? [[String: String]] else {
         throw GenError("gherkin/ui/commands.json must be an object with a \"commands\" array")
     }
-    return UIReferences(ids: ids, catalogueKeys: Set(en.keys), commandIds: Set(commands.compactMap { $0["id"] }))
+    let fixturesURL = root.appendingPathComponent("gherkin/ui/fixtures/prefs")
+    let fixtureFiles = (try? FileManager.default.contentsOfDirectory(atPath: fixturesURL.path)) ?? []
+    let prefsFixtures = Set(fixtureFiles.filter { $0.hasSuffix(".json") }.map { String($0.dropLast(".json".count)) })
+    return UIReferences(ids: ids, catalogueKeys: Set(en.keys), commandIds: Set(commands.compactMap { $0["id"] }), prefsFixtures: prefsFixtures)
 }
 
 func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], featureParams: [String: String], references: UIReferences) throws {
@@ -403,6 +409,9 @@ func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], 
             }
             if name == "command" && !references.commandIds.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a command of gherkin/ui/commands.json")
+            }
+            if name == "fixture" && !references.prefsFixtures.contains(arg) {
+                throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a file of gherkin/ui/fixtures/prefs/ (without .json)")
             }
             if name == "key" && found.def.caseName == "idReads" && !references.catalogueKeys.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a key of the English catalogue")

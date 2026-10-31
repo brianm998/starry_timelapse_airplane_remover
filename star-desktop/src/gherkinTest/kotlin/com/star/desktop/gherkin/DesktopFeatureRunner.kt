@@ -110,6 +110,10 @@ class DesktopFeatureRunner {
         StepAction.APP_NO_SEQUENCE to ::startWithNoSequence,
         StepAction.PREFS_RECENTS to { seedRecents(args[0].toInt()) },
         StepAction.PREFS_LIST_RECENTS to { t -> expectRecents(t, args[0].toInt()) },
+        StepAction.PREFS_FIXTURE to { seedPreferences(args[0]) },
+        StepAction.PREFS_UNCHANGED to { expectPreferencesUnchanged(args[0]) },
+        StepAction.PREFS_HAS_KEY to { t -> expectPreferencesKey(t, args[0]) },
+        StepAction.PREFS_KEEPS_COPY to { t -> expectUndecodableCopy(t, args[0]) },
         StepAction.MENU_CHOOSE to { t -> chooseMenuCommand(t, args[0]) },
         StepAction.MENU_ENABLED to { t -> expectMenuCommand(t, args[0], enabled = true) },
         StepAction.MENU_DISABLED to { t -> expectMenuCommand(t, args[0], enabled = false) },
@@ -724,6 +728,33 @@ class DesktopFeatureRunner {
             entries.addProperty(config.absolutePath, 10L * i)
         }
         preferencesFile().writeText(JsonObject().apply { add("recentlyOpenedSequencelist", entries) }.toString())
+    }
+
+    /** The bytes of a file of `gherkin/ui/fixtures/prefs/`. */
+    private fun fixtureBytes(name: String): ByteArray = File(repoRoot(), "gherkin/ui/fixtures/prefs/$name.json").readBytes()
+
+    /** The preferences the app will start from are this file, as it is. */
+    private fun seedPreferences(fixture: String) = preferencesFile().writeBytes(fixtureBytes(fixture))
+
+    /** The file has not been touched for a few seconds, which is longer than the app takes to write one it means to write. */
+    private fun expectPreferencesUnchanged(fixture: String) {
+        val expected = fixtureBytes(fixture)
+        val deadline = System.nanoTime() + 4_000_000_000L
+        do {
+            if (!preferencesFile().readBytes().contentEquals(expected)) throw RunnerError("the preferences file is not the fixture \"$fixture\" any more")
+            Thread.sleep(500)
+        } while (System.nanoTime() < deadline)
+    }
+
+    private fun expectPreferencesKey(t: ComposeUiTest, key: String) {
+        fun has() = runCatching { JsonParser.parseString(preferencesFile().readText()).asJsonObject.has(key) }.getOrDefault(false)
+        waitFor(t, "the preferences file to have the key \"$key\"", 15_000) { has() }
+    }
+
+    private fun expectUndecodableCopy(t: ComposeUiTest, fixture: String) {
+        val copy = File(preferencesFile().path + ".undecodable")
+        val expected = fixtureBytes(fixture)
+        waitFor(t, "a copy of the unreadable preferences file beside it", 15_000) { copy.isFile && copy.readBytes().contentEquals(expected) }
     }
 
     private fun recentCount(): Int? = runCatching {

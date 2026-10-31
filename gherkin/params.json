@@ -107,6 +107,18 @@
     },
     "uiDecisionTreeCommandsIdle": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiCorruptPreferences": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiSharedPreferences": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiPainterOpensInEditMode": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiKeysWhilePainting": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }
