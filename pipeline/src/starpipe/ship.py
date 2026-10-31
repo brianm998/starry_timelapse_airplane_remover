@@ -242,8 +242,8 @@ def watch_develop(eng: Engine) -> None:
             eng.db.set_baseline(job.workflow, job.job, str(run.get("head_sha")), now)
             if seeding or before is None:
                 continue  # reds present when the pipeline first started are the known-red ledger, not tickets
-            if before == "success" and job.red:
-                _new_red(eng, job, str(run.get("head_sha")))
+            if before == "success" and job.red and (job.conclusion or "failure") not in ci.INFRA_CONCLUSIONS:
+                _new_red(eng, job, str(run.get("head_sha")))  # cancelled / timed out is the runner, not a regression
             elif job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line"):
                 eng.db.put("stop_line", None)
                 eng.notifier.clear("develop-red", None)

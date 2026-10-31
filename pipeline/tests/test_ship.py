@@ -367,3 +367,12 @@ def test_a_job_of_a_run_still_going_is_not_rerunnable() -> None:
     jobs = ci.parse_jobs([{"id": 5, "name": "cli", "status": "in_progress"}],
                          {5: [{"name": "w", "status": "completed", "conclusion": "cancelled"}]})
     assert jobs[0].run_done is False
+
+
+def test_a_cancelled_or_timed_out_develop_job_is_not_a_regression(rig: Rig) -> None:
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "cancelled"), ("cli", "macos", "completed", "timed_out")]
+    ship.watch_develop(rig.engine)
+    assert rig.gh.issues == {} and rig.db.get("stop_line") is None
+    assert rig.db.baseline("cli", "macos") == "timed_out"
