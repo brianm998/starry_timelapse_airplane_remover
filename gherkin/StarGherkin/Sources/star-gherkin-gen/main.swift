@@ -18,12 +18,75 @@ struct ParsedFeature {
     let file: String          // path relative to the repo root, for messages
     let basename: String
     let name: String
+    /// The text under the `Feature:` line.
+    let description: String
     let tags: [String]
     let scenario: String
     let steps: [ParsedStep]
 }
 
-struct StepDef { let caseName: String; let text: String }
+/// A `steps.json` text is literal text, with inline arguments in it: `"<name>"` takes a double-quoted string from the feature
+/// (`I click "<id>"` matches `I click "startup.horizon.no"`), `<name:int>` takes a bare integer (`I go to frame <n:int>`).
+/// `{placeholder}`s are not arguments: they stay literal in the feature and the runner supplies their values.
+enum StepPart { case literal(String), quoted(String), integer(String) }
+
+struct StepDef {
+    let caseName: String
+    let text: String
+    let parts: [StepPart]
+
+    init(caseName: String, text: String) {
+        self.caseName = caseName
+        self.text = text
+        self.parts = parseStepParts(text)
+    }
+
+    /// The arguments `featureText` gives this step, or nil when it is not this step. A step with no inline arguments matches only its own text.
+    func match(_ featureText: String) -> [String]? {
+        var rest = Substring(featureText)
+        var args: [String] = []
+        for part in parts {
+            switch part {
+            case .literal(let s):
+                guard rest.hasPrefix(s) else { return nil }
+                rest = rest.dropFirst(s.count)
+            case .quoted:
+                guard rest.first == "\"" else { return nil }
+                rest = rest.dropFirst()
+                guard let end = rest.firstIndex(of: "\"") else { return nil }
+                args.append(String(rest[..<end]))
+                rest = rest[rest.index(after: end)...]
+            case .integer:
+                let digits = rest.prefix { $0.isASCII && $0.isNumber }
+                guard !digits.isEmpty else { return nil }
+                args.append(String(digits))
+                rest = rest.dropFirst(digits.count)
+            }
+        }
+        return rest.isEmpty ? args : nil
+    }
+}
+
+func parseStepParts(_ text: String) -> [StepPart] {
+    let marker = try! NSRegularExpression(pattern: #""<([a-z][A-Za-z0-9]*)>"|<([a-z][A-Za-z0-9]*):int>"#)
+    let ns = text as NSString
+    var parts: [StepPart] = []
+    var last = 0
+    for m in marker.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+        if m.range.location > last { parts.append(.literal(ns.substring(with: NSRange(location: last, length: m.range.location - last)))) }
+        if m.range(at: 1).location != NSNotFound { parts.append(.quoted(ns.substring(with: m.range(at: 1)))) }
+        else { parts.append(.integer(ns.substring(with: m.range(at: 2)))) }
+        last = m.range.location + m.range.length
+    }
+    if last < ns.length { parts.append(.literal(ns.substring(from: last))) }
+    return parts
+}
+
+/// The step a feature line is, and the arguments it gives.
+func lookup(_ s: ParsedStep, in steps: [StepDef]) -> (def: StepDef, args: [String])? {
+    for def in steps { if let args = def.match(s.text) { return (def, args) } }
+    return nil
+}
 
 // MARK: - SHA-256 (Foundation-only: CryptoKit is absent on Linux)
 
@@ -175,6 +238,7 @@ func parseFeature(at url: URL, root: URL, gherkin: (path: String, formatArgs: [S
                    line: line(of: $0))
     }
     return ParsedFeature(file: rel, basename: basename, name: feature["name"] as? String ?? "",
+                         description: (feature["description"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
                          tags: tags, scenario: sc["name"] as? String ?? "", steps: steps)
 }
 
@@ -240,8 +304,7 @@ let settingGroups: [(name: String, cases: Set<String>)] = [
 let openCases: Set<String> = ["openSequence", "importVideo", "importVideoBackground"]
 
 func validateSettings(_ f: ParsedFeature, steps: [StepDef]) throws {
-    let defs = Dictionary(uniqueKeysWithValues: steps.map { ($0.text, $0.caseName) })
-    let cases = f.steps.map { defs[$0.text] ?? "" }
+    let cases = f.steps.map { lookup($0, in: steps)?.def.caseName ?? "" }
     guard let openIdx = cases.firstIndex(where: { openCases.contains($0) }) else {
         throw GenError("\(f.file): no step opens the sequence (`I open the sequence …` or `I import the video …`)")
     }
@@ -259,8 +322,32 @@ func validateSettings(_ f: ParsedFeature, steps: [StepDef]) throws {
     }
 }
 
+/// A UI feature (`@ui`) is run by the two clients that have a UI, and by both: one on a single client is what the parity plan exists to prevent,
+/// so that takes a tag that says it is deliberate. It has no settings steps and need not open a sequence (it may start on the start screen).
+func validateUITags(_ f: ParsedFeature) throws {
+    let macOnly = f.tags.contains("@ui-mac-gui-only"), desktopOnly = f.tags.contains("@ui-desktop-only")
+    guard f.tags.contains("@ui") else {
+        if macOnly || desktopOnly { throw GenError("\(f.file): @ui-mac-gui-only and @ui-desktop-only go with @ui") }
+        return
+    }
+    if f.tags.contains("@cli") { throw GenError("\(f.file): a @ui feature has no UI to drive in the cli: remove @cli") }
+    let mac = f.tags.contains("@mac-gui"), desktop = f.tags.contains("@desktop")
+    if macOnly && desktopOnly { throw GenError("\(f.file): @ui-mac-gui-only and @ui-desktop-only together say nothing runs") }
+    if (macOnly || desktopOnly) && f.description.isEmpty {
+        throw GenError("\(f.file): a @ui feature for one client says why in the text under its Feature: line")
+    }
+    if macOnly {
+        guard mac && !desktop else { throw GenError("\(f.file): @ui-mac-gui-only wants @mac-gui and not @desktop") }
+    } else if desktopOnly {
+        guard desktop && !mac else { throw GenError("\(f.file): @ui-desktop-only wants @desktop and not @mac-gui") }
+    } else if !(mac && desktop) {
+        throw GenError("\(f.file): a @ui feature runs on both clients: it needs @mac-gui and @desktop (or @ui-mac-gui-only / @ui-desktop-only, if one client is deliberate)")
+    }
+}
+
 func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], featureParams: [String: String]) throws {
-    try validateSettings(f, steps: steps)
+    try validateUITags(f)
+    if !f.tags.contains("@ui") { try validateSettings(f, steps: steps) }
     if !isLowerCamel(f.basename) { throw GenError("\(f.file): basename `\(f.basename)` must be lowerCamelCase") }
     if !f.tags.contains("@\(f.basename)") { throw GenError("\(f.file): missing its own tag @\(f.basename)") }
     if f.steps.isEmpty { throw GenError("\(f.file): the scenario has no steps") }
@@ -268,8 +355,8 @@ func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], 
         guard stepKeywords.contains(s.keyword) else {
             throw GenError("\(f.file):\(s.line): step keyword `\(s.keyword)` is not one of \(stepKeywords.joined(separator: ", "))")
         }
-        guard steps.contains(where: { $0.text == s.text }) else {
-            throw GenError("\(f.file):\(s.line): step text has no exact match in steps.json: \"\(s.text)\"")
+        guard lookup(s, in: steps) != nil else {
+            throw GenError("\(f.file):\(s.line): step text has no match in steps.json: \"\(s.text)\"")
         }
         for p in placeholders(in: s.text) where featureParams[p] == nil && defaults[p] == nil {
             throw GenError("\(f.file):\(s.line): {\(p)} has no value for feature \(f.basename) and no default in params.json")
@@ -331,7 +418,8 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
     let h = header(hash)
     var outs: [Output] = []
     let defaults = params["default"] ?? [:]
-    func caseFor(_ s: ParsedStep) -> String { steps.first { $0.text == s.text }!.caseName }
+    func caseFor(_ s: ParsedStep) -> String { lookup(s, in: steps)!.def.caseName }
+    func argsFor(_ s: ParsedStep) -> [String] { lookup(s, in: steps)!.args }
     let clientKeys = clientTags.map(\.key)
 
     // ── Swift kernel ──
@@ -346,7 +434,11 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
 
     var swiftFeatures = ""
     for f in features {
-        let stepsLit = f.steps.map { "            Step(.\(keywordCase($0.keyword)), .\(caseFor($0)))" }.joined(separator: ",\n")
+        let stepsLit = f.steps.map { s -> String in
+            let args = argsFor(s)
+            let tail = args.isEmpty ? "" : ", args: [\(args.map(swiftString).joined(separator: ", "))]"
+            return "            Step(.\(keywordCase(s.keyword)), .\(caseFor(s))\(tail))"
+        }.joined(separator: ",\n")
         swiftFeatures += """
             public static let \(f.basename) = Feature(
                 id: \(swiftString(f.basename)),
@@ -421,7 +513,11 @@ func emit(features: [ParsedFeature], steps: [StepDef], params: [String: [String:
 
     var ktFeatures = ""
     for f in features {
-        let stepsLit = f.steps.map { "            Step(StepKeyword.\($0.keyword.uppercased()), StepAction.\(camelToUpperSnake(caseFor($0))))" }.joined(separator: ",\n")
+        let stepsLit = f.steps.map { s -> String in
+            let args = argsFor(s)
+            let tail = args.isEmpty ? "" : ", listOf(\(args.map(kotlinString).joined(separator: ", ")))"
+            return "            Step(StepKeyword.\(s.keyword.uppercased()), StepAction.\(camelToUpperSnake(caseFor(s)))\(tail))"
+        }.joined(separator: ",\n")
         ktFeatures += """
             val \(f.basename) = Feature(
                 id = \(kotlinString(f.basename)),

@@ -27,6 +27,8 @@ final class GuiFeatureRunner {
     private var completeFrames: Int?
     private var rendersVideo = false
     private var finishedReview = false
+    /// What the step being run was given for its inline arguments (`I click "<id>"`).
+    private var args: [String] = []
     private var settledOnce = false
     /// The video's frames are extracted while the run is going, not before it.
     private var backgroundImport = false
@@ -68,6 +70,17 @@ final class GuiFeatureRunner {
         .satellitesRemoved: { try $0.trailsRemoved(trailClass: "satellite") },
         .starsPreserved: { try $0.starsPreserved() },
         .nothingElseChanged: { try $0.nothingElseChanged() },
+        // the @ui vocabulary
+        .copySequence: { try $0.copySequenceStep() },
+        .openCopied: { try $0.openCopiedSequence() },
+        .clickId: { try $0.tap($0.args[0], timeout: 60) },
+        .pressKey: { try $0.press($0.args[0]) },
+        .idShown: { try $0.expectShown($0.args[0], shown: true) },
+        .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
+        .idSelected: { try $0.expectSelected($0.args[0], selected: true) },
+        .idNotSelected: { try $0.expectSelected($0.args[0], selected: false) },
+        .idOn: { try $0.expectOn($0.args[0], on: true) },
+        .idOff: { try $0.expectOn($0.args[0], on: false) },
     ]
 
     func run(_ feature: Feature) throws {
@@ -81,19 +94,44 @@ final class GuiFeatureRunner {
             if app.state != .notRunning { app.terminate() }
             try? FileManager.default.removeItem(at: scratch)
         }
-        for step in feature.steps {
-            guard let method = Self.methodMap[step.action] else {
-                throw RunnerError("no method for step \"\(step.description)\". Implemented steps:\n"
-                                  + Self.methodMap.keys.map { "  \($0.rawValue)" }.sorted().joined(separator: "\n"))
-            }
-            try XCTContext.runActivity(named: step.description) { _ in
-                do { try method(self) } catch {
-                    // said here as well: the cleanup that follows can raise issues of its own and bury this one
-                    print("STEP FAILED: \(step.description): \(error)")
-                    throw error
+        // A @ui feature that fails where gherkin/ui/known-gaps.json says it does passes, and says so; one that passes there fails until the
+        // entry is removed (the parity backlog is that file, and it only shrinks).
+        let gap = feature.tags.contains("@ui") ? Self.knownGap(feature.id) : nil
+        do {
+            for step in feature.steps {
+                guard let method = Self.methodMap[step.action] else {
+                    throw RunnerError("no method for step \"\(step.description)\". Implemented steps:\n"
+                                      + Self.methodMap.keys.map { "  \($0.rawValue)" }.sorted().joined(separator: "\n"))
+                }
+                args = step.args
+                try XCTContext.runActivity(named: step.description) { _ in
+                    do { try method(self) } catch {
+                        // said here as well: the cleanup that follows can raise issues of its own and bury this one
+                        print("STEP FAILED: \(step.description): \(error)")
+                        throw error
+                    }
                 }
             }
+        } catch {
+            if let gap {
+                print("KNOWN GAP \(feature.id) on \(Self.client): \(gap)\n  it failed with: \(error)")
+                return
+            }
+            throw error
         }
+        if let gap {
+            throw RunnerError("\(feature.id) passes on \(Self.client), and gherkin/ui/known-gaps.json still lists it as a gap (\(gap)): remove the entry")
+        }
+    }
+
+    /// Why `feature` is a known gap of this client, from gherkin/ui/known-gaps.json; nil when it is not one.
+    static func knownGap(_ feature: String) -> String? {
+        let url = repoRoot.appendingPathComponent("gherkin/ui/known-gaps.json")
+        guard let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let gaps = object["gaps"] as? [String: Any],
+              let entry = gaps[feature] as? [String: String] else { return nil }
+        return entry[client]
     }
 
     // MARK: placeholders
@@ -177,6 +215,91 @@ final class GuiFeatureRunner {
         app.launchEnvironment["HOME"] = home.path
         app.launchArguments += arguments
         app.launch()
+    }
+
+    // MARK: the @ui steps
+
+    /// A fresh copy of the sequence, as `openSequence` makes one: star derives its temp and output paths from the input directory's name.
+    private func copySequenceStep() throws {
+        let given = try param("sequence")
+        let source = try TestData.resolve(given, cache: dataCache())
+            ?? (given.hasPrefix("/") ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given))
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: source.path, isDirectory: &isDir), isDir.boolValue else {
+            throw RunnerError("sequence directory not found: \(source.path)")
+        }
+        let copy = scratch.appendingPathComponent(source.lastPathComponent)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: source, to: copy)
+        sequenceCopy = copy
+        inputFrames = copy
+    }
+
+    /// Opens the copy as the open panel would, and stops there: the startup questions are the feature's to answer.
+    private func openCopiedSequence() throws {
+        guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
+        try launch(arguments: ["-StarUITestOpenSequence", copy.path])
+    }
+
+    private func expectShown(_ identifier: String, shown: Bool) throws {
+        if shown {
+            guard element(identifier).waitForExistence(timeout: 60) else {
+                throw RunnerError("\(identifier) is not shown\n\(app.debugDescription)")
+            }
+        } else {
+            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element(identifier))
+            guard XCTWaiter.wait(for: [gone], timeout: 30) == .completed else {
+                throw RunnerError("\(identifier) is still shown\n\(app.debugDescription)")
+            }
+        }
+    }
+
+    private func expectSelected(_ identifier: String, selected: Bool) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        try waitFor("\(identifier) \(selected ? "selected" : "not selected")", timeout: 20, detail: { "(isSelected \(e.isSelected))" }) { e.isSelected == selected }
+    }
+
+    /// A switch or check box: its value is 1 when it is on.
+    private func expectOn(_ identifier: String, on: Bool) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        func isOn() -> Bool {
+            if let v = e.value as? String { return v == "1" || v.lowercased() == "on" || v.lowercased() == "true" }
+            if let v = e.value as? Int { return v == 1 }
+            if let v = e.value as? Bool { return v }
+            return false
+        }
+        try waitFor("\(identifier) \(on ? "on" : "off")", timeout: 20, detail: { "(value \(String(describing: e.value)))" }) { isOn() == on }
+    }
+
+    /// `return`, `escape`, `tab`, `space`, an arrow, or one character, with modifiers before it: `cmd+w`, `shift+cmd+,`.
+    private func press(_ spec: String) throws {
+        let parts = spec.lowercased().split(separator: "+", omittingEmptySubsequences: false).map(String.init)
+        guard let name = parts.last, !name.isEmpty else { throw RunnerError("\"\(spec)\" is not a key") }
+        var flags: XCUIElement.KeyModifierFlags = []
+        for m in parts.dropLast() {
+            switch m {
+            case "cmd", "command": flags.insert(.command)
+            case "shift": flags.insert(.shift)
+            case "alt", "option": flags.insert(.option)
+            case "ctrl", "control": flags.insert(.control)
+            default: throw RunnerError("\"\(m)\" is not a modifier (in \"\(spec)\")")
+            }
+        }
+        switch name {
+        case "return", "enter": app.typeKey(.return, modifierFlags: flags)
+        case "escape", "esc": app.typeKey(.escape, modifierFlags: flags)
+        case "tab": app.typeKey(.tab, modifierFlags: flags)
+        case "space": app.typeKey(" ", modifierFlags: flags)
+        case "left": app.typeKey(.leftArrow, modifierFlags: flags)
+        case "right": app.typeKey(.rightArrow, modifierFlags: flags)
+        case "up": app.typeKey(.upArrow, modifierFlags: flags)
+        case "down": app.typeKey(.downArrow, modifierFlags: flags)
+        default:
+            guard name.count == 1 else { throw RunnerError("\"\(name)\" is not a key I know (in \"\(spec)\")") }
+            app.typeKey(name, modifierFlags: flags)
+        }
     }
 
     /// Copies the sequence into a fresh temp dir (star derives its temp and output paths from the input

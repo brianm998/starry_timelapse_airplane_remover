@@ -1,7 +1,10 @@
 package com.star.desktop.gherkin
 
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -48,6 +51,9 @@ class DesktopFeatureRunner {
     private var completeFrames = -1
     private var rendersVideo = false
 
+    /** What the step being run was given for its inline arguments (`I click "<id>"`). */
+    private var args: List<String> = emptyList()
+
     // The setting steps, applied as the startup prompts when the sequence opens (the generator makes them precede the open step).
     private var horizon: Boolean? = null
     private var moving: Boolean? = null
@@ -78,6 +84,17 @@ class DesktopFeatureRunner {
         StepAction.SATELLITES_REMOVED to { trailsRemoved("satellite") },
         StepAction.STARS_PRESERVED to { starsPreserved() },
         StepAction.NOTHING_ELSE_CHANGED to { nothingElseChanged() },
+        // the @ui vocabulary
+        StepAction.COPY_SEQUENCE to ::copySequenceStep,
+        StepAction.OPEN_COPIED to ::openCopiedSequence,
+        StepAction.CLICK_ID to { t -> clickId(t, args[0]) },
+        StepAction.PRESS_KEY to { t -> pressKey(t, args[0]) },
+        StepAction.ID_SHOWN to { t -> expectShown(t, args[0], shown = true) },
+        StepAction.ID_NOT_SHOWN to { t -> expectShown(t, args[0], shown = false) },
+        StepAction.ID_SELECTED to { t -> expectSelected(t, args[0], selected = true) },
+        StepAction.ID_NOT_SELECTED to { t -> expectSelected(t, args[0], selected = false) },
+        StepAction.ID_ON to { t -> expectOn(t, args[0], on = true) },
+        StepAction.ID_OFF to { t -> expectOn(t, args[0], on = false) },
     )
 
     fun run(feature: Feature) {
@@ -91,21 +108,38 @@ class DesktopFeatureRunner {
         System.setProperty("user.home", File(scratch, "home").apply { mkdirs() }.absolutePath)
         try {
             // Tall enough for the settings dialog's buttons to be on screen: a click lands by coordinates, and one below the window is lost.
+            // A @ui feature that fails where gherkin/ui/known-gaps.json says it does passes, and says so; one that passes there fails until the
+            // entry is removed (the parity backlog is that file, and it only shrinks).
+            val gap = if ("@ui" in feature.tags) knownGap(feature.id) else null
+            var failure: Throwable? = null
             runDesktopComposeUiTest(width = 1400, height = 1100) {
-                for (step in feature.steps) {
-                    val method = methodMap[step.action] ?: throw RunnerError(
-                        "no method for step \"$step\". Implemented steps:\n" +
-                            methodMap.keys.map { "  ${it.text}" }.sorted().joinToString("\n"))
-                    println("STEP: $step")
-                    try {
-                        method(this)
-                    } catch (e: Throwable) {
-                        throw AssertionError("step \"$step\" failed: ${e.message}", e)
+                try {
+                    for (step in feature.steps) {
+                        val method = methodMap[step.action] ?: throw RunnerError(
+                            "no method for step \"$step\". Implemented steps:\n" +
+                                methodMap.keys.map { "  ${it.text}" }.sorted().joinToString("\n"))
+                        println("STEP: $step")
+                        args = step.args
+                        try {
+                            method(this)
+                        } catch (e: Throwable) {
+                            throw AssertionError("step \"$step\" failed: ${e.message}", e)
+                        }
                     }
+                } catch (e: Throwable) {
+                    failure = e
                 }
             }
+            failure?.let { e ->
+                if (gap == null) throw e
+                println("KNOWN GAP ${feature.id} on $CLIENT: $gap\n  it failed with: ${e.message}")
+                return
+            }
+            if (gap != null) throw RunnerError("${feature.id} passes on $CLIENT, and gherkin/ui/known-gaps.json still lists it as a gap ($gap): remove the entry")
         } finally {
             saveArtifacts(feature)
+            // A @ui feature often stops with a run going: the engine is asked to stop, so the next feature does not share it with the run.
+            if ("@ui" in feature.tags) vm?.let { m -> runCatching { kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeoutOrNull(10_000) { m.shutdown() } } } }
             scope?.cancel()
             System.setProperty("user.home", realHome)
             scratch.deleteRecursively()
@@ -214,7 +248,96 @@ class DesktopFeatureRunner {
         finishOpening(t, model)
     }
 
-    private fun finishOpening(t: ComposeUiTest, model: AppViewModel) {
+    /** Why [feature] is a known gap of this client, from gherkin/ui/known-gaps.json; null when it is not one. */
+    private fun knownGap(feature: String): String? {
+        val file = File(repoRoot(), "gherkin/ui/known-gaps.json").takeIf { it.isFile } ?: return null
+        val gaps = JsonParser.parseString(file.readText()).asJsonObject.getAsJsonObject("gaps") ?: return null
+        return gaps.getAsJsonObject(feature)?.get(CLIENT)?.asString
+    }
+
+    // ---- the @ui steps ----
+
+    /** A fresh copy of the sequence, as [openSequence] makes one: star derives its temp and output paths from the input directory's name. */
+    private fun copySequenceStep(t: ComposeUiTest) {
+        val source = resolveSequence(param("sequence"))
+        if (!source.isDirectory) throw RunnerError("sequence directory not found: $source")
+        sequenceCopy = File(scratch, source.name)
+        source.copyRecursively(sequenceCopy)
+        inputFrames = sequenceCopy
+    }
+
+    /** Opens the copy as the file chooser does, and stops there: the startup questions are the feature's to answer. */
+    private fun openCopiedSequence(t: ComposeUiTest) {
+        if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
+        val model = newModel()
+        model.openSequence(sequenceCopy.absolutePath)
+        finishOpening(t, model, answer = false)
+    }
+
+    private fun clickId(t: ComposeUiTest, id: String) {
+        waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
+        t.waitForIdle()
+        t.onNodeWithTag(id).performClick()
+    }
+
+    private fun expectShown(t: ComposeUiTest, id: String, shown: Boolean) {
+        waitFor(t, "\"$id\" ${if (shown) "shown" else "not shown"}", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) == shown }
+    }
+
+    private fun semanticsOf(t: ComposeUiTest, id: String) =
+        t.onAllNodes(hasTestTag(id)).fetchSemanticsNodes().firstOrNull()?.config
+
+    private fun expectSelected(t: ComposeUiTest, id: String, selected: Boolean) {
+        expectShown(t, id, shown = true)
+        waitFor(t, "\"$id\" ${if (selected) "selected" else "not selected"}", 20_000, { "(Selected: ${semanticsOf(t, id)?.getOrNull(SemanticsProperties.Selected)})" }) {
+            (semanticsOf(t, id)?.getOrNull(SemanticsProperties.Selected) ?: false) == selected
+        }
+    }
+
+    private fun expectOn(t: ComposeUiTest, id: String, on: Boolean) {
+        expectShown(t, id, shown = true)
+        waitFor(t, "\"$id\" ${if (on) "on" else "off"}", 20_000, { "(ToggleableState: ${semanticsOf(t, id)?.getOrNull(SemanticsProperties.ToggleableState)})" }) {
+            (semanticsOf(t, id)?.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.On) == on
+        }
+    }
+
+    /** `return`, `escape`, `tab`, `space`, an arrow, or one character, with modifiers before it: `cmd+w`, `shift+cmd+,`. */
+    private fun pressKey(t: ComposeUiTest, spec: String) {
+        val parts = spec.lowercase().split('+')
+        val name = parts.last().ifEmpty { throw RunnerError("\"$spec\" is not a key") }
+        val mac = System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)
+        val modifiers = parts.dropLast(1).map {
+            when (it) {
+                "cmd", "command" -> if (mac) Key.MetaLeft else Key.CtrlLeft
+                "shift" -> Key.ShiftLeft
+                "alt", "option" -> Key.AltLeft
+                "ctrl", "control" -> Key.CtrlLeft
+                else -> throw RunnerError("\"$it\" is not a modifier (in \"$spec\")")
+            }
+        }
+        val key = when (name) {
+            "return", "enter" -> Key.Enter
+            "escape", "esc" -> Key.Escape
+            "tab" -> Key.Tab
+            "space" -> Key.Spacebar
+            "left" -> Key.DirectionLeft
+            "right" -> Key.DirectionRight
+            "up" -> Key.DirectionUp
+            "down" -> Key.DirectionDown
+            else -> {
+                if (name.length != 1) throw RunnerError("\"$name\" is not a key I know (in \"$spec\")")
+                Key(java.awt.event.KeyEvent.getExtendedKeyCodeForChar(name[0].code))
+            }
+        }
+        t.waitForIdle()
+        t.onRoot().performKeyInput {
+            modifiers.forEach { keyDown(it) }
+            keyDown(key); keyUp(key)
+            modifiers.asReversed().forEach { keyUp(it) }
+        }
+    }
+
+    private fun finishOpening(t: ComposeUiTest, model: AppViewModel, answer: Boolean = true) {
         // The sequence opens in the background, driven by the view model and not by composition. Nothing is composed until it has:
         // the start screen (the first thing StarApp would draw) embeds a JavaFX video background, and JavaFX cannot start headless, so
         // composing it blocks the UI thread for good.
@@ -230,7 +353,7 @@ class DesktopFeatureRunner {
             if (detection != com.star.proto.DetectionType.DETECTION_STRONG) throw RunnerError("the session opened at detection type $detection, not DETECTION_STRONG")
         }
         t.setContent { StarApp(model) }
-        answerStartupPrompts(t, model)
+        if (answer) answerStartupPrompts(t, model)
     }
 
     /** Horizon → camera → (select horizon: No) → what to remove → Start processing, as a user answers them. */

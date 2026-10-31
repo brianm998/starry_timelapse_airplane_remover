@@ -14,14 +14,27 @@ public enum StepKeyword: String, Sendable {
 public struct Step: Sendable {
     public let keyword: StepKeyword
     public let action: StepAction
+    /// What the feature gave the step's inline arguments, in order (`I click "<id>"` with `"startup.horizon.no"` is `["startup.horizon.no"]`).
+    public let args: [String]
 
-    public init(_ keyword: StepKeyword, _ action: StepAction) {
+    public init(_ keyword: StepKeyword, _ action: StepAction, args: [String] = []) {
         self.keyword = keyword
         self.action = action
+        self.args = args
     }
 
-    /// The step as written in the feature file, e.g. `Given I open the sequence {sequence}`.
-    public var description: String { "\(keyword.rawValue) \(action.rawValue)" }
+    /// The step as written in the feature file, e.g. `Given I open the sequence {sequence}` or `When I click "startup.horizon.no"`.
+    public var description: String { "\(keyword.rawValue) \(text)" }
+
+    /// The step's text with its inline arguments in: `"<id>"` becomes `"startup.horizon.no"`, `<n:int>` becomes `3`.
+    public var text: String {
+        var out = action.rawValue
+        for arg in args {
+            guard let m = out.range(of: #""<[a-z][A-Za-z0-9]*>"|<[a-z][A-Za-z0-9]*:int>"#, options: .regularExpression) else { break }
+            out.replaceSubrange(m, with: out[m].hasPrefix("\"") ? "\"\(arg)\"" : arg)
+        }
+        return out
+    }
 }
 
 public struct Feature: Sendable {

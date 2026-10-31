@@ -28,4 +28,39 @@ The shared expectations for the macOS gui and the desktop client (see `plans/GUI
   A vector that changes on purpose is changed in the same commit as both clients. Gradle's `test` task declares `gherkin/ui` and the
   catalogue as inputs, so a changed file reruns the desktop tests; an Xcode run reads them from the source tree.
 
-The `@ui` features, the snapshots and the probes of §6.3 are not written yet.
+* `known-gaps.json` — the parity backlog. A `@ui` feature that fails on a client where it is listed here passes, and says `KNOWN GAP`; one that
+  fails where it is not listed fails; one that is listed and now passes fails until the entry is removed. `{"gaps": {"<feature>": {"mac-gui": "<why>", "desktop": "<why>"}}}`.
+  Both runners read it (`GuiFeatureRunner.knownGap`, `DesktopFeatureRunner.knownGap`). It is empty: the features below pass on both clients.
+
+## The `@ui` features
+
+`gherkin/features/ui*.feature`, run by the same two runners as the processing features (`GuiFeatureRunner` with XCUITest, `DesktopFeatureRunner` with
+the Compose test host over a real `stard`). A `@ui` feature carries `@mac-gui` and `@desktop` both, never `@cli`, and needs no settings steps or
+sequence of its own; `@ui-mac-gui-only` or `@ui-desktop-only` (with `@ui`, and the reason in the text under the `Feature:` line) is the way to
+say that one client is deliberate. The generator checks all of that.
+
+**Rules** (plan §6.1). A runner may differ from the other in how it clicks, types and waits, never in what the user does. A step asserts what
+the user can see (an element by its id) or what lands on disk. Features are short, and one is one launch of the app.
+
+**Inline arguments.** A step in `steps.json` can hold `"<name>"` (a double-quoted string in the feature) or `<name:int>` (a bare integer):
+`I click "<id>"` matches `I click "startup.horizon.no"`. The generated `Step` carries `args` (Swift) / `args` (Kotlin), in order. `{placeholder}`s
+are different: they stay literal in the feature and the runner supplies their values.
+
+**The vocabulary so far** (`gherkin/steps.json`; ids are those of `ids.json`):
+
+| step | does |
+|---|---|
+| `a fresh copy of the sequence {sequence}` | copies it, as `I open the sequence` does |
+| `I open the copied sequence` | opens it, and stops at the first startup question |
+| `I click "<id>"` | clicks the control with that id |
+| `I press "<key>"` | `return`, `escape`, `tab`, `space`, an arrow, or one character, with modifiers before it (`cmd+w`) |
+| `"<id>" is shown` / `is not shown` | the id is in the window (waited for, in both directions) |
+| `"<id>" is selected` / `is not selected` | a radio choice (gui: the selected trait; desktop: `selectable`) |
+| `"<id>" is on` / `is off` | a switch or check box |
+
+Run one with `./gradlew gherkinTest -Pstar.stard.path=$PWD/../daemon/.build/debug/stard --tests '*.uiStartupDefaultsFeature'` in `star-desktop` (one feature
+per Gradle run: a second in the same JVM trips over the first one's leftover coroutines) and with `xcodebuild test … -only-testing:starUITests/GeneratedFeatureUITests/testUiStartupDefaultsFeature`
+(see `gherkin/README.md`).
+
+Not written yet, from §6.3: the snapshots and probes, `I choose the menu command`, the outlier-group elements, the window steps, and the fixtures
+`ui_small` / `ui_small_selective` (the in-repo `test_data/test_a7sii_10` stands in, and these features need no outlier ids).
