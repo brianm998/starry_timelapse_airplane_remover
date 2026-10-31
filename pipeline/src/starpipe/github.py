@@ -73,8 +73,27 @@ class GitHub:
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.api("PATCH", f"issues/{number}", {"state": "closed", "state_reason": reason})
 
-    def comment(self, number: int, body: str) -> None:
-        self.api("POST", f"issues/{number}/comments", {"body": body})
+    def comment(self, number: int, body: str) -> int:
+        return int(self.api("POST", f"issues/{number}/comments", {"body": body})["id"])
+
+    def remove_label(self, number: int, label: str) -> None:
+        try:
+            self.api("DELETE", f"issues/{number}/labels/{label.replace(':', '%3A')}")
+        except GitHubError:
+            pass  # already gone
+
+    def set_state_label(self, number: int, state: str) -> None:
+        """Make `pipe:<state>` the only state label on the issue."""
+        issue = self.issue(number)
+        have = {lab["name"] for lab in issue.get("labels", [])}
+        wanted = f"pipe:{state}"
+        for label in have & set(STATE_LABELS) - {wanted}:
+            self.remove_label(number, label)
+        if wanted in STATE_LABELS and wanted not in have:
+            self.add_labels(number, [wanted])
+
+    def blocked_by(self, number: int) -> list[int]:
+        return [int(b["number"]) for b in self.paged(f"issues/{number}/dependencies/blocked_by?per_page=100")]
 
     def ensure_labels(self) -> tuple[list[str], list[str]]:
         """Create the missing labels; return (created, already_there)."""

@@ -7,13 +7,20 @@ dependencies = [
     "click>=8.1",
     "pydantic>=2.7",
     "psutil>=6.0",
+    "claude-agent-sdk>=0.2.176",
+    "aiohttp>=3.14.5",
 ]
 
 [project.scripts]
 starpipe = "starpipe.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "pyright>=1.1.380", "ruff>=0.6"]
+dev = [
+    "pytest>=8",
+    "pyright>=1.1.380",
+    "ruff>=0.6",
+    "pytest-asyncio>=1.4.1",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -33,3 +40,5 @@ src = ["src", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

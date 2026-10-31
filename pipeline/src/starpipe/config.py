@@ -14,6 +14,10 @@ def home() -> Path:
     return Path(os.environ.get("STARPIPE_HOME") or Path.home() / ".star-pipeline")
 
 
+def token_path() -> Path:
+    return home() / "api.token"
+
+
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -33,6 +37,9 @@ class Config(BaseModel):
     quiet_end: str = "07:00"
     ci_blocking_wait_s: int = 3 * 3600
     heavy_wait_report_s: float = 60.0
+    api_port: int = 47231
+    poll_s: float = 60.0
+    checkout: str = ""  # the main checkout the worktrees hang off; default: found from the cwd
 
 
 def load(path: Path | None = None) -> Config:

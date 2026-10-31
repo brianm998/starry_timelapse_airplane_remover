@@ -1,18 +1,23 @@
-"""The starpipe command line (plan §12). Phases 1-2: heavy, check, doctor, gh setup, ticket."""
+"""The starpipe command line (plan §12)."""
 
 from __future__ import annotations
 
 import json
+import os
+import plistlib
+import signal
+import subprocess
 import sys
+import time
 from pathlib import Path
+from typing import Any
 
 import click
 
 from . import config as config_mod
 from . import doctor as doctor_mod
-from . import gitutil, heavy, tickets
+from . import gitutil, heavy
 from .checks import impact, runner
-from .github import GitHub, GitHubError
 
 
 def _say(message: str) -> None:
@@ -110,6 +115,8 @@ def gh() -> None:
 @gh.command("setup")
 def gh_setup() -> None:
     """Create the pipeline's labels (idempotent)."""
+    from .github import GitHub, GitHubError
+
     try:
         created, present = GitHub(config_mod.load()).ensure_labels()
     except GitHubError as exc:
@@ -131,6 +138,8 @@ def _read_body(body_file: Path) -> str:
 @click.argument("file", type=click.Path(path_type=Path))
 def ticket_lint(file: Path) -> None:
     """Check a ticket body against plan §6.3 (FILE may be - for stdin)."""
+    from . import tickets
+
     result = tickets.lint(_read_body(file))
     for message in result.errors:
         click.echo(f"error    {message}")
@@ -145,9 +154,12 @@ def ticket_lint(file: Path) -> None:
 @click.option("--title", required=True)
 @click.option("--body-file", required=True, type=click.Path(path_type=Path), help="Ticket body; - for stdin.")
 @click.option("--blocked-by", default="", help="Comma-separated issue numbers that must land first.")
-@click.option("--priority", type=click.Choice(tickets.PRIORITIES), default=None)
+@click.option("--priority", type=click.Choice(["p0", "p1", "p2", "p3"]), default=None)
 def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | None) -> None:
     """Lint, file, label and link a ticket; prints its number and URL."""
+    from . import tickets
+    from .github import GitHub
+
     try:
         blockers = [int(n.lstrip("#")) for n in blocked_by.split(",") if n.strip()]
     except ValueError as exc:
@@ -158,6 +170,217 @@ def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | Non
     except tickets.FilingError as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"#{number} https://github.com/{cfg.owner}/{cfg.repo}/issues/{number}")
+
+
+def _num(value: str) -> int:
+    return int(value.lstrip("#"))
+
+
+def _client() -> Any:
+    from . import client as client_mod
+
+    return client_mod.Client(config_mod.load())
+
+
+def _post(path: str, body: dict[str, object] | None = None) -> None:
+    from . import client as client_mod
+
+    try:
+        _client().call("POST", path, body or {})
+    except (client_mod.DaemonDown, RuntimeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo("ok")
+
+
+@main.command()
+@click.option("--json", "as_json", is_flag=True)
+def status(as_json: bool) -> None:
+    """Daemon health, the heavy lock, and the tickets with what each is doing."""
+    from . import client as client_mod
+
+    data: dict[str, Any]
+    try:
+        data = _client().call("GET", "/v1/status")
+    except client_mod.DaemonDown as exc:
+        data = client_mod.offline_status()
+        click.echo(f"daemon down ({exc}); showing the database", err=True)
+    if as_json:
+        click.echo(json.dumps(data))
+        return
+    if data.get("daemon"):
+        d = data["daemon"]
+        click.echo(f"daemon up, pid {d['pid']}" + (f"  last error: {d['error']}" if d.get("error") else ""))
+    if data.get("pause"):
+        click.echo(f"PAUSED: {data['pause']}")
+    if data.get("usage_pause_until"):
+        click.echo(f"usage limit: model stages wait until {time.ctime(float(data['usage_pause_until']))}")
+    heavy_state: dict[str, Any] = data.get("heavy") or {}
+    for h in heavy_state.get("holders", []):
+        click.echo(f"heavy lock: {h['ticket'] or 'interactive'}  {h['cmd']}")
+    for i, w in enumerate(heavy_state.get("queue", []), 1):
+        click.echo(f"  queued {i}: p{w['priority']} {w['ticket'] or 'interactive'}  {w['cmd']}")
+    for t in data["tickets"]:
+        click.echo(f"#{t['number']:<5} p{t['priority']}  {t['title'][:48]:<48}  {t['activity']}")
+    if not data["tickets"]:
+        click.echo("no tickets in flight")
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.option("--json", "as_json", is_flag=True)
+def show(number: int, as_json: bool) -> None:
+    """A ticket's plan, stages with times, checks and question."""
+    from . import client as client_mod
+
+    try:
+        t = _client().call("GET", f"/v1/tickets/{number}")
+    except (client_mod.DaemonDown, RuntimeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if as_json:
+        click.echo(json.dumps(t))
+        return
+    click.echo(f"#{t['number']} {t['title']}  [{t['state']}]  {t['activity']}")
+    if t.get("branch"):
+        click.echo(f"branch {t['branch']}")
+    if t.get("plan"):
+        click.echo(f"plan: {t['plan']['summary']}")
+    for s in t["stages"]:
+        took = (s["ended"] or time.time()) - s["started"]
+        wait = f" (+{s['lock_wait_s'] / 60:.0f}m lock wait)" if s["lock_wait_s"] >= 60 else ""
+        click.echo(f"  {s['stage']:<8} attempt {s['attempt']}  {s['model']:<6} {took / 60:5.1f}m{wait}  {s['outcome'] or 'running'}")
+    for c in t["checks"][-8:]:
+        click.echo(f"  check {c['check_id']:<22}{c['result']}")
+    if t.get("question"):
+        click.echo(f"question: {t['question']['text']}")
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.argument("text")
+def answer(number: int, text: str) -> None:
+    """Answer a ticket's open question (same effect as an owner comment on the issue)."""
+    _post(f"/v1/tickets/{number}/answer", {"text": text})
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.argument("stage", required=False, default="explore")
+def retry(number: int, stage: str) -> None:
+    """Re-run from a stage, keeping the branch and plan."""
+    _post(f"/v1/tickets/{number}/retry", {"stage": stage})
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.argument("reason", required=False, default="")
+def cancel(number: int, reason: str) -> None:
+    """Stop the ticket and keep its branch."""
+    _post(f"/v1/tickets/{number}/cancel", {"reason": reason})
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.argument("priority", type=click.Choice(["p0", "p1", "p2", "p3"]))
+def prio(number: int, priority: str) -> None:
+    """Change a ticket's priority (rewrites the label)."""
+    _post(f"/v1/tickets/{number}/prio", {"priority": int(priority[1])})
+
+
+@main.command()
+@click.argument("scope", type=click.Choice(["all", "claims", "landing"]), default="all")
+def pause(scope: str) -> None:
+    """Hold work: all, claims (no new tickets) or landing."""
+    _post("/v1/pause", {"scope": scope})
+
+
+@main.command()
+def resume() -> None:
+    """Release a pause."""
+    _post("/v1/resume")
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.argument("stage", required=False)
+@click.option("-n", "lines", default=40, show_default=True)
+def logs(number: int, stage: str | None, lines: int) -> None:
+    """Tail a ticket's stage transcripts."""
+    folder = config_mod.home() / "tickets" / str(number) / "transcripts"
+    files = sorted(folder.glob(f"{stage or '*'}-*.jsonl"), key=lambda f: f.stat().st_mtime)
+    if not files:
+        raise click.ClickException(f"no transcripts under {folder}")
+    for line in files[-1].read_text().splitlines()[-lines:]:
+        row = json.loads(line)
+        click.echo(f"{time.strftime('%H:%M:%S', time.localtime(row['t']))} {row['type']:<18} {row['repr'][:200]}")
+
+
+@main.group()
+def daemon() -> None:
+    """The starpiped process."""
+
+
+@daemon.command("run")
+def daemon_run() -> None:
+    """Run the daemon in the foreground (launchd runs this)."""
+    import asyncio
+    import logging
+
+    from . import daemon as daemon_mod
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    asyncio.run(daemon_mod.build(config_mod.load()).run())
+
+
+LABEL = "com.brianm998.starpiped"
+
+
+def _plist_path() -> Path:
+    return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+
+
+@daemon.command("install")
+def daemon_install() -> None:
+    """Write the launchd agent and load it (KeepAlive, starts at login)."""
+    from . import daemon as daemon_mod
+
+    shim = Path(__file__).resolve().parents[2] / "bin" / "starpipe"
+    checkout = daemon_mod.checkout_root(config_mod.load(), Path.cwd())
+    template = (Path(__file__).resolve().parents[2] / "launchd" / f"{LABEL}.plist.in").read_text()
+    out = (template.replace("@SHIM@", str(shim)).replace("@CHECKOUT@", str(checkout))
+           .replace("@HOME@", str(config_mod.home())).replace("@PATH@", os.environ.get("PATH", "/usr/bin:/bin")))
+    plistlib.loads(out.encode())  # refuse to write a malformed agent
+    (config_mod.home() / "logs").mkdir(parents=True, exist_ok=True)
+    _plist_path().parent.mkdir(parents=True, exist_ok=True)
+    _plist_path().write_text(out)
+    subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", str(_plist_path())], check=False)
+    click.echo(f"installed {_plist_path()}")
+
+
+@daemon.command("uninstall")
+def daemon_uninstall() -> None:
+    """Unload and remove the launchd agent."""
+    subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}/{LABEL}"], check=False)
+    _plist_path().unlink(missing_ok=True)
+    click.echo("uninstalled")
+
+
+@daemon.command("start")
+def daemon_start() -> None:
+    """Start the launchd agent."""
+    subprocess.run(["launchctl", "kickstart", f"gui/{os.getuid()}/{LABEL}"], check=False)
+
+
+@daemon.command("stop")
+def daemon_stop() -> None:
+    """Stop the daemon (SIGTERM to the pid the API reports); launchd restarts it unless uninstalled."""
+    from . import client as client_mod
+
+    try:
+        pid = int(_client().call("GET", "/v1/status")["daemon"]["pid"])
+    except (client_mod.DaemonDown, KeyError, TypeError) as exc:
+        raise click.ClickException("the daemon is not running") from exc
+    os.kill(pid, signal.SIGTERM)
+    click.echo(f"sent SIGTERM to {pid}")
 
 
 if __name__ == "__main__":  # pragma: no cover
