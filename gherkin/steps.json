@@ -53,5 +53,8 @@
   { "case": "typeInto"              , "text": "I type \"<text>\" into \"<id>\"" },
   { "case": "idHolds"               , "text": "\"<id>\" holds the number <n:int>" },
   { "case": "idFocused"             , "text": "\"<id>\" has the keyboard" },
-  { "case": "idNotFocused"          , "text": "\"<id>\" does not have the keyboard" }
+  { "case": "idNotFocused"          , "text": "\"<id>\" does not have the keyboard" },
+  { "case": "languageIs"            , "text": "the language is \"<code>\"" },
+  { "case": "menuThere"             , "text": "the menu \"<menu>\" is there" },
+  { "case": "menuNotThere"          , "text": "the menu \"<menu>\" is not there" }
 ]

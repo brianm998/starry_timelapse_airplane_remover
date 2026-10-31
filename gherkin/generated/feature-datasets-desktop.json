@@ -15,6 +15,7 @@
   "uiKeysWhilePainting": [],
   "uiMenuCommandsIdle": [],
   "uiMenuCommandsWhilePainting": [],
+  "uiMenusNeedASequence": [],
   "uiModePickers": [],
   "uiNumberFields": [],
   "uiPainterOpensInEditMode": [],
@@ -34,5 +35,6 @@
   "uiStartupMovingHorizonQuestion": [],
   "uiStartupNoHorizonSkips": [],
   "uiStartupReturnStarts": [],
+  "uiTranslatedScreen": [],
   "uiViewPickerNeedsAnImage": []
 }
