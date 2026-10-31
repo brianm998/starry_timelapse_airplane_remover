@@ -29,6 +29,9 @@ import javafx.scene.media.MediaView
 
 private const val INTRO_VIDEO_NAME = "11_30_2024-fx3-aurora-topaz-star.mp4"
 
+/** Set (to anything) by a UI test host to have the start screen draw no video; see [IntroVideoBackground]. */
+const val NO_INTRO_VIDEO_PROPERTY = "star.ui.noIntroVideo"
+
 // Off-screen render width for the snapshot loop; the height follows the video's own shape, and Canvas.drawImage below scales the picture to
 // fill whatever size the initial screen actually is, cutting what overhangs rather than stretching it (macOS aspect-fills).
 private const val SNAPSHOT_WIDTH = 1280.0
@@ -52,6 +55,9 @@ private const val SNAPSHOT_HEIGHT = 720.0   // only the scene's size: the view i
  */
 @Composable
 fun IntroVideoBackground(modifier: Modifier = Modifier) {
+    // A UI test host is headless, where JavaFX cannot start and composing this would block the UI thread for good. The video is only a
+    // background, so a test that asks for none sees the start screen as it is without it.
+    if (System.getProperty(NO_INTRO_VIDEO_PROPERTY) != null) return
     val file = remember { resolveIntroVideoFile() } ?: return
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
 

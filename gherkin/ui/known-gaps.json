@@ -1,17 +1,4 @@
 {
   "comment": "The parity backlog (plan \u00a76.1): a @ui feature that fails on a client where it is listed here passes, and says so; one that fails where it is not listed fails; one listed that now passes fails until the entry is removed. One entry per feature and client, with the reason, and the file only shrinks.",
-  "gaps": {
-    "uiSecondaryWindowToggles": {
-      "desktop": "the menu is an AWT menu bar, which the Compose test host does not have; neither are the AWT windows it opens"
-    },
-    "uiSecondaryWindowsNeedASequence": {
-      "desktop": "the start screen embeds a JavaFX video background, and JavaFX cannot start headless; and the menu is an AWT menu bar, which the Compose test host does not have"
-    },
-    "uiSequenceWindowsGoWithIt": {
-      "desktop": "the menu is an AWT menu bar, which the Compose test host does not have; neither are the AWT windows it opens"
-    },
-    "uiRecentsRemove": {
-      "desktop": "the start screen embeds a JavaFX video background, and JavaFX cannot start headless"
-    }
-  }
+  "gaps": {}
 }

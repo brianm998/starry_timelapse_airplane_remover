@@ -15,23 +15,108 @@ import com.star.desktop.ui.initial.chooseDirectory
 import com.star.desktop.ui.initial.chooseFile
 import com.star.desktop.i18n.Strings
 import com.star.desktop.i18n.localized
+import com.star.desktop.ui.sequence.SequenceViewModel
 
 /**
  * The application menu bar (macOS `StarCommands`) — mounted on the window (the v1 client defined a
- * menu but never mounted it). Items enable/disable on session presence and route to the app /
- * sequence view models. Mode/tool/outlier accelerators mirror the macOS shortcuts.
+ * menu but never mounted it). The menus themselves are [starMenus], plain data; this draws them as the
+ * window's AWT menu bar, which a UI test host cannot reach, so a test reads [starMenusNow] instead.
  */
 @Composable
 fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
+    val menus = starMenus(app)
+    MenuBar {
+        for (menu in menus) {
+            Menu(menu.title, mnemonic = menu.mnemonic) {
+                for (entry in menu.entries) {
+                    when (entry) {
+                        is MenuEntry.Command -> Item(entry.label, enabled = entry.enabled, shortcut = entry.shortcut, onClick = entry.onClick)
+                        is MenuEntry.Choice -> RadioButtonItem(entry.label, selected = entry.selected, onClick = entry.onClick)
+                        MenuEntry.Divider -> Separator()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One entry of a menu: a command (the AWT menu's item), a radio choice, or a separator. */
+sealed interface MenuEntry {
+    class Command(val label: String, val enabled: Boolean, val shortcut: KeyShortcut?, val onClick: () -> Unit) : MenuEntry
+    class Choice(val label: String, val selected: Boolean, val onClick: () -> Unit) : MenuEntry
+    data object Divider : MenuEntry
+}
+
+/** A menu: its title, the letter that opens it from the keyboard, and its entries in order. */
+class MenuSpec(val title: String, val mnemonic: Char, val entries: List<MenuEntry>)
+
+/** What the menu code below says its menus are, in the form the Compose `MenuBar` DSL reads: the same words (`Menu`, `Item`, `Separator`), collected instead of drawn. */
+class MenuBuilder {
+    val menus = mutableListOf<MenuSpec>()
+
+    fun Menu(title: String, mnemonic: Char, build: EntriesBuilder.() -> Unit) {
+        menus += MenuSpec(title, mnemonic, EntriesBuilder().apply(build).entries)
+    }
+}
+
+class EntriesBuilder {
+    val entries = mutableListOf<MenuEntry>()
+
+    fun Item(label: String, enabled: Boolean = true, shortcut: KeyShortcut? = null, onClick: () -> Unit) {
+        entries += MenuEntry.Command(label, enabled, shortcut, onClick)
+    }
+
+    fun RadioButtonItem(label: String, selected: Boolean, onClick: () -> Unit) {
+        entries += MenuEntry.Choice(label, selected, onClick)
+    }
+
+    fun Separator() {
+        entries += MenuEntry.Divider
+    }
+}
+
+/** What the menus' items enable on: the open sequence, if there is one, and what is going on in it. */
+class MenuState(val svm: SequenceViewModel?, val keys: Boolean, val paintingHorizon: Boolean, val usesOutliers: Boolean)
+
+/**
+ * The menus, as they are now: items enable/disable on session presence and route to the app /
+ * sequence view models. Mode/tool/outlier accelerators mirror the macOS shortcuts. Read in composition, so a
+ * caller recomposes when what enables an item changes.
+ */
+@Composable
+fun starMenus(app: AppViewModel): List<MenuSpec> {
     val screen by app.screen.collectAsState()
     val svm = (screen as? AppScreen.Sequence)?.vm
+    val modalUp = svm?.showProcessingModal?.collectAsState()?.value == true
+    val paintingHorizon = svm?.horizonPaintMode?.collectAsState()?.value == true
+    val currentFrame = svm?.currentIndex?.collectAsState()?.value ?: 0
+    val currentMethod = svm?.frameVMFor(currentFrame)?.info?.collectAsState()?.value?.cleanMethod
+    return starMenus(app, MenuState(svm, keys = svm != null && !modalUp, paintingHorizon = paintingHorizon, usesOutliers = currentMethod?.usesOutliers ?: true))
+}
+
+/**
+ * The menus as they are this moment, for a caller that is not composing (a UI test host has no menu bar to draw them on): the same menus, from the
+ * same flows read once. Call it on the UI thread, where composition reads them and where the frame view models are made.
+ */
+fun starMenusNow(app: AppViewModel): List<MenuSpec> {
+    val svm = (app.screen.value as? AppScreen.Sequence)?.vm
+    val modalUp = svm?.showProcessingModal?.value == true
+    val paintingHorizon = svm?.horizonPaintMode?.value == true
+    val currentMethod = svm?.frameVMFor(svm.currentIndex.value)?.info?.value?.cleanMethod
+    return starMenus(app, MenuState(svm, keys = svm != null && !modalUp, paintingHorizon = paintingHorizon, usesOutliers = currentMethod?.usesOutliers ?: true))
+}
+
+private fun starMenus(app: AppViewModel, state: MenuState): List<MenuSpec> {
+    val svm = state.svm
     val hasSession = svm != null
     // Under the processing screen no key should act on what is behind it; while painting a horizon, the keys that change what is going on don't either.
-    val modalUp = svm?.showProcessingModal?.collectAsState()?.value == true
-    val keys = hasSession && !modalUp
-    val paintingHorizon = svm?.horizonPaintMode?.collectAsState()?.value == true
+    val keys = state.keys
+    val paintingHorizon = state.paintingHorizon
+    // The classifier over this frame's outliers, and writing the decisions into its picture (also on the d and r keys): there are none to classify
+    // for a clean method that does not use outliers.
+    val usesOutliers = state.usesOutliers
 
-    MenuBar {
+    return MenuBuilder().apply {
         Menu(localized("ui.file"), mnemonic = 'F') {
             // Each is behind the work-in-progress question (`requestOpen`): opening replaces the sequence that is open.
             Item(localized("ui.open_image_sequence"), shortcut = primaryShortcut(Key.O)) {
@@ -74,10 +159,6 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             Item(localized("ui.render_video_2"), enabled = hasSession) { app.openRenderVideo() }
             Item(localized("ui.re_process_this_frame_from_the_start"), enabled = hasSession) { svm?.reprocessCurrent() }
             Item(localized("ui.find_outliers_for_this_frame"), enabled = hasSession) { svm?.findOutliersCurrent() }
-            // The classifier over this frame's outliers, and writing the decisions into its picture (also on the d and r keys).
-            val currentFrame = svm?.currentIndex?.collectAsState()?.value ?: 0
-            val currentMethod = svm?.frameVMFor(currentFrame)?.info?.collectAsState()?.value?.cleanMethod
-            val usesOutliers = currentMethod?.usesOutliers ?: true
             Item(localized("ui.decision_tree_all"), enabled = hasSession && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame() }
             // Every frame at once: this was a button in the right panel, which the gui's panel never had (owner decision D8), so it is a command.
             Item(localized("ui.decision_tree_all_frames"), enabled = hasSession) { svm?.applyDecisionTreeAll() }
@@ -96,10 +177,9 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             // Disabled while the horizon painter is open: Compose delivers a menu accelerator before it delivers the key
             // to the view, so E would switch mode instead of selecting ground, and S or G during the startup painting
             // would leave the painter without its startup flow (macOS disables S there).
-            val painting = svm?.horizonPaintMode?.collectAsState()?.value == true
-            Item(localized("ui.edit_mode"), enabled = keys && !painting, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
-            Item(localized("ui.scrub_mode"), enabled = keys && !painting, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
-            Item(localized("ui.grid_mode"), enabled = keys && !painting, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
+            Item(localized("ui.edit_mode"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
+            Item(localized("ui.scrub_mode"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
+            Item(localized("ui.grid_mode"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
             // The same item closes the painter while it is open, and says so (macOS).
             Item(localized(if (paintingHorizon) "ui.close_horizon_painter" else "ui.paint_horizon_reference"), enabled = keys, shortcut = KeyShortcut(Key.H)) {
                 svm?.let { if (it.mode.value != InteractionMode.EDIT) it.setMode(InteractionMode.EDIT); it.toggleHorizonPaint() }
@@ -108,7 +188,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
             // Tab also does this, but a focused control can take Tab for focus traversal before it gets here, so the menu is the way that always works.
             Item(localized("ui.toggle_side_panels"), enabled = hasSession) { svm?.toggleSidePanels() }
             Item(localized("ui.toggle_filmstrip"), enabled = hasSession) { svm?.toggleFilmstrip() }
-            Item(localized("ui.play_pause"), enabled = keys && !painting, shortcut = KeyShortcut(Key.Spacebar)) { svm?.playForward() }
+            Item(localized("ui.play_pause"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.Spacebar)) { svm?.playForward() }
         }
 
         Menu(localized("ui.window"), mnemonic = 'W') {
@@ -139,7 +219,7 @@ fun FrameWindowScope.StarMenuBar(app: AppViewModel) {
                 ) { app.setLanguage(language.code) }
             }
         }
-    }
+    }.menus
 }
 
 /** True on macOS — used to map the primary modifier to Cmd there and Ctrl elsewhere. */
