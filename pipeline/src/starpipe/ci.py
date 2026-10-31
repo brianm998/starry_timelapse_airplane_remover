@@ -29,6 +29,7 @@ class Job:
     conclusion: str | None
     run_id: int
     completed_at: float | None = None
+    run_done: bool = True  # GitHub refuses `rerun-failed-jobs` on a run that is still going
 
     @property
     def key(self) -> tuple[str, str]:
@@ -66,7 +67,7 @@ def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str,
     for run in runs:
         for j in jobs_by_run.get(int(run["id"]), []):
             out.append(Job(run.get("name") or "", j["name"], j["status"], j.get("conclusion"), int(run["id"]),
-                           _ts(j.get("completed_at"))))
+                           _ts(j.get("completed_at")), run.get("status", "completed") == "completed"))
     return out
 
 

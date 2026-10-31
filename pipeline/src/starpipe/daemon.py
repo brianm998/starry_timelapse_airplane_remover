@@ -16,7 +16,7 @@ from aiohttp import web
 from . import gitutil, ship, worktrees
 from .config import Config, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
-from .engine import STAGE_STATE, Engine
+from .engine import RETRY_STATE, STAGE_STATE, Engine
 from .github import GitHubError
 
 log = logging.getLogger("starpiped")
@@ -158,11 +158,11 @@ class Daemon:
             self.engine._to_state(n, STAGE_STATE.get(q["stage"], "exploring"))  # pyright: ignore[reportPrivateUsage]
         elif action == "retry":
             stage = str(body.get("stage") or "explore")
-            if stage not in STAGE_STATE:
-                raise web.HTTPBadRequest(text=f"stage must be one of {', '.join(STAGE_STATE)}")
+            if stage not in RETRY_STATE:
+                raise web.HTTPBadRequest(text=f"stage must be one of {', '.join(RETRY_STATE)}")
             self.db.intervention(n, "retry", stage)
             self.engine.parked.discard(n)
-            self.engine._to_state(n, STAGE_STATE[stage])  # pyright: ignore[reportPrivateUsage]
+            self.engine._to_state(n, RETRY_STATE[stage])  # pyright: ignore[reportPrivateUsage]
         elif action == "cancel":
             task = self.tasks.get(n)
             if task:

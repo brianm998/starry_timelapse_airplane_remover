@@ -340,3 +340,30 @@ def test_auto_run_tickets_are_capped(rig: Rig) -> None:
     ship.watch_develop(rig.engine)
     filed = [i for i in rig.gh.issues.values() if i["title"].startswith("regression on develop")]
     assert len(filed) == 2
+
+
+async def test_a_refused_rerun_is_not_fatal_and_waits_for_the_run_to_finish(rig: Rig) -> None:
+    from starpipe.github import GitHubError
+
+    ready_ticket(rig, 1, "one.md", "one\n")
+    t = rig.db.ticket(1)
+    assert t
+    sha = gitutil.head_sha(Path(t.worktree or ""))
+    rig.gh.ci[sha] = [("pr-gate", "linux", "completed", "cancelled")]
+    attempts: list[int] = []
+
+    def refuse_then_accept(run_id: int) -> None:
+        attempts.append(run_id)
+        if len(attempts) == 1:
+            raise GitHubError("This workflow is already running (HTTP 403)")
+        rig.gh.ci[sha] = [("pr-gate", "linux", "completed", "success")]
+
+    rig.gh.rerun_failed = refuse_then_accept  # type: ignore[method-assign]
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed" and len(attempts) == 2
+
+
+def test_a_job_of_a_run_still_going_is_not_rerunnable() -> None:
+    jobs = ci.parse_jobs([{"id": 5, "name": "cli", "status": "in_progress"}],
+                         {5: [{"name": "w", "status": "completed", "conclusion": "cancelled"}]})
+    assert jobs[0].run_done is False

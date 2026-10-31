@@ -27,6 +27,7 @@ BUDGET_S = {"explore": 45 * 60, "develop": 4 * 3600, "fix": 90 * 60, "review": 4
             "ci-fix": 90 * 60, "conflict": 60 * 60}
 STAGE_STATE = {"explore": "exploring", "develop": "developing", "fix": "verifying", "review": "review",
                "ci-fix": "ci", "conflict": "landing"}
+RETRY_STATE = {**STAGE_STATE, "publish": "ready", "ci": "ci", "land": "landing"}  # what `starpipe retry <n> <stage>` re-enters
 MAX_FIX_CYCLES, MAX_REVIEW_ROUNDS, MAX_CRASH_RESUMES = 2, 2, 3
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
 PRIORITY = {"p0": 0, "p1": 1, "p2": 2, "p3": 3}

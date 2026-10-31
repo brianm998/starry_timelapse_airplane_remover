@@ -98,9 +98,14 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
         if verdict.kind == "pending":
             await eng.sleep(eng.config.ci_poll_s)
         elif verdict.kind == "rerun":
-            for run_id in {j.run_id for j in verdict.rerun}:
-                eng.gh.rerun_failed(run_id)
-            reran |= {j.key for j in verdict.rerun}
+            ready = [j for j in verdict.rerun if j.run_done]
+            for run_id in {j.run_id for j in ready}:
+                try:
+                    eng.gh.rerun_failed(run_id)
+                except GitHubError as exc:  # still running, or already rerun: look again next poll
+                    eng.db.event("rerun-refused", t.number, run=run_id, error=str(exc)[:200])
+                    ready = [j for j in ready if j.run_id != run_id]
+            reran |= {j.key for j in ready}
             eng.db.put(f"reran:{t.number}", json.dumps(sorted(reran)))
             await eng.sleep(eng.config.ci_poll_s)
         elif verdict.kind == "pass":

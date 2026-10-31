@@ -149,9 +149,11 @@ jobs:
           path: '*-test.log'
 
   # ─── macOS ───────────────────────────────────────────────────────────────────
+  # macos-14 images are in brownouts and retire on 2026-11-02. A separate cache key keeps this job from importing
+  # OpenCV / StarDecisionTrees built by cli.yml's macos-14 compiler (gherkin.yml explains why that fails).
   macos:
-    name: macOS build + tests (macos-14)
-    runs-on: macos-14
+    name: macOS build + tests (macos-15)
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -169,7 +171,7 @@ jobs:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos15-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -177,7 +179,7 @@ jobs:
           path: |
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
-          key: dt-macos-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+          key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Build OpenCV (if not cached)
         run: |
