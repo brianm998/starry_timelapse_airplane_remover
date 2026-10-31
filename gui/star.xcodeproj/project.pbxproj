@@ -63,7 +63,6 @@
 		D386FA23298B617400878B56 /* starTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA22298B617400878B56 /* starTests.swift */; };
 		D386FA2D298B617400878B56 /* GeneratedFeatureUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* GeneratedFeatureUITests.swift */; };
 		D386FA2F298B617400878B56 /* GuiFeatureRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* GuiFeatureRunner.swift */; };
-		5EC0DE0011A2B3C4D5E6F703 /* SecondaryWindowsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EC0DE0011A2B3C4D5E6F704 /* SecondaryWindowsUITests.swift */; };
 		D392EB0C2E0AFE320020E16A /* CursorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB0B2E0AFE320020E16A /* CursorView.swift */; };
 		D392EB152E0C48D60020E16A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D392EB142E0C48D60020E16A /* Assets.xcassets */; };
 		D392EB182E101CDF0020E16A /* RemoveAllButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB172E101CDF0020E16A /* RemoveAllButton.swift */; };
@@ -198,7 +197,6 @@
 		D386FA28298B617400878B56 /* starUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = starUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D386FA2C298B617400878B56 /* GeneratedFeatureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratedFeatureUITests.swift; sourceTree = "<group>"; };
 		D386FA2E298B617400878B56 /* GuiFeatureRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiFeatureRunner.swift; sourceTree = "<group>"; };
-		5EC0DE0011A2B3C4D5E6F704 /* SecondaryWindowsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondaryWindowsUITests.swift; sourceTree = "<group>"; };
 		D392EB0B2E0AFE320020E16A /* CursorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorView.swift; sourceTree = "<group>"; };
 		D392EB142E0C48D60020E16A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D392EB162E101CDF0020E16A /* KeepAllButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeepAllButton.swift; sourceTree = "<group>"; };
@@ -430,7 +428,6 @@
 			children = (
 				D386FA2C298B617400878B56 /* GeneratedFeatureUITests.swift */,
 				D386FA2E298B617400878B56 /* GuiFeatureRunner.swift */,
-				5EC0DE0011A2B3C4D5E6F704 /* SecondaryWindowsUITests.swift */,
 			);
 			path = starUITests;
 			sourceTree = "<group>";
@@ -702,7 +699,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				D386FA2F298B617400878B56 /* GuiFeatureRunner.swift in Sources */,
-				5EC0DE0011A2B3C4D5E6F703 /* SecondaryWindowsUITests.swift in Sources */,
 				D386FA2D298B617400878B56 /* GeneratedFeatureUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
