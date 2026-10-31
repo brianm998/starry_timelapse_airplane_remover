@@ -39,11 +39,19 @@
   { "case": "appNoSequence"         , "text": "the app is started with no sequence" },
   { "case": "prefsRecents"          , "text": "the preferences have <n:int> recent sequences" },
   { "case": "prefsListRecents"      , "text": "the preferences file lists <n:int> recent sequences" },
+  { "case": "prefsFixture"          , "text": "the preferences file is the fixture \"<fixture>\"" },
+  { "case": "prefsUnchanged"        , "text": "the preferences file is still the fixture \"<fixture>\"" },
+  { "case": "prefsHasKey"           , "text": "the preferences file still has the key \"<key>\"" },
+  { "case": "prefsKeepsCopy"        , "text": "the preferences file has an undecodable copy of the fixture \"<fixture>\"" },
   { "case": "menuChoose"            , "text": "I choose the menu command \"<command>\"" },
   { "case": "menuEnabled"           , "text": "the menu command \"<command>\" is enabled" },
   { "case": "menuDisabled"          , "text": "the menu command \"<command>\" is disabled" },
   { "case": "windowOpen"            , "text": "the \"<window>\" window is open" },
   { "case": "windowNotOpen"         , "text": "the \"<window>\" window is not open" },
   { "case": "openCopiedNoQuestions" , "text": "I open the copied sequence without its startup questions" },
-  { "case": "idSays"                , "text": "\"<id>\" says \"<text>\"" }
+  { "case": "idSays"                , "text": "\"<id>\" says \"<text>\"" },
+  { "case": "typeInto"              , "text": "I type \"<text>\" into \"<id>\"" },
+  { "case": "idHolds"               , "text": "\"<id>\" holds the number <n:int>" },
+  { "case": "idFocused"             , "text": "\"<id>\" has the keyboard" },
+  { "case": "idNotFocused"          , "text": "\"<id>\" does not have the keyboard" }
 ]

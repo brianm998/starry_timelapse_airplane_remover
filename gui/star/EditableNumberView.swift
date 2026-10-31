@@ -24,6 +24,8 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
     let focusedField: FocusState<FocusedField?>.Binding
     let focusField: FocusedField
     let alwaysOpen: Bool
+    /// The id a UI test finds the field by (`gherkin/ui/ids.json`), on the text and on the field it becomes
+    let identifier: String?
     /// Extra action upon commit
     let commitAction: (Value) -> Void
     
@@ -41,6 +43,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
          focusedField: FocusState<FocusedField?>.Binding,
          focusField: FocusedField,
          alwaysOpen: Bool = false,
+         identifier: String? = nil,
          commitAction: @escaping (Value) -> Void = { _ in })
     {
         self._value = value
@@ -54,6 +57,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
         self.focusedField = focusedField
         self.focusField = focusField
         self.alwaysOpen = alwaysOpen
+        self.identifier = identifier
         self.commitAction = commitAction
         _isEditing = State(initialValue: alwaysOpen)
         if alwaysOpen {
@@ -98,6 +102,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
                   .onDisappear {
                       if isEditing { commitIfValid() }
                   }
+                  .tagged(identifier)
 
                 Text(suffixTextProvider(value))
                   .foregroundColor(textColor)
@@ -113,6 +118,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
         } else {
             Text(fullTextProvider(value))
               .foregroundColor(textColor)
+              .tagged(identifier)
               .cursor(.iBeam)
               .onTapGesture {
                   // Begin editing
@@ -174,5 +180,12 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
         if focusedField.wrappedValue == focusField {
             focusedField.wrappedValue = nil
         }
+    }
+}
+
+private extension View {
+    /// The accessibility identifier, when there is one.
+    @ViewBuilder func tagged(_ identifier: String?) -> some View {
+        if let identifier { self.accessibilityIdentifier(identifier) } else { self }
     }
 }

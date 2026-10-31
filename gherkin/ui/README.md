@@ -30,10 +30,9 @@ The shared expectations for the macOS gui and the desktop client (see `plans/GUI
 
 * `known-gaps.json` — the parity backlog. A `@ui` feature that fails on a client where it is listed here passes, and says `KNOWN GAP`; one that
   fails where it is not listed fails; one that is listed and now passes fails until the entry is removed. `{"gaps": {"<feature>": {"mac-gui": "<why>", "desktop": "<why>"}}}`.
-  Both runners read it (`GuiFeatureRunner.knownGap`, `DesktopFeatureRunner.knownGap`). It lists four features for the desktop. Those are gaps of the *test host*, not of the app: the desktop has the same menu, windows, start screen and recents button, but the
-Compose test host cannot reach an AWT menu bar or window, and cannot start the JavaFX video background the start screen embeds. The desktop runner's steps for those say so
-(`not reachable in the desktop test host`), the ratchet turns each entry into a failure the day its steps work, and a feature of the gui's that fails on the desktop for a real
-difference goes here with that difference as the reason.
+  Both runners read it (`GuiFeatureRunner.knownGap`, `DesktopFeatureRunner.knownGap`). It lists one feature now, a real difference of the desktop's (`uiDecisionTreeCommandsIdle`). It held four features for the desktop for a while, which were gaps of the *test host*, not of the app
+  (the desktop has the same menu, windows, start screen and recents button, but the Compose test host has no AWT menu bar or window, and cannot start the JavaFX video the start screen embeds); they closed when
+  the runner learned to work on what the app draws those from (below). A feature of the gui's that fails on the desktop for a real difference goes here with that difference as the reason.
 
 ## The `@ui` features
 
@@ -64,14 +63,29 @@ are different: they stay literal in the feature and the runner supplies their va
 | `"<id>" is on` / `is off` | a switch or check box |
 | `"<id>" reads "<key>"` | the control's text is the English catalogue's text for the key (`STAR_LANG=en` in both runners) |
 | `"<id>" says "<text>"` | the control's text is exactly that (for a text with a number in it, such as `frame 2`) |
+| `I type "<text>" into "<id>"` | clicks the field (which opens a tap-to-edit one), replaces what it holds with the text and leaves it focused |
+| `"<id>" holds the number <n:int>` | the first whole number in the control's text is that: `7` in an open field, `merge with 7 static neighbors` in one that is not |
+| `"<id>" has the keyboard` / `does not have the keyboard` | the control is the one being typed into (gui: `hasKeyboardFocus`, desktop: `Focused`) |
 | `the app is started with no sequence` | launches on the start screen |
 | `the preferences have <n:int> recent sequences` / `the preferences file lists <n:int> recent sequences` | seeds, and then reads, the recents in the scratch `$HOME`'s preferences file |
-| `I choose the menu command "<command>"` / `the menu command "<command>" is enabled` / `is disabled` | by a `commands.json` id: its menu title and label come from that file and the English catalogue |
-| `the "<window>" window is open` / `is not open` | `debug` or `outlier` |
+| `the preferences file is the fixture "<fixture>"` | puts a file of `gherkin/ui/fixtures/prefs/` (`unreadable`: truncated JSON; `foreignKey`: a key only the desktop writes) in the scratch `$HOME` before the app starts; the generator checks the name |
+| `the preferences file is still the fixture "<fixture>"` | the file is those bytes now and stays so for four seconds (longer than the app takes to write one it means to) |
+| `the preferences file still has the key "<key>"` | the file parses and has that top-level key |
+| `the preferences file has an undecodable copy of the fixture "<fixture>"` | `<prefs file>.undecodable` holds those bytes |
+| `I choose the menu command "<command>"` / `the menu command "<command>" is enabled` / `is disabled` | by a `commands.json` id: its menu title and label come from that file and the English catalogue (gui: the menu bar; desktop: the menus as data, see below) |
+| `the "<window>" window is open` / `is not open` | `debug` or `outlier` (gui: a window with that title; desktop: the view model's flag `Main.kt` shows the window for) |
 
-The features so far (fourteen pass on both clients; four pass on the gui and are known gaps of the desktop's test host): `uiStartupDefaults`, `uiStartupReturnStarts`, `uiStartupHorizonQuestion`, `uiStartupMovingHorizonQuestion`,
+The features so far (twenty-five of the twenty-six pass on both clients; `uiDecisionTreeCommandsIdle` passes on the gui and is a known gap of the desktop, see `known-gaps.json`): `uiStartupDefaults`, `uiStartupReturnStarts`, `uiStartupHorizonQuestion`, `uiStartupMovingHorizonQuestion`,
 `uiStartupNoHorizonSkips`, `uiStartupBackToHorizon`, `uiStartupBackFromRemoval`, `uiRemovalSelectiveChoice`, `uiSettingsFromStartup`, `uiSettingsTabs`,
-`uiSettingsProcessNow`, then `uiSecondaryWindowToggles`, `uiSecondaryWindowsNeedASequence`, `uiSequenceWindowsGoWithIt` (M11) and `uiRecentsRemove` (D12), and, on the sequence screen reached without the startup questions, `uiModePickers` (Q8), `uiViewPickerNeedsAnImage` (Q1) and `uiFrameKeys`. The settings sheet is reached through the Advanced gear on a startup question, which both clients have, so no seam is needed.
+`uiSettingsProcessNow`, then `uiSecondaryWindowToggles`, `uiSecondaryWindowsNeedASequence`, `uiSequenceWindowsGoWithIt` (M11) and `uiRecentsRemove` (D12), and, on the sequence screen reached without the startup questions, `uiModePickers` (Q8), `uiViewPickerNeedsAnImage` (Q1) and `uiFrameKeys`, and on the same screen the menu's state, `uiMenuCommandsIdle`, `uiMenuCommandsWhilePainting` and `uiDecisionTreeCommandsIdle` (M12: which items are on with a sequence open and nothing running, and while the horizon painter is open; the gui's rules are the reference, `MenuState` is the desktop's copy and `MenuStateTest` also holds the states a feature cannot reach: the processing screen up, a run going, a video rendering). Then `uiPainterOpensInEditMode` (M7: Paint Reference Horizon from scrub or grid switches to edit) and `uiKeysWhilePainting` (M4: under the painter the arrow keys move the frame and a mode key does nothing), `uiNumberFields` (Q9, P3: a number field commits on Return, puts the old number back on Esc, and gives the keyboard back either way), and the two that put a preferences file under the app, `uiCorruptPreferences` (M1: a file that does not parse is left as it is and a `.undecodable` copy is kept) and `uiSharedPreferences` (M2: a key the client does not know is still there after it saves; opening a sequence is the save). The settings sheet is reached through the Advanced gear on a startup question, which both clients have, so no seam is needed.
+
+**What the desktop's runner does where the gui has an AWT menu bar, windows and a video.** The desktop's menu bar and secondary windows are AWT, which the Compose test host does not have, so those steps work on what the
+app draws them from, and a test holds the drawing to that. The menus are data, `starMenus(app)` (titles, labels, enabled, handler), which `StarMenuBar` draws as the `MenuBar` and nothing else builds; the runner reads it
+with `starMenusNow` (on the UI thread, without composing anything) and chooses an item by calling its handler (a disabled item cannot be chosen, as in a menu). A window is open when the flag in the view model that `Main.kt` shows its `Window` for says so, and
+`SecondaryWindowsWiringTest` holds `Main.kt` to that. The start screen's JavaFX video is off for a `@ui` feature (`-Dstar.ui.noIntroVideo`, `NO_INTRO_VIDEO_PROPERTY`; the gui has a video too and plays it), the
+preferences are the scratch `user.home`'s, and where a list has a control per row (the recents' remove button) a click on the id takes the first.
+
+**Two things about keys on the desktop's test host.** A click on a control with a hover tip (the neighbour field) leaves the tip up, and a tip is a second Compose root; the key step sends the pointer to a corner, which closes it, and then keys the first root, the window's. And a key sent after a number field gave up the keyboard (Return, Esc) did not reach the host's key handler, though the host held the focus (traced: no event arrived; cause not found), so `uiNumberFields` asks `has the keyboard` / `does not have the keyboard` and does not press an arrow after it.
 
 A feature that presses a key (`uiFrameKeys`) runs on the desktop with the window's key handler (`handleGlobalKey`, which `Main.kt` hangs on the `Window`, outside `StarApp`) hosted on an
 ancestor of `StarApp` by the runner (`KeyHost`), in the same bubble phase and with the focus on it: the handler is the real one, the host is the test's own.
@@ -80,9 +94,11 @@ ancestor of `StarApp` by the runner (`KeyHost`), in the same bubble phase and wi
 moving, and the desktop runner for the Compose clock to be idle, and neither can be sure. A feature that fails once and passes on a rerun, with the same step and nothing changed, is that; the gui runner also ignores
 the windows the last run left open (`-ApplePersistenceIgnoreState YES`), which a restored window used to make an order-dependent failure.
 
+**The settings sheet that stayed on "Loading…" (found and fixed).** The desktop's `uiSettingsFromStartup`, `uiSettingsProcessNow` and `uiSettingsTabs` sometimes (1 run in 54 at first, then 4 to 7 in 21) waited out the 90 s on a sheet that never left "Loading…", with the engine's config already in (traced: `getConfig` answered in 6 ms). The sheet's `produceState` wrote its state after the reply, on whichever thread the reply arrived on; a test host's coroutines run where they are resumed, so it was a worker thread, and now and then composition never saw the write (a thread dump of a hang showed `stard` idle and the UI thread drawing; tracing the write made the race vanish). The sheet writes it on the UI thread now (`withContext(Dispatchers.Main)`, which is where the real app resumes it): 21 runs of the three features in a row. If another sheet ever sticks on "Loading…" in a test, look for a `produceState` or `LaunchedEffect` that writes state after a call that resumes on another thread.
+
 Run one with `./gradlew gherkinTest -Pstar.stard.path=$PWD/../daemon/.build/debug/stard --tests '*.uiStartupDefaultsFeature'` in `star-desktop` (one feature
 per Gradle run: a second in the same JVM trips over the first one's leftover coroutines) and with `xcodebuild test … -only-testing:starUITests/GeneratedFeatureUITests/testUiStartupDefaultsFeature`
 (see `gherkin/README.md`).
 
-Not written yet, from §6.3: the snapshots and probes, `I choose the menu command`, the outlier-group elements, the window steps, and the fixtures
+Not written yet, from §6.3: the snapshots and probes, the outlier-group elements, and the fixtures
 `ui_small` / `ui_small_selective` (the in-repo `test_data/test_a7sii_10` stands in, and these features need no outlier ids).

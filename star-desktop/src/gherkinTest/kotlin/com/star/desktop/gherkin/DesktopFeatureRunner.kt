@@ -2,12 +2,15 @@ package com.star.desktop.gherkin
 
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -24,7 +27,9 @@ import com.google.gson.JsonParser
 import com.star.desktop.gherkin.generated.StepAction
 import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.app.MenuEntry
 import com.star.desktop.ui.app.StarApp
+import com.star.desktop.ui.app.starMenusNow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -102,19 +107,26 @@ class DesktopFeatureRunner {
         StepAction.ID_OFF to { t -> expectOn(t, args[0], on = false) },
         StepAction.ID_READS to { t -> expectReads(t, args[0], args[1]) },
         StepAction.ID_SAYS to { t -> expectSays(t, args[0], args[1]) },
-        // What the Compose test host cannot reach: a feature that needs one of these is a known gap of this client (gherkin/ui/known-gaps.json),
-        // which the ratchet turns into a failure the day a step here starts to work.
-        StepAction.APP_NO_SEQUENCE to { notReachable("the start screen embeds a JavaFX video background, and JavaFX cannot start headless") },
-        StepAction.PREFS_RECENTS to { notReachable("the start screen is not reachable, so the recents list is not either") },
-        StepAction.PREFS_LIST_RECENTS to { notReachable("the start screen is not reachable, so the recents list is not either") },
-        StepAction.MENU_CHOOSE to { notReachable("the menu is an AWT menu bar, which the Compose test host does not have") },
-        StepAction.MENU_ENABLED to { notReachable("the menu is an AWT menu bar, which the Compose test host does not have") },
-        StepAction.MENU_DISABLED to { notReachable("the menu is an AWT menu bar, which the Compose test host does not have") },
-        StepAction.WINDOW_OPEN to { notReachable("the secondary windows are AWT windows, which the Compose test host does not show") },
-        StepAction.WINDOW_NOT_OPEN to { notReachable("the secondary windows are AWT windows, which the Compose test host does not show") },
+        StepAction.TYPE_INTO to { t -> typeInto(t, args[0], args[1]) },
+        StepAction.ID_HOLDS to { t -> expectHolds(t, args[0], args[1].toInt()) },
+        StepAction.ID_FOCUSED to { t -> expectFocus(t, args[0], focused = true) },
+        StepAction.ID_NOT_FOCUSED to { t -> expectFocus(t, args[0], focused = false) },
+        // What the Compose test host has no AWT for. The menu bar and the secondary windows are AWT, so these steps work on what the app draws
+        // them from: the menus as data (`starMenus`, which `StarMenuBar` draws and nothing else builds; `starMenusNow` reads them without composing) and the view model's window flags (which
+        // `Main.kt` hangs each `Window` on, and `MainWindowsTest` reads it to hold it to).
+        StepAction.APP_NO_SEQUENCE to ::startWithNoSequence,
+        StepAction.PREFS_RECENTS to { seedRecents(args[0].toInt()) },
+        StepAction.PREFS_LIST_RECENTS to { t -> expectRecents(t, args[0].toInt()) },
+        StepAction.PREFS_FIXTURE to { seedPreferences(args[0]) },
+        StepAction.PREFS_UNCHANGED to { expectPreferencesUnchanged(args[0]) },
+        StepAction.PREFS_HAS_KEY to { t -> expectPreferencesKey(t, args[0]) },
+        StepAction.PREFS_KEEPS_COPY to { t -> expectUndecodableCopy(t, args[0]) },
+        StepAction.MENU_CHOOSE to { t -> chooseMenuCommand(t, args[0]) },
+        StepAction.MENU_ENABLED to { t -> expectMenuCommand(t, args[0], enabled = true) },
+        StepAction.MENU_DISABLED to { t -> expectMenuCommand(t, args[0], enabled = false) },
+        StepAction.WINDOW_OPEN to { t -> expectWindow(t, args[0], open = true) },
+        StepAction.WINDOW_NOT_OPEN to { t -> expectWindow(t, args[0], open = false) },
     )
-
-    private fun notReachable(why: String): Unit = throw RunnerError("not reachable in the desktop test host: $why")
 
     fun run(feature: Feature) {
         this.feature = feature
@@ -123,7 +135,11 @@ class DesktopFeatureRunner {
         if (feature.steps.isEmpty()) throw RunnerError("feature \"${feature.name}\" has no steps: refusing to pass vacuously")
         // The client keeps its preferences in ~/.star.userprefs.json; a test must neither read nor write the real one.
         // a @ui feature may compare what the app says with the English catalogue
-        if ("@ui" in feature.tags) com.star.desktop.i18n.Strings.setOverride("en")
+        // and may show the start screen, which would otherwise embed a JavaFX video that cannot start headless
+        if ("@ui" in feature.tags) {
+            com.star.desktop.i18n.Strings.setOverride("en")
+            System.setProperty(com.star.desktop.ui.initial.NO_INTRO_VIDEO_PROPERTY, "true")
+        }
         scratch = Files.createTempDirectory("star-gherkin-").toFile()
         val realHome = System.getProperty("user.home")
         System.setProperty("user.home", File(scratch, "home").apply { mkdirs() }.absolutePath)
@@ -163,7 +179,10 @@ class DesktopFeatureRunner {
             if ("@ui" in feature.tags) vm?.let { m -> runCatching { kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeoutOrNull(10_000) { m.shutdown() } } } }
             scope?.cancel()
             System.setProperty("user.home", realHome)
-            if ("@ui" in feature.tags) com.star.desktop.i18n.Strings.setOverride(null)
+            if ("@ui" in feature.tags) {
+                com.star.desktop.i18n.Strings.setOverride(null)
+                System.clearProperty(com.star.desktop.ui.initial.NO_INTRO_VIDEO_PROPERTY)
+            }
             scratch.deleteRecursively()
         }
     }
@@ -306,10 +325,11 @@ class DesktopFeatureRunner {
         finishOpening(t, model, answer = false)
     }
 
+    /** Clicks the control; where a list has one per row (the recents' remove button), the first, which is the row on top. */
     private fun clickId(t: ComposeUiTest, id: String) {
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
-        t.onNodeWithTag(id).performClick()
+        t.onAllNodes(hasTestTag(id))[0].performClick()
     }
 
     private fun expectShown(t: ComposeUiTest, id: String, shown: Boolean) {
@@ -331,6 +351,29 @@ class DesktopFeatureRunner {
         waitFor(t, "\"$id\" ${if (on) "on" else "off"}", 20_000, { "(ToggleableState: ${semanticsOf(t, id)?.getOrNull(SemanticsProperties.ToggleableState)})" }) {
             (semanticsOf(t, id)?.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.On) == on
         }
+    }
+
+    /** Clicks the field and replaces what it holds with [text], leaving it focused, as a user does before pressing Return. */
+    private fun typeInto(t: ComposeUiTest, text: String, id: String) {
+        clickId(t, id)
+        t.onAllNodes(hasTestTag(id))[0].performTextReplacement(text)
+    }
+
+    /** The control has the keyboard (a text field being typed into), or not. */
+    private fun expectFocus(t: ComposeUiTest, id: String, focused: Boolean) {
+        expectShown(t, id, shown = true)
+        waitFor(t, "\"$id\" ${if (focused) "to have" else "not to have"} the keyboard", 20_000, { "(Focused: ${semanticsOf(t, id)?.getOrNull(SemanticsProperties.Focused)})" }) {
+            (semanticsOf(t, id)?.getOrNull(SemanticsProperties.Focused) ?: false) == focused
+        }
+    }
+
+    /** The first whole number in the control's text is [number]: what an open field holds, or the text of a control that shows it. */
+    private fun expectHolds(t: ComposeUiTest, id: String, number: Int) {
+        expectShown(t, id, shown = true)
+        fun texts(): List<String> = semanticsOf(t, id)?.let { c ->
+            listOfNotNull(c.getOrNull(SemanticsProperties.EditableText)?.text) + c.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
+        }.orEmpty()
+        waitFor(t, "\"$id\" to hold $number", 20_000, { "(it says ${texts()})" }) { texts().any { Regex("[0-9]+").find(it)?.value?.toIntOrNull() == number } }
     }
 
     /** The control's text is exactly [expected]. */
@@ -377,7 +420,13 @@ class DesktopFeatureRunner {
             }
         }
         t.waitForIdle()
-        t.onRoot().performKeyInput {
+        // A hover tip that is up (a click on a field with one shows it) is a second root, and keys must go to the window's: the pointer is moved
+        // off the tip's control, which closes it.
+        if (t.onAllNodes(isRoot()).fetchSemanticsNodes().size > 1) {
+            t.onAllNodes(isRoot())[0].performMouseInput { moveTo(Offset(1f, 1f)) }
+            runCatching { waitFor(t, "a hover tip to close", 5_000) { t.onAllNodes(isRoot()).fetchSemanticsNodes().size == 1 } }
+        }
+        t.onAllNodes(isRoot())[0].performKeyInput {
             modifiers.forEach { keyDown(it) }
             keyDown(key); keyUp(key)
             modifiers.asReversed().forEach { keyUp(it) }
@@ -387,7 +436,7 @@ class DesktopFeatureRunner {
     private fun finishOpening(t: ComposeUiTest, model: AppViewModel, answer: Boolean = true) {
         // The sequence opens in the background, driven by the view model and not by composition. Nothing is composed until it has:
         // the start screen (the first thing StarApp would draw) embeds a JavaFX video background, and JavaFX cannot start headless, so
-        // composing it blocks the UI thread for good.
+        // composing it blocks the UI thread for good. (A @ui feature turns the video off, so one that wants the start screen can have it.)
         val deadline = System.nanoTime() + OPEN_TIMEOUT_MS * 1_000_000
         while (model.screen.value !is AppScreen.Sequence) {
             model.error.value?.let { throw RunnerError("the app reported an error while opening: $it") }
@@ -399,10 +448,16 @@ class DesktopFeatureRunner {
             val detection = model.sessions.session.value?.config?.detectionType
             if (detection != com.star.proto.DetectionType.DETECTION_STRONG) throw RunnerError("the session opened at detection type $detection, not DETECTION_STRONG")
         }
-        // The window's own key handler (`Main.kt`: `Window(onKeyEvent = ...)`) is not part of [StarApp], so a @ui feature that presses a key hosts it the
-        // same way: on an ancestor, in the bubble phase, with the focus put on it to begin with.
-        if ("@ui" in feature.tags) t.setContent { KeyHost(model) { StarApp(model) } } else t.setContent { StarApp(model) }
+        showApp(t, model)
         if (answer) answerStartupPrompts(t, model)
+    }
+
+    /**
+     * Composes the app. What `Main.kt` hangs on the window and not in [StarApp], a @ui feature hosts the same way: the window's key handler
+     * (`Window(onKeyEvent = ...)`) on an ancestor, in the bubble phase, with the focus put on it to begin with.
+     */
+    private fun showApp(t: ComposeUiTest, model: AppViewModel) {
+        if ("@ui" in feature.tags) t.setContent { KeyHost(model) { StarApp(model) } } else t.setContent { StarApp(model) }
     }
 
     /** Horizon → camera → (select horizon: No) → what to remove → Start processing, as a user answers them. */
@@ -690,6 +745,107 @@ class DesktopFeatureRunner {
             val config = File(info?.configJsonPath?.ifEmpty { "${info.scratchSessionDir}/config.json" } ?: return@runCatching)
             if (config.isFile) config.copyTo(File(dest, "config.json"), overwrite = true)
         }
+    }
+
+    // ---- the start screen, the preferences, the menu and the windows ----
+
+    /** The start screen, as the app launches: no sequence, and the preferences the earlier steps left in the scratch home. */
+    private fun startWithNoSequence(t: ComposeUiTest) {
+        showApp(t, newModel())
+    }
+
+    private fun preferencesFile() = File(System.getProperty("user.home"), ".star.userprefs.json")
+
+    /** `n` recently opened sequences in the preferences the app will start from (each a config.json that exists: one that does not is dropped). */
+    private fun seedRecents(n: Int) {
+        val entries = JsonObject()
+        for (i in 1..n) {
+            val config = File(File(scratch, "recent$i").apply { mkdirs() }, "config.json").apply { writeText("{}") }
+            entries.addProperty(config.absolutePath, 10L * i)
+        }
+        preferencesFile().writeText(JsonObject().apply { add("recentlyOpenedSequencelist", entries) }.toString())
+    }
+
+    /** The bytes of a file of `gherkin/ui/fixtures/prefs/`. */
+    private fun fixtureBytes(name: String): ByteArray = File(repoRoot(), "gherkin/ui/fixtures/prefs/$name.json").readBytes()
+
+    /** The preferences the app will start from are this file, as it is. */
+    private fun seedPreferences(fixture: String) = preferencesFile().writeBytes(fixtureBytes(fixture))
+
+    /** The file has not been touched for a few seconds, which is longer than the app takes to write one it means to write. */
+    private fun expectPreferencesUnchanged(fixture: String) {
+        val expected = fixtureBytes(fixture)
+        val deadline = System.nanoTime() + 4_000_000_000L
+        do {
+            if (!preferencesFile().readBytes().contentEquals(expected)) throw RunnerError("the preferences file is not the fixture \"$fixture\" any more")
+            Thread.sleep(500)
+        } while (System.nanoTime() < deadline)
+    }
+
+    private fun expectPreferencesKey(t: ComposeUiTest, key: String) {
+        fun has() = runCatching { JsonParser.parseString(preferencesFile().readText()).asJsonObject.has(key) }.getOrDefault(false)
+        waitFor(t, "the preferences file to have the key \"$key\"", 15_000) { has() }
+    }
+
+    private fun expectUndecodableCopy(t: ComposeUiTest, fixture: String) {
+        val copy = File(preferencesFile().path + ".undecodable")
+        val expected = fixtureBytes(fixture)
+        waitFor(t, "a copy of the unreadable preferences file beside it", 15_000) { copy.isFile && copy.readBytes().contentEquals(expected) }
+    }
+
+    private fun recentCount(): Int? = runCatching {
+        JsonParser.parseString(preferencesFile().readText()).asJsonObject.getAsJsonObject("recentlyOpenedSequencelist")?.size() ?: 0
+    }.getOrNull()
+
+    private fun expectRecents(t: ComposeUiTest, n: Int) {
+        waitFor(t, "the preferences file to list $n recent sequences", 15_000, { "(it lists ${recentCount()})" }) { recentCount() == n }
+    }
+
+    /** The command's menu title and item label, in English: from `gherkin/ui/commands.json` and the catalogue. */
+    private fun menuItem(command: String): Pair<String, String> {
+        val table = JsonParser.parseString(File(repoRoot(), "gherkin/ui/commands.json").readText()).asJsonObject
+        val entry = table.getAsJsonArray("commands").map { it.asJsonObject }.firstOrNull { it["id"].asString == command }
+            ?: throw RunnerError("no command \"$command\" in gherkin/ui/commands.json")
+        val titleKey = table.getAsJsonObject("menus")[entry["menu"].asString].asString
+        return com.star.desktop.i18n.localized(titleKey) to com.star.desktop.i18n.localized(entry["label"].asString)
+    }
+
+    /** The menu's item for the command, or null while there is no app or the menu does not have it. The menus are read on the UI thread, as composition reads what they enable on. */
+    private fun findMenuCommand(t: ComposeUiTest, command: String): MenuEntry.Command? {
+        val (title, label) = menuItem(command)
+        val model = vm ?: return null
+        return t.runOnUiThread { starMenusNow(model) }.firstOrNull { it.title == title }?.entries?.filterIsInstance<MenuEntry.Command>()?.firstOrNull { it.label == label }
+    }
+
+    private fun expectMenuCommand(t: ComposeUiTest, command: String, enabled: Boolean) {
+        waitFor(t, "the menu command \"$command\" to be ${if (enabled) "enabled" else "disabled"}", 20_000,
+            { "(${findMenuCommand(t, command)?.let { if (it.enabled) "it is enabled" else "it is disabled" } ?: "there is no such item"})" }) {
+            findMenuCommand(t, command)?.enabled == enabled
+        }
+    }
+
+    /** Chooses the item as a click on the menu would: what its handler does. A disabled item cannot be chosen, as in a menu. */
+    private fun chooseMenuCommand(t: ComposeUiTest, command: String) {
+        expectMenuCommand(t, command, enabled = true)
+        val item = findMenuCommand(t, command) ?: throw RunnerError("no menu item for \"$command\"")
+        t.runOnUiThread { item.onClick() }
+        t.waitForIdle()
+    }
+
+    /** A secondary window is open when the flag `Main.kt` shows its `Window` for says so. */
+    private fun windowIsOpen(name: String): Boolean {
+        val model = vm ?: throw RunnerError("no app is running")
+        return when (name) {
+            "debug" -> model.showDebugWindow.value
+            "outlier" -> model.showOutlierWindow.value
+            "alignment" -> model.showAlignmentWindow.value
+            "blob" -> model.showBlobWindow.value
+            else -> throw RunnerError("no window called \"$name\" (debug, outlier, alignment or blob)")
+        }
+    }
+
+    private fun expectWindow(t: ComposeUiTest, name: String, open: Boolean) {
+        waitFor(t, "the $name window to be ${if (open) "open" else "closed"}", 15_000) { windowIsOpen(name) == open }
     }
 
     // ---- waiting ----
