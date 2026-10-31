@@ -13,17 +13,23 @@ Runner = Callable[[Sequence[str], str | None], str]
 
 STATE_LABELS = ["pipe:queued", "pipe:exploring", "pipe:developing", "pipe:verifying", "pipe:review", "pipe:ci",
                 "pipe:landing", "pipe:needs-input", "pipe:failed", "pipe:paused"]
-OTHER_LABELS = ["pipeline", "pipe:landed", "pipe:filed-by-pipeline", "p0", "p1", "p2", "p3"]
+OTHER_LABELS = ["pipeline", "pipe:landed", "pipe:filed-by-pipeline", "pipe:proposed", "p0", "p1", "p2", "p3"]
 LABEL_COLOURS = {"pipeline": "0e8a16", "pipe:landed": "6f42c1", "pipe:failed": "d73a4a", "pipe:needs-input": "fbca04",
-                 "pipe:paused": "bfbfbf", "pipe:filed-by-pipeline": "c5def5"}
+                 "pipe:paused": "bfbfbf", "pipe:filed-by-pipeline": "c5def5", "pipe:proposed": "d4c5f9"}
 
 
 class GitHubError(RuntimeError):
     pass
 
 
+GH_TIMEOUT_S = 120.0
+
+
 def gh_runner(args: Sequence[str], stdin: str | None) -> str:
-    done = subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True, check=False)
+    try:
+        done = subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True, check=False, timeout=GH_TIMEOUT_S)
+    except subprocess.TimeoutExpired as exc:  # a hung call must not hang the daemon with it
+        raise GitHubError(f"gh {' '.join(args)} timed out after {GH_TIMEOUT_S:.0f}s") from exc
     if done.returncode != 0:
         raise GitHubError(f"gh {' '.join(args)} failed: {(done.stderr or done.stdout).strip()}")
     return done.stdout
@@ -134,6 +140,13 @@ class GitHub:
             self.api("DELETE", f"git/refs/heads/{branch}")
         except GitHubError:
             pass  # already deleted
+
+    def ensure_label(self, name: str) -> None:
+        """Create one label if it is missing (an existing one answers 422, which is fine)."""
+        try:
+            self.api("POST", "labels", {"name": name, "color": LABEL_COLOURS.get(name, "ededed")})
+        except GitHubError:
+            pass  # already there; a real failure surfaces on the add_labels that follows
 
     def ensure_labels(self) -> tuple[list[str], list[str]]:
         """Create the missing labels; return (created, already_there)."""

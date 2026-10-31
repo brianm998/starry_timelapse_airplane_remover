@@ -151,3 +151,11 @@ def test_java_home_is_resolved_from_config_then_environment(tmp_path: Path, monk
     assert resolve_java_home(Config()) == str(jdk)
     monkeypatch.setenv("JAVA_HOME", "/nonexistent")
     assert resolve_java_home(Config()) != "/nonexistent"
+
+
+def test_a_free_form_ticket_without_criteria_can_still_get_a_plan(tmp_path: Path) -> None:
+    """Follow-ups a stage files (file_followup) have no `A<n>:` lines; the plan then states its own acceptance ids."""
+    c = contract(tmp_path, body="Move the remaining macos-14 jobs.\n\nSome notes, no sections.")
+    assert "accepted" in c.submit_plan(plan_args(acceptance=[{"id": "A1", "check": "review: cli.yml"}]))
+    c2 = contract(tmp_path / "second", body=GOOD_BODY)  # a ticket that does list criteria keeps the strict check
+    assert "not in the ticket" in c2.submit_plan(plan_args(acceptance=[{"id": "A1", "check": "x"}, {"id": "A9", "check": "y"}]))
