@@ -21,6 +21,8 @@
   "uiNumberFields": [],
   "uiOutlierClickKeeps": [],
   "uiOutlierClicks": [],
+  "uiOutlierInformationClick": [],
+  "uiOutlierMultiClick": [],
   "uiPainterOpensInEditMode": [],
   "uiRecentsRemove": [],
   "uiRemovalSelectiveChoice": [],

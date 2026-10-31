@@ -137,6 +137,12 @@
     },
     "uiDecisionsSurviveClose": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiOutlierMultiClick": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiOutlierInformationClick": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }
