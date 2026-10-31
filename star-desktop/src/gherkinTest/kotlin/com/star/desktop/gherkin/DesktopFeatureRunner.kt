@@ -99,6 +99,7 @@ class DesktopFeatureRunner {
         StepAction.OPEN_COPIED_NO_QUESTIONS to { t -> openCopiedSequence(t, askingTheStartupQuestions = false) },
         StepAction.CLICK_ID to { t -> clickId(t, args[0]) },
         StepAction.PRESS_KEY to { t -> pressKey(t, args[0]) },
+        StepAction.DRAG_AROUND to { t -> dragAround(t, args[0]) },
         StepAction.ID_SHOWN to { t -> expectShown(t, args[0], shown = true) },
         StepAction.ID_NOT_SHOWN to { t -> expectShown(t, args[0], shown = false) },
         StepAction.ID_SELECTED to { t -> expectSelected(t, args[0], selected = true) },
@@ -348,6 +349,24 @@ class DesktopFeatureRunner {
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
         t.onAllNodes(hasTestTag(id))[0].performClick()
+    }
+
+    /**
+     * Drags a small box around the element: from a point up and to the left of its centre to one down and to the right, the pointer moving in
+     * steps (a drag has to cross the touch slop to be one). The events go to whatever is under the pointer, which is the frame's canvas for a
+     * group's probe.
+     */
+    private fun dragAround(t: ComposeUiTest, id: String) {
+        waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
+        t.waitForIdle()
+        t.onAllNodes(hasTestTag(id))[0].performMouseInput {
+            val c = center
+            moveTo(Offset(c.x - DRAG_HALF_PX, c.y - DRAG_HALF_PX))
+            press()
+            repeat(DRAG_STEPS) { moveBy(Offset(2 * DRAG_HALF_PX / DRAG_STEPS, 2 * DRAG_HALF_PX / DRAG_STEPS)) }
+            release()
+        }
+        t.waitForIdle()
     }
 
     private fun expectShown(t: ComposeUiTest, id: String, shown: Boolean) {
@@ -945,6 +964,8 @@ class DesktopFeatureRunner {
         const val CLIENT = "desktop"
         const val OPEN_TIMEOUT_MS = 10L * 60_000
         const val UI_TIMEOUT_MS = 90_000L
+        const val DRAG_HALF_PX = 24f   // a drag around a group is a box this far each way from its centre, in pixels
+        const val DRAG_STEPS = 8
         const val PROCESS_TIMEOUT_MS = 50L * 60_000   // auto selective on a 4-core runner took over 25 minutes
         const val RENDER_TIMEOUT_MS = 10L * 60_000
         val REMOVAL_ACTIONS = setOf(StepAction.AIRPLANES_REMOVED, StepAction.SATELLITES_REMOVED, StepAction.STARS_PRESERVED, StepAction.NOTHING_ELSE_CHANGED)

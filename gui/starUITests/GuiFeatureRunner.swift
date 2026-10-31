@@ -101,6 +101,7 @@ final class GuiFeatureRunner {
         .menuDisabled: { try $0.expectMenuCommand($0.args[0], enabled: false) },
         .menuThere: { try $0.expectMenu($0.args[0], there: true) },
         .menuNotThere: { try $0.expectMenu($0.args[0], there: false) },
+        .dragAround: { try $0.drag(around: $0.args[0]) },
         .processedCopy: { try $0.makeProcessedCopy() },
         .openProcessed: { try $0.openProcessedCopy() },
         .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
@@ -185,6 +186,17 @@ final class GuiFeatureRunner {
             throw RunnerError("\(identifier) did not appear within \(Int(timeout))s\n\(app.debugDescription)")
         }
         e.click()
+    }
+
+    /// Drags a small box around the element: from a point up and to the left of its centre to one down and to the right, held a moment first so
+    /// that it is a drag and not a click. What is under the pointer gets it: the frame's canvas, for a group's probe.
+    private func drag(around identifier: String, timeout: TimeInterval = 120) throws {
+        let e = element(identifier)
+        guard e.waitForExistence(timeout: timeout) else {
+            throw RunnerError("\(identifier) did not appear within \(Int(timeout))s\n\(app.debugDescription)")
+        }
+        let centre = e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        centre.withOffset(CGVector(dx: -12, dy: -12)).press(forDuration: 0.2, thenDragTo: centre.withOffset(CGVector(dx: 12, dy: 12)))
     }
 
     /// Clicks the element; if it exists but cannot be hit (on a small display the sheet's lower buttons can sit below the
