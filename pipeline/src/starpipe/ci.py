@@ -16,9 +16,15 @@ from typing import Any
 GATE = "pr-gate"
 GREEN = {"success", "skipped", "neutral"}
 INFRA_CONCLUSIONS = {"cancelled", "timed_out", "startup_failure"}
-INFRA_LOG = re.compile(r"runner (?:has )?lost|lost communication|Could not resolve host|ECONNRESET|Connection reset|"
-                       r"Temporary failure in name resolution|actions/cache|Failed to download|curl: \(\d+\)|"
-                       r"The operation was canceled|No space left on device", re.IGNORECASE)
+INFRA_LOG = re.compile(
+    r"runner (?:has )?lost|lost communication|Could not resolve host|ECONNRESET|Connection reset|"
+    r"Temporary failure in name resolution|actions/cache|Failed to download|curl: \(\d+\)|"
+    r"The operation was canceled|No space left on device|"
+    # Gradle / Maven could not fetch a dependency or plugin: the network, not the code
+    r"Could not resolve (?:all |com\.|org\.|io\.|net\.)|Could not (?:GET|HEAD) '|repo\.maven\.apache\.org|"
+    r"Read timed out|Connect timed out|Connection timed out|Received status code 5\d\d|50[234] (?:Bad Gateway|Service)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)

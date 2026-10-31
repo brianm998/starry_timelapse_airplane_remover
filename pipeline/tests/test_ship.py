@@ -400,3 +400,13 @@ def test_a_cancelled_or_timed_out_develop_job_is_not_a_regression(rig: Rig) -> N
     ship.watch_develop(rig.engine)
     assert rig.gh.issues == {} and rig.db.get("stop_line") is None
     assert rig.db.baseline("cli", "macos") == "timed_out"
+
+
+def test_a_gradle_download_failure_looks_like_infrastructure_and_a_test_failure_does_not() -> None:
+    gradle = ("> Could not resolve all files for configuration ':classpath'.\n"
+              "   > Could not resolve com.google.protobuf:protobuf-gradle-plugin:0.9.4.\n"
+              "     - https://repo.maven.apache.org/maven2/com/google/gradle/osdetector-gradle-plugin/1.7.3/x.pom")
+    assert ci.INFRA_LOG.search(gradle)
+    assert ci.INFRA_LOG.search("Could not GET 'https://plugins.gradle.org/m2/x.pom'. Received status code 503")
+    assert not ci.INFRA_LOG.search("testFoo failed: expected 1 but was 2\nProcess completed with exit code 1.")
+    assert not ci.INFRA_LOG.search("error: cannot find symbol  Could not find method foo")
