@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
+import tempfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -35,8 +37,10 @@ def sh(cwd: Path, *args: str) -> str:
     return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=True).stdout
 
 
-def make_repo(tmp: Path) -> Path:
-    """origin (bare) + a working clone on develop, so `origin/develop` resolves."""
+_template: Path | None = None
+
+
+def _build_repo(tmp: Path) -> Path:
     origin, repo = tmp / "origin.git", tmp / "repo"
     sh(tmp, "git", "init", "-q", "--bare", "-b", "develop", str(origin))
     sh(tmp, "git", "clone", "-q", str(origin), str(repo))
@@ -50,6 +54,18 @@ def make_repo(tmp: Path) -> Path:
     sh(repo, "git", "push", "-q", "origin", "HEAD:develop")
     sh(repo, "git", "fetch", "-q")
     return repo
+
+
+def make_repo(tmp: Path) -> Path:
+    """origin (bare) + a working clone on develop, so `origin/develop` resolves. Built once per run, copied per test."""
+    global _template
+    if _template is None:
+        _template = Path(tempfile.mkdtemp(prefix="starpipe-template-"))
+        _build_repo(_template)
+    shutil.copytree(_template / "origin.git", tmp / "origin.git", symlinks=True)
+    shutil.copytree(_template / "repo", tmp / "repo", symlinks=True)
+    sh(tmp / "repo", "git", "remote", "set-url", "origin", str(tmp / "origin.git"))
+    return tmp / "repo"
 
 
 Ci = list[tuple[str, str, str, str | None]]  # (workflow, job, status, conclusion)

@@ -13,8 +13,8 @@ from typing import cast
 
 from aiohttp import web
 
-from . import gitutil, ship, worktrees
-from .config import Config, token_path
+from . import gitutil, heavy, ship, watch, worktrees
+from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
 from .github import GitHubError
@@ -56,6 +56,7 @@ class Daemon:
         self.started = time.time()
         self.last_poll: float | None = None
         self.last_error: str = ""
+        self.watch = watch.Watch()
 
     # supervision ---------------------------------------------------------------------------------------------------
     def reconcile(self) -> None:
@@ -115,6 +116,44 @@ class Daemon:
             t = self.db.ticket(number)
             if t:
                 self.engine.park(t, f"internal error: {type(exc).__name__}: {exc}")
+
+    def watch_targets(self) -> list[watch.Target]:
+        """Stage sessions (this process's `claude` children) and pipeline-owned heavy jobs. Never an interactive holder."""
+        import psutil
+
+        state = heavy.status()
+        waiting = frozenset(w.pid for w in state.queue)
+        targets: list[watch.Target] = []
+        for child in psutil.Process().children():
+            try:
+                if "_bundled/claude" not in " ".join(child.cmdline()):
+                    continue
+                ticket = child.environ().get("STARPIPE_TICKET", "?")
+            except psutil.Error:
+                continue
+            folder = home() / "tickets" / ticket / "transcripts"
+
+            def newest(folder: Path = folder) -> float:
+                return max((f.stat().st_mtime for f in folder.glob("*.jsonl")), default=0.0)
+
+            targets.append(watch.Target(f"stage:{ticket}", child.pid, newest, waiting))
+        for h in state.holders:
+            if h.ticket:  # an empty ticket is an interactive caller: not ours to kill
+                targets.append(watch.Target(f"heavy:{h.pid}", h.pid, waiting_pids=waiting))
+        return targets
+
+    def watch_once(self) -> list[watch.Action]:
+        actions = self.watch.tick(self.watch_targets())
+        for a in actions:
+            ticket = int(a.label.split(":")[1]) if a.label.startswith("stage:") and a.label[6:].isdigit() else None
+            self.db.event("process-watch", ticket, action=a.kind, label=a.label, pids=a.pids)
+            log.warning("process watch: %s %s %s", a.kind, a.label, a.pids)
+        return actions
+
+    async def watcher(self) -> None:
+        while True:
+            await asyncio.to_thread(self.watch_once)
+            await asyncio.sleep(30)
 
     async def scheduler(self) -> None:
         while True:
@@ -238,7 +277,8 @@ class Daemon:
         await web.TCPSite(runner, "127.0.0.1", self.config.api_port).start()
         log.info("starpiped up on 127.0.0.1:%d", self.config.api_port)
         try:
-            await asyncio.gather(self.supervise("poller", self.poller), self.supervise("scheduler", self.scheduler))
+            await asyncio.gather(self.supervise("poller", self.poller), self.supervise("scheduler", self.scheduler),
+                                 self.supervise("watcher", self.watcher))
         finally:
             await runner.cleanup()
 
