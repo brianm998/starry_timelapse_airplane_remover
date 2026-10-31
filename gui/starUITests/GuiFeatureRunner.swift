@@ -88,6 +88,7 @@ final class GuiFeatureRunner {
         .idHolds: { try $0.expectHolds($0.args[0], number: Int($0.args[1]) ?? -1) },
         .idFocused: { try $0.expectFocus($0.args[0], focused: true) },
         .idNotFocused: { try $0.expectFocus($0.args[0], focused: false) },
+        .languageIs: { _ in },   // read by `language` when the app is launched
         .appNoSequence: { try $0.launch(arguments: []) },
         .prefsRecents: { try $0.seedRecents(Int($0.args[0]) ?? 0) },
         .prefsListRecents: { try $0.expectRecents(Int($0.args[0]) ?? -1) },
@@ -225,7 +226,7 @@ final class GuiFeatureRunner {
         try FileManager.default.createDirectory(at: markers, withIntermediateDirectories: true)
         app.launchEnvironment["STAR_RUN_MARKER_DIR"] = markers.path
         // a @ui feature may compare what the app says with the English catalogue
-        if feature?.tags.contains("@ui") == true { app.launchEnvironment["STAR_LANG"] = "en" }
+        if feature?.tags.contains("@ui") == true { app.launchEnvironment["STAR_LANG"] = language }
         if let floor = ProcessInfo.processInfo.environment["STAR_SYSTEM_FLOOR_MB"], !floor.isEmpty {
             app.launchEnvironment["STAR_SYSTEM_FLOOR_MB"] = floor
         }
@@ -299,11 +300,16 @@ final class GuiFeatureRunner {
         try waitFor("\(identifier) \(selected ? "selected" : "not selected")", timeout: 20, detail: { "(isSelected \(e.isSelected))" }) { e.isSelected == selected }
     }
 
-    /// The English text of a catalogue key: the runs of a @ui feature are in English (`STAR_LANG=en`).
+    /// The language a @ui feature runs in: English, unless it says `the language is "<code>"` (`STAR_LANG`).
+    private var language: String {
+        feature?.steps.first { $0.action == .languageIs }?.args.first ?? "en"
+    }
+
+    /// The text of a catalogue key in the feature's language: what the app shows for it.
     private func english(_ key: String) throws -> String {
-        let url = Self.repoRoot.appendingPathComponent("StarCore/Sources/StarCore/Resources/Localizations/en.json")
+        let url = Self.repoRoot.appendingPathComponent("StarCore/Sources/StarCore/Resources/Localizations/\(language).json")
         guard let table = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: String], let text = table[key] else {
-            throw RunnerError("\(key) is not in the English catalogue")
+            throw RunnerError("\(key) is not in the \(language) catalogue")
         }
         return text
     }

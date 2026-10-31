@@ -111,6 +111,7 @@ class DesktopFeatureRunner {
         StepAction.ID_HOLDS to { t -> expectHolds(t, args[0], args[1].toInt()) },
         StepAction.ID_FOCUSED to { t -> expectFocus(t, args[0], focused = true) },
         StepAction.ID_NOT_FOCUSED to { t -> expectFocus(t, args[0], focused = false) },
+        StepAction.LANGUAGE_IS to { },   // read when the run starts
         // What the Compose test host has no AWT for. The menu bar and the secondary windows are AWT, so these steps work on what the app draws
         // them from: the menus as data (`starMenus`, which `StarMenuBar` draws and nothing else builds; `starMenusNow` reads them without composing) and the view model's window flags (which
         // `Main.kt` hangs each `Window` on, and `MainWindowsTest` reads it to hold it to).
@@ -137,7 +138,8 @@ class DesktopFeatureRunner {
         // a @ui feature may compare what the app says with the English catalogue
         // and may show the start screen, which would otherwise embed a JavaFX video that cannot start headless
         if ("@ui" in feature.tags) {
-            com.star.desktop.i18n.Strings.setOverride("en")
+            // English, unless the feature says `the language is "<code>"`
+            com.star.desktop.i18n.Strings.setOverride(feature.steps.firstOrNull { it.action == StepAction.LANGUAGE_IS }?.args?.firstOrNull() ?: "en")
             System.setProperty(com.star.desktop.ui.initial.NO_INTRO_VIDEO_PROPERTY, "true")
         }
         scratch = Files.createTempDirectory("star-gherkin-").toFile()
@@ -241,6 +243,15 @@ class DesktopFeatureRunner {
         // raced the daemon on a starved VM. Other features keep the client's own default.
         if (feature.steps.any { it.action in REMOVAL_ACTIONS }) {
             File(System.getProperty("user.home"), ".star.userprefs.json").writeText("""{"processingType":"strong"}""")
+        }
+        // A language other than English is the user's choice, as the preferences hold it: the view model applies that preference when it starts, so
+        // an override set before it did is undone (the run then looked German to the test and read English). English needs no seed: it is what an
+        // English system gives, and a feature about the preferences file must find it as it put it.
+        feature.steps.firstOrNull { it.action == StepAction.LANGUAGE_IS }?.args?.firstOrNull()?.takeIf { it != "en" }?.let { code ->
+            val file = preferencesFile()
+            val preferences = runCatching { JsonParser.parseString(file.readText()).asJsonObject }.getOrElse { JsonObject() }
+            preferences.addProperty("language", code)
+            file.writeText(preferences.toString())
         }
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         scope = appScope
