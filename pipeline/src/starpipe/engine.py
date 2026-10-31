@@ -359,12 +359,13 @@ class Engine:
 
     async def _verify(self, t: Ticket) -> bool:
         wt = Path(t.worktree or "")
-        failure = self._run_verification(t, wt)
+        # The checks wait for the heavy lock and run for hours: on the event loop they froze the whole daemon (API, monitor, every other ticket).
+        failure = await asyncio.to_thread(self._run_verification, t, wt)
         while failure and self._fix_cycles(t) < MAX_FIX_CYCLES:
             result, _ = await self.model_stage(t, "fix", f"{self._ticket_text(t)}\n\nFailure:\n{failure}", fresh=True)
             if not result.ok:
                 return False
-            failure = self._run_verification(t, wt)
+            failure = await asyncio.to_thread(self._run_verification, t, wt)
         if failure:
             self.park(t, f"verification failed after {MAX_FIX_CYCLES} fix cycles: {failure[:300]}")
             return False
