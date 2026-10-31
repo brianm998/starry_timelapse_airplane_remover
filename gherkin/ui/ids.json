@@ -28,6 +28,7 @@
     "startup.horizon.yes",
     "startup.moving.moving",
     "startup.moving.static",
+    "startup.recent.remove",
     "startup.removal.automatic",
     "startup.removal.autoselective",
     "startup.removal.groundalignment",
