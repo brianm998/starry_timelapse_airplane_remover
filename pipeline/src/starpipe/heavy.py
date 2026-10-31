@@ -13,6 +13,7 @@ import json
 import os
 import signal
 import subprocess
+import threading
 import time
 from collections.abc import Callable, Generator
 from dataclasses import asdict, dataclass
@@ -184,9 +185,18 @@ def run(
                 with contextlib.suppress(ProcessLookupError):
                     os.killpg(proc.pid, signum)
 
-        old = {s: signal.signal(s, forward) for s in (signal.SIGINT, signal.SIGTERM)}
+        # Signal handlers can only be set on the main thread. The daemon runs this on a worker thread, so there the child
+        # is not forwarded signals; it is still never left running past the lock (see the except below).
+        old = {}
+        if threading.current_thread() is threading.main_thread():
+            old = {s: signal.signal(s, forward) for s in (signal.SIGINT, signal.SIGTERM)}
         try:
             code = proc.wait()
+        except BaseException:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(proc.pid, signal.SIGKILL)  # never release the lock while the job is still running
+            proc.wait()
+            raise
         finally:
             for s, h in old.items():
                 signal.signal(s, h)

@@ -5,6 +5,7 @@ import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -88,3 +89,57 @@ def test_priority_defaults_from_environment(monkeypatch: pytest.MonkeyPatch) -> 
     assert heavy.default_priority() == heavy.PIPELINE
     monkeypatch.setenv("STARPIPE_NIGHTLY", "1")
     assert heavy.default_priority() == heavy.NIGHTLY
+
+
+def test_heavy_run_works_from_a_worker_thread() -> None:
+    """The daemon's run_checks runs heavy jobs on a worker thread, where signal.signal raises. It used to launch the
+    child, then raise, release the lock and leave the child running unmanaged."""
+    import threading
+
+    result: list[tuple[int, float]] = []
+    errors: list[BaseException] = []
+
+    def work() -> None:
+        try:
+            result.append(heavy.run([sys.executable, "-c", "raise SystemExit(3)"], config=CFG))
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    t = threading.Thread(target=work)
+    t.start()
+    t.join(30)
+    assert errors == [] and result[0][0] == 3
+    assert heavy.status().holders == []
+
+
+def test_a_child_is_killed_if_the_wait_is_interrupted() -> None:
+    import threading
+
+    started = threading.Event()
+    pids: list[int] = []
+
+    def work() -> None:
+        popen: Any = subprocess.Popen
+        real_wait = popen.wait
+
+        def interrupted(self: Any, timeout: float | None = None) -> int:
+            if not started.is_set():
+                started.set()
+                pids.append(self.pid)
+                raise KeyboardInterrupt
+            return real_wait(self, timeout)
+
+        popen.wait = interrupted
+        try:
+            with pytest.raises(KeyboardInterrupt):
+                heavy.run([sys.executable, "-c", "import time;time.sleep(60)"], config=CFG)
+        finally:
+            popen.wait = real_wait
+
+    t = threading.Thread(target=work)
+    t.start()
+    t.join(30)
+    import psutil
+
+    assert pids and not psutil.pid_exists(pids[0])
+    assert heavy.status().holders == []
