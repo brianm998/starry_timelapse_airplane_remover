@@ -363,3 +363,21 @@ def test_the_shim_resolves_symlinks_so_one_runtime_supplies_the_code_and_the_env
                          text=True, check=True, env={"PATH": f"{fake_bin}:/usr/bin:/bin"}).stdout
     assert f"--project {(tmp_path / 'runtime-abc123' / 'pipeline').resolve()}" in out
     assert "current" not in out and out.strip().endswith("starpipe daemon run")
+
+
+def test_only_the_current_and_previous_runtimes_are_kept(tmp_path: Path) -> None:
+    repo, _ = make_pipeline_repo(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    runtimes: list[Path] = []
+    for i in range(3):
+        (repo / "pipeline" / f"v{i}").write_text(str(i))
+        sh(repo, "git", "add", "-A")
+        sh(repo, "git", "commit", "-q", "-m", f"v{i}")
+        rt = selfupdate.build(repo, sh(repo, "git", "rev-parse", "HEAD").strip(), noop_sync)
+        selfupdate.switch(rt, plist, lc, now=float(i), sleep=lambda _s: None)
+        runtimes.append(rt)
+    assert selfupdate.prune() == [runtimes[0].name]
+    left = {p.name for p in selfupdate.runtime_root().iterdir() if p.is_dir() and not p.is_symlink()}
+    assert left == {runtimes[1].name, runtimes[2].name}
+    assert selfupdate.link("current") == runtimes[2].resolve() and selfupdate.link("previous") == runtimes[1].resolve()
+    assert selfupdate.prune() == []

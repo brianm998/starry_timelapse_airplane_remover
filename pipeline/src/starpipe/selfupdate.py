@@ -212,6 +212,20 @@ def crash_loop(now: float | None = None) -> bool:
     return len([s for s in starts if s >= switched]) > CRASH_LIMIT
 
 
+def prune() -> list[str]:
+    """Delete runtimes that are neither `current` nor `previous` (each is about 400 MB). Returns the names removed."""
+    keep = {rt.name for rt in (link("current"), link("previous")) if rt is not None}
+    removed: list[str] = []
+    root = runtime_root()
+    if not root.exists():
+        return removed
+    for entry in sorted(root.iterdir()):
+        if entry.is_dir() and not entry.is_symlink() and entry.name not in keep:
+            shutil.rmtree(entry, ignore_errors=True)
+            removed.append(entry.name)
+    return removed
+
+
 @dataclass
 class Report:
     sha: str
@@ -240,7 +254,8 @@ def update(repo: Path, ref: str, plist: Path, *, sessions: Callable[[], int], wa
             return Report(sha, True, True, False, f"{busy} stage session(s) still running after the wait; use --now to switch anyway")
         sleep(10)
     switch(rt, plist, launchctl, clock(), sleep=sleep)
-    return Report(sha, True, True, True, f"switched to {sha[:12]}")
+    gone = prune()
+    return Report(sha, True, True, True, f"switched to {sha[:12]}" + (f"; removed old runtime(s) {', '.join(gone)}" if gone else ""))
 
 
 def rollback(plist: Path, launchctl: Launchctl = real_launchctl, clock: Callable[[], float] = time.time) -> str:
