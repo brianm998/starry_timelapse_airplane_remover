@@ -30,7 +30,10 @@ The shared expectations for the macOS gui and the desktop client (see `plans/GUI
 
 * `known-gaps.json` — the parity backlog. A `@ui` feature that fails on a client where it is listed here passes, and says `KNOWN GAP`; one that
   fails where it is not listed fails; one that is listed and now passes fails until the entry is removed. `{"gaps": {"<feature>": {"mac-gui": "<why>", "desktop": "<why>"}}}`.
-  Both runners read it (`GuiFeatureRunner.knownGap`, `DesktopFeatureRunner.knownGap`). It is empty: the features below pass on both clients.
+  Both runners read it (`GuiFeatureRunner.knownGap`, `DesktopFeatureRunner.knownGap`). It lists four features for the desktop. Those are gaps of the *test host*, not of the app: the desktop has the same menu, windows, start screen and recents button, but the
+Compose test host cannot reach an AWT menu bar or window, and cannot start the JavaFX video background the start screen embeds. The desktop runner's steps for those say so
+(`not reachable in the desktop test host`), the ratchet turns each entry into a failure the day its steps work, and a feature of the gui's that fails on the desktop for a real
+difference goes here with that difference as the reason.
 
 ## The `@ui` features
 
@@ -59,10 +62,14 @@ are different: they stay literal in the feature and the runner supplies their va
 | `"<id>" is selected` / `is not selected` | a radio choice (gui: the selected trait; desktop: `selectable`) |
 | `"<id>" is on` / `is off` | a switch or check box |
 | `"<id>" reads "<key>"` | the control's text is the English catalogue's text for the key (`STAR_LANG=en` in both runners) |
+| `the app is started with no sequence` | launches on the start screen |
+| `the preferences have <n:int> recent sequences` / `the preferences file lists <n:int> recent sequences` | seeds, and then reads, the recents in the scratch `$HOME`'s preferences file |
+| `I choose the menu command "<command>"` / `the menu command "<command>" is enabled` / `is disabled` | by a `commands.json` id: its menu title and label come from that file and the English catalogue |
+| `the "<window>" window is open` / `is not open` | `debug` or `outlier` |
 
-The features so far (all pass on both clients): `uiStartupDefaults`, `uiStartupReturnStarts`, `uiStartupHorizonQuestion`, `uiStartupMovingHorizonQuestion`,
+The features so far (the first eleven pass on both clients; the last four pass on the gui and are known gaps of the desktop's test host): `uiStartupDefaults`, `uiStartupReturnStarts`, `uiStartupHorizonQuestion`, `uiStartupMovingHorizonQuestion`,
 `uiStartupNoHorizonSkips`, `uiStartupBackToHorizon`, `uiStartupBackFromRemoval`, `uiRemovalSelectiveChoice`, `uiSettingsFromStartup`, `uiSettingsExpertToggle`,
-`uiSettingsProcessNow`. The settings sheet is reached through the Advanced gear on a startup question, which both clients have, so no seam is needed.
+`uiSettingsProcessNow`, then `uiSecondaryWindowToggles`, `uiSecondaryWindowsNeedASequence`, `uiSequenceWindowsGoWithIt` (M11) and `uiRecentsRemove` (D12). The settings sheet is reached through the Advanced gear on a startup question, which both clients have, so no seam is needed.
 
 Run one with `./gradlew gherkinTest -Pstar.stard.path=$PWD/../daemon/.build/debug/stard --tests '*.uiStartupDefaultsFeature'` in `star-desktop` (one feature
 per Gradle run: a second in the same JVM trips over the first one's leftover coroutines) and with `xcodebuild test … -only-testing:starUITests/GeneratedFeatureUITests/testUiStartupDefaultsFeature`

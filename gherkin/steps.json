@@ -35,5 +35,13 @@
   { "case": "idNotSelected"         , "text": "\"<id>\" is not selected" },
   { "case": "idOn"                  , "text": "\"<id>\" is on" },
   { "case": "idOff"                 , "text": "\"<id>\" is off" },
-  { "case": "idReads"               , "text": "\"<id>\" reads \"<key>\"" }
+  { "case": "idReads"               , "text": "\"<id>\" reads \"<key>\"" },
+  { "case": "appNoSequence"         , "text": "the app is started with no sequence" },
+  { "case": "prefsRecents"          , "text": "the preferences have <n:int> recent sequences" },
+  { "case": "prefsListRecents"      , "text": "the preferences file lists <n:int> recent sequences" },
+  { "case": "menuChoose"            , "text": "I choose the menu command \"<command>\"" },
+  { "case": "menuEnabled"           , "text": "the menu command \"<command>\" is enabled" },
+  { "case": "menuDisabled"          , "text": "the menu command \"<command>\" is disabled" },
+  { "case": "windowOpen"            , "text": "the \"<window>\" window is open" },
+  { "case": "windowNotOpen"         , "text": "the \"<window>\" window is not open" }
 ]

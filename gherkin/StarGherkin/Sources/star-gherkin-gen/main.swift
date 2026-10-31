@@ -355,11 +355,13 @@ func validateUITags(_ f: ParsedFeature) throws {
     }
 }
 
-/// What a UI step may name: an argument called `id` is an identifier in `gherkin/ui/ids.json` (or in one of its `prefix*` families), and one called `key`
-/// is a key of the English catalogue. A feature that names a control neither client has is a failure here, not a timeout in a runner.
+/// What a UI step may name: an argument called `id` is an identifier in `gherkin/ui/ids.json` (or in one of its `prefix*` families), one called `key`
+/// is a key of the English catalogue, and one called `command` is a command of `gherkin/ui/commands.json`. A feature that names a control neither client has is a failure here, not a timeout in a runner.
 struct UIReferences {
     let ids: [String]
     let catalogueKeys: Set<String>
+    /// The `id`s of `gherkin/ui/commands.json`: what an argument called `command` may name.
+    let commandIds: Set<String>
 
     func covers(id: String) -> Bool {
         ids.contains { $0.hasSuffix("*") ? id.hasPrefix(String($0.dropLast())) : $0 == id }
@@ -375,7 +377,11 @@ func loadUIReferences(root: URL) throws -> UIReferences {
     guard let en = try JSONSerialization.jsonObject(with: Data(contentsOf: enURL)) as? [String: String] else {
         throw GenError("the English catalogue (en.json) must be a flat object")
     }
-    return UIReferences(ids: ids, catalogueKeys: Set(en.keys))
+    let commandsURL = root.appendingPathComponent("gherkin/ui/commands.json")
+    guard let commands = (try JSONSerialization.jsonObject(with: Data(contentsOf: commandsURL)) as? [String: Any])?["commands"] as? [[String: String]] else {
+        throw GenError("gherkin/ui/commands.json must be an object with a \"commands\" array")
+    }
+    return UIReferences(ids: ids, catalogueKeys: Set(en.keys), commandIds: Set(commands.compactMap { $0["id"] }))
 }
 
 func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], featureParams: [String: String], references: UIReferences) throws {
@@ -394,6 +400,9 @@ func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], 
         for (name, arg) in zip(found.def.argumentNames, found.args) {
             if name == "id" && !references.covers(id: arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not in gherkin/ui/ids.json: a control a step names is one both clients carry (add it there, and to each client)")
+            }
+            if name == "command" && !references.commandIds.contains(arg) {
+                throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a command of gherkin/ui/commands.json")
             }
             if name == "key" && found.def.caseName == "idReads" && !references.catalogueKeys.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a key of the English catalogue")

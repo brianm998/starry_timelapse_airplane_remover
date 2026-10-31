@@ -67,6 +67,10 @@ the flag. gherkin 9.0.0 and cucumber-gherkin 42.0.1 were checked to produce byte
 
 A UI feature (`@ui`) is the same, with the extra rules and the inline arguments (`I click "<id>"`) in `gherkin/ui/README.md`.
 
+**Runners differ in mechanics only.** A runner may differ from another in *how* it clicks, types and waits, never in *what the user does*. If one client needs an extra
+user action to reach the same state, the feature fails on that client, and the way to say so is `gherkin/ui/known-gaps.json`, not a workaround in the runner. (The L5
+workarounds that the desktop runner once had, such as a click on Render All Frames to finish auto selective frames, are gone for that reason.)
+
 The generator fails, with file:line, on an unknown step, a placeholder with no default, a bad basename or
 tag, a second scenario, or an unsupported construct. It deletes and rewrites every generated location each
 run, so a deleted feature leaves no orphan test behind.
