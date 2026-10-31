@@ -1229,5 +1229,6 @@
   "settings_tab.gpu": "Uso de GPU",
   "settings_tab.alignment": "Alineación",
   "settings_tab.horizon": "Horizonte",
-  "settings_tab.memory": "Memoria"
+  "settings_tab.memory": "Memoria",
+  "ui.settings": "Ajustes"
 }
