@@ -37,7 +37,10 @@ def pr_body(eng: Engine, t: Ticket) -> str:
 
 def push(eng: Engine, t: Ticket) -> str:
     wt = Path(t.worktree or "")
-    gitutil.git(wt, "push", "--quiet", "origin", f"HEAD:refs/heads/{t.branch}")
+    if eng.config.remote == "https":
+        gitutil.remote_push(wt, eng.config.owner, eng.config.repo, t.branch or "")
+    else:
+        gitutil.git(wt, "push", "--quiet", "origin", f"HEAD:refs/heads/{t.branch}")
     eng.db.put(f"pushed_at:{t.number}", str(eng.clock()))
     return gitutil.head_sha(wt)
 
@@ -135,8 +138,15 @@ async def ci_fix(eng: Engine, t: Ticket, verdict: ci.Verdict) -> bool:
     return True
 
 
+def fetch(eng: Engine, wt: Path) -> None:
+    if eng.config.remote == "https":
+        gitutil.remote_fetch(wt, eng.config.owner, eng.config.repo, eng.config.base_branch)
+    else:
+        gitutil.git(wt, "fetch", "--quiet", "origin")
+
+
 def _remote(eng: Engine, wt: Path) -> str:
-    gitutil.git(wt, "fetch", "--quiet", "origin")
+    fetch(eng, wt)
     return f"origin/{eng.config.base_branch}"
 
 
@@ -192,7 +202,7 @@ def merge(eng: Engine, t: Ticket, head: str) -> bool:
         eng.park(t, f"merge refused: {exc}")
         return False
     wt = Path(t.worktree or "")
-    gitutil.git(wt, "fetch", "--quiet", "origin")
+    fetch(eng, wt)
     merged = eng.gh.pr(n)
     sha = merged.get("merge_commit_sha") or ""
     base = f"origin/{eng.config.base_branch}"

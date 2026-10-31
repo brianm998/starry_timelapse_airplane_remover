@@ -37,7 +37,7 @@ class Rig:
             self.slept.append(s)
             self.now += s
 
-        self.engine = Engine(Config(), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
+        self.engine = Engine(Config(remote="origin"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
                              Notifier(self.db, lambda t, x: self.pages.append((t, x))), "origin/develop",
                              clock=lambda: self.now, sleep=sleep,
                              negative_control=no_controls)
