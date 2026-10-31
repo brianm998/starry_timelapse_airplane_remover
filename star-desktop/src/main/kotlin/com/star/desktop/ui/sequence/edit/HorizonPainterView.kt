@@ -248,14 +248,17 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
         }
     }
 
-    // A transparent cursor so only our brush ring is visible while painting.
+    // A transparent cursor so only our brush ring is visible while painting. A toolkit that cannot make a cursor (the headless one a UI test
+    // host runs on) leaves the system's: the ring is drawn either way.
     val blankCursor = remember {
-        PointerIcon(
-            java.awt.Toolkit.getDefaultToolkit().createCustomCursor(
-                java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB),
-                java.awt.Point(0, 0), "blank",
-            ),
-        )
+        runCatching {
+            PointerIcon(
+                java.awt.Toolkit.getDefaultToolkit().createCustomCursor(
+                    java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB),
+                    java.awt.Point(0, 0), "blank",
+                ),
+            )
+        }.getOrElse { PointerIcon.Default }
     }
 
     // Marching-ants dash animation (drives only the dash phase — the area path is memoized below).

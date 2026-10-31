@@ -70,6 +70,7 @@ import com.star.desktop.ui.theme.StarShapes
 import com.star.proto.CleanMethod
 import com.star.proto.Config
 import com.star.proto.DetectionType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -112,7 +113,12 @@ internal enum class SettingsTab(val id: String, val titleKey: String, val testTa
 
 @Composable
 fun ProcessingSettingsDialog(app: AppViewModel) {
-    val loaded by produceState<Config?>(null) { value = runCatching { app.sessions.getConfig() }.getOrNull() }
+    // The state is written on the UI thread, where composition reads it: the reply resumes on whichever thread it arrived on, and a UI test host,
+    // whose coroutines run where they are resumed, then wrote it from a worker thread and left the sheet on "Loading…" for good, about once in five runs.
+    val loaded by produceState<Config?>(null) {
+        val config = runCatching { app.sessions.getConfig() }.getOrNull()
+        withContext(Dispatchers.Main) { value = config }
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
         // As big as the window allows, up to what suits the longest tab, and the same for every tab: switching tabs must not move the tab strip.

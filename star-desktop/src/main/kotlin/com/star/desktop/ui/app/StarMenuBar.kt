@@ -9,6 +9,7 @@ import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.MenuBar
 import com.star.desktop.domain.InteractionMode
 import com.star.desktop.domain.ToolType
+import com.star.desktop.domain.isRendering
 import com.star.desktop.domain.usesOutliers
 import com.star.desktop.ui.initial.OpenKind
 import com.star.desktop.ui.initial.chooseDirectory
@@ -75,8 +76,36 @@ class EntriesBuilder {
     }
 }
 
-/** What the menus' items enable on: the open sequence, if there is one, and what is going on in it. */
-class MenuState(val svm: SequenceViewModel?, val keys: Boolean, val paintingHorizon: Boolean, val usesOutliers: Boolean)
+/**
+ * What the menus' items enable on, and the gui's rules for them (`StarCommands.swift`, owner decision D9 and finding M12). Pure, so a test can
+ * put the app into any state: the ones a UI feature cannot reach (a run going, the processing screen up, a video rendering) too.
+ */
+class MenuState(
+    /** A sequence is open. */
+    val hasSession: Boolean,
+    /** The processing screen (or the re-open progress panel) is over the window: nothing under it answers to a key. */
+    val modalUp: Boolean = false,
+    /** The horizon painter is open. */
+    val paintingHorizon: Boolean = false,
+    /** A processing run is going. */
+    val processing: Boolean = false,
+    /** A video is rendering. */
+    val renderingVideo: Boolean = false,
+    /** The open frame's clean method reviews outliers (the desktop's own refinement: the gui leaves the decision-tree items on). */
+    val usesOutliers: Boolean = true,
+) {
+    /** The gui's `!isProcessingModalUp`: Process Current Frame, Processing Settings, the horizon painter. */
+    val notUnderModal: Boolean get() = hasSession && !modalUp
+
+    /** The gui's `menuHotkeysEnabled`: the single-key commands (modes, tools, remove/keep/clear, render, decision tree, play). Off under a modal and while painting a horizon. */
+    val hotkeys: Boolean get() = notUnderModal && !paintingHorizon
+
+    /** The gui's `isProcessingFrames`: there is a run to cancel. */
+    val canCancel: Boolean get() = hasSession && processing
+
+    /** The gui's `!isProcessingModalUp && !isRenderingVideo`. */
+    val canRenderVideo: Boolean get() = notUnderModal && !renderingVideo
+}
 
 /**
  * The menus, as they are now: items enable/disable on session presence and route to the app /
@@ -87,11 +116,17 @@ class MenuState(val svm: SequenceViewModel?, val keys: Boolean, val paintingHori
 fun starMenus(app: AppViewModel): List<MenuSpec> {
     val screen by app.screen.collectAsState()
     val svm = (screen as? AppScreen.Sequence)?.vm
-    val modalUp = svm?.showProcessingModal?.collectAsState()?.value == true
-    val paintingHorizon = svm?.horizonPaintMode?.collectAsState()?.value == true
     val currentFrame = svm?.currentIndex?.collectAsState()?.value ?: 0
     val currentMethod = svm?.frameVMFor(currentFrame)?.info?.collectAsState()?.value?.cleanMethod
-    return starMenus(app, MenuState(svm, keys = svm != null && !modalUp, paintingHorizon = paintingHorizon, usesOutliers = currentMethod?.usesOutliers ?: true))
+    val state = MenuState(
+        hasSession = svm != null,
+        modalUp = svm?.showProcessingModal?.collectAsState()?.value == true,
+        paintingHorizon = svm?.horizonPaintMode?.collectAsState()?.value == true,
+        processing = svm?.isProcessing?.collectAsState()?.value == true,
+        renderingVideo = app.renderState.collectAsState().value.isRendering,
+        usesOutliers = currentMethod?.usesOutliers ?: true,
+    )
+    return starMenus(app, svm, state)
 }
 
 /**
@@ -100,20 +135,21 @@ fun starMenus(app: AppViewModel): List<MenuSpec> {
  */
 fun starMenusNow(app: AppViewModel): List<MenuSpec> {
     val svm = (app.screen.value as? AppScreen.Sequence)?.vm
-    val modalUp = svm?.showProcessingModal?.value == true
-    val paintingHorizon = svm?.horizonPaintMode?.value == true
     val currentMethod = svm?.frameVMFor(svm.currentIndex.value)?.info?.value?.cleanMethod
-    return starMenus(app, MenuState(svm, keys = svm != null && !modalUp, paintingHorizon = paintingHorizon, usesOutliers = currentMethod?.usesOutliers ?: true))
+    val state = MenuState(
+        hasSession = svm != null,
+        modalUp = svm?.showProcessingModal?.value == true,
+        paintingHorizon = svm?.horizonPaintMode?.value == true,
+        processing = svm?.isProcessing?.value == true,
+        renderingVideo = app.isRendering,
+        usesOutliers = currentMethod?.usesOutliers ?: true,
+    )
+    return starMenus(app, svm, state)
 }
 
-private fun starMenus(app: AppViewModel, state: MenuState): List<MenuSpec> {
-    val svm = state.svm
-    val hasSession = svm != null
-    // Under the processing screen no key should act on what is behind it; while painting a horizon, the keys that change what is going on don't either.
-    val keys = state.keys
-    val paintingHorizon = state.paintingHorizon
-    // The classifier over this frame's outliers, and writing the decisions into its picture (also on the d and r keys): there are none to classify
-    // for a clean method that does not use outliers.
+private fun starMenus(app: AppViewModel, svm: SequenceViewModel?, state: MenuState): List<MenuSpec> {
+    val hasSession = state.hasSession
+    val hotkeys = state.hotkeys
     val usesOutliers = state.usesOutliers
 
     return MenuBuilder().apply {
@@ -141,29 +177,29 @@ private fun starMenus(app: AppViewModel, state: MenuState): List<MenuSpec> {
         Menu(localized("menu.actions"), mnemonic = 'A') {
             // Accelerators per the authoritative Swift source (StarCommands.swift): 'a' removes all,
             // 'k' keeps all, 'u' clears undecided. (KOTLIN_CLIENT_SPEC §5.8's prose had a/k swapped.)
-            Item(localized("ui.remove_all"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.A)) {
+            Item(localized("ui.remove_all"), enabled = hotkeys, shortcut = KeyShortcut(Key.A)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).removeAll(it.showTrash.value) }
             }
-            Item(localized("ui.keep_all"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.K)) {
+            Item(localized("ui.keep_all"), enabled = hotkeys, shortcut = KeyShortcut(Key.K)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).keepAll(it.showTrash.value) }
             }
-            Item(localized("ui.clear_undecided"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.U)) {
+            Item(localized("ui.clear_undecided"), enabled = hotkeys, shortcut = KeyShortcut(Key.U)) {
                 svm?.let { it.frameVMFor(it.currentIndex.value).clearUndecided(it.showTrash.value) }
             }
             // Through the app, not straight to the session: it is what asks about rendering a video before and after.
             Item(localized("ui.process_all_frames"), enabled = hasSession) { app.requestProcessAll() }
             Item(localized("ui.process_frames_from_here_to_the_end"), enabled = hasSession) { svm?.processRemaining() }
-            Item(localized("ui.process_current_frame"), enabled = hasSession) { svm?.processCurrent() }
-            Item(localized("ui.cancel_processing"), enabled = hasSession) { svm?.cancelProcessing() }
-            Item(localized("ui.processing_settings_2"), enabled = hasSession, shortcut = primaryShortcut(Key.Comma, shift = true)) { app.openSettings() }
-            Item(localized("ui.render_video_2"), enabled = hasSession) { app.openRenderVideo() }
+            Item(localized("ui.process_current_frame"), enabled = state.notUnderModal) { svm?.processCurrent() }
+            Item(localized("ui.cancel_processing"), enabled = state.canCancel) { svm?.cancelProcessing() }
+            Item(localized("ui.processing_settings_2"), enabled = state.notUnderModal, shortcut = primaryShortcut(Key.Comma, shift = true)) { app.openSettings() }
+            Item(localized("ui.render_video_2"), enabled = state.canRenderVideo) { app.openRenderVideo() }
             Item(localized("ui.re_process_this_frame_from_the_start"), enabled = hasSession) { svm?.reprocessCurrent() }
             Item(localized("ui.find_outliers_for_this_frame"), enabled = hasSession) { svm?.findOutliersCurrent() }
-            Item(localized("ui.decision_tree_all"), enabled = hasSession && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame() }
+            Item(localized("ui.decision_tree_all"), enabled = hotkeys && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame() }
             // Every frame at once: this was a button in the right panel, which the gui's panel never had (owner decision D8), so it is a command.
-            Item(localized("ui.decision_tree_all_frames"), enabled = hasSession) { svm?.applyDecisionTreeAll() }
+            Item(localized("ui.decision_tree_all_frames"), enabled = hotkeys) { svm?.applyDecisionTreeAll() }
             Item(localized("ui.dt_auto_only"), enabled = hasSession && usesOutliers) { svm?.applyDecisionTreeToCurrentFrame(autoOnly = true) }
-            Item(localized("ui.render_this_frame"), enabled = hasSession) { svm?.renderCurrentFrame() }
+            Item(localized("ui.render_this_frame"), enabled = hotkeys) { svm?.renderCurrentFrame() }
             // As the gui's: a run over the sequence with the question about rendering the video (frames already written are skipped), not
             // a separate pass that finished every frame from what was on disk (L4, D7).
             Item(localized("ui.render_all_frames"), enabled = hasSession) { app.requestProcessAll() }
@@ -171,24 +207,24 @@ private fun starMenus(app: AppViewModel, state: MenuState): List<MenuSpec> {
 
         Menu(localized("menu.tools"), mnemonic = 'T') {
             ToolType.selectable.forEachIndexed { i, t ->
-                Item(localized("ui.tool_n", t.displayName, i + 1), enabled = hasSession) { svm?.setTool(t) }
+                Item(localized("ui.tool_n", t.displayName, i + 1), enabled = hotkeys) { svm?.setTool(t) }
             }
             Separator()
             // Disabled while the horizon painter is open: Compose delivers a menu accelerator before it delivers the key
             // to the view, so E would switch mode instead of selecting ground, and S or G during the startup painting
             // would leave the painter without its startup flow (macOS disables S there).
-            Item(localized("ui.edit_mode"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
-            Item(localized("ui.scrub_mode"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
-            Item(localized("ui.grid_mode"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
+            Item(localized("ui.edit_mode"), enabled = hotkeys, shortcut = KeyShortcut(Key.E)) { svm?.setMode(InteractionMode.EDIT) }
+            Item(localized("ui.scrub_mode"), enabled = hotkeys, shortcut = KeyShortcut(Key.S)) { svm?.setMode(InteractionMode.SCRUB) }
+            Item(localized("ui.grid_mode"), enabled = hotkeys, shortcut = KeyShortcut(Key.G)) { svm?.setMode(InteractionMode.GRID) }
             // The same item closes the painter while it is open, and says so (macOS).
-            Item(localized(if (paintingHorizon) "ui.close_horizon_painter" else "ui.paint_horizon_reference"), enabled = keys, shortcut = KeyShortcut(Key.H)) {
+            Item(localized(if (state.paintingHorizon) "ui.close_horizon_painter" else "ui.paint_horizon_reference"), enabled = state.notUnderModal, shortcut = KeyShortcut(Key.H)) {
                 svm?.let { if (it.mode.value != InteractionMode.EDIT) it.setMode(InteractionMode.EDIT); it.toggleHorizonPaint() }
             }
             Separator()
             // Tab also does this, but a focused control can take Tab for focus traversal before it gets here, so the menu is the way that always works.
             Item(localized("ui.toggle_side_panels"), enabled = hasSession) { svm?.toggleSidePanels() }
             Item(localized("ui.toggle_filmstrip"), enabled = hasSession) { svm?.toggleFilmstrip() }
-            Item(localized("ui.play_pause"), enabled = keys && !paintingHorizon, shortcut = KeyShortcut(Key.Spacebar)) { svm?.playForward() }
+            Item(localized("ui.play_pause"), enabled = hotkeys, shortcut = KeyShortcut(Key.Spacebar)) { svm?.playForward() }
         }
 
         Menu(localized("ui.window"), mnemonic = 'W') {
