@@ -2580,6 +2580,67 @@ final class SequenceProgressTests: XCTestCase {
                            "\(onDisk) frames written reads as both finished and untouched")
         }
     }
+
+    // MARK: - the footer
+
+    /// Settings sits immediately left of the one action, so the processing settings can be
+    /// looked at before the video is rendered — and the action stays the rightmost button.
+    func testSettingsIsJustLeftOfRenderVideoForACompleteSequence() {
+        let steps = surveyed([.merge], frameCount: 19, [.merge: 19])
+        let sequence = progress(frameCount: 19, framesComplete: 19, steps: steps)
+
+        XCTAssertEqual(SequenceProgressPanel.footerActions(for: sequence),
+                       [.close, .settings, .renderVideo])
+    }
+
+    /// The same place in the other state, so the settings can be changed before a partly
+    /// processed run is finished (or an untouched one is started).
+    func testSettingsIsJustLeftOfTheProcessingButtonForAnIncompleteSequence() {
+        let untouched = progress(frameCount: 19, framesComplete: 0,
+                                 steps: surveyed([.starKeypoints, .merge], frameCount: 19, [:]))
+        XCTAssertEqual(SequenceProgressPanel.footerActions(for: untouched),
+                       [.close, .settings, .startProcessing])
+
+        let partial = progress(frameCount: 19, framesComplete: 4,
+                               steps: surveyed([.starKeypoints, .merge], frameCount: 19,
+                                               [.starKeypoints: 19, .merge: 4]))
+        XCTAssertEqual(SequenceProgressPanel.footerActions(for: partial),
+                       [.close, .settings, .finishProcessing])
+
+        XCTAssertEqual(SequenceProgressAction.settings.accessibilityIdentifier,
+                       "sequenceprogress.settings")
+    }
+}
+
+/// The re-open panel's Settings button: what it does is in the view model, which cannot be
+/// built in a test without a real sequence (it opens a `FrameSource` and writes run markers),
+/// so the wiring is read from the sources, as `VideoRenderWiringTests` does.
+final class SequenceProgressSettingsWiringTests: XCTestCase {
+    private func source(_ name: String) throws -> String {
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: dir.appendingPathComponent("star/\(name)"), encoding: .utf8)
+    }
+
+    /// The sheet is attached inside `BottomRightView`'s edit-mode branch and a re-opened
+    /// sequence is in `.scrub`, so raising the flag without entering edit mode shows nothing.
+    func testSettingsClosesThePanelEntersEditModeAndRaisesTheSettingsSheet() throws {
+        let model = try source("ImageSequenceViewModel.swift")
+        let start = try XCTUnwrap(model.range(of: "func openSettingsForOpenedSequence()"))
+        let end = try XCTUnwrap(model.range(of: "}", range: start.upperBound..<model.endIndex))
+        let body = String(model[start.upperBound..<end.lowerBound])
+
+        let close = try XCTUnwrap(body.range(of: "sequenceProgressModalShowing = false"))
+        let edit = try XCTUnwrap(body.range(of: "enterEditMode()"))
+        let sheet = try XCTUnwrap(body.range(of: "shouldShowProcessingSettings = true"))
+        XCTAssertLessThan(close.lowerBound, edit.lowerBound)
+        XCTAssertLessThan(edit.lowerBound, sheet.lowerBound,
+                          "the flag set before edit mode is set from .scrub, where no sheet is attached")
+
+        XCTAssertTrue(try source("SequenceProgressView.swift")
+                        .contains("openSettings: { viewModel.openSettingsForOpenedSequence() }"))
+        XCTAssertTrue(try source("BottomRightView.swift")
+                        .contains("$viewModel.shouldShowProcessingSettings"))
+    }
 }
 
 
