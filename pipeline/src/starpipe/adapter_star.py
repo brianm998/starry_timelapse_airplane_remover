@@ -10,6 +10,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# star-desktop needs a JDK 21 (sourceCompatibility 21); a launchd agent has no JAVA_HOME, and the system `java` shim picks
+# an older JDK. Used when neither config.java_home nor the environment names one.
+JAVA_HOME_CANDIDATES = ["/Applications/Android Studio.app/Contents/jbr/Contents/Home"]
 OWNER = "brianm998"
 REPO = "starry_timelapse_airplane_remover"
 

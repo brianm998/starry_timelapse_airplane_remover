@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Finding(BaseModel):
@@ -15,12 +15,28 @@ class Finding(BaseModel):
     claim: str
 
 
+IDENTIFIER = re.compile(r"[A-Za-z_]\w*(?:[./#][A-Za-z_]\w*)*")
+
+
+def method_of(name: str) -> str:
+    """The test method a planned name stands for: the last segment of `Class.method` / `Class/method`."""
+    return re.split(r"[./#]", name.strip())[-1]
+
+
 class NewTest(BaseModel):
     target: str
-    name: str
+    name: str  # the test method as written in the source (`Class.method` allowed); no prose, no spaces
     kind: Literal["unit", "daemon", "cli-gherkin", "ui"]
     shows: str = Field(pattern=r"^A\d+$")
     fails_before_fix: bool = False
+
+    @field_validator("name")
+    @classmethod
+    def _identifier(cls, value: str) -> str:
+        if not IDENTIFIER.fullmatch(value.strip()):
+            raise ValueError("name must be the test method's identifier as it appears in the source (optionally "
+                             "`Class.method`), with no spaces or explanation; put explanations in the plan's summary")
+        return value.strip()
 
 
 class Tests(BaseModel):

@@ -283,6 +283,16 @@ class Daemon:
             await runner.cleanup()
 
 
+def resolve_java_home(config: Config) -> str | None:
+    """The JDK the desktop builds need: config, then $JAVA_HOME, then the adapter's known locations."""
+    from . import adapter_star
+
+    for candidate in (config.java_home, os.environ.get("JAVA_HOME", ""), *adapter_star.JAVA_HOME_CANDIDATES):
+        if candidate and (Path(candidate) / "bin" / "java").exists():
+            return candidate
+    return None
+
+
 def checkout_root(config: Config, start: Path) -> Path:
     if config.checkout:
         return Path(config.checkout)
@@ -296,6 +306,9 @@ def build(config: Config) -> Daemon:
     from .github import GitHub
     from .notify import Notifier
 
+    java = resolve_java_home(config)
+    if java:
+        os.environ["JAVA_HOME"] = java  # every check the daemon runs, and every session it starts, inherits it
     repo = checkout_root(config, Path.cwd())
     db = Database()
     shim = str(Path(__file__).resolve().parents[2] / "bin" / "starpipe")

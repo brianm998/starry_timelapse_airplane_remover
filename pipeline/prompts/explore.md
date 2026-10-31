@@ -2,7 +2,8 @@
 
 Read the ticket and the code it points at. Decide one of:
 
-1. **Plan it.** Call `submit_plan`. Every `findings` entry is a file and line you actually read. `acceptance` maps each
+1. **Plan it.** Call `submit_plan`. Every `findings` entry is a file and line you actually read. Each new test's `name` is the method exactly as it will appear in the source (`testFoo`, or `Class.testFoo`): no spaces, no
+   notes about what it replaces; those go in `summary`. `acceptance` maps each
    ticket criterion (A1, A2, ...) to the test or check that proves it. A bug needs a regression test that fails before the
    fix (`fails_before_fix: true`). Behaviour changes need tests at the lowest level that can show the criterion; a
    refactor, performance, wording or docs ticket needs none (`none_reason`). Say which gherkin features to run, and the
