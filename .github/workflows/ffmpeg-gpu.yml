@@ -66,9 +66,9 @@ concurrency:
 jobs:
   # ─── macOS: one universal binary, both slices built on the arm64 runner ─────────
   macos:
-    name: macOS universal (macos-14)
+    name: macOS universal (macos-15)
     if: ${{ !inputs.platforms || contains(inputs.platforms, 'macos') }}
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
