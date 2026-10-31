@@ -45,7 +45,7 @@ class Digest:
             + (f" ({', '.join(f'{v} {k}' for k, v in sorted(self.interventions.items()))})" if self.interventions else ""),
             f"- **Questions answered by the resolver:** {self.resolver_answers} of {self.questions}",
             "- **Heavy lock:** "
-            + (f"busy {self.lock_busy_fraction * 100:.0f}% of the {days:.0f} days" if self.lock_busy_fraction is not None else "n/a")
+            + (f"busy {self.lock_busy_fraction * 100:.1f}% of the {days:.0f} days" if self.lock_busy_fraction is not None else "n/a")
             + f", {self.lock_wait_s / 60:.0f} min spent waiting for it",
             f"- **Last nightly:** {self.nightly}",
         ]
