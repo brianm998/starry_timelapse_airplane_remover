@@ -109,6 +109,8 @@ class FakeGitHub(GitHub):
         return []
 
     def issue(self, number: int) -> dict[str, Any]:
+        if number not in self.issues:
+            raise GitHubError(f"gh api issues/{number} failed: HTTP 404: Not Found")
         return self.issues[number]
 
     def timeline(self, number: int) -> list[dict[str, Any]]:
@@ -134,6 +136,7 @@ class FakeGitHub(GitHub):
 
     def add_labels(self, number: int, labels: list[str]) -> None:
         self.issues[number]["labels"] += [{"name": n} for n in labels]
+        self.timelines[number] += [{"event": "labeled", "label": {"name": n}, "actor": {"login": OWNER}} for n in labels]
 
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.issues[number]["state"] = "closed"

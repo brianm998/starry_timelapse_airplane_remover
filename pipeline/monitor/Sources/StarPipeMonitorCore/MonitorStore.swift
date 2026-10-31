@@ -122,6 +122,19 @@ public final class MonitorStore {
         await refreshSelected()
     }
 
+    /// For the + sheet: one link's resolution, or the daemon's reason for rejecting it.
+    public func resolve(url: String) async -> Result<ResolvedIssue, Error> {
+        guard let client else { return .failure(APIError.daemonDown("not connected")) }
+        do { return .success(try await client.resolve(url: url)) } catch { return .failure(error) }
+    }
+
+    /// Enqueue from the + sheet, then refresh like every other action; nil (with `lastError` set) on failure.
+    public func enqueue(numbers: [Int]) async -> [EnqueueResult]? {
+        var results: [EnqueueResult]?
+        await run { results = try await $0.enqueue(numbers: numbers) }
+        return results
+    }
+
     public func answer(_ number: Int, _ text: String) async { await run { try await $0.answer(number, text: text) } }
     public func retry(_ number: Int, stage: String) async { await run { try await $0.retry(number, stage: stage) } }
     public func cancel(_ number: Int) async { await run { try await $0.cancel(number, reason: "cancelled from the monitor") } }

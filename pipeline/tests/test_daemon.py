@@ -169,3 +169,59 @@ async def test_the_session_id_is_recorded_as_soon_as_it_is_known_so_a_kill_can_r
     await rig.engine.drive(7)
     assert seen[1].resume == "S-early"
     assert rig.db.stages(7, "explore")[0]["session_id"] == "S-early"
+
+
+ISSUES = "https://github.com/brianm998/starry_timelapse_airplane_remover/issues"
+
+
+async def test_resolve_reports_number_title_state_and_queued_for_an_issue_in_this_repo(rig: Rig) -> None:
+    rig.gh.add_issue(8, "Fix the sky", author="someone", labels=())
+    rig.gh.add_issue(9, "Already approved")
+    client, _ = await api(rig)
+    try:
+        r = await client.get("/v1/issues/resolve", params={"url": f"{ISSUES}/8"}, headers=AUTH)
+        assert r.status == 200
+        assert await r.json() == {"number": 8, "title": "Fix the sky", "state": "open", "queued": False}
+        r = await client.get("/v1/issues/resolve", params={"url": f" {ISSUES}/9#issuecomment-1\n"}, headers=AUTH)
+        assert (await r.json())["queued"] is True
+    finally:
+        await client.close()
+
+
+async def test_resolve_rejects_another_repo_a_pull_request_a_closed_issue_and_a_malformed_url(rig: Rig) -> None:
+    rig.gh.add_issue(10, "a PR in disguise", labels=())
+    rig.gh.issues[10]["pull_request"] = {"url": "x"}
+    rig.gh.add_issue(11, "done", labels=())
+    rig.gh.issues[11]["state"] = "closed"
+    client, _ = await api(rig)
+    try:
+        for url in ("https://github.com/someone/else/issues/8",
+                    "https://github.com/brianm998/starry_timelapse_airplane_remover/pull/8",
+                    f"{ISSUES}/10", f"{ISSUES}/11", f"{ISSUES}/99", "not a url"):
+            r = await client.get("/v1/issues/resolve", params={"url": url}, headers=AUTH)
+            assert 400 <= r.status < 500, url
+            assert (await r.text()).strip(), url
+        assert (await client.get("/v1/issues/resolve", headers=AUTH)).status == 400
+    finally:
+        await client.close()
+
+
+async def test_enqueue_labels_unlabelled_issues_skips_labelled_ones_and_sync_issues_queues_them(rig: Rig) -> None:
+    rig.gh.add_issue(8, "Fix the sky", author="someone", labels=())
+    rig.gh.timelines[8] = []
+    rig.gh.add_issue(9, "Already approved")
+    rig.engine.sync_issues()
+    assert rig.db.ticket(8) is None
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/enqueue", json={"numbers": [8, 9]}, headers=AUTH)
+        assert r.status == 200
+        assert (await r.json())["results"] == [{"number": 8, "result": "labelled"},
+                                               {"number": 9, "result": "already queued"}]
+        assert [lab["name"] for lab in rig.gh.issues[8]["labels"]] == ["pipeline"]
+        assert [lab["name"] for lab in rig.gh.issues[9]["labels"]].count("pipeline") == 1
+        assert (await client.post("/v1/enqueue", json={"numbers": []}, headers=AUTH)).status == 400
+    finally:
+        await client.close()
+    rig.engine.sync_issues()
+    assert rig.state(8) == "queued"
