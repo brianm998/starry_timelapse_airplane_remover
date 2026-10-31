@@ -27,50 +27,27 @@ struct RenderVideoSheetView: View {
 
     init(isVisible: Binding<Bool>,
          viewModel: ImageSequenceViewModel,
-         autoStart: Bool = false)
+         autoStart: Bool = false,
+         autoChoice: RenderChoice? = nil)
     {
         _isVisible = isVisible
         self.viewModel = viewModel
         self.autoStart = autoStart
-        let config = viewModel.config 
-        let frameRate = config.config().frameRate 
-        _frameRate = State(initialValue: frameRate)
-        if case .custom = frameRate { _customPicked = State(initialValue: true) }
-        _frameRateString = State(initialValue: String(format: "%g", frameRate.rawValue))
-        
-        // The config may name settings that do not go together, or ones the bundled ffmpeg does
-        // not have (it is saved with whatever was bundled then, and a GPU encoder only exists on
-        // a machine with the GPU), so settle on a set that does fit, keeping whatever already does.
-        let configured = config.config()
-        let settings = FFmpegCodec.consistentSettings(codec: configured.codec,
+        let configured = viewModel.config.config()
+        // A render the pre-processing prompt asked for uses what was chosen there; any other starts from the config.  The
+        // config may name settings that do not go together, or ones the bundled ffmpeg does not have, so it is settled
+        // on a set that does fit, keeping whatever already does.
+        let choice = autoStart ? autoChoice : nil
+        let initial = choice ?? RenderChoice.settled(frameRate: configured.frameRate,
+                                                      codec: configured.codec,
                                                       encoder: configured.encoder,
                                                       pixelFormat: configured.pixelFormat,
                                                       muxer: configured.muxer)
-        let codec = settings?.codec ?? configured.codec
-        let encoder = settings?.encoder ?? configured.encoder
-        let pixelFormat = settings?.pixelFormat ?? configured.pixelFormat
-        let muxer = settings?.muxer ?? configured.muxer
-        if codec != configured.codec || encoder != configured.encoder
-             || pixelFormat != configured.pixelFormat || muxer != configured.muxer
-        {
-            Log.w("video settings \(configured.codec)/\(configured.encoder)/\(configured.pixelFormat)/\(configured.muxer) do not fit this ffmpeg; using \(codec)/\(encoder)/\(pixelFormat)/\(muxer)")
-        }
-        _codec = State(initialValue: codec)
-        _encoder = State(initialValue: encoder)
-        _pixelFormat = State(initialValue: pixelFormat)
-        _muxer = State(initialValue: muxer)
-        _videoFilename = State(initialValue: "\(configured.basename).\(muxer.defaultFileExtension ?? muxer.rawValue)")
+        _draft = State(initialValue: RenderOptionsDraft(choice: initial))
+        _videoFilename = State(initialValue: "\(configured.basename).\(initial.muxer.defaultFileExtension ?? initial.muxer.rawValue)")
     }
-    
-    @State private var frameRateString: String
-    @State private var frameRate: FrameRate 
-    /// Whether the Custom row is the picked one.  Not derivable from the rate: Custom starts at the rate in force, which is usually a standard one.
-    @State private var customPicked = false
-    @State private var codec: FFmpegCodec 
-    @State private var encoder: FFmpegEncoder
-    @State private var pixelFormat: FFmpegPixelFormat
-    @State private var muxer: FFmpegMuxer
-    @State private var resolution: OutputResolution = .original
+
+    @State private var draft: RenderOptionsDraft
 
     @State private var isRendering = false
     @State private var renderingError: Error? = nil
@@ -104,11 +81,11 @@ struct RenderVideoSheetView: View {
     private func startRender() {
         self.isRendering = true
         viewModel.renderVideo(named: videoFilename,
-                              frameRate: frameRate,
-                              encoder: encoder,
-                              pixelFormat: pixelFormat,
-                              muxer: muxer,
-                              resolution: resolution)
+                              frameRate: draft.choice.frameRate,
+                              encoder: draft.choice.encoder,
+                              pixelFormat: draft.choice.pixelFormat,
+                              muxer: draft.choice.muxer,
+                              resolution: draft.choice.resolution)
         { currentFrame, totalFrames, _ in
             let progress = Double(currentFrame)/Double(totalFrames)
             Task { @MainActor in
@@ -206,7 +183,106 @@ struct RenderVideoSheetView: View {
                   .frame(minWidth: 300)
                 Text(localized("ui.render_video_from_n_frames", viewModel.frames.count))
                   .font(.title)
+
+                RenderOptionsView(viewModel: viewModel, draft: $draft)
+                  .onChange(of: draft.choice.muxer) {
+                      // the file's extension follows the container
+                      let ext = draft.choice.muxer.defaultFileExtension ?? draft.choice.muxer.rawValue
+                      self.videoFilename = "\(viewModel.config.config().basename).\(ext)"
+                  }
+
+                Divider()
+
+                Text(videoFilename)
                 
+                HStack {
+                    Spacer()
+                    Button(localized("ui.cancel")) {
+                        self.isVisible = false
+                    }
+                    Button(localized("ui.render")) {
+                        startRender()
+                    }
+                      .disabled(draft.hasRateProblem)
+                }
+                Spacer()
+            }
+
+            Space(width: 20)
+        }
+          .frame(minWidth: 300)
+    }
+
+    /// What the custom frame rate field accepts: from 0.01 to 1000 (the daemon refuses 0).  The desktop's rule is the same:
+    /// `gherkin/ui/vectors/constants.json` holds the cases both are checked against.
+    static let customFrameRateRange: ClosedRange<Double> = 0.01...1000
+
+    static func customFrameRate(_ text: String) -> Double? {
+        guard let value = Double(text.trimmingCharacters(in: .whitespaces)),
+              value.isFinite, customFrameRateRange.contains(value) else { return nil }
+        return value
+    }
+
+    /// "0.01", "1000": a bound as the message says it.
+    static func rateText(_ value: Double) -> String { String(format: "%g", value) }
+}
+
+/// What the render options are set to while they are being chosen: the choice, and the state of the custom frame rate field.
+struct RenderOptionsDraft: Equatable {
+    var choice: RenderChoice
+    /// Whether the Custom row is the picked one.  Not derivable from the rate: Custom starts at the rate in force, which is usually a standard one.
+    var customPicked: Bool
+    var frameRateString: String
+
+    init(choice: RenderChoice) {
+        self.choice = choice
+        if case .custom = choice.frameRate { customPicked = true } else { customPicked = false }
+        frameRateString = String(format: "%g", choice.frameRate.rawValue)
+    }
+
+    /// The custom field holds something that is not a frame rate the render accepts.
+    var hasRateProblem: Bool {
+        customPicked && RenderVideoSheetView.customFrameRate(frameRateString) == nil
+    }
+}
+
+/// The render options: frame rate, resolution, codec, encoder, pixel format and container, each with what it is.  Shared by the Render
+/// Video sheet and the pre-processing prompt's options step, which differ in what is around it.
+struct RenderOptionsView: View {
+    let viewModel: ImageSequenceViewModel
+    @Binding var draft: RenderOptionsDraft
+
+    private var frameRate: FrameRate {
+        get { draft.choice.frameRate }
+        nonmutating set { draft.choice.frameRate = newValue }
+    }
+    private var codec: FFmpegCodec {
+        get { draft.choice.codec }
+        nonmutating set { draft.choice.codec = newValue }
+    }
+    private var encoder: FFmpegEncoder {
+        get { draft.choice.encoder }
+        nonmutating set { draft.choice.encoder = newValue }
+    }
+    private var pixelFormat: FFmpegPixelFormat {
+        get { draft.choice.pixelFormat }
+        nonmutating set { draft.choice.pixelFormat = newValue }
+    }
+    private var muxer: FFmpegMuxer {
+        get { draft.choice.muxer }
+        nonmutating set { draft.choice.muxer = newValue }
+    }
+    private var frameRateString: String {
+        get { draft.frameRateString }
+        nonmutating set { draft.frameRateString = newValue }
+    }
+    private var customPicked: Bool {
+        get { draft.customPicked }
+        nonmutating set { draft.customPicked = newValue }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading) {
                 HStack {
                     Picker(localized("ui.frame_rate"), selection: rateSelection) {
                         ForEach(FrameRate.allCases, id: \.self) { frameRate in
@@ -219,7 +295,7 @@ struct RenderVideoSheetView: View {
                         }
                     }
                     if customPicked {
-                        TextField("", text: $frameRateString)
+                        TextField("", text: $draft.frameRateString)
                           .frame(maxWidth: 60)
                           .overlay(RoundedRectangle(cornerRadius: 4)
                                      .stroke(customRateProblem ? Color.red : Color.clear))
@@ -228,7 +304,7 @@ struct RenderVideoSheetView: View {
                               // Applied as it is typed, so Render is never one keystroke behind what the field says.
                               let digits = frameRateString.filter { "0123456789.".contains($0) }
                               if digits != frameRateString { frameRateString = digits }
-                              if let value = Self.customFrameRate(digits) { frameRate = .custom(value) }
+                              if let value = RenderVideoSheetView.customFrameRate(digits) { frameRate = .custom(value) }
                           }
                     }
                     Text(localized("ui.frames_per_second"))
@@ -240,12 +316,12 @@ struct RenderVideoSheetView: View {
                       viewModel.frameRate = frameRate
                       // The field shows what it was given; only a change that did not come from it (the picker) rewrites it, or
                       // "1.50" would be reformatted to "1.5" under the cursor.
-                      if Self.customFrameRate(frameRateString) != frameRate.rawValue {
+                      if RenderVideoSheetView.customFrameRate(frameRateString) != frameRate.rawValue {
                           self.frameRateString = String(format: "%g", frameRate.rawValue)
                       }
                   }
                 if customPicked && customRateProblem {
-                    Text(localized("ui.enter_a_number_from_a_to_b", Self.rateText(Self.customFrameRateRange.lowerBound), Self.rateText(Self.customFrameRateRange.upperBound)))
+                    Text(localized("ui.enter_a_number_from_a_to_b", RenderVideoSheetView.rateText(RenderVideoSheetView.customFrameRateRange.lowerBound), RenderVideoSheetView.rateText(RenderVideoSheetView.customFrameRateRange.upperBound)))
                       .font(.caption)
                       .foregroundColor(.red)
                 }
@@ -254,7 +330,7 @@ struct RenderVideoSheetView: View {
                   .lineLimit(nil)
                   .fixedSize(horizontal: false, vertical: true)
                 
-                Picker(localized("ui.resolution"), selection: $resolution) {
+                Picker(localized("ui.resolution"), selection: $draft.choice.resolution) {
                     ForEach(OutputResolution.allCases, id: \.self) { resolution in
                         Text(resolution == .original
                              ? localized("ui.resolution_original")
@@ -264,7 +340,7 @@ struct RenderVideoSheetView: View {
 
                 Divider()
                 
-                Picker(localized("ui.codec"), selection: $codec) {
+                Picker(localized("ui.codec"), selection: $draft.choice.codec) {
                     ForEach(FFmpegCodec.availableVideoCodecs, id: \.self) { codec in
                         Text(codec.description)
                     }
@@ -279,7 +355,7 @@ struct RenderVideoSheetView: View {
                       muxer = codec.defaultMuxer(for: encoder) ?? encoder.supportedMuxers[0]
                   }
 
-                Picker(localized("ui.encoder"), selection: $encoder) {
+                Picker(localized("ui.encoder"), selection: $draft.choice.encoder) {
                     ForEach(codec.availableEncoders, id: \.self) { encoder in
                         Text("\(encoder.rawValue) [\(encoder.description)]")
                     }
@@ -293,7 +369,7 @@ struct RenderVideoSheetView: View {
                       }
                   }
                 
-                Picker(localized("ui.pixel_format"), selection: $pixelFormat) {
+                Picker(localized("ui.pixel_format"), selection: $draft.choice.pixelFormat) {
                     ForEach(encoder.usablePixelFormats, id: \.self) { pixelFormat in
                         Text(pixelFormat.rawValue)
                     }
@@ -309,7 +385,7 @@ struct RenderVideoSheetView: View {
                 
                 Divider()
 
-                Picker(localized("ui.container"), selection: $muxer) {
+                Picker(localized("ui.container"), selection: $draft.choice.muxer) {
                     ForEach(encoder.supportedMuxers, id: \.self) { muxer in
                         Text(muxer.rawValue)
                     }
@@ -318,37 +394,12 @@ struct RenderVideoSheetView: View {
                       // set in user prefs and the view model if it changes
                       viewModel.userPreferences.muxer = muxer
                       viewModel.muxer = muxer
-
-                      let ext = muxer.defaultFileExtension ?? muxer.rawValue
-                      
-                      let config = viewModel.config 
-                      self.videoFilename = "\(config.config().basename).\(ext)"
                   }
 
                 Text("\(muxer.description) - (.\(muxer.defaultFileExtension ?? muxer.rawValue))")
                   .lineLimit(nil)
                   .fixedSize(horizontal: false, vertical: true)
-                
-                Divider()
-
-                Text(videoFilename)
-                
-                HStack {
-                    Spacer()
-                    Button(localized("ui.cancel")) {
-                        self.isVisible = false
-                    }
-                    Button(localized("ui.render")) {
-                        startRender()
-                    }
-                      .disabled(customPicked && customRateProblem)
-                }
-                Spacer()
-            }
-
-            Space(width: 20)
         }
-          .frame(minWidth: 300)
     }
 
     /// The picker's selection: a standard rate, or the Custom row, whose tag (`.custom(24)`) is only a tag.  Picking Custom keeps the
@@ -367,20 +418,7 @@ struct RenderVideoSheetView: View {
           })
     }
 
-    /// What the custom frame rate field accepts: from 0.01 to 1000 (the daemon refuses 0).  The desktop's rule is the same:
-    /// `gherkin/ui/vectors/constants.json` holds the cases both are checked against.
-    static let customFrameRateRange: ClosedRange<Double> = 0.01...1000
-
-    static func customFrameRate(_ text: String) -> Double? {
-        guard let value = Double(text.trimmingCharacters(in: .whitespaces)),
-              value.isFinite, customFrameRateRange.contains(value) else { return nil }
-        return value
-    }
-
-    /// "0.01", "1000": a bound as the message says it.
-    static func rateText(_ value: Double) -> String { String(format: "%g", value) }
-
-    private var customRateProblem: Bool { Self.customFrameRate(frameRateString) == nil }
+    private var customRateProblem: Bool { RenderVideoSheetView.customFrameRate(frameRateString) == nil }
 
     private var totalLengthText: String {
         formatTimeInterval(Double(viewModel.frames.count)/frameRate.rawValue)
