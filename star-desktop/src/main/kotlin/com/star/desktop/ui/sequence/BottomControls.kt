@@ -132,6 +132,13 @@ private fun ModeAndViewPickers(vm: SequenceViewModel, mode: com.star.desktop.dom
                 selected = mode,
                 label = { localized(it.labelKey) },
                 onSelect = { vm.setMode(it) },
+                tag = {
+                    when (it) {
+                        com.star.desktop.domain.InteractionMode.EDIT -> "mode.edit"
+                        com.star.desktop.domain.InteractionMode.SCRUB -> "mode.scrub"
+                        com.star.desktop.domain.InteractionMode.GRID -> "mode.grid"
+                    }
+                },
             )
         }
         Text(localized("ui.with"), color = StarColors.textPrimary, fontSize = 13.sp)
@@ -141,6 +148,7 @@ private fun ModeAndViewPickers(vm: SequenceViewModel, mode: com.star.desktop.dom
             label = ::viewPickerLabel,
             onSelect = { vm.setViewMode(it) },
             isEnabled = { it in available },
+            tag = { if (it == com.star.proto.FrameViewMode.VIEW_PROCESSED) "view.final" else "view.original" },
         )
         Text(localized("ui.frames"), color = StarColors.textPrimary, fontSize = 13.sp)
     }
@@ -237,7 +245,7 @@ private fun EditableFrameNumber(index: Int, count: Int, onSet: (Int) -> Unit) {
                 localized("ui.frame_n_lower", index),
                 color = StarColors.white,
                 fontSize = 13.sp,
-                modifier = Modifier.clickable { editing = true }.padding(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.clickable { editing = true }.padding(horizontal = 6.dp, vertical = 2.dp).testTag("frame.number"),
             )
         }
     }

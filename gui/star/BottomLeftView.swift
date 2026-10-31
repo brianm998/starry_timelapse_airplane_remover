@@ -26,7 +26,13 @@ struct BottomLeftView: View {
                 let foobar2 = 138.0/255.0
                 
                 HStack {
-                    StarPicker(selection: $viewModel.interactionMode) { value, isEnabled in
+                    StarPicker(selection: $viewModel.interactionMode, identifier: { mode in
+                        switch mode {
+                        case .edit: return "mode.edit"
+                        case .scrub: return "mode.scrub"
+                        case .grid: return "mode.grid"
+                        }
+                    }) { value, isEnabled in
                         Text(value.localizedName)
                           .foregroundColor(isEnabled ? .black : .yellow)
                         //                                  .onTapGesture { _ in
@@ -44,6 +50,7 @@ struct BottomLeftView: View {
                     
                     LimitedSelectionPicker(selection: $viewModel.frameViewMode) { value, isEnabled in
                         if value == .original || value == .final {
+                            let name = value == .final ? "view.final" : "view.original"
                             if viewModel.currentFrameView.hasImage(type: value) {
                                 Text(Self.viewLabel(value))
                                   .foregroundColor(isEnabled ? .black : .yellow)
@@ -51,10 +58,12 @@ struct BottomLeftView: View {
                                   .onTapGesture { _ in
                                       viewModel.frameViewMode = value
                                   }
+                                  .optionIdentity(name, selected: viewModel.frameViewMode == value)
                             } else {
                                 Text(Self.viewLabel(value))
                                   .foregroundColor(/*isEnabled ? .white : */ .gray)
                                   .padding(4)
+                                  .optionIdentity(name, selected: viewModel.frameViewMode == value)
                             }
                         } else {
                             Group { }
