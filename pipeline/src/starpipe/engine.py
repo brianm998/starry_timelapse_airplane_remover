@@ -175,7 +175,8 @@ class Engine:
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
-                               "high", BUDGET_S[stage], contract, self._fence(t, stage), resume)
+                               "high", BUDGET_S[stage], contract, self._fence(t, stage), resume,
+                               on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid))
             out: StageOutcome = await self.agent.run(req)
             if out.session_id:
                 self.db.set_session(stage_id, out.session_id)
@@ -186,20 +187,21 @@ class Engine:
                 if kind == "question":
                     return await self._handle_question(t, stage, value, prompt, contract, allow_resolve), contract
                 return StageResult(True, kind, value), contract
+            known = out.session_id or self._last_session(t, stage)  # the row has it even if the run never finished
             if out.status == "usage-limit":
                 self.db.put("usage_pause_until", str(out.resets_at or self.clock() + 1800))
                 self.db.event("usage-pause", None, until=out.resets_at)
-                resume = out.session_id or resume
+                resume = known or resume
                 continue  # not a failure: no attempt counted
             summary = out.summary
             if out.status == "crash":
                 crashes += 1
                 if crashes > MAX_CRASH_RESUMES:
                     return self.park(t, f"{stage}: session crashed {crashes} times: {out.summary}"), contract
-                resume = out.session_id or resume
+                resume = known or resume
                 continue
             crashes = 0
-            resume = out.session_id if out.status == "timeout" else None
+            resume = known if out.status == "timeout" else None
             attempt += 1
         return self.park(t, f"{stage}: no accepted result after 3 attempts. {summary}"), contract
 

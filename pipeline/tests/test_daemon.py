@@ -147,3 +147,25 @@ def test_activity_line(rig: Rig) -> None:
     rig.db.set_state(7, "developing")
     t = rig.db.ticket(7)
     assert t and activity(rig.db, t, rig.now + 600).startswith("developing · attempt 2/3 · 10m")
+
+
+async def test_the_session_id_is_recorded_as_soon_as_it_is_known_so_a_kill_can_resume(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    seen: list[StageRequest] = []
+
+    def killed_mid_stage(req: StageRequest) -> StageOutcome:
+        seen.append(req)
+        req.on_session("S-early")  # the SDK reported the id; the run then died without a result message
+        return StageOutcome("crash")
+
+    def resumed(req: StageRequest) -> StageOutcome:
+        seen.append(req)
+        req.contract.submit_plan(plan_args())
+        return accepted(req, "S-early")
+
+    rig.agent.on("explore", killed_mid_stage, resumed)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    assert seen[1].resume == "S-early"
+    assert rig.db.stages(7, "explore")[0]["session_id"] == "S-early"
