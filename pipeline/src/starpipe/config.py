@@ -33,6 +33,11 @@ class Config(BaseModel):
     max_active: int = 2
     heavy_slots: int = 1
     nightly_start: str = "03:00"
+    digest_weekday: int = 6  # Monday is 0
+    digest_hour: int = 8
+    nightly_enabled: bool = False  # a multi-hour job that has never run unattended: the owner turns it on
+    nightly_ui: bool = False  # the mac gui @ui features: need UI automation permission and the display
+    test_data: str = ""  # shared dataset cache; empty: $STAR_TEST_DATA, else ~/.star-test-data
     quiet_start: str = "22:00"
     quiet_end: str = "07:00"
     ci_blocking_wait_s: int = 3 * 3600

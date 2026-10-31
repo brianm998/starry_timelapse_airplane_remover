@@ -316,6 +316,58 @@ def logs(number: int, stage: str | None, lines: int) -> None:
 
 
 @main.group()
+def nightly() -> None:
+    """The nightly run (T4): every local suite and the Gherkin features on origin/develop."""
+
+
+@nightly.command("run")
+@click.option("--ref", default=None, help="A ref to test instead of origin/develop (a scratch branch with a planted red).")
+@click.option("--suite", "suites", multiple=True, help="Only checks with this id or id prefix, e.g. test:logging or gherkin:cli/")
+@click.option("--ui/--no-ui", default=False, help="Also the mac gui @ui features (needs UI automation and the display).")
+@click.option("--no-file", is_flag=True, help="Do not file tickets for new reds; say what would be filed.")
+def nightly_run(ref: str | None, suites: tuple[str, ...], ui: bool, no_file: bool) -> None:
+    """Start a nightly in the daemon now (it runs in the background; see `nightly status`)."""
+    _post("/v1/nightly/run", {"ref": ref, "suites": list(suites), "ui": ui, "file_tickets": not no_file})
+
+
+@nightly.command("status")
+@click.option("--json", "as_json", is_flag=True)
+def nightly_status(as_json: bool) -> None:
+    """The latest nightly: per-check status and time."""
+    from . import client as client_mod
+
+    try:
+        run = _client().call("GET", "/v1/nightly")
+    except client_mod.DaemonDown as exc:
+        raise click.ClickException(str(exc)) from exc
+    if as_json or not run:
+        click.echo(json.dumps(run) if as_json else "no nightly has run")
+        return
+    state = "running" if run["ended"] is None else run["status"]
+    click.echo(f"nightly #{run['id']} {run['ref']} {run['sha'][:10]}  {state}")
+    for r in run["results"]:
+        mark = "ok  " if r["status"] == "pass" else "RED "
+        counts = f"{r['executed']} tests" if r["executed"] else ""
+        click.echo(f"  {mark}{r['check_id']:<44}{r['seconds'] / 60:7.1f} min  {counts}  {'' if r['status'] == 'pass' else r['status']}")
+    for key in ("new_reds", "filed"):
+        if run["summary"].get(key):
+            click.echo(f"{key}: " + ", ".join(run["summary"][key]))
+
+
+@main.command()
+@click.option("--days", default=7, show_default=True)
+def digest(days: int) -> None:
+    """The weekly report: landed tickets, interventions, park reasons, lock use. Reads the database, read-only."""
+    from . import digest as digest_mod
+    from .checks import ledger
+    from .db import Database, db_path
+
+    if not db_path().exists():
+        raise click.ClickException("no database yet: the daemon has never run")
+    click.echo(digest_mod.build(Database(read_only=True), time.time(), days, ledger.ledger_path()).render())
+
+
+@main.group()
 def daemon() -> None:
     """The starpiped process."""
 

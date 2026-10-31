@@ -61,6 +61,8 @@ struct HeaderStrip: View {
                 item("Usage limit", "model stages wait until \(Date(timeIntervalSince1970: t).formatted(date: .omitted, time: .shortened))", color: .orange)
             }
             if let pause = store.snapshot?.pause { item("Paused", pause, color: .orange) }
+            item("Last nightly", store.snapshot?.nightly?.line ?? "none yet",
+                 color: (store.snapshot?.nightly?.reds ?? 0) > 0 || store.snapshot?.nightly?.status == "error" ? .orange : .secondary)
             Spacer()
             if let week = store.snapshot?.interventionsWeek, !week.isEmpty {
                 item("Interventions (7 d)", week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "), color: .secondary)

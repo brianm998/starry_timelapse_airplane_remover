@@ -41,6 +41,9 @@ def populate(rig: Rig) -> Daemon:
     rig.db.set_baseline("pr-gate", "linux", "abc", "success")
     rig.db.set_baseline("cli", "windows", "abc", "failure")
     rig.db.intervention(1, "answer", "explore")
+    run = rig.db.nightly_begin("origin/develop", "a" * 40)
+    rig.db.nightly_result(run, "test:logging", "pass", 68, 0, 0, 12.0, 0.0, "/log")
+    rig.db.nightly_end(run, "done", {"reds": ["gherkin:cli/alpha"]})
     return Daemon(rig.engine, Config(), token="tok")
 
 
@@ -92,6 +95,8 @@ def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> No
     snap["daemon"] = {"pid": 1, "since": 1000.0, "last_poll": 1100.0, "error": ""}
     snap["runtime"] = {"sha": "abc1234", "behind_develop": 2}
     snap["now"] = 2000.0
+    snap["nightly"]["at"] = 1500.0  # the wall-clock parts of a run are not part of the contract
+    snap["nightly"]["line"] = "Sat 03:00 · aaaaaaaa · 1 red"
     for t in snap["tickets"]:
         t["worktree"] = f"/work/pipe-{t['number']}" if t["worktree"] else None
         for s in t["stages"]:

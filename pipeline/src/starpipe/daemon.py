@@ -9,12 +9,14 @@ import os
 import secrets
 import time
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
 from aiohttp import web
 
-from . import gitutil, heavy, ship, watch, worktrees
+from . import digest as digest_mod
+from . import gitutil, heavy, nightly, ship, watch, worktrees
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
@@ -79,6 +81,7 @@ class Daemon:
         self.last_error: str = ""
         self.watch = watch.Watch()
         self._runtime: dict[str, object] = {}
+        self.nightly_task: asyncio.Task[int] | None = None
 
     # supervision ---------------------------------------------------------------------------------------------------
     def reconcile(self) -> None:
@@ -138,6 +141,46 @@ class Daemon:
             t = self.db.ticket(number)
             if t:
                 self.engine.park(t, f"internal error: {type(exc).__name__}: {exc}")
+
+    # nightly and digest -----------------------------------------------------------------------------------------------
+    def make_nightly(self) -> nightly.Nightly:
+        return nightly.Nightly(self.db, self.config, self.engine.gh, self.engine.notifier, self.engine.repo,
+                               fetch_ref=lambda _repo: ship.fetch(self.engine, self.engine.repo))
+
+    def start_nightly(self, opts: nightly.Options) -> int | None:
+        """Start a nightly in the background; None when one is already running."""
+        if self.nightly_task and not self.nightly_task.done():
+            return None
+        self.nightly_task = asyncio.create_task(asyncio.to_thread(self.make_nightly().run, opts))
+        return 1
+
+    async def nightly_loop(self) -> None:
+        while True:
+            now = datetime.now()
+            if (self.config.nightly_enabled and nightly.due(now, self.db.get("nightly_last_day"), self.config.nightly_start)
+                    and self.start_nightly(nightly.Options(ui=self.config.nightly_ui))):
+                self.db.put("nightly_last_day", now.strftime("%Y-%m-%d"))
+            await asyncio.sleep(60)
+
+    def write_digest(self, now: float | None = None) -> Path:
+        from .checks import ledger
+
+        now = now or time.time()
+        folder = home() / "digests"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{datetime.fromtimestamp(now):%Y-%m-%d}.md"
+        path.write_text(digest_mod.build(self.db, now, 7, ledger.ledger_path()).render())
+        self.db.event("digest", None, path=str(path))
+        return path
+
+    async def digest_loop(self) -> None:
+        while True:
+            now = datetime.now()
+            if (now.weekday() == self.config.digest_weekday and now.hour >= self.config.digest_hour
+                    and self.db.get("digest_last_day") != now.strftime("%Y-%m-%d")):
+                await asyncio.to_thread(self.write_digest)
+                self.db.put("digest_last_day", now.strftime("%Y-%m-%d"))
+            await asyncio.sleep(600)
 
     def watch_targets(self) -> list[watch.Target]:
         """Stage sessions (this process's `claude` children) and pipeline-owned heavy jobs. Never an interactive holder."""
@@ -236,7 +279,16 @@ class Daemon:
                 "landing": {"paused": self.db.get("pause") in ("all", "landing"), "stop_line": self.db.get("stop_line")},
                 "develop": {"gate": {r["job"]: r["conclusion"] for r in gate}, "known_red": int(reds[0]["n"])},
                 "interventions_week": {r["kind"]: r["n"] for r in week}, "events_cursor": int(cursor), "now": now,
-                "version": "starpipe 1", "repo": f"{self.config.owner}/{self.config.repo}"}
+                "version": "starpipe 1", "repo": f"{self.config.owner}/{self.config.repo}",
+                "nightly": self.nightly_info()}
+
+    def nightly_info(self) -> dict[str, object] | None:
+        run = self.db.nightly_run()
+        if run is None:
+            return None
+        return {"id": run["id"], "at": run["ended"] or run["started"], "running": run["ended"] is None, "status": run["status"],
+                "ref": run["ref"], "sha": run["sha"][:12], "reds": len(run["summary"].get("reds", [])),
+                "line": nightly.summary_line(run)}
 
     def log_tail(self, n: int, lines: int = 60) -> list[str]:
         folder = home() / "tickets" / str(n) / "transcripts"
@@ -326,6 +378,20 @@ class Daemon:
         async def snapshot(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response(await asyncio.to_thread(self.snapshot))
 
+        @r.get("/v1/nightly")
+        async def nightly_status(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            return web.json_response(self.db.nightly_run() or {})
+
+        @r.post("/v1/nightly/run")
+        async def nightly_run(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            opts = nightly.Options(ref=str(body["ref"]) if body.get("ref") else None,
+                                   suites=[str(x) for x in cast("list[object]", body.get("suites") or [])],
+                                   ui=bool(body.get("ui", self.config.nightly_ui)), file_tickets=bool(body.get("file_tickets", True)))
+            if self.start_nightly(opts) is None:
+                raise web.HTTPConflict(text="a nightly is already running")
+            return web.json_response({"result": "started"})
+
         @r.get("/v1/tickets/{n}/log")
         async def tail(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response({"lines": self.log_tail(int(req.match_info["n"]), int(req.query.get("lines", 60)))})
@@ -376,7 +442,8 @@ class Daemon:
         log.info("starpiped up on 127.0.0.1:%d", self.config.api_port)
         try:
             await asyncio.gather(self.supervise("poller", self.poller), self.supervise("scheduler", self.scheduler),
-                                 self.supervise("watcher", self.watcher))
+                                 self.supervise("watcher", self.watcher), self.supervise("nightly", self.nightly_loop),
+                                 self.supervise("digest", self.digest_loop))
         finally:
             await runner.cleanup()
 

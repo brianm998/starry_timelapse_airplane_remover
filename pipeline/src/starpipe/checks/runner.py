@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 from collections.abc import Callable
@@ -24,15 +25,17 @@ def _argv(spec: star.CheckSpec, root: Path, base: str) -> list[str]:
 
 
 def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: str,
-                 allow_skips: bool, say: Callable[[str], None]) -> ledger.Result:
+                 allow_skips: bool, say: Callable[[str], None], priority: int | None = None) -> ledger.Result:
     argv = _argv(spec, root, base)
     cwd = str(root / spec.cwd)
+    env = {**os.environ, **{k: v.format(root=root, build=build_dir(root)) for k, v in spec.env}} if spec.env else None
     started = time.monotonic()
     with log.open("wb") as out:
         if spec.heavy:
-            code, wait = heavy.run(argv, report=say, keep_display_awake=spec.ui, cwd=cwd, stdout=out.fileno())
+            code, wait = heavy.run(argv, report=say, keep_display_awake=spec.ui, cwd=cwd, stdout=out.fileno(),
+                                   priority=priority, env=env)
         else:
-            code = subprocess.run(argv, cwd=cwd, stdout=out, stderr=subprocess.STDOUT, check=False).returncode
+            code = subprocess.run(argv, cwd=cwd, stdout=out, stderr=subprocess.STDOUT, check=False, env=env).returncode
             wait = 0.0
     text = log.read_text(errors="replace")
     counts = parsers.Counts()
@@ -47,6 +50,8 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
         status = "fail"
     elif spec.parser != "exit" and counts.vacuous:
         status = "vacuous"  # exit 0 and a green banner, but nothing ran
+    elif spec.expect is not None and counts.executed != spec.expect:
+        status = "partial"  # some of the expected tests did not run
     elif counts.skipped and not allow_skips:
         status = "skipped-tests"
     return ledger.Result(spec.id, status, sha, time.monotonic() - started - wait, wait, counts.executed,
@@ -56,6 +61,16 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
 def log_name(check_id: str) -> str:
     """A check id as a file name: `build:pipeline/monitor` must not become a nested path."""
     return check_id.replace(":", "_").replace("/", "_")
+
+
+def run_spec(spec: star.CheckSpec, root: Path, base: str, log_dir: Path, *, priority: int | None = None,
+             allow_skips: bool = False, say: Callable[[str], None] = lambda _m: None) -> ledger.Result:
+    """Run one check that is not in the impact map's CHECKS (the nightly's own), recorded in the ledger like any other."""
+    sha = gitutil.head_sha(root)
+    log = log_dir / (log_name(spec.id) + ".log")
+    result = _run_command(spec, root, base, log, sha, allow_skips, say, priority)
+    ledger.record(result)
+    return result
 
 
 def run_check(check_id: str, root: Path, base: str, log_dir: Path, *, allow_skips: bool = False,
