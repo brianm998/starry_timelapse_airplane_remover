@@ -1,8 +1,10 @@
 name: Gherkin
 
-# Eight scenario features (gherkin/features/*.feature) driven through three Star clients. ONE JOB PER (client, OS, feature):
+# Scenario features (gherkin/features/*.feature) driven through three Star clients. ONE JOB PER (client, OS, feature):
 # the matrix of each client is generated (gherkin/generated/features-<client>.json) and every job runs exactly one feature
-# and fetches only the datasets it needs (gherkin/generated/feature-datasets-<client>.json). Legs:
+# and fetches only the datasets it needs (gherkin/generated/feature-datasets-<client>.json), EXCEPT the @ui features (uiXxx, a
+# few clicks each and no datasets) of the mac-gui and desktop legs: those share ONE job per leg, the matrix entry `ui`, because a
+# job apiece paid for a full build of the app, stard or Star.app to run a few clicks.  Legs:
 #   cli-linux, cli-windows, cli-macos  XCTest running the built `star` binary as a subprocess
 #   mac-gui                       XCUITest against Star.app (hosted macOS runners ship with UI automation
 #                                 mode enabled: no `automationmodetool` step here)
@@ -76,7 +78,9 @@ jobs:
     outputs:
       cli: ${{ steps.m.outputs.cli }}
       macgui: ${{ steps.m.outputs.macgui }}
+      macgui_ui: ${{ steps.m.outputs.macgui_ui }}
       desktop: ${{ steps.m.outputs.desktop }}
+      desktop_ui: ${{ steps.m.outputs.desktop_ui }}
     steps:
       - uses: actions/checkout@v4
       - id: m
@@ -88,6 +92,13 @@ jobs:
               arr=$(jq -c --arg only "$ONLY" '[ .[] | select(. as $f | ($only | split(",") | map(gsub("[ ]";"")) | index($f)) != null) ]' "gherkin/generated/features-$c.json")
             else
               arr=$(jq -c . "gherkin/generated/features-$c.json")
+            fi
+            # The @ui features of the mac-gui and desktop legs run as one job each, the entry `ui` of that leg's matrix (<leg>_ui lists them).
+            # Every other feature, and every cli feature, stays a job of its own.
+            if [ "$c" != cli ]; then
+              ui=$(jq -c '[ .[] | select(startswith("ui")) ]' <<<"$arr")
+              arr=$(jq -c --argjson ui "$ui" '[ .[] | select(startswith("ui") | not) ] + (if ($ui | length) > 0 then ["ui"] else [] end)' <<<"$arr")
+              echo "${c//-/}_ui=$ui" >> "$GITHUB_OUTPUT"
             fi
             echo "$c: $arr"
             echo "${c//-/}=$arr" >> "$GITHUB_OUTPUT"
@@ -583,21 +594,36 @@ jobs:
       fail-fast: false
       matrix:
         feature: ${{ fromJSON(needs.features.outputs.macgui) }}
-    timeout-minutes: 90
+    # the `ui` job runs every @ui feature one after the other in the one build
+    timeout-minutes: ${{ matrix.feature == 'ui' && 120 || 90 }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Name of this feature's test
+      # The matrix entry `ui` is every @ui feature of this client in one job (see the top of this file); any other entry is one feature.
+      # Either way this lists what the job runs.
+      - name: Which features this job runs
         id: t
         shell: bash
+        env:
+          UI: ${{ needs.features.outputs.macgui_ui }}
         run: |
           f="${{ matrix.feature }}"
-          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
+          if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
+          only=""; count=0
+          for n in $features; do
+            only="$only -only-testing:starUITests/GeneratedFeatureUITests/test$(echo "${n:0:1}" | tr a-z A-Z)${n:1}Feature"
+            count=$((count + 1))
+          done
+          { echo "features=$features"; echo "only=$only"; echo "count=$count"; } >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-mac-gui.txt), never maintained by hand.
       - name: Fetch test data
-        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-mac-gui.json) gui_splash_video
+        env:
+          FEATURES: ${{ steps.t.outputs.features }}
+        run: |
+          names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-mac-gui.json; done | sort -u)
+          test_data/fetch.sh $names gui_splash_video
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -691,17 +717,23 @@ jobs:
             -scheme star \
             -configuration Release \
             ENABLE_TESTABILITY=YES \
-            -only-testing:starUITests/GeneratedFeatureUITests/${{ steps.t.outputs.name }} \
+            ${{ steps.t.outputs.only }} \
             -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             2>&1 | tee gherkin-gui.log
 
-      - name: Prove the scenario ran (not a vacuous green)
+      - name: Prove the scenarios ran (not a vacuous green)
+        env:
+          FEATURES: ${{ steps.t.outputs.features }}
+          COUNT: ${{ steps.t.outputs.count }}
         run: |
-          grep -E "Executed 1 test, with 0 failures" gherkin-gui.log
-          # every "Executed N tests" line must be the one-test line: nothing else ran, nothing was skipped
-          ! grep -E "Executed [0-9]+ tests?" gherkin-gui.log | grep -v "Executed 1 test, with 0 failures"
-          grep -E "Test [Cc]ase '.*${{ steps.t.outputs.name }}.*' passed" gherkin-gui.log
+          if [ "$COUNT" = 1 ]; then ran="Executed 1 test, with 0 failures"; else ran="Executed $COUNT tests, with 0 failures"; fi
+          grep -E "$ran" gherkin-gui.log
+          # every "Executed N tests" line must be that one: nothing else ran, nothing was skipped
+          ! grep -E "Executed [0-9]+ tests?" gherkin-gui.log | grep -v "$ran"
+          for n in $FEATURES; do
+            grep -E "Test [Cc]ase '.*test$(echo "${n:0:1}" | tr a-z A-Z)${n:1}Feature.*' passed" gherkin-gui.log
+          done
 
       # The screenshots in here are the only evidence of a GUI failure.
       - name: Upload the xcresult
@@ -732,24 +764,32 @@ jobs:
       fail-fast: false
       matrix:
         feature: ${{ fromJSON(needs.features.outputs.desktop) }}
-    timeout-minutes: 75
+    # the `ui` job runs every @ui feature one after the other in the one build
+    timeout-minutes: ${{ matrix.feature == 'ui' && 120 || 75 }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Name of this feature's test
+      # The matrix entry `ui` is every @ui feature of this client in one job (see the top of this file); any other entry is one feature.
+      # Either way this lists what the job runs.
+      - name: Which features this job runs
         id: t
         shell: bash
+        env:
+          UI: ${{ needs.features.outputs.desktop_ui }}
         run: |
           f="${{ matrix.feature }}"
-          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
+          if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
+          echo "features=$features" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
       # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
       - name: Fetch test data
+        env:
+          FEATURES: ${{ steps.t.outputs.features }}
         run: |
-          names=$(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
-          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "${{ matrix.feature }} needs no test data"; fi
+          names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done | sort -u)
+          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "$FEATURES needs no test data"; fi
 
       - name: Install apt prerequisites
         run: |
@@ -832,26 +872,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
+      # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
-        working-directory: star-desktop
-        run: ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
-
-      - name: Prove the scenario ran (not a vacuous green)
-        working-directory: star-desktop
-        run: |
-          ls build/test-results/gherkinTest/*.xml
-          grep -E 'tests="1"' build/test-results/gherkinTest/*.xml
-          grep -E 'skipped="0"' build/test-results/gherkinTest/*.xml
-          grep -E 'failures="0"' build/test-results/gherkinTest/*.xml
+        run: gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ steps.t.outputs.features }}
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gherkin-desktop-linux-reports-${{ matrix.feature }}
-          path: star-desktop/build/reports/tests/gherkinTest
+          path: star-desktop/build/gherkin-each
           if-no-files-found: warn
 
   # ─── desktop, Windows ────────────────────────────────────────────────────────
@@ -875,27 +908,35 @@ jobs:
       fail-fast: false
       matrix:
         feature: ${{ fromJSON(needs.features.outputs.desktop) }}
-    timeout-minutes: 90
+    # the `ui` job runs every @ui feature one after the other in the one build
+    timeout-minutes: ${{ matrix.feature == 'ui' && 150 || 90 }}
     defaults:
       run:
         shell: bash  # Git Bash; matches cli.yml's `windows` job
     steps:
       - uses: actions/checkout@v4
 
-      - name: Name of this feature's test
+      # The matrix entry `ui` is every @ui feature of this client in one job (see the top of this file); any other entry is one feature.
+      # Either way this lists what the job runs.
+      - name: Which features this job runs
         id: t
         shell: bash
+        env:
+          UI: ${{ needs.features.outputs.desktop_ui }}
         run: |
           f="${{ matrix.feature }}"
-          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
+          if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
+          echo "features=$features" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
       # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
       - name: Fetch test data
+        env:
+          FEATURES: ${{ steps.t.outputs.features }}
         run: |
-          names=$(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
-          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "${{ matrix.feature }} needs no test data"; fi
+          names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done | sort -u)
+          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "$FEATURES needs no test data"; fi
 
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
@@ -1049,27 +1090,20 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
+      # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
-        working-directory: star-desktop
         # cygpath -m: the JVM wants C:/... , not Git Bash's /d/a/...
-        run: ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$(cygpath -m "$GITHUB_WORKSPACE/daemon/.build/release/stard.exe")"
-
-      - name: Prove the scenario ran (not a vacuous green)
-        working-directory: star-desktop
-        run: |
-          ls build/test-results/gherkinTest/*.xml
-          grep -E 'tests="1"' build/test-results/gherkinTest/*.xml
-          grep -E 'skipped="0"' build/test-results/gherkinTest/*.xml
-          grep -E 'failures="0"' build/test-results/gherkinTest/*.xml
+        run: gherkin/run-desktop-features.sh "$(cygpath -m "$GITHUB_WORKSPACE/daemon/.build/release/stard.exe")" ${{ steps.t.outputs.features }}
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gherkin-desktop-windows-reports-${{ matrix.feature }}
-          path: star-desktop/build/reports/tests/gherkinTest
+          path: star-desktop/build/gherkin-each
           if-no-files-found: warn
 
   # ─── desktop, macOS ──────────────────────────────────────────────────────────
@@ -1091,24 +1125,32 @@ jobs:
       fail-fast: false
       matrix:
         feature: ${{ fromJSON(needs.features.outputs.desktop) }}
-    timeout-minutes: 100
+    # the `ui` job runs every @ui feature one after the other in the one build
+    timeout-minutes: ${{ matrix.feature == 'ui' && 150 || 100 }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Name of this feature's test
+      # The matrix entry `ui` is every @ui feature of this client in one job (see the top of this file); any other entry is one feature.
+      # Either way this lists what the job runs.
+      - name: Which features this job runs
         id: t
         shell: bash
+        env:
+          UI: ${{ needs.features.outputs.desktop_ui }}
         run: |
           f="${{ matrix.feature }}"
-          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
+          if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
+          echo "features=$features" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
       # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
       - name: Fetch test data
+        env:
+          FEATURES: ${{ steps.t.outputs.features }}
         run: |
-          names=$(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
-          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "${{ matrix.feature }} needs no test data"; fi
+          names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done | sort -u)
+          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "$FEATURES needs no test data"; fi
 
       - name: Select latest Xcode (Swift 6)
         uses: maxim-lobanov/setup-xcode@v1
@@ -1191,6 +1233,8 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
+      # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
       # Hosted macOS VMs vary: one run had ~2GB free, so stard's memory gate admitted a frame every few minutes and nothing finished in 45
       # (the same leg passes in minutes on a healthier VM). Fail fast per attempt and try once more; the retry kills any stard left behind.
       - name: Run the Gherkin features in the Compose UI
@@ -1198,7 +1242,8 @@ jobs:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 45
+          # an attempt of the `ui` job is all its features; a retry runs only those that failed (the script keeps what passed)
+          timeout_minutes: ${{ matrix.feature == 'ui' && 75 || 45 }}
           max_attempts: 2
           retry_wait_seconds: 20
           polling_interval_seconds: 5
@@ -1209,22 +1254,14 @@ jobs:
           # A 7GB VM with ~2-3GB free: at full resolution one frame's keypoint reservation (2.2GB) exceeds stard's narrowed memory budget, so
           # frames wait minutes each. stard itself defaults to 1.5 on such a machine; pin it so a roomier moment on the VM cannot pick 1.
           # Not coarser: 1.8 and 2 find no usable star alignment on this runner. The cli, gui and other desktop legs run the default.
-          command: cd star-desktop && STAR_SYSTEM_FLOOR_MB=512 STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 ./gradlew gherkinTest --tests 'com.star.desktop.gherkin.generated.GeneratedFeatureTests.${{ matrix.feature }}Feature' --no-daemon --stacktrace -Pstar.stard.path="$GITHUB_WORKSPACE/daemon/.build/release/stard"
-
-      - name: Prove the scenario ran (not a vacuous green)
-        working-directory: star-desktop
-        run: |
-          ls build/test-results/gherkinTest/*.xml
-          grep -E 'tests="1"' build/test-results/gherkinTest/*.xml
-          grep -E 'skipped="0"' build/test-results/gherkinTest/*.xml
-          grep -E 'failures="0"' build/test-results/gherkinTest/*.xml
+          command: STAR_SYSTEM_FLOOR_MB=512 STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ steps.t.outputs.features }}
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gherkin-desktop-macos-reports-${{ matrix.feature }}
-          path: star-desktop/build/reports/tests/gherkinTest
+          path: star-desktop/build/gherkin-each
           if-no-files-found: warn
 
       - name: Upload the validator reports and run configs
