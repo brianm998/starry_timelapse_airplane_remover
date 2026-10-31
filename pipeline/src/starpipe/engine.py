@@ -65,6 +65,7 @@ class Engine:
     parked: set[int] = field(default_factory=lambda: set[int]())
     issue_memo: dict[int, tuple[str, bool, list[int]]] = field(default_factory=lambda: dict[int, tuple[str, bool, list[int]]]())
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
+    publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
 
     # intake --------------------------------------------------------------------------------------------------------
     def sync_issues(self) -> None:
@@ -293,7 +294,7 @@ class Engine:
                 if not await self._review(t):
                     return
             elif t.state == "ready":
-                if not await asyncio.to_thread(ship.publish, self, t):
+                if not await self._publish_when_room(t):
                     return
             elif t.state == "ci":
                 if not await ship.run_ci(self, t):
@@ -303,6 +304,18 @@ class Engine:
                     return
             else:
                 return
+
+    async def _publish_when_room(self, t: Ticket) -> bool:
+        """PUBLISH, but only while fewer than `max_in_ci` tickets are in CI or landing. Several PRs at once queue for the same GitHub
+        runners and invalidate each other (each landing makes the others catch up and run CI again), so the rest wait here as `ready`."""
+        while True:
+            async with self.publish_lock:
+                cur = self.db.ticket(t.number)
+                if cur is None or cur.state != "ready":
+                    return False
+                if len(self.db.tickets(("ci", "landing"))) < self.config.max_in_ci:
+                    return await asyncio.to_thread(ship.publish, self, cur)
+            await self.sleep(30)
 
     async def _explore(self, t: Ticket) -> bool:
         result, _ = await self.model_stage(t, "explore", f"{self._ticket_text(t)}\n\nBase: {self.base_ref}")

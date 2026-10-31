@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 
@@ -36,6 +37,7 @@ class Rig:
         async def sleep(s: float) -> None:
             self.slept.append(s)
             self.now += s
+            await asyncio.sleep(0)  # yield like the real sleep: a ticket polling for room must let the others run
 
         self.engine = Engine(Config(remote="origin"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
                              Notifier(self.db, lambda t, x: self.pages.append((t, x))), "origin/develop",

@@ -4,6 +4,7 @@ import json
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -419,7 +420,6 @@ async def test_publish_ci_polling_and_landing_never_block_the_event_loop(rig: Ri
     import asyncio
     import threading
     from collections.abc import Callable
-    from typing import Any
 
     ready_ticket(rig, 1, "one.md", "one\n")
     loop = asyncio.get_running_loop()
@@ -452,3 +452,45 @@ def test_a_hung_gh_call_times_out_instead_of_hanging_the_daemon(tmp_path: Path, 
     with pytest.raises(github.GitHubError, match="timed out"):
         github.gh_runner(["api", "x"], None)
     assert time.monotonic() - started < 10
+
+
+async def test_only_max_in_ci_tickets_are_in_ci_at_once_and_the_rest_wait_ready(rig: Rig) -> None:
+    import asyncio
+
+    rig.engine.config.max_in_ci = 1
+    for n in (1, 2, 3):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    in_ci_when_published: list[int] = []
+    real_create = rig.gh.create_pr
+
+    def create_pr(title: str, body: str, head: str, base: str) -> dict[str, Any]:
+        in_ci_when_published.append(len(rig.db.tickets(("ci", "landing"))))
+        return real_create(title, body, head, base)
+
+    rig.gh.create_pr = create_pr  # type: ignore[method-assign]
+    await asyncio.gather(rig.engine.drive(1), rig.engine.drive(2), rig.engine.drive(3))
+    assert [rig.state(n) for n in (1, 2, 3)] == ["landed"] * 3
+    assert in_ci_when_published == [0, 0, 0], "each ticket published only when none was in CI or landing"
+
+
+async def test_a_ticket_waiting_for_room_is_not_published_early_and_waits_as_ready(rig: Rig) -> None:
+    rig.engine.config.max_in_ci = 1
+    ready_ticket(rig, 1, "one.md", "1\n")
+    rig.db.set_state(1, "ci")  # something already occupies the only slot
+    ready_ticket(rig, 2, "two.md", "2\n")
+    waits: list[float] = []
+    real_sleep = rig.engine.sleep
+
+    async def sleep(s: float) -> None:
+        waits.append(s)
+        if len(waits) == 3:
+            rig.db.set_state(1, "landed")  # the slot frees up
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep
+    ticket = rig.db.ticket(2)
+    assert ticket
+    assert rig.gh.prs == {}
+    await rig.engine._publish_when_room(ticket)  # pyright: ignore[reportPrivateUsage]
+    assert len(waits) == 3 and waits[0] == 30, "it waited, and polled every 30 s"
+    assert len(rig.gh.prs) == 1 and rig.state(2) == "ci"

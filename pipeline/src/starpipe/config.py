@@ -32,6 +32,7 @@ class Config(BaseModel):
     allow_fable: bool = False
 
     max_active: int = 2
+    max_in_ci: int = 3  # tickets in CI or landing at once; a finished ticket waits as `ready` for room (runners are shared)
     heavy_slots: int = 1
     auto_self_update: bool = False  # after a landing that changed pipeline/, switch the daemon to a new pinned runtime when idle
     nightly_start: str = "03:00"
