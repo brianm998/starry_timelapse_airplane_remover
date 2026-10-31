@@ -43,5 +43,7 @@
   { "case": "menuEnabled"           , "text": "the menu command \"<command>\" is enabled" },
   { "case": "menuDisabled"          , "text": "the menu command \"<command>\" is disabled" },
   { "case": "windowOpen"            , "text": "the \"<window>\" window is open" },
-  { "case": "windowNotOpen"         , "text": "the \"<window>\" window is not open" }
+  { "case": "windowNotOpen"         , "text": "the \"<window>\" window is not open" },
+  { "case": "openCopiedNoQuestions" , "text": "I open the copied sequence without its startup questions" },
+  { "case": "idSays"                , "text": "\"<id>\" says \"<text>\"" }
 ]

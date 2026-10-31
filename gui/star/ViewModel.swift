@@ -102,6 +102,12 @@ public final class ViewModel {
         UserDefaults.standard.string(forKey: uiTestOpenSequenceKey).flatMap { $0.isEmpty ? nil : $0 }
     }
 
+    /// `-StarUITestSkipStartupQuestions YES`: the opened sequence is not asked the startup questions, so a test can look at the sequence screen
+    /// without processing it (the desktop client's `autoMode` does the same).
+    static var uiTestSkipStartupQuestions: Bool {
+        UserDefaults.standard.bool(forKey: "StarUITestSkipStartupQuestions")
+    }
+
     /// Test seam: opens `-StarUITestOpenSequence <dir>` the way picking it in the open panel does
     /// (`InitialView.startupWithSequenceDir`), which puts it in `.edit` mode with the startup
     /// questions showing. The open panel is the only other way in, and an XCUITest cannot drive it.
@@ -113,7 +119,10 @@ public final class ViewModel {
             guard let self else { return }
             do {
                 try await self.startup(withNewImageSequence: path)
-                await MainActor.run { self.imageSequence?.initialLoadInProgress = true }
+                await MainActor.run {
+                    self.imageSequence?.initialLoadInProgress = true
+                    if Self.uiTestSkipStartupQuestions { self.imageSequence?.shouldShowInitialInstructions = false }
+                }
             } catch {
                 Log.e("\(error)")
                 await MainActor.run {

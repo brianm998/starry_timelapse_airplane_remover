@@ -10,13 +10,17 @@ public struct StarPicker<Selection, Content: View> : View
     @Environment(\.isEnabled) var isEnabled
 
     private let title: String?
+    private let identifier: ((Selection) -> String)?
     private let content: (Selection,Bool) -> Content
 
+    /// `identifier` names each option for UI tests (`mode.edit`), which also see which one is selected.
     public init(_ title: String? = nil,
                 selection: Binding<Selection>,
+                identifier: ((Selection) -> String)? = nil,
                 @ViewBuilder content: @escaping (Selection,Bool) -> Content)
     {
         self.title = title
+        self.identifier = identifier
         self._selection = selection
         self.content = content
     }
@@ -40,12 +44,14 @@ public struct StarPicker<Selection, Content: View> : View
                           .onTapGesture { _ in
                               selection = value
                           }
+                          .optionIdentity(identifier?(value), selected: true)
                     } else {
                         content(value, isEnabled)
                           .padding(4)
                           .onTapGesture { _ in
                               selection = value
                           }
+                          .optionIdentity(identifier?(value), selected: false)
                     }
                 }
             }
@@ -110,4 +116,15 @@ public struct VerticalStarPicker<Selection, Content: View> : View
               .cornerRadius(5)
         }
     }    
+}
+
+extension View {
+    /// The accessibility identifier of a picker's option, and the selected trait on the one that is; nothing when the picker is not named.
+    @ViewBuilder func optionIdentity(_ identifier: String?, selected: Bool) -> some View {
+        if let identifier {
+            self.accessibilityIdentifier(identifier).accessibilityAddTraits(selected ? .isSelected : [])
+        } else {
+            self
+        }
+    }
 }
