@@ -2879,11 +2879,11 @@ public final class ImageSequenceViewModel {
     ///
     /// A sequence re-opened from a config file starts in `.scrub`, and every sheet those
     /// actions raise — the render sheet, the pre-processing render prompt and the
-    /// processing settings — is attached inside `BottomRightView`'s edit-mode branch.  Setting their flag from
-    /// `.scrub` would show nothing at all, and in the processing case would leave a run
-    /// that never starts.  Edit mode is also where the frames, the outlier tools and the
-    /// progress panels are, which is where someone who just asked for either of these
-    /// wants to be next.
+    /// processing settings — is attached inside `BottomRightView`'s edit-mode branch.
+    /// Setting their flag from `.scrub` would show nothing at all, and in the processing
+    /// case would leave a run that never starts.  Edit mode is also where the frames, the
+    /// outlier tools and the progress panels are, which is where someone who just asked for
+    /// any of these wants to be next.
     private func enterEditMode() {
         interactionMode = .edit
     }
