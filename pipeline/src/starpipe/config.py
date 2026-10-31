@@ -33,6 +33,7 @@ class Config(BaseModel):
 
     max_active: int = 2
     heavy_slots: int = 1
+    auto_self_update: bool = False  # after a landing that changed pipeline/, switch the daemon to a new pinned runtime when idle
     nightly_start: str = "03:00"
     digest_weekday: int = 6  # Monday is 0
     digest_hour: int = 8

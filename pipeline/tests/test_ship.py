@@ -22,14 +22,14 @@ def rig(tmp_path: Path) -> Rig:
     return Rig(tmp_path)
 
 
-def ready_ticket(rig: Rig, n: int, file: str, text: str) -> None:
+def ready_ticket(rig: Rig, n: int, file: str, text: str, folder: str = "docs") -> None:
     """A ticket that has finished REVIEW: a worktree with one commit and a plan, in state `ready`."""
     rig.gh.add_issue(n, f"change {file}")
     rig.engine.sync_issues()
     t = rig.engine.claim(rig.db.ticket(n))  # type: ignore[arg-type]
     wt = Path(t.worktree or "")
-    (wt / "docs").mkdir(exist_ok=True)
-    (wt / "docs" / file).write_text(text)
+    (wt / folder).mkdir(parents=True, exist_ok=True)
+    (wt / folder / file).write_text(text)
     sh(wt, "git", "add", "-A")
     sh(wt, "git", "commit", "-q", "-m", f"change {file}")
     rig.db.set_fields(n, plan_json=PLAN)

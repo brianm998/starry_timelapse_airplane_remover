@@ -248,6 +248,9 @@ def merge(eng: Engine, t: Ticket, head: str) -> bool:
         eng.gh.close_issue(t.number, "completed")
     eng.gh.delete_branch(t.branch or "")
     eng.gh.add_labels(t.number, ["pipe:landed"])
+    changed = gitutil.git(wt, "diff", "--name-only", f"{sha}^1", sha, check=False).split()
+    if any(p.startswith("pipeline/") and not p.startswith("pipeline/monitor/") for p in changed):
+        eng.db.put("self_update_wanted", sha)  # the daemon's own code changed: auto_self_update acts on this when idle
     worktrees.remove(eng.repo, t.number, keep_branch=False, branch=t.branch)
     eng._to_state(t.number, "landed")  # pyright: ignore[reportPrivateUsage]
     eng.db.event("landed", t.number, merge=sha)

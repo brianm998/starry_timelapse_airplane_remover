@@ -433,9 +433,30 @@ def daemon_run() -> None:
     import logging
 
     from . import daemon as daemon_mod
+    from . import selfupdate
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    selfupdate.record_start()
+    if selfupdate.crash_loop():  # the runtime we switched to does not stay up: go back, and say so
+        name = selfupdate.rollback(_plist_path())
+        from .db import Database
+        from .notify import Notifier
+
+        Notifier(Database()).alert("runtime-rollback", None, f"the new runtime kept crashing: rolled back to {name}")
+        sys.exit(1)
     asyncio.run(daemon_mod.build(config_mod.load()).run())
+
+
+@daemon.command("self-test")
+def daemon_self_test() -> None:
+    """Check this runtime can run the daemon: every module imports, config and database open, the SDK and prompts are there."""
+    from . import selfupdate
+
+    problems = selfupdate.self_test_in_process()
+    for p in problems:
+        click.echo(f"PROBLEM  {p}")
+    click.echo("ok" if not problems else f"{len(problems)} problem(s)")
+    sys.exit(1 if problems else 0)
 
 
 LABEL = "com.brianm998.starpiped"
@@ -451,9 +472,13 @@ def daemon_install() -> None:
     from . import daemon as daemon_mod
 
     checkout = daemon_mod.checkout_root(config_mod.load(), Path.cwd())
-    # run from the main checkout, not a worktree that will be deleted; self-update (§14.4) will pin it later
+    from . import selfupdate
+
+    # a pinned runtime if `self-update` has made one (launchd then follows its `current` symlink); else the main checkout, never a
+    # worktree that will be deleted
     main_shim = checkout / "pipeline" / "bin" / "starpipe"
-    shim = main_shim if main_shim.exists() else Path(__file__).resolve().parents[2] / "bin" / "starpipe"
+    shim = (selfupdate.current_shim() if selfupdate.link("current") else
+            main_shim if main_shim.exists() else Path(__file__).resolve().parents[2] / "bin" / "starpipe")
     template = (Path(__file__).resolve().parents[2] / "launchd" / f"{LABEL}.plist.in").read_text()
     out = (template.replace("@SHIM@", str(shim)).replace("@CHECKOUT@", str(checkout))
            .replace("@HOME@", str(config_mod.home())).replace("@PATH@", os.environ.get("PATH", "/usr/bin:/bin")))
@@ -490,6 +515,56 @@ def daemon_stop() -> None:
         raise click.ClickException("the daemon is not running") from exc
     os.kill(pid, signal.SIGTERM)
     click.echo(f"sent SIGTERM to {pid}")
+
+
+@main.command("self-update")
+@click.option("--ref", default=None, help="What to build the runtime from (default origin/<base branch>).")
+@click.option("--now", is_flag=True, help="Switch even if stage sessions are running (they resume from their recorded ids).")
+@click.option("--dry-run", is_flag=True, help="Build and self-test the new runtime, but do not switch.")
+@click.option("--rollback", "do_rollback", is_flag=True, help="Go back to the previous runtime.")
+@click.option("--wait-minutes", default=60, show_default=True, help="How long to wait for the sessions to finish.")
+def self_update(ref: str | None, now: bool, dry_run: bool, do_rollback: bool, wait_minutes: int) -> None:
+    """Pin the daemon to a copy of pipeline/ at one commit, so a moving checkout cannot change it underneath (plan §14.4)."""
+    from . import client as client_mod
+    from . import daemon as daemon_mod
+    from . import gitutil, selfupdate
+
+    if do_rollback:
+        try:
+            click.echo(f"rolled back to {selfupdate.rollback(_plist_path())}")
+        except RuntimeError as exc:
+            raise click.ClickException(str(exc)) from exc
+        return
+    cfg = config_mod.load()
+    repo = daemon_mod.checkout_root(cfg, Path.cwd())
+    if ref is None:
+        ref = f"origin/{cfg.base_branch}"
+        gitutil.remote_fetch(repo, cfg.owner, cfg.repo, cfg.base_branch)
+
+    def sessions() -> int:
+        try:
+            return int(client_mod.Client(cfg).call("GET", "/v1/runtime")["sessions"])
+        except client_mod.DaemonDown:
+            return 0
+
+    try:
+        report = selfupdate.update(repo, ref, _plist_path(), sessions=sessions, wait_s=wait_minutes * 60.0, now=now, dry_run=dry_run)
+    except (RuntimeError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"{report.sha[:12]}: {report.detail}")
+    sys.exit(0 if (report.switched or (dry_run and report.tested) or report.detail.startswith("already")) else 1)
+
+
+@main.command()
+def runtime() -> None:
+    """Which pinned runtime the daemon runs, and which one is kept for rollback."""
+    from . import selfupdate
+
+    for name in ("current", "previous"):
+        rt = selfupdate.link(name)
+        click.echo(f"{name:<9}{rt.name if rt else '-'}" + (f"  ({rt})" if rt else ""))
+    if selfupdate.link("current") is None:
+        click.echo("the daemon runs from the checkout; `starpipe self-update` pins it")
 
 
 if __name__ == "__main__":  # pragma: no cover
