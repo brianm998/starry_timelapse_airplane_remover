@@ -140,7 +140,7 @@ async def test_a_stage_without_a_result_climbs_the_ladder_then_parks(rig: Rig) -
     rig.engine.sync_issues()
     await rig.engine.drive(7)
     models = [r.model for r in rig.agent.requests]
-    assert models == ["opus", "opus", "opus"]  # escalation model equals the default today
+    assert models == ["sonnet", "sonnet", "sonnet"]  # the escalation model equals the default today
     assert [r.attempt for r in rig.agent.requests] == [1, 2, 3]
     assert rig.state(7) == "failed"
     assert rig.db.open_alert("ticket-failed:7", "again") is False  # already open

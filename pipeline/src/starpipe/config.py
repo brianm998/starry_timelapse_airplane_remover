@@ -25,9 +25,10 @@ class Config(BaseModel):
     repo: str = "starry_timelapse_airplane_remover"
     base_branch: str = "develop"
 
-    # models: opus for every model stage; fable / effort max stay off (ODYS-4134 in Preffect)
-    model: str = "opus"
-    model_escalate: str = "opus"
+    # models: sonnet for every model stage and for the escalation attempt, by the owner's choice on 2026-10-31 (the plan said
+    # opus). Per-stage and per-ticket choice is a ticket still to come. fable / effort max stay off (ODYS-4134 in Preffect)
+    model: str = "sonnet"
+    model_escalate: str = "sonnet"
     allow_fable: bool = False
 
     max_active: int = 2
