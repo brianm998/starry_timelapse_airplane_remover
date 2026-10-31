@@ -36,7 +36,9 @@ Generated (committed, never edit; each starts with `// @generated` and a `source
 * `gherkin/generated/datasets-{cli,mac-gui,desktop}.txt`: the `data:` datasets each client's features need; CI
   runs `test_data/fetch.sh $(cat …)` on exactly that list.
 * `gherkin/generated/features-{cli,mac-gui,desktop}.json`: the features each client runs, as a JSON array; CI builds its
-  (client, OS, feature) matrix from it.
+  (client, OS, feature) matrix from it. The `@ui` features (`uiXxx`) of the mac-gui and desktop legs are the exception:
+  they are a few clicks each and need no dataset, so they share ONE job per leg, the matrix entry `ui`, which expands to the
+  real list (`features` job in `gherkin.yml`) and runs them one after the other in a single build.
 
 Hand-written runners: `cli/Tests/GherkinTests/CliFeatureRunner.swift`,
 `gui/starUITests/GuiFeatureRunner.swift`,
@@ -192,9 +194,13 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
 ## Guarding against vacuous greens
 
 `xcodebuild -only-testing:` matching nothing exits 0 having run nothing, so each CI leg also checks the
-log: `Executed 1 test, with 0 failures` for xcodebuild, `test<Name>Feature` passed for swift test,
-and `tests="1"` / `skipped="0"` in `build/test-results/gherkinTest/*.xml` for Gradle. Each CI job runs exactly one
-feature, so the guard checks that exactly that test ran.
+log: `Executed N tests, with 0 failures` for xcodebuild (N is the number of features the job runs, and every one of them must
+show `test<Name>Feature` passed), `test<Name>Feature` passed for swift test, and `tests="1"` / `skipped="0"` in
+`build/test-results/gherkinTest/*.xml` for Gradle. A CI job runs one feature, or for the `ui` bundle every `@ui` feature, so the
+guard checks that exactly those tests ran. The Compose runner allows one feature per Gradle run, so the desktop `ui` job calls
+`gherkin/run-desktop-features.sh`, which runs `gradlew` once per feature and applies the Gradle check to each one's XML; it runs
+every feature even after a failure, keeps each one's reports under `star-desktop/build/gherkin-each/<feature>/`, and a retry of
+it re-runs only the features that failed.
 
 ## Checking airplane and satellite removal
 

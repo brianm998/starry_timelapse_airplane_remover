@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -451,7 +452,11 @@ class DesktopFeatureRunner {
     /** Start processing → "render a video afterwards?" per the feature → wait for the run (and the render) to finish. */
     private fun processEveryFrame(t: ComposeUiTest) {
         val model = vm ?: throw RunnerError("neither \"I open the sequence\" nor \"I import the video\" has run")
-        t.onNodeWithTag("startup.removal.start").performClick()
+        // The removal card is taller than the window and scrolls: Automatic shows the auto-selective toggle and its text, and on a 12 MP
+        // sequence on a small runner the speed settings open by themselves (about 280px), which put Start at y=1110 in a 1100px window.
+        // A click lands by coordinates and one outside the window is lost, so the run never started and this waited out the whole timeout
+        // below. Selective hides the extra rows, which is the one feature that always got through.
+        t.onNodeWithTag("startup.removal.start").performScrollTo().performClick()
         waitFor(t, "the render-after prompt", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("prompt.pre.no") }
         t.onNodeWithTag(if (rendersVideo) "prompt.pre.yes" else "prompt.pre.no").performClick()
 

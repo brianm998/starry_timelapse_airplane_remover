@@ -43,7 +43,7 @@ build_darwin() {
   git clone -q https://github.com/lameproject/lame.git lame && git -C lame checkout -q "$LAME_COMMIT"
   git clone -q --depth 1 --branch "$OPUS_TAG" https://github.com/xiph/opus.git opus
   git clone -q --depth 1 --branch "$VPX_TAG" https://github.com/webmproject/libvpx.git libvpx
-  curl -fsSL "https://bitbucket.org/multicoreware/x265_git/downloads/x265_$X265_VER.tar.gz" | tar xz
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 "https://bitbucket.org/multicoreware/x265_git/downloads/x265_$X265_VER.tar.gz" | tar xz
   # x265 4.1 sets CMP0025/CMP0054 to OLD, which CMake 4 (the CI runner's) refuses outright. NEW is what
   # every packager builds with, but under NEW Apple's clang reports as "AppleClang", so the one exact
   # match on "Clang" (which sets CLANG, and with it the clang flags) has to become a regex match.

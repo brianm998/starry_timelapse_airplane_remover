@@ -25,6 +25,7 @@ def _say(message: str) -> None:
 
 
 @click.group()
+@click.version_option(package_name="starpipe", prog_name="starpipe")
 def main() -> None:
     """Automated development pipeline for star."""
 

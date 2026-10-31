@@ -149,8 +149,10 @@ jobs:
           path: '*-test.log'
 
   # ─── macOS ───────────────────────────────────────────────────────────────────
-  # macos-14 images are in brownouts and retire on 2026-11-02. A separate cache key keeps this job from importing
-  # OpenCV / StarDecisionTrees built by cli.yml's macos-14 compiler (gherkin.yml explains why that fails).
+  # macos-15, not macos-14: GitHub retires the macos-14 image on 2026-11-02 and its brownouts already cancel
+  # this job (https://github.com/actions/runner-images/issues/13518). The OpenCV and StarDecisionTrees caches
+  # below carry their own macos15 keys: the StarDecisionTrees .swiftmodule only imports under the compiler that
+  # built it (see gherkin.yml), so they must not restore what cli.yml's macos-14 jobs saved under the plain keys.
   macos:
     name: macOS build + tests (macos-15)
     runs-on: macos-15
