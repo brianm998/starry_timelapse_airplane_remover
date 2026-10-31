@@ -28,6 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -110,6 +112,8 @@ fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: S
         onCancel = vm::dismissMultiSheets,
         onApply = { a, range, n, includingTrash -> vm.applyMultiSelect(a.shouldRemove, a.overlapping, range, n, includingTrash) },
         trashInitially = vm.showTrash.value,
+        summaryTag = "multiselect.summary",
+        cancelTag = "multiselect.cancel",
     )
 }
 
@@ -131,6 +135,9 @@ private fun MultiFrameSheet(
     onApply: (MultiAction, MultiFrameRange, Int, Boolean) -> Unit,
     /** null: no trash option (the multi-choice sheet acts on a chosen group); else whether it starts on, which is whether the trash is showing. */
     trashInitially: Boolean? = null,
+    /** The ids a UI test finds the sheet's sentence and its Cancel button by; none for a sheet no feature looks at. */
+    summaryTag: String? = null,
+    cancelTag: String? = null,
 ) {
     var actionIdx by remember { mutableStateOf(defaultIndex.coerceIn(0, actions.size - 1)) }
     var range by remember { mutableStateOf(initialRange) }
@@ -164,7 +171,7 @@ private fun MultiFrameSheet(
             }
             // What the action will do, in words (macOS shows this under the choices; a count the user types has no sentence).
             range.summary(action.summaryPrefix, current, frameCount)?.let {
-                Text(it, color = StarColors.textSecondary, fontSize = 12.sp)
+                Text(it, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.tagged(summaryTag))
             }
             if (range.needsCount) {
                 OutlinedTextField(
@@ -182,7 +189,7 @@ private fun MultiFrameSheet(
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
+                OutlinedButton(onClick = onCancel, modifier = Modifier.tagged(cancelTag)) { Text(localized("ui.cancel")) }
                 Button(
                     onClick = apply,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
@@ -191,6 +198,12 @@ private fun MultiFrameSheet(
         }
     }
 }
+
+/**
+ * Tags a piece of the sheet for a UI test. The card is clickable (so a click inside it is not one outside), which merges its children's semantics
+ * into one node and loses a plain tag; a node that merges its own descendants stays a node of its own.
+ */
+private fun Modifier.tagged(tag: String?): Modifier = if (tag == null) this else semantics(mergeDescendants = true) { testTag = tag }
 
 @Composable
 private fun Pill(label: String, selected: Boolean, accent: Color, onClick: () -> Unit) {

@@ -29,6 +29,7 @@
   { "case": "openCopied"            , "text": "I open the copied sequence" },
   { "case": "clickId"               , "text": "I click \"<id>\"" },
   { "case": "pressKey"              , "text": "I press \"<key>\"" },
+  { "case": "dragAround"            , "text": "I drag around \"<id>\"" },
   { "case": "idShown"               , "text": "\"<id>\" is shown" },
   { "case": "idNotShown"            , "text": "\"<id>\" is not shown" },
   { "case": "idSelected"            , "text": "\"<id>\" is selected" },
