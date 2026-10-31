@@ -59,7 +59,7 @@ fetch_tarball() {
 
     if [ ! -f "$file" ] || [ "$(sha256_of "$file")" != "$sha" ]; then
         log "downloading $url"
-        curl -fL --retry 3 --retry-delay 2 -o "$file.part" "$url"
+        curl -fL --retry 5 --retry-all-errors --retry-delay 5 -o "$file.part" "$url"
         mv "$file.part" "$file"
     fi
     local got
