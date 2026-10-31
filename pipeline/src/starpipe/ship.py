@@ -283,9 +283,21 @@ def watch_develop(eng: Engine) -> None:
             eng.db.set_baseline(job.workflow, job.job, str(run.get("head_sha")), now)
             if seeding or before is None:
                 continue  # reds present when the pipeline first started are the known-red ledger, not tickets
-            if before == "success" and job.red and (job.conclusion or "failure") not in ci.INFRA_CONCLUSIONS:
-                _new_red(eng, job, str(run.get("head_sha")))  # cancelled / timed out is the runner, not a regression
-            elif job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line"):
+            sha = str(run.get("head_sha"))
+            infra = (job.conclusion or "failure") in ci.INFRA_CONCLUSIONS  # cancelled / timed out is the runner, not a regression
+            pending = f"red_pending:{job.workflow}/{job.job}"
+            if job.red and not infra:
+                if job.workflow == ci.GATE:
+                    if before == "success":
+                        _new_red(eng, job, sha)  # the gate reacts at once: landing stops
+                elif before == "success":
+                    eng.db.put(pending, sha)  # first sighting: wait for a second, different run to agree before filing a ticket
+                elif eng.db.get(pending) not in (None, sha):
+                    eng.db.put(pending, None)
+                    _new_red(eng, job, sha)
+            elif not job.red:
+                eng.db.put(pending, None)  # green again: that was a flake
+            if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line"):
                 eng.db.put("stop_line", None)
                 eng.notifier.clear("develop-red", None)
                 eng.db.event("stop-line-cleared", None, job=job.job)

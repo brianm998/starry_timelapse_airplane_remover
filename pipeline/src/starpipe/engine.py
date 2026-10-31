@@ -86,6 +86,8 @@ class Engine:
                 continue
             seen.add(n)
             labels = {lab["name"] for lab in issue.get("labels", [])}
+            if "pipe:filed-by-pipeline" in labels:
+                self.db.put(f"auto:{n}", "1")  # filed by the pipeline with the owner's token: not the owner's own ticket
             prio = min((PRIORITY[lab] for lab in labels if lab in PRIORITY), default=2)
             if self.db.upsert_ticket(n, issue["title"], issue.get("body") or "", issue["user"]["login"], prio, blockers):
                 self._label(n, "queued")
@@ -170,7 +172,7 @@ class Engine:
                           allow_resolve: bool = True) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            owner_filed=t.author.lower() == self.config.owner.lower())
+                            owner_filed=t.author.lower() == self.config.owner.lower() and not self.db.get(f"auto:{t.number}"))
         resume = None if fresh else self._last_session(t, stage)
         pending = self._undelivered_answer(t)
         if pending:

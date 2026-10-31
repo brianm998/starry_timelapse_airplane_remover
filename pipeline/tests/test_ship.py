@@ -360,12 +360,54 @@ def test_watch_seeds_the_baseline_then_files_a_p0_for_a_red_pr_gate(rig: Rig) ->
 
 
 def test_auto_run_tickets_are_capped(rig: Rig) -> None:
+    rig.gh.develop_sha = "d1"
     rig.gh.develop_ci = [(f"w{i}", "j", "completed", "success") for i in range(4)]
     ship.watch_develop(rig.engine)
     rig.gh.develop_ci = [(f"w{i}", "j", "completed", "failure") for i in range(4)]
-    ship.watch_develop(rig.engine)
+    for sha in ("d2", "d3"):  # red in two different develop runs: now it is real
+        rig.gh.develop_sha = sha
+        ship.watch_develop(rig.engine)
     filed = [i for i in rig.gh.issues.values() if i["title"].startswith("regression on develop")]
     assert len(filed) == 2
+
+
+def test_one_red_run_of_a_non_gate_job_on_develop_files_nothing_until_a_second_run_agrees(rig: Rig) -> None:
+    rig.gh.develop_sha = "d1"
+    rig.gh.develop_ci = [("gherkin", "desktop", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.gh.develop_ci = [("gherkin", "desktop", "completed", "failure")]
+    for sha in ("d2", "d2", "d2"):  # the same red run, polled again and again
+        rig.gh.develop_sha = sha
+        ship.watch_develop(rig.engine)
+    assert rig.gh.issues == {}, "a single red run might be a flake"
+    rig.gh.develop_sha = "d3"
+    ship.watch_develop(rig.engine)
+    (issue,) = rig.gh.issues.values()
+    assert issue["title"] == "regression on develop: gherkin/desktop"
+    rig.gh.develop_sha = "d4"
+    ship.watch_develop(rig.engine)
+    assert len(rig.gh.issues) == 1, "it is filed once, not on every red run"
+
+
+def test_a_job_that_goes_green_again_was_a_flake_and_resets_the_wait(rig: Rig) -> None:
+    rig.gh.develop_sha = "d1"
+    rig.gh.develop_ci = [("gherkin", "desktop", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    for sha, result in (("d2", "failure"), ("d3", "success"), ("d4", "failure")):
+        rig.gh.develop_sha = sha
+        rig.gh.develop_ci = [("gherkin", "desktop", "completed", result)]
+        ship.watch_develop(rig.engine)
+    assert rig.gh.issues == {}, "red, green, red: never two reds in a row"
+
+
+def test_a_red_gate_still_stops_the_line_on_the_first_red_run(rig: Rig) -> None:
+    rig.gh.develop_sha = "d1"
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.gh.develop_sha = "d2"
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "failure")]
+    ship.watch_develop(rig.engine)
+    assert rig.db.get("stop_line") == "pr-gate/linux" and len(rig.gh.issues) == 1
 
 
 async def test_a_refused_rerun_is_not_fatal_and_waits_for_the_run_to_finish(rig: Rig) -> None:
