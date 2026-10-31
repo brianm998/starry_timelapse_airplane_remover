@@ -294,8 +294,12 @@ class Engine:
                 if not await self._review(t):
                     return
             elif t.state == "ready":
+                if self.config.landing_mode == "batch":
+                    return  # the landing train (train.py) takes it from here
                 if not await self._publish_when_room(t):
                     return
+            elif t.state in ("ci", "landing") and self.db.batch_of(t.number) is not None:
+                return  # in a batch: the train owns it
             elif t.state == "ci":
                 if not await ship.run_ci(self, t):
                     return

@@ -39,7 +39,7 @@ class Rig:
             self.now += s
             await asyncio.sleep(0)  # yield like the real sleep: a ticket polling for room must let the others run
 
-        self.engine = Engine(Config(remote="origin"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
+        self.engine = Engine(Config(remote="origin", landing_mode="single"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
                              Notifier(self.db, lambda t, x: self.pages.append((t, x))), "origin/develop",
                              clock=lambda: self.now, sleep=sleep,
                              negative_control=no_controls)

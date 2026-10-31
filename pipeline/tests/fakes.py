@@ -83,6 +83,8 @@ class FakeGitHub(GitHub):
         self.reruns: list[int] = []
         self.deleted: list[str] = []
         self.phantom = False
+        self.ci_hook: Callable[[str], Ci] | None = None  # the CI result for a commit, decided when it is asked for
+        self.closed_prs: list[tuple[int, str]] = []
         self.run_ids: dict[tuple[str, str], int] = {}
         self.run_jobs_by_id: dict[int, list[dict[str, Any]]] = {}
         self.issues: dict[int, dict[str, Any]] = {}
@@ -154,6 +156,10 @@ class FakeGitHub(GitHub):
     def update_pr(self, number: int, body: str) -> None:
         self.prs[number]["body"] = body
 
+    def close_pr(self, number: int, comment: str = "") -> None:
+        self.closed_prs.append((number, comment))
+        self.prs[number]["state"] = "closed"
+
     def pr(self, number: int) -> dict[str, Any]:
         pr = self.prs[number]
         return {**pr, "head": {"sha": self._head(pr["branch"])}}
@@ -163,7 +169,7 @@ class FakeGitHub(GitHub):
 
     def workflow_runs(self, sha: str | None = None, branch: str | None = None, per_page: int = 50) -> list[dict[str, Any]]:
         key = "develop" if branch else (sha or "")
-        jobs = self.develop_ci if branch else self.ci.get(key, DEFAULT_CI)
+        jobs = self.develop_ci if branch else (self.ci_hook(key) if self.ci_hook else self.ci.get(key, DEFAULT_CI))
         runs: list[dict[str, Any]] = []
         for wf in dict.fromkeys(w for w, *_ in jobs):
             run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))

@@ -32,6 +32,9 @@ class Config(BaseModel):
     allow_fable: bool = False
 
     max_active: int = 2
+    landing_mode: str = "batch"  # "batch": the landing train, one CI for many tickets; "single": a PR and a CI per ticket
+    batch_max: int = 5  # tickets in one batch
+    batch_window_s: int = 120  # wait this long for more tickets once one is ready and no batch is running
     max_in_ci: int = 3  # tickets in CI or landing at once; a finished ticket waits as `ready` for room (runners are shared)
     heavy_slots: int = 1
     auto_self_update: bool = False  # after a landing that changed pipeline/, switch the daemon to a new pinned runtime when idle

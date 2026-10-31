@@ -106,6 +106,11 @@ class GitHub:
     def create_pr(self, title: str, body: str, head: str, base: str) -> dict[str, Any]:
         return self.api("POST", "pulls", {"title": title, "body": body, "head": head, "base": base})
 
+    def close_pr(self, number: int, comment: str = "") -> None:
+        if comment:
+            self.comment(number, comment)  # a PR's conversation is its issue's comments
+        self.api("PATCH", f"pulls/{number}", {"state": "closed"})
+
     def update_pr(self, number: int, body: str) -> None:
         self.api("PATCH", f"pulls/{number}", {"body": body})
 

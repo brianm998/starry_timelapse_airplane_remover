@@ -17,7 +17,7 @@ from typing import Any, cast
 from aiohttp import web
 
 from . import digest as digest_mod
-from . import gitutil, heavy, nightly, selfupdate, ship, watch, worktrees
+from . import gitutil, heavy, nightly, selfupdate, ship, train, watch, worktrees
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
@@ -35,7 +35,7 @@ def api_token() -> str:
     return path.read_text().strip()
 
 
-def activity(db: Database, t: Ticket, now: float | None = None) -> str:
+def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "batch") -> str:
     """The one-line "what is it doing" the CLI and monitor both show (computed here, never by a client)."""
     now = now or time.time()
     stages = db.stages(t.number)
@@ -49,7 +49,11 @@ def activity(db: Database, t: Ticket, now: float | None = None) -> str:
         spent = int((now - last["started"]) / 60)
         return f"{t.state} · attempt {last['attempt']}/3 · {spent}m" + (
             f" (+{int(last['lock_wait_s'] / 60)}m lock wait)" if last["lock_wait_s"] >= 60 else "")
-    return t.state if t.state != "ready" else "ready to publish"
+    if t.state in ("ci", "landing") and (batch := db.batch_of(t.number)) is not None:
+        return f"CI · batch #{batch} ({len(db.batch_members(batch))} tickets together)"
+    if t.state == "ready":
+        return "ready · waiting for the next batch" if mode == "batch" else "ready to publish"
+    return t.state
 
 
 GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
@@ -83,6 +87,7 @@ class Daemon:
         self.watch = watch.Watch()
         self._runtime: dict[str, object] = {}
         self.nightly_task: asyncio.Task[int] | None = None
+        self.train = train.Train(engine)
 
     # supervision ---------------------------------------------------------------------------------------------------
     def reconcile(self) -> None:
@@ -253,7 +258,7 @@ class Daemon:
 
         hv = heavy.status()
         tickets = [{"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
-                    "activity": activity(self.db, t), "blocked_by": self.db.open_blockers(t.number)}
+                    "activity": activity(self.db, t, mode=self.config.landing_mode), "blocked_by": self.db.open_blockers(t.number)}
                    for t in self.db.tickets() if t.state not in ("landed", "closed", "cancelled")]
         return {"daemon": {"pid": os.getpid(), "since": self.started, "last_poll": self.last_poll,
                            "error": self.last_error},
@@ -288,7 +293,7 @@ class Daemon:
             stages = self.db.stages(t.number)
             question = self.db.open_question(t.number)
             tickets.append({"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
-                            "group": group, "activity": activity(self.db, t, now), "blocked_by": self.db.open_blockers(t.number),
+                            "group": group, "activity": activity(self.db, t, now, self.config.landing_mode), "blocked_by": self.db.open_blockers(t.number),
                             "pr_number": t.pr_number, "branch": t.branch, "worktree": t.worktree,
                             "park_reason": t.park_reason, "question": question["text"] if question else None,
                             "stages": [{k: s[k] for k in ("stage", "attempt", "model", "started", "ended", "lock_wait_s", "outcome")}
@@ -329,7 +334,7 @@ class Daemon:
         if t is None:
             return None
         return {"number": t.number, "title": t.title, "state": t.state, "priority": t.priority, "branch": t.branch,
-                "park_reason": t.park_reason, "plan": t.plan, "activity": activity(self.db, t),
+                "park_reason": t.park_reason, "plan": t.plan, "activity": activity(self.db, t, mode=self.config.landing_mode),
                 "stages": self.db.stages(n), "checks": self.db.checks(n), "question": self.db.open_question(n)}
 
     def mutate(self, n: int, action: str, body: dict[str, object]) -> str:
@@ -472,7 +477,8 @@ class Daemon:
         try:
             await asyncio.gather(self.supervise("poller", self.poller), self.supervise("scheduler", self.scheduler),
                                  self.supervise("watcher", self.watcher), self.supervise("nightly", self.nightly_loop),
-                                 self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop))
+                                 self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop),
+                                 self.supervise("train", self.train.run_forever))
         finally:
             await runner.cleanup()
 

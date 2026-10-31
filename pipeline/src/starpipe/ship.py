@@ -77,15 +77,15 @@ def _infra(eng: Engine, job: ci.Job) -> bool:
         return False
 
 
-def _judge(eng: Engine, number: int, sha: str, reran: set[tuple[str, str]]) -> ci.Verdict:
+def _judge(eng: Engine, key: int | str, sha: str, reran: set[tuple[str, str]]) -> ci.Verdict:
     """Fetch the PR's jobs and judge them. Network calls: runs in a worker thread, never on the event loop."""
     return ci.judge(fetch_jobs(eng, sha), eng.db.baseline, now=eng.clock(),
-                    head_pushed_at=float(eng.db.get(f"pushed_at:{number}") or eng.clock()),
+                    head_pushed_at=float(eng.db.get(f"pushed_at:{key}") or eng.clock()),
                     settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
                     reran=reran, infra=lambda j: _infra(eng, j))
 
 
-def _rerun(eng: Engine, number: int, jobs: list[ci.Job]) -> list[ci.Job]:
+def _rerun(eng: Engine, number: int | None, jobs: list[ci.Job]) -> list[ci.Job]:
     """Rerun the failed jobs of each finished run; the jobs whose rerun GitHub refused are left for the next poll."""
     ready = list(jobs)
     for run_id in {j.run_id for j in jobs}:
@@ -138,7 +138,9 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
                 return False
 
 
-async def ci_fix(eng: Engine, t: Ticket, verdict: ci.Verdict) -> bool:
+async def ci_fix(eng: Engine, t: Ticket, verdict: ci.Verdict, rejoin: bool = False) -> bool:
+    """A model stage fixes what CI said was red. `rejoin` (the landing train) ends with the ticket back in `ready`, to be
+    batched again, instead of pushing its own branch and going back to its own CI."""
     if len(eng.db.stages(t.number, "ci-fix")) >= MAX_CI_FIX:
         eng.park(t, f"CI still red after {MAX_CI_FIX} fix cycles: {verdict.reason}")
         return False
@@ -155,6 +157,10 @@ async def ci_fix(eng: Engine, t: Ticket, verdict: ci.Verdict) -> bool:
     if failure:
         eng.park(t, f"CI-FIX did not pass local verification: {failure[:300]}")
         return False
+    if rejoin:
+        eng.db.set_fields(t.number, pr_number=None)
+        eng._to_state(t.number, "ready")  # pyright: ignore[reportPrivateUsage]
+        return True
     await asyncio.to_thread(push, eng, t)
     return True
 
@@ -206,7 +212,7 @@ def _merge_develop(wt: Path, base: str) -> tuple[str, list[str]]:
     return done, gitutil.git(wt, "diff", "--name-only", "--diff-filter=U").split()
 
 
-async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: landing.Overlap) -> bool:
+async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: landing.Overlap, rejoin: bool = False) -> bool:
     wt = Path(t.worktree or "")
     done, conflicted = await asyncio.to_thread(_merge_develop, wt, base)
     if conflicted or "CONFLICT" in done:
@@ -223,6 +229,9 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
     if failure:
         eng.park(t, f"after catching up with develop, verification failed: {failure[:300]}")
         return False
+    if rejoin:  # the landing train: back in the queue, to be batched on the new develop
+        eng._to_state(t.number, "ready")  # pyright: ignore[reportPrivateUsage]
+        return True
     await asyncio.to_thread(push, eng, t)
     eng._to_state(t.number, "ci")  # pyright: ignore[reportPrivateUsage]
     return True
