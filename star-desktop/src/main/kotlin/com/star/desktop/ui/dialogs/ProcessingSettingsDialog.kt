@@ -9,13 +9,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -41,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.CleanMethodChoice
@@ -55,6 +63,7 @@ import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.components.GlyphButton
 import com.star.desktop.ui.components.HoverTip
+import com.star.desktop.ui.components.StarPicker
 import com.star.desktop.ui.components.numberFieldRules
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -70,9 +79,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Processing settings sheet (macOS `ProcessingSettingsView`): the scene and camera, the clean method, how much of this Mac to use and the GPU
- * toggles, and, behind "Show Expert Settings", every tuning setting the engine has, the groups of numbers folded until opened. On a wide window the
- * sheet is two columns, as the gui's is: what the footage is and how it is processed on the left, the optional and expert settings on the right.
+ * Processing settings sheet (macOS `ProcessingSettingsView`): five tabs, the first of which it opens on. Cleaning is what the footage is (scene
+ * and camera), how it is cleaned (the clean method, Selective Auto Clean and the selective processing mode) and the cloud-aware merge, the choices
+ * anyone makes; GPU Usage, Alignment, Horizon and Memory are the settings the engine has for each of those, and every tab has a scroll view of
+ * its own for what does not fit the window.
  *
  * Edits apply as they are made, as the gui's do (parity plan P5, D4): the sheet has a Dismiss button, not Cancel and Save, and Process Now (Update,
  * over frames the change contradicts) applies whatever is pending and goes on. A number is taken when Return is pressed or the field is left,
@@ -83,326 +93,369 @@ import kotlinx.coroutines.withContext
  * including ones the engine picks for itself (the keypoint divisor), and a setting put back to where it started has to be sent again once an
  * earlier edit of it has been applied. Clicking outside the sheet does nothing, and a change the engine refuses says why and leaves the sheet up.
  */
+/**
+ * The tabs of the sheet, in the order they are shown; it opens on the first. The gui's `SettingsTab` is the same list
+ * (`gherkin/ui/vectors/constants.json`, `settingsTabs`, which a test on each side reads).
+ */
+internal enum class SettingsTab(val id: String, val titleKey: String, val testTag: String) {
+    /** What the footage is and how it is cleaned: the choices anyone makes, so the sheet opens here. */
+    CLEANING("cleaning", "settings_tab.cleaning", "settings.tab.cleaning"),
+    GPU("gpu", "settings_tab.gpu", "settings.tab.gpu"),
+    ALIGNMENT("alignment", "settings_tab.alignment", "settings.tab.alignment"),
+    HORIZON("horizon", "settings_tab.horizon", "settings.tab.horizon"),
+    MEMORY("memory", "settings_tab.memory", "settings.tab.memory");
+
+    companion object {
+        val FIRST = CLEANING
+    }
+}
+
 @Composable
 fun ProcessingSettingsDialog(app: AppViewModel) {
-    val scope = rememberCoroutineScope()
     val loaded by produceState<Config?>(null) { value = runCatching { app.sessions.getConfig() }.getOrNull() }
+
+    BoxWithConstraints(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
+        // As big as the window allows, up to what suits the longest tab, and the same for every tab: switching tabs must not move the tab strip.
+        // Sized outright: a maximum put after a fill-the-width modifier cannot lower the width that modifier has fixed.
+        val sheetSize = DpSize(minOf(maxWidth * 0.94f, SHEET_MAX_WIDTH), minOf(maxHeight * 0.94f, SHEET_MAX_HEIGHT))
+        val cfg = loaded
+        if (cfg == null) {
+            SheetCard(sheetSize) {
+                // The gui's header (P8): the sentence that says what the sheet is for, and not the name of the menu item that opens it.
+                Text(localized(SETTINGS_TITLE_KEY), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                Text(localized("ui.loading"), color = StarColors.textSecondary, fontSize = 13.sp)
+            }
+        } else {
+            SettingsSheet(app, cfg, sheetSize)
+        }
+    }
+}
+
+/** The sheet's card: a fixed size, so that what does not fit a tab scrolls inside the tab. */
+@Composable
+private fun SheetCard(size: DpSize, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .size(size)
+            .clip(StarShapes.card)
+            .background(StarColors.prefsCard)
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        content = content,
+    )
+}
+
+/** The sheet over the config the daemon sent. Emits the card, and the question about re-processing over the window when it is asked. */
+@Composable
+private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
+    val scope = rememberCoroutineScope()
     // What the daemon says applying the edits would do to the work on disk; written by the effect below as the edits settle.
     var change by remember { mutableStateOf(SettingsChange.NONE) }
     val screen by app.screen.collectAsState()
     val svm = (screen as? AppScreen.Sequence)?.vm
     val processing by (svm?.isProcessing ?: remember { MutableStateFlow(false) }).collectAsState()
     val frameCount = svm?.frameCount ?: 1
+    // The tab that is up. The sheet opens on the first every time: which one was last looked at is not something the next sheet needs.
+    var tab by remember { mutableStateOf(SettingsTab.FIRST) }
 
-    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}, contentAlignment = Alignment.Center) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .widthIn(max = SHEET_MAX_WIDTH)
-                .clip(StarShapes.card)
-                .background(StarColors.prefsCard)
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+    // Which rows have their explanation open, by row id; the two buttons open and close all of them, the ones on other tabs too.
+    val info = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+
+    // What the daemon holds now: the config the sheet opened on, then what each applied edit left. What is sent is how the edits differ.
+    var applied by remember(cfg) { mutableStateOf(cfg) }
+    var clean by remember(cfg) { mutableStateOf(cfg.cleanMethod) }
+    // "Selective Auto Clean", the Yes/No under Automatic: where it stands is kept while Selective is chosen, as the gui does.
+    var autoPreserve by remember(cfg) { mutableStateOf(CleanMethodChoice.autoPreservationStart(cfg.cleanMethod)) }
+    var detection by remember(cfg) { mutableStateOf(cfg.detectionType) }
+    var horizon by remember(cfg) { mutableStateOf(cfg.horizonDetectionEnabled) }
+    var tripod by remember(cfg) { mutableStateOf(cfg.tripodHeadWasMoving) }
+    var concurrency by remember(cfg) { mutableStateOf(cfg.numberOfFramesToProcessConcurrently.coerceAtLeast(1)) }
+    // Daemons that predate the profile send none: they behave as Full.
+    var useProfile by remember(cfg) { mutableStateOf(if (cfg.hasResourceProfile()) cfg.resourceProfile else "full") }
+    // Field edits: bools, and the numbers as text (parsed when used) keyed by field label. A number is typed into [drafts] and
+    // taken into [textEdits] when it is committed (Return, or leaving the field), which is what is applied.
+    val boolEdits = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    val textEdits = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, String>() }
+    val drafts = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, String>() }
+
+    // Only the daemon's own machine's hardware is known here; a client's own machine may differ, so this reflects what the *daemon* can
+    // actually do. Absent (older daemon) means "unknown," not "unsupported" -- do not disable.
+    val gpuUnavailable = cfg.hasGpuHardwareAvailable() && !cfg.gpuHardwareAvailable
+    val edit = SettingsEdit(horizon, tripod, clean, gpuUnavailable) { id -> boolEdits[id] ?: BOOL_FIELDS[id]?.get(cfg) ?: false }
+    val daemonVersion = (app.engineStatus.value as? EngineStatus.Connected)?.daemonVersion
+
+    val frameMax = frameCount
+    // The fields with a value that cannot be used, drafts included, on whichever tab: Process Now waits until they are put right.
+    val typed = textEdits.toMap() + drafts
+    val problems = ALL_FIELDS.filter { f ->
+        f.has(cfg) && f.enabled(edit) && f is NumberField && typed[f.label]?.let { !f.isValid(it, frameMax) } == true
+    }.map { it.label }.toSet()
+
+    fun proposal(texts: Map<String, String>): Config =
+        proposedConfig(applied, clean, detection, horizon, tripod, concurrency, useProfile, edit, boolEdits, texts, frameMax)
+
+    // What applying the committed edits sends now: the four basic choices, which the daemon takes whole, and what else differs.
+    val proposed = proposal(textEdits.toMap())
+
+    val applyLock = remember { Mutex() }
+    // Apply what differs from what the daemon holds, one request at a time, and whatever the caller does next: a request sent is not
+    // taken back by an edit that follows it. False when the daemon refused it, which has been said.
+    suspend fun applyPending(texts: Map<String, String>): Boolean = withContext(NonCancellable) {
+        applyLock.withLock {
+            val pending = proposal(texts)
+            if (pending == noEditsProposal(applied)) return@withLock true
+            val result = runCatching { app.updateSessionConfig(pending) }
+            result.onSuccess { applied = it }
+            result.onFailure { app.report(it.message ?: it.toString()) }
+            result.isSuccess
+        }
+    }
+
+    // Take the typed numbers in, for a button pressed while a field still has its text.
+    fun commitDrafts(): Map<String, String> {
+        val all = textEdits.toMap() + drafts
+        drafts.forEach { (label, text) -> textEdits[label] = text }
+        drafts.clear()
+        return all
+    }
+
+    // Apply the edits once they stop (a number being typed is a burst of them), then ask the daemon whether what is applied contradicts
+    // frames already processed: the sheet says so, and the button that goes on is Update.
+    LaunchedEffect(proposed, applied) {
+        delay(300)
+        applyPending(textEdits.toMap())
+        change = SettingsChange.of(app.previewConfigChange(proposal(textEdits.toMap())))
+    }
+    var askUpdate by remember { mutableStateOf(false) }
+
+    // Apply what is pending and close; with [goOn] go on, which is to start processing (macOS "Process Now") or, over a run that is going and
+    // has nothing here to change in, to put its status back up (the button is Show Progress then). A change the daemon refuses is said, and
+    // the sheet stays up with the edits in it.
+    val showsProgress = change.showsProgress(processing)
+    val finish: (Boolean) -> Unit = { goOn ->
+        scope.launch {
+            if (applyPending(commitDrafts())) {
+                app.closeSettings()
+                if (goOn) {
+                    if (showsProgress) svm?.reopenProcessingModal() else app.requestProcessAll()
+                }
+            }
+        }
+    }
+    // The answer to "re-process the already processed frames?": what is pending is applied first, then the answer goes with the processing.
+    val answerUpdate: (Boolean) -> Unit = { reprocess ->
+        askUpdate = false
+        scope.launch {
+            val all = commitDrafts()
+            if (applyPending(all)) app.updateSettingsAndProcess(proposal(all), reprocess)
+        }
+    }
+
+    SheetCard(sheetSize) {
+        // The gui's header (P8): the sentence that says what the sheet is for, and not the name of the menu item that opens it.
+        Text(localized(SETTINGS_TITLE_KEY), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+
+        // Under the title, and only over a sequence that has work on disk this change contradicts: a sequence nothing has been done to is
+        // what this sheet was built for, and there is nothing to warn about there.
+        if (change.contradictsFinishedWork) {
+            HoverTip(localized("ui.already_processed_frames_have_different_settings_help")) {
+                Text(localized("ui.already_processed_frames_have_different_settings"), color = StarColors.red, fontSize = 14.sp)
+            }
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            OutlinedButton(onClick = { info.clear() }) { Text(localized("ui.hide_info"), fontSize = 12.sp) }
+            Button(
+                onClick = { ALL_INFO_IDS.forEach { info[it] = true } },
+                colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+            ) { Text(localized("ui.show_info"), fontSize = 12.sp) }
+        }
+
+        // Tabs rather than one long sheet, so none of it is taller than a window: the choices anyone makes first, then each group of tuning
+        // settings on its own.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            StarPicker(
+                options = SettingsTab.entries,
+                selected = tab,
+                label = { localized(it.titleKey) },
+                onSelect = { tab = it },
+                tag = { it.testTag },
+            )
+        }
+
+        // Each tab scrolls by itself, so one that does not fit the window can still be reached, and one opened after another was scrolled down
+        // starts at its top rather than wherever the other one was left.
+        key(tab) {
+            val scroll = rememberScrollState()
+            Row(Modifier.fillMaxWidth().weight(1f)) {
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).padding(end = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    when (tab) {
+                        SettingsTab.CLEANING -> {
+                            // The gui's order: what the footage is, then how it is cleaned, then whether the clouds get their own merge.
+                            SettingGroup(
+                                localized("ui.scene_type").removeSuffix(":"), info = info, infoId = "scene",
+                                help = choicesHelp(
+                                    localized("scene_type.sky_horizon") to localized("ui.sky_horizon_desc"),
+                                    localized("scene_type.sky_only") to localized("ui.sky_only_desc"),
+                                ),
+                            ) {
+                                Segmented(
+                                    options = listOf(true to localized("scene_type.sky_horizon"), false to localized("scene_type.sky_only")),
+                                    selected = horizon,
+                                    onSelect = { horizon = it },
+                                    tip = { localized(if (it) "ui.sky_horizon_help" else "ui.sky_only_help") },
+                                )
+                            }
+                            SettingGroup(
+                                localized("ui.camera_motion").removeSuffix(":"), info = info, infoId = "camera",
+                                help = choicesHelp(
+                                    localized("camera_motion.fixed") to localized("ui.camera_fixed_desc"),
+                                    localized("camera_motion.moving") to localized("ui.camera_moving_desc"),
+                                ),
+                            ) {
+                                Segmented(
+                                    options = listOf(false to localized("camera_motion.fixed"), true to localized("camera_motion.moving")),
+                                    selected = tripod,
+                                    onSelect = { tripod = it },
+                                    tip = { localized(if (it) "ui.camera_moving_help" else "ui.camera_fixed_help") },
+                                )
+                            }
+                            SettingGroup(
+                                localized("ui.clean_method"), info = info, infoId = "clean",
+                                help = choicesHelp(
+                                    localized("ui.automatic") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.AUTOMATIC)),
+                                    localized("ui.selective") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.SELECTIVE)),
+                                ),
+                            ) {
+                                Segmented(
+                                    options = listOf(
+                                        HighLevelClean.AUTOMATIC to localized("ui.automatic"),
+                                        HighLevelClean.SELECTIVE to localized("ui.selective"),
+                                    ),
+                                    tip = { localized(CleanMethodTexts.tipKey(it)) },
+                                    selected = CleanMethodChoice.highLevel(clean),
+                                    onSelect = { clean = CleanMethodChoice.method(it, autoPreserve) },
+                                )
+                                Text(
+                                    localized("ui.selective_auto_selective_detect_outlier"),
+                                    color = StarColors.textDisabled, fontSize = 10.sp,
+                                )
+                            }
+                            // Selective always reviews outliers, whatever this is left at.
+                            SettingGroup(
+                                localized("ui.selective_auto_clean").removeSuffix(":"), enabled = clean != CleanMethod.CLEAN_SELECTIVE,
+                                info = info, infoId = "autoselective",
+                                help = choicesHelp(
+                                    localized("ui.yes") to localized(CleanMethodTexts.autoPreservationDescriptionKey(true)),
+                                    localized("ui.no") to localized(CleanMethodTexts.autoPreservationDescriptionKey(false)),
+                                ),
+                            ) {
+                                Segmented(
+                                    options = listOf(true to localized("ui.yes"), false to localized("ui.no")),
+                                    tip = { localized(CleanMethodTexts.autoPreservationTipKey(it)) },
+                                    selected = autoPreserve,
+                                    onSelect = {
+                                        autoPreserve = it
+                                        if (clean != CleanMethod.CLEAN_SELECTIVE) clean = CleanMethodChoice.method(HighLevelClean.AUTOMATIC, it)
+                                    },
+                                    enabled = clean != CleanMethod.CLEAN_SELECTIVE,
+                                )
+                            }
+                            // How strictly outliers are looked for: only means something when the method finds outlier groups at all.
+                            SettingGroup(
+                                localized("ui.selective_processing_mode").removeSuffix(":"), enabled = edit.usesOutliers,
+                                info = info, infoId = "detection", help = localized("setting_help.selective_processing_mode"),
+                            ) {
+                                Segmented(
+                                    options = listOf(
+                                        DetectionType.DETECTION_MILD to localized("detection_type.mild"),
+                                        DetectionType.DETECTION_STRONG to localized("detection_type.strong"),
+                                        DetectionType.DETECTION_STRONGER to localized("detection_type.stronger"),
+                                        DetectionType.DETECTION_EXCESSIVE to localized("detection_type.excessive"),
+                                        // A config that has its own blob processor shows as this, rather than as none of the above.
+                                        DetectionType.DETECTION_CUSTOM to localized("detection_type.custom"),
+                                    ),
+                                    selected = detection,
+                                    onSelect = { detection = it },
+                                    enabled = edit.usesOutliers,
+                                )
+                            }
+                            // The cloud-aware merge, which anyone shooting a moving sky may want.
+                            ExpertGroup(MERGE_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion)
+                        }
+                        SettingsTab.GPU -> GpuGroup(cfg, edit, boolEdits, info, daemonVersion)
+                        SettingsTab.ALIGNMENT -> ExpertGroup(ALIGNMENT_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion)
+                        SettingsTab.HORIZON -> ExpertGroup(HORIZON_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion)
+                        SettingsTab.MEMORY -> {
+                            // How much of this Mac star may use is a question about memory (and CPU, GPU and disk) rather than about what
+                            // is being cleaned, so it is here with the memory numbers it sizes: the gui has it in its right-hand panel.
+                            SettingGroup(localized("ui.use_of_this_mac")) {
+                                Segmented(
+                                    options = listOf(
+                                        "full" to localized("ui.use_full"),
+                                        "balanced" to localized("ui.use_balanced"),
+                                        "light" to localized("ui.use_light"),
+                                        "custom" to localized("ui.use_custom"),
+                                    ),
+                                    selected = useProfile,
+                                    onSelect = { useProfile = it },
+                                )
+                                Text(
+                                    localized("ui.use_of_this_mac_help"),
+                                    color = StarColors.textDisabled, fontSize = 10.sp,
+                                )
+                            }
+
+                            // The old "frames at once" number is Custom's pipeline depth cap: the other
+                            // profiles size the queue from the machine, so it is only shown for Custom.
+                            if (useProfile == "custom") {
+                                SettingGroup(localized("ui.use_custom_pipeline_depth")) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        GlyphButton("−", localized("ui.fewer"), { concurrency = (concurrency - 1).coerceAtLeast(1) }, size = 24, fontSize = 14)
+                                        Text("$concurrency", color = StarColors.textPrimary, fontSize = 14.sp)
+                                        GlyphButton("+", localized("ui.more"), { concurrency += 1 }, size = 24, fontSize = 14)
+                                    }
+                                }
+                            }
+                            ExpertGroup(MEMORY_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion)
+                        }
+                    }
+                }
+                VerticalScrollbar(rememberScrollbarAdapter(scroll), Modifier.fillMaxHeight())
+            }
+        }
+
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { finish(false) }) { Text(localized("ui.dismiss")) }
+            Button(
+                // Update, over frames this change contradicts, asks before it acts: it does not start a run over an untouched sequence, it
+                // changes one that is part done.
+                onClick = { if (change.contradictsFinishedWork) askUpdate = true else finish(true) },
+                enabled = problems.isEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                modifier = Modifier.testTag("settings.process"),
+            ) { Text(localized(change.buttonKey(processing))) }
+        }
+    }
+    if (askUpdate) {
+        // Over the window, not inside the card (which is a fixed height and has no room for it). The whole question as the title. No is first
+        // and Esc, and does the safe thing: nothing is deleted, and the new settings apply only to the frames still to do. Yes, which Return
+        // takes, throws away what the change invalidated and builds it again.
+        PromptCard(
+            onScrimClick = null,
+            onDefaultAction = { answerUpdate(true) },
+            onEscape = { answerUpdate(false) },
         ) {
-            // The gui's header (P8): the sentence that says what the sheet is for, and not the name of the menu item that opens it.
-            Text(localized(SETTINGS_TITLE_KEY), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-
-            // Under the title, and only over a sequence that has work on disk this change contradicts: a sequence nothing has been done to is
-            // what this sheet was built for, and there is nothing to warn about there.
-            if (change.contradictsFinishedWork) {
-                HoverTip(localized("ui.already_processed_frames_have_different_settings_help")) {
-                    Text(localized("ui.already_processed_frames_have_different_settings"), color = StarColors.red, fontSize = 14.sp)
-                }
-            }
-
-            val cfg = loaded
-            if (cfg == null) {
-                Text(localized("ui.loading"), color = StarColors.textSecondary, fontSize = 13.sp)
-                return@Column
-            }
-
-            // Which rows have their explanation open, by row id; the two buttons open and close all of them, the ones in folded groups too.
-            val info = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                OutlinedButton(onClick = { info.clear() }) { Text(localized("ui.hide_info"), fontSize = 12.sp) }
+            Text(localized("ui.reprocess_already_processed_frames_question"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                OutlinedButton(onClick = { answerUpdate(false) }) { Text(localized("ui.no")) }
                 Button(
-                    onClick = { ALL_INFO_IDS.forEach { info[it] = true } },
+                    onClick = { answerUpdate(true) },
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text(localized("ui.show_info"), fontSize = 12.sp) }
-            }
-
-            // What the daemon holds now: the config the sheet opened on, then what each applied edit left. What is sent is how the edits differ.
-            var applied by remember(cfg) { mutableStateOf(cfg) }
-            var clean by remember(cfg) { mutableStateOf(cfg.cleanMethod) }
-            // "Selective Auto Clean", the expert Yes/No under Automatic: where it stands is kept while Selective is chosen, as the gui does.
-            var autoPreserve by remember(cfg) { mutableStateOf(CleanMethodChoice.autoPreservationStart(cfg.cleanMethod)) }
-            var detection by remember(cfg) { mutableStateOf(cfg.detectionType) }
-            var horizon by remember(cfg) { mutableStateOf(cfg.horizonDetectionEnabled) }
-            var tripod by remember(cfg) { mutableStateOf(cfg.tripodHeadWasMoving) }
-            var concurrency by remember(cfg) { mutableStateOf(cfg.numberOfFramesToProcessConcurrently.coerceAtLeast(1)) }
-            // Daemons that predate the profile send none: they behave as Full.
-            var useProfile by remember(cfg) { mutableStateOf(if (cfg.hasResourceProfile()) cfg.resourceProfile else "full") }
-            val showExpert by app.showExpertSettings.collectAsState()
-            // Expert-field edits: bools, and the numbers as text (parsed when used) keyed by field label. A number is typed into [drafts] and
-            // taken into [textEdits] when it is committed (Return, or leaving the field), which is what is applied.
-            val boolEdits = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
-            val textEdits = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, String>() }
-            val drafts = remember(cfg) { androidx.compose.runtime.mutableStateMapOf<String, String>() }
-
-            // Only the daemon's own machine's hardware is known here; a client's own machine may differ, so this reflects what the *daemon* can
-            // actually do. Absent (older daemon) means "unknown," not "unsupported" -- do not disable.
-            val gpuUnavailable = cfg.hasGpuHardwareAvailable() && !cfg.gpuHardwareAvailable
-            val edit = SettingsEdit(horizon, tripod, clean, gpuUnavailable) { id -> boolEdits[id] ?: BOOL_FIELDS[id]?.get(cfg) ?: false }
-            val daemonVersion = (app.engineStatus.value as? EngineStatus.Connected)?.daemonVersion
-
-            val frameMax = frameCount
-            // The expert fields with a value that cannot be used, drafts included: Process Now waits until they are put right.
-            val typed = textEdits.toMap() + drafts
-            val problems = ALL_FIELDS.filter { f ->
-                f.has(cfg) && f.enabled(edit) && f is NumberField && typed[f.label]?.let { !f.isValid(it, frameMax) } == true
-            }.map { it.label }.toSet()
-
-            fun proposal(texts: Map<String, String>): Config =
-                proposedConfig(applied, clean, detection, horizon, tripod, concurrency, useProfile, edit, boolEdits, texts, frameMax)
-
-            // What applying the committed edits sends now: the four basic choices, which the daemon takes whole, and what else differs.
-            val proposed = proposal(textEdits.toMap())
-
-            val applyLock = remember { Mutex() }
-            // Apply what differs from what the daemon holds, one request at a time, and whatever the caller does next: a request sent is not
-            // taken back by an edit that follows it. False when the daemon refused it, which has been said.
-            suspend fun applyPending(texts: Map<String, String>): Boolean = withContext(NonCancellable) {
-                applyLock.withLock {
-                    val pending = proposal(texts)
-                    if (pending == noEditsProposal(applied)) return@withLock true
-                    val result = runCatching { app.updateSessionConfig(pending) }
-                    result.onSuccess { applied = it }
-                    result.onFailure { app.report(it.message ?: it.toString()) }
-                    result.isSuccess
-                }
-            }
-
-            // Take the typed numbers in, for a button pressed while a field still has its text.
-            fun commitDrafts(): Map<String, String> {
-                val all = textEdits.toMap() + drafts
-                drafts.forEach { (label, text) -> textEdits[label] = text }
-                drafts.clear()
-                return all
-            }
-
-            // Apply the edits once they stop (a number being typed is a burst of them), then ask the daemon whether what is applied contradicts
-            // frames already processed: the sheet says so, and the button that goes on is Update.
-            LaunchedEffect(proposed, applied) {
-                delay(300)
-                applyPending(textEdits.toMap())
-                change = SettingsChange.of(app.previewConfigChange(proposal(textEdits.toMap())))
-            }
-            var askUpdate by remember { mutableStateOf(false) }
-
-            val left: @Composable ColumnScope.() -> Unit = {
-                // The gui's left column, in its order: what the footage is, then how it is processed.
-                SettingGroup(
-                    localized("ui.scene_type").removeSuffix(":"), info = info, infoId = "scene",
-                    help = choicesHelp(
-                        localized("scene_type.sky_horizon") to localized("ui.sky_horizon_desc"),
-                        localized("scene_type.sky_only") to localized("ui.sky_only_desc"),
-                    ),
-                ) {
-                    Segmented(
-                        options = listOf(true to localized("scene_type.sky_horizon"), false to localized("scene_type.sky_only")),
-                        selected = horizon,
-                        onSelect = { horizon = it },
-                        tip = { localized(if (it) "ui.sky_horizon_help" else "ui.sky_only_help") },
-                    )
-                }
-                SettingGroup(
-                    localized("ui.camera_motion").removeSuffix(":"), info = info, infoId = "camera",
-                    help = choicesHelp(
-                        localized("camera_motion.fixed") to localized("ui.camera_fixed_desc"),
-                        localized("camera_motion.moving") to localized("ui.camera_moving_desc"),
-                    ),
-                ) {
-                    Segmented(
-                        options = listOf(false to localized("camera_motion.fixed"), true to localized("camera_motion.moving")),
-                        selected = tripod,
-                        onSelect = { tripod = it },
-                        tip = { localized(if (it) "ui.camera_moving_help" else "ui.camera_fixed_help") },
-                    )
-                }
-                SettingGroup(
-                    localized("ui.clean_method"), info = info, infoId = "clean",
-                    help = choicesHelp(
-                        localized("ui.automatic") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.AUTOMATIC)),
-                        localized("ui.selective") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.SELECTIVE)),
-                    ),
-                ) {
-                    Segmented(
-                        options = listOf(
-                            HighLevelClean.AUTOMATIC to localized("ui.automatic"),
-                            HighLevelClean.SELECTIVE to localized("ui.selective"),
-                        ),
-                        tip = { localized(CleanMethodTexts.tipKey(it)) },
-                        selected = CleanMethodChoice.highLevel(clean),
-                        onSelect = { clean = CleanMethodChoice.method(it, autoPreserve) },
-                    )
-                    Text(
-                        localized("ui.selective_auto_selective_detect_outlier"),
-                        color = StarColors.textDisabled, fontSize = 10.sp,
-                    )
-                }
-
-                SettingGroup(localized("ui.use_of_this_mac")) {
-                    Segmented(
-                        options = listOf(
-                            "full" to localized("ui.use_full"),
-                            "balanced" to localized("ui.use_balanced"),
-                            "light" to localized("ui.use_light"),
-                            "custom" to localized("ui.use_custom"),
-                        ),
-                        selected = useProfile,
-                        onSelect = { useProfile = it },
-                    )
-                    Text(
-                        localized("ui.use_of_this_mac_help"),
-                        color = StarColors.textDisabled, fontSize = 10.sp,
-                    )
-                }
-
-                // The old "frames at once" number is Custom's pipeline depth cap: the other
-                // profiles size the queue from the machine, so it is only shown for Custom.
-                if (useProfile == "custom") {
-                    SettingGroup(localized("ui.use_custom_pipeline_depth")) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            GlyphButton("−", localized("ui.fewer"), { concurrency = (concurrency - 1).coerceAtLeast(1) }, size = 24, fontSize = 14)
-                            Text("$concurrency", color = StarColors.textPrimary, fontSize = 14.sp)
-                            GlyphButton("+", localized("ui.more"), { concurrency += 1 }, size = 24, fontSize = 14)
-                        }
-                    }
-                }
-            }
-
-            val right: @Composable ColumnScope.() -> Unit = {
-                // Not an expert setting: the cloud-aware merge, which anyone shooting a moving sky may want.
-                ExpertGroup(localized("ui.merge_settings"), MERGE_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion)
-
-                // Nor is GPU acceleration: one most people care about, so it is here without "Show Expert Settings" and open.
-                GpuGroup(cfg, edit, boolEdits, info, daemonVersion)
-
-                if (showExpert) {
-                    // The gui's order: Selective Auto Clean, how strictly outliers are looked for, then the groups of numbers.
-                    // Selective always reviews outliers, whatever this is left at.
-                    SettingGroup(
-                        localized("ui.selective_auto_clean").removeSuffix(":"), enabled = clean != CleanMethod.CLEAN_SELECTIVE,
-                        info = info, infoId = "autoselective",
-                        help = choicesHelp(
-                            localized("ui.yes") to localized(CleanMethodTexts.autoPreservationDescriptionKey(true)),
-                            localized("ui.no") to localized(CleanMethodTexts.autoPreservationDescriptionKey(false)),
-                        ),
-                    ) {
-                        Segmented(
-                            options = listOf(true to localized("ui.yes"), false to localized("ui.no")),
-                            tip = { localized(CleanMethodTexts.autoPreservationTipKey(it)) },
-                            selected = autoPreserve,
-                            onSelect = {
-                                autoPreserve = it
-                                if (clean != CleanMethod.CLEAN_SELECTIVE) clean = CleanMethodChoice.method(HighLevelClean.AUTOMATIC, it)
-                            },
-                            enabled = clean != CleanMethod.CLEAN_SELECTIVE,
-                        )
-                    }
-                    // How strictly outliers are looked for: only means something when the method finds outlier groups at all.
-                    SettingGroup(
-                        localized("ui.selective_processing_mode").removeSuffix(":"), enabled = edit.usesOutliers,
-                        info = info, infoId = "detection", help = localized("setting_help.selective_processing_mode"),
-                    ) {
-                        Segmented(
-                            options = listOf(
-                                DetectionType.DETECTION_MILD to localized("detection_type.mild"),
-                                DetectionType.DETECTION_STRONG to localized("detection_type.strong"),
-                                DetectionType.DETECTION_STRONGER to localized("detection_type.stronger"),
-                                DetectionType.DETECTION_EXCESSIVE to localized("detection_type.excessive"),
-                                // A config that has its own blob processor shows as this, rather than as none of the above.
-                                DetectionType.DETECTION_CUSTOM to localized("detection_type.custom"),
-                            ),
-                            selected = detection,
-                            onSelect = { detection = it },
-                            enabled = edit.usesOutliers,
-                        )
-                    }
-                    // Folded until opened, as the gui's disclosure groups are.
-                    ExpertGroup(localized("ui.alignment_settings"), ALIGNMENT_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion, collapsible = true)
-                    ExpertGroup(localized("ui.horizon_settings"), HORIZON_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion, collapsible = true)
-                    ExpertGroup(localized("ui.memory_settings"), MEMORY_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion, collapsible = true)
-                }
-            }
-
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                if (maxWidth >= TWO_COLUMNS_FROM) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp), content = left)
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp), content = right)
-                    }
-                } else {
-                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) { left(); right() }
-                }
-            }
-
-            // Apply what is pending and close; with [goOn] go on, which is to start processing (macOS "Process Now") or, over a run that is going and
-            // has nothing here to change in, to put its status back up (the button is Show Progress then). A change the daemon refuses is said, and
-            // the sheet stays up with the edits in it.
-            val showsProgress = change.showsProgress(processing)
-            val finish: (Boolean) -> Unit = { goOn ->
-                scope.launch {
-                    if (applyPending(commitDrafts())) {
-                        app.closeSettings()
-                        if (goOn) {
-                            if (showsProgress) svm?.reopenProcessingModal() else app.requestProcessAll()
-                        }
-                    }
-                }
-            }
-            // The answer to "re-process the already processed frames?": what is pending is applied first, then the answer goes with the processing.
-            val answerUpdate: (Boolean) -> Unit = { reprocess ->
-                askUpdate = false
-                scope.launch {
-                    val all = commitDrafts()
-                    if (applyPending(all)) app.updateSettingsAndProcess(proposal(all), reprocess)
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { finish(false) }) { Text(localized("ui.dismiss")) }
-                Button(
-                    // Update, over frames this change contradicts, asks before it acts: it does not start a run over an untouched sequence, it
-                    // changes one that is part done.
-                    onClick = { if (change.contradictsFinishedWork) askUpdate = true else finish(true) },
-                    enabled = problems.isEmpty(),
-                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                    modifier = Modifier.testTag("settings.process"),
-                ) { Text(localized(change.buttonKey(processing))) }
-                Spacer(Modifier.weight(1f))
-                // A button, as the gui's is, not a switch in the middle of the settings.
-                OutlinedButton(onClick = { app.setShowExpertSettings(!showExpert) }) {
-                    Text(localized(if (showExpert) "ui.hide_expert_settings" else "ui.show_expert_settings"))
-                }
-            }
-            if (askUpdate) {
-                // The whole question as the title. No is first and Esc, and does the safe thing: nothing is deleted, and the new settings
-                // apply only to the frames still to do. Yes, which Return takes, throws away what the change invalidated and builds it again.
-                PromptCard(
-                    onScrimClick = null,
-                    onDefaultAction = { answerUpdate(true) },
-                    onEscape = { answerUpdate(false) },
-                ) {
-                    Text(localized("ui.reprocess_already_processed_frames_question"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                        OutlinedButton(onClick = { answerUpdate(false) }) { Text(localized("ui.no")) }
-                        Button(
-                            onClick = { answerUpdate(true) },
-                            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                        ) { Text(localized("ui.yes")) }
-                    }
-                }
+                ) { Text(localized("ui.yes")) }
             }
         }
     }
@@ -418,9 +471,12 @@ internal fun noEditsProposal(applied: Config): Config {
     )
 }
 
-/** The widest the sheet gets, and the width from which it is two columns (the gui's is 1400 points wide, so as not to be taller than a screen). */
-private val SHEET_MAX_WIDTH = 1180.dp
-private val TWO_COLUMNS_FROM = 860.dp
+/**
+ * How big the sheet gets: a single column of rows has no use for a wide window (a row's label and its box stay close enough together to read as
+ * one line), and the card is no taller than suits the longest tab, with the rest of a tab reached by scrolling it.
+ */
+private val SHEET_MAX_WIDTH = 860.dp
+private val SHEET_MAX_HEIGHT = 780.dp
 
 /**
  * What to send to make the daemon's [applied] config what the sheet shows: the four basic choices (the daemon takes those whole, so they are always
@@ -479,6 +535,7 @@ internal const val SETTINGS_TITLE_KEY = "ui.choose_from_the_following_options_to
 
 private fun choicesHelp(vararg choices: Pair<String, String>): String = choices.joinToString("\n\n") { (name, meaning) -> "$name\n$meaning" }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun <T> Segmented(
     options: List<Pair<T, String>>,
@@ -488,7 +545,8 @@ private fun <T> Segmented(
     /** What hovering an option says it means (macOS's `.help` on each choice). */
     tip: (T) -> String? = { null },
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Wraps onto the next line rather than squeezing an option until its text is cut off.
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         options.forEach { (value, label) ->
             val isSel = value == selected
             val option: @Composable () -> Unit = {
@@ -537,7 +595,8 @@ private fun InfoRow(id: String, open: SnapshotStateMap<String, Boolean>, help: S
 @Composable
 private fun ToggleRow(label: String, value: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 13.sp)
+        // The label takes what the switch leaves and wraps, rather than a long one (in any language) pushing the switch out of the row.
+        Text(label, color = if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 13.sp, modifier = Modifier.weight(1f))
         Switch(checked = value, onCheckedChange = onChange, enabled = enabled)
     }
 }
@@ -797,9 +856,9 @@ private val ALL_INFO_IDS: List<String> = listOf("clean", "autoselective", "detec
 /** The toggles by id, for the rules that read one toggle from another's row. */
 private val BOOL_FIELDS: Map<String, BoolField> = ALL_FIELDS.filterIsInstance<BoolField>().associateBy { it.label }
 
+/** The rows of [fields], one under another: a tab's worth of settings, which the tab names. */
 @Composable
 private fun ExpertGroup(
-    title: String,
     fields: List<ExpertField>,
     cfg: Config,
     edit: SettingsEdit,
@@ -809,10 +868,8 @@ private fun ExpertGroup(
     info: SnapshotStateMap<String, Boolean>,
     frameCount: Int,
     daemonVersion: String?,
-    /** Folded until opened (the gui's disclosure groups). */
-    collapsible: Boolean = false,
 ) {
-    val rows: @Composable () -> Unit = {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         fields.forEach { f ->
             val label = localized(f.labelKey).removeSuffix(":")
             if (!f.has(cfg)) {
@@ -850,20 +907,6 @@ private fun ExpertGroup(
             }
         }
     }
-    if (collapsible) CollapsibleGroup(title, rows) else SettingGroup(title) { rows() }
-}
-
-/** A group of rows under a title that opens and closes it, folded to begin with (the gui's `DisclosureGroup`). */
-@Composable
-private fun CollapsibleGroup(title: String, content: @Composable () -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(if (expanded) "▼" else "▶", color = StarColors.textSecondary, fontSize = 10.sp)
-            Text(title, color = StarColors.textSecondary, fontSize = 12.sp)
-        }
-        if (expanded) content()
-    }
 }
 
 @Composable
@@ -878,33 +921,26 @@ private fun UnsupportedRow(label: String, daemonVersion: String?) {
 }
 
 /**
- * GPU Settings (macOS's section of the same name): three independent toggles, each for one step, and a line saying whether this machine has a GPU
- * star can use and which. Open to begin with, and it can be folded away. A toggle on a machine without one is greyed and shown off, which the status
- * line explains: without it a toggle that cannot be turned on would look broken rather than moot.
+ * The GPU Usage tab (macOS's GPU Settings section): three independent toggles, each for one step, and a line saying whether this machine has a GPU
+ * star can use and which. A toggle on a machine without one is greyed and shown off, which the status line explains: without it a toggle that cannot
+ * be turned on would look broken rather than moot.
  */
 @Composable
 private fun GpuGroup(cfg: Config, edit: SettingsEdit, boolEdits: SnapshotStateMap<String, Boolean>, info: SnapshotStateMap<String, Boolean>, daemonVersion: String?) {
-    var expanded by remember { mutableStateOf(true) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(if (expanded) "▼" else "▶", color = StarColors.textSecondary, fontSize = 10.sp)
-            Text(localized("ui.gpu_settings"), color = StarColors.textSecondary, fontSize = 12.sp)
-        }
-        // Each toggle controls one processing step only: "GPU Settings" must not read as one switch for the whole pipeline.
-        Text(localized("ui.gpu_settings_scope_note"), color = StarColors.textDisabled, fontSize = 10.sp)
-        // Said whether or not the section is open. Absent (an older daemon) means unknown, not unsupported.
+        // Each toggle controls one processing step only: the tab must not read as one switch for the whole pipeline.
+        Text(localized("ui.gpu_settings_scope_note"), color = StarColors.textSecondary, fontSize = 11.sp)
+        // Absent (an older daemon) means unknown, not unsupported.
         if (cfg.hasGpuHardwareAvailable()) GPUHardwareStatusRow(cfg.gpuHardwareAvailable, if (cfg.hasGpuDeviceName()) cfg.gpuDeviceName else null)
-        if (expanded) {
-            PERFORMANCE_FIELDS.forEach { f ->
-                if (!f.has(cfg)) { UnsupportedRow(localized(f.labelKey).removeSuffix(":"), daemonVersion); return@forEach }
-                if (f is BoolField) {
-                    InfoRow(f.label, info, f.helpText()) {
-                        ToggleRow(
-                            localized(f.labelKey).removeSuffix(":"),
-                            if (!f.enabled(edit)) false else (boolEdits[f.label] ?: f.get(cfg)),
-                            enabled = f.enabled(edit),
-                        ) { boolEdits[f.label] = it }
-                    }
+        PERFORMANCE_FIELDS.forEach { f ->
+            if (!f.has(cfg)) { UnsupportedRow(localized(f.labelKey).removeSuffix(":"), daemonVersion); return@forEach }
+            if (f is BoolField) {
+                InfoRow(f.label, info, f.helpText()) {
+                    ToggleRow(
+                        localized(f.labelKey).removeSuffix(":"),
+                        if (!f.enabled(edit)) false else (boolEdits[f.label] ?: f.get(cfg)),
+                        enabled = f.enabled(edit),
+                    ) { boolEdits[f.label] = it }
                 }
             }
         }

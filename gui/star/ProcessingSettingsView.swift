@@ -169,6 +169,43 @@ enum CameraMotion: String, InstructionOption, Identifiable {
     }
 }
 
+/// The tabs of the settings sheet, in the order they are shown.  The desktop client's `SettingsTab` is
+/// the same list (`gherkin/ui/vectors/constants.json`, `settingsTabs`, which a test on each side reads).
+enum SettingsTab: String, CaseIterable, Identifiable {
+    /// What the footage is and how it is cleaned: the choices anyone makes, so the sheet opens here.
+    case cleaning
+    case gpu
+    case alignment
+    case horizon
+    case memory
+
+    /// The one the sheet opens on.
+    static let first = SettingsTab.cleaning
+
+    var id: Self { self }
+
+    var titleText: String {
+        switch self {
+        case .cleaning:  localized("settings_tab.cleaning")
+        case .gpu:       localized("settings_tab.gpu")
+        case .alignment: localized("settings_tab.alignment")
+        case .horizon:   localized("settings_tab.horizon")
+        case .memory:    localized("settings_tab.memory")
+        }
+    }
+
+    /// What a UI test finds the tab by (`gherkin/ui/ids.json`).
+    var accessibilityId: String {
+        switch self {
+        case .cleaning:  "settings.tab.cleaning"
+        case .gpu:       "settings.tab.gpu"
+        case .alignment: "settings.tab.alignment"
+        case .horizon:   "settings.tab.horizon"
+        case .memory:    "settings.tab.memory"
+        }
+    }
+}
+
 struct ProcessingSettingsView: View {
     var viewModel: ImageSequenceViewModel
 
@@ -233,11 +270,9 @@ struct ProcessingSettingsView: View {
     @State private var showUseGPUForSIFTInfo = false
     @State private var showUseGPUForAKAZEInfo = false
 
-    /// Expanded by default, unlike the Expert Settings disclosure groups below: GPU
-    /// acceleration is a mainstream performance setting most users care about, not an
-    /// expert-only tuning knob, so it should not need "Show expert settings" plus another
-    /// click to even see.
-    @State private var showGPUSettingsExpanded = true
+    /// The tab the sheet is showing.  It opens on the first, every time: which tab was last looked at
+    /// is not something the next sheet needs to remember.
+    @State private var selectedTab: SettingsTab = .first
 
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
@@ -469,177 +504,28 @@ struct ProcessingSettingsView: View {
               }
               
               Space(height: 20)
-              
-              ScrollView {
-                // Two columns, so the sheet is not taller than a screen: what the footage is
-                // and how it is processed on the left, the optional and expert settings on
-                // the right.
-                HStack(alignment: .top, spacing: 20) {
-                  Grid {
-                      self.sceneTypeGridRow
-                      Divider()
-                      self.cameraMotionGridRow
-                      Divider()
-                      self.processingMethodGridRow
-                  }
-                  .frame(maxWidth: .infinity, alignment: .top)
 
-                  Divider()
-
-                  Grid {
-                      // Not an expert setting: whether clouds come out banded is something
-                      // anyone shooting a moving sky wants to be able to turn on.
-                      self.cloudAwareMergeView
-
-                      Divider()
-                      DisclosureGroup(isExpanded: $showGPUSettingsExpanded) {
-                          Grid {
-                              self.useGPUForMergeView
-                              Divider()
-                              self.useGPUForSIFTView
-                              Divider()
-                              self.useGPUForAKAZEView
-                          }
-                      } label: {
-                          VStack(alignment: .leading, spacing: 2) {
-                              Text(localized("ui.gpu_settings"))
-                                .font(.title2)
-                                .foregroundColor(.white)
-                                .opacity(0.6)
-                              // Each toggle below is independent — see ui.gpu_settings_scope_note.
-                              // Without this, "GPU Settings" reads as one on/off switch for the
-                              // whole pipeline, which is exactly the misreading useGPUForMerge
-                              // (née useGPU) was renamed to avoid at the property-name level.
-                              Text(localized("ui.gpu_settings_scope_note"))
-                                .font(.caption)
-                                .foregroundColor(.white)
-                                .opacity(0.5)
-                              Text(Config.gpuAccelerationStatusText())
-                                .font(.caption)
-                                .foregroundColor(.white)
-                                .opacity(0.5)
-                          }
-                      }
-                      .tint(.blue)
-
-                      if viewModel.showExpertSettings {
-                          Divider()
-                          self.automaticSelectionGridRow
-                          Divider()
-                          self.processingModeView
-                          Divider()
-                          //self.cuncurrentProcessingLimitView
-                          //Divider()
-                         
-                          DisclosureGroup {
-                              Grid {
-                                  self.neighborFrameCountView
-                                  Divider()
-                                  self.staticNeighborFrameCountView
-                                  Divider()
-                                  self.pixelThresholdView
-                                  Divider()
-                                  self.alignmentMaxKeypointsView
-                                  Divider()
-                                  self.alignmentGroundHorizonExtensionView
-                                  Divider()
-                                  self.alignmentSkyHorizonExtensionView
-                                  Divider()
-                                  self.alignmentBaseImageDilateSizeView
-                                  Divider()
-                                  self.alignmentBaseImageThresholdValueView
-                                  Divider()
-                                  self.alignmentKeypointDivisorView
-                                  Divider()
-                                  self.allowEarthAlignmentView
-                                  Divider()
-                                  self.alignmentWriteDebugImagesViewValueView
-                                  Divider()
-                                  self.homographySmoothingEpsilonView
-                              }
-                          } label: {
-                              Text(localized("ui.alignment_settings")) 
-                                .font(.title2)
-                                .foregroundColor(.white)
-                                .opacity(0.6)
-                          }
-                          .tint(.primary)
-
-                          Divider()
-                          DisclosureGroup {
-                              Grid {
-                                  self.useCannyEdgeDetectionGridRow
-                                  Divider()
-                                  self.cannyMinThresholdView
-                                  Divider()
-                                  self.cannyMaxThresholdView
-                                  Divider()
-                                  self.l2GradientGridRow
-                                  Divider()
-                                  self.useReferenceHorizonSmoothingView
-                                  Divider()
-                                  self.referenceHorizonSmoothingMaxDistanceView
-                                  Divider()
-                                  self.useReferenceHorizonBrightnessRefinementView
-                                  Divider()
-                                  self.referenceHorizonBrightnessRefinementSearchRadiusView
-                                  Divider()
-                                  self.referenceHorizonBrightnessRefinementHistogramBucketsView
-                                  Divider()
-                                  self.referenceHorizonNeighborhoodSizeView
-                                  Divider()
-                                  self.horizonSpikeRemovalEnabledView
-                                  Divider()
-                                  self.horizonSpikeMaxWidthView
-                                  Divider()
-                                  self.horizonSpikeMaxDeviationFractionView
-                                  Divider()
-                                  self.horizonSpikeWindowHalfView
-                              }
-                          } label: {
-                              Text(localized("ui.horizon_settings"))
-                                .font(.title2)
-                                .foregroundColor(.white)
-                                .opacity(0.6)
-                          }
-                          .tint(.secondary)
-
-                          Divider()
-                          DisclosureGroup {
-                              Grid {
-                                  // Only Custom reads this: the other profiles size the budget
-                                  // themselves (Full 0.85, Balanced 0.60, Light 0.35).
-                                  if viewModel.resourceProfile == .custom {
-                                      self.memoryBudgetFractionView
-                                      Divider()
-                                  }
-                                  self.keypointMultiplierView
-                                  Divider()
-                                  self.outlierMultiplierView
-                                  Divider()
-                                  self.mergeMultiplierView
-                                  Divider()
-                                  self.horizonMultiplierView
-                                  Divider()
-                                  self.horizonFloorView
-                                  Divider()
-                                  self.maxKeypointOpsView
-                                  Divider()
-                                  self.mergeStreamingView
-                              }
-                          } label: {
-                              Text(localized("ui.memory_settings"))
-                                .font(.title2)
-                                .foregroundColor(.white)
-                                .opacity(0.6)
-                          }
-                          .tint(.orange)
-                      }
-                  }
-                  .frame(maxWidth: .infinity, alignment: .top)
-                }
+              // Tabs rather than one long sheet, so none of it is taller than a screen: the
+              // choices anyone makes first, then each group of tuning settings on its own.
+              StarPicker(selection: $selectedTab) { tab, isEnabled in
+                  Text(tab.titleText)
+                    .foregroundColor(isEnabled ? .black : .yellow)
+                    .accessibilityIdentifier(tab.accessibilityId)
               }
-              
+
+              Space(height: 20)
+
+              // Each tab scrolls by itself.  The id gives every tab its own scroll view, so one
+              // opened after another was scrolled down starts at its top rather than wherever
+              // the other one was left.
+              ScrollView(.vertical) {
+                  self.tabContent
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.trailing, 12)
+              }
+                .id(selectedTab)
+                .frame(minHeight: 300, idealHeight: 480, maxHeight: .infinity)
+
               Space(height: 20)
               
               HStack {
@@ -697,26 +583,10 @@ struct ProcessingSettingsView: View {
                         .accessibilityIdentifier("settings.process")
 
                       Spacer()
-                      Button() {
-                          withAnimation {
-                              viewModel.showExpertSettings.toggle()
-                          }
-                      } label: {
-                          ZStack {
-                              Color.blue
-                                .cornerRadius(10)
-
-                              Text(viewModel.showExpertSettings ? localized("ui.hide_expert_settings") : localized("ui.show_expert_settings"))
-                                .foregroundColor(.white)
-                                .padding(10)
-                          }
-                      }
-                        .buttonStyle(PlainButtonStyle())
-                        .fixedSize(horizontal: true, vertical: true)
                   }
               }
           }
-          .frame(minWidth: 1400)
+          .frame(minWidth: 1000)
           .padding(20)
           .background(.gray)
           .onAppear {
@@ -748,6 +618,150 @@ struct ProcessingSettingsView: View {
               Button(localized("ui.yes")) { finishUpdate(reprocess: true) }
                 .keyboardShortcut(.defaultAction)
           }
+    }
+
+    // MARK: - Tabs
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .cleaning:  cleaningTab
+        case .gpu:       gpuTab
+        case .alignment: alignmentTab
+        case .horizon:   horizonTab
+        case .memory:    memoryTab
+        }
+    }
+
+    /// What the footage is, how it is cleaned, and whether the clouds get their own merge: the choices
+    /// anyone makes, in the order the questions come.
+    private var cleaningTab: some View {
+        Grid {
+            self.sceneTypeGridRow
+            Divider()
+            self.cameraMotionGridRow
+            Divider()
+            self.processingMethodGridRow
+            Divider()
+            // Selective always reviews outliers, so the next two only mean something under
+            // some methods; each greys itself out under the others.
+            self.automaticSelectionGridRow
+            Divider()
+            self.processingModeView
+            Divider()
+            // Whether clouds come out banded is something anyone shooting a moving sky wants
+            // to be able to turn on.
+            self.cloudAwareMergeView
+        }
+    }
+
+    /// This is one of three independent toggles, not a master switch: each controls the one step it
+    /// is named for (see `ui.gpu_settings_scope_note`), which is exactly the misreading
+    /// `useGPUForMerge` (née `useGPU`) was renamed to avoid at the property-name level.
+    private var gpuTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(localized("ui.gpu_settings_scope_note"))
+              .font(.body)
+              .foregroundColor(.white)
+              .opacity(0.8)
+              .fixedSize(horizontal: false, vertical: true)
+            Text(Config.gpuAccelerationStatusText())
+              .font(.body)
+              .foregroundColor(.white)
+              .opacity(0.8)
+              .fixedSize(horizontal: false, vertical: true)
+            Grid {
+                self.useGPUForMergeView
+                Divider()
+                self.useGPUForSIFTView
+                Divider()
+                self.useGPUForAKAZEView
+            }
+        }
+    }
+
+    private var alignmentTab: some View {
+        Grid {
+            self.neighborFrameCountView
+            Divider()
+            self.staticNeighborFrameCountView
+            Divider()
+            self.pixelThresholdView
+            Divider()
+            self.alignmentMaxKeypointsView
+            Divider()
+            self.alignmentGroundHorizonExtensionView
+            Divider()
+            self.alignmentSkyHorizonExtensionView
+            Divider()
+            self.alignmentBaseImageDilateSizeView
+            Divider()
+            self.alignmentBaseImageThresholdValueView
+            Divider()
+            self.alignmentKeypointDivisorView
+            Divider()
+            self.allowEarthAlignmentView
+            Divider()
+            self.alignmentWriteDebugImagesViewValueView
+            Divider()
+            self.homographySmoothingEpsilonView
+        }
+    }
+
+    private var horizonTab: some View {
+        Grid {
+            self.useCannyEdgeDetectionGridRow
+            Divider()
+            self.cannyMinThresholdView
+            Divider()
+            self.cannyMaxThresholdView
+            Divider()
+            self.l2GradientGridRow
+            Divider()
+            self.useReferenceHorizonSmoothingView
+            Divider()
+            self.referenceHorizonSmoothingMaxDistanceView
+            Divider()
+            self.useReferenceHorizonBrightnessRefinementView
+            Divider()
+            self.referenceHorizonBrightnessRefinementSearchRadiusView
+            Divider()
+            self.referenceHorizonBrightnessRefinementHistogramBucketsView
+            Divider()
+            self.referenceHorizonNeighborhoodSizeView
+            Divider()
+            self.horizonSpikeRemovalEnabledView
+            Divider()
+            self.horizonSpikeMaxWidthView
+            Divider()
+            self.horizonSpikeMaxDeviationFractionView
+            Divider()
+            self.horizonSpikeWindowHalfView
+        }
+    }
+
+    private var memoryTab: some View {
+        Grid {
+            // Only Custom reads this: the other profiles size the budget
+            // themselves (Full 0.85, Balanced 0.60, Light 0.35).
+            if viewModel.resourceProfile == .custom {
+                self.memoryBudgetFractionView
+                Divider()
+            }
+            self.keypointMultiplierView
+            Divider()
+            self.outlierMultiplierView
+            Divider()
+            self.mergeMultiplierView
+            Divider()
+            self.horizonMultiplierView
+            Divider()
+            self.horizonFloorView
+            Divider()
+            self.maxKeypointOpsView
+            Divider()
+            self.mergeStreamingView
+        }
     }
 
     private var sceneTypeGridRow: some View {
@@ -1980,10 +1994,13 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
                       Text(item.titleText)
                         .foregroundColor(.white)
                         .font(.largeTitle)
+                        .fixedSize(horizontal: false, vertical: true)
                       
                       Text(item.descriptionText)
                         .foregroundColor(.white)
                         .font(.body)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                   }
               }
           },
@@ -2256,6 +2273,9 @@ struct InstructionGridRow<Content: View, InfoContent: View>: View {
             .buttonStyle(PlainButtonStyle())
 
             // --- Column 3 ---
+            // Leading-aligned and as wide as the grid gives it: a grid centres a cell narrower than its
+            // column, which starts every row's explanation at a different place, and the explanation
+            // wraps within this width rather than being cut short.
             HStack {
                 if showInfo {
                     infoView()
@@ -2269,6 +2289,7 @@ struct InstructionGridRow<Content: View, InfoContent: View>: View {
                     if addSpacer() { Spacer() }
                 }
             }
+              .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

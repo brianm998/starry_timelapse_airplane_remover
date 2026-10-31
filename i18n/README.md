@@ -63,7 +63,7 @@ from it.
 | `warning.*` | `StarWarning` titles, messages and suggestions |
 | `run_marker.*` | the crash / interrupted-run report |
 | `frame_state.*`, `operation.*`, `alignment_state.*` | the progress vocabulary, shared by the cli progress bars and the gui panels |
-| `tool.*`, `multi_*`, `scene_type.*`, `camera_motion.*`, `interaction_mode.*`, `fast_advancement.*` | enum display names |
+| `tool.*`, `multi_*`, `scene_type.*`, `camera_motion.*`, `settings_tab.*`, `interaction_mode.*`, `fast_advancement.*` | enum display names |
 | `language.*`, `menu.*`, `severity.*`, `duration.*`, `progress.*` | small shared vocabularies |
 
 ## Known limitation: plurals

@@ -107,13 +107,16 @@ class SettingsLiveApplyTest {
     }
 
     @Test fun theLayoutIsTheGuis() {
-        assertTrue("BoxWithConstraints" in dialog && "TWO_COLUMNS_FROM" in dialog, "two columns")
-        assertEquals(3, Regex("""collapsible = true""").findAll(dialog).count(), "alignment, horizon and memory are folded until opened")
-        assertTrue("app.setShowExpertSettings(!showExpert)" in dialog, "the expert toggle is a button")
-        assertFalse("ToggleRow(localized(if (showExpert)" in dialog, "the expert toggle is a switch among the settings")
-        // The gui's left column: what the footage is, then how it is processed.
-        val left = dialog.substringAfter("val left: @Composable ColumnScope.() -> Unit").substringBefore("val right:")
-        val order = listOf("infoId = \"scene\"", "infoId = \"camera\"", "infoId = \"clean\"").map { left.indexOf(it) }
-        assertTrue(order.all { it >= 0 } && order == order.sorted(), "scene type, camera motion, then the clean method: $order")
+        // Tabs, not two columns with a button that shows a second half: nothing of it is behind an expert toggle.
+        assertTrue("StarPicker(" in dialog && "options = SettingsTab.entries" in dialog, "the tab strip")
+        assertFalse("showExpert" in dialog || "setShowExpertSettings" in dialog, "an expert toggle is left")
+        assertFalse("ui.show_expert_settings" in dialog || "ui.hide_expert_settings" in dialog, "the expert button's words are left")
+        assertFalse("collapsible" in dialog || "CollapsibleGroup" in dialog, "the tab is the group: nothing is folded inside it")
+        // The gui's cleaning tab, in its order: what the footage is, how it is cleaned, then the cloud-aware merge.
+        val cleaning = dialog.substringAfter("SettingsTab.CLEANING -> {").substringBefore("SettingsTab.GPU ->")
+        val order = listOf(
+            "infoId = \"scene\"", "infoId = \"camera\"", "infoId = \"clean\"", "infoId = \"autoselective\"", "infoId = \"detection\"", "MERGE_FIELDS",
+        ).map { cleaning.indexOf(it) }
+        assertTrue(order.all { it >= 0 } && order == order.sorted(), "scene type, camera motion, clean method, selective auto clean, detection, merge: $order")
     }
 }

@@ -68,7 +68,7 @@ class RenderQuestionTest {
         assertTrue("renderQuestion.done(currentSequence?.runsStarted ?: 0)" in source)
         assertTrue("renderQuestion.arm(forRun = (currentSequence?.runsStarted ?: 0) + 1" in source)
         // P4: a settings change over a live run stops it and asks again (or restarts in one step when the question is off)
-        val update = source.substringAfter("fun updateSettingsAndProcess(").substringBefore("// \"Show Expert Settings\" is remembered")
+        val update = source.substringAfter("fun updateSettingsAndProcess(").substringBefore("// The Preferences dialog")
         assertTrue("currentSequence?.cancelProcessing()" in update && "requestProcessAll()" in update)
         assertTrue("currentSequence?.restartProcessing()" in update)
     }

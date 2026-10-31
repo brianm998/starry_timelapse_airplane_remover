@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -36,6 +37,8 @@ fun <T> StarPicker(
     enabled: Boolean = true,
     /** Whether one option can be chosen: a mode the frame has no image for is greyed out and does nothing. */
     isEnabled: (T) -> Boolean = { true },
+    /** The id a UI test finds an option by (`gherkin/ui/ids.json`), for those that have one. */
+    tag: (T) -> String? = { null },
 ) {
     Row(
         modifier.alpha(if (enabled) 1f else 0.5f).clip(StarShapes.picker).background(StarColors.pickerTrack).padding(2.dp),
@@ -49,6 +52,7 @@ fun <T> StarPicker(
                     .clip(StarShapes.picker)
                     .background(if (sel) StarColors.white else Color.Transparent)
                     .clickable(enabled = usable) { onSelect(opt) }
+                    .then(tag(opt)?.let { Modifier.testTag(it) } ?: Modifier)
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             ) {
                 Text(

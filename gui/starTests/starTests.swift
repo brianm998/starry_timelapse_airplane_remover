@@ -3794,6 +3794,36 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(k["tooHigh"] as? Double, KeypointDivisorStartupView.tooHighDivisor)
         XCTAssertEqual(k["max"] as? Double, KeypointDivisorStartupView.maxDivisor)
     }
+
+    /// The settings sheet is tabs, and the desktop's are the same tabs in the same order, opening on the same one.
+    func testTheSettingsTabsAreTheDesktops() throws {
+        let rule = try XCTUnwrap(try doc()["settingsTabs"] as? [String: Any])
+        XCTAssertEqual(SettingsTab.allCases.map(\.rawValue), rule["tabs"] as? [String])
+        XCTAssertEqual(SettingsTab.first.rawValue, rule["default"] as? String, "the sheet opens on the first tab")
+        // Every tab is named in the catalogue under its id, and the UI id a test finds it by ends in the same id.
+        for tab in SettingsTab.allCases {
+            XCTAssertEqual(tab.accessibilityId, "settings.tab.\(tab.rawValue)")
+            StarLocalization.shared.languageOverride = "en"
+            let english = tab.titleText
+            XCTAssertNotEqual(english, "settings_tab.\(tab.rawValue)", "\(tab.rawValue) is missing from the catalogue")
+            StarLocalization.shared.languageOverride = "de"
+            XCTAssertNotEqual(tab.titleText, english, "\(tab.rawValue) is English in German")
+        }
+        StarLocalization.shared.languageOverride = nil
+    }
+
+    /// The sheet is tabs now: no button toggles a second, expert, half of it, and nothing in the view model remembers one.
+    func testTheSettingsSheetHasNoExpertToggle() throws {
+        let root = Self.path.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        for name in ["gui/star/ProcessingSettingsView.swift", "gui/star/ImageSequenceViewModel.swift"] {
+            let text = try String(contentsOf: root.appendingPathComponent(name), encoding: .utf8)
+            XCTAssertFalse(text.contains("showExpertSettings"), "\(name) still has the expert toggle")
+            XCTAssertFalse(text.contains("ui.show_expert_settings"), name)
+        }
+        let sheet = try String(contentsOf: root.appendingPathComponent("gui/star/ProcessingSettingsView.swift"), encoding: .utf8)
+        // Each tab is its own scroll view, so a tab taller than the window can still be reached.
+        XCTAssertTrue(sheet.contains("ScrollView(.vertical)") && sheet.contains(".id(selectedTab)"), "each tab scrolls by itself")
+    }
 }
 
 /// P12 of `plans/GUI_CLIENT_PARITY_PLAN.md`: the gui's Render Video made its own ffmpeg command from a glob, could not be stopped, and never
