@@ -49,5 +49,9 @@
   { "case": "windowOpen"            , "text": "the \"<window>\" window is open" },
   { "case": "windowNotOpen"         , "text": "the \"<window>\" window is not open" },
   { "case": "openCopiedNoQuestions" , "text": "I open the copied sequence without its startup questions" },
-  { "case": "idSays"                , "text": "\"<id>\" says \"<text>\"" }
+  { "case": "idSays"                , "text": "\"<id>\" says \"<text>\"" },
+  { "case": "typeInto"              , "text": "I type \"<text>\" into \"<id>\"" },
+  { "case": "idHolds"               , "text": "\"<id>\" holds the number <n:int>" },
+  { "case": "idFocused"             , "text": "\"<id>\" has the keyboard" },
+  { "case": "idNotFocused"          , "text": "\"<id>\" does not have the keyboard" }
 ]
