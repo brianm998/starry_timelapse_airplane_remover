@@ -13,8 +13,8 @@ from starpipe.engine import Engine
 from starpipe.notify import Notifier
 
 from .fakes import (
-    OWNER,
     GOOD_BODY,
+    OWNER,
     FakeAgent,
     FakeGitHub,
     accepted,
