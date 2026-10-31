@@ -59,6 +59,7 @@ are different: they stay literal in the feature and the runner supplies their va
 | `I open the copied sequence without its startup questions` | opens it on the sequence screen (gui: `-StarUITestSkipStartupQuestions YES`, which the seam in `ViewModel` reads; desktop: the view model's `autoMode` hook) |
 | `I click "<id>"` | clicks the control with that id |
 | `I press "<key>"` | `return`, `escape`, `tab`, `space`, an arrow, or one character, with modifiers before it (`cmd+w`) |
+| `I drag around "<id>"` | drags a small box around the element's centre (24 points square in the gui, 48 pixels on the desktop), held a moment first so that it is a drag; what is under the pointer gets it, which for a group's probe (`outlier.first`) is the frame, so the chosen tool acts on the box: the Multi tool opens its area sheet |
 | `"<id>" is shown` / `is not shown` | the id is in the window (waited for, in both directions) |
 | `"<id>" is selected` / `is not selected` | a radio choice (gui: the selected trait; desktop: `selectable`) |
 | `"<id>" is on` / `is off` | a switch or check box |

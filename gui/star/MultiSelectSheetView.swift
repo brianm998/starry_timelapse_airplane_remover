@@ -60,56 +60,62 @@ struct MultiSelectSheetView: View {
               .pickerStyle(.inline)
               .frame(minWidth: 280)
 
-            switch multiSelectionType {
-            case .all:
-                switch multiSelectionRemovalType {
-                case .remove:
-                    Text(localized("ui.area.remove.all", frames.count))
-                case .keep:
-                    Text(localized("ui.area.keep.all", frames.count))
-                case .removeOverlaps:
-                    Text(localized("ui.area.remove_overlaps.all", frames.count))
-                case .keepOverlaps:
-                    Text(localized("ui.area.keep_overlaps.all", frames.count))
-                }
+            // what the choices above will do, in words: the id a UI test reads the sheet's action and frames by
+            Group {
+                switch multiSelectionType {
+                case .all:
+                    switch multiSelectionRemovalType {
+                    case .remove:
+                        Text(localized("ui.area.remove.all", frames.count))
+                    case .keep:
+                        Text(localized("ui.area.keep.all", frames.count))
+                    case .removeOverlaps:
+                        Text(localized("ui.area.remove_overlaps.all", frames.count))
+                    case .keepOverlaps:
+                        Text(localized("ui.area.keep_overlaps.all", frames.count))
+                    }
                 
-            case .allAfter:
-                let numFrames = frames.count - currentIndex + 1
-                switch multiSelectionRemovalType {
-                case .remove:
-                    Text(localized("ui.area.remove.after", numFrames, currentIndex))
-                case .keep:
-                    Text(localized("ui.area.keep.after", numFrames, currentIndex))
-                case .removeOverlaps:
-                    Text(localized("ui.area.remove_overlaps.after", numFrames, currentIndex))
-                case .keepOverlaps:
-                    Text(localized("ui.area.keep_overlaps.after", numFrames, currentIndex))
+                case .allAfter:
+                    let numFrames = frames.count - currentIndex + 1
+                    switch multiSelectionRemovalType {
+                    case .remove:
+                        Text(localized("ui.area.remove.after", numFrames, currentIndex))
+                    case .keep:
+                        Text(localized("ui.area.keep.after", numFrames, currentIndex))
+                    case .removeOverlaps:
+                        Text(localized("ui.area.remove_overlaps.after", numFrames, currentIndex))
+                    case .keepOverlaps:
+                        Text(localized("ui.area.keep_overlaps.after", numFrames, currentIndex))
 
-                }
+                    }
                     
-            case .allBefore:
-                let numFrames = currentIndex + 1
-                switch multiSelectionRemovalType {
-                case .remove:
-                    Text(localized("ui.area.remove.before", numFrames, currentIndex))
-                case .keep:
-                    Text(localized("ui.area.keep.before", numFrames, currentIndex))
-                case .removeOverlaps:
-                    Text(localized("ui.area.remove_overlaps.before", numFrames, currentIndex))
-                case .keepOverlaps:
-                    Text(localized("ui.area.keep_overlaps.before", numFrames, currentIndex))
-                }
+                case .allBefore:
+                    let numFrames = currentIndex + 1
+                    switch multiSelectionRemovalType {
+                    case .remove:
+                        Text(localized("ui.area.remove.before", numFrames, currentIndex))
+                    case .keep:
+                        Text(localized("ui.area.keep.before", numFrames, currentIndex))
+                    case .removeOverlaps:
+                        Text(localized("ui.area.remove_overlaps.before", numFrames, currentIndex))
+                    case .keepOverlaps:
+                        Text(localized("ui.area.keep_overlaps.before", numFrames, currentIndex))
+                    }
 
-           case .someAfter:
-                Spacer().frame(minHeight: 30)
-           case .someBefore:
-                Spacer().frame(minHeight: 30)
-            }
+               case .someAfter:
+                    Spacer().frame(minHeight: 30)
+               case .someBefore:
+                    Spacer().frame(minHeight: 30)
+                }
             
+            }
+              .accessibilityIdentifier("multiselect.summary")
+
             HStack {
                 Button(localized("ui.cancel")) {
                     self.isVisible = false
                 }
+                  .accessibilityIdentifier("multiselect.cancel")
                 switch multiSelectionType {
                 case .all:
                     Button(localized("ui.modify")) {
