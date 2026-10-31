@@ -156,7 +156,11 @@ def ticket_lint(file: Path) -> None:
 @click.option("--body-file", required=True, type=click.Path(path_type=Path), help="Ticket body; - for stdin.")
 @click.option("--blocked-by", default="", help="Comma-separated issue numbers that must land first.")
 @click.option("--priority", type=click.Choice(["p0", "p1", "p2", "p3"]), default=None)
-def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | None) -> None:
+@click.option("--propose", is_flag=True, help="File it for the owner to approve (starpipe approve) instead of running it.")
+@click.option("--by", default=None, help="Who is filing (default: $STARPIPE_AGENT, else 'interactive').")
+@click.option("--force", is_flag=True, help="File even if an open issue has a near-identical title.")
+def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | None, propose: bool, by: str | None,
+               force: bool) -> None:
     """Lint, file, label and link a ticket; prints its number and URL."""
     from . import tickets
     from .github import GitHub
@@ -167,14 +171,64 @@ def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | Non
         raise click.BadParameter("expected numbers like 41,42", param_hint="--blocked-by") from exc
     cfg = config_mod.load()
     try:
-        number = tickets.file_ticket(GitHub(cfg), title, _read_body(body_file), blockers, priority)
+        number = tickets.file_ticket(GitHub(cfg), title, _read_body(body_file), blockers, priority, propose=propose,
+                                     by=by or os.environ.get("STARPIPE_AGENT") or "interactive", force=force,
+                                     max_open=cfg.max_open_tickets, max_proposed=cfg.max_proposed)
     except tickets.FilingError as exc:
         raise click.ClickException(str(exc)) from exc
-    click.echo(f"#{number} https://github.com/{cfg.owner}/{cfg.repo}/issues/{number}")
+    click.echo(f"#{number} https://github.com/{cfg.owner}/{cfg.repo}/issues/{number}" + (" (proposed)" if propose else ""))
 
 
 def _num(value: str) -> int:
     return int(value.lstrip("#"))
+
+
+@main.command()
+def proposals() -> None:
+    """The tickets waiting for the owner's approval, and who filed each."""
+    from . import tickets
+    from .github import GitHub, GitHubError
+
+    try:
+        found = tickets.proposals(GitHub(config_mod.load()))
+    except GitHubError as exc:
+        raise click.ClickException(str(exc)) from exc
+    for p in found:
+        click.echo(f"#{p.number:<5} {p.title[:70]:<70}  by {p.by}")
+    if not found:
+        click.echo("no proposals waiting")
+
+
+@main.command()
+@click.argument("numbers", nargs=-1, required=True, type=_num)
+@click.option("--priority", type=click.Choice(["p0", "p1", "p2", "p3"]), default=None)
+def approve(numbers: tuple[int, ...], priority: str | None) -> None:
+    """Approve proposed tickets: they join the pipeline's queue."""
+    from . import tickets
+    from .github import GitHub
+
+    cfg = config_mod.load()
+    for n in numbers:
+        try:
+            tickets.approve(GitHub(cfg), n, priority, cfg.max_open_tickets)
+        except tickets.FilingError as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"#{n} approved")
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.argument("reason", required=False, default="")
+def reject(number: int, reason: str) -> None:
+    """Turn a proposal down: comment, close as not planned."""
+    from . import tickets
+    from .github import GitHub
+
+    try:
+        tickets.reject(GitHub(config_mod.load()), number, reason)
+    except tickets.FilingError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"#{number} rejected")
 
 
 def _client() -> Any:

@@ -49,6 +49,8 @@ class Config(BaseModel):
     ci_poll_s: float = 60.0
     ci_settle_s: float = 90.0
     max_auto_tickets: int = 2
+    max_open_tickets: int = 30  # open issues labelled `pipeline`: `ticket new` and `approve` refuse past this
+    max_proposed: int = 10  # open issues labelled `pipe:proposed`: waiting on the owner
     poll_s: float = 60.0
     checkout: str = ""  # the main checkout the worktrees hang off; default: found from the cwd
 

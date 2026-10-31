@@ -22,6 +22,7 @@ from .contracts import CheckRunner, Contract
 from .db import ACTIVE_STATES, Database, Ticket
 from .github import GitHub, GitHubError
 from .notify import Notifier
+from .tickets import PROPOSED, filed_by
 
 BUDGET_S = {"explore": 45 * 60, "develop": 4 * 3600, "fix": 90 * 60, "review": 45 * 60, "resolve": 20 * 60,
             "ci-fix": 90 * 60, "conflict": 60 * 60}
@@ -215,8 +216,10 @@ class Engine:
     def _file_followups(self, t: Ticket, contract: Contract) -> None:
         for item in contract.followups:
             try:
-                n = self.gh.create_issue(item["title"], f"{item['body']}\n\nFiled by the pipeline while working on #{t.number}.")
-                self.gh.add_labels(n, ["pipe:filed-by-pipeline"])
+                self.gh.ensure_label(PROPOSED)
+                n = self.gh.create_issue(item["title"], f"{item['body']}\n\nFiled by the pipeline while working on #{t.number}."
+                                         + filed_by(f"pipeline stage of #{t.number}"))
+                self.gh.add_labels(n, ["pipe:filed-by-pipeline", PROPOSED])  # waits for `starpipe approve`
                 self.db.event("followup", t.number, issue=n)
             except GitHubError as exc:
                 self.db.event("followup-failed", t.number, error=str(exc))
