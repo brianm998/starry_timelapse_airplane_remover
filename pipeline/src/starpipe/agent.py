@@ -28,6 +28,7 @@ STAGE_TOOLS: dict[str, list[str]] = {
     "review": ["submit_review", "ask_question", "file_followup"],
     "resolve": ["submit_resolution"],
     "ci-fix": ["run_checks", "submit_change", "ask_question", "file_followup"],
+    "conflict": ["run_checks", "submit_change", "ask_question"],
 }
 READ_ONLY_STAGES = {"explore", "review", "resolve"}
 DEFAULT_USAGE_PAUSE_S = 30 * 60

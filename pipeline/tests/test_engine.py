@@ -27,7 +27,7 @@ from .fakes import (
 class Rig:
     def __init__(self, tmp: Path) -> None:
         self.db = Database(tmp / "state.db")
-        self.gh = FakeGitHub()
+        self.gh = FakeGitHub(origin=tmp / "origin.git")
         self.agent = FakeAgent()
         self.pages: list[tuple[str, str]] = []
         self.slept: list[float] = []
@@ -84,7 +84,7 @@ def review_ok(req: StageRequest) -> StageOutcome:
     return accepted(req, "S-rev")
 
 
-async def test_a_ticket_goes_from_label_to_ready(rig: Rig) -> None:
+async def test_a_ticket_goes_from_label_to_landed(rig: Rig) -> None:
     rig.gh.add_issue(7, "Tidy the docs")
     rig.engine.sync_issues()
     assert rig.state(7) == "queued"
@@ -96,13 +96,13 @@ async def test_a_ticket_goes_from_label_to_ready(rig: Rig) -> None:
     assert t and t.number == 7
     await rig.engine.drive(7)
 
-    assert rig.state(7) == "ready"
-    assert rig.gh.state_label(7) == "pipe:ci"
+    assert rig.state(7) == "landed"
     t = rig.db.ticket(7)
     assert t and t.plan and t.plan["summary"].startswith("Add a line")
     assert [s["stage"] for s in rig.db.stages(7)] == ["explore", "develop", "review"]
     assert rig.db.checks(7), "run_checks results are in the database"
-    assert (Path(t.worktree or "") / "docs" / "a.md").read_text() == "two\n"
+    assert rig.gh.issues[7]["state"] == "closed"
+    assert (rig.engine.repo / ".claude" / "worktrees" / "pipe-7").exists() is False
 
 
 async def test_an_outsider_issue_is_not_taken_without_the_owner_label(rig: Rig) -> None:
@@ -272,7 +272,7 @@ async def test_review_changes_send_it_back_through_develop_and_verify(rig: Rig) 
     rig.agent.on("develop", develop_ok, develop_again)
     rig.agent.on("review", changes, review_ok)
     await rig.engine.drive(7)
-    assert rig.state(7) == "ready"
+    assert rig.state(7) == "landed"
     develops = [r for r in rig.agent.requests if r.stage == "develop"]
     assert "wrong word" in develops[1].prompt
     reviews = [r for r in rig.agent.requests if r.stage == "review"]

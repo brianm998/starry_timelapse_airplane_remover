@@ -53,3 +53,8 @@ def added_paths(root: Path, base: str) -> list[str]:
 
 def is_clean(root: Path) -> bool:
     return git(root, "status", "--porcelain", "--untracked-files=no").strip() == ""
+
+
+def is_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
+    return subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", ancestor, descendant],
+                          capture_output=True, check=False).returncode == 0

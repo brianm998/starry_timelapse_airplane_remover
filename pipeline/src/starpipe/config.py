@@ -38,6 +38,9 @@ class Config(BaseModel):
     ci_blocking_wait_s: int = 3 * 3600
     heavy_wait_report_s: float = 60.0
     api_port: int = 47231
+    ci_poll_s: float = 60.0
+    ci_settle_s: float = 90.0
+    max_auto_tickets: int = 2
     poll_s: float = 60.0
     checkout: str = ""  # the main checkout the worktrees hang off; default: found from the cwd
 

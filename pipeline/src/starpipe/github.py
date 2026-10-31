@@ -95,6 +95,46 @@ class GitHub:
     def blocked_by(self, number: int) -> list[int]:
         return [int(b["number"]) for b in self.paged(f"issues/{number}/dependencies/blocked_by?per_page=100")]
 
+    # pull requests and CI ---------------------------------------------------------------------------------------------
+    def create_pr(self, title: str, body: str, head: str, base: str) -> dict[str, Any]:
+        return self.api("POST", "pulls", {"title": title, "body": body, "head": head, "base": base})
+
+    def update_pr(self, number: int, body: str) -> None:
+        self.api("PATCH", f"pulls/{number}", {"body": body})
+
+    def pr(self, number: int) -> dict[str, Any]:
+        return self.api("GET", f"pulls/{number}")
+
+    def find_pr(self, branch: str) -> dict[str, Any] | None:
+        found = self.paged(f"pulls?head={self.config.owner}:{branch}&state=all&per_page=10")
+        return found[0] if found else None
+
+    def workflow_runs(self, sha: str | None = None, branch: str | None = None, per_page: int = 50) -> list[dict[str, Any]]:
+        query = f"per_page={per_page}" + (f"&head_sha={sha}" if sha else "") + (f"&branch={branch}" if branch else "")
+        data: dict[str, Any] = self.api("GET", f"actions/runs?{query}") or {}
+        return data.get("workflow_runs", [])
+
+    def run_jobs(self, run_id: int) -> list[dict[str, Any]]:
+        data: dict[str, Any] = self.api("GET", f"actions/runs/{run_id}/jobs?per_page=100") or {}
+        return data.get("jobs", [])
+
+    def rerun_failed(self, run_id: int) -> None:
+        self.api("POST", f"actions/runs/{run_id}/rerun-failed-jobs")
+
+    def failed_log(self, run_id: int, limit: int = 12000) -> str:
+        out = self._run(["run", "view", str(run_id), "-R", f"{self.config.owner}/{self.config.repo}", "--log-failed"], None)
+        return out[-limit:]
+
+    def merge_pr(self, number: int, sha: str) -> None:
+        """A merge commit, refused by GitHub unless the PR head is still `sha` (the plan's --match-head-commit)."""
+        self.api("PUT", f"pulls/{number}/merge", {"merge_method": "merge", "sha": sha})
+
+    def delete_branch(self, branch: str) -> None:
+        try:
+            self.api("DELETE", f"git/refs/heads/{branch}")
+        except GitHubError:
+            pass  # already deleted
+
     def ensure_labels(self) -> tuple[list[str], list[str]]:
         """Create the missing labels; return (created, already_there)."""
         have = {item["name"] for item in self.paged("labels?per_page=100")}

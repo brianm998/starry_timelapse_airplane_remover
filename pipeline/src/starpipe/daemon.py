@@ -13,9 +13,9 @@ from typing import cast
 
 from aiohttp import web
 
-from . import gitutil, worktrees
+from . import gitutil, ship, worktrees
 from .config import Config, token_path
-from .db import ACTIVE_STATES, Database, Ticket
+from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import STAGE_STATE, Engine
 from .github import GitHubError
 
@@ -81,6 +81,7 @@ class Daemon:
         try:
             await asyncio.to_thread(self.engine.sync_issues)
             await asyncio.to_thread(self.engine.close_due)
+            await asyncio.to_thread(ship.watch_develop, self.engine)
             self.last_poll = time.time()
         except GitHubError as exc:
             self.last_error = f"github: {exc}"
@@ -92,7 +93,7 @@ class Daemon:
             await asyncio.sleep(self.config.poll_s)
 
     def schedule_once(self) -> None:
-        for t in self.db.tickets(ACTIVE_STATES):  # resume after a restart, and after a RETRY or an answer
+        for t in self.db.tickets((*ACTIVE_STATES, *POST_STATES)):  # resume after a restart, and after a RETRY or an answer
             self._start(t.number)
         while (t := self.engine.claimable()) is not None:
             self._start(t.number)  # drive() claims it; one claim per tick keeps the active cap honest

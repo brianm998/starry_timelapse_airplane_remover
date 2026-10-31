@@ -18,7 +18,8 @@ Clock = Callable[[], float]
 
 # A ticket's state is also its GitHub label (pipe:<state>).
 ACTIVE_STATES = ("exploring", "developing", "verifying", "review")
-LIVE_STATES = ("queued", *ACTIVE_STATES, "ready", "ci", "landing", "needs-input", "paused")
+POST_STATES = ("ready", "ci", "landing")
+LIVE_STATES = ("queued", *ACTIVE_STATES, *POST_STATES, "needs-input", "paused")
 TERMINAL_STATES = ("landed", "failed", "closed", "cancelled")
 
 
@@ -211,6 +212,23 @@ class Database:
 
     def asked_before(self, ticket: int, text: str) -> bool:
         return bool(self._all("SELECT 1 FROM questions WHERE ticket=? AND text=? AND answer IS NOT NULL", (ticket, text)))
+
+    # CI baseline ---------------------------------------------------------------------------------------------------
+    def baseline(self, workflow: str, job: str) -> str | None:
+        rows = self._all("SELECT conclusion FROM develop_baseline WHERE workflow=? AND job=?", (workflow, job))
+        return rows[0]["conclusion"] if rows else None
+
+    def set_baseline(self, workflow: str, job: str, sha: str, conclusion: str) -> None:
+        self._exec("INSERT INTO develop_baseline(workflow,job,sha,conclusion,at) VALUES (?,?,?,?,?) "
+                   "ON CONFLICT(workflow,job) DO UPDATE SET sha=excluded.sha, conclusion=excluded.conclusion, at=excluded.at",
+                   (workflow, job, sha, conclusion, self.clock()))
+
+    def baseline_size(self) -> int:
+        return int(self._all("SELECT COUNT(*) AS n FROM develop_baseline")[0]["n"])
+
+    def record_ci(self, ticket: int, sha: str, verdict: str, detail: dict[str, Any]) -> None:
+        self._exec("INSERT INTO ci_runs(ticket,sha,verdict,detail,at) VALUES (?,?,?,?,?)",
+                   (ticket, sha, verdict, json.dumps(detail), self.clock()))
 
     # checks / interventions / alerts ---------------------------------------------------------------------------------
     def record_check(self, ticket: int, sha: str, check_id: str, result: str, counts: dict[str, Any], log: str) -> None:

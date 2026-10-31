@@ -11,7 +11,7 @@ from starpipe import gitutil
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.checks import impact, ledger
 from starpipe.config import Config
-from starpipe.github import GitHub
+from starpipe.github import GitHub, GitHubError
 
 OWNER = "brianm998"
 GOOD_BODY = """## Goal
@@ -52,9 +52,23 @@ def make_repo(tmp: Path) -> Path:
     return repo
 
 
+Ci = list[tuple[str, str, str, str | None]]  # (workflow, job, status, conclusion)
+DEFAULT_CI: Ci = [("pr-gate", "linux", "completed", "success")]
+
+
 class FakeGitHub(GitHub):
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, config: Config | None = None, origin: Path | None = None) -> None:
         super().__init__(config or Config())
+        self.origin = origin
+        self.prs: dict[int, dict[str, Any]] = {}
+        self.ci: dict[str, Ci] = {}
+        self.develop_ci: Ci = []
+        self.logs: dict[int, str] = {}
+        self.reruns: list[int] = []
+        self.deleted: list[str] = []
+        self.phantom = False
+        self.run_ids: dict[tuple[str, str], int] = {}
+        self.run_jobs_by_id: dict[int, list[dict[str, Any]]] = {}
         self.issues: dict[int, dict[str, Any]] = {}
         self.timelines: dict[int, list[dict[str, Any]]] = {}
         self.comment_list: dict[int, list[dict[str, Any]]] = {}
@@ -107,6 +121,69 @@ class FakeGitHub(GitHub):
 
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.issues[number]["state"] = "closed"
+
+    # pull requests and CI ---------------------------------------------------------------------------------------------
+    def _head(self, branch: str) -> str:
+        assert self.origin
+        return sh(self.origin, "git", "rev-parse", f"refs/heads/{branch}").strip()
+
+    def create_pr(self, title: str, body: str, head: str, base: str) -> dict[str, Any]:
+        n = 100 + len(self.prs) + 1
+        self.prs[n] = {"number": n, "title": title, "body": body, "branch": head, "merged": False, "mergeable": True,
+                       "merge_commit_sha": None}
+        return self.prs[n]
+
+    def update_pr(self, number: int, body: str) -> None:
+        self.prs[number]["body"] = body
+
+    def pr(self, number: int) -> dict[str, Any]:
+        pr = self.prs[number]
+        return {**pr, "head": {"sha": self._head(pr["branch"])}}
+
+    def find_pr(self, branch: str) -> dict[str, Any] | None:
+        return next((p for p in self.prs.values() if p["branch"] == branch), None)
+
+    def workflow_runs(self, sha: str | None = None, branch: str | None = None, per_page: int = 50) -> list[dict[str, Any]]:
+        key = "develop" if branch else (sha or "")
+        jobs = self.develop_ci if branch else self.ci.get(key, DEFAULT_CI)
+        runs: list[dict[str, Any]] = []
+        for wf in dict.fromkeys(w for w, *_ in jobs):
+            run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))
+            self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None}
+                                           for w, j, st, c in jobs if w == wf]
+            runs.append({"id": run_id, "name": wf, "status": "completed", "head_sha": key})
+        return runs
+
+    def run_jobs(self, run_id: int) -> list[dict[str, Any]]:
+        return self.run_jobs_by_id.get(run_id, [])
+
+    def rerun_failed(self, run_id: int) -> None:
+        self.reruns.append(run_id)
+
+    def failed_log(self, run_id: int, limit: int = 12000) -> str:
+        return self.logs.get(run_id, "Run swift test\nerror: boom")
+
+    def merge_pr(self, number: int, sha: str) -> None:
+        pr = self.pr(number)
+        if pr["head"]["sha"] != sha:
+            raise GitHubError("head changed")
+        assert self.origin
+        if self.phantom:
+            pr["merged"] = self.prs[number]["merged"] = True
+            self.prs[number]["merge_commit_sha"] = "0" * 40
+            return
+        clone = self.origin.parent / f"merge-{number}"
+        sh(self.origin.parent, "git", "clone", "-q", str(self.origin), str(clone))
+        sh(clone, "git", "config", "user.email", "t@t")
+        sh(clone, "git", "config", "user.name", "t")
+        sh(clone, "git", "checkout", "-q", "develop")
+        sh(clone, "git", "merge", "-q", "--no-ff", "-m", f"Merge PR {number}", sha)
+        sh(clone, "git", "push", "-q", "origin", "develop")
+        self.prs[number]["merged"] = True
+        self.prs[number]["merge_commit_sha"] = sh(clone, "git", "rev-parse", "HEAD").strip()
+
+    def delete_branch(self, branch: str) -> None:
+        self.deleted.append(branch)
 
     def state_label(self, number: int) -> str | None:
         names = [lab["name"] for lab in self.issues[number]["labels"] if lab["name"].startswith("pipe:")]

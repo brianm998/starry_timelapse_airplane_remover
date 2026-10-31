@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import gitutil, guards, negctl, trust, worktrees
+from . import gitutil, guards, negctl, ship, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
 from .checks import impact, ledger
 from .config import Config, home
@@ -24,8 +24,9 @@ from .github import GitHub, GitHubError
 from .notify import Notifier
 
 BUDGET_S = {"explore": 45 * 60, "develop": 4 * 3600, "fix": 90 * 60, "review": 45 * 60, "resolve": 20 * 60,
-            "ci-fix": 90 * 60}
-STAGE_STATE = {"explore": "exploring", "develop": "developing", "fix": "verifying", "review": "review"}
+            "ci-fix": 90 * 60, "conflict": 60 * 60}
+STAGE_STATE = {"explore": "exploring", "develop": "developing", "fix": "verifying", "review": "review",
+               "ci-fix": "ci", "conflict": "landing"}
 MAX_FIX_CYCLES, MAX_REVIEW_ROUNDS, MAX_CRASH_RESUMES = 2, 2, 3
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
 PRIORITY = {"p0": 0, "p1": 1, "p2": 2, "p3": 3}
@@ -60,6 +61,7 @@ class Engine:
     negative_control: Callable[[Path, str, list[str]], list[negctl.Control]] = negctl.run
     shim: str = ""
     parked: set[int] = field(default_factory=lambda: set[int]())
+    land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
 
     # intake --------------------------------------------------------------------------------------------------------
     def sync_issues(self) -> None:
@@ -272,6 +274,15 @@ class Engine:
                     return
             elif t.state == "review":
                 if not await self._review(t):
+                    return
+            elif t.state == "ready":
+                if not ship.publish(self, t):
+                    return
+            elif t.state == "ci":
+                if not await ship.run_ci(self, t):
+                    return
+            elif t.state == "landing":
+                if not await ship.land(self, t):
                     return
             else:
                 return
