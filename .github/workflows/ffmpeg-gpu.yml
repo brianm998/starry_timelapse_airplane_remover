@@ -60,7 +60,8 @@ on:
 
 concurrency:
   group: ffmpeg-${{ github.workflow }}-${{ github.ref }}-${{ inputs.platforms }}
-  cancel-in-progress: true
+  # a push to develop must run to the end: it is the baseline the pipeline's CI judge compares PRs with
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ─── macOS: one universal binary, both slices built on the arm64 runner ─────────

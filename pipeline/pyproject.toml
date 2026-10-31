@@ -1,0 +1,35 @@
+[project]
+name = "starpipe"
+version = "0.1.0"
+description = "Automated development pipeline for star (see plans/PIPELINE.md)"
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.1",
+    "pydantic>=2.7",
+    "psutil>=6.0",
+]
+
+[project.scripts]
+starpipe = "starpipe.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pyright>=1.1.380", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/starpipe"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"
+pythonVersion = "3.13"
+
+[tool.ruff]
+line-length = 110
+src = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

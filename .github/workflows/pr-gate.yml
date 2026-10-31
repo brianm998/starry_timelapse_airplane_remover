@@ -1,0 +1,213 @@
+name: pr-gate
+
+# The fast check every PR must pass before the pipeline merges it (plans/PIPELINE.md §8.5, §15).
+# Target: 30 minutes. No path filter, so there is always a result for the head SHA. The slow
+# workflows (Gherkin, the installers, wgpu) are not part of this gate; they block a merge only
+# when they fail on a PR where develop passes them.
+#
+# Not in this first version: a Windows job (cli.yml's windows job needs ~190 lines of MSVC/SDK
+# pinning and is red on develop today). It joins once that is fixed.
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: pr-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ─── static checks and the pipeline's own tests: seconds, no OpenCV ─────────────
+  static:
+    name: static checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Localization catalogue
+        run: python3 i18n/check.py
+
+      - name: Set up Swift (for the Gherkin generator)
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: '6.0'
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Install the Gherkin parser
+        run: gem install cucumber-gherkin -v 42.0.1 --no-document
+
+      - name: Generated Gherkin files are current
+        run: |
+          gherkin/generate.sh
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated files are out of date: run gherkin/generate.sh and commit the result"
+            git --no-pager diff
+            exit 1
+          fi
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Proto is in sync with the daemon
+        working-directory: star-desktop
+        run: ./gradlew checkProtoSync --no-daemon
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Pipeline lint, types and tests
+        working-directory: pipeline
+        run: |
+          uv run ruff check .
+          uv run pyright
+          uv run pytest -q
+
+  # ─── Linux ───────────────────────────────────────────────────────────────────
+  linux:
+    name: Linux build + tests (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install apt prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake make git pkg-config perl \
+            libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
+            libcurl4-openssl-dev
+
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: '6.0'
+
+      # the same cache keys as cli.yml, so a warm cache there is a warm cache here
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/linux
+            opencv/include
+          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/linux
+            StarDecisionTrees/include/release/linux
+          key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/linux/libopencv2.a ]; then
+            cd opencv && ./release.sh
+          fi
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/linux/libStarDecisionTrees.a ]; then
+            cd StarDecisionTrees && bash release.sh
+          fi
+
+      - name: Build cli and daemon
+        run: |
+          swift build --package-path cli
+          swift build --package-path daemon
+
+      # `tee` would hide swift test's exit status without pipefail; bash -e -o pipefail is the default shell here
+      - name: StarCore tests
+        run: swift test --package-path StarCore 2>&1 | tee starcore-test.log
+
+      - name: Daemon tests
+        run: swift test --package-path daemon 2>&1 | tee daemon-test.log
+
+      - name: Prove tests ran (not a vacuous green)
+        run: |
+          for log in starcore-test.log daemon-test.log; do
+            n=$(grep -Eo 'Executed [0-9]+ tests' "$log" | tail -1 | grep -Eo '[0-9]+' || echo 0)
+            echo "$log: $n tests"
+            [ "$n" -ge 1 ] || { echo "::error::$log executed no tests"; exit 1; }
+          done
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-gate-linux-logs
+          path: '*-test.log'
+
+  # ─── macOS ───────────────────────────────────────────────────────────────────
+  macos:
+    name: macOS build + tests (macos-14)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install Eigen3 via Homebrew
+        run: brew install eigen
+
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/macos
+            opencv/include
+          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/macos
+            StarDecisionTrees/include/release/macos
+          key: dt-macos-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/macos/libopencv2.a ]; then
+            cd opencv && ./release.sh
+          fi
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then
+            cd StarDecisionTrees && ./release.sh
+          fi
+
+      - name: Build cli and daemon
+        run: |
+          swift build --package-path cli
+          swift build --package-path daemon
+
+      - name: StarCore tests
+        run: swift test --package-path StarCore 2>&1 | tee starcore-test.log
+
+      - name: Prove tests ran (not a vacuous green)
+        run: |
+          n=$(grep -Eo 'Executed [0-9]+ tests' starcore-test.log | tail -1 | grep -Eo '[0-9]+' || echo 0)
+          echo "StarCore: $n tests"
+          [ "$n" -ge 1 ] || { echo "::error::StarCore executed no tests"; exit 1; }
+
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-gate-macos-log
+          path: starcore-test.log

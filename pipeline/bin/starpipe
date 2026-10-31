@@ -1,0 +1,4 @@
+#!/bin/bash
+# starpipe from any directory: runs the pipeline project's own environment.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec uv run --quiet --project "$here" starpipe "$@"

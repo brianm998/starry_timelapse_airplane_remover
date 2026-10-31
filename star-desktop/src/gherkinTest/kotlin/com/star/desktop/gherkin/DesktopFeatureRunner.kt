@@ -1,6 +1,9 @@
 package com.star.desktop.gherkin
 
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
@@ -87,7 +90,8 @@ class DesktopFeatureRunner {
         StepAction.NOTHING_ELSE_CHANGED to { nothingElseChanged() },
         // the @ui vocabulary
         StepAction.COPY_SEQUENCE to ::copySequenceStep,
-        StepAction.OPEN_COPIED to ::openCopiedSequence,
+        StepAction.OPEN_COPIED to { t -> openCopiedSequence(t) },
+        StepAction.OPEN_COPIED_NO_QUESTIONS to { t -> openCopiedSequence(t, askingTheStartupQuestions = false) },
         StepAction.CLICK_ID to { t -> clickId(t, args[0]) },
         StepAction.PRESS_KEY to { t -> pressKey(t, args[0]) },
         StepAction.ID_SHOWN to { t -> expectShown(t, args[0], shown = true) },
@@ -97,6 +101,7 @@ class DesktopFeatureRunner {
         StepAction.ID_ON to { t -> expectOn(t, args[0], on = true) },
         StepAction.ID_OFF to { t -> expectOn(t, args[0], on = false) },
         StepAction.ID_READS to { t -> expectReads(t, args[0], args[1]) },
+        StepAction.ID_SAYS to { t -> expectSays(t, args[0], args[1]) },
         // What the Compose test host cannot reach: a feature that needs one of these is a known gap of this client (gherkin/ui/known-gaps.json),
         // which the ratchet turns into a failure the day a step here starts to work.
         StepAction.APP_NO_SEQUENCE to { notReachable("the start screen embeds a JavaFX video background, and JavaFX cannot start headless") },
@@ -210,7 +215,7 @@ class DesktopFeatureRunner {
         return videos[0]
     }
 
-    private fun newModel(): AppViewModel {
+    private fun newModel(openPath: String? = null, mode: String? = null): AppViewModel {
         // The removal pins were measured at DETECTION_STRONG (Star's own default, the cli's). A session opens at the user's remembered type, and
         // with none remembered the proto's zero value, DETECTION_MILD, so a removal feature seeds the remembered type before the view model
         // reads its preferences (user.home is the scratch home, see run()), and finishOpening only checks it. Patching the session afterwards
@@ -222,7 +227,7 @@ class DesktopFeatureRunner {
         scope = appScope
         // No auto-open hook and no autoMode: either one suppresses the startup prompts, and the prompts are how a user sets the
         // settings this feature asks for. The sequence is opened through the view model instead, as the file chooser does.
-        return AppViewModel(appScope, autoOpenPath = null, autoMode = null, autoFrame = null, releaseCheck = { null }).also { vm = it }
+        return AppViewModel(appScope, autoOpenPath = openPath, autoMode = mode, autoFrame = if (mode != null) 0 else null, releaseCheck = { null }).also { vm = it }
     }
 
     /**
@@ -272,6 +277,15 @@ class DesktopFeatureRunner {
         return gaps.getAsJsonObject(feature)?.get(CLIENT)?.asString
     }
 
+    @androidx.compose.runtime.Composable
+    private fun KeyHost(model: AppViewModel, content: @androidx.compose.runtime.Composable () -> Unit) {
+        val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+        androidx.compose.foundation.layout.Box(
+            androidx.compose.ui.Modifier.focusRequester(focus).focusable().onKeyEvent { com.star.desktop.ui.app.handleGlobalKey(it, model) },
+        ) { content() }
+        androidx.compose.runtime.LaunchedEffect(Unit) { focus.requestFocus() }
+    }
+
     // ---- the @ui steps ----
 
     /** A fresh copy of the sequence, as [openSequence] makes one: star derives its temp and output paths from the input directory's name. */
@@ -284,10 +298,11 @@ class DesktopFeatureRunner {
     }
 
     /** Opens the copy as the file chooser does, and stops there: the startup questions are the feature's to answer. */
-    private fun openCopiedSequence(t: ComposeUiTest) {
+    private fun openCopiedSequence(t: ComposeUiTest, askingTheStartupQuestions: Boolean = true) {
         if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
-        val model = newModel()
-        model.openSequence(sequenceCopy.absolutePath)
+        // The view model's own dev hook lands in the edit screen without the startup questions, as the gui's launch argument does.
+        val model = if (askingTheStartupQuestions) newModel().also { it.openSequence(sequenceCopy.absolutePath) }
+                    else newModel(openPath = sequenceCopy.absolutePath, mode = "edit")
         finishOpening(t, model, answer = false)
     }
 
@@ -316,6 +331,13 @@ class DesktopFeatureRunner {
         waitFor(t, "\"$id\" ${if (on) "on" else "off"}", 20_000, { "(ToggleableState: ${semanticsOf(t, id)?.getOrNull(SemanticsProperties.ToggleableState)})" }) {
             (semanticsOf(t, id)?.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.On) == on
         }
+    }
+
+    /** The control's text is exactly [expected]. */
+    private fun expectSays(t: ComposeUiTest, id: String, expected: String) {
+        expectShown(t, id, shown = true)
+        fun texts() = semanticsOf(t, id)?.getOrNull(SemanticsProperties.Text)?.map { it.text }.orEmpty()
+        waitFor(t, "\"$id\" to say \"$expected\"", 20_000, { "(it says ${texts()})" }) { expected in texts() || texts().joinToString("") == expected }
     }
 
     /** The control's text is the catalogue's English text for [key]. */
@@ -377,7 +399,9 @@ class DesktopFeatureRunner {
             val detection = model.sessions.session.value?.config?.detectionType
             if (detection != com.star.proto.DetectionType.DETECTION_STRONG) throw RunnerError("the session opened at detection type $detection, not DETECTION_STRONG")
         }
-        t.setContent { StarApp(model) }
+        // The window's own key handler (`Main.kt`: `Window(onKeyEvent = ...)`) is not part of [StarApp], so a @ui feature that presses a key hosts it the
+        // same way: on an ancestor, in the bubble phase, with the focus put on it to begin with.
+        if ("@ui" in feature.tags) t.setContent { KeyHost(model) { StarApp(model) } } else t.setContent { StarApp(model) }
         if (answer) answerStartupPrompts(t, model)
     }
 

@@ -9,6 +9,8 @@
   "autoSkyOnlyTiff16": ["a7sii_10_sky_tiff16"],
   "removeAirplanes": ["a7sii_10"],
   "selectiveHorizonTiff16": ["a7sii_10_16bit"],
+  "uiFrameKeys": [],
+  "uiModePickers": [],
   "uiRecentsRemove": [],
   "uiRemovalSelectiveChoice": [],
   "uiSecondaryWindowToggles": [],
@@ -23,5 +25,6 @@
   "uiStartupHorizonQuestion": [],
   "uiStartupMovingHorizonQuestion": [],
   "uiStartupNoHorizonSkips": [],
-  "uiStartupReturnStarts": []
+  "uiStartupReturnStarts": [],
+  "uiViewPickerNeedsAnImage": []
 }
