@@ -171,7 +171,7 @@ CHECKS: dict[str, CheckSpec] = {
         ),
         CheckSpec(
             "test:pipeline", "pytest pipeline",
-            ("uv", "run", "--project", "pipeline", "pytest", "-q"), parser="pytest", heavy=False,
+            ("uv", "run", "pytest", "-q"), cwd="pipeline", parser="pytest", heavy=False,  # from pipeline/, so its pytest ini applies
         ),
         CheckSpec(
             "t0:pipeline-static", "pyright + ruff pipeline",

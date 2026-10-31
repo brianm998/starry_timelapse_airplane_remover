@@ -69,3 +69,11 @@ def test_the_monitor_has_its_own_build_and_test() -> None:
     assert "t0:pipeline-static" in plan.t0  # still a pipeline/ change
     plain = impact.plan_for(["pipeline/src/starpipe/daemon.py"])
     assert plain.builds == [] and plain.tests == ["test:pipeline"]
+
+
+def test_the_pipeline_tests_run_from_the_pipeline_directory() -> None:
+    """From the repo root pytest never reads pipeline/pyproject.toml, so asyncio_mode=auto is not applied and every async test
+    fails. The nightly found this: the check had only ever passed while the suite had no async tests."""
+    spec = star.CHECKS["test:pipeline"]
+    assert spec.cwd == "pipeline" and "--project" not in spec.argv
+    assert 'asyncio_mode = "auto"' in (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
