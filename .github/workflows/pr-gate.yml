@@ -59,9 +59,17 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Plugin resolution from plugins.gradle.org fails transiently ("Could not parse POM"); try once more before going red.
       - name: Proto is in sync with the daemon
-        working-directory: star-desktop
-        run: ./gradlew checkProtoSync --no-daemon
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 2
+          retry_wait_seconds: 20
+          shell: bash
+          command: cd star-desktop && ./gradlew checkProtoSync --no-daemon
 
       - uses: astral-sh/setup-uv@v5
 
