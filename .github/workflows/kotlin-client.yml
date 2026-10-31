@@ -54,9 +54,25 @@ jobs:
   # ─── ffmpeg / ffprobe ─────────────────────────────────────────────────────────
   # Built from source by ffmpeg/build.sh, for every platform, in the shared ffmpeg-gpu.yml (cli.yml
   # reuses it for the macOS GUI). Artifacts: ffmpeg-linux-x64, ffmpeg-windows-x64, ffmpeg-macos-universal.
-  ffmpeg:
+  # One call per OS, so an installer waits for the ffmpeg of its own OS only: a single call made the Linux
+  # installer wait for the slowest build, and a cold macOS or Windows cache is 20+ minutes.
+  ffmpeg-linux:
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/ffmpeg-gpu.yml
+    with:
+      platforms: linux
+
+  ffmpeg-macos:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/ffmpeg-gpu.yml
+    with:
+      platforms: macos
+
+  ffmpeg-windows:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/ffmpeg-gpu.yml
+    with:
+      platforms: windows
 
   # ─── Linux installer (.deb) ───────────────────────────────────────────────────
   # Builds stard for Linux (same OpenCV/StarDecisionTrees caches as cli.yml's
@@ -70,7 +86,7 @@ jobs:
   linux-package:
     name: Linux installer (.deb)
     runs-on: ubuntu-24.04
-    needs: ffmpeg
+    needs: ffmpeg-linux
     if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -163,7 +179,7 @@ jobs:
   windows-package:
     name: Windows installer (.exe)
     runs-on: windows-2022
-    needs: ffmpeg
+    needs: ffmpeg-windows
     if: github.event_name != 'pull_request'
     defaults:
       run:
@@ -384,7 +400,7 @@ jobs:
   macos-signed:
     name: macOS signed + notarized installer (macos-14)
     runs-on: macos-14
-    needs: ffmpeg
+    needs: ffmpeg-macos
     if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v4
