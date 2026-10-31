@@ -118,7 +118,7 @@ internal class RenderOptionsState(val caps: VideoCapabilities, start: VideoEncod
     var customText by mutableStateOf(RenderVideo.rateText(choice.frameRate))
 
     val customRate: Double? get() = RenderVideo.customRate(customText)
-    val rateEntry get() = RenderVideo.shownRateEntry(caps, choice.frameRate, customPicked)
+    val rateEntry: com.star.proto.FrameRateCaps? get() = RenderVideo.shownRateEntry(caps, choice.frameRate, customPicked)
 
     /** There is an encoder, and the custom rate field, if it is the one in use, holds a rate. */
     val usable: Boolean get() = choice.encoder.isNotEmpty() && (rateEntry?.custom != true || customRate != null)
