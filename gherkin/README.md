@@ -65,6 +65,8 @@ the flag. gherkin 9.0.0 and cucumber-gherkin 42.0.1 were checked to produce byte
    `{placeholders}` stay literal in the file; the runner supplies their values (below).
 4. `gherkin/generate.sh`, then commit the generated files.
 
+A UI feature (`@ui`) is the same, with the extra rules and the inline arguments (`I click "<id>"`) in `gherkin/ui/README.md`.
+
 The generator fails, with file:line, on an unknown step, a placeholder with no default, a bad basename or
 tag, a second scenario, or an unsupported construct. It deletes and rewrites every generated location each
 run, so a deleted feature leaves no orphan test behind.

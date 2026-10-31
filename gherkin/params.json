@@ -53,6 +53,24 @@
     },
     "videoBackgroundIdentical": {
       "video": "data:a7sii_10_h264"
+    },
+    "uiStartupReturnStarts": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiStartupDefaults": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiStartupHorizonQuestion": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiStartupMovingHorizonQuestion": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiStartupNoHorizonSkips": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiRemovalSelectiveChoice": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }

@@ -8,5 +8,11 @@
   "autoSelectiveHorizonTiff16": ["a7sii_10_16bit"],
   "autoSkyOnlyTiff16": ["a7sii_10_sky_tiff16"],
   "removeAirplanes": ["a7sii_10"],
-  "selectiveHorizonTiff16": ["a7sii_10_16bit"]
+  "selectiveHorizonTiff16": ["a7sii_10_16bit"],
+  "uiRemovalSelectiveChoice": [],
+  "uiStartupDefaults": [],
+  "uiStartupHorizonQuestion": [],
+  "uiStartupMovingHorizonQuestion": [],
+  "uiStartupNoHorizonSkips": [],
+  "uiStartupReturnStarts": []
 }

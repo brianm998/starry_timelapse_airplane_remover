@@ -1,0 +1,4 @@
+{
+  "comment": "The parity backlog (plan \u00a76.1): a @ui feature that fails on a client where it is listed here passes, and says so; one that fails where it is not listed fails; one listed that now passes fails until the entry is removed. One entry per feature and client, with the reason, and the file only shrinks.",
+  "gaps": {}
+}

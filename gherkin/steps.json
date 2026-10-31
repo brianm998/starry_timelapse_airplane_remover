@@ -24,5 +24,15 @@
   { "case": "airplanesRemoved"      , "text": "the labelled airplanes are removed" },
   { "case": "satellitesRemoved"     , "text": "the labelled satellites are removed" },
   { "case": "starsPreserved"        , "text": "the stars are preserved" },
-  { "case": "nothingElseChanged"    , "text": "nothing outside the labelled trails changed" }
+  { "case": "nothingElseChanged"    , "text": "nothing outside the labelled trails changed" },
+  { "case": "copySequence"          , "text": "a fresh copy of the sequence {sequence}" },
+  { "case": "openCopied"            , "text": "I open the copied sequence" },
+  { "case": "clickId"               , "text": "I click \"<id>\"" },
+  { "case": "pressKey"              , "text": "I press \"<key>\"" },
+  { "case": "idShown"               , "text": "\"<id>\" is shown" },
+  { "case": "idNotShown"            , "text": "\"<id>\" is not shown" },
+  { "case": "idSelected"            , "text": "\"<id>\" is selected" },
+  { "case": "idNotSelected"         , "text": "\"<id>\" is not selected" },
+  { "case": "idOn"                  , "text": "\"<id>\" is on" },
+  { "case": "idOff"                 , "text": "\"<id>\" is off" }
 ]
