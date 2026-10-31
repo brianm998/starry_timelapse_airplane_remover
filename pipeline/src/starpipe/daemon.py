@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import secrets
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from aiohttp import web
 
@@ -48,6 +49,26 @@ def activity(db: Database, t: Ticket, now: float | None = None) -> str:
     return t.state if t.state != "ready" else "ready to publish"
 
 
+GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
+
+
+def group_of(t: Ticket, holding_or_waiting_lock: bool, now: float, updated: float) -> str | None:
+    """Which sidebar group a ticket belongs in (computed here, never by a client). None: not shown."""
+    if t.state == "needs-input":
+        return "needs_you"
+    if t.state in ACTIVE_STATES:
+        return "waiting" if holding_or_waiting_lock else "running"
+    if t.state in ("ready", "ci", "landing", "paused"):
+        return "waiting"
+    if t.state == "queued":
+        return "queued"
+    if t.state == "landed":
+        return "landed_today" if now - updated < 24 * 3600 else None
+    if t.state in ("failed", "cancelled"):
+        return "failed" if now - updated < 7 * 24 * 3600 else None
+    return None
+
+
 class Daemon:
     def __init__(self, engine: Engine, config: Config, token: str | None = None) -> None:
         self.engine, self.config, self.db = engine, config, engine.db
@@ -57,6 +78,7 @@ class Daemon:
         self.last_poll: float | None = None
         self.last_error: str = ""
         self.watch = watch.Watch()
+        self._runtime: dict[str, object] = {}
 
     # supervision ---------------------------------------------------------------------------------------------------
     def reconcile(self) -> None:
@@ -174,6 +196,60 @@ class Daemon:
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "tickets": tickets}
 
+    def runtime(self) -> dict[str, object]:
+        """The checkout the daemon runs from and how far behind origin/develop its pipeline/ is (cached 30 s)."""
+        now = time.time()
+        if self._runtime and now - float(str(self._runtime["at"])) < 30:
+            return self._runtime
+        root = self.engine.repo
+        sha = gitutil.git(root, "rev-parse", "--short", "HEAD", check=False).strip()
+        behind = gitutil.git(root, "rev-list", "--count", f"HEAD..origin/{self.config.base_branch}", "--",
+                             "pipeline", check=False).strip()
+        self._runtime = {"sha": sha, "behind_develop": int(behind or 0), "at": now}
+        return self._runtime
+
+    def snapshot(self) -> dict[str, object]:
+        """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
+        base = self.status()
+        now = time.time()
+        hv: dict[str, Any] = base["heavy"]  # type: ignore[assignment]
+        lock_tickets = {str(h["ticket"]) for h in hv["holders"]} | {str(w["ticket"]) for w in hv["queue"]}
+        tickets: list[dict[str, object]] = []
+        for t in self.db.tickets():
+            row = self.db._all("SELECT updated_at FROM tickets WHERE number=?", (t.number,))[0]  # pyright: ignore[reportPrivateUsage]
+            group = group_of(t, str(t.number) in lock_tickets, now, float(row["updated_at"]))
+            if group is None:
+                continue
+            stages = self.db.stages(t.number)
+            question = self.db.open_question(t.number)
+            tickets.append({"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
+                            "group": group, "activity": activity(self.db, t, now), "blocked_by": self.db.open_blockers(t.number),
+                            "pr_number": t.pr_number, "branch": t.branch, "worktree": t.worktree,
+                            "park_reason": t.park_reason, "question": question["text"] if question else None,
+                            "stages": [{k: s[k] for k in ("stage", "attempt", "model", "started", "ended", "lock_wait_s", "outcome")}
+                                       for s in stages]})
+        gate = [r for r in self.db._all("SELECT job, conclusion FROM develop_baseline WHERE workflow='pr-gate'")]  # pyright: ignore[reportPrivateUsage]
+        reds = self.db._all("SELECT COUNT(*) AS n FROM develop_baseline WHERE conclusion NOT IN ('success','skipped','neutral')")  # pyright: ignore[reportPrivateUsage]
+        week = self.db._all("SELECT kind, COUNT(*) AS n FROM interventions WHERE at > ? GROUP BY kind", (now - 7 * 86400,))  # pyright: ignore[reportPrivateUsage]
+        cursor = self.db._all("SELECT COALESCE(MAX(id),0) AS m FROM events")[0]["m"]  # pyright: ignore[reportPrivateUsage]
+        return {**base, "tickets": tickets, "groups": list(GROUPS), "runtime": {k: v for k, v in self.runtime().items() if k != "at"},
+                "landing": {"paused": self.db.get("pause") in ("all", "landing"), "stop_line": self.db.get("stop_line")},
+                "develop": {"gate": {r["job"]: r["conclusion"] for r in gate}, "known_red": int(reds[0]["n"])},
+                "interventions_week": {r["kind"]: r["n"] for r in week}, "events_cursor": int(cursor), "now": now,
+                "version": "starpipe 1", "repo": f"{self.config.owner}/{self.config.repo}"}
+
+    def log_tail(self, n: int, lines: int = 60) -> list[str]:
+        folder = home() / "tickets" / str(n) / "transcripts"
+        files = sorted(folder.glob("*.jsonl"), key=lambda f: f.stat().st_mtime)
+        out: list[str] = []
+        for row in (files[-1].read_text().splitlines()[-lines:] if files else []):
+            try:
+                data = json.loads(row)
+            except ValueError:
+                continue
+            out.append(f"{time.strftime('%H:%M:%S', time.localtime(data['t']))} {data['type']}  {str(data['repr'])[:220]}")
+        return out
+
     def show(self, n: int) -> dict[str, object] | None:
         t = self.db.ticket(n)
         if t is None:
@@ -246,9 +322,31 @@ class Daemon:
                 raise web.HTTPNotFound()
             return web.json_response(data)
 
+        @r.get("/v1/snapshot")
+        async def snapshot(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            return web.json_response(await asyncio.to_thread(self.snapshot))
+
+        @r.get("/v1/tickets/{n}/log")
+        async def tail(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            return web.json_response({"lines": self.log_tail(int(req.match_info["n"]), int(req.query.get("lines", 60)))})
+
         @r.get("/v1/events")
-        async def events(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
-            return web.json_response(self.db.events_since(int(req.query.get("after", 0))))
+        async def events(req: web.Request) -> web.StreamResponse:  # pyright: ignore[reportUnusedFunction]
+            after = int(req.query.get("after", req.headers.get("Last-Event-ID", 0)))
+            if "text/event-stream" not in req.headers.get("Accept", ""):
+                return web.json_response(self.db.events_since(after))
+            resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache"})
+            await resp.prepare(req)
+            idle = 0
+            while True:  # one event per line pair; a comment every 15 s keeps proxies and the client's timeout quiet
+                batch = self.db.events_since(after)
+                for e in batch:
+                    after = e["id"]
+                    await resp.write(f"id: {e['id']}\ndata: {json.dumps(e)}\n\n".encode())
+                idle = 0 if batch else idle + 1
+                if idle and idle % 15 == 0:
+                    await resp.write(b": keepalive\n\n")
+                await asyncio.sleep(1)
 
         @r.post("/v1/tickets/{n}/{action}")
         async def act(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]

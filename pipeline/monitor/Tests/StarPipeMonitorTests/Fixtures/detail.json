@@ -1,0 +1,172 @@
+{
+  "activity": "landed",
+  "branch": "pipe/28-processing-frames-dialog-show-alignment-",
+  "checks": [
+    {
+      "at": 1793468568.080448,
+      "check_id": "t0:diff-check",
+      "counts": "{\"executed\": 0, \"failed\": 0, \"skipped\": 0}",
+      "id": 25,
+      "log": "/logs/t0_diff-check.log",
+      "result": "pass",
+      "sha": "fc9f8ae2748f029b44a17c45388ea61c9d27c2a6",
+      "ticket": 28
+    },
+    {
+      "at": 1793468568.081799,
+      "check_id": "t0:artifacts",
+      "counts": "{\"executed\": 0, \"failed\": 0, \"skipped\": 0}",
+      "id": 26,
+      "log": "/logs/t0_artifacts.log",
+      "result": "pass",
+      "sha": "fc9f8ae2748f029b44a17c45388ea61c9d27c2a6",
+      "ticket": 28
+    },
+    {
+      "at": 1793468568.082099,
+      "check_id": "build:gui",
+      "counts": "{\"executed\": 0, \"failed\": 0, \"skipped\": 0}",
+      "id": 27,
+      "log": "/logs/build_gui.log",
+      "result": "pass",
+      "sha": "fc9f8ae2748f029b44a17c45388ea61c9d27c2a6",
+      "ticket": 28
+    }
+  ],
+  "number": 28,
+  "park_reason": null,
+  "plan": {
+    "acceptance": [
+      {
+        "check": "starTests ProcessingModalAlignmentPreferenceTests.testTheChartsAreOffWhenNeverChosen: empty prefs decode \u2192 showsAlignmentInProcessingWindow == false (fails before the change, where the effective default was true).",
+        "id": "A1"
+      },
+      {
+        "check": "star-desktop LocalPreferencesTest theProcessingWindowsAlignmentChartsAreOffUntilTurnedOn: assertFalse(LocalPreferences().showAlignmentInProcessingWindow) with no prefs file.",
+        "id": "A2"
+      },
+      {
+        "check": "gui testTheChoiceRoundTrips (true and false, raw and effective) and the desktop test's true-then-false write/read-back both pass.",
+        "id": "A3"
+      },
+      {
+        "check": "Review: LocalPreferences.kt KDoc says off until turned on; UserPreferences.swift doc comment says nil means no.",
+        "id": "A4"
+      }
+    ],
+    "approach": [
+      "gui/star/UserPreferences.swift: add a computed `var showsAlignmentInProcessingWindow: Bool { showAlignmentInProcessingWindow ?? false }` next to the optional (line ~154) so the effective default is testable without the view; correct its doc comment 'nil means yes' to 'nil means no' (line ~149).",
+      "gui/star/ProcessingModalView.swift:56: the Binding getter reads that computed property (i.e. `?? false`) instead of `?? true`; setter unchanged.",
+      "star-desktop/.../data/LocalPreferences.kt:135: `bool(\"showAlignmentInProcessingWindow\") ?: false`; rewrite the KDoc at line 131 from 'On unless turned off' to 'Off until turned on'.",
+      "star-desktop LocalPreferencesTest.kt:229-235: rename to ...AreOffUntilTurnedOn, assertFalse on the default, then set true and read true back (proves a saved true is honoured), then set false and read false (existing assertions), keeping the file-contents check under the macOS key.",
+      "gui/starTests/starTests.swift ProcessingModalAlignmentPreferenceTests: add testTheChartsAreOffWhenNeverChosen decoding `{\"recentlyOpenedSequencelist\":{}}` and asserting `showsAlignmentInProcessingWindow == false`; extend testTheChoiceRoundTrips to also assert the computed property equals `chosen` for true and false (A3). Decode only, never assign (setters write the real prefs file).",
+      "Update the desktop AlignmentSection KDoc in ProcessingModal.kt only if it states the default (it does not today, so likely no change). No catalogue strings change, so no localization work."
+    ],
+    "findings": [
+      {
+        "claim": "Binding getter uses `showAlignmentInProcessingWindow ?? true`, so unset means charts shown.",
+        "file": "gui/star/ProcessingModalView.swift",
+        "line": 56
+      },
+      {
+        "claim": "`showAlignmentInProcessingWindow: Bool?` with didSet save; doc comment above says 'nil means yes'.",
+        "file": "gui/star/UserPreferences.swift",
+        "line": 154
+      },
+      {
+        "claim": "Existing test only asserts the raw optional is nil when the key is absent; nothing tests the effective default. testTheChoiceRoundTrips (2762-2777) decodes/encodes true and false.",
+        "file": "gui/starTests/starTests.swift",
+        "line": 2756
+      },
+      {
+        "claim": "Getter is `bool(\"showAlignmentInProcessingWindow\") ?: true`; KDoc at 131 says 'On unless turned off'.",
+        "file": "star-desktop/src/main/kotlin/com/star/desktop/data/LocalPreferences.kt",
+        "line": 135
+      },
+      {
+        "claim": "assertTrue on the default, then round-trips false only; after the flip the false round-trip alone would no longer prove a saved value is honoured, so it must also round-trip true.",
+        "file": "star-desktop/src/test/kotlin/com/star/desktop/data/LocalPreferencesTest.kt",
+        "line": 231
+      },
+      {
+        "claim": "Desktop checkbox initial state is `app.prefs.showAlignmentInProcessingWindow`, so changing the LocalPreferences default is sufficient for the desktop UI.",
+        "file": "star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingModal.kt",
+        "line": 316
+      },
+      {
+        "claim": "Demo script already says to toggle Show alignment results on to show the graphs, which matches off-by-default; no change needed.",
+        "file": "demo_videos/01_full_auto_script.md",
+        "line": 190
+      },
+      {
+        "claim": "No Gherkin feature references the show-alignment toggle (grep of gherkin/features for alignment shows only menu/settings-tab/ground-alignment steps).",
+        "file": "gherkin/features/uiStartupDefaults.feature",
+        "line": 15
+      }
+    ],
+    "gherkin_features_to_run": [],
+    "parity": "both",
+    "parity_reason": "The same preference key and default flip in the gui (ProcessingModalView/UserPreferences) and the desktop (LocalPreferences), each with its own test.",
+    "risks": [
+      "gui tests must decode, not assign, UserPreferences: setters write the real ~/ preferences file.",
+      "Desktop ProcessingModal reads the pref once via remember{}; no behaviour change there beyond the new initial value."
+    ],
+    "summary": "Flip the effective default of the processing modal's \"Show alignment results\" toggle (preference showAlignmentInProcessingWindow) from on to off when never saved, in both the macOS gui and the desktop client; saved values are untouched.",
+    "tests": {
+      "existing_to_extend": [
+        "gui/starTests/starTests.swift ProcessingModalAlignmentPreferenceTests.testTheChoiceRoundTrips: also assert the effective computed property equals the saved true/false (A3)",
+        "star-desktop LocalPreferencesTest: the flipped test also writes true and reads it back before the existing false round-trip (A3)"
+      ],
+      "new": [
+        {
+          "fails_before_fix": true,
+          "kind": "unit",
+          "name": "testTheChartsAreOffWhenNeverChosen",
+          "shows": "A1",
+          "target": "gui/starTests/starTests.swift"
+        },
+        {
+          "fails_before_fix": true,
+          "kind": "unit",
+          "name": "theProcessingWindowsAlignmentChartsAreOffUntilTurnedOn",
+          "shows": "A2",
+          "target": "star-desktop/src/test/kotlin/com/star/desktop/data/LocalPreferencesTest.kt"
+        }
+      ],
+      "none_reason": ""
+    },
+    "touches_localization": false
+  },
+  "priority": 1,
+  "question": null,
+  "stages": [
+    {
+      "attempt": 1,
+      "detail": "The plan for ticket #28 was accepted. I changed no files at this stage.\n\n**Where the default lives:**\n- **macOS gui:** `gui/star/ProcessingModalView.swift:56` falls back to `?? true` when nothing is saved. The comment in `gui/star/UserPreferences.swift` says \"nil means yes\".\n- **Desktop client:** `star-desktop/src/main/kotlin/com/star/desktop/data/LocalPreferences.kt:135` uses `?: true`, and its KDoc says \"On unless turned off\".\n\n**Planned change:**\n- **Default:** both fallbacks become off. A sa",
+      "ended": 1793466490.671204,
+      "id": 12,
+      "lock_wait_s": 0.0,
+      "model": "opus",
+      "outcome": "accepted",
+      "session_id": "191fd10c-79fd-4c4b-b27c-8616ac38ee60",
+      "stage": "explore",
+      "started": 1793466427.739966,
+      "ticket": 28
+    },
+    {
+      "attempt": 1,
+      "detail": "daemon restarted",
+      "ended": 1793466712.13097,
+      "id": 13,
+      "lock_wait_s": 0.0,
+      "model": "opus",
+      "outcome": "interrupted",
+      "session_id": null,
+      "stage": "develop",
+      "started": 1793466494.1165628,
+      "ticket": 28
+    }
+  ],
+  "state": "landed",
+  "title": "Processing Frames dialog: Show alignment results is off by default"
+}
