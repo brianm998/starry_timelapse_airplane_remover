@@ -108,6 +108,37 @@ public final class ViewModel {
         UserDefaults.standard.bool(forKey: "StarUITestSkipStartupQuestions")
     }
 
+    /// `-StarUITestOpenConfig <config.json>`: a processed sequence to open at launch, as Load Config does (nil in every other launch).
+    static var uiTestOpenConfigPath: String? {
+        UserDefaults.standard.string(forKey: "StarUITestOpenConfig").flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// `-StarUITestProbes YES`: the views a test needs to find (one outlier group of the open frame) carry an identifier, which they do not otherwise.
+    static var uiTestProbes: Bool {
+        UserDefaults.standard.bool(forKey: "StarUITestProbes")
+    }
+
+    /// Test seam: opens `-StarUITestOpenConfig <config.json>` the way Load Config does (`InitialView.loadConfig`), which the open panel the user
+    /// picks it in is the only other way to. Does nothing without the argument, or once a sequence is open or loading.
+    func openConfigFromUITestArgument() {
+        guard let path = Self.uiTestOpenConfigPath, imageSequence == nil, !isLoadingImageSequence else { return }
+        Log.i("UI test: opening config \(path)")
+        eraserTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.startup(withConfigFile: path)
+                await MainActor.run { self.imageSequence?.initialLoadInProgress = true }
+            } catch {
+                Log.e("\(error)")
+                await MainActor.run {
+                    self.report(error: "\(error)")
+                    self.imageSequence = nil
+                    self.isLoadingImageSequence = false
+                }
+            }
+        }
+    }
+
     /// Test seam: opens `-StarUITestOpenSequence <dir>` the way picking it in the open panel does
     /// (`InitialView.startupWithSequenceDir`), which puts it in `.edit` mode with the startup
     /// questions showing. The open panel is the only other way in, and an XCUITest cannot drive it.

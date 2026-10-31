@@ -309,6 +309,7 @@ struct StarApp: App {
                   setupKHTLogging()
                   appDelegate.viewModel = viewModel
                   viewModel.openSequenceFromUITestArgument()
+                  viewModel.openConfigFromUITestArgument()
                   viewModel.openVideoFromUITestArgument()
               }
               // the windows about the sequence go with it (D11)

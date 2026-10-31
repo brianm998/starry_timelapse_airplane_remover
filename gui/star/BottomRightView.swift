@@ -234,10 +234,12 @@ struct BottomRightView: View {
                         if let numPositive = frameView.frameObserver.numberOfPositiveOutliers {
                             Text(localized("ui.n_will_remove", numPositive))
                               .foregroundColor(numPositive == 0 ? .white : .red)
+                              .accessibilityIdentifier("status.remove")
                         }
                         if let numNegative = frameView.frameObserver.numberOfNegativeOutliers {
                             Text(localized("ui.n_will_keep", numNegative))
                               .foregroundColor(numNegative == 0 ? .white : .green)
+                              .accessibilityIdentifier("status.keep")
                         }
                         if let numUndecided = frameView.frameObserver.numberOfUndecidedOutliers,
                            numUndecided > 0

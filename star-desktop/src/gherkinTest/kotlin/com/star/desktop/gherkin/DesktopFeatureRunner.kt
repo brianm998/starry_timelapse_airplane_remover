@@ -127,6 +127,9 @@ class DesktopFeatureRunner {
         StepAction.MENU_DISABLED to { t -> expectMenuCommand(t, args[0], enabled = false) },
         StepAction.MENU_THERE to { t -> expectMenu(t, args[0], there = true) },
         StepAction.MENU_NOT_THERE to { t -> expectMenu(t, args[0], there = false) },
+        StepAction.PROCESSED_COPY to { processedCopyStep() },
+        StepAction.OPEN_PROCESSED to { t -> openProcessedCopy(t) },
+        StepAction.CONFIRM_CLOSE_IF_ASKED to { t -> confirmClosingIfAsked(t) },
         StepAction.WINDOW_OPEN to { t -> expectWindow(t, args[0], open = true) },
         StepAction.WINDOW_NOT_OPEN to { t -> expectWindow(t, args[0], open = false) },
     )
@@ -143,6 +146,7 @@ class DesktopFeatureRunner {
             // English, unless the feature says `the language is "<code>"`
             com.star.desktop.i18n.Strings.setOverride(feature.steps.firstOrNull { it.action == StepAction.LANGUAGE_IS }?.args?.firstOrNull() ?: "en")
             System.setProperty(com.star.desktop.ui.initial.NO_INTRO_VIDEO_PROPERTY, "true")
+            System.setProperty(com.star.desktop.ui.sequence.edit.PROBES_PROPERTY, "true")
         }
         scratch = Files.createTempDirectory("star-gherkin-").toFile()
         val realHome = System.getProperty("user.home")
@@ -186,6 +190,7 @@ class DesktopFeatureRunner {
             if ("@ui" in feature.tags) {
                 com.star.desktop.i18n.Strings.setOverride(null)
                 System.clearProperty(com.star.desktop.ui.initial.NO_INTRO_VIDEO_PROPERTY)
+                System.clearProperty(com.star.desktop.ui.sequence.edit.PROBES_PROPERTY)
             }
             scratch.deleteRecursively()
         }
@@ -828,6 +833,46 @@ class DesktopFeatureRunner {
         val (title, label) = menuItem(command)
         val model = vm ?: return null
         return t.runOnUiThread { starMenusNow(model) }.firstOrNull { it.title == title }?.entries?.filterIsInstance<MenuEntry.Command>()?.firstOrNull { it.label == label }
+    }
+
+    /** The work-in-progress question, if it comes up within a few seconds: its red button is pressed. Not being asked is fine. */
+    private fun confirmClosingIfAsked(t: ComposeUiTest) {
+        val asked = runCatching { waitFor(t, "the close question", 6_000) { t.onAllNodesWithTagExists("closeconfirm.confirm") } }.isSuccess
+        if (asked) { t.onAllNodes(hasTestTag("closeconfirm.confirm"))[0].performClick(); t.waitForIdle() }
+    }
+
+    /** The config.json of the processed copy the feature opens. */
+    private var processedConfig: File? = null
+
+    /**
+     * A relocated copy, in the scratch directory, of the processed sequence the cli made once (`gherkin/ui/make-processed-fixture.sh`: it runs the cli
+     * over the sequence the first time it is asked, which takes minutes, and finds it afterwards). The copy's json files that hold the old absolute
+     * path (the config.json among them) are rewritten to hold the new one.
+     */
+    private fun processedCopyStep() {
+        val source = resolveSequence(param("sequence"))
+        val script = File(repoRoot(), "gherkin/ui/make-processed-fixture.sh")
+        // A machine without a built cli builds it (the script's STAR_CLI_BUILD): the first feature of a run that needs the processed sequence waits for that.
+        val builder = ProcessBuilder("bash", script.path, source.path).redirectError(ProcessBuilder.Redirect.INHERIT)
+        builder.environment().putIfAbsent("STAR_CLI_BUILD", "1")
+        val process = builder.start()
+        val printed = process.inputStream.bufferedReader().readText().lines().lastOrNull { it.isNotBlank() }?.trim()
+        if (process.waitFor() != 0 || printed == null) throw RunnerError("could not make the processed sequence (the script's own message is above)")
+        val target = File(scratch, "processed")
+        File(printed).copyRecursively(target)
+        target.walkTopDown().filter { it.isFile && it.extension == "json" && it.length() < 8_000_000 }.forEach { f ->
+            val text = f.readText()
+            if (printed in text) f.writeText(text.replace(printed, target.path))
+        }
+        processedConfig = File(target, "input/star_temp_${source.name}/config.json")
+    }
+
+    /** Opens the processed copy as Load Config does; the reopened sequence says where it left off, which the feature closes. */
+    private fun openProcessedCopy(t: ComposeUiTest) {
+        val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
+        val model = newModel()
+        model.openConfig(config.path)
+        finishOpening(t, model, answer = false)
     }
 
     /** The menu is in the menu bar, or not: the title is the catalogue's text for the key `gherkin/ui/commands.json` gives the menu. */

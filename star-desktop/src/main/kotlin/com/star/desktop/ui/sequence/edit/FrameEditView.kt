@@ -23,6 +23,9 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.ClickRules
@@ -412,6 +415,17 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 selectionBox(Offset(pending.startX, pending.startY), Offset(pending.endX, pending.endY), StarColors.toolColor(com.star.desktop.domain.ToolType.MULTI))
             }
         }
+        // A UI test finds one group of the frame by an id (`gherkin/ui/ids.json`), under `-Dstar.ui.probes`: the smallest box that is drawn (the gui's
+        // views are drawn from the largest to the smallest, so that is the one on top), as an invisible node on its centre. Nothing in it takes a pointer, so
+        // a click on the node is a click on the frame, which is what finds the group.
+        if (System.getProperty(PROBES_PROPERTY) != null && usesOutliers && canvasSize != Size.Zero) {
+            groups.filter { it.size > 40 }
+                .minByOrNull { (it.bounds.maxX - it.bounds.minX).toLong() * (it.bounds.maxY - it.bounds.minY) }
+                ?.let { g ->
+                    val c = transform.imageToCanvas(Offset((g.bounds.minX + g.bounds.maxX) / 2f, (g.bounds.minY + g.bounds.maxY) / 2f), canvasSize)
+                    Box(Modifier.offset { IntOffset(c.x.roundToInt() - 3, c.y.roundToInt() - 3) }.size(6.dp).testTag("outlier.first"))
+                }
+        }
         // Loading the frame's outliers (macOS ProgressBars): a bar along the bottom, a little faded.
         if (showLoading) {
             Row(
@@ -425,3 +439,6 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** Set (to anything) by a UI test host to have the views a test must find carry an id they do not otherwise carry. */
+const val PROBES_PROPERTY = "star.ui.probes"

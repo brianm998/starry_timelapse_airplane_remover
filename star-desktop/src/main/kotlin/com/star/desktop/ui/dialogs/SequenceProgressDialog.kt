@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.ReopenVerdict
@@ -88,7 +89,7 @@ fun SequenceProgressDialog(app: AppViewModel, progress: SequenceProgress) {
             HorizontalDivider(color = StarColors.cellDefault)
             Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 HoverTip(localized("ui.close_this_and_go_to_the_frames")) {
-                    OutlinedButton(onClick = app::closeSequenceProgress) { Text(localized("ui.close")) }
+                    OutlinedButton(onClick = app::closeSequenceProgress, modifier = Modifier.testTag("sequenceprogress.close")) { Text(localized("ui.close")) }
                 }
                 Box(Modifier.weight(1f))
                 HoverTip(localized(verdict.actionHelpKey)) {

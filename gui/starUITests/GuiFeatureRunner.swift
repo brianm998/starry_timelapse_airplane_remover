@@ -101,6 +101,9 @@ final class GuiFeatureRunner {
         .menuDisabled: { try $0.expectMenuCommand($0.args[0], enabled: false) },
         .menuThere: { try $0.expectMenu($0.args[0], there: true) },
         .menuNotThere: { try $0.expectMenu($0.args[0], there: false) },
+        .processedCopy: { try $0.makeProcessedCopy() },
+        .openProcessed: { try $0.openProcessedCopy() },
+        .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
         .windowNotOpen: { try $0.expectWindow($0.args[0], open: false) },
     ]
@@ -369,6 +372,61 @@ final class GuiFeatureRunner {
             throw RunnerError("\(command) is not a command of gherkin/ui/commands.json")
         }
         return (try english(titleKey), try english(labelKey))
+    }
+
+    /// The work-in-progress question, if it comes up within a few seconds: its red button is pressed. Not being asked is fine: whether a close right after
+    /// an edit has anything left to wait for is the app's own business.
+    private func confirmClosingIfAsked() throws {
+        if element("closeconfirm.confirm").waitForExistence(timeout: 6) { try clickId("closeconfirm.confirm") }
+    }
+
+    /// The config.json of the processed copy the feature opens.
+    private var processedConfig: URL?
+
+    /// A relocated copy, in the scratch directory, of the processed sequence the cli made once (`gherkin/ui/make-processed-fixture.sh`: it runs the
+    /// cli over the sequence the first time it is asked, which takes minutes, and finds it afterwards). The copy's files that hold the old
+    /// absolute path (the config.json among them) are rewritten to hold the new one.
+    private func makeProcessedCopy() throws {
+        let given = try param("sequence")
+        let source = try TestData.resolve(given, cache: dataCache())
+            ?? (given.hasPrefix("/") ? URL(fileURLWithPath: given) : Self.repoRoot.appendingPathComponent(given))
+        let script = Self.repoRoot.appendingPathComponent("gherkin/ui/make-processed-fixture.sh")
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let errorLog = scratch.appendingPathComponent("processed-fixture.log")
+        FileManager.default.createFile(atPath: errorLog.path, contents: nil)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [script.path, source.path]
+        // A machine without a built cli builds it (the script's STAR_CLI_BUILD): the first feature of a run that needs the processed sequence waits for that.
+        process.environment = ProcessInfo.processInfo.environment.merging(["STAR_CLI_BUILD": "1"]) { current, _ in current }
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = try FileHandle(forWritingTo: errorLog)
+        try process.run()
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw RunnerError("could not make the processed sequence:\n" + ((try? String(contentsOf: errorLog, encoding: .utf8)) ?? ""))
+        }
+        guard let printed = String(decoding: data, as: UTF8.self).split(whereSeparator: \.isNewline).last.map({ $0.trimmingCharacters(in: .whitespaces) }), !printed.isEmpty else {
+            throw RunnerError("the processed-fixture script printed no directory")
+        }
+        let target = scratch.appendingPathComponent("processed")
+        try FileManager.default.copyItem(atPath: printed, toPath: target.path)
+        if let files = FileManager.default.enumerator(at: target, includingPropertiesForKeys: [.fileSizeKey]) {
+            for case let url as URL in files where url.pathExtension == "json" {
+                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                guard size < 8_000_000, let text = try? String(contentsOf: url, encoding: .utf8), text.contains(printed) else { continue }
+                try text.replacingOccurrences(of: printed, with: target.path).write(to: url, atomically: true, encoding: .utf8)
+            }
+        }
+        processedConfig = target.appendingPathComponent("input/star_temp_\(source.lastPathComponent)/config.json")
+    }
+
+    /// Opens the processed copy as Load Config does, with the views a test finds one outlier group by labelled.
+    private func openProcessedCopy() throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        try launch(arguments: ["-StarUITestOpenConfig", config.path, "-StarUITestProbes", "YES"])
     }
 
     /// The menu's title in the feature's language: from `gherkin/ui/commands.json` (`menus`) and the catalogue.

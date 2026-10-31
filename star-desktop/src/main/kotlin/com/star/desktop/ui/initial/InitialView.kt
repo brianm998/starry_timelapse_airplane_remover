@@ -196,6 +196,7 @@ private fun RecentFilesList(recent: List<String>, onOpen: (String) -> Unit, onRe
                     .clip(RoundedCornerShape(4.dp))
                     .background(StarColors.sidePanel.copy(alpha = 0.4f))
                     .clickable { onOpen(path) }
+                    .testTag("startup.recent.open")
                     .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

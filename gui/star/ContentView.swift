@@ -112,6 +112,7 @@ struct ContentView: View {
                         action?()
                     }
                     .foregroundColor(.red)
+                    .accessibilityIdentifier("closeconfirm.confirm")
                 }
             }
               .padding(40)
