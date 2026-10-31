@@ -169,3 +169,37 @@ async def test_the_session_id_is_recorded_as_soon_as_it_is_known_so_a_kill_can_r
     await rig.engine.drive(7)
     assert seen[1].resume == "S-early"
     assert rig.db.stages(7, "explore")[0]["session_id"] == "S-early"
+
+
+async def test_requeue_moves_a_ticket_in_its_own_ci_onto_the_train(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "ci")
+    rig.db.set_fields(7, pr_number=101)
+    rig.gh.prs[101] = {"number": 101, "title": "t", "body": "", "branch": "pipe/7-t", "merged": False, "mergeable": True,
+                       "merge_commit_sha": None}
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)
+        assert r.status == 200 and rig.state(7) == "ready"
+        t = rig.db.ticket(7)
+        assert t and t.pr_number is None
+        assert rig.gh.closed_prs and "landing train" in rig.gh.closed_prs[0][1]
+        assert [r["kind"] for r in rig.db._all("SELECT kind FROM interventions")] == ["requeue"]  # pyright: ignore[reportPrivateUsage]
+        assert (await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)).status == 409, "it is ready now, not in CI"
+    finally:
+        await client.close()
+
+
+async def test_requeue_refuses_a_ticket_that_is_already_in_a_batch(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "ci")
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(bid, 7, 0)
+    client, _ = await api(rig)
+    try:
+        assert (await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)).status == 409
+        assert rig.state(7) == "ci" and rig.gh.closed_prs == []
+    finally:
+        await client.close()

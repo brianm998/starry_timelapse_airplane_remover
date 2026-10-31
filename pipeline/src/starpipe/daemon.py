@@ -329,6 +329,16 @@ class Daemon:
             out.append(f"{time.strftime('%H:%M:%S', time.localtime(data['t']))} {data['type']}  {str(data['repr'])[:220]}")
         return out
 
+    def _close_pr_for_requeue(self, n: int) -> None:
+        t = self.db.ticket(n)
+        if t is None or t.state not in ("ci", "landing") or self.db.batch_of(n) is not None or not t.pr_number:
+            return
+        try:
+            self.engine.gh.close_pr(t.pr_number, "Moving this ticket onto the landing train: its changes will be in the next batch PR, "
+                                    "which runs one CI for several tickets.")
+        except GitHubError:
+            pass  # it is requeued either way; an open stale PR is harmless
+
     def show(self, n: int) -> dict[str, object] | None:
         t = self.db.ticket(n)
         if t is None:
@@ -363,6 +373,12 @@ class Daemon:
                 task.cancel()
             self.db.intervention(n, "cancel", t.state)
             self.engine._to_state(n, "cancelled", str(body.get("reason") or "cancelled by the owner"))  # pyright: ignore[reportPrivateUsage]
+        elif action == "requeue":
+            if t.state not in ("ci", "landing") or self.db.batch_of(n) is not None:
+                raise web.HTTPConflict(text=f"#{n} is {t.state}: only a ticket in its own CI can be moved onto the train")
+            self.db.set_fields(n, pr_number=None)
+            self.db.intervention(n, "requeue", t.state)
+            self.engine._to_state(n, "ready")  # pyright: ignore[reportPrivateUsage]
         elif action == "prio":
             prio = int(str(body["priority"]))
             self.db.set_fields(n, priority=prio)
@@ -451,7 +467,10 @@ class Daemon:
         @r.post("/v1/tickets/{n}/{action}")
         async def act(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)
-            return web.json_response({"result": self.mutate(int(req.match_info["n"]), req.match_info["action"], body)})
+            n = int(req.match_info["n"])
+            if req.match_info["action"] == "requeue":
+                await asyncio.to_thread(self._close_pr_for_requeue, n)  # the GitHub call off the loop; the state change on it
+            return web.json_response({"result": self.mutate(n, req.match_info["action"], body)})
 
         @r.post("/v1/pause")
         async def pause(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]

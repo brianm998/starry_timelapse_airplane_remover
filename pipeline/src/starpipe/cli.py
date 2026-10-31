@@ -326,6 +326,14 @@ def retry(number: int, stage: str) -> None:
 
 
 @main.command()
+@click.argument("numbers", nargs=-1, required=True, type=_num)
+def requeue(numbers: tuple[int, ...]) -> None:
+    """Move tickets from their own PR and CI onto the landing train (their PRs are closed; the next batch carries them)."""
+    for n in numbers:
+        _post(f"/v1/tickets/{n}/requeue", {})
+
+
+@main.command()
 @click.argument("number", type=_num)
 @click.argument("reason", required=False, default="")
 def cancel(number: int, reason: str) -> None:
