@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 import subprocess
 from pathlib import Path
 
@@ -42,3 +43,9 @@ def test_t0_catches_an_artifact_path(tmp_path: Path) -> None:
     subprocess.run(["git", "-C", str(repo), "commit", "-qm", "oops"], check=True)
     out = CliRunner().invoke(main, ["check", "--tier", "t0", "--diff", "develop", "--worktree", str(repo)])
     assert out.exit_code == 1 and "gui/videos" in (out.output + (out.stderr if out.stderr_bytes else ""))
+
+
+def test_version_flag() -> None:
+    out = CliRunner().invoke(main, ["--version"])
+    assert out.exit_code == 0, out.output
+    assert f"starpipe, version {importlib.metadata.version('starpipe')}" in out.output
