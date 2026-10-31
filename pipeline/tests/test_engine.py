@@ -191,7 +191,7 @@ async def test_a_disallowed_model_or_unknown_effort_falls_back_and_is_noted(rig:
     rig.gh.add_issue(7, "t", body=piped("model_explore: fable · effort_explore: ultra"))
     rig.engine.sync_issues()
     await rig.engine.drive(7)
-    assert {(r.model, r.effort) for r in rig.agent.requests} == {("opus", "high")}
+    assert {(r.model, r.effort) for r in rig.agent.requests} == {(rig.engine.config.model, "high")}
     noted = [e for e in rig.db.events_since() if e["kind"] == "stage-choice-ignored"]
     assert {e["data"]["key"] for e in noted} == {"model_explore", "effort_explore"}
     assert any("fable" in e["data"]["reason"] for e in noted)
