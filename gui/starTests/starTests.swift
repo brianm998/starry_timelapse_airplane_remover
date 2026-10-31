@@ -4405,6 +4405,6 @@ final class PreProcessingRenderFlowTests: XCTestCase {
 
     private func source(_ relativePath: String) throws -> String {
         let guiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        return try String(contentsOf: guiDir.appendingPathComponent(relativePath), encoding: .utf8)
+        return try String(contentsOf: guiDir.appendingPathComponent("star/\(relativePath)"), encoding: .utf8)
     }
 }
