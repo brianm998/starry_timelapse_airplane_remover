@@ -1,4 +1,8 @@
 {
   "comment": "The parity backlog (plan \u00a76.1): a @ui feature that fails on a client where it is listed here passes, and says so; one that fails where it is not listed fails; one listed that now passes fails until the entry is removed. One entry per feature and client, with the reason, and the file only shrinks.",
-  "gaps": {}
+  "gaps": {
+    "uiDecisionTreeCommandsIdle": {
+      "desktop": "the desktop greys Apply Decision Tree and its Auto Only form for a clean method that reviews no outliers (plain Automatic, which a sequence opened without its startup questions has); the gui leaves them on whenever a sequence is open. Which is right is the owner's (M12), and the desktop keeps its own refinement until then"
+    }
+  }
 }
