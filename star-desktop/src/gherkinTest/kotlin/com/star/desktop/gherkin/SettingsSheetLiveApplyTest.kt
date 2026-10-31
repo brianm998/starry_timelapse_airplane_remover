@@ -6,12 +6,12 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -95,10 +95,10 @@ class SettingsSheetLiveApplyTest {
                 fun toggle(key: String) = beside(key, isToggleable())
                 fun field(key: String) = beside(key, hasSetTextAction())
 
-                until("the sheet is up") { runCatching { onNodeWithText(localized("ui.show_expert_settings")).assertExists() }.isSuccess }
-                onNodeWithText(localized("ui.show_expert_settings")).performClick()
-                until("the alignment group") { runCatching { onNodeWithText(localized("ui.alignment_settings")).assertExists() }.isSuccess }
-                onNodeWithText(localized("ui.alignment_settings")).performClick()
+                // The sheet opens on its first tab; the alignment settings are on the Alignment tab.
+                val alignmentTab = { onNodeWithTag("settings.tab.alignment", useUnmergedTree = true) }
+                until("the sheet is up") { runCatching { alignmentTab().assertExists() }.isSuccess }
+                alignmentTab().performClick()
                 until("the earth alignment row") { runCatching { toggle("ui.allow_earth_alignment").assertExists() }.isSuccess }
 
                 // A toggle applies by itself, and putting it back is sent again.
@@ -123,9 +123,8 @@ class SettingsSheetLiveApplyTest {
                 assertEquals(typed, config().alignmentMaxKeypoints, "a value out of range was applied")
                 onNodeWithText(localized("ui.enter_a_whole_number_from_a_to_b", 4, 10000), useUnmergedTree = true).assertExists()
 
-                // Dismiss closes the sheet.
-                // With the expert groups open the sheet is taller than the window, and its buttons are at the bottom of what scrolls.
-                onNodeWithText(localized("ui.dismiss")).performScrollTo().performClick()
+                // Dismiss closes the sheet. Its buttons are under the tab, not at the bottom of what scrolls.
+                onNodeWithText(localized("ui.dismiss")).performClick()
                 until("the sheet closes") { !model.showSettings.value }
                 assertFalse(model.showSettings.value)
                 assertTrue(model.error.value == null, "an error was shown: ${model.error.value}")

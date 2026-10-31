@@ -4,14 +4,14 @@ import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** P8: the alignment group lists its rows in the order the gui's sheet does (`ProcessingSettingsView`'s alignment `DisclosureGroup`). */
+/** P8: the Alignment tab lists its rows in the order the gui's sheet does (`ProcessingSettingsView`'s `alignmentTab`). */
 class AlignmentFieldOrderTest {
     @Test fun theRowsAreInTheGuisOrder() {
         // the gui's rows, by the catalogue key the desktop labels the same setting with
         val gui = File("../gui/star/ProcessingSettingsView.swift").takeIf { it.isFile } ?: File("gui/star/ProcessingSettingsView.swift")
         val source = gui.readText()
-        val group = source.substringAfter("self.neighborFrameCountView").substringBefore("Text(localized(\"ui.alignment_settings\"))")
-        val guiOrder = Regex("self\\.([A-Za-z]+View)").findAll("self.neighborFrameCountView$group").map { it.groupValues[1] }.toList()
+        val tab = source.substringAfter("private var alignmentTab: some View").substringBefore("private var horizonTab")
+        val guiOrder = Regex("self\\.([A-Za-z]+View)").findAll(tab).map { it.groupValues[1] }.toList()
         val byGuiView = mapOf(
             "neighborFrameCountView" to "ui.neighbor_frame_count",
             "staticNeighborFrameCountView" to "ui.static_neighbor_frame_count",

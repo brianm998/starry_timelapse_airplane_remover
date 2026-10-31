@@ -360,12 +360,6 @@ class AppViewModel(
         }
     }
 
-    // "Show Expert Settings" is remembered while a sequence is open, so closing the sheet and coming back finds it as it was left
-    // (macOS keeps it on the sequence's view model for the same reason).
-    private val _showExpertSettings = MutableStateFlow(false)
-    val showExpertSettings: StateFlow<Boolean> = _showExpertSettings.asStateFlow()
-    fun setShowExpertSettings(show: Boolean) { _showExpertSettings.value = show }
-
     // The Preferences dialog (macOS's sheet on Cmd-,); the Processing Settings it used to open are Cmd-Shift-,.
     private val _showPreferences = MutableStateFlow(false)
     val showPreferences: StateFlow<Boolean> = _showPreferences.asStateFlow()
@@ -1205,7 +1199,6 @@ class AppViewModel(
         _warningState.update { WarningRouting.reset(it) }
         _showSettings.value = false
         _showCustomLimits.value = false
-        _showExpertSettings.value = false
         _sequenceProgress.value = null
         renderJob?.cancel()
         _renderState.value = RenderState.Choosing

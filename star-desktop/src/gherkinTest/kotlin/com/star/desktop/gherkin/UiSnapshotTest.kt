@@ -3,7 +3,10 @@ package com.star.desktop.gherkin
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
@@ -29,12 +32,20 @@ import kotlin.test.assertTrue
  *
  *     STAR_UI_SNAPSHOT_DIR=/tmp/shots ./gradlew gherkinTest -Pstar.stard.path=$PWD/../daemon/.build/debug/stard --tests '*UiSnapshotTest*'
  *
- * `STAR_UI_SNAPSHOT_MODES` (comma separated) picks the screens: edit, grid, settings, progress, prerender, startup, removal, and three reached by
- * one more call on the view model: customlimits, rendervideo, settingsexpert. The start screen is not
+ * `STAR_UI_SNAPSHOT_MODES` (comma separated) picks the screens: edit, grid, settings, progress, prerender, startup, removal, and those reached by
+ * one more step: customlimits and rendervideo (a call on the view model), settingsgpu, settingsalignment, settingshorizon and settingsmemory (the
+ * settings sheet's other tabs, which `settings` leaves on the first, by a click on the tab). The start screen is not
  * among them: it embeds a JavaFX video background, and JavaFX cannot start headless. The window is 1400 x 1100, as the Gherkin runner's.
  */
 @OptIn(ExperimentalTestApi::class)
 class UiSnapshotTest {
+
+    /** The snapshot modes that are the settings sheet on a tab other than its first, and the tab (`settings.tab.<id>` in `gherkin/ui/ids.json`). */
+    private companion object {
+        val SETTINGS_TAB_MODES = mapOf(
+            "settingsgpu" to "gpu", "settingsalignment" to "alignment", "settingshorizon" to "horizon", "settingsmemory" to "memory",
+        )
+    }
 
     /** Frames with a gradient sky, a horizon and some stars: enough for the client to open them and draw thumbnails. */
     private fun makeSequence(dir: File, frames: Int = 6) {
@@ -72,7 +83,12 @@ class UiSnapshotTest {
                 makeSequence(sequence)
                 val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
                 // A few screens are reached from a dev-hook mode by one more call, below.
-                val hook = when (mode) { "customlimits", "rendervideo" -> "edit"; "settingsexpert" -> "settings"; else -> mode }
+                val settingsTab = SETTINGS_TAB_MODES[mode]
+                val hook = when {
+                    mode == "customlimits" || mode == "rendervideo" -> "edit"
+                    settingsTab != null -> "settings"
+                    else -> mode
+                }
                 val model = AppViewModel(scope, autoOpenPath = sequence.absolutePath, autoMode = hook, autoFrame = 2, releaseCheck = { null })
                 try {
                     runDesktopComposeUiTest(width = 1400, height = 1100) {
@@ -87,7 +103,16 @@ class UiSnapshotTest {
                         when (mode) {
                             "customlimits" -> model.openCustomLimits()
                             "rendervideo" -> model.openRenderVideo()
-                            "settingsexpert" -> model.setShowExpertSettings(true)
+                        }
+                        if (settingsTab != null) {
+                            // The tabs are there once the daemon has sent the config the sheet shows.
+                            val tag = "settings.tab.$settingsTab"
+                            val tabDeadline = System.nanoTime() + 60_000_000_000L
+                            while (onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().isEmpty()) {
+                                check(System.nanoTime() < tabDeadline) { "timed out waiting for the $settingsTab tab" }
+                                waitForIdle(); Thread.sleep(100)
+                            }
+                            onNodeWithTag(tag, useUnmergedTree = true).performClick()
                         }
                         // Frames, thumbnails and the daemon's answers arrive on real threads, not on the test clock.
                         repeat(40) { waitForIdle(); Thread.sleep(150) }

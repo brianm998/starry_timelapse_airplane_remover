@@ -68,7 +68,7 @@ are different: they stay literal in the feature and the runner supplies their va
 | `the "<window>" window is open` / `is not open` | `debug` or `outlier` |
 
 The features so far (the first eleven pass on both clients; the last four pass on the gui and are known gaps of the desktop's test host): `uiStartupDefaults`, `uiStartupReturnStarts`, `uiStartupHorizonQuestion`, `uiStartupMovingHorizonQuestion`,
-`uiStartupNoHorizonSkips`, `uiStartupBackToHorizon`, `uiStartupBackFromRemoval`, `uiRemovalSelectiveChoice`, `uiSettingsFromStartup`, `uiSettingsExpertToggle`,
+`uiStartupNoHorizonSkips`, `uiStartupBackToHorizon`, `uiStartupBackFromRemoval`, `uiRemovalSelectiveChoice`, `uiSettingsFromStartup`, `uiSettingsTabs`,
 `uiSettingsProcessNow`, then `uiSecondaryWindowToggles`, `uiSecondaryWindowsNeedASequence`, `uiSequenceWindowsGoWithIt` (M11) and `uiRecentsRemove` (D12). The settings sheet is reached through the Advanced gear on a startup question, which both clients have, so no seam is needed.
 
 Run one with `./gradlew gherkinTest -Pstar.stard.path=$PWD/../daemon/.build/debug/stard --tests '*.uiStartupDefaultsFeature'` in `star-desktop` (one feature

@@ -147,5 +147,16 @@
         }
       }
     }
+  },
+  "settingsTabs": {
+    "comment": "The tabs of the processing settings sheet, in the order both clients show them, and the one it opens on. An id is the end of the catalogue key `settings_tab.<id>` that names the tab and of the UI id `settings.tab.<id>` (gherkin/ui/ids.json) that a test finds it by.",
+    "tabs": [
+      "cleaning",
+      "gpu",
+      "alignment",
+      "horizon",
+      "memory"
+    ],
+    "default": "cleaning"
   }
 }
