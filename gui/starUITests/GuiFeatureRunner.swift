@@ -82,6 +82,14 @@ final class GuiFeatureRunner {
         .idOn: { try $0.expectOn($0.args[0], on: true) },
         .idOff: { try $0.expectOn($0.args[0], on: false) },
         .idReads: { try $0.expectReads($0.args[0], key: $0.args[1]) },
+        .appNoSequence: { try $0.launch(arguments: []) },
+        .prefsRecents: { try $0.seedRecents(Int($0.args[0]) ?? 0) },
+        .prefsListRecents: { try $0.expectRecents(Int($0.args[0]) ?? -1) },
+        .menuChoose: { try $0.chooseMenuCommand($0.args[0]) },
+        .menuEnabled: { try $0.expectMenuCommand($0.args[0], enabled: true) },
+        .menuDisabled: { try $0.expectMenuCommand($0.args[0], enabled: false) },
+        .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
+        .windowNotOpen: { try $0.expectWindow($0.args[0], open: false) },
     ]
 
     func run(_ feature: Feature) throws {
@@ -296,6 +304,82 @@ final class GuiFeatureRunner {
         let e = element(identifier)
         func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
         try waitFor("\(identifier) to read \"\(expected)\"", timeout: 20, detail: { "(it reads \(texts()))" }) { texts().contains(expected) }
+    }
+
+    // MARK: menus, windows and preferences
+
+    /// The command's menu title and item label, in English: from `gherkin/ui/commands.json` and the catalogue.
+    private func menuItem(_ command: String) throws -> (menu: String, label: String) {
+        let url = Self.repoRoot.appendingPathComponent("gherkin/ui/commands.json")
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any],
+              let commands = object["commands"] as? [[String: String]], let entry = commands.first(where: { $0["id"] == command }),
+              let menus = object["menus"] as? [String: String], let titleKey = entry["menu"].flatMap({ menus[$0] }), let labelKey = entry["label"] else {
+            throw RunnerError("\(command) is not a command of gherkin/ui/commands.json")
+        }
+        return (try english(titleKey), try english(labelKey))
+    }
+
+    private func chooseMenuCommand(_ command: String) throws {
+        let item = try menuItem(command)
+        app.menuBars.menuBarItems[item.menu].click()
+        let entry = app.menuBars.menuItems[item.label]
+        guard entry.waitForExistence(timeout: 10) else { throw RunnerError("no menu item \"\(item.label)\" in \"\(item.menu)\"") }
+        guard entry.isEnabled else {
+            app.typeKey(.escape, modifierFlags: [])
+            throw RunnerError("\"\(item.label)\" is disabled")
+        }
+        entry.click()
+    }
+
+    private func expectMenuCommand(_ command: String, enabled: Bool) throws {
+        let item = try menuItem(command)
+        app.menuBars.menuBarItems[item.menu].click()
+        let entry = app.menuBars.menuItems[item.label]
+        defer { app.typeKey(.escape, modifierFlags: []) }
+        guard entry.waitForExistence(timeout: 10) else { throw RunnerError("no menu item \"\(item.label)\" in \"\(item.menu)\"") }
+        guard entry.isEnabled == enabled else { throw RunnerError("\"\(item.label)\" is \(entry.isEnabled ? "enabled" : "disabled"), not \(enabled ? "enabled" : "disabled")") }
+    }
+
+    /// The titles the secondary windows go by.
+    private func windowTitle(_ name: String) throws -> String {
+        switch name {
+        case "debug": return try english("ui.star_debug")
+        case "outlier": return "Outliers Group Information"   // the window sets its own title (its view's, not the scene's)
+        default: throw RunnerError("no window called \"\(name)\" (debug, outlier)")
+        }
+    }
+
+    private func expectWindow(_ name: String, open: Bool) throws {
+        let title = try windowTitle(name)
+        func count() -> Int { app.windows.matching(NSPredicate(format: "title == %@", title)).count }
+        try waitFor("the \(name) window to be \(open ? "open" : "closed")", timeout: 15,
+                    detail: { "(windows: \(self.app.windows.allElementsBoundByIndex.map { $0.title }))" }) { count() == (open ? 1 : 0) }
+    }
+
+    private var preferencesFile: URL { scratch.appendingPathComponent("home/.star.userprefs.json") }
+
+    /// `n` recently opened sequences in the preferences the app will start from (each a config.json that exists: one that does not is dropped).
+    private func seedRecents(_ n: Int) throws {
+        try FileManager.default.createDirectory(at: scratch.appendingPathComponent("home"), withIntermediateDirectories: true)
+        var entries: [String: Double] = [:]
+        for i in 1...max(n, 1) where i <= n {
+            let dir = scratch.appendingPathComponent("recent\(i)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let config = dir.appendingPathComponent("config.json")
+            try "{}".write(to: config, atomically: true, encoding: .utf8)
+            entries[config.path] = Double(10 * i)
+        }
+        try JSONSerialization.data(withJSONObject: ["recentlyOpenedSequencelist": entries]).write(to: preferencesFile)
+    }
+
+    private func recentCount() -> Int? {
+        guard let data = try? Data(contentsOf: preferencesFile),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return ((object["recentlyOpenedSequencelist"] as? [String: Any]) ?? [:]).count
+    }
+
+    private func expectRecents(_ n: Int) throws {
+        try waitFor("the preferences file to list \(n) recent sequences", timeout: 15, detail: { "(it lists \(String(describing: self.recentCount())))" }) { recentCount() == n }
     }
 
     /// A switch or check box: its value is 1 when it is on.

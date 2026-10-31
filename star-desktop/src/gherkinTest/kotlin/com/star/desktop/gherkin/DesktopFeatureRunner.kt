@@ -96,7 +96,19 @@ class DesktopFeatureRunner {
         StepAction.ID_ON to { t -> expectOn(t, args[0], on = true) },
         StepAction.ID_OFF to { t -> expectOn(t, args[0], on = false) },
         StepAction.ID_READS to { t -> expectReads(t, args[0], args[1]) },
+        // What the Compose test host cannot reach: a feature that needs one of these is a known gap of this client (gherkin/ui/known-gaps.json),
+        // which the ratchet turns into a failure the day a step here starts to work.
+        StepAction.APP_NO_SEQUENCE to { notReachable("the start screen embeds a JavaFX video background, and JavaFX cannot start headless") },
+        StepAction.PREFS_RECENTS to { notReachable("the start screen is not reachable, so the recents list is not either") },
+        StepAction.PREFS_LIST_RECENTS to { notReachable("the start screen is not reachable, so the recents list is not either") },
+        StepAction.MENU_CHOOSE to { notReachable("the menu is an AWT menu bar, which the Compose test host does not have") },
+        StepAction.MENU_ENABLED to { notReachable("the menu is an AWT menu bar, which the Compose test host does not have") },
+        StepAction.MENU_DISABLED to { notReachable("the menu is an AWT menu bar, which the Compose test host does not have") },
+        StepAction.WINDOW_OPEN to { notReachable("the secondary windows are AWT windows, which the Compose test host does not show") },
+        StepAction.WINDOW_NOT_OPEN to { notReachable("the secondary windows are AWT windows, which the Compose test host does not show") },
     )
+
+    private fun notReachable(why: String): Unit = throw RunnerError("not reachable in the desktop test host: $why")
 
     fun run(feature: Feature) {
         this.feature = feature
