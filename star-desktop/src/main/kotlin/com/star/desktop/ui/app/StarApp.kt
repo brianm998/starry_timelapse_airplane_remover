@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.engine.EngineFailure
@@ -318,7 +319,7 @@ private fun ConfirmCloseOverlay(confirmation: com.star.desktop.domain.CloseConfi
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp, Alignment.End),
         ) {
             OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
-            OutlinedButton(onClick = onConfirm, colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red)) {
+            OutlinedButton(onClick = onConfirm, modifier = Modifier.testTag("closeconfirm.confirm"), colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red)) {
                 Text(localized(confirmation.action.confirmKey))
             }
         }

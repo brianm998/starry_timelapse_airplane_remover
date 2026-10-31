@@ -56,5 +56,8 @@
   { "case": "idNotFocused"          , "text": "\"<id>\" does not have the keyboard" },
   { "case": "languageIs"            , "text": "the language is \"<code>\"" },
   { "case": "menuThere"             , "text": "the menu \"<menu>\" is there" },
-  { "case": "menuNotThere"          , "text": "the menu \"<menu>\" is not there" }
+  { "case": "menuNotThere"          , "text": "the menu \"<menu>\" is not there" },
+  { "case": "processedCopy"         , "text": "a processed copy of the sequence {sequence}" },
+  { "case": "openProcessed"         , "text": "I open the processed copy" },
+  { "case": "confirmCloseIfAsked"   , "text": "I confirm closing if it is asked" }
 ]
