@@ -99,6 +99,8 @@ def judge(jobs: list[Job], baseline: Baseline, *, now: float, head_pushed_at: fl
                 verdict.known_red.append(j)  # already failing on develop (or never seen): does not block
             elif infra(j) and j.key not in reran:
                 verdict.rerun.append(j)
+            elif infra(j):
+                verdict.known_red.append(j)  # infrastructure twice (e.g. a runner-image brownout): not this PR's fault
             else:
                 verdict.blocking.append(j)
     if verdict.blocking:

@@ -142,7 +142,7 @@ async def test_an_infrastructure_red_is_rerun_once(rig: Rig) -> None:
     assert rig.state(1) == "landed" and rig.gh.reruns == [1000]
 
 
-async def test_a_second_infrastructure_red_is_treated_as_real(rig: Rig) -> None:
+async def test_a_second_infrastructure_red_of_the_gate_is_treated_as_real(rig: Rig) -> None:
     ready_ticket(rig, 1, "one.md", "one\n")
     t = rig.db.ticket(1)
     assert t
@@ -273,7 +273,14 @@ def test_slow_jobs_stop_blocking_after_the_wait() -> None:
 def test_the_judge_reruns_once() -> None:
     jobs = [job("pr-gate", "l", conclusion="timed_out")]
     assert judged(jobs).kind == "rerun"
-    assert judged(jobs, reran={("pr-gate", "l")}).kind == "fail"
+    assert judged(jobs, reran={("pr-gate", "l")}).kind == "fail"  # the gate always blocks
+
+
+def test_another_workflow_cancelled_twice_is_infrastructure_not_a_failure() -> None:
+    jobs = [job("pr-gate", "l"), job("cli", "macos", conclusion="cancelled")]
+    assert judged(jobs, {("cli", "macos"): "success"}).kind == "rerun"
+    v = judged(jobs, {("cli", "macos"): "success"}, reran={("cli", "macos")})
+    assert v.kind == "pass" and [j.job for j in v.known_red] == ["macos"]
 
 
 def test_parse_jobs_pairs_runs_with_their_jobs() -> None:
