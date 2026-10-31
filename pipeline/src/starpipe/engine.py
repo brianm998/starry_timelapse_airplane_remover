@@ -124,6 +124,7 @@ class Engine:
         return None
 
     def claim(self, t: Ticket) -> Ticket:
+        gitutil.git(self.repo, "fetch", "--quiet", "origin", self.config.base_branch, check=False)  # best effort
         wt, branch = worktrees.create(self.repo, t.number, t.title, self.base_ref)
         self.db.set_fields(t.number, worktree=str(wt), branch=branch, claimed_at=self.clock())
         self._to_state(t.number, "exploring")
