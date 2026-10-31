@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from starpipe import worktrees
 from starpipe.contracts import Contract
 from starpipe.db import Database
@@ -112,3 +114,40 @@ def test_the_database_migrates_once_and_survives_reopening(tmp_path: Path) -> No
     t = db.ticket(1)
     assert t and t.title == "a2" and t.priority == 1 and t.blocked_by == [5]
     assert db.open_blockers(1) == [5]
+
+
+def test_planned_test_names_must_be_identifiers_not_prose(tmp_path: Path) -> None:
+    c = contract(tmp_path)
+    prose = {"target": "T", "name": "theThing (flipped from before, assertFalse)", "kind": "unit", "shows": "A1"}
+    out = c.submit_plan(plan_args(tests={"new": [prose]}))
+    assert "identifier" in out and c.result is None
+    ok = {"target": "T", "name": "ProcessingTests.theThing", "kind": "unit", "shows": "A1"}
+    assert "accepted" in c.submit_plan(plan_args(tests={"new": [ok]}))
+
+
+def test_the_diff_gate_matches_the_method_not_the_qualified_name(tmp_path: Path) -> None:
+    from starpipe import plan as planmod
+
+    assert planmod.method_of("Class.testFoo") == "testFoo" and planmod.method_of("Suite/testBar") == "testBar"
+    c = contract(tmp_path)
+    c.ticket.plan_json = '{"tests": {"new": [{"name": "SomeTests.testTheThing"}]}}'
+    (c.worktree / "docs" / "t.md").write_text("func testTheThing() {}\n")
+    sh(c.worktree, "git", "add", "-A")
+    sh(c.worktree, "git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "c")
+    c.run_checks({})
+    assert "accepted" in c.submit_change({"summary": "x"})
+
+
+def test_java_home_is_resolved_from_config_then_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe.config import Config
+    from starpipe.daemon import resolve_java_home
+
+    jdk = tmp_path / "jdk"
+    (jdk / "bin").mkdir(parents=True)
+    (jdk / "bin" / "java").write_text("")
+    monkeypatch.delenv("JAVA_HOME", raising=False)
+    assert resolve_java_home(Config(java_home=str(jdk))) == str(jdk)
+    monkeypatch.setenv("JAVA_HOME", str(jdk))
+    assert resolve_java_home(Config()) == str(jdk)
+    monkeypatch.setenv("JAVA_HOME", "/nonexistent")
+    assert resolve_java_home(Config()) != "/nonexistent"

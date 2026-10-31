@@ -38,6 +38,7 @@ class Config(BaseModel):
     ci_blocking_wait_s: int = 3 * 3600
     heavy_wait_report_s: float = 60.0
     api_port: int = 47231
+    java_home: str = ""  # JDK 21 for star-desktop builds; empty: $JAVA_HOME, else the adapter's candidates
     remote: str = "https"  # "https" (the daemon, token from github.env or gh) or "origin" (tests, a local bare repo)
     ci_poll_s: float = 60.0
     ci_settle_s: float = 90.0

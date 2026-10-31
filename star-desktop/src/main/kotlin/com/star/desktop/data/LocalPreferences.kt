@@ -128,11 +128,11 @@ class LocalPreferences {
         set(value) = setBool("showProcessingWindow", value)
 
     /**
-     * macOS `showAlignmentInProcessingWindow`: whether the processing screen draws its alignment charts. On unless turned off; kept here
+     * macOS `showAlignmentInProcessingWindow`: whether the processing screen draws its alignment charts. Off until turned on; kept here
      * and not in the screen's own state, which is rebuilt every time the screen is dismissed and brought back.
      */
     var showAlignmentInProcessingWindow: Boolean
-        get() = bool("showAlignmentInProcessingWindow") ?: true
+        get() = bool("showAlignmentInProcessingWindow") ?: false
         set(value) = setBool("showAlignmentInProcessingWindow", value)
 
     /**

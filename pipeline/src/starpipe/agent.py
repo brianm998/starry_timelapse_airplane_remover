@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol, cast
@@ -63,6 +64,7 @@ class StageRequest:
     contract: Contract
     fence: guards.Fence
     resume: str | None = None
+    on_session: Callable[[str], None] = lambda _sid: None  # called as soon as the session id is known
 
 
 @dataclass
@@ -121,6 +123,19 @@ def parse_usage_limit(info: Any) -> float | None:
         return None
     resets = getattr(info, "resets_at", None)
     return float(resets) if resets else time.time() + DEFAULT_USAGE_PAUSE_S
+
+
+def _session_id_of(message: object) -> str | None:
+    """The session id a message carries: a `session_id` field, or the `init` system message's data."""
+    direct: object = getattr(message, "session_id", None)
+    if isinstance(direct, str) and direct:
+        return direct
+    data: object = getattr(message, "data", None)
+    if isinstance(data, dict):
+        inner = cast("dict[str, object]", data).get("session_id")
+        if isinstance(inner, str) and inner:
+            return inner
+    return None
 
 
 class SdkRunner:
@@ -190,6 +205,10 @@ class SdkRunner:
                     log.write(json.dumps({"t": time.time(), "type": type(message).__name__,
                                           "repr": repr(message)[:4000]}) + "\n")
                     log.flush()
+                    sid = _session_id_of(message)
+                    if sid and outcome.session_id != sid:
+                        outcome.session_id = sid
+                        req.on_session(sid)  # recorded now, so a daemon kill mid-stage can still resume it
                     if isinstance(message, RateLimitEvent):
                         resets = parse_usage_limit(message.rate_limit_info)
                         if resets:

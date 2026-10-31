@@ -148,7 +148,7 @@ class Contract:
             plan = self.ticket.plan or {}
             diff = gitutil.git(self.worktree, "diff", f"{self.base_ref}...HEAD")
             for t in plan.get("tests", {}).get("new", []):
-                if t["name"] not in diff:
+                if planmod.method_of(t["name"]) not in diff:
                     problems.append(f"planned test '{t['name']}' does not appear in the diff")
             changed = gitutil.changed_paths(self.worktree, self.base_ref)
             gui = any(p.startswith(GUI_PREFIX) for p in changed)

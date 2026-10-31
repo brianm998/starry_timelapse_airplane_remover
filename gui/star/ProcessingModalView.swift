@@ -53,7 +53,7 @@ struct ProcessingModalView: View {
     /// the view is rebuilt every time the modal is dismissed and brought back.
     private var showAlignment: Binding<Bool> {
         Binding(
-          get: { viewModel.userPreferences.showAlignmentInProcessingWindow ?? true },
+          get: { viewModel.userPreferences.showsAlignmentInProcessingWindow },
           set: { viewModel.userPreferences.showAlignmentInProcessingWindow = $0 }
         )
     }

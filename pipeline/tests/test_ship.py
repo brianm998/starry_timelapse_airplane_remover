@@ -260,7 +260,8 @@ def test_other_reds_block_only_when_new() -> None:
     jobs = [job("pr-gate", "l"), job("cli", "w", conclusion="failure")]
     assert judged(jobs, {("cli", "w"): "failure"}).kind == "pass"
     assert judged(jobs, {}).kind == "pass"  # no develop data: it was already failing as far as we know
-    assert judged(jobs, {("cli", "w"): "success"}).kind == "fail"
+    assert judged(jobs, {("cli", "w"): "success"}).kind == "rerun"  # once, in case it is a flake
+    assert judged(jobs, {("cli", "w"): "success"}, reran={("cli", "w")}).kind == "fail"
 
 
 def test_slow_jobs_stop_blocking_after_the_wait() -> None:
@@ -268,6 +269,22 @@ def test_slow_jobs_stop_blocking_after_the_wait() -> None:
     assert judged(jobs, now=100).kind == "pending"
     v = judged(jobs, now=4 * 3600)
     assert v.kind == "pass" and [j.job for j in v.demoted] == ["w"]
+
+
+def test_a_new_red_outside_the_gate_is_rerun_once_before_it_counts() -> None:
+    jobs = [job("pr-gate", "l"), job("gherkin", "videoBackgroundIdentical", conclusion="failure")]
+    base = {("gherkin", "videoBackgroundIdentical"): "success"}
+    v = judged(jobs, base)
+    assert v.kind == "rerun" and [j.job for j in v.rerun] == ["videoBackgroundIdentical"]
+    assert judged(jobs, base, reran={("gherkin", "videoBackgroundIdentical")}).kind == "fail"
+
+
+def test_a_failure_in_a_run_that_never_finishes_stops_blocking_after_the_wait() -> None:
+    stuck = ci.Job("gherkin", "videoBackgroundIdentical", "completed", "failure", 7, run_done=False)
+    base = {("gherkin", "videoBackgroundIdentical"): "success"}
+    assert judged([job("pr-gate", "l"), stuck], base, now=3600).kind == "rerun"
+    v = judged([job("pr-gate", "l"), stuck], base, now=4 * 3600)
+    assert v.kind == "pass" and [j.job for j in v.demoted] == ["videoBackgroundIdentical"]
 
 
 def test_the_judge_reruns_once() -> None:
