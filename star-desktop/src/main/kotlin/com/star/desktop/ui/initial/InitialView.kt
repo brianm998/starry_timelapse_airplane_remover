@@ -38,6 +38,7 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -205,7 +206,7 @@ private fun RecentFilesList(recent: List<String>, onOpen: (String) -> Unit, onRe
                 Spacer(Modifier.width(8.dp))
                 HoverTip(localized("ui.remove_from_recent")) {
                     Box(
-                        Modifier.size(20.dp).clip(RoundedCornerShape(10.dp)).clickable { onRemove(path) },
+                        Modifier.size(20.dp).clip(RoundedCornerShape(10.dp)).clickable { onRemove(path) }.testTag("startup.recent.remove"),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text("✕", color = StarColors.textDisabled, fontSize = 12.sp)

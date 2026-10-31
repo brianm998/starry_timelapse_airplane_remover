@@ -124,6 +124,7 @@ struct InitialView: View {
                           .foregroundColor(.white)
                     }
                       .buttonStyle(.plain)
+                      .accessibilityIdentifier("startup.recent.remove")
                       .help(localized("ui.remove_from_recent"))
                       .disabled(previously_opened_sheet_showing_item.isEmpty)
                 }
