@@ -87,6 +87,10 @@ final class GuiFeatureRunner {
         .appNoSequence: { try $0.launch(arguments: []) },
         .prefsRecents: { try $0.seedRecents(Int($0.args[0]) ?? 0) },
         .prefsListRecents: { try $0.expectRecents(Int($0.args[0]) ?? -1) },
+        .prefsFixture: { try $0.seedPreferences(fixture: $0.args[0]) },
+        .prefsUnchanged: { try $0.expectPreferencesUnchanged(fixture: $0.args[0]) },
+        .prefsHasKey: { try $0.expectPreferencesKey($0.args[0]) },
+        .prefsKeepsCopy: { try $0.expectUndecodableCopy(fixture: $0.args[0]) },
         .menuChoose: { try $0.chooseMenuCommand($0.args[0]) },
         .menuEnabled: { try $0.expectMenuCommand($0.args[0], enabled: true) },
         .menuDisabled: { try $0.expectMenuCommand($0.args[0], enabled: false) },
@@ -381,6 +385,44 @@ final class GuiFeatureRunner {
             entries[config.path] = Double(10 * i)
         }
         try JSONSerialization.data(withJSONObject: ["recentlyOpenedSequencelist": entries]).write(to: preferencesFile)
+    }
+
+    /// The bytes of a file of `gherkin/ui/fixtures/prefs/`.
+    private func fixtureData(_ name: String) throws -> Data {
+        try Data(contentsOf: Self.repoRoot.appendingPathComponent("gherkin/ui/fixtures/prefs/\(name).json"))
+    }
+
+    /// The preferences the app will start from are this file, as it is.
+    private func seedPreferences(fixture: String) throws {
+        try FileManager.default.createDirectory(at: scratch.appendingPathComponent("home"), withIntermediateDirectories: true)
+        try fixtureData(fixture).write(to: preferencesFile)
+    }
+
+    /// The file has not been touched for a few seconds, which is longer than the app takes to write one it means to write.
+    private func expectPreferencesUnchanged(fixture: String) throws {
+        let expected = try fixtureData(fixture)
+        let deadline = Date().addingTimeInterval(4)
+        repeat {
+            guard let now = try? Data(contentsOf: preferencesFile), now == expected else {
+                throw RunnerError("the preferences file is not the fixture \"\(fixture)\" any more")
+            }
+            Thread.sleep(forTimeInterval: 0.5)
+        } while Date() < deadline
+    }
+
+    private func expectPreferencesKey(_ key: String) throws {
+        func has() -> Bool {
+            guard let data = try? Data(contentsOf: preferencesFile),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+            return object[key] != nil
+        }
+        try waitFor("the preferences file to have the key \"\(key)\"", timeout: 15) { has() }
+    }
+
+    private func expectUndecodableCopy(fixture: String) throws {
+        let copy = URL(fileURLWithPath: preferencesFile.path + ".undecodable")
+        let expected = try fixtureData(fixture)
+        try waitFor("a copy of the unreadable preferences file beside it", timeout: 15) { (try? Data(contentsOf: copy)) == expected }
     }
 
     private func recentCount() -> Int? {
