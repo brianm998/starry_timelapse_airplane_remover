@@ -45,4 +45,4 @@ apply to it: don't translate it and don't build a Kotlin twin.
   interactive sessions automatically (`STARPIPE_NO_WRAP=1` turns that off).
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
-- To queue work for the pipeline, use the file-tickets skill (Phase 2; not built yet).
+- To queue work for the pipeline, use the file-tickets skill (`.claude/skills/file-tickets`).

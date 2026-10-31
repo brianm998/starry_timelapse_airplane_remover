@@ -1,4 +1,4 @@
-"""The starpipe command line (plan §12). Phase 1: heavy, check, doctor."""
+"""The starpipe command line (plan §12). Phases 1-2: heavy, check, doctor, gh setup, ticket."""
 
 from __future__ import annotations
 
@@ -8,9 +8,11 @@ from pathlib import Path
 
 import click
 
+from . import config as config_mod
 from . import doctor as doctor_mod
-from . import gitutil, heavy
+from . import gitutil, heavy, tickets
 from .checks import impact, runner
+from .github import GitHub, GitHubError
 
 
 def _say(message: str) -> None:
@@ -98,6 +100,64 @@ def doctor(worktree: Path) -> None:
     for f in findings:
         click.echo(f"{marks[f.level]}  {f.name:<32}{f.detail}")
     sys.exit(doctor_mod.exit_code(findings))
+
+
+@main.group()
+def gh() -> None:
+    """GitHub setup."""
+
+
+@gh.command("setup")
+def gh_setup() -> None:
+    """Create the pipeline's labels (idempotent)."""
+    try:
+        created, present = GitHub(config_mod.load()).ensure_labels()
+    except GitHubError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"created {len(created)} label(s)" + (": " + ", ".join(created) if created else ""))
+    click.echo(f"{len(present)} already present")
+
+
+@main.group()
+def ticket() -> None:
+    """File and check pipeline tickets."""
+
+
+def _read_body(body_file: Path) -> str:
+    return sys.stdin.read() if str(body_file) == "-" else body_file.read_text()
+
+
+@ticket.command("lint")
+@click.argument("file", type=click.Path(path_type=Path))
+def ticket_lint(file: Path) -> None:
+    """Check a ticket body against plan §6.3 (FILE may be - for stdin)."""
+    result = tickets.lint(_read_body(file))
+    for message in result.errors:
+        click.echo(f"error    {message}")
+    for message in result.warnings:
+        click.echo(f"warning  {message}")
+    if result.ok:
+        click.echo("ok")
+    sys.exit(0 if result.ok else 1)
+
+
+@ticket.command("new")
+@click.option("--title", required=True)
+@click.option("--body-file", required=True, type=click.Path(path_type=Path), help="Ticket body; - for stdin.")
+@click.option("--blocked-by", default="", help="Comma-separated issue numbers that must land first.")
+@click.option("--priority", type=click.Choice(tickets.PRIORITIES), default=None)
+def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | None) -> None:
+    """Lint, file, label and link a ticket; prints its number and URL."""
+    try:
+        blockers = [int(n.lstrip("#")) for n in blocked_by.split(",") if n.strip()]
+    except ValueError as exc:
+        raise click.BadParameter("expected numbers like 41,42", param_hint="--blocked-by") from exc
+    cfg = config_mod.load()
+    try:
+        number = tickets.file_ticket(GitHub(cfg), title, _read_body(body_file), blockers, priority)
+    except tickets.FilingError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"#{number} https://github.com/{cfg.owner}/{cfg.repo}/issues/{number}")
 
 
 if __name__ == "__main__":  # pragma: no cover

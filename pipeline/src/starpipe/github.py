@@ -1,0 +1,88 @@
+"""A thin GitHub client over `gh api`. The runner is injectable so tests never touch the network."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from collections.abc import Callable, Sequence
+from typing import Any
+
+from .config import Config
+
+Runner = Callable[[Sequence[str], str | None], str]
+
+STATE_LABELS = ["pipe:queued", "pipe:exploring", "pipe:developing", "pipe:verifying", "pipe:review", "pipe:ci",
+                "pipe:landing", "pipe:needs-input", "pipe:failed", "pipe:paused"]
+OTHER_LABELS = ["pipeline", "pipe:landed", "pipe:filed-by-pipeline", "p0", "p1", "p2", "p3"]
+LABEL_COLOURS = {"pipeline": "0e8a16", "pipe:landed": "6f42c1", "pipe:failed": "d73a4a", "pipe:needs-input": "fbca04",
+                 "pipe:paused": "bfbfbf", "pipe:filed-by-pipeline": "c5def5"}
+
+
+class GitHubError(RuntimeError):
+    pass
+
+
+def gh_runner(args: Sequence[str], stdin: str | None) -> str:
+    done = subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True, check=False)
+    if done.returncode != 0:
+        raise GitHubError(f"gh {' '.join(args)} failed: {(done.stderr or done.stdout).strip()}")
+    return done.stdout
+
+
+class GitHub:
+    def __init__(self, config: Config, runner: Runner = gh_runner) -> None:
+        self.config = config
+        self._run = runner
+        self.base = f"repos/{config.owner}/{config.repo}"
+
+    def api(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+        args = ["api", "-X", method, f"{self.base}/{path}"]
+        stdin = None
+        if body is not None:
+            args += ["--input", "-"]
+            stdin = json.dumps(body)
+        out = self._run(args, stdin)
+        return json.loads(out) if out.strip() else None
+
+    def paged(self, path: str) -> list[dict[str, Any]]:
+        """Every page of a list endpoint (gh's --paginate with --slurp wraps pages in an outer array)."""
+        out = self._run(["api", "--paginate", "--slurp", f"{self.base}/{path}"], None)
+        pages: list[list[dict[str, Any]]] = json.loads(out) if out.strip() else []
+        return [item for page in pages for item in page]
+
+    def issue(self, number: int) -> dict[str, Any]:
+        return self.api("GET", f"issues/{number}")
+
+    def comments(self, number: int) -> list[dict[str, Any]]:
+        return self.paged(f"issues/{number}/comments?per_page=100")
+
+    def timeline(self, number: int) -> list[dict[str, Any]]:
+        return self.paged(f"issues/{number}/timeline?per_page=100")
+
+    def create_issue(self, title: str, body: str) -> int:
+        return int(self.api("POST", "issues", {"title": title, "body": body})["number"])
+
+    def add_labels(self, number: int, labels: list[str]) -> None:
+        self.api("POST", f"issues/{number}/labels", {"labels": labels})
+
+    def block(self, number: int, blocked_by: int) -> None:
+        """Record that `number` is blocked by `blocked_by` (needs the blocker's database id)."""
+        blocker = self.issue(blocked_by)
+        self.api("POST", f"issues/{number}/dependencies/blocked_by", {"issue_id": blocker["id"]})
+
+    def close_issue(self, number: int, reason: str = "not_planned") -> None:
+        self.api("PATCH", f"issues/{number}", {"state": "closed", "state_reason": reason})
+
+    def comment(self, number: int, body: str) -> None:
+        self.api("POST", f"issues/{number}/comments", {"body": body})
+
+    def ensure_labels(self) -> tuple[list[str], list[str]]:
+        """Create the missing labels; return (created, already_there)."""
+        have = {item["name"] for item in self.paged("labels?per_page=100")}
+        created: list[str] = []
+        for name in [*OTHER_LABELS, *STATE_LABELS]:
+            if name in have:
+                continue
+            self.api("POST", "labels", {"name": name, "color": LABEL_COLOURS.get(name, "ededed")})
+            created.append(name)
+        return created, sorted(have & {*OTHER_LABELS, *STATE_LABELS})
