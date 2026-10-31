@@ -33,7 +33,15 @@ class WorkingLocationTest {
         } finally { dir.deleteRecursively() }
     }
 
+    /**
+     * The folder is the source's own, absolute. The source here has no drive letter, so on Windows "absolute" puts the current drive in front
+     * of it (`D:\Volumes\x\shoots`) and the expected folder has to be resolved the same way rather than written out as a Unix path.
+     */
     @Test fun beingBesideTheSourceIsTheSourcesFolder() {
-        assertEquals(File("/Volumes/x/shoots").path, WorkingLocation.defaultFolder("/Volumes/x/shoots/clip.mov"))
+        assertEquals(File("/Volumes/x/shoots").absoluteFile.path, WorkingLocation.defaultFolder("/Volumes/x/shoots/clip.mov"))
+    }
+
+    @Test fun aRelativeSourceIsBesideItsWorkingDirectory() {
+        assertEquals(File("").absoluteFile.path, WorkingLocation.defaultFolder("clip.mov"))
     }
 }

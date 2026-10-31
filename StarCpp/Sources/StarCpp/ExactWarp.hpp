@@ -238,6 +238,22 @@ inline void warpRow(const uint16_t *S0, size_t sstep, int sw, int sh,
 
 #ifdef STAR_X86_AVX2_KERNELS
 
+// The pixel pair of one source row of a three-channel frame, six samples = 12 bytes, read as
+// 8 + 4 so nothing past them is touched, then one float lane per channel: lanes 0-2 of `left`
+// are the channels at x, lanes 0-2 of `right` the channels at x + 1.  Lane 3 is whatever it is.
+//
+// A named function and not a lambda inside `interpolateRangeAvx2`: a lambda's call operator does
+// not inherit the enclosing function's target attribute, so the SSE4.1 conversion below would be
+// inlined into code compiled without it, which the clang that Swift ships on Linux and Windows
+// (baseline x86-64) refuses to build.  Apple's default target includes SSE4.1 and hid it.
+STAR_AVX2_INLINE void pixelPairTaps(const uint16_t *p, __m128 &left, __m128 &right) {
+    int tail;
+    std::memcpy(&tail, p + 4, sizeof tail);
+    const __m128i six = _mm_unpacklo_epi64(_mm_loadl_epi64((const __m128i *)p), _mm_cvtsi32_si128(tail));
+    left = _mm_cvtepi32_ps(_mm_cvtepu16_epi32(six));
+    right = _mm_cvtepi32_ps(_mm_cvtepu16_epi32(_mm_srli_si128(six, 6)));
+}
+
 // `interpolateBlock` with the three-channel pixel four floats at a time.  Every value is the
 // one the scalar block computes, from the same operations in the same order: the vector lanes
 // are independent channels, and none of the arithmetic is fused — AVX2 here means the wide
@@ -259,21 +275,11 @@ STAR_AVX2 inline void interpolateRangeAvx2(const uint16_t *S0, size_t sstep, int
                 uint16_t *Dx = D + (size_t)(x + x1) * CN;
                 const uint16_t *S = S0 + (size_t)sy * sstep + (size_t)sx * CN;
                 if constexpr (CN == 3) {
-                    // The pixel pair of each of the two rows, six samples = 12 bytes, read as
-                    // 8 + 4 so nothing past them is touched, then one float lane per channel:
-                    // lanes 0-2 are the channels at x, lanes 0-2 of the second vector the
-                    // channels at x + 1.  Lane 3 is whatever it is and is not stored.
-                    auto taps = [](const uint16_t *p, __m128 &left, __m128 &right) {
-                        int tail;
-                        std::memcpy(&tail, p + 4, sizeof tail);
-                        const __m128i six = _mm_unpacklo_epi64(_mm_loadl_epi64((const __m128i *)p),
-                                                               _mm_cvtsi32_si128(tail));
-                        left = _mm_cvtepi32_ps(_mm_cvtepu16_epi32(six));
-                        right = _mm_cvtepi32_ps(_mm_cvtepu16_epi32(_mm_srli_si128(six, 6)));
-                    };
+                    // The pixel pair of each of the two rows, one float lane per channel; lane 3
+                    // is not stored.
                     __m128 a0, a1, b0, b1;
-                    taps(S, a0, a1);
-                    taps(S + sstep, b0, b1);
+                    pixelPairTaps(S, a0, a1);
+                    pixelPairTaps(S + sstep, b0, b1);
                     __m128 t = _mm_mul_ps(a0, _mm_load1_ps(w));
                     t = _mm_add_ps(t, _mm_mul_ps(a1, _mm_load1_ps(w + 1)));
                     t = _mm_add_ps(t, _mm_mul_ps(b0, _mm_load1_ps(w + 2)));

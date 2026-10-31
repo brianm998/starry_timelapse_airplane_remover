@@ -489,7 +489,11 @@ final class GuiFeatureRunner {
             let isOn = (background.value as? String) == "1" || (background.value as? Int) == 1
             if isOn != inBackground { background.click() }
         }
-        try tap("videoimport.import")
+        // The sheet now also asks where the working files go, so it is 665pt tall: on a hosted runner's 1024x768 screen its Import button
+        // is at y 733-753, in the Dock's zone. A click there raises no error (the point is on the screen) and is lost, and the sheet stays
+        // up until the wait for the first startup prompt gives up 600s later. `activateDefault` would click too if the button counts as
+        // hittable; Return is Import's default action, the sheet has the keyboard focus, and it does not care where the button is.
+        app.typeKey(.return, modifierFlags: [])
         try answerStartupPrompts()
     }
 

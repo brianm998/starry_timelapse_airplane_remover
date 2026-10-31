@@ -9,7 +9,11 @@ name: Gherkin
 #   desktop-linux/-windows/-macos runComposeUiTest against a real stard, offscreen (no Xvfb)
 # plus generate-check, which regenerates every generated file and fails on a diff.
 #
-# Test data is fetched from the `test-data` release (test_data/datasets.json) into .test-data and cached with actions/cache.
+# Test data is fetched from the `test-data` release (test_data/datasets.json) into .test-data by every job, and is NOT cached:
+# one actions/cache entry per (client, feature) held 7.6 GiB of the ~9.9 GiB in use against the repository's 10 GB Actions cache limit
+# (the same dataset stored once per feature that uses it), so every save evicted something that was expensive to rebuild (the
+# macOS and Windows ffmpeg, the Windows OpenCV and StarDecisionTrees) and those rebuilt on every run.  A release download is seconds; see
+# https://docs.github.com/actions/using-workflows/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy
 #
 # Every leg ends with a "vacuous green" check: it fails the job unless the log (or the Gradle XML) shows
 # exactly one test that ran, passed and was not skipped. Exit codes alone are not proof: xcodebuild
@@ -126,7 +130,7 @@ jobs:
   cli-linux:
     name: cli (ubuntu-24.04) · ${{ matrix.feature }}
     runs-on: ubuntu-24.04
-    needs: [features, ffmpeg]
+    needs: [features, ffmpeg-linux]
     if: needs.features.outputs.cli != '[]'
     strategy:
       fail-fast: false
@@ -145,13 +149,7 @@ jobs:
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-cli.txt), never maintained by hand.
-      - name: Cache test data
-        uses: actions/cache@v4
-        with:
-          path: .test-data
-          key: testdata-cli-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-cli.json') }}
-
-      - name: Fetch test data (a no-op on a cache hit)
+      - name: Fetch test data
         run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-cli.json)
 
       - name: Install apt prerequisites
@@ -246,7 +244,7 @@ jobs:
   cli-windows:
     name: cli (windows-2022) · ${{ matrix.feature }}
     runs-on: windows-2022
-    needs: [features, ffmpeg]
+    needs: [features, ffmpeg-windows]
     if: needs.features.outputs.cli != '[]'
     strategy:
       fail-fast: false
@@ -266,13 +264,7 @@ jobs:
           f="${{ matrix.feature }}"
           echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
 
-      - name: Cache test data
-        uses: actions/cache@v4
-        with:
-          path: .test-data
-          key: testdata-cli-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-cli.json') }}
-
-      - name: Fetch test data (a no-op on a cache hit)
+      - name: Fetch test data
         run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-cli.json)
 
       - name: Set up Swift
@@ -453,7 +445,7 @@ jobs:
   cli-macos:
     name: cli (macos-15) · ${{ matrix.feature }}
     runs-on: macos-15
-    needs: [features, ffmpeg]
+    needs: [features, ffmpeg-macos]
     if: needs.features.outputs.cli != '[]'
     strategy:
       fail-fast: false
@@ -472,13 +464,7 @@ jobs:
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-cli.txt), never maintained by hand.
-      - name: Cache test data
-        uses: actions/cache@v4
-        with:
-          path: .test-data
-          key: testdata-cli-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-cli.json') }}
-
-      - name: Fetch test data (a no-op on a cache hit)
+      - name: Fetch test data
         run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-cli.json)
 
       - name: Select latest Xcode
@@ -570,15 +556,27 @@ jobs:
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
-  ffmpeg:
+  # ffmpeg-gpu.yml once per OS, so a leg waits for the ffmpeg of its own OS only.  One call for all three made every job wait for
+  # the slowest build, and when the macOS or Windows cache was cold (20+ minutes) the Linux jobs sat behind it.
+  ffmpeg-linux:
     uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
-      platforms: linux windows macos
+      platforms: linux
+
+  ffmpeg-macos:
+    uses: ./.github/workflows/ffmpeg-gpu.yml
+    with:
+      platforms: macos
+
+  ffmpeg-windows:
+    uses: ./.github/workflows/ffmpeg-gpu.yml
+    with:
+      platforms: windows
 
   mac-gui:
     name: mac gui (macos-15) · ${{ matrix.feature }}
     runs-on: macos-15
-    needs: [features, ffmpeg]
+    needs: [features, ffmpeg-macos]
     if: needs.features.outputs.macgui != '[]'
     strategy:
       fail-fast: false
@@ -597,13 +595,7 @@ jobs:
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-mac-gui.txt), never maintained by hand.
-      - name: Cache test data
-        uses: actions/cache@v4
-        with:
-          path: .test-data
-          key: testdata-mac-gui-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-mac-gui.json') }}
-
-      - name: Fetch test data (a no-op on a cache hit)
+      - name: Fetch test data
         run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-mac-gui.json) gui_splash_video
 
       - name: Select latest Xcode
@@ -665,8 +657,10 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
+      # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
+        if: ${{ !startsWith(matrix.feature, 'ui') }}
         shell: bash
         run: swift build -c release --package-path removal_tools
 
@@ -731,7 +725,7 @@ jobs:
   desktop-linux:
     name: desktop (ubuntu-24.04) · ${{ matrix.feature }}
     runs-on: ubuntu-24.04
-    needs: [features, ffmpeg]
+    needs: [features, ffmpeg-linux]
     if: needs.features.outputs.desktop != '[]'
     strategy:
       fail-fast: false
@@ -750,14 +744,11 @@ jobs:
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
-      - name: Cache test data
-        uses: actions/cache@v4
-        with:
-          path: .test-data
-          key: testdata-desktop-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-desktop.json') }}
-
-      - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
+      # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
+      - name: Fetch test data
+        run: |
+          names=$(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
+          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "${{ matrix.feature }} needs no test data"; fi
 
       - name: Install apt prerequisites
         run: |
@@ -813,8 +804,10 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
+      # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
+        if: ${{ !startsWith(matrix.feature, 'ui') }}
         shell: bash
         run: swift build -c release --package-path removal_tools
 
@@ -875,7 +868,7 @@ jobs:
   desktop-windows:
     name: desktop (windows-2022) · ${{ matrix.feature }}
     runs-on: windows-2022
-    needs: [features, ffmpeg]
+    needs: [features, ffmpeg-windows]
     if: needs.features.outputs.desktop != '[]'
     strategy:
       fail-fast: false
@@ -897,14 +890,11 @@ jobs:
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
-      - name: Cache test data
-        uses: actions/cache@v4
-        with:
-          path: .test-data
-          key: testdata-desktop-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-desktop.json') }}
-
-      - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
+      # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
+      - name: Fetch test data
+        run: |
+          names=$(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
+          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "${{ matrix.feature }} needs no test data"; fi
 
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
@@ -1032,8 +1022,10 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg.exe external_binaries/bin/ffprobe.exe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
+      # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
+        if: ${{ !startsWith(matrix.feature, 'ui') }}
         shell: bash
         run: swift build -c release --package-path removal_tools
 
@@ -1092,7 +1084,7 @@ jobs:
   desktop-macos:
     name: desktop (macos-15) · ${{ matrix.feature }}
     runs-on: macos-15
-    needs: [features, ffmpeg]
+    needs: [features, ffmpeg-macos]
     if: needs.features.outputs.desktop != '[]'
     strategy:
       fail-fast: false
@@ -1111,14 +1103,11 @@ jobs:
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
-      - name: Cache test data
-        uses: actions/cache@v4
-        with:
-          path: .test-data
-          key: testdata-desktop-${{ matrix.feature }}-${{ hashFiles('test_data/datasets.json', 'gherkin/generated/feature-datasets-desktop.json') }}
-
-      - name: Fetch test data (a no-op on a cache hit)
-        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
+      # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
+      - name: Fetch test data
+        run: |
+          names=$(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-desktop.json)
+          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "${{ matrix.feature }} needs no test data"; fi
 
       - name: Select latest Xcode (Swift 6)
         uses: maxim-lobanov/setup-xcode@v1
@@ -1175,8 +1164,10 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
+      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
+      # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
+        if: ${{ !startsWith(matrix.feature, 'ui') }}
         shell: bash
         run: swift build -c release --package-path removal_tools
 
