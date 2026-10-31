@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -59,11 +60,20 @@ def test_a_dead_holder_frees_the_slot() -> None:
     heavy.release(held)
 
 
+def wait_until(condition: Callable[[], bool], timeout: float = 20.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        time.sleep(0.1)
+    return False
+
+
 def test_status_lists_holder_and_waiter() -> None:
-    h = starpipe("heavy", "--", sys.executable, "-c", "import time;time.sleep(3)")
-    time.sleep(0.7)
+    h = starpipe("heavy", "--", sys.executable, "-c", "import time;time.sleep(60)")
+    assert wait_until(lambda: len(heavy.status().holders) == 1)
     w = starpipe("heavy", "--", sys.executable, "-c", "pass")
-    time.sleep(0.7)
+    assert wait_until(lambda: len(heavy.status().queue) == 1)
     st = heavy.status()
     assert len(st.holders) == 1 and len(st.queue) == 1
     h.kill()
