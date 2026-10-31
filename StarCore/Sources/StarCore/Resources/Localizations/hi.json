@@ -829,7 +829,6 @@
   "ui.render_video_2": "वीडियो रेंडर करें…",
   "ui.render_video_after_processing": "प्रसंस्करण के बाद वीडियो रेंडर करें?",
   "ui.render_video_from_n_frames": "{0} फ़्रेमों से वीडियो रेंडर करें",
-  "ui.render_video_from_n_frames_lower": "{0} फ़्रेमों से वीडियो रेंडर करें",
   "ui.render_video_no_frames": "वीडियो बनाने के लिए अभी कोई प्रसंस्कृत फ़्रेम नहीं हैं। पहले फ़्रेम प्रसंस्कृत करें।",
   "ui.render_video_now": "अभी वीडियो रेंडर करें?",
   "ui.rendering_error": "रेंडरिंग त्रुटि: {0}",

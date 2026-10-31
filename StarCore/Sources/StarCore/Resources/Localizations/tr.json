@@ -829,7 +829,6 @@
   "ui.render_video_2": "Video oluştur…",
   "ui.render_video_after_processing": "İşlemeden sonra video oluşturulsun mu?",
   "ui.render_video_from_n_frames": "{0} kareden video oluştur",
-  "ui.render_video_from_n_frames_lower": "{0} kareden video oluştur",
   "ui.render_video_no_frames": "Henüz videoya dönüştürülecek işlenmiş kare yok. Önce kareleri işleyin.",
   "ui.render_video_now": "Video şimdi oluşturulsun mu?",
   "ui.rendering_error": "oluşturma hatası: {0}",

@@ -95,6 +95,7 @@ class DesktopFeatureRunner {
         StepAction.ID_NOT_SELECTED to { t -> expectSelected(t, args[0], selected = false) },
         StepAction.ID_ON to { t -> expectOn(t, args[0], on = true) },
         StepAction.ID_OFF to { t -> expectOn(t, args[0], on = false) },
+        StepAction.ID_READS to { t -> expectReads(t, args[0], args[1]) },
     )
 
     fun run(feature: Feature) {
@@ -103,6 +104,8 @@ class DesktopFeatureRunner {
         rendersVideo = feature.steps.any { it.action == StepAction.RENDER_OUTPUT_VIDEO }
         if (feature.steps.isEmpty()) throw RunnerError("feature \"${feature.name}\" has no steps: refusing to pass vacuously")
         // The client keeps its preferences in ~/.star.userprefs.json; a test must neither read nor write the real one.
+        // a @ui feature may compare what the app says with the English catalogue
+        if ("@ui" in feature.tags) com.star.desktop.i18n.Strings.setOverride("en")
         scratch = Files.createTempDirectory("star-gherkin-").toFile()
         val realHome = System.getProperty("user.home")
         System.setProperty("user.home", File(scratch, "home").apply { mkdirs() }.absolutePath)
@@ -142,6 +145,7 @@ class DesktopFeatureRunner {
             if ("@ui" in feature.tags) vm?.let { m -> runCatching { kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeoutOrNull(10_000) { m.shutdown() } } } }
             scope?.cancel()
             System.setProperty("user.home", realHome)
+            if ("@ui" in feature.tags) com.star.desktop.i18n.Strings.setOverride(null)
             scratch.deleteRecursively()
         }
     }
@@ -299,6 +303,14 @@ class DesktopFeatureRunner {
         waitFor(t, "\"$id\" ${if (on) "on" else "off"}", 20_000, { "(ToggleableState: ${semanticsOf(t, id)?.getOrNull(SemanticsProperties.ToggleableState)})" }) {
             (semanticsOf(t, id)?.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.On) == on
         }
+    }
+
+    /** The control's text is the catalogue's English text for [key]. */
+    private fun expectReads(t: ComposeUiTest, id: String, key: String) {
+        expectShown(t, id, shown = true)
+        val expected = com.star.desktop.i18n.localized(key)
+        fun texts() = semanticsOf(t, id)?.getOrNull(SemanticsProperties.Text)?.map { it.text }.orEmpty()
+        waitFor(t, "\"$id\" to read \"$expected\"", 20_000, { "(it reads ${texts()})" }) { expected in texts() || texts().joinToString("") == expected }
     }
 
     /** `return`, `escape`, `tab`, `space`, an arrow, or one character, with modifiers before it: `cmd+w`, `shift+cmd+,`. */

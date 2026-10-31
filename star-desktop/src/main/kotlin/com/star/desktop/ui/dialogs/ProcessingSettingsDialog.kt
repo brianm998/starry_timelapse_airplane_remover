@@ -429,7 +429,7 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
         }
 
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { finish(false) }) { Text(localized("ui.dismiss")) }
+            OutlinedButton(onClick = { finish(false) }, modifier = Modifier.testTag("settings.dismiss")) { Text(localized("ui.dismiss")) }
             Button(
                 // Update, over frames this change contradicts, asks before it acts: it does not start a run over an untouched sequence, it
                 // changes one that is part done.

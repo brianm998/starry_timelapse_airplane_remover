@@ -829,7 +829,6 @@
   "ui.render_video_2": "Vykreslit video…",
   "ui.render_video_after_processing": "Vykreslit video po zpracování?",
   "ui.render_video_from_n_frames": "Vykreslit video z {0} snímků",
-  "ui.render_video_from_n_frames_lower": "vykreslit video z {0} snímků",
   "ui.render_video_no_frames": "Zatím nejsou k dispozici žádné zpracované snímky, ze kterých by se dalo vytvořit video. Nejdřív snímky zpracujte.",
   "ui.render_video_now": "Vykreslit video hned teď?",
   "ui.rendering_error": "chyba vykreslování: {0}",

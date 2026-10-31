@@ -829,7 +829,6 @@
   "ui.render_video_2": "Video renderen…",
   "ui.render_video_after_processing": "Video renderen na de verwerking?",
   "ui.render_video_from_n_frames": "Video renderen uit {0} beelden",
-  "ui.render_video_from_n_frames_lower": "video renderen uit {0} beelden",
   "ui.render_video_no_frames": "Er zijn nog geen verwerkte beelden om een video van te maken. Verwerk eerst de beelden.",
   "ui.render_video_now": "Video nu renderen?",
   "ui.rendering_error": "renderfout: {0}",

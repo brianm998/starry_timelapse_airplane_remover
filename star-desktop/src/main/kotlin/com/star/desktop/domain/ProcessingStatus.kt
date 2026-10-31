@@ -36,6 +36,34 @@ sealed interface ProcessingButtonRole {
     }
 }
 
+/**
+ * Which of the bottom bar's two buttons are on screen (macOS `ProcessingButtonsLayout`).
+ *
+ * "Render Video" is there only once processing is complete (every frame finished, no run going, no horizon reference still waiting to
+ * be applied), because before that there is nothing to make a video from. The Process button gives its place up to it at the same
+ * moment: a finished sequence has nothing left to process, and the two side by side took more of the bar than a disabled button is
+ * worth. A sequence with no frames is never complete; there is nothing to render, and the Process button is where the user starts.
+ */
+data class ProcessingButtonsLayout(
+    val showsProcess: Boolean,
+    val showsRender: Boolean,
+    /** A video being written holds off a second one, so Render stays on screen but off. */
+    val renderEnabled: Boolean,
+) {
+    companion object {
+        fun current(
+            isProcessing: Boolean,
+            isRendering: Boolean,
+            completeCount: Int,
+            frameCount: Int,
+            pendingHorizonRefinement: Boolean,
+        ): ProcessingButtonsLayout {
+            val complete = frameCount > 0 && completeCount == frameCount && !isProcessing && !pendingHorizonRefinement
+            return ProcessingButtonsLayout(showsProcess = !complete, showsRender = complete, renderEnabled = complete && !isRendering)
+        }
+    }
+}
+
 /** How many frames are in each processing state. A frame the daemon has not reported on yet is unprocessed. */
 class FrameStateCounts(states: Map<Int, FrameProcessingState>, private val frameCount: Int) {
     private val byState: Map<FrameProcessingState, Int> = states.values.groupingBy { it }.eachCount()

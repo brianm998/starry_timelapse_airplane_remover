@@ -829,7 +829,6 @@
   "ui.render_video_2": "Відтворити відео…",
   "ui.render_video_after_processing": "Відтворити відео після обробки?",
   "ui.render_video_from_n_frames": "Відтворити відео з {0} кадрів",
-  "ui.render_video_from_n_frames_lower": "відтворити відео з {0} кадрів",
   "ui.render_video_no_frames": "Ще немає оброблених кадрів, з яких можна зробити відео. Спершу обробіть кадри.",
   "ui.render_video_now": "Відтворити відео зараз?",
   "ui.rendering_error": "помилка відтворення: {0}",

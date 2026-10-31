@@ -764,7 +764,6 @@
   "ui.render_video_2": "Render Video…",
   "ui.render_video_after_processing": "Render video after processing?",
   "ui.render_video_from_n_frames": "Render video from {0} frames",
-  "ui.render_video_from_n_frames_lower": "render video from {0} frames",
   "ui.render_video_no_frames": "There are no processed frames to make a video from yet. Process the frames first.",
   "ui.render_video_now": "Render video now?",
   "ui.rendering_error": "rendering error: {0}",

@@ -57,6 +57,42 @@ class ProcessingStatusTest {
         assertEquals(ProcessingButtonRole.Process(false), ProcessingButtonRole.current(false, true, counts(3, 0 to FPS_COMPLETE), 3, false))
     }
 
+    private fun layout(complete: Int, frames: Int = 10, processing: Boolean = false, rendering: Boolean = false, pending: Boolean = false) =
+        ProcessingButtonsLayout.current(processing, rendering, complete, frames, pending)
+
+    @Test fun aFreshOrPartlyDoneSequenceShowsProcessAndNotRender() {
+        for (done in listOf(0, 9)) {
+            assertEquals(ProcessingButtonsLayout(showsProcess = true, showsRender = false, renderEnabled = false), layout(done))
+        }
+    }
+
+    @Test fun aRunInProgressShowsItsStatusAndNotRender() {
+        assertEquals(ProcessingButtonsLayout(showsProcess = true, showsRender = false, renderEnabled = false), layout(4, processing = true))
+    }
+
+    /** The last frame can be complete a moment before the run is over. */
+    @Test fun everyFrameCompleteWhileTheRunIsStillGoingIsNotComplete() {
+        assertEquals(ProcessingButtonsLayout(showsProcess = true, showsRender = false, renderEnabled = false), layout(10, processing = true))
+    }
+
+    @Test fun aCompleteSequenceShowsRenderVideoInPlaceOfProcess() {
+        assertEquals(ProcessingButtonsLayout(showsProcess = false, showsRender = true, renderEnabled = true), layout(10))
+    }
+
+    @Test fun aVideoBeingWrittenLeavesRenderOnScreenButOff() {
+        assertEquals(ProcessingButtonsLayout(showsProcess = false, showsRender = true, renderEnabled = false), layout(10, rendering = true))
+    }
+
+    /** A horizon reference still to be applied is work the sequence is owed, so it is not done, whatever its frame states say. */
+    @Test fun aPendingHorizonRefinementIsNotComplete() {
+        assertEquals(ProcessingButtonsLayout(showsProcess = true, showsRender = false, renderEnabled = false), layout(10, pending = true))
+    }
+
+    /** 0 == 0 is not a finished sequence; there is nothing to render a video from. */
+    @Test fun noFramesIsNotComplete() {
+        assertEquals(ProcessingButtonsLayout(showsProcess = true, showsRender = false, renderEnabled = false), layout(0, frames = 0))
+    }
+
     @Test fun onlyTheModesTheFrameHasAreListedAndTheBasicOnesUntilExpanded() {
         val available = listOf(
             com.star.proto.FrameViewMode.VIEW_ORIGINAL, com.star.proto.FrameViewMode.VIEW_STAR_ALIGNED, com.star.proto.FrameViewMode.VIEW_PROCESSED,

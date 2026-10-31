@@ -406,44 +406,54 @@ struct ProcessingButtonsView: View {
         return false
     }
 
-    var renderButtonDisabled: Bool {
-        let complete = viewModel.frameStateMap[.complete]?.count ?? 0
-        return complete != viewModel.frames.count || viewModel.isProcessingFrames || viewModel.isRenderingVideo
+    var layout: ProcessingButtonsLayout {
+        ProcessingButtonsLayout.current(
+          isProcessingFrames: viewModel.isProcessingFrames,
+          isRenderingVideo: viewModel.isRenderingVideo,
+          completeCount: viewModel.frameStateMap[.complete]?.count ?? 0,
+          frameCount: viewModel.frames.count,
+          pendingHorizonRefinement: viewModel.hasPendingHorizonRefinement
+        )
     }
 
     var body: some View {
         let role = self.role
+        let layout = self.layout
         HStack {
-            Button() {
-                switch role {
-                case .status:  viewModel.processingModalShowing = true
-                case .process: viewModel.shouldShowProcessingSettings = true
+            if layout.showsProcess {
+                Button() {
+                    switch role {
+                    case .status:  viewModel.processingModalShowing = true
+                    case .process: viewModel.shouldShowProcessingSettings = true
+                    }
+                } label: {
+                    Text(role == .status
+                           ? localized("ui.show_progress")
+                           : localized("ui.process_frames"))
                 }
-            } label: {
-                Text(role == .status
-                       ? localized("ui.show_progress")
-                       : localized("ui.process_frames"))
+                  .accessibilityIdentifier("process.frames")
+                  .disabled(processButtonDisabled)
+                  .if(!processButtonDisabled) {
+                      $0.buttonStyle(.borderedProminent)
+                        .tint(.blue)
+                  }
+                  .help(role == .status
+                          ? localized("ui.show_the_processing_status_again")
+                          : localized("ui.choose_settings_and_process_these_frames"))
             }
-              .accessibilityIdentifier("process.frames")
-              .disabled(processButtonDisabled)
-              .if(!processButtonDisabled) {
-                  $0.buttonStyle(.borderedProminent)
-                    .tint(.blue)
-              }
-              .help(role == .status
-                      ? localized("ui.show_the_processing_status_again")
-                      : localized("ui.choose_settings_and_process_these_frames"))
 
-            Button() {
-                viewModel.renderVideoSheetShowing = true
-            } label: {
-                Text(localized("ui.render_video_from_n_frames_lower", viewModel.frames.count))
+            if layout.showsRender {
+                Button() {
+                    viewModel.renderVideoSheetShowing = true
+                } label: {
+                    Text(localized("ui.render_video"))
+                }
+                  .disabled(!layout.renderEnabled)
+                  .if(layout.renderEnabled) {
+                      $0.buttonStyle(.borderedProminent)
+                        .tint(.blue)
+                  }
             }
-              .disabled(renderButtonDisabled)
-              .if(!renderButtonDisabled) {
-                  $0.buttonStyle(.borderedProminent)
-                    .tint(.blue)
-              }
         }
     }
 }
