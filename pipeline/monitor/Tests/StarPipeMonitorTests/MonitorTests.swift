@@ -37,6 +37,24 @@ final class FixtureTests: XCTestCase {
     }
 }
 
+extension FixtureTests {
+    func testTicketsDecodeTheRunningStagesModel() throws {
+        let s = try Self.snapshot()
+        let running = try XCTUnwrap(s.tickets.first { $0.group == "running" })
+        XCTAssertEqual(running.model, "opus")
+        XCTAssertEqual(running.stages.first?.model, "opus")
+        XCTAssertNil(try XCTUnwrap(s.tickets.first { $0.group == "queued" }).model)
+        // a snapshot from a daemon that predates the field still decodes
+        let old = try JSONSerialization.jsonObject(with: Self.fixture()) as! [String: Any]
+        var tickets = old["tickets"] as! [[String: Any]]
+        tickets[0].removeValue(forKey: "model")
+        var stripped = old
+        stripped["tickets"] = tickets
+        let decoded = try JSONDecoder().decode(Snapshot.self, from: JSONSerialization.data(withJSONObject: stripped))
+        XCTAssertNil(decoded.tickets[0].model)
+    }
+}
+
 final class DetailTests: XCTestCase {
     func testARealTicketDetailDecodes() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "detail", withExtension: "json", subdirectory: "Fixtures"))

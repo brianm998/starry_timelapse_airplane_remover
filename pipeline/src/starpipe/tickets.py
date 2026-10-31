@@ -8,7 +8,11 @@ from dataclasses import dataclass, field
 from .github import GitHub, GitHubError
 
 SECTIONS = ["Goal", "Context", "Acceptance criteria", "Tests", "Out of scope"]
-PIPELINE_KEYS = {"model_develop", "effort_develop", "model_explore", "effort_explore", "gherkin", "skip_review"}
+MODEL_STAGES = ("explore", "develop", "fix", "review", "resolve", "ci_fix", "conflict")  # "ci-fix" is "ci_fix" in a key
+ALLOWED_MODELS = ("opus", "sonnet", "haiku")
+FABLE = "fable"  # allowed only when Config.allow_fable
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
+PIPELINE_KEYS = {"gherkin", "skip_review", *(f"{kind}_{s}" for s in MODEL_STAGES for kind in ("model", "effort"))}
 PRIORITIES = ["p0", "p1", "p2", "p3"]
 MAX_CRITERIA = 6
 VAGUE_NONE = re.compile(r"^(visual|hard to test|ui|cosmetic|n/?a|none)\W*$", re.IGNORECASE)
@@ -40,7 +44,33 @@ def split_sections(body: str) -> dict[str, str]:
     return {k: "\n".join(v).strip() for k, v in out.items()}
 
 
-def lint(body: str, title: str = "") -> Lint:
+def pipeline_entries(section: str) -> list[tuple[str, str, str]]:
+    """The '## Pipeline' entries as (key, value, raw part); a part without ':' has an empty key and value."""
+    out: list[tuple[str, str, str]] = []
+    for line in section.splitlines():
+        for part in filter(None, (p.strip() for p in line.split("·"))):
+            key, colon, value = part.partition(":")
+            out.append((key.strip().lstrip("-* "), value.strip(), part) if colon else ("", "", part))
+    return out
+
+
+def parse_pipeline(body: str) -> dict[str, str]:
+    """The key: value choices of a ticket body's '## Pipeline' section (later entries win; unvalidated)."""
+    return {k: v for k, v, _ in pipeline_entries(split_sections(body).get("Pipeline", "")) if k}
+
+
+def validate_choice(key: str, value: str, allow_fable: bool = False) -> str | None:
+    """Why a model_*/effort_* value is not usable, or None when it is (or the key is not one of those)."""
+    if key.startswith("model_"):
+        allowed = (*ALLOWED_MODELS, *((FABLE,) if allow_fable else ()))
+        if value not in allowed:
+            return f"model '{value}' is not allowed (one of {', '.join(allowed)})"
+    elif key.startswith("effort_") and value not in EFFORTS:
+        return f"effort '{value}' is not one of {', '.join(EFFORTS)}"
+    return None
+
+
+def lint(body: str, title: str = "", allow_fable: bool = False) -> Lint:
     result = Lint()
     sections = split_sections(body)
     for name in SECTIONS:
@@ -70,13 +100,13 @@ def lint(body: str, title: str = "") -> Lint:
         elif not re.search(r"^\s*[-*\d]", tests, re.MULTILINE):
             result.errors.append("'## Tests' must be a list of tests or 'none: <reason>'")
 
-    for line in sections.get("Pipeline", "").splitlines():
-        for part in filter(None, (p.strip() for p in line.split("·"))):
-            key = part.partition(":")[0].strip().lstrip("-* ")
-            if ":" not in part:
-                result.errors.append(f"'## Pipeline' entry '{part}' is not key: value")
-            elif key not in PIPELINE_KEYS:
-                result.errors.append(f"unknown '## Pipeline' key '{key}' (known: {', '.join(sorted(PIPELINE_KEYS))})")
+    for key, value, part in pipeline_entries(sections.get("Pipeline", "")):
+        if not key:
+            result.errors.append(f"'## Pipeline' entry '{part}' is not key: value")
+        elif key not in PIPELINE_KEYS:
+            result.errors.append(f"unknown '## Pipeline' key '{key}' (known: {', '.join(sorted(PIPELINE_KEYS))})")
+        elif (bad := validate_choice(key, value, allow_fable)):
+            result.errors.append(f"'## Pipeline' {key}: {bad}")
     return result
 
 
@@ -85,11 +115,11 @@ class FilingError(RuntimeError):
 
 
 def file_ticket(gh: GitHub, title: str, body: str, blocked_by: list[int] | None = None,
-                priority: str | None = None) -> int:
+                priority: str | None = None, allow_fable: bool = False) -> int:
     """Lint, create, label and link. All or nothing: a failure closes what was created and says so."""
     if priority is not None and priority not in PRIORITIES:
         raise FilingError(f"priority must be one of {', '.join(PRIORITIES)}")
-    result = lint(body, title)
+    result = lint(body, title, allow_fable)
     if not result.ok:
         raise FilingError("ticket lint failed:\n  " + "\n  ".join(result.errors))
     number: int | None = None

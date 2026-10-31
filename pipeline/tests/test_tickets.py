@@ -51,6 +51,21 @@ def test_unknown_pipeline_key_and_too_many_criteria() -> None:
     assert any("acceptance criteria" in w for w in tickets.lint(many).warnings)
 
 
+def test_lint_rejects_disallowed_models_and_unknown_efforts_and_accepts_every_stage_key() -> None:
+    every = " · ".join(f"{kind}_{s}: {v}" for s in tickets.MODEL_STAGES for kind, v in (("model", "sonnet"), ("effort", "max")))
+    assert tickets.lint(GOOD.replace("model_develop: opus · effort_develop: high", every)).ok
+
+    def errors(entry: str, allow_fable: bool = False) -> list[str]:
+        return tickets.lint(GOOD.replace("model_develop: opus", entry), allow_fable=allow_fable).errors
+
+    assert any("fable" in e for e in errors("model_review: fable"))
+    assert errors("model_review: fable", allow_fable=True) == []
+    assert any("gpt" in e for e in errors("model_ci_fix: gpt"))
+    assert any("ultra" in e for e in errors("effort_conflict: ultra"))
+    assert any("unknown" in e for e in errors("model_ci-fix: opus"))
+    assert tickets.parse_pipeline(GOOD) == {"model_develop": "opus", "effort_develop": "high"}
+
+
 def test_bug_ticket_needs_a_real_none_reason() -> None:
     body = GOOD.replace("- FooTests.testWorks: fails without the fix", "none: visual")
     assert not tickets.lint(body, title="Fix crash on open").ok

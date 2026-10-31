@@ -75,6 +75,16 @@ def test_old_landed_and_failed_tickets_drop_off(rig: Rig) -> None:
     assert group_of(t, False, 3600.0, 0.0) == "landed_today"
 
 
+def test_the_snapshot_ticket_carries_the_running_stages_model(rig: Rig) -> None:
+    d = populate(rig)
+    models = {t["number"]: t["model"] for t in d.snapshot()["tickets"]}  # type: ignore[index, union-attr]
+    assert models[2] == "opus" and models[1] is None and models[4] is None
+    rig.db.end_stage(rig.db.stages(2)[0]["id"], "accepted", 0.0, "done")
+    assert {t["number"]: t["model"] for t in d.snapshot()["tickets"]}[2] is None  # type: ignore[index, union-attr]
+    rig.db.begin_stage(2, "review", 1, "sonnet")
+    assert {t["number"]: t["model"] for t in d.snapshot()["tickets"]}[2] == "sonnet"  # type: ignore[index, union-attr]
+
+
 def test_the_snapshot_carries_develop_landing_and_interventions(rig: Rig) -> None:
     d = populate(rig)
     rig.db.put("stop_line", "pr-gate/linux")

@@ -140,7 +140,13 @@ struct TicketRow: View {
                 Spacer()
                 Chip(text: ticket.state, color: stateColor(ticket.state))
             }
-            Text(ticket.activity).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(ticket.activity).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Spacer(minLength: 0)
+                if let model = ticket.model {
+                    Text(model).font(.caption2.monospaced()).foregroundStyle(.tertiary)
+                }
+            }
         }
         .padding(.vertical, 2)
     }

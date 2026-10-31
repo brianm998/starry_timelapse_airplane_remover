@@ -14,6 +14,7 @@ from starpipe.notify import Notifier
 
 from .fakes import (
     OWNER,
+    GOOD_BODY,
     FakeAgent,
     FakeGitHub,
     accepted,
@@ -144,6 +145,59 @@ async def test_a_stage_without_a_result_climbs_the_ladder_then_parks(rig: Rig) -
     assert [r.attempt for r in rig.agent.requests] == [1, 2, 3]
     assert rig.state(7) == "failed"
     assert rig.db.open_alert("ticket-failed:7", "again") is False  # already open
+
+
+def piped(entries: str) -> str:
+    return GOOD_BODY + f"\n## Pipeline\n{entries}\n"
+
+
+async def test_a_tickets_per_stage_model_and_effort_reach_the_stage_request(rig: Rig) -> None:
+    rig.engine.config.model = "sonnet"
+    rig.gh.add_issue(7, "t", body=piped("model_explore: haiku · effort_explore: max · effort_develop: low"))
+    rig.gh.add_issue(8, "t")
+    rig.engine.sync_issues()
+    await rig.engine.drive(7)
+    await rig.engine.drive(8)
+    mine = [r for r in rig.agent.requests if r.ticket == 7]
+    other = [r for r in rig.agent.requests if r.ticket == 8]
+    assert [(r.model, r.effort) for r in mine[:2]] == [("haiku", "max")] * 2
+    assert [(r.model, r.effort) for r in other[:2]] == [("sonnet", "high")] * 2
+
+    # a stage the ticket does not name keeps the default, a hyphenated stage maps to its underscored key
+    rig.db.upsert_ticket(7, "t", piped("model_ci_fix: sonnet · effort_ci_fix: xhigh"), OWNER, 2, [])
+    assert rig.engine._stage_choice(rig.db.ticket(7), "ci-fix", 1) == ("sonnet", "xhigh")  # type: ignore[arg-type]
+    assert rig.engine._stage_choice(rig.db.ticket(7), "conflict", 1) == ("sonnet", "high")  # type: ignore[arg-type]
+
+
+async def test_attempt_three_escalates_unless_the_ticket_names_a_model(rig: Rig) -> None:
+    rig.engine.config.model = "sonnet"
+    rig.engine.config.model_escalate = "opus"
+    rig.gh.add_issue(7, "t", body=piped("model_develop: haiku"))
+    rig.gh.add_issue(8, "t", body=piped("effort_explore: low"))
+    rig.engine.sync_issues()
+    await rig.engine.drive(7)
+    await rig.engine.drive(8)
+    assert [r.model for r in rig.agent.requests if r.ticket == 8] == ["sonnet", "sonnet", "opus"]  # explore, escalates
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"), lambda r: StageOutcome("no-result"),
+                 lambda r: StageOutcome("no-result"))
+    rig.db.set_state(7, "queued")
+    await rig.engine.drive(7)
+    develops = [r for r in rig.agent.requests if r.ticket == 7 and r.stage == "develop"]
+    assert [r.model for r in develops] == ["haiku", "haiku", "haiku"]  # the explicit choice survives attempt 3
+
+
+async def test_a_disallowed_model_or_unknown_effort_falls_back_and_is_noted(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t", body=piped("model_explore: fable · effort_explore: ultra"))
+    rig.engine.sync_issues()
+    await rig.engine.drive(7)
+    assert {(r.model, r.effort) for r in rig.agent.requests} == {("opus", "high")}
+    noted = [e for e in rig.db.events_since() if e["kind"] == "stage-choice-ignored"]
+    assert {e["data"]["key"] for e in noted} == {"model_explore", "effort_explore"}
+    assert any("fable" in e["data"]["reason"] for e in noted)
+
+    rig.engine.config.allow_fable = True  # fable is honoured once the config allows it
+    assert rig.engine._stage_choice(rig.db.ticket(7), "explore", 1)[0] == "fable"  # type: ignore[arg-type]
 
 
 async def test_a_timeout_resumes_the_same_session(rig: Rig) -> None:

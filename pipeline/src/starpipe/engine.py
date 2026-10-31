@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import gitutil, guards, negctl, ship, trust, worktrees
+from . import gitutil, guards, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
 from .checks import impact, ledger
 from .config import Config, home
@@ -156,6 +156,31 @@ class Engine:
         rows = [s for s in self.db.stages(t.number, stage) if s["session_id"]]
         return rows[-1]["session_id"] if rows else None
 
+    def _stage_choice(self, t: Ticket, stage: str, attempt: int) -> tuple[str, str]:
+        """The model and effort for one attempt: the ticket's `model_<stage>`/`effort_<stage>` where valid, else the config.
+
+        The ticket row is re-read so an edit picked up by intake applies to the next attempt. Attempt 3 escalates to
+        `config.model_escalate` unless the ticket names a model for the stage. A bad value is ignored and noted.
+        """
+        fresh = self.db.ticket(t.number) or t
+        chosen = tickets.parse_pipeline(fresh.body)
+        suffix = stage.replace("-", "_")
+        model = self.config.model if attempt < 3 else self.config.model_escalate
+        effort = "high"
+        for kind in ("model", "effort"):
+            key = f"{kind}_{suffix}"
+            if key not in chosen:
+                continue
+            bad = tickets.validate_choice(key, chosen[key], self.config.allow_fable)
+            if bad:
+                self.db.event("stage-choice-ignored", t.number, stage=stage, attempt=attempt, key=key, value=chosen[key],
+                              reason=bad)
+            elif kind == "model":
+                model = chosen[key]
+            else:
+                effort = chosen[key]
+        return model, effort
+
     async def model_stage(self, t: Ticket, stage: str, prompt: str, *, fresh: bool = False,
                           allow_resolve: bool = True) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
@@ -170,12 +195,12 @@ class Engine:
         summary = ""
         while attempt <= 3:
             await self._wait_for_usage()
-            model = self.config.model if attempt < 3 else self.config.model_escalate
+            model, effort = self._stage_choice(t, stage, attempt)
             stage_id = self.db.begin_stage(t.number, stage, attempt, model)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
-                               "high", BUDGET_S[stage], contract, self._fence(t, stage), resume,
+                               effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
                                on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid))
             out: StageOutcome = await self.agent.run(req)
             if out.session_id:
