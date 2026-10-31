@@ -70,11 +70,15 @@ are different: they stay literal in the feature and the runner supplies their va
 | `the "<window>" window is open` / `is not open` | `debug` or `outlier` |
 
 The features so far (fourteen pass on both clients; four pass on the gui and are known gaps of the desktop's test host): `uiStartupDefaults`, `uiStartupReturnStarts`, `uiStartupHorizonQuestion`, `uiStartupMovingHorizonQuestion`,
-`uiStartupNoHorizonSkips`, `uiStartupBackToHorizon`, `uiStartupBackFromRemoval`, `uiRemovalSelectiveChoice`, `uiSettingsFromStartup`, `uiSettingsExpertToggle`,
+`uiStartupNoHorizonSkips`, `uiStartupBackToHorizon`, `uiStartupBackFromRemoval`, `uiRemovalSelectiveChoice`, `uiSettingsFromStartup`, `uiSettingsTabs`,
 `uiSettingsProcessNow`, then `uiSecondaryWindowToggles`, `uiSecondaryWindowsNeedASequence`, `uiSequenceWindowsGoWithIt` (M11) and `uiRecentsRemove` (D12), and, on the sequence screen reached without the startup questions, `uiModePickers` (Q8), `uiViewPickerNeedsAnImage` (Q1) and `uiFrameKeys`. The settings sheet is reached through the Advanced gear on a startup question, which both clients have, so no seam is needed.
 
 A feature that presses a key (`uiFrameKeys`) runs on the desktop with the window's key handler (`handleGlobalKey`, which `Main.kt` hangs on the `Window`, outside `StarApp`) hosted on an
 ancestor of `StarApp` by the runner (`KeyHost`), in the same bubble phase and with the focus on it: the handler is the real one, the host is the test's own.
+
+**A loaded machine can lose a click or a key** sent while a screen is still being put up (seen with a load average of 10 to 14, from other builds): the gui runner waits for a control to be hittable and its frame to stop
+moving, and the desktop runner for the Compose clock to be idle, and neither can be sure. A feature that fails once and passes on a rerun, with the same step and nothing changed, is that; the gui runner also ignores
+the windows the last run left open (`-ApplePersistenceIgnoreState YES`), which a restored window used to make an order-dependent failure.
 
 Run one with `./gradlew gherkinTest -Pstar.stard.path=$PWD/../daemon/.build/debug/stard --tests '*.uiStartupDefaultsFeature'` in `star-desktop` (one feature
 per Gradle run: a second in the same JVM trips over the first one's leftover coroutines) and with `xcodebuild test … -only-testing:starUITests/GeneratedFeatureUITests/testUiStartupDefaultsFeature`

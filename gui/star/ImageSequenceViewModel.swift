@@ -1963,9 +1963,6 @@ public final class ImageSequenceViewModel {
     /// reads as the finished sequence it is about to take apart.
     var processingStatusText: String? = nil
 
-    // used in initial instructions view
-    var showExpertSettings = false
-
     var shouldShowTrash: Bool = false
 
     var minimumClassificationSize: Int = 20

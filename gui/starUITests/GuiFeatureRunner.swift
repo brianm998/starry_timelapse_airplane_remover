@@ -226,7 +226,8 @@ final class GuiFeatureRunner {
         let home = scratch.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         app.launchEnvironment["HOME"] = home.path
-        app.launchArguments += arguments
+        // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
+        app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
         app.launch()
     }
 

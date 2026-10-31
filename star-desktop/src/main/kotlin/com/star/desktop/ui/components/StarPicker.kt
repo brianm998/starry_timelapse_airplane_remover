@@ -39,7 +39,7 @@ fun <T> StarPicker(
     enabled: Boolean = true,
     /** Whether one option can be chosen: a mode the frame has no image for is greyed out and does nothing. */
     isEnabled: (T) -> Boolean = { true },
-    /** What an option is called for tests (`mode.edit`); the option also says whether it is the selected one, as a radio button does. */
+    /** The id a UI test finds an option by (`gherkin/ui/ids.json`), for those that have one; the option also says whether it is the selected one, as a radio button does. */
     tag: (T) -> String? = { null },
 ) {
     Row(
