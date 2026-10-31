@@ -67,6 +67,24 @@ def _ts(value: str | None) -> float | None:
     return datetime.fromisoformat(value).timestamp() if value else None
 
 
+def run_version(run: dict[str, Any]) -> str | None:
+    """A cache key for a run's jobs: only a completed run is stable, and a rerun changes its attempt and update time."""
+    if run.get("status") != "completed":
+        return None
+    return f"{run.get('run_attempt')}:{run.get('updated_at')}"
+
+
+def poll_delay(age_s: float, base: float) -> float:
+    """How long to wait before looking at CI again: often at first, then less, since CI takes hours and polls cost API quota."""
+    if age_s < 10 * 60:
+        return base
+    if age_s < 30 * 60:
+        return base * 2
+    if age_s < 2 * 3600:
+        return base * 3
+    return base * 5
+
+
 def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str, Any]]]) -> list[Job]:
     """GitHub's workflow runs and their jobs as Job values (the latest attempt of each run)."""
     out: list[Job] = []

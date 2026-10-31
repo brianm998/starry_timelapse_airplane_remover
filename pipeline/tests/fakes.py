@@ -172,7 +172,7 @@ class FakeGitHub(GitHub):
             runs.append({"id": run_id, "name": wf, "status": "completed", "head_sha": key})
         return runs
 
-    def run_jobs(self, run_id: int) -> list[dict[str, Any]]:
+    def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
         return self.run_jobs_by_id.get(run_id, [])
 
     def rerun_failed(self, run_id: int) -> None:

@@ -63,6 +63,7 @@ class Engine:
     negative_control: Callable[[Path, str, list[str]], list[negctl.Control]] = negctl.run
     shim: str = ""
     parked: set[int] = field(default_factory=lambda: set[int]())
+    issue_memo: dict[int, tuple[str, bool, list[int]]] = field(default_factory=lambda: dict[int, tuple[str, bool, list[int]]]())
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
 
     # intake --------------------------------------------------------------------------------------------------------
@@ -72,13 +73,20 @@ class Engine:
         seen: set[int] = set()
         for issue in issues:
             n = int(issue["number"])
-            if not trust.may_run(issue, self.gh.timeline(n), self.config.owner):
+            stamp = str(issue.get("updated_at") or "")
+            memo = self.issue_memo.get(n)
+            if stamp and memo and memo[0] == stamp:  # nothing changed on the issue since: no timeline or dependency calls
+                allowed, blockers = memo[1], memo[2]
+            else:
+                allowed = trust.may_run(issue, self.gh.timeline(n), self.config.owner)
+                blockers = self.gh.blocked_by(n) if allowed else []
+                self.issue_memo[n] = (stamp, allowed, blockers)
+            if not allowed:
                 continue
             seen.add(n)
             labels = {lab["name"] for lab in issue.get("labels", [])}
             prio = min((PRIORITY[lab] for lab in labels if lab in PRIORITY), default=2)
-            if self.db.upsert_ticket(n, issue["title"], issue.get("body") or "", issue["user"]["login"], prio,
-                                     self.gh.blocked_by(n)):
+            if self.db.upsert_ticket(n, issue["title"], issue.get("body") or "", issue["user"]["login"], prio, blockers):
                 self._label(n, "queued")
         for t in self.db.tickets(("queued", *ACTIVE_STATES, "needs-input", "paused", "ready")):
             if t.number not in seen:

@@ -65,7 +65,7 @@ def publish(eng: Engine, t: Ticket) -> bool:
 
 def fetch_jobs(eng: Engine, sha: str) -> list[ci.Job]:
     runs = eng.gh.workflow_runs(sha=sha)
-    return ci.parse_jobs(runs, {int(r["id"]): eng.gh.run_jobs(int(r["id"])) for r in runs})
+    return ci.parse_jobs(runs, {int(r["id"]): eng.gh.run_jobs(int(r["id"]), ci.run_version(r)) for r in runs})
 
 
 def _infra(eng: Engine, job: ci.Job) -> bool:
@@ -120,7 +120,8 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
             continue
         eng.db.record_ci(t.number, sha, verdict.kind, {"reason": verdict.reason})
         if verdict.kind == "pending":
-            await eng.sleep(eng.config.ci_poll_s)
+            pushed = float(eng.db.get(f"pushed_at:{t.number}") or eng.clock())
+            await eng.sleep(ci.poll_delay(eng.clock() - pushed, eng.config.ci_poll_s))
         elif verdict.kind == "rerun":
             ready = await asyncio.to_thread(_rerun, eng, t.number, [j for j in verdict.rerun if j.run_done])
             reran |= {j.key for j in ready}
@@ -267,7 +268,7 @@ def watch_develop(eng: Engine) -> None:
         latest.setdefault(str(r.get("name")), r)
     seeding = eng.db.baseline_size() == 0
     for run in latest.values():
-        for job in ci.parse_jobs([run], {int(str(run["id"])): eng.gh.run_jobs(int(str(run["id"])))}):
+        for job in ci.parse_jobs([run], {int(str(run["id"])): eng.gh.run_jobs(int(str(run["id"])), ci.run_version(run))}):
             before = eng.db.baseline(job.workflow, job.job)
             now = job.conclusion or "failure"
             eng.db.set_baseline(job.workflow, job.job, str(run.get("head_sha")), now)

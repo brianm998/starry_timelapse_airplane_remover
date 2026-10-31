@@ -40,6 +40,7 @@ class GitHub:
         self.config = config
         self._run = runner
         self.base = f"repos/{config.owner}/{config.repo}"
+        self._jobs_cache: dict[tuple[int, str], list[dict[str, Any]]] = {}
 
     def api(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         args = ["api", "-X", method, f"{self.base}/{path}"]
@@ -120,9 +121,18 @@ class GitHub:
         data: dict[str, Any] = self.api("GET", f"actions/runs?{query}") or {}
         return data.get("workflow_runs", [])
 
-    def run_jobs(self, run_id: int) -> list[dict[str, Any]]:
+    def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
+        """A run's jobs. With a `version` (only for a completed run: its attempt and update time) the answer is remembered, since a
+        completed run does not change until it is rerun, which changes the version. This is most of the polling cost."""
+        if version is not None and (run_id, version) in self._jobs_cache:
+            return self._jobs_cache[(run_id, version)]
         data: dict[str, Any] = self.api("GET", f"actions/runs/{run_id}/jobs?per_page=100") or {}
-        return data.get("jobs", [])
+        jobs: list[dict[str, Any]] = data.get("jobs", [])
+        if version is not None:
+            if len(self._jobs_cache) > 2000:
+                self._jobs_cache.clear()
+            self._jobs_cache[(run_id, version)] = jobs
+        return jobs
 
     def rerun_failed(self, run_id: int) -> None:
         self.api("POST", f"actions/runs/{run_id}/rerun-failed-jobs")
