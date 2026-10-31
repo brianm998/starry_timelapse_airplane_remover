@@ -28,6 +28,7 @@ struct StartupBackButton: View {
               .opacity(0.8)
         }
           .buttonStyle(PlainButtonStyle())
+          .accessibilityIdentifier("startup.back")
     }
 }
 
@@ -127,6 +128,7 @@ struct HorizonView: View {
                     }
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.advanced")
             }
         }
     }
@@ -216,6 +218,7 @@ struct MovingView: View {
                     }
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.advanced")
             }
         }
     }
@@ -538,6 +541,7 @@ struct RemovalView: View {
                     }
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .accessibilityIdentifier("startup.advanced")
             }
         }
     }

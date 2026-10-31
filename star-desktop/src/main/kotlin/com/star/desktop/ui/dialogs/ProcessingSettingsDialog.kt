@@ -371,7 +371,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { finish(false) }) { Text(localized("ui.dismiss")) }
+                OutlinedButton(onClick = { finish(false) }, modifier = Modifier.testTag("settings.dismiss")) { Text(localized("ui.dismiss")) }
                 Button(
                     // Update, over frames this change contradicts, asks before it acts: it does not start a run over an untouched sequence, it
                     // changes one that is part done.
@@ -382,7 +382,7 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
                 ) { Text(localized(change.buttonKey(processing))) }
                 Spacer(Modifier.weight(1f))
                 // A button, as the gui's is, not a switch in the middle of the settings.
-                OutlinedButton(onClick = { app.setShowExpertSettings(!showExpert) }) {
+                OutlinedButton(onClick = { app.setShowExpertSettings(!showExpert) }, modifier = Modifier.testTag("settings.expert")) {
                     Text(localized(if (showExpert) "ui.hide_expert_settings" else "ui.show_expert_settings"))
                 }
             }

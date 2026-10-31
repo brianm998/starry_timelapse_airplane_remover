@@ -34,5 +34,6 @@
   { "case": "idSelected"            , "text": "\"<id>\" is selected" },
   { "case": "idNotSelected"         , "text": "\"<id>\" is not selected" },
   { "case": "idOn"                  , "text": "\"<id>\" is on" },
-  { "case": "idOff"                 , "text": "\"<id>\" is off" }
+  { "case": "idOff"                 , "text": "\"<id>\" is off" },
+  { "case": "idReads"               , "text": "\"<id>\" reads \"<key>\"" }
 ]

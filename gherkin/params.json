@@ -71,6 +71,21 @@
     },
     "uiRemovalSelectiveChoice": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiSettingsFromStartup": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiSettingsExpertToggle": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiSettingsProcessNow": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiStartupBackToHorizon": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiStartupBackFromRemoval": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }

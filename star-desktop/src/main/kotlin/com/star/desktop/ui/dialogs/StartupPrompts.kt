@@ -317,7 +317,7 @@ private fun AnswerRow(back: (() -> Unit)? = null, advanced: (() -> Unit)? = null
 @Composable
 private fun BackButton(onClick: () -> Unit) {
     Row(
-        Modifier.clip(StarShapes.card).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 4.dp),
+        Modifier.clip(StarShapes.card).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 4.dp).testTag("startup.back"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -342,7 +342,7 @@ private fun SecondaryButton(text: String, tag: String? = null, onClick: () -> Un
 private fun AdvancedButton(onClick: () -> Unit) {
     HoverTip(localized("ui.show_advanced_settings")) {
         Column(
-            Modifier.clip(StarShapes.card).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp),
+            Modifier.clip(StarShapes.card).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp).testTag("startup.advanced"),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text("⚙", color = StarColors.textSecondary, fontSize = 30.sp)
