@@ -279,6 +279,14 @@ def test_a_new_red_outside_the_gate_is_rerun_once_before_it_counts() -> None:
     assert judged(jobs, base, reran={("gherkin", "videoBackgroundIdentical")}).kind == "fail"
 
 
+def test_a_failure_in_a_run_that_never_finishes_stops_blocking_after_the_wait() -> None:
+    stuck = ci.Job("gherkin", "videoBackgroundIdentical", "completed", "failure", 7, run_done=False)
+    base = {("gherkin", "videoBackgroundIdentical"): "success"}
+    assert judged([job("pr-gate", "l"), stuck], base, now=3600).kind == "rerun"
+    v = judged([job("pr-gate", "l"), stuck], base, now=4 * 3600)
+    assert v.kind == "pass" and [j.job for j in v.demoted] == ["videoBackgroundIdentical"]
+
+
 def test_the_judge_reruns_once() -> None:
     jobs = [job("pr-gate", "l", conclusion="timed_out")]
     assert judged(jobs).kind == "rerun"

@@ -98,7 +98,10 @@ def judge(jobs: list[Job], baseline: Baseline, *, now: float, head_pushed_at: fl
             if baseline(*j.key) != "success":
                 verdict.known_red.append(j)  # already failing on develop (or never seen): does not block
             elif j.key not in reran:
-                verdict.rerun.append(j)  # a new red outside the gate gets one rerun first (a flaky test is not worth a model session): it may be a flake
+                if not j.run_done and now - head_pushed_at > blocking_wait_s:
+                    verdict.demoted.append(j)  # cannot be rerun while its run is still going, and the wait is over
+                else:
+                    verdict.rerun.append(j)  # a new red outside the gate gets one rerun first (a flaky test is not worth a model session): it may be a flake
             elif infra(j):
                 verdict.known_red.append(j)  # infrastructure twice (e.g. a runner-image brownout): not this PR's fault
             else:
