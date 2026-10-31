@@ -54,3 +54,18 @@ def test_no_top_level_source_directory_is_unmapped() -> None:
                            check=True).stdout.splitlines()
     top = sorted({n.split("/", 1)[0] for n in names if "/" in n})
     assert impact.unmapped_top_levels(top) == []
+
+
+def test_a_check_id_with_a_slash_is_a_flat_log_name() -> None:
+    from starpipe.checks import runner
+
+    assert runner.log_name("build:pipeline/monitor") == "build_pipeline_monitor"
+    assert "/" not in runner.log_name("test:pipeline/monitor")
+
+
+def test_the_monitor_has_its_own_build_and_test() -> None:
+    plan = impact.plan_for(["pipeline/monitor/Sources/StarPipeMonitor/App.swift"])
+    assert plan.builds == ["build:pipeline/monitor"] and plan.tests == ["test:pipeline/monitor"]
+    assert "t0:pipeline-static" in plan.t0  # still a pipeline/ change
+    plain = impact.plan_for(["pipeline/src/starpipe/daemon.py"])
+    assert plain.builds == [] and plain.tests == ["test:pipeline"]

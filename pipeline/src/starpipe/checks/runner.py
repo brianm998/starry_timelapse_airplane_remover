@@ -53,10 +53,15 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
                          counts.failed, counts.skipped, str(log), f"exit {code}")
 
 
+def log_name(check_id: str) -> str:
+    """A check id as a file name: `build:pipeline/monitor` must not become a nested path."""
+    return check_id.replace(":", "_").replace("/", "_")
+
+
 def run_check(check_id: str, root: Path, base: str, log_dir: Path, *, allow_skips: bool = False,
               say: Callable[[str], None] = lambda _m: None) -> ledger.Result:
     sha = gitutil.head_sha(root)
-    log = log_dir / (check_id.replace(":", "_") + ".log")
+    log = log_dir / (log_name(check_id) + ".log")
     if check_id in ("t0:artifacts", "t0:i18n"):
         started = time.monotonic()
         ok, detail = (t0.artifacts if check_id == "t0:artifacts" else t0.i18n)(root, base)

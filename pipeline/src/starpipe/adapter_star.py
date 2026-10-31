@@ -93,6 +93,8 @@ CHECKS: dict[str, CheckSpec] = {
             ("./gradlew", "compileKotlin", "compileTestKotlin", "--no-daemon"), cwd="star-desktop",
         ),
         _swift_test("logging"),
+        _swift_build("pipeline/monitor"),
+        _swift_test("pipeline/monitor"),
         _swift_test("StarCpp", "--filter", "StarCppBridgeTests", tid="StarCpp"),
         _swift_test("StarCpp", "--filter", "StarCppWGPUTests", tid="StarCpp-wgpu"),
         _swift_test("StarCore"),
@@ -168,6 +170,8 @@ RULES: list[Rule] = [
     Rule(("trail_tools/",), builds=("build:trail_tools",), tests=("test:trail_tools",)),
     Rule(("decision_tree_generator/",), builds=("build:decision_tree_generator",),
          tests=("test:decision_tree_generator",)),
+    Rule(("pipeline/monitor/",), builds=("build:pipeline/monitor",), tests=("test:pipeline/monitor",),
+         note="swift build + test of the monitor"),
     Rule(("pipeline/",), tests=("test:pipeline",), note="pyright + ruff (T0)"),
 ]
 

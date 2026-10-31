@@ -1,0 +1,161 @@
+{
+  "daemon": {
+    "error": "",
+    "last_poll": 1100.0,
+    "pid": 1,
+    "since": 1000.0
+  },
+  "develop": {
+    "gate": {
+      "linux": "success"
+    },
+    "known_red": 1
+  },
+  "events_cursor": 12,
+  "groups": [
+    "needs_you",
+    "running",
+    "waiting",
+    "queued",
+    "landed_today",
+    "failed"
+  ],
+  "heavy": {
+    "holders": [
+      {
+        "cmd": "swift test --package-path StarCore",
+        "pid": 4242,
+        "since": 1.0,
+        "ticket": "2"
+      }
+    ],
+    "queue": [
+      {
+        "cmd": "xcodebuild -scheme star",
+        "enqueued_at": 2.0,
+        "pid": 4343,
+        "priority": 1,
+        "started": 2.0,
+        "ticket": "3"
+      }
+    ]
+  },
+  "interventions_week": {
+    "answer": 1
+  },
+  "landing": {
+    "paused": false,
+    "stop_line": null
+  },
+  "now": 2000.0,
+  "pause": null,
+  "repo": "brianm998/starry_timelapse_airplane_remover",
+  "runtime": {
+    "behind_develop": 2,
+    "sha": "abc1234"
+  },
+  "tickets": [
+    {
+      "activity": "needs you \u00b7 asked 0m ago",
+      "blocked_by": [],
+      "branch": null,
+      "group": "needs_you",
+      "number": 1,
+      "park_reason": "waiting on the owner",
+      "pr_number": null,
+      "priority": 2,
+      "question": "Which of the two?",
+      "stages": [],
+      "state": "needs-input",
+      "title": "needs an answer",
+      "worktree": null
+    },
+    {
+      "activity": "developing \u00b7 attempt 1/3 \u00b7 0m",
+      "blocked_by": [],
+      "branch": null,
+      "group": "running",
+      "number": 2,
+      "park_reason": null,
+      "pr_number": null,
+      "priority": 2,
+      "question": null,
+      "stages": [
+        {
+          "attempt": 1,
+          "ended": null,
+          "lock_wait_s": 0.0,
+          "model": "opus",
+          "outcome": null,
+          "stage": "develop",
+          "started": 1000.0
+        }
+      ],
+      "state": "developing",
+      "title": "being developed",
+      "worktree": null
+    },
+    {
+      "activity": "ci",
+      "blocked_by": [],
+      "branch": null,
+      "group": "waiting",
+      "number": 3,
+      "park_reason": null,
+      "pr_number": null,
+      "priority": 2,
+      "question": null,
+      "stages": [],
+      "state": "ci",
+      "title": "waiting in CI",
+      "worktree": null
+    },
+    {
+      "activity": "queued",
+      "blocked_by": [],
+      "branch": null,
+      "group": "queued",
+      "number": 4,
+      "park_reason": null,
+      "pr_number": null,
+      "priority": 2,
+      "question": null,
+      "stages": [],
+      "state": "queued",
+      "title": "in the queue",
+      "worktree": null
+    },
+    {
+      "activity": "landed",
+      "blocked_by": [],
+      "branch": null,
+      "group": "landed_today",
+      "number": 5,
+      "park_reason": null,
+      "pr_number": null,
+      "priority": 2,
+      "question": null,
+      "stages": [],
+      "state": "landed",
+      "title": "landed this morning",
+      "worktree": null
+    },
+    {
+      "activity": "failed \u00b7 CI still red after 2 fix cycles",
+      "blocked_by": [],
+      "branch": null,
+      "group": "failed",
+      "number": 6,
+      "park_reason": "CI still red after 2 fix cycles",
+      "pr_number": null,
+      "priority": 2,
+      "question": null,
+      "stages": [],
+      "state": "failed",
+      "title": "gave up",
+      "worktree": null
+    }
+  ],
+  "usage_pause_until": null,
+  "version": "starpipe 1"
+}
