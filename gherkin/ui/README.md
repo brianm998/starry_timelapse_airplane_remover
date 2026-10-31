@@ -60,6 +60,10 @@ are different: they stay literal in the feature and the runner supplies their va
 | `I click "<id>"` | clicks the control with that id |
 | `I press "<key>"` | `return`, `escape`, `tab`, `space`, an arrow, or one character, with modifiers before it (`cmd+w`) |
 | `I drag around "<id>"` | drags a small box around the element's centre (24 points square in the gui, 48 pixels on the desktop), held a moment first so that it is a drag; what is under the pointer gets it, which for a group's probe (`outlier.first`) is the frame, so the chosen tool acts on the box: the Multi tool opens its area sheet |
+| `I click the label "<key>"` | clicks the control that shows the catalogue's text for the key (the one in a sheet or dialog when one is up, else the last one drawn): for the choices of a picker that has no id of its own (gui: a radio button, button or menu item by its label; desktop: the last enabled control with that text, pressed through its own action) |
+| `I wait <n> seconds` | does nothing for that long with the app running: for what shows only after a timer in the app or the daemon has gone off, which no condition can wait for (a frame saved ten seconds after an edit). Not for waiting for the app: every other step does that |
+| `"<id>" is still saying "<text>"` | the element says it now, with no waiting for it to: for a state that must have been there all along, which `says` would let a frame pass by getting there late |
+| `"<id>" stops saying "<text>"` | waits (up to 90 s) until the element says something else: for a count that moves off a value it is known to start on, without the feature pinning the new one |
 | `"<id>" is shown` / `is not shown` | the id is in the window (waited for, in both directions) |
 | `"<id>" is selected` / `is not selected` | a radio choice (gui: the selected trait; desktop: `selectable`) |
 | `"<id>" is on` / `is off` | a switch or check box |
