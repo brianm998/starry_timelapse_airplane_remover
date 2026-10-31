@@ -1071,7 +1071,35 @@ class AppViewModel(
     /** What happens once the app is done, set by whoever owns the window (it exits the application). */
     var onQuit: () -> Unit = {}
 
-    /** The window's close button, Cmd-Q: quit, after asking if that would interrupt anything. */
+    /** What the main window's close button does on this system ([MainWindowClose]); settable for a test. */
+    var mainWindowClose: com.star.desktop.domain.MainWindowClose = com.star.desktop.domain.MainWindowClose.current
+
+    private val _mainWindowVisible = MutableStateFlow(true)
+
+    /** Whether the main window is showing; false after it was closed where the app keeps running, until it is raised again. */
+    val mainWindowVisible: StateFlow<Boolean> = _mainWindowVisible.asStateFlow()
+
+    /**
+     * The main window's close button. Where the app stays running (macOS, as the gui does) this unloads the sequence, after asking if that would
+     * interrupt anything ("Close Anyway"), and hides the window; elsewhere it is a quit.
+     */
+    fun requestCloseWindow() {
+        if (mainWindowClose == com.star.desktop.domain.MainWindowClose.QUIT) { requestQuit(); return }
+        val work = pendingWork()
+        if (work.isPending) _closeConfirmation.value = CloseConfirmation(CloseAction.CLOSE_WINDOW, work.description()) else closeWindowNow()
+    }
+
+    /** The app was raised (the Dock icon, Cmd-Tab) with its window gone: a fresh window, on the start screen, as the gui's reopens. */
+    fun reopenMainWindow() { _mainWindowVisible.value = true }
+
+    private fun closeWindowNow() {
+        scope.launch {
+            unloadSession()
+            _mainWindowVisible.value = false
+        }
+    }
+
+    /** Cmd-Q (and Quit in the app menu): quit, after asking if that would interrupt anything. */
     fun requestQuit() {
         val work = pendingWork()
         if (work.isPending) _closeConfirmation.value = CloseConfirmation(CloseAction.QUIT, work.description()) else quitNow()
@@ -1112,6 +1140,7 @@ class AppViewModel(
         when (asked.action) {
             CloseAction.QUIT -> quitNow()
             CloseAction.CLOSE_SESSION -> closeSession()
+            CloseAction.CLOSE_WINDOW -> closeWindowNow()
             CloseAction.OPEN -> open?.invoke()
         }
     }
@@ -1136,11 +1165,13 @@ class AppViewModel(
     }
 
     fun closeSession() {
-        scope.launch {
-            closeOpenSession()
-            lastResumePath = null // nothing is open, so a crash from here on has nothing to resume
-            _screen.value = AppScreen.Initial
-        }
+        scope.launch { unloadSession() }
+    }
+
+    private suspend fun unloadSession() {
+        closeOpenSession()
+        lastResumePath = null // nothing is open, so a crash from here on has nothing to resume
+        _screen.value = AppScreen.Initial
     }
 
     /**

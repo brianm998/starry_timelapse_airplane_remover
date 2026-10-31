@@ -820,6 +820,7 @@
   "ui.remove": "Вилучити",
   "ui.remove_all": "Вилучити все",
   "ui.remove_all_of_the_outlier_groups_in_the": "вилучити всі групи викидів у кадрі",
+  "ui.remove_from_recent": "Вилучити цю послідовність зі списку нещодавніх",
   "ui.render": "Відтворити",
   "ui.render_all_frames": "Відтворити всі кадри",
   "ui.render_all_frames_of_this_sequence_with": "Відтворити всі кадри цієї послідовності з поточними параметрами",

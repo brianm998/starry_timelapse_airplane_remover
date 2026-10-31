@@ -155,7 +155,7 @@ import StarCppBridge
 struct StarApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     public static let outlierGroupTableWindowName = "outlierGroupTableWindow"
     public static let blobProcessingStepsWindowName = "blobProcessingStepsWindow"
@@ -265,29 +265,34 @@ struct StarApp: App {
     let loggingViewModel = LoggingViewModel()
     
     var body: some Scene {
-        WindowGroup(id: StarApp.blobProcessingStepsWindowName) {
+        // One of each, not a new copy every time (D11); `SecondaryWindowCommands` toggles them.
+        Window(localized("ui.star_blob_processing"), id: StarApp.blobProcessingStepsWindowName) {
             BlobProcessingView()
               .environment(viewModel)
               .starLanguage(viewModel.languageCode)
+              .secondaryWindow(.blob, in: viewModel)
         }
 
-        WindowGroup(id: StarApp.alignmentWindowName) {
+        Window(localized("ui.star_alignment_info"), id: StarApp.alignmentWindowName) {
             AlignmentWindowView()
               .environment(viewModel)
               .starLanguage(viewModel.languageCode)
+              .secondaryWindow(.alignment, in: viewModel)
         }
 
-        WindowGroup(id: StarApp.outlierGroupTableWindowName) {
+        Window(localized("ui.star_outlier_info_window"), id: StarApp.outlierGroupTableWindowName) {
             OutlierWindowView()
               .environment(viewModel)
               .starLanguage(viewModel.languageCode)
+              .secondaryWindow(.outlier, in: viewModel)
         }
 
-        WindowGroup(id: StarApp.debugWindowName) {
+        Window(localized("ui.star_debug"), id: StarApp.debugWindowName) {
             DebugView()
               .environment(viewModel)
               .environment(loggingViewModel)
               .starLanguage(viewModel.languageCode)
+              .secondaryWindow(.debug, in: viewModel)
         }
 
         WindowGroup(id: StarApp.mainWindowName) {
@@ -306,6 +311,11 @@ struct StarApp: App {
                   viewModel.openSequenceFromUITestArgument()
                   viewModel.openVideoFromUITestArgument()
               }
+              // the windows about the sequence go with it (D11)
+              .onChange(of: viewModel.imageSequence == nil) { _, unloaded in
+                  guard unloaded else { return }
+                  for window in viewModel.secondaryWindows.closingWithTheSequence { dismissWindow(id: window.id) }
+              }
               .onChange(of: loggingViewModel.level) {
                   enableGUILogs()
               }
@@ -320,27 +330,7 @@ struct StarApp: App {
         .defaultLaunchBehavior(.presented)
         .commands {
             StarCommands(viewModel: viewModel)
-            CommandGroup(after: .windowList) {
-                Divider()  // optional separator
-                Button(localized("ui.blob_processing_window")) {
-                    openWindow(id: StarApp.blobProcessingStepsWindowName)
-                }
-                  .keyboardShortcut("p", modifiers: [.option/*.command, .shift*/])
-                Button(localized("ui.outlier_information_window")) {
-                    openWindow(id: StarApp.outlierGroupTableWindowName) 
-                }
-                  .keyboardShortcut("o", modifiers: [.option])
-
-                Button(localized("ui.alignment_information_window")) {
-                    openWindow(id: StarApp.alignmentWindowName) 
-                }
-                .keyboardShortcut("a", modifiers: [.option])
-
-                Button(localized("ui.debug_window")) {
-                    openWindow(id: StarApp.debugWindowName) 
-                }
-                  .keyboardShortcut("d", modifiers: [.option])
-            }
+            SecondaryWindowCommands(viewModel: viewModel)
         }
 
         // this shows up as stars and wand in the upper right of the menu bar

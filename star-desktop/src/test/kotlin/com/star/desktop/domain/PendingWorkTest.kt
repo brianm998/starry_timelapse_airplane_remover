@@ -49,6 +49,8 @@ class PendingWorkTest {
         assertEquals("Currently processing frames. Quitting now will interrupt this work.", quit.message)
         val close = CloseConfirmation(CloseAction.CLOSE_SESSION, "rendering video")
         assertEquals("Currently rendering video. Closing now will interrupt this work.", close.message)
+        val window = CloseConfirmation(CloseAction.CLOSE_WINDOW, "processing frames")
+        assertEquals("Currently processing frames. Closing now will interrupt this work.", window.message)
         val open = CloseConfirmation(CloseAction.OPEN, "processing frames")
         assertEquals("Currently processing frames. Opening another sequence now will interrupt this work.", open.message)
     }
@@ -56,6 +58,7 @@ class PendingWorkTest {
     @Test fun theButtonsNameWhatTheyDo() {
         assertEquals("Quit Anyway", com.star.desktop.i18n.localized(CloseAction.QUIT.confirmKey))
         assertEquals("Stop and Close", com.star.desktop.i18n.localized(CloseAction.CLOSE_SESSION.confirmKey))
+        assertEquals("Close Anyway", com.star.desktop.i18n.localized(CloseAction.CLOSE_WINDOW.confirmKey), "the gui's alert on closing the window")
         assertEquals("Stop and Open", com.star.desktop.i18n.localized(CloseAction.OPEN.confirmKey))
     }
 }

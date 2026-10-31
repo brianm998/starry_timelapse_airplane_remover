@@ -456,6 +456,9 @@ public final class ViewModel {
 
     var imageSequence: ImageSequenceViewModel?
 
+    /// Which secondary windows are open (D11): the Window menu opens or closes each.
+    var secondaryWindows = SecondaryWindowState()
+
     var eraserTask: Task<(),Never>?
     
     var cursor: NSCursor = .arrow

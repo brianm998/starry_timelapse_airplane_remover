@@ -1,5 +1,6 @@
 {
-  "comment": "S8: the start screen's controls in the order the gui's InitialView has them, each with its label and its hover text in the catalogue. The desktop's InitialView says the same (it also has a Recent list with a remove button, which the gui lacks: D12). Each client's test reads its own view's source for these keys in this order.",
+  "comment": "S8: the start screen's controls in the order the gui's InitialView has them, each with its label and its hover text in the catalogue. The desktop's InitialView says the same (D12: a recent can be removed from the list in both; the desktop has a ✕ on each row, the gui one beside its picker for the entry shown, and both say `removeRecent` when hovered). Each client's test reads its own view's source for these keys in this order.",
+  "removeRecent": "ui.remove_from_recent",
   "controls": [
     {
       "id": "learn",

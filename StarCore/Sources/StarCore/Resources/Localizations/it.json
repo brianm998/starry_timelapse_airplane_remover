@@ -820,6 +820,7 @@
   "ui.remove": "Rimuovi",
   "ui.remove_all": "Rimuovi tutto",
   "ui.remove_all_of_the_outlier_groups_in_the": "rimuovi tutti i gruppi anomali del fotogramma",
+  "ui.remove_from_recent": "Rimuovi questa sequenza dall'elenco dei recenti",
   "ui.render": "Renderizza",
   "ui.render_all_frames": "Renderizza tutti i fotogrammi",
   "ui.render_all_frames_of_this_sequence_with": "Renderizza tutti i fotogrammi di questa sequenza con le impostazioni attuali",

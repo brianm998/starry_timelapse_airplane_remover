@@ -820,6 +820,7 @@
   "ui.remove": "削除",
   "ui.remove_all": "すべて削除",
   "ui.remove_all_of_the_outlier_groups_in_the": "フレーム内のすべての外れ値グループを削除",
+  "ui.remove_from_recent": "このシーケンスを最近使った項目から削除",
   "ui.render": "レンダリング",
   "ui.render_all_frames": "すべてのフレームをレンダリング",
   "ui.render_all_frames_of_this_sequence_with": "現在の設定でこのシーケンスのすべてのフレームをレンダリング",

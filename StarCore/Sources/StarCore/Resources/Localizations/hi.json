@@ -820,6 +820,7 @@
   "ui.remove": "हटाएँ",
   "ui.remove_all": "सब हटाएँ",
   "ui.remove_all_of_the_outlier_groups_in_the": "फ़्रेम के सभी आउटलायर समूह हटाएँ",
+  "ui.remove_from_recent": "इस सीक्वेंस को हाल की सूची से हटाएँ",
   "ui.render": "रेंडर",
   "ui.render_all_frames": "सभी फ़्रेम रेंडर करें",
   "ui.render_all_frames_of_this_sequence_with": "वर्तमान सेटिंग के साथ इस सीक्वेंस के सभी फ़्रेम रेंडर करें",

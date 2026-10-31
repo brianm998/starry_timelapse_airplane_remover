@@ -820,6 +820,7 @@
   "ui.remove": "Eliminar",
   "ui.remove_all": "Eliminar todo",
   "ui.remove_all_of_the_outlier_groups_in_the": "eliminar todos los grupos atípicos del fotograma",
+  "ui.remove_from_recent": "Eliminar esta secuencia de la lista de recientes",
   "ui.render": "Renderizar",
   "ui.render_all_frames": "Renderizar todos los fotogramas",
   "ui.render_all_frames_of_this_sequence_with": "Renderizar todos los fotogramas de esta secuencia con los ajustes actuales",

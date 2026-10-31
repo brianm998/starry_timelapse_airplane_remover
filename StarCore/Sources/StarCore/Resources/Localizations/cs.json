@@ -820,6 +820,7 @@
   "ui.remove": "Odstranit",
   "ui.remove_all": "Odstranit vše",
   "ui.remove_all_of_the_outlier_groups_in_the": "odstranit všechny odlehlé skupiny ve snímku",
+  "ui.remove_from_recent": "Odstranit tuto sekvenci ze seznamu nedávných",
   "ui.render": "Vykreslit",
   "ui.render_all_frames": "Vykreslit všechny snímky",
   "ui.render_all_frames_of_this_sequence_with": "Vykreslit všechny snímky této sekvence s aktuálním nastavením",

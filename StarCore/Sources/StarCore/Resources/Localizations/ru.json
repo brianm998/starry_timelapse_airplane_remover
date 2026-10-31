@@ -820,6 +820,7 @@
   "ui.remove": "Удалить",
   "ui.remove_all": "Удалить всё",
   "ui.remove_all_of_the_outlier_groups_in_the": "удалить все группы выбросов в кадре",
+  "ui.remove_from_recent": "Удалить эту последовательность из списка недавних",
   "ui.render": "Рендеринг",
   "ui.render_all_frames": "Отрендерить все кадры",
   "ui.render_all_frames_of_this_sequence_with": "Отрендерить все кадры этой последовательности с текущими настройками",

@@ -820,6 +820,7 @@
   "ui.remove": "Hapus",
   "ui.remove_all": "Hapus semua",
   "ui.remove_all_of_the_outlier_groups_in_the": "hapus semua kelompok pencilan di bingkai ini",
+  "ui.remove_from_recent": "Hapus urutan ini dari daftar yang baru dipakai",
   "ui.render": "Render",
   "ui.render_all_frames": "Render semua bingkai",
   "ui.render_all_frames_of_this_sequence_with": "Render semua bingkai urutan ini dengan pengaturan saat ini",

@@ -203,11 +203,13 @@ private fun RecentFilesList(recent: List<String>, onOpen: (String) -> Unit, onRe
                     Text(location ?: path, color = StarColors.textDisabled, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier.size(20.dp).clip(RoundedCornerShape(10.dp)).clickable { onRemove(path) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("✕", color = StarColors.textDisabled, fontSize = 12.sp)
+                HoverTip(localized("ui.remove_from_recent")) {
+                    Box(
+                        Modifier.size(20.dp).clip(RoundedCornerShape(10.dp)).clickable { onRemove(path) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("✕", color = StarColors.textDisabled, fontSize = 12.sp)
+                    }
                 }
             }
         }

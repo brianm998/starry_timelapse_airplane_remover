@@ -34,8 +34,11 @@ data class PendingWork(
 
 /** What a confirmation is about to do. */
 enum class CloseAction(val messageKey: String, val confirmKey: String) {
-    /** The window is closing, or Cmd-Q: the whole app goes. */
+    /** Cmd-Q, or the window closing where that quits (see [MainWindowClose]): the whole app goes. */
     QUIT("ui.work_in_progress.quitting", "ui.quit_anyway"),
+
+    /** The window closing where the app stays (macOS): the sequence goes and the window with it, as the gui's `windowShouldClose` does. */
+    CLOSE_WINDOW("ui.work_in_progress.closing", "ui.close_anyway"),
 
     /** File ▸ Close: the sequence goes, the app stays. */
     CLOSE_SESSION("ui.work_in_progress.closing", "ui.stop_and_close"),

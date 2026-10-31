@@ -820,6 +820,7 @@
   "ui.remove": "ลบออก",
   "ui.remove_all": "ลบออกทั้งหมด",
   "ui.remove_all_of_the_outlier_groups_in_the": "ลบกลุ่มค่าผิดปกติทั้งหมดในเฟรมนี้",
+  "ui.remove_from_recent": "ลบลำดับภาพนี้ออกจากรายการล่าสุด",
   "ui.render": "เรนเดอร์",
   "ui.render_all_frames": "เรนเดอร์ทุกเฟรม",
   "ui.render_all_frames_of_this_sequence_with": "เรนเดอร์ทุกเฟรมของลำดับนี้ด้วยการตั้งค่าปัจจุบัน",

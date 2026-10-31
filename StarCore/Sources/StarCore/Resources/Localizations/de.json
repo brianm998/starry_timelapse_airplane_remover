@@ -820,6 +820,7 @@
   "ui.remove": "Entfernen",
   "ui.remove_all": "Alle entfernen",
   "ui.remove_all_of_the_outlier_groups_in_the": "alle Ausreißergruppen im Bild entfernen",
+  "ui.remove_from_recent": "Diese Sequenz aus der Liste „Zuletzt benutzt“ entfernen",
   "ui.render": "Rendern",
   "ui.render_all_frames": "Alle Bilder rendern",
   "ui.render_all_frames_of_this_sequence_with": "Alle Bilder dieser Sequenz mit den aktuellen Einstellungen rendern",

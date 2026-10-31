@@ -820,6 +820,7 @@
   "ui.remove": "إزالة",
   "ui.remove_all": "إزالة الكل",
   "ui.remove_all_of_the_outlier_groups_in_the": "أزل كل مجموعات القيم الشاذة في الإطار",
+  "ui.remove_from_recent": "إزالة هذا التسلسل من العناصر الحديثة",
   "ui.render": "إخراج",
   "ui.render_all_frames": "إخراج كل الإطارات",
   "ui.render_all_frames_of_this_sequence_with": "أخرج كل إطارات هذا التسلسل بالإعدادات الحالية",

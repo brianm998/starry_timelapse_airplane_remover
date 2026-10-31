@@ -212,6 +212,19 @@ struct UserPreferences: Codable, Sendable {
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }
 
+    /// Take `filename` off the Open Recent list (the desktop client's ✕ on a recent; parity plan D12).
+    mutating func removeFromRecent(filename: String) {
+        recentlyOpenedSequencelist.removeValue(forKey: filename)
+    }
+
+    /// What the Open Recent picker shows once `removed` has gone from `list` (newest first): the entry that took its place, else the one
+    /// before it, else nothing.
+    static func recentSelection(afterRemoving removed: String, from list: [String]) -> String {
+        guard let index = list.firstIndex(of: removed) else { return list.first ?? "" }
+        let rest = list.filter { $0 != removed }
+        return rest.isEmpty ? "" : rest[min(index, rest.count - 1)]
+    }
+
     mutating func pruneNonExistentFromRecentList() {
         let missing = recentlyOpenedSequencelist.keys.filter {
             !FileManager.default.fileExists(atPath: $0)

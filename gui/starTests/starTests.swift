@@ -3025,6 +3025,34 @@ final class UserPreferencesMergeTests: XCTestCase {
         XCTAssertNotNil(file["outlierTableColumns"])
     }
 
+    /// D12: a recent the user took off the list is gone from the file, the others stay, and one the other client added meanwhile stays too.
+    func testARecentTheUserRemovedIsRemovedAndTheOthersStay() throws {
+        // another client opens /d after this process read the file
+        try #"{"recentlyOpenedSequencelist":{"/a/config.json":10,"/b/config.json":20,"/c/config.json":30,"/d/config.json":40}}"#
+            .write(toFile: path, atomically: true, encoding: .utf8)
+        let before = try obj(#"{"recentlyOpenedSequencelist":{"/a/config.json":10,"/b/config.json":20,"/c/config.json":30}}"#)
+        var prefs = UserPreferences()
+        prefs.recentlyOpenedSequencelist = ["/a/config.json": 10, "/b/config.json": 20, "/c/config.json": 30]
+        prefs.removeFromRecent(filename: "/b/config.json")
+        XCTAssertEqual(prefs.sortedSequenceList, ["/c/config.json", "/a/config.json"])
+        let after = try obj(#"{"recentlyOpenedSequencelist":{"/a/config.json":10,"/c/config.json":30}}"#)
+
+        _ = try UserPreferences.writeMerged(current: after, previous: before, to: path)
+
+        let recent = try XCTUnwrap(try written()["recentlyOpenedSequencelist"] as? [String: Any])
+        XCTAssertEqual(Set(recent.keys), ["/a/config.json", "/c/config.json", "/d/config.json"])
+    }
+
+    /// What the Open Recent picker shows after its entry is removed: the one that took its place, else the one before, else nothing.
+    func testThePickerMovesToTheNextRecentAfterARemoval() {
+        let list = ["/c", "/b", "/a"]
+        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/c", from: list), "/b")
+        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/b", from: list), "/a")
+        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/a", from: list), "/b")
+        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/a", from: ["/a"]), "")
+        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/z", from: list), "/c", "not in the list: the first")
+    }
+
     /// Recent files are one object: two clients opening different sequences both keep theirs.
     func testRecentFilesAddedByTheOtherClientAreKept() throws {
         try #"{"recentlyOpenedSequencelist":{"/a/config.json":10,"/b/config.json":20}}"#
@@ -3360,6 +3388,93 @@ final class FastAdvancementSkipTests: XCTestCase {
     }
 }
 
+/// P5 (D4): a number typed into the settings sheet that the field does not take is marked and says what it takes, in the desktop client's words.
+final class NumberFieldValidationTests: XCTestCase {
+    override func setUp() { StarLocalization.shared.languageOverride = "en" }
+    override func tearDown() { StarLocalization.shared.languageOverride = nil }
+
+    func testAWholeNumberInRangeHasNothingWrongWithIt() {
+        XCTAssertNil(EditableNumberView<Int>.validationMessage(for: "7", min: 1, max: 1000, allowDecimal: false))
+        XCTAssertNil(EditableNumberView<Int>.validationMessage(for: "1000", min: 1, max: 1000, allowDecimal: false), "the bound itself")
+    }
+
+    func testOutOfRangeOrNotANumberSaysWhatIsTaken() {
+        XCTAssertEqual(EditableNumberView<Int>.validationMessage(for: "5000", min: 1, max: 1000, allowDecimal: false), "Enter a whole number from 1 to 1000")
+        XCTAssertEqual(EditableNumberView<Int>.validationMessage(for: "0", min: 1, max: 1000, allowDecimal: false), "Enter a whole number from 1 to 1000")
+        XCTAssertEqual(EditableNumberView<Int>.validationMessage(for: "", min: 1, max: 1000, allowDecimal: false), "Enter a whole number from 1 to 1000")
+    }
+
+    func testADecimalReadsItsBoundsWithoutAPointZero() {
+        XCTAssertNil(EditableNumberView<Double>.validationMessage(for: "0.5", min: 0.001, max: 10, allowDecimal: true))
+        XCTAssertEqual(EditableNumberView<Double>.validationMessage(for: "11", min: 0.001, max: 10, allowDecimal: true), "Enter a number from 0.001 to 10")
+        XCTAssertEqual(EditableNumberView<Double>.validationMessage(for: "9", min: 1, max: 8, allowDecimal: true), "Enter a number from 1 to 8")
+    }
+
+    func testItIsTheDesktopClientsSentenceInAnotherLanguageToo() {
+        StarLocalization.shared.languageOverride = "de"
+        let german = EditableNumberView<Int>.validationMessage(for: "0", min: 1, max: 9, allowDecimal: false)
+        XCTAssertNotEqual(german, "Enter a whole number from 1 to 9")
+        XCTAssertTrue(german?.contains("1") == true && german?.contains("9") == true)
+    }
+}
+
+/// M11 (D11) of the parity plan: the four secondary windows are single-instance scenes the Window menu toggles; the outlier and alignment
+/// windows need a sequence and go when it does.  The desktop client's windows already behaved so.
+final class SecondaryWindowsTests: XCTestCase {
+    private static var guiDir: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("star")
+    }
+
+    private func source(_ name: String) throws -> String {
+        try String(contentsOf: Self.guiDir.appendingPathComponent(name), encoding: .utf8)
+    }
+
+    func testTheMenuOpensAWindowAndClosesItWhenItIsOpen() {
+        var state = SecondaryWindowState()
+        XCTAssertEqual(state.menuAction(for: .outlier), .open)
+        state.appeared(.outlier)
+        XCTAssertEqual(state.menuAction(for: .outlier), .close, "the second press closes it; it used to open a second copy")
+        XCTAssertEqual(state.menuAction(for: .blob), .open, "another window is not affected")
+        state.disappeared(.outlier)
+        XCTAssertEqual(state.menuAction(for: .outlier), .open, "closed by its own close button")
+    }
+
+    func testOnlyTheWindowsAboutASequenceNeedOne() {
+        let state = SecondaryWindowState()
+        for window in SecondaryWindow.allCases {
+            XCTAssertTrue(state.isMenuItemEnabled(window, hasSequence: true))
+        }
+        XCTAssertFalse(state.isMenuItemEnabled(.outlier, hasSequence: false))
+        XCTAssertFalse(state.isMenuItemEnabled(.alignment, hasSequence: false))
+        XCTAssertTrue(state.isMenuItemEnabled(.blob, hasSequence: false), "a developer tool: any screen")
+        XCTAssertTrue(state.isMenuItemEnabled(.debug, hasSequence: false), "the log is wanted most when nothing will open")
+    }
+
+    func testUnloadingTheSequenceClosesTheOutlierAndAlignmentWindowsOnly() {
+        var state = SecondaryWindowState()
+        for window in SecondaryWindow.allCases { state.appeared(window) }
+        XCTAssertEqual(Set(state.closingWithTheSequence), [.outlier, .alignment])
+        state.disappeared(.alignment)
+        XCTAssertEqual(state.closingWithTheSequence, [.outlier], "one that is not open is not closed")
+    }
+
+    func testTheScenesAreSingleInstanceWindowsThatReportTheirState() throws {
+        let app = try source("StarApp.swift")
+        let names: [SecondaryWindow: String] = [
+            .blob: "StarApp.blobProcessingStepsWindowName", .outlier: "StarApp.outlierGroupTableWindowName",
+            .alignment: "StarApp.alignmentWindowName", .debug: "StarApp.debugWindowName",
+        ]
+        for window in SecondaryWindow.allCases {
+            let name = try XCTUnwrap(names[window])
+            XCTAssertTrue(app.contains("id: \(name)) {"), "\(window) is not a Window scene")
+            XCTAssertFalse(app.contains("WindowGroup(id: \(name)"), "a window group opens a new copy every time")
+            XCTAssertTrue(app.contains(".secondaryWindow(.\(window.rawValue), in: viewModel)"), "\(window) does not report when it is open")
+        }
+        XCTAssertTrue(app.contains("SecondaryWindowCommands(viewModel: viewModel)"))
+        XCTAssertTrue(app.contains("closingWithTheSequence"), "nothing closes the windows when the sequence is unloaded")
+    }
+}
+
 /// Layer 0 of the parity plan: `gherkin/ui/commands.json` lists the menu commands both clients offer, by the catalogue key of the label.
 /// The gui's menu code has to use every one (a command added to the desktop client only is a failure here), and a known gap has to
 /// still be a gap.  The Kotlin client's `CommandTableTest` reads the same file.
@@ -3383,7 +3498,7 @@ final class CommandTableTests: XCTestCase {
     private func menuSource() throws -> String {
         let dir = Self.repoRoot.appendingPathComponent("gui/star")
         let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
-            .filter { ($0 == "StarCommands.swift" || $0 == "StarApp.swift" || ($0.contains("Button") && $0.hasSuffix(".swift"))) && !$0.hasPrefix(".") }
+            .filter { ($0 == "StarCommands.swift" || $0 == "StarApp.swift" || $0 == "SecondaryWindows.swift" || ($0.contains("Button") && $0.hasSuffix(".swift"))) && !$0.hasPrefix(".") }
         XCTAssertTrue(names.contains("StarCommands.swift"), "the menu source moved")
         return try names.map { try String(contentsOf: dir.appendingPathComponent($0), encoding: .utf8) }.joined(separator: "\n")
     }
@@ -3452,13 +3567,13 @@ final class CommandTableTests: XCTestCase {
     /// M12 / D9: each command is in the menu the table says (File, Actions, Tools, Window), and in no other.
     func testEveryCommandIsInItsMenuAndNoOther() throws {
         let commandsText = try guiFile("StarCommands.swift")
-        let appText = try guiFile("StarApp.swift")
+        let windowsText = try guiFile("SecondaryWindows.swift")
         let menus: [String: Set<String>] = [
             "file": try menuKeys(try block(after: "CommandGroup(replacing: .newItem)", in: commandsText))
                 .union(try menuKeys(try block(after: "CommandGroup(replacing: .saveItem)", in: commandsText))),
             "actions": try menuKeys(try block(after: #"CommandMenu(localized("menu.actions"))"#, in: commandsText)),
             "tools": try menuKeys(try block(after: #"CommandMenu(localized("menu.tools"))"#, in: commandsText)),
-            "window": try menuKeys(try block(after: "CommandGroup(after: .windowList)", in: appText)),
+            "window": try menuKeys(try block(after: "CommandGroup(after: .windowList)", in: windowsText)),
         ]
         let url = Self.repoRoot.appendingPathComponent("gherkin/ui/commands.json")
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
@@ -3873,6 +3988,22 @@ final class StartScreenTests: XCTestCase {
             last = found.upperBound
             XCTAssertTrue(source.contains(".help(localized(\"\(tip)\"))"), "\(control["id"] ?? "") has no hover text")
         }
+    }
+
+    /// D12: a recent can be removed from the list, and the button says so when hovered, as the desktop's ✕ does.
+    func testARecentCanBeRemovedAndSaysSo() throws {
+        let doc = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(contentsOf: Self.root.appendingPathComponent("gherkin/ui/vectors/startScreen.json"))) as? [String: Any])
+        let key = try XCTUnwrap(doc["removeRecent"] as? String)
+        let source = try String(contentsOf: Self.root.appendingPathComponent("gui/star/InitialView.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains(".help(localized(\"\(key)\"))"), "the remove button has no hover text")
+        XCTAssertTrue(source.contains("removeFromRecent(filename:"), "the button does not take the entry off the list")
+        defer { StarLocalization.shared.languageOverride = nil }
+        StarLocalization.shared.languageOverride = "en"
+        let english = localized(key)
+        XCTAssertNotEqual(english, key, "\(key) is missing from the catalogue")
+        StarLocalization.shared.languageOverride = "de"
+        XCTAssertNotEqual(localized(key), english, "\(key) is English in German")
     }
 }
 
