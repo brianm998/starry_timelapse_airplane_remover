@@ -7,6 +7,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -226,9 +227,12 @@ class LocalPreferencesBooleansTest {
         assertEquals(listOf("initial", "merged"), LocalPreferences().hiddenHorizonLineKinds)
     }
 
-    /** The processing screen's charts: on until turned off, under the macOS app's own key so the two clients share the choice. */
-    @Test fun theProcessingWindowsAlignmentChartsAreOnUntilTurnedOff() {
-        assertTrue(LocalPreferences().showAlignmentInProcessingWindow)
+    /** The processing screen's charts: off until turned on, under the macOS app's own key so the two clients share the choice. */
+    @Test fun theProcessingWindowsAlignmentChartsAreOffUntilTurnedOn() {
+        assertFalse(LocalPreferences().showAlignmentInProcessingWindow)
+        LocalPreferences().showAlignmentInProcessingWindow = true
+        assertTrue(prefsFile.readText().contains("\"showAlignmentInProcessingWindow\":true"), prefsFile.readText())
+        assertEquals(true, LocalPreferences().showAlignmentInProcessingWindow)
         LocalPreferences().showAlignmentInProcessingWindow = false
         assertTrue(prefsFile.readText().contains("\"showAlignmentInProcessingWindow\":false"), prefsFile.readText())
         assertEquals(false, LocalPreferences().showAlignmentInProcessingWindow)

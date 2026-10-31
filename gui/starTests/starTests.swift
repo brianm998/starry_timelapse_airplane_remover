@@ -2756,6 +2756,13 @@ final class ProcessingModalAlignmentPreferenceTests: XCTestCase {
         XCTAssertNil(prefs.showAlignmentInProcessingWindow)
     }
 
+    /// Someone who never chose gets the charts off: they are the tall half of the panel.
+    func testTheChartsAreOffWhenNeverChosen() throws {
+        let json = #"{"recentlyOpenedSequencelist":{}}"#
+        let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
+        XCTAssertFalse(prefs.showsAlignmentInProcessingWindow)
+    }
+
     /// Decoded rather than assigned: every setter on `UserPreferences` writes the real
     /// preferences file in the home directory, so a test that assigns one clobbers the
     /// user's own settings.
@@ -2766,6 +2773,7 @@ final class ProcessingModalAlignmentPreferenceTests: XCTestCase {
               """
             let prefs = try JSONDecoder().decode(UserPreferences.self, from: Data(json.utf8))
             XCTAssertEqual(prefs.showAlignmentInProcessingWindow, chosen)
+            XCTAssertEqual(prefs.showsAlignmentInProcessingWindow, chosen)
 
             let encoded = try JSONEncoder().encode(prefs)
             XCTAssertTrue(String(decoding: encoded, as: UTF8.self)
