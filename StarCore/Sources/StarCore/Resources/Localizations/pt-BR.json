@@ -835,7 +835,6 @@
   "ui.render_video_2": "Renderizar vídeo…",
   "ui.render_video_after_processing": "Renderizar o vídeo após o processamento?",
   "ui.render_video_from_n_frames": "Renderizar vídeo a partir de {0} quadros",
-  "ui.render_video_from_n_frames_lower": "renderizar vídeo a partir de {0} quadros",
   "ui.render_video_no_frames": "Ainda não há quadros processados para fazer um vídeo. Processe os quadros primeiro.",
   "ui.render_video_now": "Renderizar o vídeo agora?",
   "ui.rendering_error": "erro de renderização: {0}",

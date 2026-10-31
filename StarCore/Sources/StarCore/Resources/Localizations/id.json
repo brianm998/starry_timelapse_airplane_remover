@@ -835,7 +835,6 @@
   "ui.render_video_2": "Render video…",
   "ui.render_video_after_processing": "Render video setelah pemrosesan?",
   "ui.render_video_from_n_frames": "Render video dari {0} bingkai",
-  "ui.render_video_from_n_frames_lower": "render video dari {0} bingkai",
   "ui.render_video_no_frames": "Belum ada bingkai yang sudah diproses untuk dijadikan video. Proses bingkai terlebih dahulu.",
   "ui.render_video_now": "Render video sekarang?",
   "ui.rendering_error": "galat perenderan: {0}",

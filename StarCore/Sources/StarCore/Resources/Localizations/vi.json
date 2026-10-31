@@ -835,7 +835,6 @@
   "ui.render_video_2": "Kết xuất video…",
   "ui.render_video_after_processing": "Kết xuất video sau khi xử lý?",
   "ui.render_video_from_n_frames": "Kết xuất video từ {0} khung",
-  "ui.render_video_from_n_frames_lower": "kết xuất video từ {0} khung",
   "ui.render_video_no_frames": "Chưa có khung nào đã xử lý để tạo video. Hãy xử lý các khung trước.",
   "ui.render_video_now": "Kết xuất video ngay bây giờ?",
   "ui.rendering_error": "lỗi kết xuất: {0}",

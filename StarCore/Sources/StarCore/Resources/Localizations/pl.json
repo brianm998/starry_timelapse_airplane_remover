@@ -835,7 +835,6 @@
   "ui.render_video_2": "Renderuj film…",
   "ui.render_video_after_processing": "Renderować film po przetworzeniu?",
   "ui.render_video_from_n_frames": "Renderuj film z {0} klatek",
-  "ui.render_video_from_n_frames_lower": "renderuj film z {0} klatek",
   "ui.render_video_no_frames": "Nie ma jeszcze przetworzonych klatek, z których można zrobić film. Najpierw przetwórz klatki.",
   "ui.render_video_now": "Renderować film teraz?",
   "ui.rendering_error": "błąd renderowania: {0}",

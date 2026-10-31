@@ -835,7 +835,6 @@
   "ui.render_video_2": "ভিডিও রেন্ডার করুন…",
   "ui.render_video_after_processing": "প্রক্রিয়াকরণের পরে ভিডিও রেন্ডার করবেন?",
   "ui.render_video_from_n_frames": "{0}টি ফ্রেম থেকে ভিডিও রেন্ডার করুন",
-  "ui.render_video_from_n_frames_lower": "{0}টি ফ্রেম থেকে ভিডিও রেন্ডার করুন",
   "ui.render_video_no_frames": "ভিডিও তৈরি করার মতো প্রক্রিয়াজাত ফ্রেম এখনও নেই। আগে ফ্রেমগুলো প্রক্রিয়া করুন।",
   "ui.render_video_now": "এখনই ভিডিও রেন্ডার করবেন?",
   "ui.rendering_error": "রেন্ডারিং ত্রুটি: {0}",

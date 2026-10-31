@@ -835,7 +835,6 @@
   "ui.render_video_2": "ویڈیو رینڈر کریں…",
   "ui.render_video_after_processing": "کارروائی کے بعد ویڈیو رینڈر کریں؟",
   "ui.render_video_from_n_frames": "{0} فریموں سے ویڈیو رینڈر کریں",
-  "ui.render_video_from_n_frames_lower": "{0} فریموں سے ویڈیو رینڈر کریں",
   "ui.render_video_no_frames": "ویڈیو بنانے کے لیے ابھی کوئی کارروائی شدہ فریم نہیں ہیں۔ پہلے فریموں پر کارروائی کریں۔",
   "ui.render_video_now": "ابھی ویڈیو رینڈر کریں؟",
   "ui.rendering_error": "رینڈرنگ میں خامی: {0}",
