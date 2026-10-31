@@ -357,7 +357,7 @@ func validateUITags(_ f: ParsedFeature) throws {
 
 /// What a UI step may name: an argument called `id` is an identifier in `gherkin/ui/ids.json` (or in one of its `prefix*` families), one called `key`
 /// is a key of the English catalogue, one called `command` is a command of `gherkin/ui/commands.json`, and one called `fixture` is a file of
-/// `gherkin/ui/fixtures/prefs/` (without `.json`). A feature that names a control neither client has is a failure here, not a timeout in a runner.
+/// `gherkin/ui/fixtures/prefs/` (without `.json`), and one called `code` is a language of the catalogue (`de`, `pt-BR`). A feature that names a control neither client has is a failure here, not a timeout in a runner.
 struct UIReferences {
     let ids: [String]
     let catalogueKeys: Set<String>
@@ -365,6 +365,8 @@ struct UIReferences {
     let commandIds: Set<String>
     /// The preference files of `gherkin/ui/fixtures/prefs/`, by name without `.json`: what an argument called `fixture` may name.
     let prefsFixtures: Set<String>
+    /// The languages of the catalogue (the files of `StarCore/.../Localizations/` but `languages.json`): what an argument called `code` may name.
+    let languages: Set<String>
 
     func covers(id: String) -> Bool {
         ids.contains { $0.hasSuffix("*") ? id.hasPrefix(String($0.dropLast())) : $0 == id }
@@ -387,7 +389,9 @@ func loadUIReferences(root: URL) throws -> UIReferences {
     let fixturesURL = root.appendingPathComponent("gherkin/ui/fixtures/prefs")
     let fixtureFiles = (try? FileManager.default.contentsOfDirectory(atPath: fixturesURL.path)) ?? []
     let prefsFixtures = Set(fixtureFiles.filter { $0.hasSuffix(".json") }.map { String($0.dropLast(".json".count)) })
-    return UIReferences(ids: ids, catalogueKeys: Set(en.keys), commandIds: Set(commands.compactMap { $0["id"] }), prefsFixtures: prefsFixtures)
+    let languageFiles = (try? FileManager.default.contentsOfDirectory(atPath: enURL.deletingLastPathComponent().path)) ?? []
+    let languages = Set(languageFiles.filter { $0.hasSuffix(".json") && $0 != "languages.json" }.map { String($0.dropLast(".json".count)) })
+    return UIReferences(ids: ids, catalogueKeys: Set(en.keys), commandIds: Set(commands.compactMap { $0["id"] }), prefsFixtures: prefsFixtures, languages: languages)
 }
 
 func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], featureParams: [String: String], references: UIReferences) throws {
@@ -409,6 +413,9 @@ func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], 
             }
             if name == "command" && !references.commandIds.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a command of gherkin/ui/commands.json")
+            }
+            if name == "code" && !references.languages.contains(arg) {
+                throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a language of the catalogue (a file of StarCore/Sources/StarCore/Resources/Localizations/)")
             }
             if name == "fixture" && !references.prefsFixtures.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a file of gherkin/ui/fixtures/prefs/ (without .json)")
