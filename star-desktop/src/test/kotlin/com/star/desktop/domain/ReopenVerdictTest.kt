@@ -46,6 +46,15 @@ class ReopenVerdictTest {
         assertEquals(ReopenVerdict.COMPLETE, ReopenVerdict.of(progress(complete = true, untouched = true)))
     }
 
+    /** Settings sits immediately left of the action in every state (macOS `footerActions`), and the action stays the rightmost button. */
+    @Test fun everyVerdictPutsSettingsJustLeftOfTheAction() {
+        for (v in ReopenVerdict.values()) {
+            assertEquals(listOf(SequenceProgressButton.CLOSE, SequenceProgressButton.SETTINGS, SequenceProgressButton.ACTION), v.footer, "$v")
+        }
+        assertEquals("sequenceprogress.settings", SequenceProgressButton.SETTINGS.testTag)
+        assertEquals("sequenceprogress.close", SequenceProgressButton.CLOSE.testTag)
+    }
+
     @Test fun everyWordingIsInTheCatalogue() {
         com.star.desktop.i18n.Strings.setOverride("en")
         try {
