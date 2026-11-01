@@ -5,13 +5,28 @@ import SwiftUI
 @main
 struct StarPipeMonitorApp: App {
     @State private var store = MonitorStore()
+    @AppStorage("fontScale") private var fontScale = FontScale.default
     private let notifier = Notifier()
 
     var body: some Scene {
         Window("Star Pipeline", id: "main") {
             MonitorWindow(store: store)
                 .frame(minWidth: 980, minHeight: 600)
+                .environment(\.fontScale, FontScale.clamped(fontScale))
                 .task { await launch() }
+        }
+        .commands {
+            CommandGroup(after: .toolbar) {
+                Button("Bigger") { fontScale = FontScale.bigger(fontScale) }
+                    .keyboardShortcut("+", modifiers: .command)
+                // ⌘+ is ⌘⇧= on a US layout, so ⌘= has to work too.
+                Button("Bigger") { fontScale = FontScale.bigger(fontScale) }
+                    .keyboardShortcut("=", modifiers: .command)
+                Button("Smaller") { fontScale = FontScale.smaller(fontScale) }
+                    .keyboardShortcut("-", modifiers: .command)
+                Button("Actual Size") { fontScale = FontScale.default }
+                    .keyboardShortcut("0", modifiers: .command)
+            }
         }
         MenuBarExtra {
             MenuBarContent(store: store)

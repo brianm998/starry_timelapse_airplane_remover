@@ -77,6 +77,33 @@ def _infra(eng: Engine, job: ci.Job) -> bool:
         return False
 
 
+def _judge(eng: Engine, number: int, sha: str, reran: set[tuple[str, str]]) -> ci.Verdict:
+    """Fetch the PR's jobs and judge them. Network calls: runs in a worker thread, never on the event loop."""
+    return ci.judge(fetch_jobs(eng, sha), eng.db.baseline, now=eng.clock(),
+                    head_pushed_at=float(eng.db.get(f"pushed_at:{number}") or eng.clock()),
+                    settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
+                    reran=reran, infra=lambda j: _infra(eng, j))
+
+
+def _rerun(eng: Engine, number: int, jobs: list[ci.Job]) -> list[ci.Job]:
+    """Rerun the failed jobs of each finished run; the jobs whose rerun GitHub refused are left for the next poll."""
+    ready = list(jobs)
+    for run_id in {j.run_id for j in jobs}:
+        try:
+            eng.gh.rerun_failed(run_id)
+        except GitHubError as exc:  # still running, or already rerun: look again next poll
+            eng.db.event("rerun-refused", number, run=run_id, error=str(exc)[:200])
+            ready = [j for j in ready if j.run_id != run_id]
+    return ready
+
+
+def _finish_ci(eng: Engine, cur: Ticket, notes: list[str]) -> None:
+    eng.db.put(f"ci_notes:{cur.number}", "\n".join(f"- {n}" for n in notes) or None)
+    if notes and cur.pr_number:
+        eng.gh.update_pr(cur.pr_number, pr_body(eng, cur))
+    eng._to_state(cur.number, "landing")  # pyright: ignore[reportPrivateUsage]
+
+
 async def run_ci(eng: Engine, t: Ticket) -> bool:
     """Judge CI until it passes (-> landing), parks, or needs a CI-FIX. True when the ticket should keep going."""
     while True:
@@ -86,11 +113,7 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
         sha = gitutil.head_sha(Path(cur.worktree or ""))
         reran = {tuple(k) for k in json.loads(eng.db.get(f"reran:{t.number}") or "[]")}
         try:
-            jobs = fetch_jobs(eng, sha)
-            verdict = ci.judge(jobs, eng.db.baseline, now=eng.clock(),
-                               head_pushed_at=float(eng.db.get(f"pushed_at:{t.number}") or eng.clock()),
-                               settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
-                               reran=reran, infra=lambda j: _infra(eng, j))
+            verdict = await asyncio.to_thread(_judge, eng, t.number, sha, reran)
         except GitHubError as exc:
             await eng.sleep(eng.config.ci_poll_s)
             eng.db.event("ci-poll-failed", t.number, error=str(exc))
@@ -99,13 +122,7 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
         if verdict.kind == "pending":
             await eng.sleep(eng.config.ci_poll_s)
         elif verdict.kind == "rerun":
-            ready = [j for j in verdict.rerun if j.run_done]
-            for run_id in {j.run_id for j in ready}:
-                try:
-                    eng.gh.rerun_failed(run_id)
-                except GitHubError as exc:  # still running, or already rerun: look again next poll
-                    eng.db.event("rerun-refused", t.number, run=run_id, error=str(exc)[:200])
-                    ready = [j for j in ready if j.run_id != run_id]
+            ready = await asyncio.to_thread(_rerun, eng, t.number, [j for j in verdict.rerun if j.run_done])
             reran |= {j.key for j in ready}
             eng.db.put(f"reran:{t.number}", json.dumps(sorted(reran)))
             await eng.sleep(eng.config.ci_poll_s)
@@ -113,10 +130,7 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
             notes = [f"known red on develop (not blocking): {j.workflow}/{j.job}" for j in verdict.known_red]
             notes += [f"still running after {eng.config.ci_blocking_wait_s / 3600:g} h (demoted to the post-merge watch): "
                       f"{j.workflow}/{j.job}" for j in verdict.demoted]
-            eng.db.put(f"ci_notes:{t.number}", "\n".join(f"- {n}" for n in notes) or None)
-            if notes and cur.pr_number:
-                eng.gh.update_pr(cur.pr_number, pr_body(eng, cur))
-            eng._to_state(t.number, "landing")  # pyright: ignore[reportPrivateUsage]
+            await asyncio.to_thread(_finish_ci, eng, cur, notes)
             return True
         else:
             if not await ci_fix(eng, cur, verdict):
@@ -129,7 +143,7 @@ async def ci_fix(eng: Engine, t: Ticket, verdict: ci.Verdict) -> bool:
         return False
     first = verdict.blocking[0]
     try:
-        log = eng.gh.failed_log(first.run_id)
+        log = await asyncio.to_thread(eng.gh.failed_log, first.run_id)
     except GitHubError as exc:
         log = f"(could not fetch the log: {exc})"
     prompt = (f"{eng._ticket_text(t)}\n\nCI failed on the PR: {verdict.reason}\n\nFailing log (trimmed):\n{log}")  # pyright: ignore[reportPrivateUsage]
@@ -140,7 +154,7 @@ async def ci_fix(eng: Engine, t: Ticket, verdict: ci.Verdict) -> bool:
     if failure:
         eng.park(t, f"CI-FIX did not pass local verification: {failure[:300]}")
         return False
-    push(eng, t)
+    await asyncio.to_thread(push, eng, t)
     return True
 
 
@@ -164,29 +178,42 @@ async def land(eng: Engine, t: Ticket) -> bool:
         cur = eng.db.ticket(t.number)
         if cur is None or cur.state != "landing":
             return False
-        wt = Path(cur.worktree or "")
-        base = _remote(eng, wt)
-        pr = eng.gh.pr(cur.pr_number or 0)
-        head = pr["head"]["sha"]
-        mb = gitutil.git(wt, "merge-base", base, head).strip()
-        if mb != gitutil.git(wt, "rev-parse", base).strip():
-            pr_files = [p for p in gitutil.git(wt, "diff", "--name-only", f"{mb}..{head}").splitlines() if p]
-            ov = landing.overlap(wt, mb, base, pr_files)
-            if ov.any or pr.get("mergeable") is False:
-                return await catch_up(eng, cur, base, mb, head, ov)
-        return merge(eng, cur, head)
+        step = await asyncio.to_thread(_prepare_land, eng, cur)
+        if step[0] == "catch_up":
+            return await catch_up(eng, cur, step[1], step[2], step[3], step[4])
+        return await asyncio.to_thread(merge, eng, cur, step[3])
+
+
+def _prepare_land(eng: Engine, cur: Ticket) -> tuple[str, str, str, str, landing.Overlap]:
+    """Fetch, look at the PR, and decide: merge it as it is, or merge develop into it first. Network and git: worker thread."""
+    wt = Path(cur.worktree or "")
+    base = _remote(eng, wt)
+    pr = eng.gh.pr(cur.pr_number or 0)
+    head = pr["head"]["sha"]
+    mb = gitutil.git(wt, "merge-base", base, head).strip()
+    none = landing.Overlap([], [])
+    if mb != gitutil.git(wt, "rev-parse", base).strip():
+        pr_files = [p for p in gitutil.git(wt, "diff", "--name-only", f"{mb}..{head}").splitlines() if p]
+        ov = landing.overlap(wt, mb, base, pr_files)
+        if ov.any or pr.get("mergeable") is False:
+            return ("catch_up", base, mb, head, ov)
+    return ("merge", base, mb, head, none)
+
+
+def _merge_develop(wt: Path, base: str) -> tuple[str, list[str]]:
+    done = gitutil.git(wt, "merge", "--no-edit", base, check=False)
+    return done, gitutil.git(wt, "diff", "--name-only", "--diff-filter=U").split()
 
 
 async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: landing.Overlap) -> bool:
     wt = Path(t.worktree or "")
-    done = gitutil.git(wt, "merge", "--no-edit", base, check=False)
-    conflicted = gitutil.git(wt, "diff", "--name-only", "--diff-filter=U").split()
+    done, conflicted = await asyncio.to_thread(_merge_develop, wt, base)
     if conflicted or "CONFLICT" in done:
         prompt = (f"{eng._ticket_text(t)}\n\nConflicts merging {base}:\n" + "\n".join(conflicted))  # pyright: ignore[reportPrivateUsage]
         result, _ = await eng.model_stage(t, "conflict", prompt, fresh=True)
         if not result.ok:
             return False
-    dropped = landing.audit(wt, mb, base, head)
+    dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
     if dropped:
         shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
         eng.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
@@ -195,7 +222,7 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
     if failure:
         eng.park(t, f"after catching up with develop, verification failed: {failure[:300]}")
         return False
-    push(eng, t)
+    await asyncio.to_thread(push, eng, t)
     eng._to_state(t.number, "ci")  # pyright: ignore[reportPrivateUsage]
     return True
 
@@ -221,6 +248,9 @@ def merge(eng: Engine, t: Ticket, head: str) -> bool:
         eng.gh.close_issue(t.number, "completed")
     eng.gh.delete_branch(t.branch or "")
     eng.gh.add_labels(t.number, ["pipe:landed"])
+    changed = gitutil.git(wt, "diff", "--name-only", f"{sha}^1", sha, check=False).split()
+    if any(p.startswith("pipeline/") and not p.startswith("pipeline/monitor/") for p in changed):
+        eng.db.put("self_update_wanted", sha)  # the daemon's own code changed: auto_self_update acts on this when idle
     worktrees.remove(eng.repo, t.number, keep_branch=False, branch=t.branch)
     eng._to_state(t.number, "landed")  # pyright: ignore[reportPrivateUsage]
     eng.db.event("landed", t.number, merge=sha)
