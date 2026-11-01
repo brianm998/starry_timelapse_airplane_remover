@@ -548,3 +548,61 @@ def test_a_normal_gherkin_run_still_blocks_and_only_a_longer_one_is_demoted() ->
     assert judged(running, now=3.6 * 3600, blocking_wait_s=limit).kind == "pending", "214 minutes in: still waiting for it"
     v = judged(running, now=4.1 * 3600, blocking_wait_s=limit)
     assert v.kind == "pass" and [j.workflow for j in v.demoted] == ["gherkin"]
+
+
+def _audit_repo(tmp_path: Path, base: str, develop: str, pr: str, resolved: str) -> list[landing.Dropped]:
+    repo = tmp_path / "r"
+    sh(tmp_path, "git", "init", "-q", "-b", "develop", str(repo))
+    sh(repo, "git", "config", "user.email", "t@t")
+    sh(repo, "git", "config", "user.name", "t")
+    f = repo / "f.txt"
+    f.write_text(base)
+    sh(repo, "git", "add", "-A")
+    sh(repo, "git", "commit", "-q", "-m", "base")
+    mb = gitutil.head_sha(repo)
+    sh(repo, "git", "checkout", "-q", "-b", "pr")
+    f.write_text(pr)
+    sh(repo, "git", "commit", "-qam", "pr")
+    pr_head = gitutil.head_sha(repo)
+    sh(repo, "git", "checkout", "-q", "develop")
+    f.write_text(develop)
+    sh(repo, "git", "commit", "-qam", "dev")
+    dev = gitutil.head_sha(repo)
+    sh(repo, "git", "checkout", "-q", "pr")
+    f.write_text(resolved)
+    sh(repo, "git", "commit", "-qam", "resolution")
+    return landing.audit(repo, mb, dev, pr_head)
+
+
+def test_the_audit_accepts_a_line_both_sides_edited_when_its_content_survives(tmp_path: Path) -> None:
+    """The case that parked ticket #37: develop added an argument to a call, #37 added a different one; the resolution has both."""
+    base = "def f(a, b) -> int:\n    pass\n"
+    develop = "def f(a, b, max_open: int = 30, max_proposed: int = 10) -> int:\n    pass\n"
+    pr = "def f(a, b, allow_fable: bool = False) -> int:\n    pass\n"
+    resolved = "def f(a, b, max_open: int = 30, max_proposed: int = 10, allow_fable: bool = False) -> int:\n    pass\n"
+    assert _audit_repo(tmp_path, base, develop, pr, resolved) == []
+
+
+def test_the_audit_accepts_a_line_that_was_re_wrapped_across_lines(tmp_path: Path) -> None:
+    base = "x = call(a)\n"
+    develop = "x = call(a, max_open=cfg.max_open_tickets, max_proposed=cfg.max_proposed)\n"
+    pr = "x = call(a, extra=1)\n"
+    resolved = "x = call(a,\n         max_open=cfg.max_open_tickets, max_proposed=cfg.max_proposed,\n         extra=1)\n"
+    assert _audit_repo(tmp_path, base, develop, pr, resolved) == []
+
+
+def test_the_audit_still_catches_a_line_that_was_really_deleted(tmp_path: Path) -> None:
+    base = "a = 1\n"
+    develop = "a = 1\nchecked = verify_the_landing(batch, merge_commit, develop_head)\n"
+    pr = "a = 2\n"
+    resolved = "a = 2\nunrelated = other_thing()\n"
+    dropped = _audit_repo(tmp_path, base, develop, pr, resolved)
+    assert [d.line for d in dropped] == ["checked = verify_the_landing(batch, merge_commit, develop_head)"]
+
+
+def test_a_short_line_must_be_present_exactly(tmp_path: Path) -> None:
+    base = "a = 1\n"
+    develop = "a = 1\nreturn x\n"  # two words: too little to be matched loosely
+    pr = "a = 2\n"
+    resolved = "a = 2\nreturn x + 1\n"  # `return` and `x` both appear, but the line itself is gone
+    assert [d.line for d in _audit_repo(tmp_path, base, develop, pr, resolved)] == ["return x"]
