@@ -203,3 +203,18 @@ async def test_requeue_refuses_a_ticket_that_is_already_in_a_batch(rig: Rig) -> 
         assert rig.state(7) == "ci" and rig.gh.closed_prs == []
     finally:
         await client.close()
+
+
+async def test_requeue_also_cancels_the_ci_runs_of_the_pr_it_closes(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "ci")
+    rig.db.set_fields(7, pr_number=101, branch="pipe/7-t")
+    rig.gh.prs[101] = {"number": 101, "title": "t", "body": "", "branch": "pipe/7-t", "merged": False, "mergeable": True,
+                       "merge_commit_sha": None}
+    client, _ = await api(rig)
+    try:
+        assert (await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)).status == 200
+        assert rig.gh.cancelled_branches == ["pipe/7-t"]
+    finally:
+        await client.close()

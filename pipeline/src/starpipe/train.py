@@ -357,6 +357,7 @@ class Train:
             if batch["pr_number"]:
                 eng.gh.close_pr(int(batch["pr_number"]), f"Closing this batch: {why}.")
             if batch["branch"]:
+                eng.gh.cancel_runs(str(batch["branch"]))  # its CI is of no use now, and queued runs still hold up the others
                 eng.gh.delete_branch(str(batch["branch"]))
         except GitHubError as exc:
             eng.db.event("batch-cleanup-failed", None, batch=bid, error=str(exc)[:200])

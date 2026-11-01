@@ -389,3 +389,22 @@ def test_a_poll_that_changes_nothing_does_not_move_updated_at(rig: Rig) -> None:
     rig.engine.sync_issues()
     changed = rig.db.ticket(7)
     assert changed and changed.updated_at > before.updated_at and changed.title == "a new title"
+
+
+async def test_abandoning_a_batch_cancels_its_queued_ci_runs_too(rig: Rig) -> None:
+    """Found live: closed PRs left their Gherkin runs queued, ahead of the batch's own, so CI crawled for hours."""
+    for n in (1, 2):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    real_sleep = rig.engine.sleep
+    done: list[bool] = []
+
+    async def sleep(s: float) -> None:
+        if not done:
+            done.append(True)
+            rig.db.set_state(2, "cancelled", "cancelled by the owner")
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep
+    await train_of(rig).run_until_idle()
+    assert "pipe/batch-1" in rig.gh.cancelled_branches, "the abandoned batch's runs were cancelled, not just its PR closed"
+    assert rig.gh.closed_prs and rig.state(1) == "landed"

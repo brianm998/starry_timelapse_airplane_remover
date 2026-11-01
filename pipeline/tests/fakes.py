@@ -86,6 +86,7 @@ class FakeGitHub(GitHub):
         self.ci_hook: Callable[[str], Ci] | None = None  # the CI result for a commit, decided when it is asked for
         self.closed_prs: list[tuple[int, str]] = []
         self.develop_sha = "develop"
+        self.cancelled_branches: list[str] = []
         self.run_ids: dict[tuple[str, str], int] = {}
         self.run_jobs_by_id: dict[int, list[dict[str, Any]]] = {}
         self.issues: dict[int, dict[str, Any]] = {}
@@ -156,6 +157,10 @@ class FakeGitHub(GitHub):
 
     def update_pr(self, number: int, body: str) -> None:
         self.prs[number]["body"] = body
+
+    def cancel_runs(self, branch: str) -> int:
+        self.cancelled_branches.append(branch)
+        return 1
 
     def close_pr(self, number: int, comment: str = "") -> None:
         self.closed_prs.append((number, comment))

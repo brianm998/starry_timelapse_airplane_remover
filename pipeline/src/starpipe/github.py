@@ -111,6 +111,20 @@ class GitHub:
             self.comment(number, comment)  # a PR's conversation is its issue's comments
         self.api("PATCH", f"pulls/{number}", {"state": "closed"})
 
+    def cancel_runs(self, branch: str) -> int:
+        """Cancel the queued and running workflow runs of a branch: closing its PR does not, and a queued run for a closed PR still takes
+        its turn for GitHub's runners. Returns how many cancellations were requested."""
+        data: dict[str, Any] = self.api("GET", f"actions/runs?branch={branch}&per_page=30") or {}
+        cancelled = 0
+        for run in data.get("workflow_runs", []):
+            if run.get("status") in ("queued", "in_progress", "waiting", "pending"):
+                try:
+                    self.api("POST", f"actions/runs/{run['id']}/cancel")
+                    cancelled += 1
+                except GitHubError:
+                    pass  # it finished between the list and the cancel
+        return cancelled
+
     def update_pr(self, number: int, body: str) -> None:
         self.api("PATCH", f"pulls/{number}", {"body": body})
 

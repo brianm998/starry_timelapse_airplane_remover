@@ -353,6 +353,8 @@ class Daemon:
         try:
             self.engine.gh.close_pr(t.pr_number, "Moving this ticket onto the landing train: its changes will be in the next batch PR, "
                                     "which runs one CI for several tickets.")
+            if t.branch:
+                self.engine.gh.cancel_runs(t.branch)  # closing the PR leaves its queued runs in the queue, ahead of everyone else's
         except GitHubError:
             pass  # it is requeued either way; an open stale PR is harmless
 

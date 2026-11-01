@@ -137,3 +137,19 @@ async def test_ci_polling_backs_off_while_pending_and_still_lands(rig: Rig) -> N
     assert waits[0] == 60 and max(waits) == 300 and 120 in waits and 180 in waits
     assert waits == sorted(waits), "it only ever backs off"
     assert len(waits) < 80, "an hour-by-hour poll at 60 s would have taken 180+ calls"
+
+
+def test_cancel_runs_cancels_only_the_queued_and_running_ones() -> None:
+    calls: list[tuple[str, str]] = []
+
+    def runner(args: Sequence[str], stdin: str | None) -> str:
+        method, path = args[args.index("-X") + 1], args[-3] if "--input" in args else args[-1]
+        calls.append((method, path))
+        if method == "GET":
+            return json.dumps({"workflow_runs": [{"id": 1, "status": "queued"}, {"id": 2, "status": "in_progress"},
+                                                 {"id": 3, "status": "completed"}, {"id": 4, "status": "waiting"}]})
+        return "{}"
+
+    gh = GitHub(Config(), runner)
+    assert gh.cancel_runs("pipe/batch-1") == 3
+    assert [p.split("actions/")[1] for m, p in calls if m == "POST"] == ["runs/1/cancel", "runs/2/cancel", "runs/4/cancel"]
