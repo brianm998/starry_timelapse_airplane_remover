@@ -116,11 +116,18 @@ class Engine:
         return StageResult(False, reason=reason)
 
     # claim ---------------------------------------------------------------------------------------------------------
+    def max_active(self) -> int:
+        """How many tickets may run at once: the owner's db override from the monitor, else config.toml."""
+        raw = self.db.get("max_active")
+        if raw and raw.isdigit() and int(raw) >= 1:
+            return int(raw)
+        return self.config.max_active
+
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims") or self.db.get("self_update_pending"):
             return None  # the second is the daemon waiting to swap to new code: nothing new starts, running stages finish
         active = len(self.db.tickets(ACTIVE_STATES))
-        if active >= self.config.max_active:
+        if active >= self.max_active():
             return None
         for t in self.db.tickets(("queued",)):  # ordered by priority then age
             if not self.db.open_blockers(t.number):

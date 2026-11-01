@@ -7,6 +7,8 @@ import Foundation
 public struct Snapshot: Codable, Sendable, Equatable {
     public var daemon: DaemonInfo?
     public var pause: String?
+    /// How many tickets may run at once (the owner's override, else config.toml).
+    public var maxActive: Int
     public var usagePauseUntil: String?
     public var heavy: HeavyState
     public var tickets: [TicketSnap]
@@ -24,6 +26,7 @@ public struct Snapshot: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey {
         case daemon, pause, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
         case usagePauseUntil = "usage_pause_until"
+        case maxActive = "max_active"
         case interventionsWeek = "interventions_week"
         case eventsCursor = "events_cursor"
     }
@@ -171,6 +174,44 @@ public struct ServerEvent: Sendable, Equatable {
     public var kind: String
     public var data: [String: String]
     public var at: Double
+}
+
+/// What the Overview page shows, worked out from the snapshot alone.
+public enum Overview {
+    /// States with a model stage open (the daemon's ACTIVE_STATES).
+    public static let activeStates: Set<String> = ["exploring", "developing", "verifying", "review"]
+    /// The landing queue in landing order: CI first, then the ticket landing, then the ones about to publish.
+    public static let landingStates = ["ci", "landing", "ready"]
+    /// The most tickets the daemon accepts for `max_active`.
+    public static let maxActiveCap = 6
+
+    public struct Session: Equatable, Sendable, Identifiable {
+        public var ticket: TicketSnap
+        /// The open stage's name, else the ticket's state.
+        public var stage: String
+        public var id: Int { ticket.number }
+    }
+
+    public struct ModelGroup: Equatable, Sendable, Identifiable {
+        public var model: String
+        public var sessions: [Session]
+        public var id: String { model }
+    }
+
+    /// Tickets with a model session open, grouped by model (alphabetical), each group's tickets by number.
+    public static func activeModels(_ tickets: [TicketSnap]) -> [ModelGroup] {
+        var byModel: [String: [Session]] = [:]
+        for t in tickets where activeStates.contains(t.state) {
+            guard let model = t.model else { continue }
+            let stage = t.stages.last { $0.ended == nil }?.stage ?? t.state
+            byModel[model, default: []].append(Session(ticket: t, stage: stage))
+        }
+        return byModel.keys.sorted().map { ModelGroup(model: $0, sessions: byModel[$0]!.sorted { $0.ticket.number < $1.ticket.number }) }
+    }
+
+    public static func landingQueue(_ tickets: [TicketSnap]) -> [TicketSnap] {
+        landingStates.flatMap { state in tickets.filter { $0.state == state }.sorted { $0.number < $1.number } }
+    }
 }
 
 public enum GroupTitle {
