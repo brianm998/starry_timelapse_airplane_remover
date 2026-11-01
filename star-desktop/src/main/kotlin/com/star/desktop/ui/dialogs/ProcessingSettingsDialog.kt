@@ -745,9 +745,7 @@ private val NEEDS_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly }
 private val NEEDS_MOVING_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly && !it.cameraFixed }
 
 /** The number fields a UI test can reach: the box's id and its message line's id (literals, for the id registry). */
-private val NUMBER_FIELD_TAGS: Map<String, Pair<String, String>> = mapOf(
-    "Max keypoints" to Pair("settings.alignment.maxkeypoints", "settings.alignment.maxkeypoints.message"),
-)
+private val NUMBER_FIELD_TAGS: Map<String, Pair<String, String>> = mapOf("Max keypoints" to Pair("settings.alignment.maxkeypoints", "settings.alignment.maxkeypoints.message"))
 
 // The gui's order (P8): ... the base image threshold, the keypoint divisor, earth alignment, the debug images, and the smoothing last.
 internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
