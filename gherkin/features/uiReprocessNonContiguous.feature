@@ -4,7 +4,9 @@ Feature: Re-processing two frames of a selection leaves the frame between them a
   L6 of the parity plan. In the grid a selection need not be one run of frames: frames 0 and 2 can be selected with 1 left out. Re-Process Outliers
   on that selection runs the outlier stage again for those two frames and for no other (the gui used to clear every frame from the first to the last,
   and so the decisions made on the one between). Frame 1 has every group removed by the user before; after the run, which the processing screen lets
-  the user look away from (Preview) while it goes on, it still has them removed. Starts from the processed sequence the cli made once.
+  the user look away from (Preview) while it goes on, it still has them removed. The two frames that were run have the decision tree's first answer
+  where they had none decided (the frames the cli made have no group decided): in both clients, as "Find Outliers for This Frame" gives it. Starts
+  from the processed sequence the cli made once.
 
   Scenario: Re-process frames 0 and 2, not 1
     Given a processed copy of the sequence {sequence}
@@ -26,6 +28,16 @@ Feature: Re-processing two frames of a selection leaves the frame between them a
       And I click "mode.edit"
       And I wait for processing to finish
       And I click "mode.grid"
+      And I click "grid.cell.0"
+      And I click "mode.edit"
+    Then  "frame.number" says "frame 0"
+      And "status.keep" stops saying "0 will keep"
+    When  I click "mode.grid"
+      And I click "grid.cell.2"
+      And I click "mode.edit"
+    Then  "frame.number" says "frame 2"
+      And "status.keep" stops saying "0 will keep"
+    When  I click "mode.grid"
       And I click "grid.cell.1"
       And I click "mode.edit"
     Then  "frame.number" says "frame 1"
