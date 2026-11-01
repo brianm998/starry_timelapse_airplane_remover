@@ -144,6 +144,9 @@
     "uiOutlierInformationClick": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiOutlierWindowRows": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiMultiSelectSheet": {
       "sequence": "test_data/test_a7sii_10"
     },

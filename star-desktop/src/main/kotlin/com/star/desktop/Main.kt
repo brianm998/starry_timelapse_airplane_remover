@@ -108,7 +108,7 @@ private fun runApp(args: Array<String>) = application {
         val looking by svm.currentIndex.collectAsState()
         Window(
             onCloseRequest = vm::closeOutlierWindow,
-            title = localized("ui.outliers_for_frame", listed?.frameIndex ?: looking),
+            title = com.star.desktop.ui.windows.outlierWindowTitle(listed?.frameIndex, looking),
             state = rememberWindowState(size = DpSize(960.dp, 720.dp)),
         ) {
             // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).

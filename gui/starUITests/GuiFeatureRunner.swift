@@ -115,6 +115,7 @@ final class GuiFeatureRunner {
         .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
         .windowNotOpen: { try $0.expectWindow($0.args[0], open: false) },
+        .windowTitled: { try $0.expectWindowTitled($0.args[0], title: $0.args[1]) },
     ]
 
     func run(_ feature: Feature) throws {
@@ -617,6 +618,14 @@ final class GuiFeatureRunner {
         }
         try waitFor("the \(name) window to be \(open ? "open" : "closed")", timeout: 15,
                     detail: { "(windows: \(self.app.windows.allElementsBoundByIndex.map { $0.title }))" }) { count() == (open ? 1 : 0) }
+    }
+
+    /// One window of the app is titled exactly [title] (waited for). The window is named so a misspelt name fails as it does for `expectWindow`.
+    private func expectWindowTitled(_ name: String, title: String) throws {
+        _ = try windowTitles(name)
+        func titles() -> [String] { app.windows.allElementsBoundByIndex.map { $0.title } }
+        try waitFor("the \(name) window to be titled \"\(title)\"", timeout: 15,
+                    detail: { "(windows: \(titles()))" }) { titles().contains(title) }
     }
 
     private var preferencesFile: URL { scratch.appendingPathComponent("home/.star.userprefs.json") }

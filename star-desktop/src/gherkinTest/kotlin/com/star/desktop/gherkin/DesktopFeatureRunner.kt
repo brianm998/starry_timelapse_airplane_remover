@@ -1,6 +1,10 @@
 package com.star.desktop.gherkin
 
 import androidx.compose.foundation.focusable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
@@ -149,6 +153,7 @@ class DesktopFeatureRunner {
         StepAction.CONFIRM_CLOSE_IF_ASKED to { t -> confirmClosingIfAsked(t) },
         StepAction.WINDOW_OPEN to { t -> expectWindow(t, args[0], open = true) },
         StepAction.WINDOW_NOT_OPEN to { t -> expectWindow(t, args[0], open = false) },
+        StepAction.WINDOW_TITLED to { t -> expectWindowTitled(t, args[0], args[1]) },
     )
 
     fun run(feature: Feature) {
@@ -585,7 +590,27 @@ class DesktopFeatureRunner {
      * (`Window(onKeyEvent = ...)`) on an ancestor, in the bubble phase, with the focus put on it to begin with.
      */
     private fun showApp(t: ComposeUiTest, model: AppViewModel) {
-        if ("@ui" in feature.tags) t.setContent { KeyHost(model) { StarApp(model) } } else t.setContent { StarApp(model) }
+        if ("@ui" in feature.tags) t.setContent { KeyHost(model) { StarApp(model); OutlierWindowHost(model) } } else t.setContent { StarApp(model) }
+    }
+
+    /**
+     * `Main.kt` shows the outlier window as an AWT `Window`, which the Compose test host cannot see. This composes the window's content
+     * under the same condition (`showOutlierWindow` and a sequence on screen) so its semantics are there to read. It is laid out at the
+     * window's size but reports 0 by 0, so it takes no room from the app and no pointer input goes to it.
+     */
+    @androidx.compose.runtime.Composable
+    private fun OutlierWindowHost(model: AppViewModel) {
+        val show by model.showOutlierWindow.collectAsState()
+        val screen by model.screen.collectAsState()
+        val svm = (screen as? AppScreen.Sequence)?.vm
+        if (show && svm != null) {
+            androidx.compose.foundation.layout.Box(
+                androidx.compose.ui.Modifier.layout { measurable, _ ->
+                    val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(960.dp.roundToPx(), 720.dp.roundToPx()))
+                    layout(0, 0) { placeable.place(0, 0) }
+                },
+            ) { com.star.desktop.ui.theme.StarTheme { com.star.desktop.ui.windows.OutlierWindowView(svm) } }
+        }
     }
 
     /** Horizon → camera → (select horizon: No) → what to remove → Start processing, as a user answers them. */
@@ -1031,6 +1056,21 @@ class DesktopFeatureRunner {
 
     private fun expectWindow(t: ComposeUiTest, name: String, open: Boolean) {
         waitFor(t, "the $name window to be ${if (open) "open" else "closed"}", 15_000) { windowIsOpen(name) == open }
+    }
+
+    /**
+     * The window's title is [title] (waited for): `Main.kt`'s title for the window, by the function it calls, from the same state. Only the
+     * outlier window has a title that says anything.
+     */
+    private fun expectWindowTitled(t: ComposeUiTest, name: String, title: String) {
+        if (name != "outlier") throw RunnerError("no window called \"$name\" with a title to read (outlier)")
+        val model = vm ?: throw RunnerError("no app is running")
+        fun now(): String? {
+            if (!model.showOutlierWindow.value) return null
+            val svm = (model.screen.value as? AppScreen.Sequence)?.vm ?: return null
+            return com.star.desktop.ui.windows.outlierWindowTitle(svm.infoRows.value?.frameIndex, svm.currentIndex.value)
+        }
+        waitFor(t, "the $name window to be titled \"$title\"", 15_000, detail = { "(it is titled ${now()})" }) { now() == title }
     }
 
     // ---- waiting ----

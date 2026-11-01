@@ -21,6 +21,7 @@
     "multiselect.cancel",
     "multiselect.summary",
     "outlier.first",
+    "outlier.rows",
     "process.frames",
     "processing.extraction",
     "processing.headline",

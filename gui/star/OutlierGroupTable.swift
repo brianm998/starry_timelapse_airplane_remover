@@ -240,6 +240,7 @@ struct OutlierGroupTable: View {
             VStack {
                 Spacer()
                 Text(localized("ui.info_about_n_outlier_groups", viewModel.outlierGroupTableRows.count))
+                    .accessibilityIdentifier("outlier.rows")
                 Table(viewModel.outlierGroupTableRows,
                       selection: $viewModel.selectedOutliers,
                       sortOrder: $sortOrder)

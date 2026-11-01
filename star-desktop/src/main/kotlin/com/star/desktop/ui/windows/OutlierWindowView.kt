@@ -37,6 +37,7 @@ import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -49,6 +50,9 @@ import com.star.desktop.ui.sequence.edit.OutlierOverlay
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.OutlierFeatureRow
 import com.star.proto.RemoveReason
+
+/** The outlier window's title, "Outliers for frame N": the frame its table lists (an Information click's, else the one being looked at). */
+fun outlierWindowTitle(listedFrame: Int?, looking: Int): String = localized("ui.outliers_for_frame", listedFrame ?: looking)
 
 private val DECISION_WIDTH = 80.dp
 private val SIZE_WIDTH = 80.dp
@@ -109,7 +113,7 @@ fun OutlierWindowView(vm: SequenceViewModel) {
             Text(
                 localized("ui.info_about_n_outlier_groups", sorted?.size ?: 0),
                 color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                modifier = Modifier.padding(bottom = 6.dp),
+                modifier = Modifier.padding(bottom = 6.dp).testTag("outlier.rows"),
             )
             when {
                 sorted == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
