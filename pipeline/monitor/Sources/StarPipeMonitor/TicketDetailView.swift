@@ -16,6 +16,7 @@ struct TicketDetailView: View {
                 StageTimeline(stages: ticket.stages, now: store.snapshot?.now ?? Date().timeIntervalSince1970)
                 if let q = ticket.question ?? store.detail?.question?.text { questionBox(q) }
                 if let reason = ticket.parkReason, ticket.question == nil { Label(reason, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+                blockedBy
                 if let plan = store.detail?.plan { planBox(plan) }
                 checks
                 logBox
@@ -76,6 +77,25 @@ struct TicketDetailView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// The open issues this ticket waits for, one link per line; absent when nothing blocks it.
+    @ViewBuilder
+    private var blockedBy: some View {
+        let rows = store.detail.map { $0.number == ticket.number ? BlockerLinks.detailRows(blockers: $0.blockers, repo: repo) : [] } ?? []
+        if !rows.isEmpty {
+            GroupBox("Blocked by") {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(rows) { row in
+                        HStack(alignment: .firstTextBaseline) {
+                            Link(row.label, destination: row.url).monospacedDigit().help(row.url.absoluteString)
+                            Text(row.title).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 

@@ -144,6 +144,32 @@ public struct TicketDetail: Codable, Sendable, Equatable {
     public var plan: PlanSummary?
     public var checks: [CheckRow]
     public var question: QuestionRow?
+    /// The open issues this ticket waits for; empty from a daemon that predates the field.
+    public var blockers: [BlockerRef]
+
+    enum CodingKeys: String, CodingKey { case number, plan, checks, question, blockers }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        number = try c.decode(Int.self, forKey: .number)
+        plan = try c.decodeIfPresent(PlanSummary.self, forKey: .plan)
+        checks = try c.decode([CheckRow].self, forKey: .checks)
+        question = try c.decodeIfPresent(QuestionRow.self, forKey: .question)
+        blockers = try c.decodeIfPresent([BlockerRef].self, forKey: .blockers) ?? []
+    }
+}
+
+/// An open issue a ticket is blocked by. The title is empty when the daemon could not look it up.
+public struct BlockerRef: Codable, Sendable, Equatable, Identifiable {
+    public var number: Int
+    public var title: String
+
+    public init(number: Int, title: String) {
+        self.number = number
+        self.title = title
+    }
+
+    public var id: Int { number }
 }
 
 public struct PlanSummary: Codable, Sendable, Equatable {
