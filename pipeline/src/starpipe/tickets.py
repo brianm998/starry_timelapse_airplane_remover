@@ -61,10 +61,53 @@ def parse_pipeline(body: str) -> dict[str, str]:
     return {k: v for k, v, _ in pipeline_entries(split_sections(body).get("Pipeline", "")) if k}
 
 
+def allowed_models(allow_fable: bool = False) -> tuple[str, ...]:
+    return (*ALLOWED_MODELS, *((FABLE,) if allow_fable else ()))
+
+
+def with_pipeline_models(body: str, models: dict[str, str]) -> str:
+    """`body` with a `model_<stage>` entry per `models` item in its '## Pipeline' section.
+
+    A chosen stage's entry is replaced where it stands (or added at the end of the section); every other entry is
+    kept as written. The section is created at the end of the body when there is none."""
+    if not models:
+        return body
+    chosen = {f"model_{stage}": f"model_{stage}: {model}" for stage, model in models.items()}
+    lines = body.splitlines()
+    start = end = None
+    in_fence = False
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        if in_fence or not re.fullmatch(r"##\s+(.+?)\s*", line):
+            continue
+        if start is not None:
+            end = i
+            break
+        if re.fullmatch(r"##\s+Pipeline\s*", line):
+            start = i
+    if start is None:
+        return body.rstrip("\n") + "\n\n## Pipeline\n" + " · ".join(chosen.values()) + "\n"
+    end = len(lines) if end is None else end
+    parts: list[str] = []
+    done: set[str] = set()
+    for key, _, raw in pipeline_entries("\n".join(lines[start + 1:end])):
+        if key not in chosen:
+            parts.append(raw)
+        elif key not in done:
+            parts.append(chosen[key])
+            done.add(key)
+    parts += [v for k, v in chosen.items() if k not in done]
+    section = [lines[start], " · ".join(parts)]
+    if end < len(lines):
+        section.append("")  # keep the blank line before the next heading
+    return "\n".join([*lines[:start], *section, *lines[end:]]) + "\n"
+
+
 def validate_choice(key: str, value: str, allow_fable: bool = False) -> str | None:
     """Why a model_*/effort_* value is not usable, or None when it is (or the key is not one of those)."""
     if key.startswith("model_"):
-        allowed = (*ALLOWED_MODELS, *((FABLE,) if allow_fable else ()))
+        allowed = allowed_models(allow_fable)
         if value not in allowed:
             return f"model '{value}' is not allowed (one of {', '.join(allowed)})"
     elif key.startswith("effort_") and value not in EFFORTS:

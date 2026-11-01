@@ -11,6 +11,8 @@ struct EnqueueSheet: View {
     @State private var resolved: [String: Resolution] = [:]
     @State private var enqueueing = false
     @State private var problems: [String] = []
+    /// stage → picker value; a stage absent from here is "Default".
+    @State private var choices: [String: String] = [:]
 
     enum Resolution {
         case issue(ResolvedIssue)
@@ -28,6 +30,16 @@ struct EnqueueSheet: View {
         }
     }
 
+    /// The daemon's allowed models and stages, from the first resolved issue (they are the same for every issue).
+    private var options: (models: [String], stages: [String])? {
+        for link in links {
+            if case .issue(let issue) = resolved[link], let models = issue.models, let stages = issue.stages, !stages.isEmpty {
+                return (models, stages)
+            }
+        }
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Enqueue GitHub issues").font(.headline)
@@ -39,6 +51,9 @@ struct EnqueueSheet: View {
             List(links, id: \.self) { link in row(link) }
                 .frame(minHeight: 140)
                 .overlay { if links.isEmpty { Text("No links").foregroundStyle(.secondary) } }
+            if let options {
+                modelPickers(options)
+            }
             ForEach(problems, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
             HStack {
                 Spacer()
@@ -52,6 +67,25 @@ struct EnqueueSheet: View {
         .padding(16)
         .frame(minWidth: 560, minHeight: 420)
         .task(id: text) { await resolveAll() }
+    }
+
+    /// One picker per stage; the choices apply to every issue enqueued in this batch.
+    private func modelPickers(_ options: (models: [String], stages: [String])) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Model per stage (applies to every issue above; written to each issue's ## Pipeline)")
+                .font(.caption).foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], alignment: .leading, spacing: 4) {
+                ForEach(options.stages, id: \.self) { stage in
+                    Picker(stage, selection: Binding(get: { choices[stage] ?? EnqueueRequest.defaultChoice },
+                                                     set: { choices[stage] = $0 })) {
+                        Text(EnqueueRequest.defaultChoice).tag(EnqueueRequest.defaultChoice)
+                        ForEach(options.models, id: \.self) { Text($0).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .disabled(enqueueing)
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -88,7 +122,7 @@ struct EnqueueSheet: View {
         enqueueing = true
         defer { enqueueing = false }
         problems = []
-        guard let results = await store.enqueue(numbers: enqueueable) else {
+        guard let results = await store.enqueue(numbers: enqueueable, models: choices) else {
             problems = ["Nothing was enqueued: \(store.lastError ?? "the daemon refused")"]
             return
         }
