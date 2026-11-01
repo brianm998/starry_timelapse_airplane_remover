@@ -31,7 +31,10 @@ class Config(BaseModel):
     model_escalate: str = "sonnet"
     allow_fable: bool = False
 
-    max_active: int = 2
+    # What limits starting work is resources, not a count of tickets: LLM sessions running at once and measured CPU use (load.py).
+    max_llm_sessions: int = 3
+    cpu_limit_pct: float = 85.0  # rolling average over cpu_window_s; only a reason to wait while another session is running
+    cpu_window_s: int = 60
     landing_mode: str = "batch"  # "batch": the landing train, one CI for many tickets; "single": a PR and a CI per ticket
     batch_max: int = 5  # tickets in one batch
     batch_window_s: int = 120  # wait this long for more tickets once one is ready and no batch is running

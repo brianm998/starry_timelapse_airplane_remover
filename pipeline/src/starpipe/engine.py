@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import gitutil, guards, negctl, ship, trust, worktrees
+from . import gitutil, guards, load, negctl, ship, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
 from .checks import impact, ledger
 from .config import Config, home
@@ -63,6 +63,8 @@ class Engine:
     negative_control: Callable[[Path, str, list[str]], list[negctl.Control]] = negctl.run
     shim: str = ""
     parked: set[int] = field(default_factory=lambda: set[int]())
+    cpu: Callable[[], float] = lambda: 0.0  # the rolling CPU average; the daemon injects its meter
+    llm_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-start is one step
     issue_memo: dict[int, tuple[str, bool, list[int]]] = field(default_factory=lambda: dict[int, tuple[str, bool, list[int]]]())
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
     publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
@@ -127,11 +129,28 @@ class Engine:
         return StageResult(False, reason=reason)
 
     # claim ---------------------------------------------------------------------------------------------------------
+    # limits ----------------------------------------------------------------------------------------------------------
+    def limits(self) -> tuple[int, float]:
+        """(max LLM sessions, CPU limit %): the owner's runtime override if set (`starpipe limits`), else the config."""
+        sessions, cpu = self.db.get("limit_llm"), self.db.get("limit_cpu")
+        return (int(sessions) if sessions else self.config.max_llm_sessions,
+                float(cpu) if cpu else self.config.cpu_limit_pct)
+
+    def llm_active(self) -> int:
+        """Sessions in the middle of work. One whose ticket is only waiting for the heavy lock is not generating anything."""
+        from . import heavy
+
+        waiting = {w.ticket for w in heavy.status().queue}
+        return len([s for s in self.db.running_stages() if str(s["ticket"]) not in waiting])
+
+    def llm_room(self) -> load.Room:
+        sessions, cpu_limit = self.limits()
+        return load.room(self.llm_active(), self.cpu(), sessions, cpu_limit)
+
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims"):
             return None
-        active = len(self.db.tickets(ACTIVE_STATES))
-        if active >= self.config.max_active:
+        if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
             return None
         for t in self.db.tickets(("queued",)):  # ordered by priority then age
             if not self.db.open_blockers(t.number):
@@ -183,7 +202,7 @@ class Engine:
         while attempt <= 3:
             await self._wait_for_usage()
             model = self.config.model if attempt < 3 else self.config.model_escalate
-            stage_id = self.db.begin_stage(t.number, stage, attempt, model)
+            stage_id = await self._begin_when_room(t, stage, attempt, model)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
@@ -216,6 +235,18 @@ class Engine:
             resume = known if out.status == "timeout" else None
             attempt += 1
         return self.park(t, f"{stage}: no accepted result after 3 attempts. {summary}"), contract
+
+    async def _begin_when_room(self, t: Ticket, stage: str, attempt: int, model: str) -> int:
+        """Start a stage's session only while there is room: fewer than the limit of LLM sessions running and CPU not saturated.
+        Waits (and says why, in the ticket's activity line) instead of starting a session the machine cannot afford."""
+        while True:
+            async with self.llm_lock:
+                room = self.llm_room()
+                if room.ok:
+                    self.db.put(f"llm_wait:{t.number}", None)
+                    return self.db.begin_stage(t.number, stage, attempt, model)
+            self.db.put(f"llm_wait:{t.number}", room.reason)
+            await self.sleep(15)
 
     def _undelivered_answer(self, t: Ticket) -> dict[str, Any] | None:
         rows = self.db._all("SELECT * FROM questions WHERE ticket=? AND answer IS NOT NULL ORDER BY id DESC LIMIT 1",  # pyright: ignore[reportPrivateUsage]

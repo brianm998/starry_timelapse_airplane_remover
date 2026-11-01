@@ -17,7 +17,7 @@ from typing import Any, cast
 from aiohttp import web
 
 from . import digest as digest_mod
-from . import gitutil, heavy, nightly, selfupdate, ship, train, watch, worktrees
+from . import gitutil, heavy, load, nightly, selfupdate, ship, train, watch, worktrees
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
@@ -45,6 +45,9 @@ def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "bat
         return f"needs you · asked {int((now - q['asked_at']) / 60)}m ago" if q else "needs you"
     if t.state in ("failed", "cancelled", "closed", "paused") and t.park_reason:
         return f"{t.state} · {t.park_reason}"
+    wait = db.get(f"llm_wait:{t.number}")
+    if wait and t.state in ACTIVE_STATES and (last is None or last["ended"] is not None):
+        return f"{t.state} · waiting to start: {wait}"
     if last and last["ended"] is None:
         spent = int((now - last["started"]) / 60)
         return f"{t.state} · attempt {last['attempt']}/3 · {spent}m" + (
@@ -88,6 +91,8 @@ class Daemon:
         self._runtime: dict[str, object] = {}
         self.nightly_task: asyncio.Task[int] | None = None
         self.train = train.Train(engine)
+        self.cpu = load.CpuMeter(window_s=float(config.cpu_window_s))
+        engine.cpu = self.cpu.average
 
     # supervision ---------------------------------------------------------------------------------------------------
     def reconcile(self) -> None:
@@ -247,6 +252,18 @@ class Daemon:
             await asyncio.to_thread(self.watch_once)
             await asyncio.sleep(30)
 
+    async def cpu_loop(self) -> None:
+        self.cpu.sample()  # psutil's first reading is meaningless; this primes it
+        while True:
+            await asyncio.sleep(5)
+            self.cpu.sample()
+
+    def resources(self) -> dict[str, object]:
+        sessions, cpu_limit = self.engine.limits()
+        room = self.engine.llm_room()
+        return {"llm_active": room.llm_active, "llm_max": sessions, "cpu_pct": round(room.cpu, 1), "cpu_limit": cpu_limit,
+                "waiting": room.reason, "overridden": bool(self.db.get("limit_llm") or self.db.get("limit_cpu"))}
+
     async def scheduler(self) -> None:
         while True:
             self.schedule_once()
@@ -262,7 +279,7 @@ class Daemon:
                    for t in self.db.tickets() if t.state not in ("landed", "closed", "cancelled")]
         return {"daemon": {"pid": os.getpid(), "since": self.started, "last_poll": self.last_poll,
                            "error": self.last_error},
-                "pause": self.db.get("pause"), "usage_pause_until": self.db.get("usage_pause_until"),
+                "resources": self.resources(), "pause": self.db.get("pause"), "usage_pause_until": self.db.get("usage_pause_until"),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "tickets": tickets}
 
@@ -421,6 +438,29 @@ class Daemon:
         async def snapshot(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response(await asyncio.to_thread(self.snapshot))
 
+        @r.get("/v1/limits")
+        async def limits_get(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            return web.json_response(self.resources())
+
+        @r.post("/v1/limits")
+        async def limits_set(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            if body.get("reset"):
+                self.db.put("limit_llm", None)
+                self.db.put("limit_cpu", None)
+            if body.get("llm") is not None:
+                value = int(str(body["llm"]))
+                if not 1 <= value <= 32:
+                    raise web.HTTPBadRequest(text="llm must be between 1 and 32")
+                self.db.put("limit_llm", str(value))
+            if body.get("cpu") is not None:
+                pct = float(str(body["cpu"]))
+                if not 10 <= pct <= 100:
+                    raise web.HTTPBadRequest(text="cpu must be between 10 and 100")
+                self.db.put("limit_cpu", str(pct))
+            self.db.intervention(None, "limits")
+            return web.json_response(self.resources())
+
         @r.get("/v1/runtime")
         async def runtime_info(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             cur, prev = selfupdate.link("current"), selfupdate.link("previous")
@@ -497,7 +537,7 @@ class Daemon:
             await asyncio.gather(self.supervise("poller", self.poller), self.supervise("scheduler", self.scheduler),
                                  self.supervise("watcher", self.watcher), self.supervise("nightly", self.nightly_loop),
                                  self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop),
-                                 self.supervise("train", self.train.run_forever))
+                                 self.supervise("train", self.train.run_forever), self.supervise("cpu", self.cpu_loop))
         finally:
             await runner.cleanup()
 

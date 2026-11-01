@@ -265,6 +265,10 @@ def status(as_json: bool) -> None:
     if data.get("daemon"):
         d = data["daemon"]
         click.echo(f"daemon up, pid {d['pid']}" + (f"  last error: {d['error']}" if d.get("error") else ""))
+    res = data.get("resources")
+    if res:
+        click.echo(f"LLM sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
+                   + (f" · new sessions wait: {res['waiting']}" if res.get("waiting") else ""))
     if data.get("pause"):
         click.echo(f"PAUSED: {data['pause']}")
     if data.get("usage_pause_until"):
@@ -323,6 +327,25 @@ def answer(number: int, text: str) -> None:
 def retry(number: int, stage: str) -> None:
     """Re-run from a stage, keeping the branch and plan."""
     _post(f"/v1/tickets/{number}/retry", {"stage": stage})
+
+
+@main.command()
+@click.option("--llm", type=int, default=None, help="Most LLM sessions running at once.")
+@click.option("--cpu", type=float, default=None, help="Do not start another session while CPU use is above this percent.")
+@click.option("--reset", is_flag=True, help="Go back to the values in config.toml.")
+def limits(llm: int | None, cpu: float | None, reset: bool) -> None:
+    """Show or change what limits starting work: LLM sessions at once, and CPU use (a runtime override of config.toml)."""
+    from . import client as client_mod
+
+    try:
+        client = _client()
+        res = client.call("POST", "/v1/limits", {"llm": llm, "cpu": cpu, "reset": reset}) if (llm or cpu or reset) \
+            else client.call("GET", "/v1/limits")
+    except (client_mod.DaemonDown, RuntimeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"LLM sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
+               + (" · overridden at runtime" if res["overridden"] else " · from config.toml")
+               + (f" · new sessions wait: {res['waiting']}" if res["waiting"] else ""))
 
 
 @main.command()

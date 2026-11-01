@@ -60,6 +60,14 @@
   "now": 2000.0,
   "pause": null,
   "repo": "brianm998/starry_timelapse_airplane_remover",
+  "resources": {
+    "cpu_limit": 85.0,
+    "cpu_pct": 0.0,
+    "llm_active": 1,
+    "llm_max": 3,
+    "overridden": false,
+    "waiting": ""
+  },
   "runtime": {
     "behind_develop": 2,
     "sha": "abc1234"

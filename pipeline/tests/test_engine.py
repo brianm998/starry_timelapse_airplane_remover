@@ -128,15 +128,6 @@ async def test_blockers_and_priority_decide_the_claim(rig: Rig) -> None:
     assert t and t.number == 1
 
 
-async def test_the_active_cap_holds_new_claims(rig: Rig) -> None:
-    for n in (1, 2, 3):
-        rig.gh.add_issue(n, f"t{n}")
-    rig.engine.sync_issues()
-    rig.db.set_state(1, "developing")
-    rig.db.set_state(2, "exploring")
-    assert rig.engine.claimable() is None
-
-
 async def test_a_stage_without_a_result_climbs_the_ladder_then_parks(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
