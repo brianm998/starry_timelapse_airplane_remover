@@ -1230,6 +1230,10 @@
   "settings_tab.alignment": "Alignement",
   "settings_tab.horizon": "Horizon",
   "settings_tab.memory": "Mémoire",
+  "ui.location_grant_message": "Star a besoin d'accéder à {0} pour écrire sa sortie à côté de {1}.",
+  "ui.folder_access_prompt": "Star a besoin d'accéder à {0} pour ouvrir cette séquence. Choisissez ce dossier pour continuer.",
+  "ui.folder_access_denied": "Star n'a pas pu accéder à {0}. Il a peut-être été déplacé ou supprimé, ou l'accès n'a pas été accordé.",
+  "ui.folder_access_grant": "Autoriser l'accès",
   "ui.render_options_after_processing_title": "Choisir les réglages de la vidéo",
   "ui.use_these_settings": "Utiliser ces réglages",
   "ui.settings": "Réglages"

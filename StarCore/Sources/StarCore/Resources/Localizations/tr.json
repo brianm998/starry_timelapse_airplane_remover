@@ -1230,6 +1230,10 @@
   "settings_tab.alignment": "Hizalama",
   "settings_tab.horizon": "Ufuk",
   "settings_tab.memory": "Bellek",
+  "ui.location_grant_message": "Star'ın çıktıyı {1} yanına yazabilmesi için {0} klasörüne erişmesi gerekiyor.",
+  "ui.folder_access_prompt": "Star'ın bu görüntü dizisini açabilmesi için {0} klasörüne erişmesi gerekiyor. Devam etmek için o klasörü seçin.",
+  "ui.folder_access_denied": "Star {0} konumuna erişemedi. Taşınmış ya da silinmiş olabilir veya erişim izni verilmemiş olabilir.",
+  "ui.folder_access_grant": "Erişime İzin Ver",
   "ui.render_options_after_processing_title": "Video ayarlarını seçin",
   "ui.use_these_settings": "Bu ayarları kullan",
   "ui.settings": "Ayarlar"

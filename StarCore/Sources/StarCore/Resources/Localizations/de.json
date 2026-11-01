@@ -1230,6 +1230,10 @@
   "settings_tab.alignment": "Ausrichtung",
   "settings_tab.horizon": "Horizont",
   "settings_tab.memory": "Speicher",
+  "ui.location_grant_message": "Star benötigt Zugriff auf {0}, um die Ausgabe neben {1} zu schreiben.",
+  "ui.folder_access_prompt": "Star benötigt Zugriff auf {0}, um diese Sequenz zu öffnen. Wähle diesen Ordner, um fortzufahren.",
+  "ui.folder_access_denied": "Star konnte nicht auf {0} zugreifen. Der Ordner wurde möglicherweise verschoben oder gelöscht, oder der Zugriff wurde nicht erlaubt.",
+  "ui.folder_access_grant": "Zugriff erlauben",
   "ui.render_options_after_processing_title": "Videoeinstellungen wählen",
   "ui.use_these_settings": "Diese Einstellungen verwenden",
   "ui.settings": "Einstellungen"

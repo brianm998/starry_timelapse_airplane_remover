@@ -74,6 +74,7 @@
 		D39728C62F06CC5400F1CBC2 /* AlignmentWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */; };
 		D397FEF92E96005500680C78 /* NewReleaseSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D397FEF82E96005500680C78 /* NewReleaseSheetView.swift */; };
 		D3F1DE0100000000000A0002 /* VideoImportSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F1DE0100000000000A0001 /* VideoImportSheetView.swift */; };
+		D3F1DE0100000000000B0002 /* FolderAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F1DE0100000000000B0001 /* FolderAccess.swift */; };
 		D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */; };
 		D3A0D3AE2CF383DF00FD2E9E /* ExpandUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */; };
 		D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */; };
@@ -208,6 +209,7 @@
 		D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlignmentWindowView.swift; sourceTree = "<group>"; };
 		D397FEF82E96005500680C78 /* NewReleaseSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewReleaseSheetView.swift; sourceTree = "<group>"; };
 		D3F1DE0100000000000A0001 /* VideoImportSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoImportSheetView.swift; sourceTree = "<group>"; };
+		D3F1DE0100000000000B0001 /* FolderAccess.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FolderAccess.swift; sourceTree = "<group>"; };
 		D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ClearUndecidedButton.swift; sourceTree = "<group>"; };
 		D3A0D3AD2CF383DF00FD2E9E /* ExpandUpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandUpButton.swift; sourceTree = "<group>"; };
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
@@ -329,6 +331,7 @@
 				D324257E2EE5030100CEF78F /* ProcessingSettingsView.swift */,
 				D397FEF82E96005500680C78 /* NewReleaseSheetView.swift */,
 				D3F1DE0100000000000A0001 /* VideoImportSheetView.swift */,
+				D3F1DE0100000000000B0001 /* FolderAccess.swift */,
 				D35A284A2E50E176007121E6 /* Zoomable */,
 				D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */,
 				D3E6804A2E424B0700A97C28 /* FocusedField.swift */,
@@ -682,6 +685,7 @@
 				D3FBFA232CE91B4700A23FC6 /* ImageSequenceLoadingView.swift in Sources */,
 				D397FEF92E96005500680C78 /* NewReleaseSheetView.swift in Sources */,
 				D3F1DE0100000000000A0002 /* VideoImportSheetView.swift in Sources */,
+				D3F1DE0100000000000B0002 /* FolderAccess.swift in Sources */,
 				D32F6DB02A4D2ADA00704870 /* RenderCurrentFrameButton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

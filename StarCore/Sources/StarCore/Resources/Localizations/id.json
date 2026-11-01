@@ -1230,6 +1230,10 @@
   "settings_tab.alignment": "Penyelarasan",
   "settings_tab.horizon": "Horizon",
   "settings_tab.memory": "Memori",
+  "ui.location_grant_message": "Star memerlukan akses ke {0} untuk menulis keluarannya di samping {1}.",
+  "ui.folder_access_prompt": "Star memerlukan akses ke {0} untuk membuka urutan ini. Pilih folder tersebut untuk melanjutkan.",
+  "ui.folder_access_denied": "Star tidak dapat mengakses {0}. Folder itu mungkin telah dipindahkan atau dihapus, atau akses belum diberikan.",
+  "ui.folder_access_grant": "Izinkan Akses",
   "ui.render_options_after_processing_title": "Pilih pengaturan video",
   "ui.use_these_settings": "Gunakan pengaturan ini",
   "ui.settings": "Pengaturan"

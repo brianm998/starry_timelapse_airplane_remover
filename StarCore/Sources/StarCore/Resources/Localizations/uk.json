@@ -1230,6 +1230,10 @@
   "settings_tab.alignment": "Вирівнювання",
   "settings_tab.horizon": "Горизонт",
   "settings_tab.memory": "Памʼять",
+  "ui.location_grant_message": "Star потрібен доступ до теки {0}, щоб записати результат поруч із «{1}».",
+  "ui.folder_access_prompt": "Star потрібен доступ до теки {0}, щоб відкрити цю послідовність. Виберіть цю теку, щоб продовжити.",
+  "ui.folder_access_denied": "Star не вдалося отримати доступ до {0}. Можливо, теку переміщено або видалено, або доступ не було надано.",
+  "ui.folder_access_grant": "Дозволити доступ",
   "ui.render_options_after_processing_title": "Виберіть налаштування відео",
   "ui.use_these_settings": "Використати ці налаштування",
   "ui.settings": "Налаштування"
