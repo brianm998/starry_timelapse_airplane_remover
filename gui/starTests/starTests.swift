@@ -4373,3 +4373,16 @@ final class IdRegistryTests: XCTestCase {
                        "knownGaps.desktop entries the gui does not have either: they are not gaps of the desktop's alone")
     }
 }
+
+/// The settings sheet's tab titles: black on the selected pill, white on the grey track otherwise, yellow when disabled.
+final class SettingsTabTitleColorTests: XCTestCase {
+    func testSelectedTabIsBlackAndUnselectedIsWhite() {
+        XCTAssertEqual(settingsTabTitleColor(isSelected: true, isEnabled: true), .black)
+        XCTAssertEqual(settingsTabTitleColor(isSelected: false, isEnabled: true), .white)
+    }
+
+    func testDisabledTabsStayYellow() {
+        XCTAssertEqual(settingsTabTitleColor(isSelected: true, isEnabled: false), .yellow)
+        XCTAssertEqual(settingsTabTitleColor(isSelected: false, isEnabled: false), .yellow)
+    }
+}
