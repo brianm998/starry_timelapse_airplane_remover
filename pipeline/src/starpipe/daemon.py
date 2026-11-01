@@ -21,13 +21,15 @@ from typing import Any, cast
 from aiohttp import web
 
 from . import digest as digest_mod
-from . import gitutil, heavy, nightly, selfupdate, ship, watch, worktrees
+from . import gitutil, heavy, nightly, selfupdate, ship, trust, watch, worktrees
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
 from .github import GitHubError
 
 log = logging.getLogger("starpiped")
+
+ISSUE_URL = re.compile(r"\Ahttps://github\.com/(?P<owner>[^/\s]+)/(?P<repo>[^/\s]+)/(?P<kind>issues|pull)/(?P<n>\d+)/?\Z")
 
 
 def api_token() -> str:
@@ -481,6 +483,61 @@ class Daemon:
             raise web.HTTPBadRequest(text=f"unknown action {action}")
         return "ok"
 
+    def _issue_problem(self, issue: dict[str, Any]) -> str | None:
+        """Why `issue` cannot be enqueued, or None."""
+        n = issue.get("number")
+        if "pull_request" in issue:
+            return f"#{n} is a pull request"
+        if issue.get("state") != "open":
+            return f"#{n} is closed"
+        return None
+
+    @staticmethod
+    def _labelled(issue: dict[str, Any]) -> bool:
+        labels = cast("list[object]", issue.get("labels") or [])
+        names = {str(cast("dict[str, object]", lab).get("name")) if isinstance(lab, dict) else str(lab) for lab in labels}
+        return trust.PIPELINE_LABEL in names
+
+    def resolve_issue(self, url: str) -> dict[str, object]:
+        """An issue link from the monitor's + sheet: this repo's open issue, its title and whether it is queued."""
+        link = url.strip().split("#", 1)[0].split("?", 1)[0]
+        m = ISSUE_URL.match(link)
+        if m is None:
+            raise web.HTTPBadRequest(text=f"not a GitHub issue link: {url.strip()[:200]}")
+        if (m["owner"].lower(), m["repo"].lower()) != (self.config.owner.lower(), self.config.repo.lower()):
+            raise web.HTTPBadRequest(text=f"not this repo ({self.config.owner}/{self.config.repo}): {m['owner']}/{m['repo']}")
+        n = int(m["n"])
+        if m["kind"] == "pull":
+            raise web.HTTPBadRequest(text=f"#{n} is a pull request")
+        try:
+            issue = self.engine.gh.issue(n)
+        except GitHubError as exc:
+            raise web.HTTPNotFound(text=f"#{n}: {exc}") from exc
+        problem = self._issue_problem(issue)
+        if problem:
+            raise web.HTTPUnprocessableEntity(text=problem)
+        return {"number": n, "title": str(issue.get("title") or ""), "state": str(issue.get("state")),
+                "queued": self._labelled(issue)}
+
+    def enqueue(self, numbers: list[int]) -> list[dict[str, object]]:
+        """Label each issue `pipeline` with the owner's token, so the next intake poll queues it (trust.may_run)."""
+        out: list[dict[str, object]] = []
+        for n in dict.fromkeys(numbers):
+            try:
+                issue = self.engine.gh.issue(n)
+                problem = self._issue_problem(issue)
+                if problem:
+                    result = f"rejected: {problem}"
+                elif self._labelled(issue):
+                    result = "already queued"
+                else:
+                    self.engine.gh.add_labels(n, [trust.PIPELINE_LABEL])
+                    result = "labelled"
+            except GitHubError as exc:
+                result = f"error: {exc}"
+            out.append({"number": n, "result": result})
+        return out
+
     def app(self) -> web.Application:
         @web.middleware
         async def auth(request: web.Request, handler: Callable[[web.Request], Awaitable[web.StreamResponse]]) -> web.StreamResponse:
@@ -556,6 +613,23 @@ class Daemon:
                 if idle and idle % 15 == 0:
                     await resp.write(b": keepalive\n\n")
                 await asyncio.sleep(1)
+
+        @r.get("/v1/issues/resolve")
+        async def resolve(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            url = req.query.get("url")
+            if not url:
+                raise web.HTTPBadRequest(text="url is required")
+            return web.json_response(await asyncio.to_thread(self.resolve_issue, url))
+
+        @r.post("/v1/enqueue")
+        async def enqueue(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            raw = body.get("numbers")
+            items = cast("list[object]", raw) if isinstance(raw, list) else []
+            if not items or not all(isinstance(x, int) and not isinstance(x, bool) for x in items):
+                raise web.HTTPBadRequest(text="numbers must be a non-empty list of issue numbers")
+            numbers = [cast("int", x) for x in items]
+            return web.json_response({"results": await asyncio.to_thread(self.enqueue, numbers)})
 
         @r.post("/v1/tickets/{n}/{action}")
         async def act(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
