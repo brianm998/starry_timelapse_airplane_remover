@@ -12,6 +12,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.app.StarApp
 import com.star.desktop.ui.app.StarMenuBar
+import com.star.desktop.ui.app.StatusTray
 import com.star.desktop.ui.app.handleGlobalKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -97,6 +98,9 @@ private fun runApp(args: Array<String>) = application {
         StarMenuBar(vm)
         StarApp(vm)
     }
+
+    // The tray icon: live run status, readable from any app (the gui's menu-bar wand).
+    StatusTray(vm)
 
     // Secondary Outlier table window (macOS multi-window behavior), toggled from the Window menu.
     val showOutlier by vm.showOutlierWindow.collectAsState()
