@@ -60,6 +60,8 @@ def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "bat
             f" (+{int(last['lock_wait_s'] / 60)}m lock wait)" if last["lock_wait_s"] >= 60 else "")
     if t.state in ("ci", "landing") and (batch := db.batch_of(t.number)) is not None:
         return f"CI · batch #{batch} ({len(db.batch_members(batch))} tickets together)"
+    if t.state == "queued" and (blockers := db.open_blockers(t.number)):
+        return "queued: " + ", ".join(f"#{b}" for b in blockers)
     if t.state == "ready":
         return "ready · waiting for the next batch" if mode == "batch" else "ready to publish"
     return t.state
@@ -102,6 +104,7 @@ class Daemon:
         self.cpu = load.CpuMeter(window_s=float(config.cpu_window_s))
         engine.cpu = self.cpu.average
         self._update_lock = threading.Lock()
+        self._blocker_titles: dict[int, str] = {}  # GitHub titles of blockers, fetched once per daemon
         self.exit: Callable[[int], None] = hard_exit  # replaced in tests
 
     # supervision ---------------------------------------------------------------------------------------------------
@@ -464,7 +467,22 @@ class Daemon:
             return None
         return {"number": t.number, "title": t.title, "state": t.state, "priority": t.priority, "branch": t.branch,
                 "park_reason": t.park_reason, "plan": t.plan, "activity": activity(self.db, t, mode=self.config.landing_mode),
-                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": self.db.open_question(n)}
+                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": self.db.open_question(n),
+                "blockers": [{"number": b, "title": self.blocker_title(b)} for b in self.db.open_blockers(n)]}
+
+    def blocker_title(self, n: int) -> str:
+        """A blocker's title: the pipeline ticket's, else the GitHub issue's (cached; a failed lookup is retried later)."""
+        if n in self._blocker_titles:
+            return self._blocker_titles[n]
+        t = self.db.ticket(n)
+        if t is not None:
+            return t.title
+        try:
+            title = str(self.engine.gh.issue(n).get("title") or "")
+        except GitHubError:
+            return ""
+        self._blocker_titles[n] = title
+        return title
 
     def mutate(self, n: int, action: str, body: dict[str, object]) -> str:
         t = self.db.ticket(n)
@@ -621,7 +639,7 @@ class Daemon:
 
         @r.get("/v1/tickets/{n}")
         async def show(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
-            data = self.show(int(req.match_info["n"]))
+            data = await asyncio.to_thread(self.show, int(req.match_info["n"]))  # a blocker's title may need GitHub
             if data is None:
                 raise web.HTTPNotFound()
             return web.json_response(data)
