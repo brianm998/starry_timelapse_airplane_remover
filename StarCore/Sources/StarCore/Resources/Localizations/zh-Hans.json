@@ -1230,6 +1230,10 @@
   "settings_tab.alignment": "对齐",
   "settings_tab.horizon": "地平线",
   "settings_tab.memory": "内存",
+  "ui.location_grant_message": "Star 需要访问 {0}，才能将输出写入 {1} 旁边。",
+  "ui.folder_access_prompt": "Star 需要访问 {0}，才能打开此序列。请选择该文件夹以继续。",
+  "ui.folder_access_denied": "Star 无法访问 {0}。它可能已被移动或删除，或者未授予访问权限。",
+  "ui.folder_access_grant": "允许访问",
   "ui.render_options_after_processing_title": "选择视频设置",
   "ui.use_these_settings": "使用这些设置",
   "ui.settings": "设置"

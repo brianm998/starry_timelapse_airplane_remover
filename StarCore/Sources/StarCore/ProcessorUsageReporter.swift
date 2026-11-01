@@ -34,7 +34,21 @@ public actor ProcessorUsageReporter {
                                     idle: 0)
     }
 
+#if os(macOS)
+    private var tickSampler = ProcessorTickSampler()
+#endif
+
     private func readUsage() -> Double {
+#if os(macOS)
+        // From the kernel's own counters: `top` is a child process, which a sandboxed app may not run.  `top` stays as the fallback.
+        if let usage = tickSampler.sample() {
+            self.usage = usage
+            self.realUsages.append(usage)
+            while realUsages.count > 10 { realUsages.removeFirst(1) }
+            Log.d("CPU usage: \(usage)")
+            return usage.idlePercent
+        }
+#endif
         do {
             try ObjC.catchException {
                 // Failed to set posix_spawn_file_actions for fd -1 at index 0 with errno 9

@@ -2278,6 +2278,27 @@ final class UserPreferencesStoreTests: XCTestCase {
                        "a UserPreferences is built outside the store: \(built)")
     }
 
+    /// The App Sandbox denies writes to `/tmp` and moves `$HOME` into the container, so no source builds either path by hand: the
+    /// home directory comes from `NSHomeDirectory()` (which follows the sandbox) and scratch files go in the temporary directory.
+    func testNoHandBuiltTmpOrHomePathsInSources() throws {
+        let sources = Self.guiDir.deletingLastPathComponent().appendingPathComponent("StarCore/Sources")
+        var urls = try swiftSources().map { Self.guiDir.appendingPathComponent("star/\($0.name)") }
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+        for case let url as URL in walker where url.pathExtension == "swift" && !url.lastPathComponent.hasPrefix(".") {
+            urls.append(url)
+        }
+        XCTAssertGreaterThan(urls.count, 100, "found only \(urls.count) sources")
+
+        let handBuilt = try NSRegularExpression(pattern: #""/tmp|environment\["HOME"\]|env\["HOME"\]"#)
+        var found: [String] = []
+        for url in urls {
+            let text = NoHardCodedStringsTests.withoutComments(try String(contentsOf: url, encoding: .utf8))
+            let n = handBuilt.numberOfMatches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
+            if n > 0 { found.append("\(url.lastPathComponent) ×\(n)") }
+        }
+        XCTAssertEqual(found, [], "a /tmp or $HOME path is built by hand: \(found)")
+    }
+
     /// The tell of the old hazard: reaching through one view model to write the preferences held
     /// by the other, which is what had to be done, field by field, to keep them in step.
     func testNoPreferenceIsWrittenThroughASecondViewModel() throws {
@@ -4371,6 +4392,144 @@ final class IdRegistryTests: XCTestCase {
         XCTAssertEqual(guiGaps.filter { gap in found.contains { covers(gap, $0) } }.sorted(), [], "knownGaps.gui entries the gui now has")
         XCTAssertEqual(desktopGaps.filter { gap in !found.contains { covers(gap, $0) } }.sorted(), [],
                        "knownGaps.desktop entries the gui does not have either: they are not gaps of the desktop's alone")
+    }
+}
+
+
+/// Which folder a sandboxed star has to be granted before it can write its output (`OutputLocation`).
+final class OutputLocationDecisionTests: XCTestCase {
+
+    /// "Beside the source" is a sibling of what the open panel granted: the parent has to be granted too, unless it can be written.
+    func testBesideNeedsGrantOfParentWhenNotWritable() {
+        XCTAssertEqual(OutputLocation.folderNeedingGrant(source: "/Users/me/Pictures/sky", outputDir: nil,
+                                                         isWritable: { _ in false }),
+                       "/Users/me/Pictures")
+        // a video is a file: its parent is the folder, and its extracted frames go there as well
+        XCTAssertEqual(OutputLocation.folderNeedingGrant(source: "/Users/me/Movies/sky.mov", outputDir: nil,
+                                                         isWritable: { _ in false }),
+                       "/Users/me/Movies")
+    }
+
+    /// A folder the user chose was granted by the panel that chose it.
+    func testChosenFolderNeedsNoFurtherGrant() {
+        XCTAssertNil(OutputLocation.folderNeedingGrant(source: "/Users/me/Pictures/sky", outputDir: "/Volumes/big/out",
+                                                       isWritable: { _ in false }))
+    }
+
+    /// Unsandboxed, or a parent granted earlier: nothing to ask.
+    func testWritableParentNeedsNoPrompt() {
+        var asked: [String] = []
+        XCTAssertNil(OutputLocation.folderNeedingGrant(source: "/Users/me/Pictures/sky", outputDir: nil,
+                                                       isWritable: { asked.append($0); return true }))
+        XCTAssertEqual(asked, ["/Users/me/Pictures"], "what is tested is the parent, not the sequence itself")
+    }
+}
+
+/// The security-scoped bookmarks a sandboxed star keeps for the folders it has been granted (`BookmarkStore`), with the system calls
+/// replaced so that this runs unsandboxed.
+@MainActor
+final class FolderBookmarkStoreTests: XCTestCase {
+
+    /// What the preferences file holds, which outlives a store.
+    private final class Disk { var bookmarks: [String: Data] = [:] }
+
+    /// What the file system is doing to the folders behind the bookmarks.
+    private final class World {
+        var gone: Set<String> = []
+        var stale: Set<String> = []
+        var movedTo: [String: String] = [:]
+        var started: [String] = []
+        var stopped: [String] = []
+    }
+
+    private func store(_ disk: Disk, _ world: World, sandboxed: Bool = true) -> BookmarkStore {
+        BookmarkStore(
+          system: BookmarkStore.System(
+            isSandboxed: sandboxed,
+            makeBookmark: { Data($0.path.utf8) },
+            resolveBookmark: { data in
+                let path = String(decoding: data, as: UTF8.self)
+                if world.gone.contains(path) { throw CocoaError(.fileNoSuchFile) }
+                if let moved = world.movedTo[path] { return (URL(fileURLWithPath: moved), true) }
+                return (URL(fileURLWithPath: path), world.stale.contains(path))
+            },
+            startAccess: { world.started.append($0.path); return true },
+            stopAccess: { world.stopped.append($0.path) }),
+          load: { disk.bookmarks },
+          store: { disk.bookmarks = $0 })
+    }
+
+    private let sky = URL(fileURLWithPath: "/data/sky")
+
+    /// Saved in one launch, resolved in the next: a second store over the same file finds it, for the folder and for what is inside.
+    func testSaveThenResolveAfterReload() {
+        let disk = Disk(), world = World()
+        store(disk, world).save(url: sky)
+
+        let reloaded = store(disk, world)
+        XCTAssertEqual(reloaded.resolve(path: "/data/sky"), .resolved(sky))
+        XCTAssertEqual(reloaded.resolve(covering: "/data/sky/sub/config.json"), .resolved(sky))
+        XCTAssertEqual(reloaded.resolve(covering: "/data/skyline"), .missing, "a folder whose name merely starts the same is not covered")
+
+        reloaded.startAccess(covering: "/data/sky/sub/config.json")
+        reloaded.startAccess(covering: "/data/sky")
+        XCTAssertEqual(world.started, ["/data/sky"], "one start per folder, however many paths it covers")
+        reloaded.stopAll()
+        XCTAssertEqual(world.stopped, ["/data/sky"], "every start is balanced")
+        XCTAssertEqual(reloaded.activeFolders, [])
+    }
+
+    /// A bookmark the system flags as out of date, or that resolves somewhere else because the folder was moved, is reported as stale
+    /// and remade from where the folder is now.
+    func testStaleBookmarkIsReportedAndRefreshed() {
+        let disk = Disk(), world = World()
+        store(disk, world).save(url: sky)
+
+        world.stale = ["/data/sky"]
+        XCTAssertEqual(store(disk, world).resolve(path: "/data/sky"), .stale(sky))
+        XCTAssertEqual(Array(disk.bookmarks.keys), ["/data/sky"], "refreshed in place")
+
+        world.stale = []
+        world.movedTo = ["/data/sky": "/data/moved"]
+        let moved = URL(fileURLWithPath: "/data/moved")
+        XCTAssertEqual(store(disk, world).resolve(path: "/data/sky"), .stale(moved))
+        XCTAssertEqual(Array(disk.bookmarks.keys), ["/data/moved"], "the bookmark follows the folder")
+        world.movedTo = [:]
+        XCTAssertEqual(store(disk, world).resolve(path: "/data/moved"), .resolved(moved))
+    }
+
+    /// Nothing saved, or the folder deleted: `.missing`, which is what makes the caller ask the user.  Never a throw or a crash.
+    func testMissingOrDeletedFolderIsReportedNotThrown() {
+        let disk = Disk(), world = World()
+        let bookmarks = store(disk, world)
+        XCTAssertEqual(bookmarks.resolve(path: "/data/sky"), .missing)
+        XCTAssertEqual(bookmarks.resolve(covering: "/data/sky/a/config.json"), .missing)
+
+        bookmarks.save(url: sky)
+        world.gone = ["/data/sky"]
+        XCTAssertEqual(store(disk, world).resolve(path: "/data/sky"), .missing)
+        XCTAssertEqual(store(disk, world).startAccess(covering: "/data/sky/a"), .missing)
+        XCTAssertEqual(world.started, [])
+    }
+
+    /// A nearer bookmark that is gone does not hide a live one further up: the parent's grant still covers the sequence.
+    func testDeadNearerBookmarkFallsBackToLiveAncestor() {
+        let disk = Disk(), world = World()
+        let bookmarks = store(disk, world)
+        bookmarks.save(url: URL(fileURLWithPath: "/data"))
+        bookmarks.save(url: sky)
+        world.gone = ["/data/sky"]
+        XCTAssertEqual(store(disk, world).resolve(covering: "/data/sky/a"), .resolved(URL(fileURLWithPath: "/data")))
+
+        world.gone = ["/data/sky", "/data"]
+        XCTAssertEqual(store(disk, world).resolve(covering: "/data/sky/a"), .missing, "nothing live: the nearest one's outcome")
+    }
+
+    /// Only a sandboxed star makes bookmarks: unsandboxed there is nothing for them to add, and the preferences file is shared.
+    func testNothingIsSavedWhenNotSandboxed() {
+        let disk = Disk(), world = World()
+        store(disk, world, sandboxed: false).save(url: sky)
+        XCTAssertTrue(disk.bookmarks.isEmpty)
     }
 }
 
