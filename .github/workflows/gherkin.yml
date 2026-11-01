@@ -17,6 +17,10 @@ name: Gherkin
 # macOS and Windows ffmpeg, the Windows OpenCV and StarDecisionTrees) and those rebuilt on every run.  A release download is seconds; see
 # https://docs.github.com/actions/using-workflows/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy
 #
+# The @ui features that start from a processed sequence (`a processed copy of the sequence`) need the fixture that gherkin/ui/make-processed-fixture.sh
+# makes with the release cli.  The `ui` job of each of mac-gui, desktop-linux, desktop-windows and desktop-macos therefore has a step that builds the cli
+# and makes the fixture once (about 180 MB, deliberately not cached, see above); a cli that cannot be built fails that step.
+#
 # Every leg ends with a "vacuous green" check: it fails the job unless the log (or the Gradle XML) shows
 # exactly one test that ran, passed and was not skipped. Exit codes alone are not proof: xcodebuild
 # -only-testing matching nothing exits 0 having run nothing.
@@ -597,7 +601,7 @@ jobs:
       matrix:
         feature: ${{ fromJSON(needs.features.outputs.macgui) }}
     # the `ui` job runs every @ui feature one after the other in the one build
-    timeout-minutes: ${{ matrix.feature == 'ui' && 120 || 90 }}
+    timeout-minutes: ${{ matrix.feature == 'ui' && 150 || 90 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -611,12 +615,16 @@ jobs:
         run: |
           f="${{ matrix.feature }}"
           if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
+          processed=false
+          for n in $features; do
+            if grep -q 'a processed copy of the sequence' "gherkin/features/$n.feature"; then processed=true; fi
+          done
           only=""; count=0
           for n in $features; do
             only="$only -only-testing:starUITests/GeneratedFeatureUITests/test$(echo "${n:0:1}" | tr a-z A-Z)${n:1}Feature"
             count=$((count + 1))
           done
-          { echo "features=$features"; echo "only=$only"; echo "count=$count"; } >> "$GITHUB_OUTPUT"
+          { echo "features=$features"; echo "processed=$processed"; echo "only=$only"; echo "count=$count"; } >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-mac-gui.txt), never maintained by hand.
@@ -685,6 +693,38 @@ jobs:
         run: |
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # The @ui features that start from the processed sequence (`a processed copy of the sequence`, see gherkin/ui/README.md) need the
+      # fixture the release cli makes: built here, once, so the build is visible and a cli that cannot be built fails this step, instead of
+      # being built inside the first feature or leaving the features skipped.  The runners call make-processed-fixture.sh for every
+      # feature; the exports below make each call name the same <sequence>-<cli stamp> directory and take its READY shortcut.  STAR_CLI_BUILD=0
+      # (the runners default it to 1) keeps a missing cli an error.  Not an actions/cache entry, deliberately: see the header on the cache
+      # budget.  The fixture is about 180 MB per leg and its key would change with nearly every push (cli/, StarCore/, StarCpp/).
+      - name: Make the processed fixture (release cli, once)
+        if: steps.t.outputs.processed == 'true'
+        shell: bash
+        env:
+          # a hosted macOS VM can have under 2GB free, below star's default memory floor, so the cli would admit nothing
+          STAR_SYSTEM_FLOOR_MB: 512
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          swift build -c release --package-path cli || fail "the star cli could not be built on this runner (mac gui (macos-15)), so the processed-fixture @ui features cannot run"
+          BIN="$(swift build -c release --package-path cli --show-bin-path)/star"
+          [ -x "$BIN" ] || fail "the star cli build left no $BIN (mac gui (macos-15))"
+          CLI="$BIN"
+          FIXTURES="$GITHUB_WORKSPACE/.test-data/ui-processed"
+          export STAR_CLI_PATH="$CLI" STAR_UI_FIXTURES="$FIXTURES" STAR_CLI_BUILD=0
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+          {
+            echo "STAR_CLI_PATH=$CLI"
+            echo "STAR_UI_FIXTURES=$FIXTURES"
+            echo "STAR_CLI_BUILD=0"
+            # xcodebuild strips TEST_RUNNER_ and hands the rest to the UI-test runner
+            echo "TEST_RUNNER_STAR_CLI_PATH=$CLI"
+            echo "TEST_RUNNER_STAR_UI_FIXTURES=$FIXTURES"
+            echo "TEST_RUNNER_STAR_CLI_BUILD=0"
+          } >> "$GITHUB_ENV"
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
@@ -767,7 +807,7 @@ jobs:
       matrix:
         feature: ${{ fromJSON(needs.features.outputs.desktop) }}
     # the `ui` job runs every @ui feature one after the other in the one build
-    timeout-minutes: ${{ matrix.feature == 'ui' && 120 || 75 }}
+    timeout-minutes: ${{ matrix.feature == 'ui' && 150 || 75 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -781,7 +821,11 @@ jobs:
         run: |
           f="${{ matrix.feature }}"
           if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
-          echo "features=$features" >> "$GITHUB_OUTPUT"
+          processed=false
+          for n in $features; do
+            if grep -q 'a processed copy of the sequence' "gherkin/features/$n.feature"; then processed=true; fi
+          done
+          { echo "features=$features"; echo "processed=$processed"; } >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
@@ -846,6 +890,31 @@ jobs:
         run: |
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # The @ui features that start from the processed sequence (`a processed copy of the sequence`, see gherkin/ui/README.md) need the
+      # fixture the release cli makes: built here, once, so the build is visible and a cli that cannot be built fails this step, instead of
+      # being built inside the first feature or leaving the features skipped.  The runners call make-processed-fixture.sh for every
+      # feature; the exports below make each call name the same <sequence>-<cli stamp> directory and take its READY shortcut.  STAR_CLI_BUILD=0
+      # (the runners default it to 1) keeps a missing cli an error.  Not an actions/cache entry, deliberately: see the header on the cache
+      # budget.  The fixture is about 180 MB per leg and its key would change with nearly every push (cli/, StarCore/, StarCpp/).
+      - name: Make the processed fixture (release cli, once)
+        if: steps.t.outputs.processed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          swift build -c release --package-path cli || fail "the star cli could not be built on this runner (desktop (ubuntu-24.04)), so the processed-fixture @ui features cannot run"
+          BIN="$(swift build -c release --package-path cli --show-bin-path)/star"
+          [ -x "$BIN" ] || fail "the star cli build left no $BIN (desktop (ubuntu-24.04))"
+          CLI="$BIN"
+          FIXTURES="$GITHUB_WORKSPACE/.test-data/ui-processed"
+          export STAR_CLI_PATH="$CLI" STAR_UI_FIXTURES="$FIXTURES" STAR_CLI_BUILD=0
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+          {
+            echo "STAR_CLI_PATH=$CLI"
+            echo "STAR_UI_FIXTURES=$FIXTURES"
+            echo "STAR_CLI_BUILD=0"
+          } >> "$GITHUB_ENV"
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
@@ -925,7 +994,7 @@ jobs:
       matrix:
         feature: ${{ fromJSON(needs.features.outputs.desktop) }}
     # the `ui` job runs every @ui feature one after the other in the one build
-    timeout-minutes: ${{ matrix.feature == 'ui' && 150 || 90 }}
+    timeout-minutes: ${{ matrix.feature == 'ui' && 180 || 90 }}
     defaults:
       run:
         shell: bash  # Git Bash; matches cli.yml's `windows` job
@@ -942,7 +1011,11 @@ jobs:
         run: |
           f="${{ matrix.feature }}"
           if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
-          echo "features=$features" >> "$GITHUB_OUTPUT"
+          processed=false
+          for n in $features; do
+            if grep -q 'a processed copy of the sequence' "gherkin/features/$n.feature"; then processed=true; fi
+          done
+          { echo "features=$features"; echo "processed=$processed"; } >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
@@ -1080,6 +1153,32 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg.exe external_binaries/bin/ffprobe.exe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
+      # The @ui features that start from the processed sequence (`a processed copy of the sequence`, see gherkin/ui/README.md) need the
+      # fixture the release cli makes: built here, once, so the build is visible and a cli that cannot be built fails this step, instead of
+      # being built inside the first feature or leaving the features skipped.  The runners call make-processed-fixture.sh for every
+      # feature; the exports below make each call name the same <sequence>-<cli stamp> directory and take its READY shortcut.  STAR_CLI_BUILD=0
+      # (the runners default it to 1) keeps a missing cli an error.  Not an actions/cache entry, deliberately: see the header on the cache
+      # budget.  The fixture is about 180 MB per leg and its key would change with nearly every push (cli/, StarCore/, StarCpp/).
+      - name: Make the processed fixture (release cli, once)
+        if: steps.t.outputs.processed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          swift build -c release --package-path cli || fail "the star cli could not be built on this runner (desktop (windows-2022)), so the processed-fixture @ui features cannot run"
+          BIN="$(swift build -c release --package-path cli --show-bin-path)/star.exe"
+          [ -x "$BIN" ] || fail "the star cli build left no $BIN (desktop (windows-2022))"
+          # cygpath -m: the JVM wants C:/..., not Git Bash's /d/a/...
+          CLI="$(cygpath -m "$BIN")"
+          FIXTURES="$(cygpath -m "$GITHUB_WORKSPACE/.test-data/ui-processed")"
+          export STAR_CLI_PATH="$CLI" STAR_UI_FIXTURES="$FIXTURES" STAR_CLI_BUILD=0
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+          {
+            echo "STAR_CLI_PATH=$CLI"
+            echo "STAR_UI_FIXTURES=$FIXTURES"
+            echo "STAR_CLI_BUILD=0"
+          } >> "$GITHUB_ENV"
+
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
@@ -1142,7 +1241,7 @@ jobs:
       matrix:
         feature: ${{ fromJSON(needs.features.outputs.desktop) }}
     # the `ui` job runs every @ui feature one after the other in the one build
-    timeout-minutes: ${{ matrix.feature == 'ui' && 150 || 100 }}
+    timeout-minutes: ${{ matrix.feature == 'ui' && 180 || 100 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -1156,7 +1255,11 @@ jobs:
         run: |
           f="${{ matrix.feature }}"
           if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
-          echo "features=$features" >> "$GITHUB_OUTPUT"
+          processed=false
+          for n in $features; do
+            if grep -q 'a processed copy of the sequence' "gherkin/features/$n.feature"; then processed=true; fi
+          done
+          { echo "features=$features"; echo "processed=$processed"; } >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
@@ -1222,6 +1325,34 @@ jobs:
         run: |
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # The @ui features that start from the processed sequence (`a processed copy of the sequence`, see gherkin/ui/README.md) need the
+      # fixture the release cli makes: built here, once, so the build is visible and a cli that cannot be built fails this step, instead of
+      # being built inside the first feature or leaving the features skipped.  The runners call make-processed-fixture.sh for every
+      # feature; the exports below make each call name the same <sequence>-<cli stamp> directory and take its READY shortcut.  STAR_CLI_BUILD=0
+      # (the runners default it to 1) keeps a missing cli an error.  Not an actions/cache entry, deliberately: see the header on the cache
+      # budget.  The fixture is about 180 MB per leg and its key would change with nearly every push (cli/, StarCore/, StarCpp/).
+      - name: Make the processed fixture (release cli, once)
+        if: steps.t.outputs.processed == 'true'
+        shell: bash
+        env:
+          # a hosted macOS VM can have under 2GB free, below star's default memory floor, so the cli would admit nothing
+          STAR_SYSTEM_FLOOR_MB: 512
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          swift build -c release --package-path cli || fail "the star cli could not be built on this runner (desktop (macos-15)), so the processed-fixture @ui features cannot run"
+          BIN="$(swift build -c release --package-path cli --show-bin-path)/star"
+          [ -x "$BIN" ] || fail "the star cli build left no $BIN (desktop (macos-15))"
+          CLI="$BIN"
+          FIXTURES="$GITHUB_WORKSPACE/.test-data/ui-processed"
+          export STAR_CLI_PATH="$CLI" STAR_UI_FIXTURES="$FIXTURES" STAR_CLI_BUILD=0
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+          {
+            echo "STAR_CLI_PATH=$CLI"
+            echo "STAR_UI_FIXTURES=$FIXTURES"
+            echo "STAR_CLI_BUILD=0"
+          } >> "$GITHUB_ENV"
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
