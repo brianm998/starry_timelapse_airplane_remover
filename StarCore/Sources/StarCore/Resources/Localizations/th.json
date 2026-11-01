@@ -1230,6 +1230,10 @@
   "settings_tab.alignment": "การจัดวาง",
   "settings_tab.horizon": "เส้นขอบฟ้า",
   "settings_tab.memory": "หน่วยความจำ",
+  "ui.location_grant_message": "Star ต้องการสิทธิ์เข้าถึง {0} เพื่อเขียนผลลัพธ์ไว้ข้าง {1}",
+  "ui.folder_access_prompt": "Star ต้องการสิทธิ์เข้าถึง {0} เพื่อเปิดลำดับภาพนี้ เลือกโฟลเดอร์นั้นเพื่อดำเนินการต่อ",
+  "ui.folder_access_denied": "Star เข้าถึง {0} ไม่ได้ โฟลเดอร์อาจถูกย้ายหรือลบไปแล้ว หรือยังไม่ได้อนุญาตให้เข้าถึง",
+  "ui.folder_access_grant": "อนุญาตการเข้าถึง",
   "ui.render_options_after_processing_title": "เลือกการตั้งค่าวิดีโอ",
   "ui.use_these_settings": "ใช้การตั้งค่านี้",
   "ui.settings": "การตั้งค่า"

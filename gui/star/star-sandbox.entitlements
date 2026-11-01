@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  For trying the App Sandbox locally; not what ships (gui/release.sh signs with star.entitlements, which is empty).
+	  Sign a Debug build "to run locally" with it by building the star scheme with
+	  CODE_SIGN_ENTITLEMENTS=star/star-sandbox.entitlements on the command line.
+	  The bundled ffmpeg and ffprobe are child processes; running them sandboxed needs them signed with app-sandbox +
+	  inherit, which belongs to the App Store build, not to this file.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>

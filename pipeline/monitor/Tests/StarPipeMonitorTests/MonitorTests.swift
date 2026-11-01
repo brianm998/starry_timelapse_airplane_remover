@@ -87,6 +87,42 @@ final class DetailTests: XCTestCase {
         XCTAssertEqual(d.checks.first?.checkId, "t0:diff-check")
         XCTAssertEqual(d.checks.first?.result, "pass")
         XCTAssertNil(d.question)
+        XCTAssertEqual(d.blockers, [BlockerRef(number: 27, title: "Processing Frames dialog: remember the window size")])
+    }
+
+    func testADetailWithoutBlockersFromAnOlderDaemonDecodesToNone() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "detail", withExtension: "json", subdirectory: "Fixtures"))
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        raw["blockers"] = nil
+        let d = try JSONDecoder().decode(TicketDetail.self, from: JSONSerialization.data(withJSONObject: raw))
+        XCTAssertEqual(d.blockers, [])
+        XCTAssertEqual(d.number, 28)
+    }
+}
+
+final class BlockerLinksTests: XCTestCase {
+    let repo = "brianm998/starry_timelapse_airplane_remover"
+
+    func testBlockerLinksBuildIssueURLsAndRowLabels() throws {
+        XCTAssertEqual(BlockerLinks.issueURL(repo: repo, number: 84)?.absoluteString,
+                       "https://github.com/brianm998/starry_timelapse_airplane_remover/issues/84")
+        XCTAssertNil(BlockerLinks.issueURL(repo: "", number: 84))
+        let row = try XCTUnwrap(BlockerLinks.row(activity: "queued: #84, #85", blockedBy: [84, 85], repo: repo))
+        XCTAssertEqual(row.prefix, "queued:")
+        XCTAssertEqual(row.links.map(\.label), ["#84", "#85"])
+        XCTAssertEqual(row.links.map(\.url.absoluteString), [84, 85].map { "https://github.com/\(repo)/issues/\($0)" })
+        XCTAssertNil(BlockerLinks.row(activity: "queued", blockedBy: [], repo: repo), "an unblocked row is plain text")
+        XCTAssertNil(BlockerLinks.row(activity: "developing · attempt 1/3 · 4m", blockedBy: [84], repo: repo))
+        XCTAssertNil(BlockerLinks.row(activity: "queued: #84", blockedBy: [84], repo: ""), "no repo, no links")
+    }
+
+    func testDetailRowsListEachBlockerAndAreEmptyWithNone() {
+        let rows = BlockerLinks.detailRows(blockers: [BlockerRef(number: 84, title: "first"), BlockerRef(number: 85, title: "")],
+                                           repo: repo)
+        XCTAssertEqual(rows.map(\.label), ["#84", "#85"])
+        XCTAssertEqual(rows.map(\.title), ["first", ""])
+        XCTAssertEqual(rows.map(\.url.absoluteString), [84, 85].map { "https://github.com/\(repo)/issues/\($0)" })
+        XCTAssertEqual(BlockerLinks.detailRows(blockers: [], repo: repo), [])
     }
 }
 
@@ -122,6 +158,18 @@ final class StoreTests: XCTestCase {
         s.tickets.removeAll { $0.number == 5 }
         store.apply(s)
         XCTAssertNil(store.selected)
+    }
+
+    func testShowOverviewClearsTheSelectionAndDetail() async throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        store.selected = 5
+        XCTAssertEqual(store.selectedTicket?.number, 5)
+        store.showOverview()
+        XCTAssertNil(store.selected)
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertNil(store.detail)
+        XCTAssertTrue(store.logLines.isEmpty)
     }
 
     func testOnlyTheLastFiveChangesAreKept() {

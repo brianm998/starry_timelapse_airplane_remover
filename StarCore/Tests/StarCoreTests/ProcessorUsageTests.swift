@@ -49,6 +49,28 @@ final class ProcessorUsageTests: XCTestCase {
         XCTAssertNil(ProcessorUsage(from: "CPU usage: % user, % sys, % idle"))
     }
 
+    // MARK: - usage from the kernel's tick counters
+
+    /// What `top` said, read from the counters instead (`top` is a child process, which the App Sandbox may refuse).  Only the
+    /// difference between two readings counts, nice time is user time, and a counter that wrapped still gives the right difference.
+    func testUsageFromTickDeltas() throws {
+        let before = ProcessorTicks(user: 1000, system: 500, idle: 8000, nice: 100)
+        let after = ProcessorTicks(user: 1030, system: 510, idle: 8050, nice: 110)
+        let usage = try XCTUnwrap(ProcessorUsage.from(ticks: after, previous: before))
+        // user 30 + nice 10 = 40, system 10, idle 50, of 100 ticks
+        XCTAssertEqual(usage.user, 40, accuracy: 1e-9)
+        XCTAssertEqual(usage.sys, 10, accuracy: 1e-9)
+        XCTAssertEqual(usage.idle, 50, accuracy: 1e-9)
+
+        let wrapped = ProcessorTicks(user: 10, system: 0, idle: 70, nice: 0)
+        let wrapping = try XCTUnwrap(ProcessorUsage.from(
+          ticks: wrapped, previous: ProcessorTicks(user: UInt32.max - 9, system: 0, idle: UInt32.max - 9, nice: 0)))
+        XCTAssertEqual(wrapping.user, 20, accuracy: 1e-9)
+        XCTAssertEqual(wrapping.idle, 80, accuracy: 1e-9)
+
+        XCTAssertNil(ProcessorUsage.from(ticks: before, previous: before), "no ticks passed: no percentage to give")
+    }
+
     // MARK: - malformed input returns nil rather than trapping
 
     /// The parser indexes `parts[1]`, `foobar[1]` and `foobar[2]`.  Those subscripts used to be
