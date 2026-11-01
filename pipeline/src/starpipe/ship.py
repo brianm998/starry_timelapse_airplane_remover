@@ -267,9 +267,12 @@ def merge(eng: Engine, t: Ticket, head: str) -> bool:
 
 # post-merge watch and stop-the-line ---------------------------------------------------------------------------------
 def watch_develop(eng: Engine) -> None:
-    """Refresh the develop baseline from the latest completed run of each workflow; react to new reds (§10.3)."""
+    """Refresh the develop baseline from the latest run of each workflow that ended success or failure; react to new reds
+    (§10.3). A run cancelled by a newer push is completed but says nothing about the code, so it is skipped: the workflow's
+    earlier success/failure run stays the baseline."""
     base = eng.config.base_branch
-    runs = [r for r in eng.gh.workflow_runs(branch=base) if r.get("status") == "completed"]
+    runs = [r for r in eng.gh.workflow_runs(branch=base)
+            if r.get("status") == "completed" and r.get("conclusion") in ("success", "failure")]
     latest: dict[str, dict[str, object]] = {}
     for r in runs:  # newest first
         latest.setdefault(str(r.get("name")), r)

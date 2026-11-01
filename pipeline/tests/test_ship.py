@@ -515,6 +515,38 @@ def test_a_cancelled_or_timed_out_develop_job_is_not_a_regression(rig: Rig) -> N
     assert rig.db.baseline("cli", "macos") == "timed_out"
 
 
+def test_a_cancelled_newest_develop_run_leaves_baseline_and_stop_line_alone(rig: Rig) -> None:
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.db.put("stop_line", "pr-gate/linux")  # a stop-the-line from earlier: a cancelled run must not clear it either
+    before = {k: rig.db.baseline(*k) for k in (("pr-gate", "linux"), ("cli", "macos"))}
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "cancelled"), ("cli", "macos", "completed", "cancelled")]
+    ship.watch_develop(rig.engine)
+    assert rig.gh.issues == {} and rig.db.get("stop_line") == "pr-gate/linux"
+    assert {k: rig.db.baseline(*k) for k in before} == before == {("pr-gate", "linux"): "success", ("cli", "macos"): "success"}
+
+
+def test_a_cancelled_newest_run_keeps_the_older_successful_runs_baseline(rig: Rig) -> None:
+    rig.gh.develop_ci = [("cli", "macos", "completed", "success")]
+    ship.watch_develop(rig.engine)  # seeds
+    rig.gh.develop_ci = [("cli", "macos", "completed", "cancelled")]
+    rig.gh.develop_history = [[("cli", "macos", "completed", "success")]]
+    ship.watch_develop(rig.engine)
+    assert rig.db.baseline("cli", "macos") == "success"
+    assert rig.gh.issues == {}
+
+
+def test_a_newest_develop_run_that_really_failed_still_counts(rig: Rig) -> None:
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "failure")]
+    rig.gh.develop_history = [[("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "cancelled")]]
+    ship.watch_develop(rig.engine)
+    assert rig.db.baseline("cli", "macos") == "failure"
+    (issue,) = rig.gh.issues.values()
+    assert issue["title"] == "regression on develop: cli/macos"
+
+
 def test_a_gradle_download_failure_looks_like_infrastructure_and_a_test_failure_does_not() -> None:
     gradle = ("> Could not resolve all files for configuration ':classpath'.\n"
               "   > Could not resolve com.google.protobuf:protobuf-gradle-plugin:0.9.4.\n"

@@ -79,6 +79,7 @@ class FakeGitHub(GitHub):
         self.prs: dict[int, dict[str, Any]] = {}
         self.ci: dict[str, Ci] = {}
         self.develop_ci: Ci = []
+        self.develop_history: list[Ci] = []  # older develop runs, newest first, after develop_ci
         self.logs: dict[int, str] = {}
         self.reruns: list[int] = []
         self.deleted: list[str] = []
@@ -168,14 +169,22 @@ class FakeGitHub(GitHub):
         return next((p for p in self.prs.values() if p["branch"] == branch), None)
 
     def workflow_runs(self, sha: str | None = None, branch: str | None = None, per_page: int = 50) -> list[dict[str, Any]]:
-        key = "develop" if branch else (sha or "")
-        jobs = self.develop_ci if branch else self.ci.get(key, DEFAULT_CI)
+        if branch:
+            generations = [("develop", self.develop_ci), *((f"develop~{n}", ci) for n, ci in enumerate(self.develop_history, 1))]
+        else:
+            generations = [(sha or "", self.ci.get(sha or "", DEFAULT_CI))]
         runs: list[dict[str, Any]] = []
-        for wf in dict.fromkeys(w for w, *_ in jobs):
-            run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))
-            self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None}
-                                           for w, j, st, c in jobs if w == wf]
-            runs.append({"id": run_id, "name": wf, "status": "completed", "head_sha": key})
+        for key, jobs in generations:  # newest first, like the API
+            for wf in dict.fromkeys(w for w, *_ in jobs):
+                run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))
+                mine = [(j, st, c) for w, j, st, c in jobs if w == wf]
+                self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None}
+                                               for j, st, c in mine]
+                conclusions = {c for _, _, c in mine}
+                # a run's own conclusion: cancelled when the runner cancelled all of it, as a newer push does
+                conclusion = ("cancelled" if conclusions == {"cancelled"} else "success" if conclusions == {"success"}
+                              else "failure")
+                runs.append({"id": run_id, "name": wf, "status": "completed", "conclusion": conclusion, "head_sha": key})
         return runs
 
     def run_jobs(self, run_id: int) -> list[dict[str, Any]]:
