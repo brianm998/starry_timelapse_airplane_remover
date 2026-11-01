@@ -91,6 +91,61 @@ async def test_answer_retry_cancel_prio_and_pause(rig: Rig) -> None:
         await client.close()
 
 
+async def test_settings_stores_max_active_and_snapshot_reports_it(rig: Rig) -> None:
+    client, _ = await api(rig)
+    try:
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["max_active"] == 2
+        assert (await client.post("/v1/settings", json={"max_active": 4}, headers=AUTH)).status == 200
+        assert rig.db.get("max_active") == "4" and rig.engine.max_active() == 4
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["max_active"] == 4
+        for bad in (0, 7, -1, "3", 2.5, True, None):
+            r = await client.post("/v1/settings", json={"max_active": bad}, headers=AUTH)
+            assert r.status == 400, bad
+        assert (await client.post("/v1/settings", json={}, headers=AUTH)).status == 400
+        assert rig.db.get("max_active") == "4"
+        assert (await client.post("/v1/settings", json={"max_active": 6}, headers=AUTH)).status == 200
+        assert (await client.post("/v1/settings", json={"max_active": 1}, headers=AUTH)).status == 200
+        assert rig.engine.max_active() == 1
+    finally:
+        await client.close()
+
+
+async def test_land_now_is_refused_outside_ready_ci_landing(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    client, _ = await api(rig)
+    try:
+        for state in ("queued", "exploring", "developing", "review", "needs-input", "failed", "landed", "cancelled"):
+            rig.db.set_state(7, state)
+            assert (await client.post("/v1/tickets/7/land-now", headers=AUTH)).status == 409, state
+        assert rig.db.get("land_now:7") is None
+        assert rig.db._all("SELECT kind FROM interventions") == []  # pyright: ignore[reportPrivateUsage]
+        for state in ("ready", "ci", "landing"):
+            rig.db.set_state(7, state)
+            assert (await client.post("/v1/tickets/7/land-now", headers=AUTH)).status == 200, state
+        assert (await client.post("/v1/tickets/99/land-now", headers=AUTH)).status == 404
+    finally:
+        await client.close()
+
+
+async def test_land_now_records_an_intervention(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "landing")
+    client, _ = await api(rig)
+    try:
+        assert (await client.post("/v1/tickets/7/land-now", headers=AUTH)).status == 200
+        rows = rig.db._all("SELECT ticket, kind, stage FROM interventions")  # pyright: ignore[reportPrivateUsage]
+        assert [(r["ticket"], r["kind"], r["stage"]) for r in rows] == [(7, "land-now", "landing")]
+        assert rig.db.get("land_now:7") == "1"
+        await client.post("/v1/tickets/7/retry", json={"stage": "develop"}, headers=AUTH)
+        assert rig.db.get("land_now:7") is None  # a retried ticket is tested again
+    finally:
+        await client.close()
+
+
 async def test_restart_resumes_an_interrupted_stage_by_session_id(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
