@@ -57,6 +57,50 @@ async def test_status_and_show_report_the_ticket_and_its_activity(rig: Rig) -> N
         await client.close()
 
 
+async def test_activity_lists_open_blockers_of_a_queued_ticket(rig: Rig) -> None:
+    for n, title in [(7, "blocked"), (8, "free"), (84, "first blocker"), (85, "second blocker")]:
+        rig.gh.add_issue(n, title)
+    rig.gh.deps[7] = [84, 85]
+    rig.engine.sync_issues()
+    t7, t8 = rig.db.ticket(7), rig.db.ticket(8)
+    assert t7 and t8
+    assert activity(rig.db, t7) == "queued: #84, #85"
+    assert activity(rig.db, t8) == "queued"
+    rig.db.set_state(84, "landed")
+    assert activity(rig.db, t7) == "queued: #85"
+    rig.db.set_state(85, "closed")
+    assert activity(rig.db, t7) == "queued"
+
+
+async def test_show_lists_blockers_with_titles_and_caches_github_lookups(rig: Rig) -> None:
+    rig.gh.add_issue(7, "blocked")
+    rig.gh.add_issue(84, "a pipeline blocker")
+    rig.gh.add_issue(85, "an ordinary issue", labels=())  # not a pipeline ticket: its title comes from GitHub
+    rig.gh.add_issue(86, "already landed")
+    rig.gh.deps[7] = [84, 85, 86]
+    rig.engine.sync_issues()
+    assert rig.db.ticket(85) is None
+    rig.db.set_state(86, "landed")
+    asked: list[int] = []
+    real_issue = rig.gh.issue
+
+    def counting_issue(n: int) -> dict[str, Any]:
+        asked.append(n)
+        return real_issue(n)
+
+    rig.gh.issue = counting_issue  # type: ignore[method-assign]
+    client, _ = await api(rig)
+    try:
+        for _ in range(2):
+            shown = await (await client.get("/v1/tickets/7", headers=AUTH)).json()
+            assert shown["blockers"] == [{"number": 84, "title": "a pipeline blocker"},
+                                         {"number": 85, "title": "an ordinary issue"}]
+        assert asked == [85], "the non-pipeline title is fetched once, the pipeline one never"
+        assert (await (await client.get("/v1/tickets/84", headers=AUTH)).json())["blockers"] == []
+    finally:
+        await client.close()
+
+
 async def test_answer_retry_cancel_prio_and_pause(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
