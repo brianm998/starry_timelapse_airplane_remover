@@ -501,3 +501,27 @@ async def test_verification_does_not_block_the_event_loop(rig: Rig) -> None:
     await asyncio.gather(rig.engine._verify(ticket), ticker())  # pyright: ignore[reportPrivateUsage]
     assert waited_out == [False]
     assert rig.state(7) == "review"
+
+
+async def test_opus_in_a_ticket_body_is_ignored_unless_the_owner_asked_for_it(rig: Rig) -> None:
+    """Found live: tickets filed by agent sessions carried `model_develop: opus` copied from the skill's example, and ran on opus."""
+    rig.gh.add_issue(7, "t", body=piped("model_develop: opus · model_review: haiku"))
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t is not None
+    assert rig.engine._stage_choice(t, "develop", 1) == ("sonnet", "high"), "opus in the body does nothing"  # pyright: ignore[reportPrivateUsage]
+    assert rig.engine._stage_choice(t, "review", 1) == ("haiku", "high"), "other models are still honoured"  # pyright: ignore[reportPrivateUsage]
+    assert any(e["kind"] == "stage-choice-ignored" and e["data"]["value"] == "opus" for e in rig.db.events_since())
+
+    rig.db.put("opus_ok:7", "1")  # `starpipe allow-opus 7`, or picking opus in the monitor
+    assert rig.engine._stage_choice(t, "develop", 1) == ("opus", "high")  # pyright: ignore[reportPrivateUsage]
+    rig.db.put("opus_ok:7", None)
+    rig.engine.config.allow_opus = True
+    assert rig.engine._stage_choice(t, "develop", 1) == ("opus", "high")  # pyright: ignore[reportPrivateUsage]
+
+
+def test_the_defaults_are_sonnet_everywhere() -> None:
+    from starpipe.config import Config
+
+    cfg = Config()
+    assert (cfg.model, cfg.model_escalate, cfg.allow_opus) == ("sonnet", "sonnet", False)

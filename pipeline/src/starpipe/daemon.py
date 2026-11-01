@@ -487,6 +487,9 @@ class Daemon:
             self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
             self.engine.parked.discard(n)
             self.engine._to_state(n, RETRY_STATE[stage])  # pyright: ignore[reportPrivateUsage]
+        elif action == "allow-opus":
+            self.db.put(f"opus_ok:{n}", "1")  # the ticket's own `model_<stage>: opus` choices now apply
+            self.db.intervention(n, "allow-opus", t.state)
         elif action == "cancel":
             task = self.tasks.get(n)
             if task:
@@ -590,6 +593,8 @@ class Daemon:
                     if new_body != body:
                         self.engine.gh.set_body(n, new_body)
                     self.engine.gh.add_labels(n, [trust.PIPELINE_LABEL])
+                    if "opus" in models.values():
+                        self.db.put(f"opus_ok:{n}", "1")  # the owner picked it in the monitor: the one way opus is asked for
                     result = "labelled"
             except GitHubError as exc:
                 result = f"error: {exc}"
