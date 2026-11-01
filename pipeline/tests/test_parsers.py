@@ -31,6 +31,23 @@ def test_carriage_returns_do_not_hide_the_count() -> None:
     assert parsers.parse_xctest("Executed 3 tests, with 1 failure (1 unexpected)\r\n").failed == 1
 
 
+def test_skips_for_missing_fixtures_and_opt_in_measurements_are_expected() -> None:
+    """Found live: 8 StarCore tests skip on this Mac (horizon fixtures not in the repo, opt-in measurements), so every ticket that
+    touched StarCore failed its checks with `skipped-tests` and parked."""
+    expected = ("/w/H.swift:472: -[StarCoreTests.H a] : Test skipped - no horizon test sequence found — not in the repo\n"
+                "Test Case '-[StarCoreTests.H a]' skipped (0.001 seconds).\n"
+                "/w/C.swift:48: -[StarCoreTests.C b] : Test skipped - no horizon reference fixtures present\n"
+                "Test Case '-[StarCoreTests.C b]' skipped (0.001 seconds).\n"
+                "/w/S.swift:7: -[StarCoreTests.S c] : Test skipped - opt-in\n"
+                "Test Case '-[StarCoreTests.S c]' skipped (0.001 seconds).\n"
+                "/w/T.swift:17: -[StarCoreTests.T d] : Test skipped - set STAR_MEASURE_TIFF to a night frame to run this\n"
+                "Test Case '-[StarCoreTests.T d]' skipped (0.001 seconds).\n")
+    assert parsers.parse_xctest(XC_GREEN + expected).skipped == 0
+    other = ("/w/X.swift:9: -[StarCoreTests.X e] : Test skipped - the decoder is not available\n"
+             "Test Case '-[StarCoreTests.X e]' skipped (0.001 seconds).\n")
+    assert parsers.parse_xctest(XC_GREEN + expected + other).skipped == 1, "any other reason still counts"
+
+
 def test_skipped_tests_are_counted() -> None:
     text = XC_GREEN + "Test Case '-[A b]' skipped (0.001 seconds).\n"
     assert parsers.parse_xctest(text).skipped == 1
