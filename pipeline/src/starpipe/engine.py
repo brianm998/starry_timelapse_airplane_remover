@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import gitutil, guards, load, negctl, ship, trust, worktrees
+from . import gitutil, guards, load, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
 from .checks import impact, ledger
 from .config import Config, home
@@ -132,9 +132,13 @@ class Engine:
     # limits ----------------------------------------------------------------------------------------------------------
     def limits(self) -> tuple[int, float]:
         """(max LLM sessions, CPU limit %): the owner's runtime override if set (`starpipe limits`), else the config."""
-        sessions, cpu = self.db.get("limit_llm"), self.db.get("limit_cpu")
-        return (int(sessions) if sessions else self.config.max_llm_sessions,
+        sessions, cpu = self.db.get("limit_llm") or self.db.get("max_active"), self.db.get("limit_cpu")  # max_active: the monitor's stepper
+        return (int(sessions) if sessions and sessions.isdigit() and int(sessions) >= 1 else self.config.max_llm_sessions,
                 float(cpu) if cpu else self.config.cpu_limit_pct)
+
+    def max_active(self) -> int:
+        """How many LLM sessions may run at once (what the monitor's concurrency control shows)."""
+        return self.limits()[0]
 
     def llm_active(self) -> int:
         """Sessions in the middle of work. One whose ticket is only waiting for the heavy lock is not generating anything."""
@@ -148,8 +152,8 @@ class Engine:
         return load.room(self.llm_active(), self.cpu(), sessions, cpu_limit)
 
     def claimable(self) -> Ticket | None:
-        if self.db.get("pause") in ("all", "claims"):
-            return None
+        if self.db.get("pause") in ("all", "claims") or self.db.get("self_update_pending"):
+            return None  # the second is the daemon waiting to swap to new code: nothing new starts, running stages finish
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
             return None
         for t in self.db.tickets(("queued",)):  # ordered by priority then age
@@ -179,6 +183,10 @@ class Engine:
             await self.sleep(min(left, 60))
         self.db.put("usage_pause_until", None)
 
+    async def _wait_for_update_hold(self) -> None:
+        while self.db.get("self_update_pending"):
+            await self.sleep(5)
+
     def _fence(self, t: Ticket, stage: str) -> guards.Fence:
         return guards.Fence(Path(t.worktree or ""), worktrees.ticket_dir(t.number), home() / "build" / f"pipe-{t.number}",
                             read_only=stage in READ_ONLY_STAGES, branch=t.branch or "")
@@ -186,6 +194,31 @@ class Engine:
     def _last_session(self, t: Ticket, stage: str) -> str | None:
         rows = [s for s in self.db.stages(t.number, stage) if s["session_id"]]
         return rows[-1]["session_id"] if rows else None
+
+    def _stage_choice(self, t: Ticket, stage: str, attempt: int) -> tuple[str, str]:
+        """The model and effort for one attempt: the ticket's `model_<stage>`/`effort_<stage>` where valid, else the config.
+
+        The ticket row is re-read so an edit picked up by intake applies to the next attempt. Attempt 3 escalates to
+        `config.model_escalate` unless the ticket names a model for the stage. A bad value is ignored and noted.
+        """
+        fresh = self.db.ticket(t.number) or t
+        chosen = tickets.parse_pipeline(fresh.body)
+        suffix = stage.replace("-", "_")
+        model = self.config.model if attempt < 3 else self.config.model_escalate
+        effort = "high"
+        for kind in ("model", "effort"):
+            key = f"{kind}_{suffix}"
+            if key not in chosen:
+                continue
+            bad = tickets.validate_choice(key, chosen[key], self.config.allow_fable)
+            if bad:
+                self.db.event("stage-choice-ignored", t.number, stage=stage, attempt=attempt, key=key, value=chosen[key],
+                              reason=bad)
+            elif kind == "model":
+                model = chosen[key]
+            else:
+                effort = chosen[key]
+        return model, effort
 
     async def model_stage(self, t: Ticket, stage: str, prompt: str, *, fresh: bool = False,
                           allow_resolve: bool = True) -> tuple[StageResult, Contract]:
@@ -201,12 +234,13 @@ class Engine:
         summary = ""
         while attempt <= 3:
             await self._wait_for_usage()
-            model = self.config.model if attempt < 3 else self.config.model_escalate
+            await self._wait_for_update_hold()
+            model, effort = self._stage_choice(t, stage, attempt)
             stage_id = await self._begin_when_room(t, stage, attempt, model)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
-                               "high", BUDGET_S[stage], contract, self._fence(t, stage), resume,
+                               effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
                                on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid))
             out: StageOutcome = await self.agent.run(req)
             if out.session_id:

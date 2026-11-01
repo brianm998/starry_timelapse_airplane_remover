@@ -20,6 +20,12 @@ if TYPE_CHECKING:
 
 MAX_CI_FIX = 2
 LANDING_STATES = ("ci", "landing")
+BYPASS_NOTE = "The owner landed this with land-now: CI, the overlap re-test and the stop-line wait were bypassed."
+
+
+def land_now(eng: Engine, n: int) -> bool:
+    """The owner's land-now mark (db kv, set by the monitor): stop waiting for tests and land."""
+    return bool(eng.db.get(f"land_now:{n}"))
 
 
 def pr_body(eng: Engine, t: Ticket) -> str:
@@ -33,6 +39,7 @@ def pr_body(eng: Engine, t: Ticket) -> str:
             f"## Acceptance\n{acceptance}\n\n## Local checks at HEAD\n| check | result | tests |\n|---|---|---|\n{rows}\n\n"
             f"## Negative control\n{json.dumps(controls) if controls else 'none planned'}\n"
             + (f"\n## CI notes\n{notes}\n" if notes else "")
+            + (f"\n## Tests bypassed\n{BYPASS_NOTE}\n" if land_now(eng, t.number) else "")
             + "\nOpened by the star pipeline.\n")
 
 
@@ -113,6 +120,9 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
         cur = eng.db.ticket(t.number)
         if cur is None or cur.state != "ci":
             return False
+        if land_now(eng, t.number):  # re-read every pass, so a mark set while we sleep in a poll is seen
+            await asyncio.to_thread(_finish_ci, eng, cur, ["tests bypassed by the owner (land-now)"])
+            return True
         sha = gitutil.head_sha(Path(cur.worktree or ""))
         reran = {tuple(k) for k in json.loads(eng.db.get(f"reran:{t.number}") or "[]")}
         try:
@@ -183,7 +193,7 @@ def _remote(eng: Engine, wt: Path) -> str:
 async def land(eng: Engine, t: Ticket) -> bool:
     """LAND (§10.1). One ticket at a time. True when the ticket should keep going (back to CI after a catch-up)."""
     async with eng.land_lock:
-        while eng.db.get("pause") in ("all", "landing") or eng.db.get("stop_line"):
+        while eng.db.get("pause") in ("all", "landing") or (eng.db.get("stop_line") and not land_now(eng, t.number)):
             await eng.sleep(eng.config.ci_poll_s)
         cur = eng.db.ticket(t.number)
         if cur is None or cur.state != "landing":
@@ -204,7 +214,8 @@ def _prepare_land(eng: Engine, cur: Ticket) -> tuple[str, str, str, str, landing
     none = landing.Overlap([], [])
     if mb != gitutil.git(wt, "rev-parse", base).strip():
         pr_files = [p for p in gitutil.git(wt, "diff", "--name-only", f"{mb}..{head}").splitlines() if p]
-        ov = landing.overlap(wt, mb, base, pr_files)
+        bypass = land_now(eng, cur.number)
+        ov = none if bypass and pr.get("mergeable") is not False else landing.overlap(wt, mb, base, pr_files)
         if ov.any or pr.get("mergeable") is False:
             return ("catch_up", base, mb, head, ov)
     return ("merge", base, mb, head, none)
@@ -228,7 +239,7 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
         shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
         eng.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
         return False
-    failure = await asyncio.to_thread(eng._run_verification, t, wt)  # pyright: ignore[reportPrivateUsage]
+    failure = None if land_now(eng, t.number) else await asyncio.to_thread(eng._run_verification, t, wt)  # pyright: ignore[reportPrivateUsage]
     if failure:
         eng.park(t, f"after catching up with develop, verification failed: {failure[:300]}")
         return False
@@ -261,9 +272,6 @@ def merge(eng: Engine, t: Ticket, head: str) -> bool:
         eng.gh.close_issue(t.number, "completed")
     eng.gh.delete_branch(t.branch or "")
     eng.gh.add_labels(t.number, ["pipe:landed"])
-    changed = gitutil.git(wt, "diff", "--name-only", f"{sha}^1", sha, check=False).split()
-    if any(p.startswith("pipeline/") and not p.startswith("pipeline/monitor/") for p in changed):
-        eng.db.put("self_update_wanted", sha)  # the daemon's own code changed: auto_self_update acts on this when idle
     worktrees.remove(eng.repo, t.number, keep_branch=False, branch=t.branch)
     eng._to_state(t.number, "landed")  # pyright: ignore[reportPrivateUsage]
     eng.db.event("landed", t.number, merge=sha)
@@ -272,9 +280,12 @@ def merge(eng: Engine, t: Ticket, head: str) -> bool:
 
 # post-merge watch and stop-the-line ---------------------------------------------------------------------------------
 def watch_develop(eng: Engine) -> None:
-    """Refresh the develop baseline from the latest completed run of each workflow; react to new reds (§10.3)."""
+    """Refresh the develop baseline from the latest run of each workflow that ended success or failure; react to new reds
+    (§10.3). A run cancelled by a newer push is completed but says nothing about the code, so it is skipped: the workflow's
+    earlier success/failure run stays the baseline."""
     base = eng.config.base_branch
-    runs = [r for r in eng.gh.workflow_runs(branch=base) if r.get("status") == "completed"]
+    runs = [r for r in eng.gh.workflow_runs(branch=base)
+            if r.get("status") == "completed" and r.get("conclusion") in ("success", "failure")]
     latest: dict[str, dict[str, object]] = {}
     for r in runs:  # newest first
         latest.setdefault(str(r.get("name")), r)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 import time
@@ -219,6 +220,117 @@ async def test_landing_waits_while_develop_is_red(rig: Rig) -> None:
     rig.engine.sleep = sleep
     await rig.engine.drive(1)
     assert rig.state(1) == "landed" and len(cleared) >= 3
+
+
+def pending_ci(rig: Rig, n: int) -> None:
+    t = rig.db.ticket(n)
+    assert t
+    rig.gh.ci[gitutil.head_sha(Path(t.worktree or ""))] = [("pr-gate", "linux", "in_progress", None)]
+
+
+async def drive_within(rig: Rig, n: int) -> None:
+    await asyncio.wait_for(rig.engine.drive(n), 60)  # a land-now that is ignored would wait on CI forever
+
+
+async def test_land_now_skips_the_ci_wait(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    pending_ci(rig, 1)
+    rig.db.put("land_now:1", "1")
+    await drive_within(rig, 1)
+    assert rig.state(1) == "landed"
+    assert rig.db.get("ci_notes:1") == "- tests bypassed by the owner (land-now)"
+
+
+async def test_land_now_set_while_ci_is_pending_is_seen_on_the_next_poll(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    pending_ci(rig, 1)
+    polls: list[float] = []
+    real_sleep = rig.engine.sleep
+
+    async def sleep(s: float) -> None:
+        polls.append(s)
+        if len(polls) == 2:
+            rig.db.put("land_now:1", "1")
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep
+    await drive_within(rig, 1)
+    assert rig.state(1) == "landed" and len(polls) >= 2
+
+
+async def test_land_now_skips_the_overlap_retest_and_the_stop_line(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    advance_develop(rig, "other.md", "theirs\n")  # develop moved: normally the overlap is looked at
+    asked: list[str] = []
+
+    def overlap(*_: object) -> landing.Overlap:
+        asked.append("overlap")
+        return landing.Overlap(["docs/other.md"], [])  # would force a catch-up and a re-test
+
+    monkeypatch.setattr(landing, "overlap", overlap)
+    rig.db.put("stop_line", "pr-gate/linux")  # never cleared
+    rig.db.put("land_now:1", "1")
+    await drive_within(rig, 1)
+    assert rig.state(1) == "landed" and asked == []
+    assert not [r for r in rig.agent.requests]
+
+
+async def test_land_now_still_waits_for_an_explicit_landing_pause(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    rig.db.put("land_now:1", "1")
+    rig.db.put("pause", "landing")
+    waits: list[str] = []
+    real_sleep = rig.engine.sleep
+
+    async def sleep(s: float) -> None:
+        waits.append(rig.state(1))
+        if len(waits) == 3:
+            rig.db.put("pause", None)
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep
+    await drive_within(rig, 1)
+    assert rig.state(1) == "landed" and waits[:3] == ["landing"] * 3
+
+
+async def test_land_now_still_sends_a_conflict_to_the_conflict_stage(rig: Rig) -> None:
+    ready_ticket(rig, 1, "shared.md", "mine\n")
+    advance_develop(rig, "shared.md", "develop's version\n")
+    assert ship.publish(rig.engine, rig.db.ticket(1))  # type: ignore[arg-type]
+    pr = rig.db.ticket(1)
+    assert pr and pr.pr_number
+    rig.gh.prs[pr.pr_number]["mergeable"] = False
+    rig.db.set_state(1, "landing")
+    rig.db.put("land_now:1", "1")
+
+    def resolve(req: StageRequest) -> StageOutcome:
+        wt = req.contract.worktree
+        (wt / "docs" / "shared.md").write_text("develop's version\nmine\n")
+        sh(wt, "git", "add", "-A")
+        sh(wt, "git", "commit", "-q", "--no-edit")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "resolved"})
+        return accepted(req, "S-conflict")
+
+    rig.agent.on("conflict", resolve)
+    rig.gh.prs[pr.pr_number]["mergeable"] = False
+    await drive_within(rig, 1)
+    assert [r.stage for r in rig.agent.requests] == ["conflict"]
+    assert rig.state(1) == "landed"
+
+
+async def test_land_now_notes_the_bypass_in_the_pr_body(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    rig.db.put("land_now:1", "1")
+    await drive_within(rig, 1)
+    bodies = [p["body"] for p in rig.gh.prs.values()]
+    assert len(bodies) == 1 and "## Tests bypassed" in bodies[0] and "land-now" in bodies[0]
+
+
+async def test_a_ticket_without_land_now_has_no_bypass_note(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    await drive_within(rig, 1)
+    assert all("Tests bypassed" not in p["body"] for p in rig.gh.prs.values())
 
 
 async def test_the_pr_head_is_pinned_so_a_late_push_is_not_merged(rig: Rig) -> None:
@@ -444,6 +556,41 @@ def test_a_cancelled_or_timed_out_develop_job_is_not_a_regression(rig: Rig) -> N
     ship.watch_develop(rig.engine)
     assert rig.gh.issues == {} and rig.db.get("stop_line") is None
     assert rig.db.baseline("cli", "macos") == "timed_out"
+
+
+def test_a_cancelled_newest_develop_run_leaves_baseline_and_stop_line_alone(rig: Rig) -> None:
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.db.put("stop_line", "pr-gate/linux")  # a stop-the-line from earlier: a cancelled run must not clear it either
+    before = {k: rig.db.baseline(*k) for k in (("pr-gate", "linux"), ("cli", "macos"))}
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "cancelled"), ("cli", "macos", "completed", "cancelled")]
+    ship.watch_develop(rig.engine)
+    assert rig.gh.issues == {} and rig.db.get("stop_line") == "pr-gate/linux"
+    assert {k: rig.db.baseline(*k) for k in before} == before == {("pr-gate", "linux"): "success", ("cli", "macos"): "success"}
+
+
+def test_a_cancelled_newest_run_keeps_the_older_successful_runs_baseline(rig: Rig) -> None:
+    rig.gh.develop_ci = [("cli", "macos", "completed", "success")]
+    ship.watch_develop(rig.engine)  # seeds
+    rig.gh.develop_ci = [("cli", "macos", "completed", "cancelled")]
+    rig.gh.develop_history = [[("cli", "macos", "completed", "success")]]
+    ship.watch_develop(rig.engine)
+    assert rig.db.baseline("cli", "macos") == "success"
+    assert rig.gh.issues == {}
+
+
+def test_a_newest_develop_run_that_really_failed_still_counts(rig: Rig) -> None:
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "failure")]
+    rig.gh.develop_history = [[("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "cancelled")]]
+    ship.watch_develop(rig.engine)
+    assert rig.db.baseline("cli", "macos") == "failure"
+    assert rig.gh.issues == {}, "one red run waits for a second to agree"
+    rig.gh.develop_sha = "d2"  # a later develop push, also red
+    ship.watch_develop(rig.engine)
+    (issue,) = rig.gh.issues.values()
+    assert issue["title"] == "regression on develop: cli/macos"
 
 
 def test_a_gradle_download_failure_looks_like_infrastructure_and_a_test_failure_does_not() -> None:
