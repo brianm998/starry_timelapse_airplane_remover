@@ -161,6 +161,9 @@
     },
     "uiStartDuringRun": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiMultiChoiceSheet": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }

@@ -367,9 +367,10 @@ class DesktopFeatureRunner {
         t.waitForIdle()
         val node = t.onAllNodes(hasTestTag(id))[0]
         val config = node.fetchSemanticsNode().config
-        // A button is pressed through its own action: a pointer click on the ones in the right panel (under a hover tip) did not reach them in
-        // the test host. A field, or a spot on the frame that has no action, needs the pointer, which is what a user's click is.
-        if (config.getOrNull(SemanticsProperties.Role) == Role.Button && SemanticsActions.OnClick in config && SemanticsProperties.Disabled !in config) {
+        // A button or a switch is pressed through its own action: a pointer click on the ones in the right panel (under a hover tip) did not
+        // reach them in the test host. A field, or a spot on the frame that has no action, needs the pointer, which is what a user's click is.
+        val role = config.getOrNull(SemanticsProperties.Role)
+        if ((role == Role.Button || role == Role.Switch) && SemanticsActions.OnClick in config && SemanticsProperties.Disabled !in config) {
             node.performSemanticsAction(SemanticsActions.OnClick)
         } else {
             node.performClick()
