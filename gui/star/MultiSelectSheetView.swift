@@ -12,6 +12,51 @@ public enum MultiSelectionType: String, Equatable, CaseIterable {
     var localizedName: String {
         localized("multi_selection.\(rawValue)")
     }
+
+    /// The tail of the choice's id and of its catalogue key (the case name: the rawValues are sentences).
+    var idName: String {
+        switch self {
+        case .all: "all"
+        case .allAfter: "allAfter"
+        case .allBefore: "allBefore"
+        case .someAfter: "someAfter"
+        case .someBefore: "someBefore"
+        }
+    }
+}
+
+/// One choice of a picker, as a button that carries an identifier: the segments of a stock `Picker` are AppKit radio buttons, which an
+/// `accessibilityIdentifier` on the picker does not reach. The chosen one has the selected trait. `radio` draws a list row with a
+/// radio glyph (the range choices); otherwise a pill (the action choices).
+struct ChoiceButton: View {
+    let title: String
+    let selected: Bool
+    let identifier: String
+    var radio: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            if radio {
+                HStack(spacing: 6) {
+                    Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                        .foregroundColor(selected ? .accentColor : .secondary)
+                    Text(title)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            } else {
+                Text(title)
+                    .foregroundColor(selected ? .white : .primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(selected ? Color.accentColor : Color.gray.opacity(0.25)))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
 }
 
 public enum MultiSelectionRemovalType: String, Equatable, CaseIterable {
@@ -43,21 +88,21 @@ struct MultiSelectSheetView: View {
               .frame(minWidth: 300)
             Text(localized("ui.change_removing_in_the_selected_area_across"))
 
-            Picker("", selection: $multiSelectionRemovalType) {
+            // the ids of the choices, which a UI test presses: "multiselect.action.*" and "multiselect.range.*" (the case names)
+            HStack(spacing: 6) {
                 ForEach(MultiSelectionRemovalType.allCases, id: \.self) { value in
-                    Text(value.localizedName).tag(value)
+                    ChoiceButton(title: value.localizedName, selected: multiSelectionRemovalType == value,
+                                 identifier: "multiselect.action.\(value.rawValue)") { multiSelectionRemovalType = value }
                 }
             }
-              .pickerStyle(.segmented)
-              .frame(maxWidth: 120)
-            
+
             Text(localized("ui.what_frames_should_we_modify"))
-            Picker("", selection: $multiSelectionType) {
+            VStack(alignment: .leading, spacing: 4) {
                 ForEach(MultiSelectionType.allCases, id: \.self) { value in
-                    Text(value.localizedName).tag(value)
+                    ChoiceButton(title: value.localizedName, selected: multiSelectionType == value,
+                                 identifier: "multiselect.range.\(value.idName)", radio: true) { multiSelectionType = value }
                 }
             }
-              .pickerStyle(.inline)
               .frame(minWidth: 280)
 
             // what the choices above will do, in words: the id a UI test reads the sheet's action and frames by
@@ -76,7 +121,7 @@ struct MultiSelectSheetView: View {
                     }
                 
                 case .allAfter:
-                    let numFrames = frames.count - currentIndex + 1
+                    let numFrames = frames.count - currentIndex
                     switch multiSelectionRemovalType {
                     case .remove:
                         Text(localized("ui.area.remove.after", numFrames, currentIndex))
@@ -206,6 +251,7 @@ struct MultiSelectSheetView: View {
                         Text(localized("ui.the_next"))
                         TextField("", value: $number_of_frames, format: .number)
                           .frame(maxWidth: 40)
+                          .accessibilityIdentifier("multiselect.count")
                         Text(localized("ui.frames"))
                     }
                 case .someBefore:
@@ -236,6 +282,7 @@ struct MultiSelectSheetView: View {
                         Text(localized("ui.the_previous"))
                         TextField("", value: $number_of_frames, format: .number)
                           .frame(maxWidth: 40)
+                          .accessibilityIdentifier("multiselect.count")
                         Text(localized("ui.frames"))
                     }
                 }

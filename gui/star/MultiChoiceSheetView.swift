@@ -27,21 +27,21 @@ struct MultiChoiceSheetView: View {
                 Spacer()
                 Text(localized("ui.change_all_overlapping_outliers_in_other"))
                 
-                Picker("", selection: $multiChoicePaintType) {
+                // the ids of the choices, which a UI test presses: "multichoice.paint.*" and "multichoice.range.*" (the case names)
+                HStack(spacing: 6) {
                     ForEach(MultiChoicePaintType.allCases, id: \.self) { value in
-                        Text(value.localizedName).tag(value)
+                        ChoiceButton(title: value.localizedName, selected: multiChoicePaintType == value,
+                                     identifier: "multichoice.paint.\(value.rawValue)") { multiChoicePaintType = value }
                     }
                 }
-                  .pickerStyle(.segmented)
-                  .frame(maxWidth: 120)
 
                 Text(localized("ui.what_frames_should_we_modify"))
-                Picker("", selection: $multiChoiceType) {
+                VStack(alignment: .leading, spacing: 4) {
                     ForEach(MultiSelectionType.allCases, id: \.self) { value in
-                        Text(value.localizedName).tag(value)
+                        ChoiceButton(title: value.localizedName, selected: multiChoiceType == value,
+                                     identifier: "multichoice.range.\(value.idName)", radio: true) { multiChoiceType = value }
                     }
                 }
-                  .pickerStyle(.inline)
                   .frame(minWidth: 280)
 
                 
@@ -55,7 +55,7 @@ struct MultiChoiceSheetView: View {
                     }
 
                 case .allAfter:
-                    let numFrames = frames.count - currentIndex + 1
+                    let numFrames = frames.count - currentIndex
                     switch multiChoicePaintType {
                     case .remove:
                         Text(localized("ui.overlap.paint.after", numFrames, currentIndex))
@@ -163,6 +163,7 @@ struct MultiChoiceSheetView: View {
                             Text(localized("ui.the_next"))
                             TextField("", value: $number_of_frames, format: .number)
                               .frame(maxWidth: 40)
+                              .accessibilityIdentifier("multichoice.count")
                             Text(localized("ui.frames"))
                         }
                     case .someBefore:
@@ -190,6 +191,7 @@ struct MultiChoiceSheetView: View {
                             Text(localized("ui.the_previous"))
                             TextField("", value: $number_of_frames, format: .number)
                               .frame(maxWidth: 40)
+                              .accessibilityIdentifier("multichoice.count")
                             Text(localized("ui.frames"))
                         }
                     }

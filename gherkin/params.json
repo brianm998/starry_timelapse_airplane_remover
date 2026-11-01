@@ -147,6 +147,9 @@
     "uiMultiSelectSheet": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiMultiSheetChoices": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiFrameModeChange": {
       "sequence": "test_data/test_a7sii_10"
     },

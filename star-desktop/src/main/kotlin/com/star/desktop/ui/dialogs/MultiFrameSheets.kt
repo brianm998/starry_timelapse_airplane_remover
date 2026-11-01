@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +63,8 @@ class MultiSheetMemory {
  * entry the sentence saying what it will do to which frames is built from (`ui.overlap.paint`, `ui.area.keep_overlaps`, …).
  */
 private data class MultiAction(
+    /** The tail of the action's id and of its catalogue key (`multi_removal.<name>`, `multi_paint.<name>`): the gui's enum case names. */
+    val name: String,
     val label: String, val shouldRemove: Boolean, val overlapping: Boolean, val accent: Color, val summaryPrefix: String,
 )
 
@@ -68,8 +72,8 @@ private data class MultiAction(
 @Composable
 fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoiceTarget) {
     val actions = listOf(
-        MultiAction(localized("multi_paint.remove"), true, false, StarColors.red, "ui.overlap.paint"),
-        MultiAction(localized("multi_paint.keep"), false, false, StarColors.green, "ui.overlap.clear"),
+        MultiAction("remove", localized("multi_paint.remove"), true, false, StarColors.red, "ui.overlap.paint"),
+        MultiAction("keep", localized("multi_paint.keep"), false, false, StarColors.green, "ui.overlap.clear"),
     )
     MultiFrameSheet(
         title = localized("ui.change_overlapping_outliers_in_other_frames"),
@@ -83,6 +87,9 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
         actionButtonLabel = { localized(if (it.shouldRemove) "ui.remove" else "ui.keep") },
         onCancel = vm::dismissMultiSheets,
         onApply = { a, range, n, _ -> vm.applyMultiChoice(a.shouldRemove, range, n) },
+        actionTag = { "multichoice.paint.${it.name}" },
+        rangeTag = { "multichoice.range.${it.key}" },
+        countTag = "multichoice.count",
     )
 }
 
@@ -90,10 +97,10 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
 @Composable
 fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: SequenceViewModel.RectSelection) {
     val actions = listOf(
-        MultiAction(localized("multi_removal.remove"), true, false, StarColors.red, "ui.area.remove"),
-        MultiAction(localized("multi_removal.keep"), false, false, StarColors.green, "ui.area.keep"),
-        MultiAction(localized("multi_removal.removeOverlaps"), true, true, StarColors.red, "ui.area.remove_overlaps"),
-        MultiAction(localized("multi_removal.keepOverlaps"), false, true, StarColors.green, "ui.area.keep_overlaps"),
+        MultiAction("remove", localized("multi_removal.remove"), true, false, StarColors.red, "ui.area.remove"),
+        MultiAction("keep", localized("multi_removal.keep"), false, false, StarColors.green, "ui.area.keep"),
+        MultiAction("removeOverlaps", localized("multi_removal.removeOverlaps"), true, true, StarColors.red, "ui.area.remove_overlaps"),
+        MultiAction("keepOverlaps", localized("multi_removal.keepOverlaps"), false, true, StarColors.green, "ui.area.keep_overlaps"),
     )
     MultiFrameSheet(
         title = localized("ui.change_outliers_in_the_selected_area_across"),
@@ -114,6 +121,9 @@ fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: S
         trashInitially = vm.showTrash.value,
         summaryTag = "multiselect.summary",
         cancelTag = "multiselect.cancel",
+        actionTag = { "multiselect.action.${it.name}" },
+        rangeTag = { "multiselect.range.${it.key}" },
+        countTag = "multiselect.count",
     )
 }
 
@@ -138,6 +148,10 @@ private fun MultiFrameSheet(
     /** The ids a UI test finds the sheet's sentence and its Cancel button by; none for a sheet no feature looks at. */
     summaryTag: String? = null,
     cancelTag: String? = null,
+    /** The ids of the action choice, of each range choice and of the number-of-frames field (the two sheets have their own, `multiselect.*` and `multichoice.*`). */
+    actionTag: (MultiAction) -> String,
+    rangeTag: (MultiFrameRange) -> String,
+    countTag: String,
 ) {
     var actionIdx by remember { mutableStateOf(defaultIndex.coerceIn(0, actions.size - 1)) }
     var range by remember { mutableStateOf(initialRange) }
@@ -162,12 +176,12 @@ private fun MultiFrameSheet(
             Text(title, color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 actions.forEachIndexed { i, a ->
-                    Pill(a.label, selected = i == actionIdx, accent = a.accent) { actionIdx = i }
+                    Pill(a.label, selected = i == actionIdx, accent = a.accent, tag = actionTag(a)) { actionIdx = i }
                 }
             }
             Text(localized("ui.what_frames_should_we_modify"), color = StarColors.textSecondary, fontSize = 12.sp)
             MultiFrameRange.entries.forEach { r ->
-                RadioRow(r.label, selected = r == range) { range = r }
+                RadioRow(r.label, selected = r == range, tag = rangeTag(r)) { range = r }
             }
             // What the action will do, in words (macOS shows this under the choices; a count the user types has no sentence).
             range.summary(action.summaryPrefix, current, frameCount)?.let {
@@ -179,7 +193,7 @@ private fun MultiFrameSheet(
                     onValueChange = { nText = it.filter(Char::isDigit) },
                     label = { Text(localized("ui.number_of_frames")) },
                     singleLine = true,
-                    modifier = Modifier.width(180.dp),
+                    modifier = Modifier.width(180.dp).tagged(countTag),
                 )
             }
             if (trashInitially != null) {
@@ -206,7 +220,7 @@ private fun MultiFrameSheet(
 private fun Modifier.tagged(tag: String?): Modifier = if (tag == null) this else semantics(mergeDescendants = true) { testTag = tag }
 
 @Composable
-private fun Pill(label: String, selected: Boolean, accent: Color, onClick: () -> Unit) {
+private fun Pill(label: String, selected: Boolean, accent: Color, tag: String, onClick: () -> Unit) {
     Text(
         label,
         color = if (selected) Color.White else StarColors.textPrimary,
@@ -214,15 +228,16 @@ private fun Pill(label: String, selected: Boolean, accent: Color, onClick: () ->
         modifier = Modifier
             .clip(RoundedCornerShape(5.dp))
             .background(if (selected) accent else StarColors.cellDefault)
-            .clickable(onClick = onClick)
+            .tagged(tag)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 6.dp),
     )
 }
 
 @Composable
-private fun RadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun RadioRow(label: String, selected: Boolean, tag: String, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 2.dp)) {
+        modifier = Modifier.fillMaxWidth().tagged(tag).selectable(selected = selected, role = Role.RadioButton, onClick = onClick).padding(vertical = 2.dp)) {
         Text(if (selected) "◉" else "○", color = if (selected) StarColors.accent else StarColors.textSecondary, fontSize = 13.sp)
         Text(label, color = StarColors.textPrimary, fontSize = 12.sp)
     }
