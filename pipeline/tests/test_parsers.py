@@ -72,3 +72,34 @@ def test_gradle_with_no_results_is_vacuous(tmp_path: Path) -> None:
 def test_pytest_summary() -> None:
     c = parsers.parse_pytest("..F\n1 failed, 2 passed, 1 skipped in 0.12s\n")
     assert (c.executed, c.failed, c.skipped) == (4, 1, 1)
+
+
+def test_diff_check_compares_with_where_the_branch_left_develop_not_with_its_moving_tip(tmp_path: Path) -> None:
+    """Found live (#59): develop gained a commit that cleaned up a file, and `git diff --check <tip>` then reported the branch's
+    untouched, older copy of that file as added lines with trailing whitespace."""
+    import subprocess
+
+    from starpipe import adapter_star
+    from starpipe.checks import runner
+
+    def sh(*argv: str) -> None:
+        subprocess.run(argv, cwd=tmp_path, check=True, capture_output=True)
+
+    sh("git", "init", "-q", "-b", "develop")
+    sh("git", "config", "user.email", "t@t")
+    sh("git", "config", "user.name", "t")
+    (tmp_path / "f.txt").write_text("dirty \n")  # already on develop when the branch is cut
+    sh("git", "add", "-A")
+    sh("git", "commit", "-q", "-m", "base")
+    sh("git", "checkout", "-q", "-b", "pipe/1")
+    (tmp_path / "g.txt").write_text("clean\n")
+    sh("git", "add", "-A")
+    sh("git", "commit", "-q", "-m", "ticket")
+    sh("git", "checkout", "-q", "develop")
+    (tmp_path / "f.txt").write_text("clean\n")  # develop moves on
+    sh("git", "commit", "-qam", "tidy")
+    sh("git", "checkout", "-q", "pipe/1")
+    spec = adapter_star.CHECKS["t0:diff-check"]
+    argv = runner._argv(spec, tmp_path, "develop")  # pyright: ignore[reportPrivateUsage]
+    assert subprocess.run(argv, cwd=tmp_path, capture_output=True).returncode == 0
+    assert subprocess.run(["git", "diff", "--check", "develop"], cwd=tmp_path, capture_output=True).returncode != 0, "the old form"

@@ -20,8 +20,16 @@ def build_dir(root: Path) -> Path:
     return path
 
 
+def _merge_base(root: Path, base: str) -> str:
+    """Where this branch left `base`. Diffing against the moving tip instead (as `git diff <tip>` does) shows what landed on the
+    base since as this branch's own reversed lines, so a ticket was failed for whitespace in someone else's change (#59)."""
+    out = subprocess.run(["git", "merge-base", base, "HEAD"], cwd=root, capture_output=True, text=True, check=False)
+    return out.stdout.strip() or base
+
+
 def _argv(spec: star.CheckSpec, root: Path, base: str) -> list[str]:
-    return [a.format(base=base, build=build_dir(root)) for a in spec.argv]
+    mergebase = _merge_base(root, base) if any("{mergebase}" in a for a in spec.argv) else base
+    return [a.format(base=base, mergebase=mergebase, build=build_dir(root)) for a in spec.argv]
 
 
 def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: str,
