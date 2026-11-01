@@ -158,6 +158,9 @@
     },
     "uiReprocessNonContiguous": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiStartDuringRun": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }
