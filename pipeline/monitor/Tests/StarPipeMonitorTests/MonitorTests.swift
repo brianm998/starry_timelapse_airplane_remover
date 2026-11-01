@@ -160,6 +160,18 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(store.selected)
     }
 
+    func testShowOverviewClearsTheSelectionAndDetail() async throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        store.selected = 5
+        XCTAssertEqual(store.selectedTicket?.number, 5)
+        store.showOverview()
+        XCTAssertNil(store.selected)
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertNil(store.detail)
+        XCTAssertTrue(store.logLines.isEmpty)
+    }
+
     func testOnlyTheLastFiveChangesAreKept() {
         let store = MonitorStore()
         for i in 1...8 {
