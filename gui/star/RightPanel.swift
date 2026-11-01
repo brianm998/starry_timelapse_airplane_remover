@@ -372,6 +372,9 @@ extension CleanMethod {
             localized(usesOutliers ? "ui.frame_mode_auto_selective" : "ui.frame_mode_automatic")
         case .selective:
             localized("ui.frame_mode_selective")
+        case .dirtySky, .dirtyEarth:
+            // T3: no name of their own in this dialog yet
+            localized("ui.frame_mode_automatic")
         }
     }
 
@@ -381,6 +384,9 @@ extension CleanMethod {
             localized(usesOutliers ? "ui.frame_mode_desc_auto_selective" : "ui.frame_mode_desc_automatic")
         case .selective:
             localized("ui.frame_mode_desc_selective")
+        case .dirtySky, .dirtyEarth:
+            // T3: no description of their own in this dialog yet
+            localized("ui.frame_mode_desc_automatic")
         }
     }
 }
@@ -488,6 +494,10 @@ struct ChangeProcessingModeView: View {
                   autoSelect = usesOutliers ? .yes : .no
               case .selective:
                   clean = .selective
+                  autoSelect = .no
+              case .dirtySky, .dirtyEarth:
+                  // T3: the dialog has no dirty choice yet
+                  clean = .automatic
                   autoSelect = .no
               }
           }

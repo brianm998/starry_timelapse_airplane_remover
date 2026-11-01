@@ -382,6 +382,31 @@ final class ConfigOverridesTests: XCTestCase {
                       "still untouched by a command line that did not mention it")
     }
 
+    /// The dirty methods override a saved config like any other, and survive the config.json
+    /// a resume reads back (synthesized Codable: `{"dirtySky":{}}`).
+    func testDirtyCleanMethodsApplyAndRoundTripThroughConfigJSON() throws {
+        for (spelling, method, key) in [("dirtySky", CleanMethod.dirtySky, "dirtySky"),
+                                        ("dirtyEarth", CleanMethod.dirtyEarth, "dirtyEarth")] {
+            var config = savedConfig()
+            config.horizonDetectionEnabled = true
+            try StarCli.parse(["--clean-method", spelling, "/some/seq"]).configOverrides.apply(to: &config)
+            XCTAssertEqual(config.cleanMethod, method)
+
+            let methodJSON = String(decoding: try JSONEncoder().encode(method), as: UTF8.self)
+            XCTAssertEqual(methodJSON, "{\"\(key)\":{}}")
+
+            let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("star-config-dirty-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let file = dir.appendingPathComponent("config.json")
+            try JSONEncoder().encode(config).write(to: file)
+            let decoded = try Config.read(fromJsonFilename: file.path)
+            XCTAssertEqual(decoded.cleanMethod, method)
+            XCTAssertEqual(decoded.horizonDetectionEnabled, true)
+        }
+    }
+
     // MARK: - nothing falls out of the wiring
 
     /// Catches the next version of this bug at its source: a field added to

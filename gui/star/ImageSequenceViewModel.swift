@@ -824,6 +824,10 @@ public final class ImageSequenceViewModel {
                     case .selective:
                         self._currentFrameHighLevelCleanMethod = .selective
                         self._currentFrameAutoPreservationMode = .no
+                    case .dirtySky, .dirtyEarth:
+                        // T3: the pickers have no dirty choice yet; shown as automatic
+                        self._currentFrameHighLevelCleanMethod = .automatic
+                        self._currentFrameAutoPreservationMode = .no
                     }
                     
                 } else {
@@ -834,6 +838,10 @@ public final class ImageSequenceViewModel {
 
                     case .selective:
                         self._currentFrameHighLevelCleanMethod = .selective
+                        self._currentFrameAutoPreservationMode = .no
+                    case .dirtySky, .dirtyEarth:
+                        // T3: the pickers have no dirty choice yet; shown as automatic
+                        self._currentFrameHighLevelCleanMethod = .automatic
                         self._currentFrameAutoPreservationMode = .no
                     }
                 }
@@ -2465,6 +2473,10 @@ public final class ImageSequenceViewModel {
                     case .selective:
                         currentFrameHighLevelCleanMethod = .selective
                         currentFrameAutoPreservationMode = .no
+                    case .dirtySky, .dirtyEarth:
+                        // T3: the pickers have no dirty choice yet.  Setting them here would
+                        // run their didSets and overwrite the frame's dirty method, so leave them.
+                        break
                     }
                 }
             }
@@ -3849,6 +3861,10 @@ public final class ImageSequenceViewModel {
             self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
         case .selective:
             self._currentFrameHighLevelCleanMethod = .selective
+            self._currentFrameAutoPreservationMode = .no
+        case .dirtySky, .dirtyEarth:
+            // T3: the pickers have no dirty choice yet; shown as automatic
+            self._currentFrameHighLevelCleanMethod = .automatic
             self._currentFrameAutoPreservationMode = .no
         }
         if getCleanMethod(forFrame: currentIndex) != method {

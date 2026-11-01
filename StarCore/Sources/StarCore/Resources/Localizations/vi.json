@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star: thư mục tạm đã được giữ lại — tiếp tục bằng:",
   "cli.errors.video_path_needs_render_video": "--video-path cần có --render-video.",
   "cli.frame_state_change": "khung {0} chuyển sang trạng thái {1}",
-  "cli.help.clean_method": "Chế độ làm sạch dùng cho chuỗi ảnh này.\nMặc định là automatic với chuỗi mới, còn khi tiếp tục từ cấu hình đã lưu thì\ndùng giá trị trong cấu hình đó.",
+  "cli.help.clean_method": "Chế độ làm sạch dùng cho chuỗi ảnh này.\nMặc định là automatic với chuỗi mới, còn khi tiếp tục từ cấu hình đã lưu thì\ndùng giá trị trong cấu hình đó.\ndirtySky và dirtyEarth làm ngược với làm sạch: chỉ giữ lại những gì đã chuyển động\ntrên bầu trời, hoặc trên mặt đất, và ghi phần còn lại của khung thành màu đen.",
   "cli.help.cloud_aware_merge": "Giữ nguyên vẹn mây chuyển động nhanh trong phép hợp nhất căn chỉnh theo sao.\nMây trôi so với các ngôi sao, nên phép hợp nhất các khung lân cận đã căn chỉnh theo sao lấy\ntừng điểm ảnh mây từ một thời điểm khác nhau và để lại các bản sao lặp lại, thành dải của\nmép mây.  Khi bật, một phép hợp nhất thứ hai căn chỉnh theo chuyển động của mây được trộn vào\nở bất cứ chỗ nào nó giải thích khung tốt hơn, với các ngôi sao được đặt lại, nhờ vậy mây giữ\nnguyên hình dạng trong khi vệt máy bay và vệ tinh vẫn bị loại bỏ.  Bầu trời quang\nkhông thay đổi.\nTốn thêm CPU và bộ nhớ trên các khung có mây.  Tắt theo mặc định.\nThay đổi nó sẽ hợp nhất lại các khung đã được xử lý; phần căn chỉnh của chúng được giữ nguyên.\n--no-cloud-aware-merge sẽ tắt nó.  Được lưu vào cấu hình như mọi cờ khác ở đây,\nnên việc tiếp tục mà không lặp lại cờ này sẽ giữ nguyên lựa chọn tương tự.",
   "cli.help.detection_type": "Kiểu phát hiện",
   "cli.help.extract_in_background": "Bắt đầu xử lý trong khi các khung hình của video vẫn đang được trích xuất. Mặc định bật cho ProRes và các định dạng có thể đưa ra bất kỳ khung hình nào nhanh chóng, tắt cho H.264, H.265 và tương tự.",
@@ -1232,5 +1232,8 @@
   "settings_tab.memory": "Bộ nhớ",
   "ui.render_options_after_processing_title": "Chọn cài đặt video",
   "ui.use_these_settings": "Dùng các cài đặt này",
-  "ui.settings": "Cài đặt"
+  "ui.settings": "Cài đặt",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth chỉ giữ phần mặt đất dưới đường chân trời, nên cần phát hiện đường chân trời và không thể chạy khi tính năng đó bị tắt (--no-horizon).",
+  "view_mode.dirtySkyProcessed": "bầu trời chưa làm sạch",
+  "view_mode.dirtyEarthProcessed": "mặt đất chưa làm sạch"
 }

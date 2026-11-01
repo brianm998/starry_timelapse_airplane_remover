@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star: 임시 디렉터리를 남겨 두었습니다. 다음 명령으로 이어서 진행하세요:",
   "cli.errors.video_path_needs_render_video": "--video-path에는 --render-video가 필요합니다.",
   "cli.frame_state_change": "프레임 {0}의 상태가 {1}(으)로 바뀌었습니다",
-  "cli.help.clean_method": "이 이미지 시퀀스에 사용할 정리 모드입니다.\n새 시퀀스에서는 automatic이 기본값이며, 저장된 설정에서 다시 시작할 때는\n해당 설정의 값을 사용합니다.",
+  "cli.help.clean_method": "이 이미지 시퀀스에 사용할 정리 모드입니다.\n새 시퀀스에서는 automatic이 기본값이며, 저장된 설정에서 다시 시작할 때는\n해당 설정의 값을 사용합니다.\ndirtySky와 dirtyEarth는 정리의 반대입니다. 하늘 또는 지상에서 움직인 것만 남기고\n프레임의 나머지는 검게 기록합니다.",
   "cli.help.cloud_aware_merge": "별에 정렬한 병합에서 빠르게 움직이는 구름이 온전하게 유지되도록 합니다.\n구름은 별에 대해 이동하므로, 별 기준으로 정렬한 인접 프레임을 병합하면\n구름의 각 픽셀을 서로 다른 순간에서 가져와 구름 가장자리의 띠 모양으로 반복된\n복사본이 남습니다. 이 옵션을 켜면 구름의 움직임에 맞춰 정렬한 두 번째 병합이,\n프레임을 더 잘 설명하는 곳에 별을 다시 넣은 상태로 섞이므로 구름이\n형태를 유지하면서도 비행기와 인공위성의 궤적은 계속 제거됩니다. 맑은 하늘은\n달라지지 않습니다.\n구름이 있는 프레임에서 CPU와 메모리를 추가로 사용합니다. 기본값은 꺼짐입니다.\n변경하면 이미 처리된 프레임의 병합이 다시 수행되며, 정렬은 그대로 유지됩니다.\n--no-cloud-aware-merge로 끕니다. 여기의 다른 플래그와 마찬가지로 구성에 저장되므로,\n이를 반복하지 않고 재개해도 동일한 선택이 유지됩니다.",
   "cli.help.detection_type": "감지 유형",
   "cli.help.extract_in_background": "비디오의 프레임이 아직 추출되는 동안 처리를 시작합니다. 기본값은 어떤 프레임이든 빠르게 줄 수 있는 ProRes 등에서 켜짐, H.264, H.265 등에서 꺼짐입니다.",
@@ -1232,5 +1232,8 @@
   "settings_tab.memory": "메모리",
   "ui.render_options_after_processing_title": "영상 설정 선택",
   "ui.use_these_settings": "이 설정 사용",
-  "ui.settings": "설정"
+  "ui.settings": "설정",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth는 지평선 아래의 지상만 남기므로 지평선 감지가 필요하며, 감지를 끈 상태(--no-horizon)에서는 실행할 수 없습니다.",
+  "view_mode.dirtySkyProcessed": "정리하지 않은 하늘",
+  "view_mode.dirtyEarthProcessed": "정리하지 않은 지상"
 }

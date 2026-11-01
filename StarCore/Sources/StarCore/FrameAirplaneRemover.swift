@@ -304,7 +304,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     /// `output` stage's invalidation passed over every frame of a sequence whose output
     /// directory was gone, and a reprocess under a new merge put the old merge back.
     nonisolated public func mergeOutputExistsOnDisk() -> Bool {
-        [FrameViewMode.final, .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed]
+        [FrameViewMode.final, .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed,
+         .dirtySkyProcessed, .dirtyEarthProcessed]
           .contains { imageAccessor.imageExists(frameIndex: frameIndex,
                                                 ofType: $0,
                                                 atSize: .original) }
@@ -704,7 +705,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func deleteMergeOutput() {
         imageAccessor.deleteImages(
             frameIndex: frameIndex,
-            ofTypes: [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final],
+            ofTypes: [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed,
+                      .dirtySkyProcessed, .dirtyEarthProcessed, .final],
             atSizes: [.original, .preview]
         )
         if state == .complete {
@@ -731,7 +733,121 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try await self.finishAuto(useOutliers: useOutliers)
         case .selective:
             try await self.finishSelective()
+        case .dirtySky:
+            try await self.finishDirty(portion: .sky)
+        case .dirtyEarth:
+            try await self.finishDirty(portion: .earth)
         }
+    }
+
+    /// Which part of the frame a dirty clean method keeps.
+    public enum DirtyPortion: Sendable {
+        case sky
+        case earth
+
+        var outputType: FrameViewMode {
+            switch self {
+            case .sky:   .dirtySkyProcessed
+            case .earth: .dirtyEarthProcessed
+            }
+        }
+    }
+
+    /// The dirty clean methods' image: for `portion`, `original − aligned reference` per channel,
+    /// clipped at 0, in the original's own bit depth and channels; the other portion is exactly 0.
+    /// The reference and the horizon split are the ones the outlier subtraction uses
+    /// (`loadOrCreateAlignedReference`), un-feathered for the split, so a static star or static
+    /// ground goes to ~0 and only what moved is left.
+    ///
+    /// With horizon detection off there is no ground: dirty sky covers the whole frame and dirty
+    /// earth throws `Config.dirtyEarthNeedsHorizonMessage`.  On a moving camera, a frame whose
+    /// ground neighbours cannot be tracked has the original as its earth reference, so its dirty
+    /// earth image is near-black; that is the right answer for "what moved", not a defect.
+    func createDirtyImage(portion: DirtyPortion) async throws -> PixelatedImage {
+        let config = await configManager.config()
+        if portion == .earth, !config.horizonDetectionEnabled {
+            throw Config.dirtyEarthNeedsHorizonMessage
+        }
+
+        let aligned = try await loadOrCreateAlignedReference()
+
+        var skyMask = aligned.skyMask
+        if config.horizonDetectionEnabled, skyMask == nil {
+            // no earth image to blend with: still split where the horizon is
+            if let horizon = try await horizonProcessor.loadOrCreateFinalHorizonMask()?.image {
+                skyMask = await alignmentProcessor.starAlignedHorizonMask(from: horizon)
+            }
+        }
+        if portion == .earth, skyMask == nil {
+            throw "frame \(frameIndex) cannot make a dirty earth image without a horizon mask"
+        }
+
+        guard let original = try await imageAccessor.load(frameIndex: frameIndex,
+                                                          type: .original,
+                                                          atSize: .original)
+        else {
+            throw "frame \(frameIndex) couldn't load original image for a dirty image"
+        }
+
+        // a full-frame pixel loop, off the pool like the grayscale subtraction
+        let reference = aligned.reference
+        let mask = skyMask
+        let keepSky = portion == .sky
+        return try await NativeWork.run {
+            try original.subtractColor(reference, mask: mask, keepingMaskWhite: keepSky)
+        }
+    }
+
+    /// Finishes a frame under `.dirtySky` or `.dirtyEarth`: writes `createDirtyImage` as the
+    /// processed image and links it as the final.  No outlier or blob work, and no outlier files.
+    public func finishDirty(portion: DirtyPortion) async throws {
+        let outputType = portion.outputType
+        let outputSizes = await self.outputSizes
+
+        if imageAccessor.imageExists(frameIndex: frameIndex, ofType: outputType, atSize: .original) {
+            Log.i("frame \(frameIndex) \(outputType) already done")
+            try await imageAccessor.linkFinals(frameIndex: frameIndex, as: outputType, atSizes: outputSizes)
+            self.set(state: .complete)
+            return
+        }
+
+        if !self.writeOutputFiles {
+            Log.d("frame \(self.frameIndex) not writing output files")
+            self.set(state: .complete)
+            if let completion { await completion() }
+            return
+        }
+
+        // the original, the reference and the result
+        let estimatedBytes = MemoryMonitor.estimatedImageBytes(
+            width: width,
+            height: height,
+            componentsPerPixel: componentsPerPixel
+        ) * 3
+        await MemoryMonitor.shared.waitForMemory(needed: estimatedBytes)
+
+        self.set(state: .finishing)
+        let config = await configManager.config()
+        var image = try await createDirtyImage(portion: portion)
+        if config.imageBitsPerComponent == 8 {
+            // as finishSelective does: an 8-bit sequence is written back out at 8 bits
+            image = image.ensure8Bits
+        }
+
+        self.set(state: .writingOutputFile)
+        try await imageAccessor.save(image,
+                                     frameIndex: frameIndex,
+                                     as: outputType,
+                                     atSizes: outputSizes,
+                                     overwrite: true)
+        try await imageAccessor.linkFinals(frameIndex: frameIndex,
+                                           as: outputType,
+                                           atSizes: outputSizes)
+
+        self.set(state: .complete)
+        await MemoryMonitor.shared.memoryFreed()
+        if let completion { await completion() }
+        Log.i("frame \(self.frameIndex) complete (\(outputType))")
     }
     
     // run after shouldRemove has been set for each group,
@@ -1877,6 +1993,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         }
                     }
                 }
+            case .dirtySky, .dirtyEarth:
+                // finishDirty links the cached processed image when it is on disk, and makes it
+                // when it is not
+                try await self.finishDirty(portion: cleanMethod == .dirtySky ? .sky : .earth)
             case .selective:
                 if let filename = imageAccessor.nameForImage(
                      frameIndex: frameIndex,
@@ -2153,32 +2273,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // if we don't have the subtracted image on file yet, make it
         Log.d("frame \(frameIndex) loadOrCreateSubtractionImage")
 
-        // load or create the aligned frame
-
-        // Star and earth builds below merge the same neighbours; decode each once.
-        let decodePin = await alignmentProcessor.pinNeighborDecodes()
-        defer { decodePin.release() }
-
-        Log.d("frame \(frameIndex) loadOrCreateStarAlignedImage")
-        let result = try await alignmentProcessor.loadOrCreateStarAlignedImage()
-        let starAlignedImage = result.warpedFrame
-          
-        Log.d("frame \(frameIndex) loadedOrCreatedStarAlignedImage")
-
-        var skyImage: PixelatedImage? = nil
-
-        if let starAlignedImage {
-            skyImage = PixelatedImage(mat: starAlignedImage)
-        }
-//        if skyImage == nil {
-//            skyImage = failedStarAlignment
-//        }
-        guard let skyImage else {
-            let msg = "frame \(frameIndex) cannot create subtraction image without either a successful or failed alignment image"
-            Log.e(msg)
-            throw msg
-        }
-        
         let config = await configManager.config()
 
         var subtractionImage: PixelatedImage! = nil
@@ -2189,72 +2283,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         // will be bright in the subtractionImage
         //Log.d("frame \(frameIndex) OG image \(image.description)")
 
-        var imageToSubtract: PixelatedImage? = nil
-        
-        if config.horizonDetectionEnabled {
-            Log.d("doing horizon enabled subtraction image")
-            // we care about the horizon, so make a composite
-            // of the earth and star aligned images, and subtract
-            // that from the image instead of just the star aligned image
-
-            let alignmentResult = try await alignmentProcessor.loadOrCreateEarthAlignedImage()
-            let earthAlignedImage = alignmentResult.warpedFrame
-            let horizonMask = alignmentResult.warpedHorizon
-
-            let earthImage = earthAlignedImage
-
-            if let earthImage,
-               let earth = PixelatedImage(mat: earthImage)
-            {
-                var horizon: PixelatedImage? = nil
-                if let horizonMask {
-                    horizon = PixelatedImage(mat: horizonMask)
-                }
-                if horizon == nil {
-                    // fall back to non merged horizon mask if we have to
-                    horizon = try await horizonProcessor.loadOrCreateFinalHorizonMask()?.image
-                }
-                if let horizon {
-                    // Same adjustment the final composite makes: the star-aligned
-                    // image's smeared ground can reach above this mask's horizon, and
-                    // subtracting sky-smear from the original's sharp ridge painted a
-                    // bright false band there for the outlier pass to chase.  Take
-                    // those pixels from the earth image on both sides of the
-                    // subtraction instead — see StarAlignedHorizonMask — feathered
-                    // for the same reason the composite is: a hard switch between
-                    // layers whose brightness differs subtracts as a false edge.
-                    let starAlignedMask =
-                      await alignmentProcessor.starAlignedHorizonMask(from: horizon)
-                    let featherMask = starAlignedMask
-                    let featheredMask = await NativeWork.run {
-                        featherMask.raiseMaskBy(FrameAirplaneRemover.horizonFeatherPixels)
-                    }
-                    // The blend is a full-frame pixel loop: native thread, CPU gate.
-                    let blendBase = skyImage
-                    if let feathered = featheredMask,
-                       let blended = await NativeWork.run({
-                           try? blendBase.blend(mask: feathered, with: earth)
-                       })
-                    {
-                        imageToSubtract = blended
-                    } else {
-                        imageToSubtract = try skyImage.apply(
-                          mask: starAlignedMask,
-                          with: earth
-                        )
-                    }
-                }
-            } else {
-                // with no earth image to use, fall back to the sky
-                imageToSubtract = skyImage
-            }
-            
-        } else {
-            // with no horizon to worry about, just subtract the star aligned image
-            
-            imageToSubtract = skyImage
-        }
-
+        let imageToSubtract: PixelatedImage? = try await loadOrCreateAlignedReference().reference
 
         if let imageToSubtract {
 
@@ -2302,6 +2331,114 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         } else {
             throw "unable to create image to subtract"
         }
+    }
+
+
+    /// The aligned reference a frame is subtracted against, and the horizon split it was made with.
+    ///
+    /// `reference` is the star-aligned image in the sky; with horizon detection on and an earth
+    /// image to use, it is blended with the earth-aligned image below the horizon, the blend
+    /// feathered by `horizonFeatherPixels`.  `skyMask` is the un-feathered star-aligned horizon
+    /// mask that split was made from (white = sky, black = ground), nil when there was no split.
+    ///
+    /// Shared by the grayscale subtraction outlier detection reads and the dirty clean methods'
+    /// colour one, so both subtract the same thing.
+    internal func loadOrCreateAlignedReference() async throws -> (reference: PixelatedImage, skyMask: PixelatedImage?) {
+        // load or create the aligned frame
+
+        // Star and earth builds below merge the same neighbours; decode each once.
+        let decodePin = await alignmentProcessor.pinNeighborDecodes()
+        defer { decodePin.release() }
+
+        Log.d("frame \(frameIndex) loadOrCreateStarAlignedImage")
+        let result = try await alignmentProcessor.loadOrCreateStarAlignedImage()
+        let starAlignedImage = result.warpedFrame
+          
+        Log.d("frame \(frameIndex) loadedOrCreatedStarAlignedImage")
+
+        var skyImage: PixelatedImage? = nil
+
+        if let starAlignedImage {
+            skyImage = PixelatedImage(mat: starAlignedImage)
+        }
+        guard let skyImage else {
+            let msg = "frame \(frameIndex) cannot create subtraction image without either a successful or failed alignment image"
+            Log.e(msg)
+            throw msg
+        }
+        
+        let config = await configManager.config()
+
+        var imageToSubtract: PixelatedImage? = nil
+        var skyMask: PixelatedImage? = nil
+        
+        if config.horizonDetectionEnabled {
+            Log.d("doing horizon enabled subtraction image")
+            // we care about the horizon, so make a composite
+            // of the earth and star aligned images, and subtract
+            // that from the image instead of just the star aligned image
+
+            let alignmentResult = try await alignmentProcessor.loadOrCreateEarthAlignedImage()
+            let earthAlignedImage = alignmentResult.warpedFrame
+            let horizonMask = alignmentResult.warpedHorizon
+
+            let earthImage = earthAlignedImage
+
+            if let earthImage,
+               let earth = PixelatedImage(mat: earthImage)
+            {
+                var horizon: PixelatedImage? = nil
+                if let horizonMask {
+                    horizon = PixelatedImage(mat: horizonMask)
+                }
+                if horizon == nil {
+                    // fall back to non merged horizon mask if we have to
+                    horizon = try await horizonProcessor.loadOrCreateFinalHorizonMask()?.image
+                }
+                if let horizon {
+                    // Same adjustment the final composite makes: the star-aligned
+                    // image's smeared ground can reach above this mask's horizon, and
+                    // subtracting sky-smear from the original's sharp ridge painted a
+                    // bright false band there for the outlier pass to chase.  Take
+                    // those pixels from the earth image on both sides of the
+                    // subtraction instead — see StarAlignedHorizonMask — feathered
+                    // for the same reason the composite is: a hard switch between
+                    // layers whose brightness differs subtracts as a false edge.
+                    let starAlignedMask =
+                      await alignmentProcessor.starAlignedHorizonMask(from: horizon)
+                    skyMask = starAlignedMask
+                    let featherMask = starAlignedMask
+                    let featheredMask = await NativeWork.run {
+                        featherMask.raiseMaskBy(FrameAirplaneRemover.horizonFeatherPixels)
+                    }
+                    // The blend is a full-frame pixel loop: native thread, CPU gate.
+                    let blendBase = skyImage
+                    if let feathered = featheredMask,
+                       let blended = await NativeWork.run({
+                           try? blendBase.blend(mask: feathered, with: earth)
+                       })
+                    {
+                        imageToSubtract = blended
+                    } else {
+                        imageToSubtract = try skyImage.apply(
+                          mask: starAlignedMask,
+                          with: earth
+                        )
+                    }
+                }
+            } else {
+                // with no earth image to use, fall back to the sky
+                imageToSubtract = skyImage
+            }
+            
+        } else {
+            // with no horizon to worry about, just subtract the star aligned image
+            
+            imageToSubtract = skyImage
+        }
+
+        guard let imageToSubtract else { throw "unable to create image to subtract" }
+        return (imageToSubtract, skyMask)
     }
 
 }

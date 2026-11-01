@@ -121,6 +121,11 @@ struct GridCellView: View {
                 case .selective:
                     SelectiveIcon()
                         .foregroundColor(.white)
+                case .dirtySky, .dirtyEarth:
+                    // T3: no icon of their own yet
+                    AutoIcon()
+                        .font(.system(size: 8))
+                        .foregroundColor(.white)
                 }
 
                 Spacer().frame(width: 4)

@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star: geçici dizin korundu — şu komutla devam edin:",
   "cli.errors.video_path_needs_render_video": "--video-path için --render-video gerekir.",
   "cli.frame_state_change": "kare {0} durumu {1} oldu",
-  "cli.help.clean_method": "Bu görüntü dizisi için kullanılacak temizleme kipi.\nYeni bir dizide varsayılan automatic'tir; kaydedilmiş bir yapılandırmadan devam\nederken o yapılandırmadaki değer kullanılır.",
+  "cli.help.clean_method": "Bu görüntü dizisi için kullanılacak temizleme kipi.\nYeni bir dizide varsayılan automatic'tir; kaydedilmiş bir yapılandırmadan devam\nederken o yapılandırmadaki değer kullanılır.\ndirtySky ve dirtyEarth temizlemenin tersini yapar: yalnızca gökyüzünde ya da yerde\nhareket edeni tutar, karenin geri kalanını siyah yazar.",
   "cli.help.cloud_aware_merge": "Hızlı hareket eden bulutları yıldızlara hizalı birleştirmede bozulmadan korur.\nBulutlar yıldızlara göre kayar; bu yüzden yıldızlara hizalı komşu karelerin birleştirmesi\nher bulut pikselini farklı bir andan alır ve bulut kenarlarının bantlı,\ntekrarlanan kopyalarını bırakır.  Açıkken, bulut hareketine hizalı ikinci bir birleştirme\nkareyi daha iyi açıkladığı her yerde, yıldızlar yerine konarak karıştırılır; böylece bulutlar\nşeklini korurken uçak ve uydu izleri yine de kaldırılır.  Açık gökyüzü\ndeğişmez.\nBulut içeren karelerde ek CPU ve bellek harcar.  Varsayılan olarak kapalıdır.\nDeğiştirmek önceden işlenmiş karelerin birleştirmesini yeniden yapar; hizalamaları korunur.\n--no-cloud-aware-merge bunu kapatır.  Buradaki diğer her bayrak gibi yapılandırmaya kaydedilir,\nbu nedenle bunu tekrarlamayan bir devam aynı seçimi korur.",
   "cli.help.detection_type": "Algılama türleri",
   "cli.help.extract_in_background": "Videonun kareleri hâlâ çıkarılırken işlemeye başlar. Varsayılan: herhangi bir kareyi hızla verebilen ProRes ve benzeri biçimler için açık, H.264, H.265 ve benzerleri için kapalı.",
@@ -1232,5 +1232,8 @@
   "settings_tab.memory": "Bellek",
   "ui.render_options_after_processing_title": "Video ayarlarını seçin",
   "ui.use_these_settings": "Bu ayarları kullan",
-  "ui.settings": "Ayarlar"
+  "ui.settings": "Ayarlar",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth yalnızca ufkun altındaki yeri tutar; bu yüzden ufuk algılama gerektirir ve algılama kapalıyken (--no-horizon) çalışamaz.",
+  "view_mode.dirtySkyProcessed": "temizlenmemiş gökyüzü",
+  "view_mode.dirtyEarthProcessed": "temizlenmemiş yer"
 }

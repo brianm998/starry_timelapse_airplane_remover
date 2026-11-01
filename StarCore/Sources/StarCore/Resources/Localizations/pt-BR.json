@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star: o diretório temporário foi mantido — retome com:",
   "cli.errors.video_path_needs_render_video": "--video-path exige --render-video.",
   "cli.frame_state_change": "o quadro {0} mudou para o estado {1}",
-  "cli.help.clean_method": "O modo de limpeza a usar nesta sequência de imagens.\nO padrão é automatic para uma sequência nova e, ao retomar, o valor já gravado\nna configuração salva.",
+  "cli.help.clean_method": "O modo de limpeza a usar nesta sequência de imagens.\nO padrão é automatic para uma sequência nova e, ao retomar, o valor já gravado\nna configuração salva.\ndirtySky e dirtyEarth fazem o contrário da limpeza: mantêm só o que se moveu\nno céu, ou no solo, e gravam o resto do quadro em preto.",
   "cli.help.cloud_aware_merge": "Mantém intactas as nuvens de movimento rápido na mesclagem alinhada às estrelas.\nAs nuvens se deslocam em relação às estrelas, então uma mesclagem de quadros vizinhos alinhados às estrelas pega\ncada pixel de nuvem de um momento diferente e deixa cópias repetidas e em faixas das\nbordas das nuvens.  Com isto ativado, uma segunda mesclagem alinhada ao movimento das nuvens é combinada\nonde quer que explique melhor o quadro, com as estrelas recolocadas, de modo que as nuvens mantenham\nsua forma enquanto os rastros de aviões e satélites continuam sendo removidos.  O céu limpo\npermanece inalterado.\nCusta CPU e memória extras em quadros que têm nuvens.  Desativado por padrão.\nAlterá-lo refaz a mesclagem dos quadros que já foram processados; o alinhamento deles é mantido.\n--no-cloud-aware-merge desativa.  Salvo na configuração como qualquer outra opção\naqui, então uma retomada que não o repetir mantém a mesma escolha.",
   "cli.help.detection_type": "Tipos de detecção",
   "cli.help.extract_in_background": "Começa a processar enquanto os quadros do vídeo ainda estão sendo extraídos. O padrão é ligado para ProRes e formatos que entregam qualquer quadro rapidamente, e desligado para H.264, H.265 e semelhantes.",
@@ -1232,5 +1232,8 @@
   "settings_tab.memory": "Memória",
   "ui.render_options_after_processing_title": "Escolher as configurações do vídeo",
   "ui.use_these_settings": "Usar estas configurações",
-  "ui.settings": "Ajustes"
+  "ui.settings": "Ajustes",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth mantém só o solo abaixo do horizonte, então precisa da detecção de horizonte e não pode ser executado com ela desativada (--no-horizon).",
+  "view_mode.dirtySkyProcessed": "céu sem limpeza",
+  "view_mode.dirtyEarthProcessed": "solo sem limpeza"
 }

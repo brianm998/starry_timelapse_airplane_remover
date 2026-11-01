@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star：临时目录已保留 — 可用以下命令继续：",
   "cli.errors.video_path_needs_render_video": "--video-path 需要同时使用 --render-video。",
   "cli.frame_state_change": "帧 {0} 状态变更为 {1}",
-  "cli.help.clean_method": "用于此图像序列的清理模式。\n新序列默认为 automatic；从已保存的配置恢复时，采用该配置中的值。",
+  "cli.help.clean_method": "用于此图像序列的清理模式。\n新序列默认为 automatic；从已保存的配置恢复时，采用该配置中的值。\ndirtySky 和 dirtyEarth 与清理相反：只保留天空中或地面上移动过的内容，\n帧的其余部分写为黑色。",
   "cli.help.cloud_aware_merge": "让快速移动的云在与星点对齐的合并中保持完整。\n云相对于星点会移动，因此对已与星点对齐的相邻帧做合并时，\n每个云像素都取自不同的时刻，并留下带状、重复的\n云边缘副本。开启后，会再做一次与云的运动对齐的合并，并在它能更好地解释该帧的地方\n混入结果，同时把星点放回去，这样云能保持\n形状，而飞机和卫星的条纹仍会被移除。晴朗的天空\n保持不变。\n对含有云的帧会额外占用 CPU 和内存。默认关闭。\n更改它会对已处理过的帧重新进行合并，但保留其对齐结果。\n--no-cloud-aware-merge 可将其关闭。与此处的其他标志一样保存在配置中，\n因此未重复该标志的恢复操作会保留相同的选择。",
   "cli.help.detection_type": "检测类型",
   "cli.help.extract_in_background": "在视频帧仍在提取时开始处理。默认对 ProRes 等能快速给出任意一帧的格式开启，对 H.264、H.265 等关闭。",
@@ -1232,5 +1232,8 @@
   "settings_tab.memory": "内存",
   "ui.render_options_after_processing_title": "选择视频设置",
   "ui.use_these_settings": "使用这些设置",
-  "ui.settings": "设置"
+  "ui.settings": "设置",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth 只保留地平线以下的地面，因此需要地平线检测，关闭检测（--no-horizon）时无法运行。",
+  "view_mode.dirtySkyProcessed": "未清理的天空",
+  "view_mode.dirtyEarthProcessed": "未清理的地面"
 }

@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star: se ha conservado el directorio temporal — reanuda con:",
   "cli.errors.video_path_needs_render_video": "--video-path requiere --render-video.",
   "cli.frame_state_change": "el fotograma {0} cambió de estado a {1}",
-  "cli.help.clean_method": "El modo de limpieza para esta secuencia de imágenes.\nDe forma predeterminada es automático para una secuencia nueva, y el valor\nque ya tenga una configuración guardada al reanudarla.",
+  "cli.help.clean_method": "El modo de limpieza para esta secuencia de imágenes.\nDe forma predeterminada es automático para una secuencia nueva, y el valor\nque ya tenga una configuración guardada al reanudarla.\ndirtySky y dirtyEarth hacen lo contrario de limpiar: conservan solo lo que se movió\nen el cielo, o en la tierra, y escriben el resto del fotograma en negro.",
   "cli.help.cloud_aware_merge": "Mantiene intactas las nubes que se mueven rápido en la fusión alineada con las estrellas.\nLas nubes se desplazan respecto a las estrellas, así que una fusión de fotogramas vecinos alineados con las estrellas toma\ncada píxel de nube de un momento distinto y deja copias repetidas y con bandas de los\nbordes de las nubes.  Con esto activado, una segunda fusión alineada con el movimiento de las nubes se mezcla\nallí donde explica mejor el fotograma, con las estrellas devueltas a su sitio, de modo que las nubes conservan\nsu forma mientras las estelas de aviones y satélites se siguen eliminando.  El cielo despejado\nno cambia.\nCuesta CPU y memoria adicionales en los fotogramas que tienen nubes.  Desactivado de forma predeterminada.\nCambiarlo vuelve a hacer la fusión de los fotogramas ya procesados; su alineación se conserva.\n--no-cloud-aware-merge lo desactiva.  Se guarda en la configuración como cualquier otro\nindicador aquí, por lo que una reanudación que no lo repita mantiene la misma elección.",
   "cli.help.detection_type": "Tipos de detección",
   "cli.help.extract_in_background": "Empezar a procesar mientras los fotogramas del vídeo aún se extraen. Por defecto, activado para ProRes y formatos que pueden dar cualquier fotograma rápidamente, y desactivado para H.264, H.265 y similares.",
@@ -1232,5 +1232,8 @@
   "settings_tab.memory": "Memoria",
   "ui.render_options_after_processing_title": "Elegir los ajustes del vídeo",
   "ui.use_these_settings": "Usar estos ajustes",
-  "ui.settings": "Ajustes"
+  "ui.settings": "Ajustes",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth conserva solo la tierra bajo el horizonte, así que necesita la detección del horizonte y no puede ejecutarse con ella desactivada (--no-horizon).",
+  "view_mode.dirtySkyProcessed": "cielo sin limpiar",
+  "view_mode.dirtyEarthProcessed": "tierra sin limpiar"
 }

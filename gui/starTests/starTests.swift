@@ -3866,6 +3866,8 @@ final class SharedConstantsTests: XCTestCase {
         case .automatic(false): "automatic"
         case .automatic(true): "autoSelective"
         case .selective: "selective"
+        case .dirtySky: "dirtySky"     // T3
+        case .dirtyEarth: "dirtyEarth" // T3
         }
     }
 

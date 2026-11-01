@@ -94,6 +94,13 @@ struct FilmstripImageView: View {
                       .shadow(radius: 1)
                       .help(localized("ui.this_frame_uses_selective_mode"))
                       .foregroundColor(self.processingColor)
+                case .dirtySky, .dirtyEarth:
+                    // T3: no icon of their own yet; shown as automatic until the pickers know them
+                    AutoIcon()
+                      .padding(2)
+                      .shadow(radius: 1)
+                      .help(localized("ui.this_frame_uses_automatic_mode"))
+                      .foregroundColor(self.processingColor)
                 }
                 
                 

@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star: 一時ディレクトリを保持しました。次のコマンドで再開できます:",
   "cli.errors.video_path_needs_render_video": "--video-path には --render-video が必要です。",
   "cli.frame_state_change": "フレーム {0} の状態が {1} に変わりました",
-  "cli.help.clean_method": "この画像シーケンスに使用するクリーンモード。\n新しいシーケンスでは automatic が既定で、保存済み設定から再開する場合は\nその設定の値が使われます。",
+  "cli.help.clean_method": "この画像シーケンスに使用するクリーンモード。\n新しいシーケンスでは automatic が既定で、保存済み設定から再開する場合は\nその設定の値が使われます。\ndirtySky と dirtyEarth はクリーンの逆で、空、または地上で動いたものだけを残し、\nフレームの残りを黒で書き出します。",
   "cli.help.cloud_aware_merge": "星に位置合わせしたマージで、動きの速い雲をそのまま保ちます。\n雲は星に対してずれていくため、星に位置合わせした隣接フレームのマージでは\n雲の各ピクセルが異なる瞬間から取られ、雲の縁が帯状に繰り返された\nコピーが残ってしまいます。これをオンにすると、雲の動きに位置合わせした 2 つ目のマージが、\nフレームをより適切に説明できる箇所に、星を戻したうえでブレンドされるため、雲は\n形を保ち、飛行機や衛星の筋は引き続き除去されます。晴れた空は\n変わりません。\n雲のあるフレームでは追加の CPU とメモリを使います。デフォルトではオフです。\n変更すると、処理済みのフレームのマージがやり直されます。位置合わせはそのまま保持されます。\n--no-cloud-aware-merge でオフになります。ここにある他のフラグと同様に設定へ保存されるため、\n指定し直さずに再開しても同じ選択が維持されます。",
   "cli.help.detection_type": "検出タイプ",
   "cli.help.extract_in_background": "ビデオのフレームを抽出している間に処理を開始します。既定は、任意のフレームをすばやく取得できる ProRes などでオン、H.264、H.265 などでオフです。",
@@ -1232,5 +1232,8 @@
   "settings_tab.memory": "メモリ",
   "ui.render_options_after_processing_title": "動画の設定を選択",
   "ui.use_these_settings": "この設定を使う",
-  "ui.settings": "設定"
+  "ui.settings": "設定",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth は地平線より下の地上だけを残すため、地平線検出が必要で、検出をオフにした状態 (--no-horizon) では実行できません。",
+  "view_mode.dirtySkyProcessed": "未クリーンの空",
+  "view_mode.dirtyEarthProcessed": "未クリーンの地上"
 }
