@@ -17,6 +17,7 @@ from .fakes import (
     GOOD_BODY,
     OWNER,
     FakeAgent,
+    FakeAnnouncer,
     FakeGitHub,
     accepted,
     commit_change,
@@ -32,6 +33,7 @@ class Rig:
         self.gh = FakeGitHub(origin=tmp / "origin.git")
         self.agent = FakeAgent()
         self.pages: list[tuple[str, str]] = []
+        self.announcer = FakeAnnouncer()
         self.slept: list[float] = []
         self.now = time.time()
 
@@ -43,7 +45,7 @@ class Rig:
         self.engine = Engine(Config(remote="origin", landing_mode="single"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
                              Notifier(self.db, lambda t, x: self.pages.append((t, x))), "origin/develop",
                              clock=lambda: self.now, sleep=sleep,
-                             negative_control=no_controls)
+                             negative_control=no_controls, announcer=self.announcer)
         self.db.clock = lambda: self.now
 
     def state(self, n: int) -> str:
@@ -525,3 +527,47 @@ def test_the_defaults_are_sonnet_everywhere() -> None:
 
     cfg = Config()
     assert (cfg.model, cfg.model_escalate, cfg.allow_opus) == ("sonnet", "sonnet", False)
+
+
+async def test_needs_input_announces_with_the_attention_voice(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.add_question(7, "explore", "ship it?", {})
+    rig.db.answer_question(1, "no", "owner")
+    rig.db.put("delivered:1", "1")
+
+    def ask(req: StageRequest) -> StageOutcome:
+        req.contract.ask_question({"question": "ship it?", "why_unanswerable": "again"})
+        return accepted(req)
+
+    rig.agent.on("explore", ask)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "needs-input"
+    assert rig.announcer.calls == [("attention", 7)]
+    from starpipe.announce import CLIPS
+
+    sound, voice, sentence = CLIPS["attention"]
+    assert sentence.format(n=7) == "Star issue number 7 needs your attention"
+    assert (sound, voice) != CLIPS["landed"][:2]
+
+
+async def test_announcer_failure_does_not_fail_the_stage(rig: Rig) -> None:
+    rig.announcer.fail = True
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    result = rig.engine.park(t, "needs a human", state="needs-input")
+    assert not result.ok and rig.state(7) == "needs-input" and rig.announcer.calls == [("attention", 7)]
+    rig.engine._to_state(7, "landed")  # pyright: ignore[reportPrivateUsage]
+    assert rig.state(7) == "landed"
+
+
+def test_the_real_announcer_swallows_missing_binaries_and_never_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe import announce
+
+    monkeypatch.setattr(announce, "AFPLAY", "/nonexistent/afplay")
+    monkeypatch.setattr(announce, "SAY", "/nonexistent/say")
+    announce.SayAnnouncer.play("landed", 1)  # no exception
+    a = announce.SayAnnouncer()
+    a.announce("attention", 2)  # returns at once; the worker thread swallows the failure

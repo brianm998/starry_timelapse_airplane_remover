@@ -347,7 +347,7 @@ class Daemon:
         return {"daemon": {"pid": os.getpid(), "since": self.started, "last_poll": self.last_poll,
                            "error": self.last_error or self.update_error()},
                 "self_update": {"pending": self.db.get("self_update_pending"), "failed": self.update_failure()},
-                "resources": self.resources(), "pause": self.db.get("pause"), "usage_pause_until": self.db.get("usage_pause_until"),
+                "resources": self.resources(), "pause": self.db.get("pause"), "muted": self.db.get("muted") == "1", "usage_pause_until": self.db.get("usage_pause_until"),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "tickets": tickets}
 
@@ -747,6 +747,15 @@ class Daemon:
             self.db.put("max_active", str(n))  # lowering it never stops a running ticket, it only stops new claims
             return web.json_response({"result": "ok"})
 
+        @r.post("/v1/mute")
+        async def mute(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            muted = body.get("muted")
+            if not isinstance(muted, bool):
+                raise web.HTTPBadRequest(text="muted must be true or false")
+            self.db.put("muted", "1" if muted else "0")  # the daemon db: it survives a restart
+            return web.json_response({"result": "ok"})
+
         @r.post("/v1/resume")
         async def resume(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             self.db.put("pause", None)
@@ -790,6 +799,7 @@ def checkout_root(config: Config, start: Path) -> Path:
 
 def build(config: Config) -> Daemon:
     from .agent import SdkRunner
+    from .announce import SayAnnouncer
     from .engine import check_runner_for
     from .github import GitHub
     from .notify import Notifier
@@ -801,7 +811,7 @@ def build(config: Config) -> Daemon:
     db = Database()
     shim = str(Path(__file__).resolve().parents[2] / "bin" / "starpipe")
     engine = Engine(config, db, GitHub(config), SdkRunner(shim), repo, check_runner_for(), Notifier(db),
-                    base_ref=gitutil.resolve_base(repo, None), shim=shim)
+                    base_ref=gitutil.resolve_base(repo, None), shim=shim, announcer=SayAnnouncer())
     return Daemon(engine, config)
 
 

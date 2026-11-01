@@ -55,6 +55,7 @@ async def test_ready_tickets_land_together_through_one_pr_and_one_ci(rig: Rig) -
     rig.gh.workflow_runs = watched  # type: ignore[method-assign]
     await train_of(rig).run_until_idle()
     assert [rig.state(n) for n in (1, 2, 3)] == ["landed"] * 3
+    assert sorted(rig.announcer.calls) == [("landed", 1), ("landed", 2), ("landed", 3)], "each member announced once"
     assert len(rig.gh.prs) == 1 and len(set(ran_ci_for)) == 1, "one PR, and CI for one commit, for three tickets"
     pr = next(iter(rig.gh.prs.values()))
     assert all(f"Closes #{n}" in pr["body"] for n in (1, 2, 3))

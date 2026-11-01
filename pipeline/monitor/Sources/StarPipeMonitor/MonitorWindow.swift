@@ -73,6 +73,9 @@ struct HeaderStrip: View {
             }
             Button { enqueueing = true } label: { Image(systemName: "plus") }
                 .help("Enqueue GitHub issues from links")
+            let muted = store.snapshot?.muted ?? false
+            Button { Task { await store.setMuted(!muted) } } label: { Image(systemName: muted ? "speaker.slash" : "speaker.wave.2") }
+                .help(muted ? "Unmute the pipeline's spoken alerts" : "Mute the pipeline's spoken alerts")
         }
         .sheet(isPresented: $enqueueing) { EnqueueSheet(store: store) }
         .padding(.horizontal, 14).padding(.vertical, 8)

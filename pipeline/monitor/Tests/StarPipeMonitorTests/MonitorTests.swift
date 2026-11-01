@@ -31,6 +31,10 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(try Self.snapshot().maxActive, 2)
     }
 
+    func testSnapshotDecodesMuted() throws {
+        XCTAssertEqual(try Self.snapshot().muted, false)
+    }
+
     func testOverviewGroupsActiveSessionsByModelAndOrdersTheLandingQueue() throws {
         let base = try XCTUnwrap(try Self.snapshot().tickets.first)
         func ticket(_ n: Int, _ state: String, model: String?, stage: String? = nil) -> TicketSnap {
