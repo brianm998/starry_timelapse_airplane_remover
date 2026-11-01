@@ -844,6 +844,13 @@ class AppViewModel(
         openRenderVideo()
     }
 
+    /** The panel's Settings: the Processing Settings, in edit mode like the panel's other actions. */
+    fun openSettingsForOpenedSequence() {
+        closeSequenceProgress()
+        currentSequence?.setMode(com.star.desktop.domain.InteractionMode.EDIT)
+        openSettings()
+    }
+
     /** Total frames in the open sequence — bounds the moving-horizon count stepper. */
     fun startupFrameCount(): Int = (currentSequence?.frameCount ?: 1).coerceAtLeast(1)
 

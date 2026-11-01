@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "Горизонт",
   "settings_tab.memory": "Память",
   "ui.render_options_after_processing_title": "Выберите настройки видео",
-  "ui.use_these_settings": "Использовать эти настройки"
+  "ui.use_these_settings": "Использовать эти настройки",
+  "ui.settings": "Настройки"
 }

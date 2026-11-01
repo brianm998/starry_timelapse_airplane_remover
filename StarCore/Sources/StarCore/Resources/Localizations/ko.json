@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "지평선",
   "settings_tab.memory": "메모리",
   "ui.render_options_after_processing_title": "영상 설정 선택",
-  "ui.use_these_settings": "이 설정 사용"
+  "ui.use_these_settings": "이 설정 사용",
+  "ui.settings": "설정"
 }

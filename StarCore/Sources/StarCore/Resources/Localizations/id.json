@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "Horizon",
   "settings_tab.memory": "Memori",
   "ui.render_options_after_processing_title": "Pilih pengaturan video",
-  "ui.use_these_settings": "Gunakan pengaturan ini"
+  "ui.use_these_settings": "Gunakan pengaturan ini",
+  "ui.settings": "Pengaturan"
 }

@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "Orizzonte",
   "settings_tab.memory": "Memoria",
   "ui.render_options_after_processing_title": "Scegli le impostazioni del video",
-  "ui.use_these_settings": "Usa queste impostazioni"
+  "ui.use_these_settings": "Usa queste impostazioni",
+  "ui.settings": "Impostazioni"
 }

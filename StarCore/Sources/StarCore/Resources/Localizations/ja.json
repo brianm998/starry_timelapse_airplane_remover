@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "地平線",
   "settings_tab.memory": "メモリ",
   "ui.render_options_after_processing_title": "動画の設定を選択",
-  "ui.use_these_settings": "この設定を使う"
+  "ui.use_these_settings": "この設定を使う",
+  "ui.settings": "設定"
 }

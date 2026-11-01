@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "Horizont",
   "settings_tab.memory": "Speicher",
   "ui.render_options_after_processing_title": "Videoeinstellungen wählen",
-  "ui.use_these_settings": "Diese Einstellungen verwenden"
+  "ui.use_these_settings": "Diese Einstellungen verwenden",
+  "ui.settings": "Einstellungen"
 }

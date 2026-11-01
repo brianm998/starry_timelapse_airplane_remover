@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "الأفق",
   "settings_tab.memory": "الذاكرة",
   "ui.render_options_after_processing_title": "اختيار إعدادات الفيديو",
-  "ui.use_these_settings": "استخدام هذه الإعدادات"
+  "ui.use_these_settings": "استخدام هذه الإعدادات",
+  "ui.settings": "الإعدادات"
 }

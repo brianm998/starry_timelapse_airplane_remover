@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "Ufuk",
   "settings_tab.memory": "Bellek",
   "ui.render_options_after_processing_title": "Video ayarlarını seçin",
-  "ui.use_these_settings": "Bu ayarları kullan"
+  "ui.use_these_settings": "Bu ayarları kullan",
+  "ui.settings": "Ayarlar"
 }

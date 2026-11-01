@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "افق",
   "settings_tab.memory": "میموری",
   "ui.render_options_after_processing_title": "ویڈیو کی ترتیبات منتخب کریں",
-  "ui.use_these_settings": "یہ ترتیبات استعمال کریں"
+  "ui.use_these_settings": "یہ ترتیبات استعمال کریں",
+  "ui.settings": "ترتیبات"
 }

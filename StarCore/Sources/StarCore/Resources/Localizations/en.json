@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "Horizon",
   "settings_tab.memory": "Memory",
   "ui.render_options_after_processing_title": "Choose Video Settings",
-  "ui.use_these_settings": "Use These Settings"
+  "ui.use_these_settings": "Use These Settings",
+  "ui.settings": "Settings"
 }

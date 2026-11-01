@@ -1231,5 +1231,6 @@
   "settings_tab.horizon": "Đường chân trời",
   "settings_tab.memory": "Bộ nhớ",
   "ui.render_options_after_processing_title": "Chọn cài đặt video",
-  "ui.use_these_settings": "Dùng các cài đặt này"
+  "ui.use_these_settings": "Dùng các cài đặt này",
+  "ui.settings": "Cài đặt"
 }

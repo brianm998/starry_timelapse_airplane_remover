@@ -33,6 +33,7 @@ class Config(BaseModel):
 
     max_active: int = 2
     heavy_slots: int = 1
+    auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
     nightly_start: str = "03:00"
     digest_weekday: int = 6  # Monday is 0
     digest_hour: int = 8
@@ -49,6 +50,8 @@ class Config(BaseModel):
     ci_poll_s: float = 60.0
     ci_settle_s: float = 90.0
     max_auto_tickets: int = 2
+    max_open_tickets: int = 30  # open issues labelled `pipeline`: `ticket new` and `approve` refuse past this
+    max_proposed: int = 10  # open issues labelled `pipe:proposed`: waiting on the owner
     poll_s: float = 60.0
     checkout: str = ""  # the main checkout the worktrees hang off; default: found from the cwd
 
