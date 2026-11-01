@@ -251,6 +251,19 @@ class FakeGitHub(GitHub):
 Script = Callable[[StageRequest], Awaitable[StageOutcome] | StageOutcome]
 
 
+class FakeAnnouncer:
+    """Records what would have been said, so the suite never makes a sound."""
+
+    def __init__(self, fail: bool = False) -> None:
+        self.calls: list[tuple[str, int]] = []
+        self.fail = fail
+
+    def announce(self, kind: str, n: int) -> None:
+        self.calls.append((kind, n))
+        if self.fail:
+            raise RuntimeError("no speakers")
+
+
 class FakeAgent:
     """A scripted agent: per stage, a queue of behaviours. Each gets the request and may drive the contract."""
 
