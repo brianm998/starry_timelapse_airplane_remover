@@ -296,6 +296,18 @@ final class ClientTests: XCTestCase {
     }
 }
 
+final class IssueLinksTests: XCTestCase {
+    func testLinksSplitOnAnyWhitespaceDropEmptiesAndCollapseDuplicates() {
+        let a = "https://github.com/brianm998/starry_timelapse_airplane_remover/issues/8"
+        let b = "https://github.com/brianm998/starry_timelapse_airplane_remover/issues/9"
+        let c = "https://github.com/brianm998/starry_timelapse_airplane_remover/issues/10"
+        let text = "  \(a)\r\n\n\n\(b)\t\(a) \(c)\n\t \n\(b)\n"
+        XCTAssertEqual(IssueLinks.parse(text), [a, b, c])
+        XCTAssertEqual(IssueLinks.parse(" \n\t\r\n "), [])
+        XCTAssertEqual(IssueLinks.parse(""), [])
+    }
+}
+
 final class FontScaleTests: XCTestCase {
     func testBiggerAndSmallerStepAndClampAndResetReturnsToOne() {
         XCTAssertEqual(FontScale.default, 1.0)

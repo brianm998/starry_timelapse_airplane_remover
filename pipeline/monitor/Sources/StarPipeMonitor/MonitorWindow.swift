@@ -50,6 +50,7 @@ func stateColor(_ state: String) -> Color {
 
 struct HeaderStrip: View {
     let store: MonitorStore
+    @State private var enqueueing = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 22) {
@@ -67,7 +68,10 @@ struct HeaderStrip: View {
             if let week = store.snapshot?.interventionsWeek, !week.isEmpty {
                 item("Interventions (7 d)", week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "), color: .secondary)
             }
+            Button { enqueueing = true } label: { Image(systemName: "plus") }
+                .help("Enqueue GitHub issues from links")
         }
+        .sheet(isPresented: $enqueueing) { EnqueueSheet(store: store) }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .scaledFont(.caption)
     }
