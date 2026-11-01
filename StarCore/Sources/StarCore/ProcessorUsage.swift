@@ -133,3 +133,77 @@ public struct ProcessorUsage {
     }
 }
 
+
+
+/// The cumulative cpu tick counters of the whole machine, as the kernel keeps them.  The counters are 32 bit and wrap, so only the
+/// difference between two readings means anything (`ProcessorUsage.from(ticks:previous:)`).
+struct ProcessorTicks: Equatable {
+    var user: UInt32
+    var system: UInt32
+    var idle: UInt32
+    var nice: UInt32
+}
+
+extension ProcessorUsage {
+    /// The usage over the time between two tick readings, or nil when no ticks passed between them (no basis for a percentage).
+    ///
+    /// What `top` reported as "CPU usage", read from the kernel instead: `top` is a child process, which a sandboxed app may not run.
+    /// Nice time counts as user time, as it does in `top`.
+    static func from(ticks: ProcessorTicks, previous: ProcessorTicks) -> ProcessorUsage? {
+        // wrapping subtraction: a counter that rolled over between the readings still gives the right difference
+        let user = Double(ticks.user &- previous.user) + Double(ticks.nice &- previous.nice)
+        let sys = Double(ticks.system &- previous.system)
+        let idle = Double(ticks.idle &- previous.idle)
+        let total = user + sys + idle
+        guard total > 0 else { return nil }
+        return ProcessorUsage(user: user / total * 100, sys: sys / total * 100, idle: idle / total * 100)
+    }
+}
+
+#if os(macOS)
+import Darwin
+
+/// `host_statistics(HOST_CPU_LOAD_INFO)`: the tick counters, with no child process and nothing a sandbox forbids.
+enum HostProcessorTicks {
+    static func read() -> ProcessorTicks? {
+        var info = host_cpu_load_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+        // the tuple is indexed by CPU_STATE_USER, _SYSTEM, _IDLE, _NICE
+        return ProcessorTicks(user: info.cpu_ticks.0, system: info.cpu_ticks.1, idle: info.cpu_ticks.2, nice: info.cpu_ticks.3)
+    }
+}
+
+/// Reads the machine's usage from `HostProcessorTicks`, one reading at a time.  A reading is the usage since the one before, so the
+/// first has nothing to compare with: it waits a moment and reads again, rather than report the cpu as idle (or busy) on no evidence.
+struct ProcessorTickSampler {
+    private var last: (ticks: ProcessorTicks, at: Date)?
+
+    /// A previous reading older than this says nothing about now.
+    static let freshSeconds: TimeInterval = 30
+    static let firstWindowSeconds: TimeInterval = 0.2
+
+    mutating func sample() -> ProcessorUsage? {
+        guard let first = HostProcessorTicks.read() else { return nil }
+        let firstAt = Date()
+        let baseline: ProcessorTicks
+        let current: ProcessorTicks
+        if let last, firstAt.timeIntervalSince(last.at) < Self.freshSeconds {
+            baseline = last.ticks
+            current = first
+        } else {
+            Thread.sleep(forTimeInterval: Self.firstWindowSeconds)
+            guard let second = HostProcessorTicks.read() else { return nil }
+            baseline = first
+            current = second
+        }
+        last = (current, Date())
+        return ProcessorUsage.from(ticks: current, previous: baseline)
+    }
+}
+#endif

@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "Využití GPU",
   "settings_tab.alignment": "Zarovnání",
   "settings_tab.horizon": "Horizont",
-  "settings_tab.memory": "Paměť"
+  "settings_tab.memory": "Paměť",
+  "ui.location_grant_message": "Star potřebuje přístup ke složce {0}, aby mohl zapsat výstup vedle {1}.",
+  "ui.folder_access_prompt": "Star potřebuje přístup ke složce {0}, aby mohl otevřít tuto sekvenci. Pokračujte výběrem této složky.",
+  "ui.folder_access_denied": "Star nezískal přístup ke složce {0}. Možná byla přesunuta nebo smazána, nebo přístup nebyl povolen.",
+  "ui.folder_access_grant": "Povolit přístup"
 }

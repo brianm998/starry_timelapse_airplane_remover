@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "Uso de GPU",
   "settings_tab.alignment": "Alineación",
   "settings_tab.horizon": "Horizonte",
-  "settings_tab.memory": "Memoria"
+  "settings_tab.memory": "Memoria",
+  "ui.location_grant_message": "Star necesita acceso a {0} para escribir su salida junto a {1}.",
+  "ui.folder_access_prompt": "Star necesita acceso a {0} para abrir esta secuencia. Elige esa carpeta para continuar.",
+  "ui.folder_access_denied": "Star no pudo acceder a {0}. Puede que se haya movido o eliminado, o que no se haya concedido el acceso.",
+  "ui.folder_access_grant": "Permitir acceso"
 }

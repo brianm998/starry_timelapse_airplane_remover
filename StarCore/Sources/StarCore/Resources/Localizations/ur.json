@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "GPU کا استعمال",
   "settings_tab.alignment": "ہم آہنگی",
   "settings_tab.horizon": "افق",
-  "settings_tab.memory": "میموری"
+  "settings_tab.memory": "میموری",
+  "ui.location_grant_message": "{1} کے ساتھ آؤٹ پٹ لکھنے کے لیے Star کو {0} تک رسائی درکار ہے۔",
+  "ui.folder_access_prompt": "اس سیکوئنس کو کھولنے کے لیے Star کو {0} تک رسائی درکار ہے۔ جاری رکھنے کے لیے وہی فولڈر منتخب کریں۔",
+  "ui.folder_access_denied": "Star {0} تک رسائی حاصل نہیں کر سکا۔ ہو سکتا ہے اسے منتقل یا حذف کر دیا گیا ہو، یا رسائی کی اجازت نہ دی گئی ہو۔",
+  "ui.folder_access_grant": "رسائی کی اجازت دیں"
 }

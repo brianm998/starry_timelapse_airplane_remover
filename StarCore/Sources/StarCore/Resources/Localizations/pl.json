@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "Użycie GPU",
   "settings_tab.alignment": "Wyrównanie",
   "settings_tab.horizon": "Horyzont",
-  "settings_tab.memory": "Pamięć"
+  "settings_tab.memory": "Pamięć",
+  "ui.location_grant_message": "Star potrzebuje dostępu do folderu {0}, aby zapisać wyniki obok {1}.",
+  "ui.folder_access_prompt": "Star potrzebuje dostępu do folderu {0}, aby otworzyć tę sekwencję. Wybierz ten folder, aby kontynuować.",
+  "ui.folder_access_denied": "Star nie uzyskał dostępu do folderu {0}. Mógł zostać przeniesiony lub usunięty albo dostęp nie został udzielony.",
+  "ui.folder_access_grant": "Zezwól na dostęp"
 }

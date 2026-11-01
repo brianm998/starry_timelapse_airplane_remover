@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "GPU उपयोग",
   "settings_tab.alignment": "अलाइनमेंट",
   "settings_tab.horizon": "क्षितिज",
-  "settings_tab.memory": "मेमोरी"
+  "settings_tab.memory": "मेमोरी",
+  "ui.location_grant_message": "{1} के बगल में आउटपुट लिखने के लिए Star को {0} तक पहुँच चाहिए।",
+  "ui.folder_access_prompt": "इस सीक्वेंस को खोलने के लिए Star को {0} तक पहुँच चाहिए। जारी रखने के लिए वही फ़ोल्डर चुनें।",
+  "ui.folder_access_denied": "Star {0} तक नहीं पहुँच सका। हो सकता है उसे दूसरी जगह ले जाया गया हो या हटा दिया गया हो, या पहुँच की अनुमति न दी गई हो।",
+  "ui.folder_access_grant": "पहुँच की अनुमति दें"
 }

@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "Использование GPU",
   "settings_tab.alignment": "Выравнивание",
   "settings_tab.horizon": "Горизонт",
-  "settings_tab.memory": "Память"
+  "settings_tab.memory": "Память",
+  "ui.location_grant_message": "Star нужен доступ к папке {0}, чтобы записать результат рядом с «{1}».",
+  "ui.folder_access_prompt": "Star нужен доступ к папке {0}, чтобы открыть эту последовательность. Выберите эту папку, чтобы продолжить.",
+  "ui.folder_access_denied": "Star не удалось получить доступ к {0}. Возможно, папку переместили или удалили, либо доступ не был предоставлен.",
+  "ui.folder_access_grant": "Разрешить доступ"
 }

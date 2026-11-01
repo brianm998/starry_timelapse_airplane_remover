@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "GPUの使用",
   "settings_tab.alignment": "アライメント",
   "settings_tab.horizon": "地平線",
-  "settings_tab.memory": "メモリ"
+  "settings_tab.memory": "メモリ",
+  "ui.location_grant_message": "Star が {1} と同じ場所に出力を書き込むには、{0} へのアクセス権が必要です。",
+  "ui.folder_access_prompt": "Star がこのシーケンスを開くには、{0} へのアクセス権が必要です。続けるにはそのフォルダを選択してください。",
+  "ui.folder_access_denied": "Star は {0} にアクセスできませんでした。移動または削除されたか、アクセスが許可されていない可能性があります。",
+  "ui.folder_access_grant": "アクセスを許可"
 }

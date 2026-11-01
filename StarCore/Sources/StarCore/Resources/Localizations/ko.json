@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "GPU 사용",
   "settings_tab.alignment": "정렬",
   "settings_tab.horizon": "지평선",
-  "settings_tab.memory": "메모리"
+  "settings_tab.memory": "메모리",
+  "ui.location_grant_message": "Star가 {1} 옆에 출력을 쓰려면 {0}에 대한 접근 권한이 필요합니다.",
+  "ui.folder_access_prompt": "Star가 이 시퀀스를 열려면 {0}에 대한 접근 권한이 필요합니다. 계속하려면 해당 폴더를 선택하세요.",
+  "ui.folder_access_denied": "Star가 {0}에 접근하지 못했습니다. 폴더가 이동되었거나 삭제되었거나 접근 권한이 허용되지 않았을 수 있습니다.",
+  "ui.folder_access_grant": "접근 허용"
 }

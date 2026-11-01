@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "GPU Usage",
   "settings_tab.alignment": "Alignment",
   "settings_tab.horizon": "Horizon",
-  "settings_tab.memory": "Memory"
+  "settings_tab.memory": "Memory",
+  "ui.location_grant_message": "Star needs access to {0} to write its output beside {1}.",
+  "ui.folder_access_prompt": "Star needs access to {0} to open this sequence. Choose that folder to continue.",
+  "ui.folder_access_denied": "Star could not get access to {0}. It may have been moved or deleted, or access was not granted.",
+  "ui.folder_access_grant": "Allow Access"
 }

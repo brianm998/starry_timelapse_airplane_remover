@@ -35,7 +35,21 @@ public actor ProcessorUsageTracker {
                                     idle: 0)
     }
 
+#if os(macOS)
+    private var tickSampler = ProcessorTickSampler()
+#endif
+
     private func readUsage() -> Double {
+#if os(macOS)
+        // From the kernel's own counters: `top` is a child process, which a sandboxed app may not run.  `top` stays as the fallback.
+        if let usage = tickSampler.sample() {
+            self.realUsages.append(usage)
+            while realUsages.count > 10 { realUsages.removeFirst(1) }
+            self.usage = usage
+            Log.d("CPU usage: \(usage)")
+            return usage.idlePercent
+        }
+#endif
         nonisolated(unsafe) var ret = ProcessorUsage.busy()
         do {
             try ObjC.catchException {

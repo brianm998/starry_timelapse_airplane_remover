@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "استخدام GPU",
   "settings_tab.alignment": "المحاذاة",
   "settings_tab.horizon": "الأفق",
-  "settings_tab.memory": "الذاكرة"
+  "settings_tab.memory": "الذاكرة",
+  "ui.location_grant_message": "يحتاج Star إلى الوصول إلى {0} لكتابة مخرجاته بجوار {1}.",
+  "ui.folder_access_prompt": "يحتاج Star إلى الوصول إلى {0} لفتح هذا التسلسل. اختر ذلك المجلد للمتابعة.",
+  "ui.folder_access_denied": "تعذّر على Star الوصول إلى {0}. ربما تم نقله أو حذفه، أو لم يتم منح إذن الوصول.",
+  "ui.folder_access_grant": "السماح بالوصول"
 }

@@ -1229,5 +1229,9 @@
   "settings_tab.gpu": "GPU ব্যবহার",
   "settings_tab.alignment": "অ্যালাইনমেন্ট",
   "settings_tab.horizon": "দিগন্ত",
-  "settings_tab.memory": "মেমরি"
+  "settings_tab.memory": "মেমরি",
+  "ui.location_grant_message": "{1}-এর পাশে আউটপুট লেখার জন্য Star-এর {0}-এ অ্যাক্সেস দরকার।",
+  "ui.folder_access_prompt": "এই সিকোয়েন্স খোলার জন্য Star-এর {0}-এ অ্যাক্সেস দরকার। চালিয়ে যেতে ওই ফোল্ডারটি বেছে নিন।",
+  "ui.folder_access_denied": "Star {0}-এ অ্যাক্সেস পায়নি। এটি সরানো বা মুছে ফেলা হয়ে থাকতে পারে, অথবা অ্যাক্সেস দেওয়া হয়নি।",
+  "ui.folder_access_grant": "অ্যাক্সেসের অনুমতি দিন"
 }
