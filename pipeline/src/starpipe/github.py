@@ -79,6 +79,9 @@ class GitHub:
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.api("PATCH", f"issues/{number}", {"state": "closed", "state_reason": reason})
 
+    def set_body(self, number: int, body: str) -> None:
+        self.api("PATCH", f"issues/{number}", {"body": body})
+
     def comment(self, number: int, body: str) -> int:
         return int(self.api("POST", f"issues/{number}/comments", {"body": body})["id"])
 

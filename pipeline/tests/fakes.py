@@ -143,6 +143,9 @@ class FakeGitHub(GitHub):
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.issues[number]["state"] = "closed"
 
+    def set_body(self, number: int, body: str) -> None:
+        self.issues[number]["body"] = body
+
     # pull requests and CI ---------------------------------------------------------------------------------------------
     def _head(self, branch: str) -> str:
         assert self.origin
