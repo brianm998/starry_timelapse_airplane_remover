@@ -48,6 +48,7 @@ with the owner's GitHub token.
 ## Out of scope
 ## Pipeline
 (optional) model_develop: opus · effort_develop: high · gherkin: <feature> · skip_review: no
+(`model_<stage>` / `effort_<stage>` exist for explore, develop, fix, review, resolve, ci_fix and conflict; models: opus, sonnet, haiku; efforts: low, medium, high, xhigh, max)
 ```
 
 - Every acceptance criterion has a `check:`. A bug's tests say "fails without the fix"; `none:` for a bug needs a real
