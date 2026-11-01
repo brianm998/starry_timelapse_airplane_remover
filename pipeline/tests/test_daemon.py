@@ -681,6 +681,30 @@ async def test_picking_opus_in_the_monitor_and_allow_opus_are_how_a_ticket_may_u
         await client.close()
 
 
+async def test_mute_is_persisted_reported_and_silences_announcements(rig: Rig) -> None:
+    client, _ = await api(rig)
+    try:
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["muted"] is False
+        for bad in ("yes", 1, None):
+            assert (await client.post("/v1/mute", json={"muted": bad}, headers=AUTH)).status == 400
+        assert (await client.post("/v1/mute", json={"muted": True}, headers=AUTH)).status == 200
+        assert rig.db.get("muted") == "1"
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["muted"] is True
+        rig.engine.announce("landed", 5)
+        assert rig.announcer.calls == []
+        restarted = Daemon(rig.engine, Config(), token="tok")  # a new daemon on the same db: still muted
+        assert restarted.status()["muted"] is True
+        assert (await client.post("/v1/mute", json={"muted": False}, headers=AUTH)).status == 200
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["muted"] is False
+        rig.engine.announce("landed", 5)
+        assert rig.announcer.calls == [("landed", 5)]
+    finally:
+        await client.close()
+
+
 def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(monkeypatch: pytest.MonkeyPatch, rig: Rig) -> None:
     from starpipe import daemon as daemon_mod
 

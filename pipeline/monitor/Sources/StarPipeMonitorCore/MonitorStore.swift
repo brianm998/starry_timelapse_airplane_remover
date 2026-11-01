@@ -190,5 +190,6 @@ public final class MonitorStore {
     public func cancel(_ number: Int) async { await run { try await $0.cancel(number, reason: "cancelled from the monitor") } }
     public func setPriority(_ number: Int, _ priority: Int) async { await run { try await $0.setPriority(number, priority) } }
     public func landNow(_ number: Int) async { await run { try await $0.landNow(number) } }
+    public func setMuted(_ muted: Bool) async { await run { try await $0.setMuted(muted) } }
     public func setMaxActive(_ n: Int) async { await run { try await $0.setMaxActive(n) } }
 }

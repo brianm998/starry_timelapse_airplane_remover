@@ -48,6 +48,7 @@
     "stop_line": null
   },
   "max_active": 2,
+  "muted": false,
   "nightly": {
     "at": 1500.0,
     "id": 1,
