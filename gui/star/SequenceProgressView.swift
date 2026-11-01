@@ -25,8 +25,23 @@ struct SequenceProgressModalView: View {
               progress: progress,
               finishProcessing: { viewModel.finishProcessingOpenedSequence() },
               renderVideo: { viewModel.renderVideoForOpenedSequence() },
+              openSettings: { viewModel.openSettingsForOpenedSequence() },
               dismiss: { viewModel.sequenceProgressModalShowing = false }
             )
+        }
+    }
+}
+
+/// The buttons along the bottom of the re-open modal, left to right.
+enum SequenceProgressAction: Equatable {
+    case close, settings, renderVideo, startProcessing, finishProcessing
+
+    /// The id the UI tests and the Gherkin steps find the button by (`gherkin/ui/ids.json`).
+    var accessibilityIdentifier: String? {
+        switch self {
+        case .close: "sequenceprogress.close"
+        case .settings: "sequenceprogress.settings"
+        case .renderVideo, .startProcessing, .finishProcessing: nil
         }
     }
 }
@@ -36,7 +51,21 @@ struct SequenceProgressPanel: View {
     let progress: SequenceProgress
     let finishProcessing: () -> Void
     let renderVideo: () -> Void
+    let openSettings: () -> Void
     let dismiss: () -> Void
+
+    /// The footer's buttons, left to right: a way out, Settings, then the one action.
+    /// Which action depends on whether there is anything left to process — offering a
+    /// render of a sequence with unwritten frames would offer a video with holes in it.
+    /// Settings is there in every state, so the settings can be changed before a partly
+    /// processed run is finished as well as before a finished one is rendered.
+    static func footerActions(for progress: SequenceProgress) -> [SequenceProgressAction] {
+        let action: SequenceProgressAction =
+          progress.isComplete ? .renderVideo
+          : progress.isUntouched ? .startProcessing
+          : .finishProcessing
+        return [.close, .settings, action]
+    }
 
     /// The same width as `ProcessingModalPanel`, and for the same reason: it holds the
     /// longest translated step name over two lines, and the two panels stack the same rows.
@@ -134,30 +163,40 @@ struct SequenceProgressPanel: View {
         }
     }
 
-    /// One action, plus a way out of the panel.  Which action depends on whether there is
-    /// anything left to process — offering a render of a sequence with unwritten frames
-    /// would offer a video with holes in it.
+    /// Built from `footerActions(for:)`, so what the tests read is what is drawn.
     private var footer: some View {
         HStack(spacing: 12) {
-            Button(localized("ui.close"), action: dismiss)
-              .accessibilityIdentifier("sequenceprogress.close")
-              .help(localized("ui.close_this_and_go_to_the_frames"))
-
-            Spacer()
-
-            if progress.isComplete {
-                Button(localized("ui.render_video"), action: renderVideo)
-                  .keyboardShortcut(.defaultAction)
-                  .help(localized("ui.render_all_frames_of_this_sequence_with"))
-            } else {
-                Button(progress.isUntouched
-                         ? localized("ui.start_processing")
-                         : localized("ui.finish_processing"),
-                       action: finishProcessing)
-                  .keyboardShortcut(.defaultAction)
-                  .help(localized("ui.process_the_frames_that_are_not_finished"))
+            ForEach(Self.footerActions(for: progress), id: \.self) { action in
+                footerButton(action)
+                if action == .close { Spacer() }
             }
         }
           .padding(20)
+    }
+
+    @ViewBuilder
+    private func footerButton(_ action: SequenceProgressAction) -> some View {
+        switch action {
+        case .close:
+            Button(localized("ui.close"), action: dismiss)
+              .accessibilityIdentifier("sequenceprogress.close")
+              .help(localized("ui.close_this_and_go_to_the_frames"))
+        case .settings:
+            // A plain button: Return stays with the action to its right.
+            Button(localized("ui.settings"), action: openSettings)
+              .accessibilityIdentifier("sequenceprogress.settings")
+              .help(localized("ui.processing_settings"))
+        case .renderVideo:
+            Button(localized("ui.render_video"), action: renderVideo)
+              .keyboardShortcut(.defaultAction)
+              .help(localized("ui.render_all_frames_of_this_sequence_with"))
+        case .startProcessing, .finishProcessing:
+            Button(action == .startProcessing
+                     ? localized("ui.start_processing")
+                     : localized("ui.finish_processing"),
+                   action: finishProcessing)
+              .keyboardShortcut(.defaultAction)
+              .help(localized("ui.process_the_frames_that_are_not_finished"))
+        }
     }
 }

@@ -1229,5 +1229,6 @@
   "settings_tab.gpu": "Využití GPU",
   "settings_tab.alignment": "Zarovnání",
   "settings_tab.horizon": "Horizont",
-  "settings_tab.memory": "Paměť"
+  "settings_tab.memory": "Paměť",
+  "ui.settings": "Nastavení"
 }
