@@ -56,8 +56,12 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: store.needsAttention ? "exclamationmark.circle.fill" : "shippingbox")
+            Image(nsImage: StarIcon.menuBarImage(for: store.pipelineState))
             if store.needsYouCount > 0 { Text("\(store.needsYouCount)") }
+        }
+        // The label is always alive (the window is not), so it keeps the Dock icon in step with the menu bar star.
+        .onChange(of: store.pipelineState, initial: true) { _, state in
+            NSApp.applicationIconImage = StarIcon.dockImage(for: state)
         }
     }
 }

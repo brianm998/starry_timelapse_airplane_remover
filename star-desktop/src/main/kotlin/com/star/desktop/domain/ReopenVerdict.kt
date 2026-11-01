@@ -2,6 +2,15 @@ package com.star.desktop.domain
 
 import com.star.proto.SequenceProgress
 
+/** The buttons along the bottom of the reopen panel (macOS `SequenceProgressAction`), and the tag a test or a Gherkin step finds each by. */
+enum class SequenceProgressButton(val testTag: String?) {
+    CLOSE("sequenceprogress.close"),
+    SETTINGS("sequenceprogress.settings"),
+
+    /** The verdict's one action: Render Video, or Start/Finish Processing. */
+    ACTION(null),
+}
+
 /**
  * What the panel shown when a sequence is reopened says about it, and the one thing it offers to do about it (macOS `SequenceProgressPanel`).
  * The facts it turns on, whether every frame is written, whether what is on disk will be made again, and whether nothing at all was done, are the daemon's call (they come with the
@@ -23,6 +32,12 @@ enum class ReopenVerdict(val statusKey: String, val actionKey: String, val actio
 
     /** Whether the action is a render rather than a run: offering a render of a sequence with unwritten frames would offer a video with holes in it. */
     val rendersVideo: Boolean get() = this == COMPLETE
+
+    /**
+     * The footer, left to right: a way out, Settings, then the action (macOS `SequenceProgressPanel.footerActions`). Settings is there in every
+     * state, so the settings can be changed before a partly processed run is finished as well as before a finished one is rendered.
+     */
+    val footer: List<SequenceProgressButton> get() = listOf(SequenceProgressButton.CLOSE, SequenceProgressButton.SETTINGS, SequenceProgressButton.ACTION)
 
     companion object {
         fun of(progress: SequenceProgress): ReopenVerdict = when {
