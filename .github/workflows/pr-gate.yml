@@ -1,8 +1,10 @@
 name: pr-gate
 
 # The fast check every PR must pass before the pipeline merges it (plans/PIPELINE.md §8.5, §15).
-# Target: 30 minutes. No path filter, so there is always a result for the head SHA. The slow
-# workflows (Gherkin, the installers, wgpu) are not part of this gate; they block a merge only
+# Target: 30 minutes. No path filter on the workflow, so there is always a result for the head SHA.
+# When a PR changes only paths that cannot affect the star program, the `changes` job says so and
+# the heavy `linux` and `macos` jobs are skipped (a skipped job counts as green); `static` always runs.
+# The slow workflows (Gherkin, the installers, wgpu) are not part of this gate; they block a merge only
 # when they fail on a PR where develop passes them.
 #
 # Not in this first version: a Windows job (cli.yml's windows job needs ~190 lines of MSVC/SDK
@@ -20,6 +22,42 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # ─── does the change touch the program at all? The one place that decides ─────────
+  # The list mirrors paths-ignore in cli.yml (glob syntax there, `case` syntax here: `*` crosses `/`).
+  # Only pull_request is narrowed: a push to develop or a manual run always builds, because develop's
+  # result is the baseline the pipeline's CI judge compares PRs with.
+  changes:
+    name: changed paths
+    runs-on: ubuntu-24.04
+    outputs:
+      program: ${{ steps.decide.outputs.program }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Does the change touch the program?
+        id: decide
+        run: |
+          program=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            # the checkout is the PR's merge commit: HEAD^1 is the base tip, so this is the PR's own files.
+            # --no-renames lists both sides of a move, so a file moved out of a program path still counts
+            files=$(git diff --name-only --no-renames HEAD^1 HEAD)
+            echo "Changed files:"; echo "$files"
+            if [ -n "$files" ]; then
+              program=false
+              while IFS= read -r f; do
+                case "$f" in
+                  pipeline/*|plans/*|docs/*|.claude/*|*.md|.github/ISSUE_TEMPLATE/*) ;;
+                  *) program=true; echo "Touches the program: $f"; break ;;
+                esac
+              done <<< "$files"
+            fi
+          fi
+          echo "program=$program"
+          echo "program=$program" >> "$GITHUB_OUTPUT"
+
   # ─── static checks and the pipeline's own tests: seconds, no OpenCV ─────────────
   static:
     name: static checks
@@ -75,6 +113,8 @@ jobs:
   # ─── Linux ───────────────────────────────────────────────────────────────────
   linux:
     name: Linux build + tests (ubuntu-24.04)
+    needs: changes
+    if: needs.changes.outputs.program == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -155,6 +195,8 @@ jobs:
   # built it (see gherkin.yml), so they must not restore what cli.yml's macos-14 jobs saved under the plain keys.
   macos:
     name: macOS build + tests (macos-15)
+    needs: changes
+    if: needs.changes.outputs.program == 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
