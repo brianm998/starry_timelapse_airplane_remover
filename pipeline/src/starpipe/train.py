@@ -98,7 +98,7 @@ class Train:
                 return group
         if not ready:
             return []
-        oldest = min(t.updated_at for t in ready)
+        oldest = min(eng.db.state_since(t.number, "ready") or t.updated_at for t in ready)
         if len(ready) >= eng.config.batch_max or eng.clock() - oldest >= eng.config.batch_window_s:
             return ids[: eng.config.batch_max]
         return []

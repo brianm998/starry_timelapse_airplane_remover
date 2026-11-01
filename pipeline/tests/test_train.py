@@ -359,3 +359,33 @@ def test_split_groups_survive_in_the_database_as_json(rig: Rig) -> None:
     ready_ticket(rig, 3, "f3.md", "3\n")
     assert train_of(rig)._pick() == [1]  # pyright: ignore[reportPrivateUsage]  # 2 is not ready; the group shrinks to what is
     assert json.loads(rig.db.get("train_groups") or "[]") == [[3]]
+
+
+async def test_the_window_counts_from_when_the_ticket_became_ready_not_from_the_last_poll(rig: Rig) -> None:
+    """Found live: the issue poll rewrote updated_at every minute, so a ticket never looked 'ready for 120 s' and no batch formed."""
+    rig.engine.config.batch_window_s = 600
+    ready_ticket(rig, 1, "f1.md", "1\n")
+    t = train_of(rig)
+    for _ in range(3):
+        rig.now += 250
+        rig.engine.sync_issues()  # the daemon does this every minute, and it used to refresh updated_at
+        if rig.now < 750 + (rig.db.state_since(1, "ready") or 0) - 250:
+            assert await t.step() is False
+    assert rig.db.state_since(1, "ready") is not None
+    assert await t.step() is True and rig.state(1) == "ci", "750 s after it became ready the 600 s window has passed"
+
+
+def test_a_poll_that_changes_nothing_does_not_move_updated_at(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    before = rig.db.ticket(7)
+    assert before
+    rig.now += 500
+    rig.engine.sync_issues()
+    again = rig.db.ticket(7)
+    assert again and again.updated_at == before.updated_at
+    rig.gh.issues[7]["title"] = "a new title"
+    rig.now += 100
+    rig.engine.sync_issues()
+    changed = rig.db.ticket(7)
+    assert changed and changed.updated_at > before.updated_at and changed.title == "a new title"

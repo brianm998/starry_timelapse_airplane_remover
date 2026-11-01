@@ -121,10 +121,13 @@ class Database:
                       blocked_by: list[int]) -> bool:
         """Insert a new ticket as queued, or refresh the issue's own fields. True when it was new."""
         now = self.clock()
-        exists = self.ticket(number) is not None
-        if exists:
-            self._exec("UPDATE tickets SET title=?, body=?, priority=?, blocked_by=?, updated_at=? WHERE number=?",
-                       (title, body, priority, json.dumps(blocked_by), now, number))
+        current = self.ticket(number)
+        exists = current is not None
+        if current is not None:
+            if (current.title, current.body, current.priority, current.blocked_by) != (title, body, priority, blocked_by):
+                # only a real change moves updated_at: this runs every poll, and "how long has it been in this state" reads it
+                self._exec("UPDATE tickets SET title=?, body=?, priority=?, blocked_by=?, updated_at=? WHERE number=?",
+                           (title, body, priority, json.dumps(blocked_by), now, number))
         else:
             self._exec("INSERT INTO tickets(number,title,body,author,priority,blocked_by,created_at,updated_at) "
                        "VALUES (?,?,?,?,?,?,?,?)", (number, title, body, author, priority, json.dumps(blocked_by), now, now))
@@ -142,6 +145,13 @@ class Database:
         else:
             rows = self._all("SELECT * FROM tickets ORDER BY priority, created_at")
         return [_ticket(r) for r in rows]
+
+    def state_since(self, number: int, state: str) -> float | None:
+        """When the ticket last entered `state`, from the event log (updated_at also moves for other reasons)."""
+        for row in self._all("SELECT at, data FROM events WHERE ticket=? AND kind='state' ORDER BY id DESC", (number,)):
+            if json.loads(row["data"]).get("state") == state:
+                return float(row["at"])
+        return None
 
     def set_state(self, number: int, state: str, reason: str | None = None) -> None:
         self._exec("UPDATE tickets SET state=?, park_reason=?, updated_at=? WHERE number=?",
