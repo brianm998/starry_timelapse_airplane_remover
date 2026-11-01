@@ -13,6 +13,9 @@ public enum MultiSelectionType: String, Equatable, CaseIterable {
         localized("multi_selection.\(rawValue)")
     }
 
+    /// "some frames" has a number the user types and no sentence under the choices.
+    var takesACount: Bool { self == .someAfter || self == .someBefore }
+
     /// The tail of the choice's id and of its catalogue key (the case name: the rawValues are sentences).
     var idName: String {
         switch self {
@@ -106,6 +109,10 @@ struct MultiSelectSheetView: View {
               .frame(minWidth: 280)
 
             // what the choices above will do, in words: the id a UI test reads the sheet's action and frames by
+            // (not there for a choice with a number, which has no sentence; the space it takes stays)
+            if multiSelectionType.takesACount {
+                Spacer().frame(minHeight: 30)
+            } else {
             Group {
                 switch multiSelectionType {
                 case .all:
@@ -147,14 +154,13 @@ struct MultiSelectSheetView: View {
                         Text(localized("ui.area.keep_overlaps.before", numFrames, currentIndex))
                     }
 
-               case .someAfter:
-                    Spacer().frame(minHeight: 30)
-               case .someBefore:
-                    Spacer().frame(minHeight: 30)
+               case .someAfter, .someBefore:
+                    EmptyView()
                 }
             
             }
               .accessibilityIdentifier("multiselect.summary")
+            }
 
             HStack {
                 Button(localized("ui.cancel")) {
