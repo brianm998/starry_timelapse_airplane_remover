@@ -103,6 +103,13 @@ public struct APIClient: Sendable {
         try JSONDecoder().decode(Snapshot.self, from: try await send(request("/v1/snapshot")))
     }
 
+    public func monitorUpdate(sha: String) async throws -> MonitorUpdateInfo {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&+=#")
+        let encoded = sha.addingPercentEncoding(withAllowedCharacters: allowed) ?? sha
+        return try JSONDecoder().decode(MonitorUpdateInfo.self, from: try await send(request("/v1/monitor-update?sha=\(encoded)")))
+    }
+
     public func detail(_ number: Int) async throws -> TicketDetail {
         try JSONDecoder().decode(TicketDetail.self, from: try await send(request("/v1/tickets/\(number)")))
     }

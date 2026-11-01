@@ -11,7 +11,7 @@ from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.daemon import Daemon, activity
 
-from .fakes import accepted, plan_args
+from .fakes import accepted, plan_args, sh
 from .test_engine import Rig, explore_ok
 
 
@@ -169,3 +169,55 @@ async def test_the_session_id_is_recorded_as_soon_as_it_is_known_so_a_kill_can_r
     await rig.engine.drive(7)
     assert seen[1].resume == "S-early"
     assert rig.db.stages(7, "explore")[0]["session_id"] == "S-early"
+
+
+def commit_under(repo: Path, rel: str, text: str) -> str:
+    """Commit one file to the working clone's develop and publish it to the bare origin; return the new sha."""
+    (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+    (repo / rel).write_text(text)
+    sh(repo, "git", "add", "-A")
+    sh(repo, "git", "commit", "-q", "-m", f"edit {rel}")
+    sh(repo, "git", "push", "-q", "origin", "HEAD:develop")
+    sh(repo, "git", "fetch", "-q")
+    return sh(repo, "git", "rev-parse", "HEAD").strip()
+
+
+async def monitor_update(client: TestClient[Any, Any], sha: str) -> dict[str, Any]:
+    resp = await client.get("/v1/monitor-update", params={"sha": sha}, headers=AUTH)
+    assert resp.status == 200
+    return await resp.json()  # type: ignore[no-any-return]
+
+
+async def test_monitor_update_reports_commits_behind_under_pipeline_monitor_and_the_latest_sha(rig: Rig) -> None:
+    repo = rig.engine.repo
+    built = commit_under(repo, "pipeline/monitor/a.swift", "one\n")
+    commit_under(repo, "pipeline/monitor/a.swift", "two\n")
+    newest = commit_under(repo, "pipeline/monitor/b.swift", "three\n")
+    assert sh(repo, "git", "rev-parse", "origin/develop").strip() == newest
+    client, _ = await api(rig)
+    try:
+        assert await monitor_update(client, built) == {"behind": 2, "latest": newest}
+    finally:
+        await client.close()
+
+
+async def test_monitor_update_is_zero_behind_when_up_to_date_and_ignores_other_paths(rig: Rig) -> None:
+    repo = rig.engine.repo
+    built = commit_under(repo, "pipeline/monitor/a.swift", "one\n")
+    commit_under(repo, "docs/b.md", "elsewhere\n")
+    commit_under(repo, "pipeline/src/x.py", "daemon only\n")
+    client, _ = await api(rig)
+    try:
+        assert await monitor_update(client, built) == {"behind": 0, "latest": built}
+    finally:
+        await client.close()
+
+
+async def test_monitor_update_for_an_unknown_sha_is_behind_null_not_an_error(rig: Rig) -> None:
+    latest = commit_under(rig.engine.repo, "pipeline/monitor/a.swift", "one\n")
+    client, _ = await api(rig)
+    try:
+        for sha in ("deadbeef" * 5, "", "--output=x", "HEAD"):
+            assert await monitor_update(client, sha) == {"behind": None, "latest": latest}
+    finally:
+        await client.close()

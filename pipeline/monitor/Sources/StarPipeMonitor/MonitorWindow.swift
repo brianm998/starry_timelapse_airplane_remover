@@ -64,6 +64,9 @@ struct HeaderStrip: View {
             if let until = store.snapshot?.usagePauseUntil, let t = Double(until) {
                 item("Usage limit", "model stages wait until \(Date(timeIntervalSince1970: t).formatted(date: .omitted, time: .shortened))", color: .orange)
             }
+            if store.updateAvailable {
+                item("Monitor", "Update available — \(MonitorUpdates.rebuildCommand)", color: .orange)
+            }
             if let pause = store.snapshot?.pause { item("Paused", pause, color: .orange) }
             item("Last nightly", store.snapshot?.nightly?.line ?? "none yet",
                  color: (store.snapshot?.nightly?.reds ?? 0) > 0 || store.snapshot?.nightly?.status == "error" ? .orange : .secondary)

@@ -28,11 +28,30 @@ public final class MonitorStore {
     public var lastError: String?
 
     public var onAlert: (@MainActor (Alert) -> Void)?
+    /// Called with the update notice when the daemon reports newer monitor code; the sha is recorded as announced
+    /// only at that point, so whatever delivers the alert is the thing that decides it was shown.
+    public var onUpdate: (@MainActor (Alert) -> Void)?
+
+    /// How many commits to `pipeline/monitor` on develop this build lacks; 0 when current, unstamped or unknown.
+    public private(set) var updateBehind = 0
+    public var updateAvailable: Bool { updateBehind > 0 }
+
+    /// The commit this build was made from (stamped by `make app`); nil for a build without a bundle, which never checks.
+    private let sourceSHA: String?
+    private let lastNotifiedUpdate: () -> String?
+    private let setLastNotifiedUpdate: (String) -> Void
 
     private var client: APIClient?
     private var tasks: [Task<Void, Never>] = []
 
-    public init(client: APIClient? = nil) { self.client = client }
+    public init(client: APIClient? = nil, sourceSHA: String? = nil,
+                lastNotifiedUpdate: @escaping () -> String? = { nil },
+                setLastNotifiedUpdate: @escaping (String) -> Void = { _ in }) {
+        self.client = client
+        self.sourceSHA = sourceSHA
+        self.lastNotifiedUpdate = lastNotifiedUpdate
+        self.setLastNotifiedUpdate = setLastNotifiedUpdate
+    }
 
     // derived, from the snapshot only ----------------------------------------------------------------------------------
     public var needsYouCount: Int { snapshot?.tickets.filter { $0.group == "needs_you" }.count ?? 0 }
@@ -68,6 +87,17 @@ public final class MonitorStore {
         do { apply(try await client.snapshot()) } catch { connection = .down("\(error.localizedDescription)") }
     }
 
+    /// Ask the daemon whether develop has newer monitor code than this build; notify once per new `latest`.
+    /// A daemon that does not answer leaves the previous state alone.
+    public func checkForUpdate() async {
+        guard let client, let sha = sourceSHA, !sha.isEmpty else { return }
+        guard let info = try? await client.monitorUpdate(sha: sha) else { return }
+        updateBehind = max(info.behind ?? 0, 0)
+        guard let (alert, latest) = MonitorUpdates.notification(for: info, lastNotified: lastNotifiedUpdate()) else { return }
+        setLastNotifiedUpdate(latest)
+        onUpdate?(alert)
+    }
+
     public func refreshSelected() async {
         guard let client, let n = selected else { detail = nil; logLines = []; return }
         detail = try? await client.detail(n)
@@ -99,6 +129,12 @@ public final class MonitorStore {
                     } catch {}
                     try? await Task.sleep(for: .seconds(delay))
                     delay = min(delay * 2, 30)
+                }
+            },
+            Task { [weak self] in
+                while !Task.isCancelled {
+                    await self?.checkForUpdate()
+                    try? await Task.sleep(for: .seconds(3600))
                 }
             },
         ]
