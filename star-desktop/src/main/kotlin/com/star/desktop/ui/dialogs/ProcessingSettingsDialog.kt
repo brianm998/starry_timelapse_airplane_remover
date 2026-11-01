@@ -1,6 +1,8 @@
 package com.star.desktop.ui.dialogs
 
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1009,7 +1011,7 @@ private fun NumberRow(
         }
         if (shownProblem != null) Text(
             shownProblem, color = StarColors.red, fontSize = 10.sp,
-            modifier = Modifier.align(Alignment.End).let { if (messageTag != null) it.testTag(messageTag) else it },
+            modifier = Modifier.align(Alignment.End).let { if (messageTag != null) it.semantics(mergeDescendants = true) { testTag = messageTag } else it },
         )
     }
 }
