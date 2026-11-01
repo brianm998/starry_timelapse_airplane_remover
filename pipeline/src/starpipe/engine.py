@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from typing import Any
 
 from . import gitutil, guards, load, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
+from .announce import Announcer, Kind, SilentAnnouncer
 from .checks import impact, ledger
 from .config import Config, home
 from .contracts import CheckRunner, Contract
@@ -24,6 +26,7 @@ from .github import GitHub, GitHubError
 from .notify import Notifier
 from .tickets import PROPOSED, filed_by
 
+log = logging.getLogger("starpipe.engine")
 BUDGET_S = {"explore": 45 * 60, "develop": 4 * 3600, "fix": 90 * 60, "review": 45 * 60, "resolve": 20 * 60,
             "ci-fix": 90 * 60, "conflict": 60 * 60}
 STAGE_STATE = {"explore": "exploring", "develop": "developing", "fix": "verifying", "review": "review",
@@ -68,6 +71,7 @@ class Engine:
     issue_memo: dict[int, tuple[str, bool, list[int]]] = field(default_factory=lambda: dict[int, tuple[str, bool, list[int]]]())
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
     publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
+    announcer: Announcer = field(default_factory=SilentAnnouncer)  # spoken alerts; the daemon injects the real one
 
     # intake --------------------------------------------------------------------------------------------------------
     def sync_issues(self) -> None:
@@ -121,11 +125,24 @@ class Engine:
     def _to_state(self, n: int, state: str, reason: str | None = None) -> None:
         self.db.set_state(n, state, reason)
         self._label(n, state)
+        if state == "landed":
+            self.announce("landed", n)
+
+    def announce(self, kind: Kind, n: int) -> None:
+        """Say it aloud unless the owner muted the pipeline. Audio never reaches the stage: it queues, and any failure is swallowed."""
+        if self.db.get("muted") == "1":
+            return
+        try:
+            self.announcer.announce(kind, n)
+        except Exception:
+            log.warning("announcing %s #%d failed", kind, n, exc_info=True)
 
     def park(self, t: Ticket, reason: str, state: str = "failed") -> StageResult:
         self._to_state(t.number, state, reason)
         self.notifier.alert("needs-input" if state == "needs-input" else "ticket-failed", t.number,
                             f"#{t.number} {t.title}: {reason}")
+        if state == "needs-input":
+            self.announce("attention", t.number)
         return StageResult(False, reason=reason)
 
     # claim ---------------------------------------------------------------------------------------------------------
