@@ -109,6 +109,7 @@ class DesktopFeatureRunner {
         StepAction.COMMAND_CLICK_ID to { t -> clickWith(t, args[0], command = true) },
         StepAction.RIGHT_CLICK_ID to { t -> clickWith(t, args[0], right = true) },
         StepAction.PROCESSING_FINISHES to { t -> waitForProcessingToFinish(t) },
+        StepAction.PROCESSING_STOPS to { t -> waitForProcessingToStop(t) },
         StepAction.PRESS_KEY to { t -> pressKey(t, args[0]) },
         StepAction.DRAG_AROUND to { t -> dragAround(t, args[0]) },
         StepAction.CLICK_LABEL to { t -> clickLabel(t, args[0]) },
@@ -366,9 +367,10 @@ class DesktopFeatureRunner {
         t.waitForIdle()
         val node = t.onAllNodes(hasTestTag(id))[0]
         val config = node.fetchSemanticsNode().config
-        // A button is pressed through its own action: a pointer click on the ones in the right panel (under a hover tip) did not reach them in
-        // the test host. A field, or a spot on the frame that has no action, needs the pointer, which is what a user's click is.
-        if (config.getOrNull(SemanticsProperties.Role) == Role.Button && SemanticsActions.OnClick in config && SemanticsProperties.Disabled !in config) {
+        // A button or a switch is pressed through its own action: a pointer click on the ones in the right panel (under a hover tip) did not
+        // reach them in the test host. A field, or a spot on the frame that has no action, needs the pointer, which is what a user's click is.
+        val role = config.getOrNull(SemanticsProperties.Role)
+        if ((role == Role.Button || role == Role.Switch) && SemanticsActions.OnClick in config && SemanticsProperties.Disabled !in config) {
             node.performSemanticsAction(SemanticsActions.OnClick)
         } else {
             node.performClick()
@@ -406,6 +408,24 @@ class DesktopFeatureRunner {
             if (parts.size != 3) return@waitFor false
             if (parts[2] == "running") sawRunning = true
             sawRunning && parts[2] == "idle" && (parts[1].toIntOrNull() ?: 0) > 0 && parts[0] == parts[1]
+        }
+    }
+
+    /**
+     * Waits for the run to be idle, whether or not every frame is complete (a run that another start put an end to leaves the frames it
+     * cleared unfinished). It has to stay idle for three seconds, so the moment between a run being stopped and the next one starting is
+     * not taken for the end.
+     */
+    private fun waitForProcessingToStop(t: ComposeUiTest) {
+        var idleSince: Long? = null
+        var last = "(none)"
+        waitFor(t, "processing to stop", 20L * 60_000, { "(last progress: $last)" }) {
+            val state = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription)
+            val idle = state != null && state.split('/').let { it.size == 3 && it[2] == "idle" }
+            if (state != null) last = state
+            if (!idle) { idleSince = null; return@waitFor false }
+            val since = idleSince ?: System.nanoTime().also { idleSince = it }
+            System.nanoTime() - since >= IDLE_STOPPED_NS
         }
     }
 
@@ -1057,6 +1077,7 @@ class DesktopFeatureRunner {
     }
 
     private companion object {
+        const val IDLE_STOPPED_NS = 3_000_000_000L
         const val CLIENT = "desktop"
         const val OPEN_TIMEOUT_MS = 10L * 60_000
         const val UI_TIMEOUT_MS = 90_000L
