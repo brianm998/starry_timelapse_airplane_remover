@@ -773,3 +773,10 @@ def test_a_short_line_must_be_present_exactly(tmp_path: Path) -> None:
     pr = "a = 2\n"
     resolved = "a = 2\nreturn x + 1\n"  # `return` and `x` both appear, but the line itself is gone
     assert [d.line for d in _audit_repo(tmp_path, base, develop, pr, resolved)] == ["return x"]
+
+
+async def test_landing_announces_each_ticket_once(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed"
+    assert rig.announcer.calls == [("landed", 1)]
