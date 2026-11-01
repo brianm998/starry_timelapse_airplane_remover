@@ -49,6 +49,10 @@ class Config(BaseModel):
     digest_hour: int = 8
     nightly_enabled: bool = False  # a multi-hour job that has never run unattended: the owner turns it on
     nightly_ui: bool = False  # the mac gui @ui features: need UI automation permission and the display
+    # NOT the T4 nightly above: the daemon dispatches ONE full run of the "Gherkin" workflow on GitHub, local time, once a day, only
+    # when code Gherkin covers changed since the last green full run (gherkin_nightly.py). A push to develop no longer runs Gherkin.
+    gherkin_nightly_enabled: bool = True
+    gherkin_nightly_start: str = "23:00"
     test_data: str = ""  # shared dataset cache; empty: $STAR_TEST_DATA, else ~/.star-test-data
     quiet_start: str = "22:00"
     quiet_end: str = "07:00"
