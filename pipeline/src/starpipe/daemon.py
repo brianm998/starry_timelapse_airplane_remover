@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -20,13 +21,15 @@ from typing import Any, cast
 from aiohttp import web
 
 from . import digest as digest_mod
-from . import gitutil, heavy, nightly, selfupdate, ship, watch, worktrees
+from . import gitutil, heavy, nightly, selfupdate, ship, tickets, trust, watch, worktrees
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
 from .github import GitHubError
 
 log = logging.getLogger("starpiped")
+
+ISSUE_URL = re.compile(r"\Ahttps://github\.com/(?P<owner>[^/\s]+)/(?P<repo>[^/\s]+)/(?P<kind>issues|pull)/(?P<n>\d+)/?\Z")
 
 
 def api_token() -> str:
@@ -55,6 +58,8 @@ def activity(db: Database, t: Ticket, now: float | None = None) -> str:
     return t.state if t.state != "ready" else "ready to publish"
 
 
+LAND_NOW_STATES = ("ready", "ci", "landing")
+MAX_ACTIVE_CAP = 6
 GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
 
 
@@ -351,6 +356,22 @@ class Daemon:
         self._runtime = {"sha": sha, "behind_develop": int(behind_out or 0), "at": now}
         return self._runtime
 
+    def monitor_update(self, sha: str) -> dict[str, object]:
+        """How many commits under pipeline/monitor on origin/<base> the monitor build `sha` lacks, and the newest one.
+
+        An unknown sha (or one that cannot be a sha) answers behind null; so does a repo without origin/<base>."""
+        root, ref = self.engine.repo, f"origin/{self.config.base_branch}"
+        paths = ("--", "pipeline/monitor")
+        latest = gitutil.git(root, "rev-list", "-1", ref, *paths, check=False).strip() or None
+        known = re.fullmatch(r"[0-9a-fA-F]{4,40}", sha) is not None and subprocess.run(
+            ["git", "-C", str(root), "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True, check=False,
+        ).returncode == 0
+        behind: int | None = None
+        if known:
+            count = gitutil.git(root, "rev-list", "--count", f"{sha}..{ref}", *paths, check=False).strip()
+            behind = int(count) if count.isdigit() else None
+        return {"behind": behind, "latest": latest}
+
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
         base = {k: v for k, v in self.status().items() if k != "self_update"}  # the monitor's contract is pinned by a fixture
@@ -376,7 +397,7 @@ class Daemon:
         reds = self.db._all("SELECT COUNT(*) AS n FROM develop_baseline WHERE conclusion NOT IN ('success','skipped','neutral')")  # pyright: ignore[reportPrivateUsage]
         week = self.db._all("SELECT kind, COUNT(*) AS n FROM interventions WHERE at > ? GROUP BY kind", (now - 7 * 86400,))  # pyright: ignore[reportPrivateUsage]
         cursor = self.db._all("SELECT COALESCE(MAX(id),0) AS m FROM events")[0]["m"]  # pyright: ignore[reportPrivateUsage]
-        return {**base, "tickets": tickets, "groups": list(GROUPS), "runtime": {k: v for k, v in self.runtime().items() if k != "at"},
+        return {**base, "max_active": self.engine.max_active(), "tickets": tickets, "groups": list(GROUPS), "runtime": {k: v for k, v in self.runtime().items() if k != "at"},
                 "landing": {"paused": self.db.get("pause") in ("all", "landing"), "stop_line": self.db.get("stop_line")},
                 "develop": {"gate": {r["job"]: r["conclusion"] for r in gate}, "known_red": int(reds[0]["n"])},
                 "interventions_week": {r["kind"]: r["n"] for r in week}, "events_cursor": int(cursor), "now": now,
@@ -429,6 +450,7 @@ class Daemon:
             if stage not in RETRY_STATE:
                 raise web.HTTPBadRequest(text=f"stage must be one of {', '.join(RETRY_STATE)}")
             self.db.intervention(n, "retry", stage)
+            self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
             self.engine.parked.discard(n)
             self.engine._to_state(n, RETRY_STATE[stage])  # pyright: ignore[reportPrivateUsage]
         elif action == "cancel":
@@ -436,7 +458,18 @@ class Daemon:
             if task:
                 task.cancel()
             self.db.intervention(n, "cancel", t.state)
+            self.db.put(f"land_now:{n}", None)
             self.engine._to_state(n, "cancelled", str(body.get("reason") or "cancelled by the owner"))  # pyright: ignore[reportPrivateUsage]
+        elif action == "land-now":
+            if t.state not in LAND_NOW_STATES:
+                raise web.HTTPConflict(text=f"#{n} is {t.state}: land-now needs a ticket in {', '.join(LAND_NOW_STATES)}")
+            self.db.put(f"land_now:{n}", "1")
+            self.db.intervention(n, "land-now", t.state)
+            if t.pr_number:  # say so on the PR now; ship.pr_body repeats it on every later update
+                try:
+                    self.engine.gh.update_pr(t.pr_number, ship.pr_body(self.engine, t))
+                except (GitHubError, RuntimeError):
+                    pass
         elif action == "prio":
             prio = int(str(body["priority"]))
             self.db.set_fields(n, priority=prio)
@@ -449,6 +482,79 @@ class Daemon:
         else:
             raise web.HTTPBadRequest(text=f"unknown action {action}")
         return "ok"
+
+    def _issue_problem(self, issue: dict[str, Any]) -> str | None:
+        """Why `issue` cannot be enqueued, or None."""
+        n = issue.get("number")
+        if "pull_request" in issue:
+            return f"#{n} is a pull request"
+        if issue.get("state") != "open":
+            return f"#{n} is closed"
+        return None
+
+    @staticmethod
+    def _labelled(issue: dict[str, Any]) -> bool:
+        labels = cast("list[object]", issue.get("labels") or [])
+        names = {str(cast("dict[str, object]", lab).get("name")) if isinstance(lab, dict) else str(lab) for lab in labels}
+        return trust.PIPELINE_LABEL in names
+
+    def resolve_issue(self, url: str) -> dict[str, object]:
+        """An issue link from the monitor's + sheet: this repo's open issue, its title and whether it is queued."""
+        link = url.strip().split("#", 1)[0].split("?", 1)[0]
+        m = ISSUE_URL.match(link)
+        if m is None:
+            raise web.HTTPBadRequest(text=f"not a GitHub issue link: {url.strip()[:200]}")
+        if (m["owner"].lower(), m["repo"].lower()) != (self.config.owner.lower(), self.config.repo.lower()):
+            raise web.HTTPBadRequest(text=f"not this repo ({self.config.owner}/{self.config.repo}): {m['owner']}/{m['repo']}")
+        n = int(m["n"])
+        if m["kind"] == "pull":
+            raise web.HTTPBadRequest(text=f"#{n} is a pull request")
+        try:
+            issue = self.engine.gh.issue(n)
+        except GitHubError as exc:
+            raise web.HTTPNotFound(text=f"#{n}: {exc}") from exc
+        problem = self._issue_problem(issue)
+        if problem:
+            raise web.HTTPUnprocessableEntity(text=problem)
+        return {"number": n, "title": str(issue.get("title") or ""), "state": str(issue.get("state")),
+                "queued": self._labelled(issue), "models": list(tickets.allowed_models(self.config.allow_fable)),
+                "stages": list(tickets.MODEL_STAGES)}
+
+    def _check_models(self, models: dict[str, str]) -> None:
+        """400 for a stage or model the engine would not honour (tickets.validate_choice), before any issue is touched."""
+        for stage, model in models.items():
+            if stage not in tickets.MODEL_STAGES:
+                raise web.HTTPBadRequest(text=f"unknown stage '{stage}' (one of {', '.join(tickets.MODEL_STAGES)})")
+            bad = tickets.validate_choice(f"model_{stage}", model, self.config.allow_fable)
+            if bad:
+                raise web.HTTPBadRequest(text=f"{stage}: {bad}")
+
+    def enqueue(self, numbers: list[int], models: dict[str, str] | None = None) -> list[dict[str, object]]:
+        """Label each issue `pipeline` with the owner's token, so the next intake poll queues it (trust.may_run).
+
+        `models` ({stage: model}) is written into each issue's '## Pipeline' section first, so the engine applies it."""
+        models = models or {}
+        self._check_models(models)
+        out: list[dict[str, object]] = []
+        for n in dict.fromkeys(numbers):
+            try:
+                issue = self.engine.gh.issue(n)
+                problem = self._issue_problem(issue)
+                if problem:
+                    result = f"rejected: {problem}"
+                elif self._labelled(issue):
+                    result = "already queued"
+                else:
+                    body = str(issue.get("body") or "")
+                    new_body = tickets.with_pipeline_models(body, models)
+                    if new_body != body:
+                        self.engine.gh.set_body(n, new_body)
+                    self.engine.gh.add_labels(n, [trust.PIPELINE_LABEL])
+                    result = "labelled"
+            except GitHubError as exc:
+                result = f"error: {exc}"
+            out.append({"number": n, "result": result})
+        return out
 
     def app(self) -> web.Application:
         @web.middleware
@@ -478,6 +584,10 @@ class Daemon:
         @r.get("/v1/snapshot")
         async def snapshot(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response(await asyncio.to_thread(self.snapshot))
+
+        @r.get("/v1/monitor-update")
+        async def monitor_update(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            return web.json_response(await asyncio.to_thread(self.monitor_update, req.query.get("sha", "")))
 
         @r.get("/v1/runtime")
         async def runtime_info(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
@@ -522,6 +632,30 @@ class Daemon:
                     await resp.write(b": keepalive\n\n")
                 await asyncio.sleep(1)
 
+        @r.get("/v1/issues/resolve")
+        async def resolve(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            url = req.query.get("url")
+            if not url:
+                raise web.HTTPBadRequest(text="url is required")
+            return web.json_response(await asyncio.to_thread(self.resolve_issue, url))
+
+        @r.post("/v1/enqueue")
+        async def enqueue(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            raw = body.get("numbers")
+            items = cast("list[object]", raw) if isinstance(raw, list) else []
+            if not items or not all(isinstance(x, int) and not isinstance(x, bool) for x in items):
+                raise web.HTTPBadRequest(text="numbers must be a non-empty list of issue numbers")
+            numbers = [cast("int", x) for x in items]
+            chosen = body.get("models")
+            if chosen is None:
+                chosen = {}
+            if not isinstance(chosen, dict) or not all(isinstance(k, str) and isinstance(v, str)
+                                                       for k, v in cast("dict[object, object]", chosen).items()):
+                raise web.HTTPBadRequest(text="models must be an object of stage to model name")
+            models = cast("dict[str, str]", chosen)
+            return web.json_response({"results": await asyncio.to_thread(self.enqueue, numbers, models)})
+
         @r.post("/v1/tickets/{n}/{action}")
         async def act(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)
@@ -531,6 +665,15 @@ class Daemon:
         async def pause(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)
             self.db.put("pause", str(body.get("scope") or "all"))
+            return web.json_response({"result": "ok"})
+
+        @r.post("/v1/settings")
+        async def settings(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            n = body.get("max_active")
+            if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= MAX_ACTIVE_CAP:
+                raise web.HTTPBadRequest(text=f"max_active must be an integer from 1 to {MAX_ACTIVE_CAP}")
+            self.db.put("max_active", str(n))  # lowering it never stops a running ticket, it only stops new claims
             return web.json_response({"result": "ok"})
 
         @r.post("/v1/resume")

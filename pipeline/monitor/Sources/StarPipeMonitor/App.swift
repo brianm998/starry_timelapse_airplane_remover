@@ -4,7 +4,10 @@ import SwiftUI
 
 @main
 struct StarPipeMonitorApp: App {
-    @State private var store = MonitorStore()
+    @State private var store = MonitorStore(
+        sourceSHA: Bundle.main.object(forInfoDictionaryKey: "StarPipeSourceSHA") as? String,
+        lastNotifiedUpdate: { UserDefaults.standard.string(forKey: "lastNotifiedMonitorUpdate") },
+        setLastNotifiedUpdate: { UserDefaults.standard.set($0, forKey: "lastNotifiedMonitorUpdate") })
     @AppStorage("fontScale") private var fontScale = FontScale.default
     private let notifier = Notifier()
 
@@ -39,6 +42,7 @@ struct StarPipeMonitorApp: App {
     private func launch() async {
         notifier.requestAuthorization()
         store.onAlert = { notifier.deliver($0) }
+        store.onUpdate = { notifier.deliver($0) }
         do {
             store.start(client: APIClient(config: try APIConfig.load()))
         } catch {

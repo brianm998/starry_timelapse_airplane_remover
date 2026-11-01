@@ -136,6 +136,25 @@ async def test_the_active_cap_holds_new_claims(rig: Rig) -> None:
     assert rig.engine.claimable() is None
 
 
+async def test_the_db_max_active_override_decides_claims(rig: Rig) -> None:
+    for n in (1, 2, 3):
+        rig.gh.add_issue(n, f"t{n}")
+    rig.engine.sync_issues()
+    rig.db.set_state(1, "developing")
+    rig.db.set_state(2, "exploring")
+    assert rig.engine.max_active() == 2 and rig.engine.claimable() is None  # config.toml's default
+    rig.db.put("max_active", "3")
+    assert rig.engine.max_active() == 3
+    t = rig.engine.claimable()
+    assert t and t.number == 3
+    rig.db.put("max_active", "1")  # lowering it stops new claims; the running tickets stay as they are
+    assert rig.engine.claimable() is None and rig.state(1) == "developing" and rig.state(2) == "exploring"
+    rig.db.put("max_active", "junk")
+    assert rig.engine.max_active() == 2  # an unreadable override falls back to the file
+    rig.db.put("max_active", None)
+    assert rig.engine.max_active() == 2
+
+
 async def test_a_stage_without_a_result_climbs_the_ladder_then_parks(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()

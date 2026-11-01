@@ -20,6 +20,12 @@ if TYPE_CHECKING:
 
 MAX_CI_FIX = 2
 LANDING_STATES = ("ci", "landing")
+BYPASS_NOTE = "The owner landed this with land-now: CI, the overlap re-test and the stop-line wait were bypassed."
+
+
+def land_now(eng: Engine, n: int) -> bool:
+    """The owner's land-now mark (db kv, set by the monitor): stop waiting for tests and land."""
+    return bool(eng.db.get(f"land_now:{n}"))
 
 
 def pr_body(eng: Engine, t: Ticket) -> str:
@@ -33,6 +39,7 @@ def pr_body(eng: Engine, t: Ticket) -> str:
             f"## Acceptance\n{acceptance}\n\n## Local checks at HEAD\n| check | result | tests |\n|---|---|---|\n{rows}\n\n"
             f"## Negative control\n{json.dumps(controls) if controls else 'none planned'}\n"
             + (f"\n## CI notes\n{notes}\n" if notes else "")
+            + (f"\n## Tests bypassed\n{BYPASS_NOTE}\n" if land_now(eng, t.number) else "")
             + "\nOpened by the star pipeline.\n")
 
 
@@ -110,6 +117,9 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
         cur = eng.db.ticket(t.number)
         if cur is None or cur.state != "ci":
             return False
+        if land_now(eng, t.number):  # re-read every pass, so a mark set while we sleep in a poll is seen
+            await asyncio.to_thread(_finish_ci, eng, cur, ["tests bypassed by the owner (land-now)"])
+            return True
         sha = gitutil.head_sha(Path(cur.worktree or ""))
         reran = {tuple(k) for k in json.loads(eng.db.get(f"reran:{t.number}") or "[]")}
         try:
@@ -173,7 +183,7 @@ def _remote(eng: Engine, wt: Path) -> str:
 async def land(eng: Engine, t: Ticket) -> bool:
     """LAND (§10.1). One ticket at a time. True when the ticket should keep going (back to CI after a catch-up)."""
     async with eng.land_lock:
-        while eng.db.get("pause") in ("all", "landing") or eng.db.get("stop_line"):
+        while eng.db.get("pause") in ("all", "landing") or (eng.db.get("stop_line") and not land_now(eng, t.number)):
             await eng.sleep(eng.config.ci_poll_s)
         cur = eng.db.ticket(t.number)
         if cur is None or cur.state != "landing":
@@ -194,7 +204,8 @@ def _prepare_land(eng: Engine, cur: Ticket) -> tuple[str, str, str, str, landing
     none = landing.Overlap([], [])
     if mb != gitutil.git(wt, "rev-parse", base).strip():
         pr_files = [p for p in gitutil.git(wt, "diff", "--name-only", f"{mb}..{head}").splitlines() if p]
-        ov = landing.overlap(wt, mb, base, pr_files)
+        bypass = land_now(eng, cur.number)
+        ov = none if bypass and pr.get("mergeable") is not False else landing.overlap(wt, mb, base, pr_files)
         if ov.any or pr.get("mergeable") is False:
             return ("catch_up", base, mb, head, ov)
     return ("merge", base, mb, head, none)
@@ -218,7 +229,7 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
         shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
         eng.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
         return False
-    failure = await asyncio.to_thread(eng._run_verification, t, wt)  # pyright: ignore[reportPrivateUsage]
+    failure = None if land_now(eng, t.number) else await asyncio.to_thread(eng._run_verification, t, wt)  # pyright: ignore[reportPrivateUsage]
     if failure:
         eng.park(t, f"after catching up with develop, verification failed: {failure[:300]}")
         return False
