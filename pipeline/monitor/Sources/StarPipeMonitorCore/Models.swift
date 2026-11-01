@@ -100,6 +100,8 @@ public struct TicketSnap: Codable, Sendable, Equatable, Identifiable {
     public var priority: Int
     public var group: String
     public var activity: String
+    /// The model of the stage running now; nil when no stage is open.
+    public var model: String?
     public var blockedBy: [Int]
     public var prNumber: Int?
     public var branch: String?
@@ -111,7 +113,7 @@ public struct TicketSnap: Codable, Sendable, Equatable, Identifiable {
     public var id: Int { number }
 
     enum CodingKeys: String, CodingKey {
-        case number, title, state, priority, group, activity, branch, worktree, question, stages
+        case number, title, state, priority, group, activity, model, branch, worktree, question, stages
         case blockedBy = "blocked_by"
         case prNumber = "pr_number"
         case parkReason = "park_reason"
