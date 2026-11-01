@@ -101,5 +101,5 @@ def test_diff_check_compares_with_where_the_branch_left_develop_not_with_its_mov
     sh("git", "checkout", "-q", "pipe/1")
     spec = adapter_star.CHECKS["t0:diff-check"]
     argv = runner._argv(spec, tmp_path, "develop")  # pyright: ignore[reportPrivateUsage]
-    assert subprocess.run(argv, cwd=tmp_path, capture_output=True).returncode == 0
-    assert subprocess.run(["git", "diff", "--check", "develop"], cwd=tmp_path, capture_output=True).returncode != 0, "the old form"
+    assert subprocess.run(argv, check=False, cwd=tmp_path, capture_output=True).returncode == 0
+    assert subprocess.run(["git", "diff", "--check", "develop"], check=False, cwd=tmp_path, capture_output=True).returncode != 0, "the old form"
