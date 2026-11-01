@@ -125,6 +125,12 @@ class GitHub:
                     pass  # it finished between the list and the cancel
         return cancelled
 
+    def cancel_run(self, run_id: int) -> None:
+        try:
+            self.api("POST", f"actions/runs/{run_id}/cancel")
+        except GitHubError:
+            pass  # it finished between the list and the cancel
+
     def update_pr(self, number: int, body: str) -> None:
         self.api("PATCH", f"pulls/{number}", {"body": body})
 

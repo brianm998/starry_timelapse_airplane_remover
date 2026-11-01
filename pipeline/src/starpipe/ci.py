@@ -85,6 +85,13 @@ def poll_delay(age_s: float, base: float) -> float:
     return base * 5
 
 
+def split_post_merge(runs: list[dict[str, Any]], names: tuple[str, ...]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(runs the PR is judged on, runs of post-merge-only workflows). Names compare without regard to case."""
+    wanted = {n.lower() for n in names}
+    kept = [r for r in runs if (r.get("name") or "").lower() not in wanted]
+    return kept, [r for r in runs if r not in kept]
+
+
 def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str, Any]]]) -> list[Job]:
     """GitHub's workflow runs and their jobs as Job values (the latest attempt of each run)."""
     out: list[Job] = []

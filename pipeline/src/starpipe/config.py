@@ -52,6 +52,10 @@ class Config(BaseModel):
     # Gherkin's matrix takes about 3 h (median 174, slowest 214 min, 2026-10-31): a job still running after this stops blocking, so the
     # limit has to sit clear of a normal Gherkin run
     ci_blocking_wait_s: int = 4 * 3600
+    # Workflows whose result a PR does not wait for. Gherkin's matrix takes ~3 h and is mostly queueing for GitHub's few macOS runners,
+    # so waiting for it capped landings at a few a day (2026-10-31). Its runs on the PR are cancelled at once, to free those runners;
+    # the push to develop runs it, and the post-merge watch files a regression ticket if it goes red.
+    ci_post_merge_workflows: tuple[str, ...] = ("Gherkin",)
     heavy_wait_report_s: float = 60.0
     api_port: int = 47231
     java_home: str = ""  # JDK 21 for star-desktop builds; empty: $JAVA_HOME, else the adapter's candidates

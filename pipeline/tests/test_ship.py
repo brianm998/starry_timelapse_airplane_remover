@@ -550,6 +550,26 @@ def test_a_normal_gherkin_run_still_blocks_and_only_a_longer_one_is_demoted() ->
     assert v.kind == "pass" and [j.workflow for j in v.demoted] == ["gherkin"]
 
 
+def test_a_pr_does_not_wait_for_gherkin_and_its_runs_are_cancelled(rig: Rig) -> None:
+    """Gherkin takes ~3 h, mostly queueing for macOS runners, so a landing waited hours for it. It is judged after the merge instead:
+    the PR's own runs of it are ignored (even a red one) and cancelled, to free the runners; everything else is judged as before."""
+    rig.gh.ci["sha1"] = [("pr-gate", "linux", "completed", "success"), ("CLI Build", "macos", "completed", "success"),
+                         ("Gherkin", "cli (macos-15) · a", "in_progress", None), ("Gherkin", "desktop (ubuntu-24.04) · b", "completed", "failure")]
+    rig.engine.db.put("pushed_at:1", str(rig.engine.clock() - 10000))
+    v = ship._judge(rig.engine, 1, "sha1", set())  # pyright: ignore[reportPrivateUsage]
+    assert v.kind == "pass" and v.known_red == [] and v.blocking == [] and v.demoted == []
+    assert rig.gh.cancelled_runs == [rig.gh.run_ids[("sha1", "Gherkin")]], "only Gherkin's run was cancelled"
+
+
+def test_a_red_non_gherkin_job_still_blocks_when_gherkin_is_ignored(rig: Rig) -> None:
+    rig.gh.ci["sha2"] = [("pr-gate", "linux", "completed", "success"), ("Kotlin Client", "build", "completed", "failure"),
+                         ("Gherkin", "cli (macos-15) · a", "in_progress", None)]
+    rig.engine.db.set_baseline("Kotlin Client", "build", "x", "success")
+    rig.engine.db.put("pushed_at:1", str(rig.engine.clock() - 10000))
+    v = ship._judge(rig.engine, 1, "sha2", set())  # pyright: ignore[reportPrivateUsage]
+    assert v.kind in ("rerun", "fail"), "a failing job outside Gherkin is still judged"
+
+
 def _audit_repo(tmp_path: Path, base: str, develop: str, pr: str, resolved: str) -> list[landing.Dropped]:
     repo = tmp_path / "r"
     sh(tmp_path, "git", "init", "-q", "-b", "develop", str(repo))

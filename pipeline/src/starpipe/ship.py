@@ -64,7 +64,10 @@ def publish(eng: Engine, t: Ticket) -> bool:
 
 
 def fetch_jobs(eng: Engine, sha: str) -> list[ci.Job]:
-    runs = eng.gh.workflow_runs(sha=sha)
+    runs, post_merge = ci.split_post_merge(eng.gh.workflow_runs(sha=sha), eng.config.ci_post_merge_workflows)
+    for run in post_merge:
+        if run.get("status") != "completed":
+            eng.gh.cancel_run(int(run["id"]))  # nobody waits for it, and it holds a macOS runner other work needs
     return ci.parse_jobs(runs, {int(r["id"]): eng.gh.run_jobs(int(r["id"]), ci.run_version(r)) for r in runs})
 
 

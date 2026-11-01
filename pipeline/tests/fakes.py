@@ -87,6 +87,7 @@ class FakeGitHub(GitHub):
         self.closed_prs: list[tuple[int, str]] = []
         self.develop_sha = "develop"
         self.cancelled_branches: list[str] = []
+        self.cancelled_runs: list[int] = []
         self.run_ids: dict[tuple[str, str], int] = {}
         self.run_jobs_by_id: dict[int, list[dict[str, Any]]] = {}
         self.issues: dict[int, dict[str, Any]] = {}
@@ -162,6 +163,9 @@ class FakeGitHub(GitHub):
         self.cancelled_branches.append(branch)
         return 1
 
+    def cancel_run(self, run_id: int) -> None:
+        self.cancelled_runs.append(run_id)
+
     def close_pr(self, number: int, comment: str = "") -> None:
         self.closed_prs.append((number, comment))
         self.prs[number]["state"] = "closed"
@@ -181,7 +185,8 @@ class FakeGitHub(GitHub):
             run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))
             self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None}
                                            for w, j, st, c in jobs if w == wf]
-            runs.append({"id": run_id, "name": wf, "status": "completed", "head_sha": self.develop_sha if branch else key})
+            done = all(st == "completed" for w, _, st, _ in jobs if w == wf)
+            runs.append({"id": run_id, "name": wf, "status": "completed" if done else "in_progress", "head_sha": self.develop_sha if branch else key})
         return runs
 
     def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
