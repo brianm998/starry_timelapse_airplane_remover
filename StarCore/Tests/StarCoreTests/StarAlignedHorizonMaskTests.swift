@@ -1,4 +1,5 @@
 import XCTest
+import StarCppBridge
 @testable import StarCore
 
 /// The geometry behind `StarAlignedHorizonMask`: intersecting the horizon mask with
@@ -238,5 +239,112 @@ final class StarAlignedHorizonMaskTests: XCTestCase {
                        "a mask with a different horizon must not be answered " +
                        "from the other mask's slot")
         XCTAssertEqual(boundary(of: moved)[50], horizonY + 10 - 20)
+    }
+
+    // MARK: - Heap integrity under the crash's workload
+
+    /// The eight homographies a9-2 frame 611 merged (neighbours 607...615 without itself),
+    /// read from that run's homography.db.  The perspective terms are small but real, which
+    /// is what sends OpenCV down its perspective rather than affine remap path.
+    private static let a9_2Frame611: [[Double]] = [
+        [1.0061157695666394, 0.004534312649519937, -19.4361104307603, 0.0008506897716432838, 1.0073869571443639, -23.70048637080109, 5.361888957361996e-07, 1.448024701917303e-06, 1],
+        [1.00452686189122, 0.003407222597862513, -14.468890599804995, 0.0006117433234070847, 1.005534928853778, -17.762225597145186, 3.898814869079981e-07, 1.0879337552829858e-06, 1],
+        [1.0029700864506756, 0.0023144240085680896, -9.603983224422455, 0.0003915592867946989, 1.0036818569947499, -11.8232090042792, 2.5125485417316684e-07, 7.332642208531102e-07, 1],
+        [1.0015311536420957, 0.0011215313284047145, -4.791168515219407, 0.00018753683194567305, 1.0017790160917508, -5.85826712325726, 1.3625980590859365e-07, 3.451078508583622e-07, 1],
+        [0.9992385575991518, -0.0005182800857452981, 3.237556719839122, -0.00022064826475199124, 0.9982128171170319, 6.290710652583869, -4.23171141701994e-08, -2.749874174137786e-07, 0.9999999999999999],
+        [0.9969890649859868, -0.002306370675196633, 9.647704826273554, -0.0004246971470725641, 0.9962672321081697, 11.905148128943901, -2.5814508703315995e-07, -7.439113947493028e-07, 0.9999999999999999],
+        [0.9954605025577902, -0.0034386711340025308, 14.410086669829944, -0.0006532689805825064, 0.9944240797279142, 17.89422417691363, -3.951981630384381e-07, -1.1005666360115607e-06, 1],
+        [0.993970482316306, -0.0045596651429831376, 19.166951574720876, -0.0008560364501395022, 0.9925829818180378, 23.786276918068495, -5.237311491638077e-07, -1.464084943638238e-06, 1],
+    ]
+
+    /// Frame 611's set nudged down by `variant` tenths of a pixel, so every variant is its own
+    /// cache key and nothing collapses into a shared computation, as on a moving sequence.
+    private static func a9_2Set(variant: Int) -> [[Double]] {
+        a9_2Frame611.map { h in
+            var h = h
+            h[5] += Double(variant) * 0.1
+            return h
+        }
+    }
+
+    private static func bytes(of image: PixelatedImage) -> [UInt8] {
+        let count = image.mat.lengthInBytes
+        guard let base = image.mat.dataPtr else { return [] }
+        return Array(UnsafeBufferPointer(start: base.assumingMemoryBound(to: UInt8.self),
+                                         count: count))
+    }
+
+    private func sixteenBitFrame(width: Int, height: Int, seed: UInt16) -> MatWrapper {
+        let count = width * height * 3
+        let data = UnsafeMutablePointer<UInt16>.allocate(capacity: count)
+        for i in 0..<count { data[i] = UInt16(truncatingIfNeeded: i &* 31 &+ Int(seed)) }
+        return MatWrapper(width: width, height: height,
+                          cvType: MatWrapper.cvType(forBitsPerComponent: 16, componentsPerPixel: 3),
+                          bytesPerRow: width * 3 * MemoryLayout<UInt16>.size,
+                          data: UnsafeMutableRawPointer(data),
+                          takeOwnership: true)
+    }
+
+    /// What was running when the 0.12.6 gui aborted on a heap-corruption guard at a9-2 frame
+    /// 611: a dozen full-frame star-aligned masks, each eight perspective warps of a
+    /// 6000×4000 mask, all on `NativeWork` at once, beside the downscale that saves a frame's
+    /// preview (`ImageAccessor.saveInt`), the distance transform behind the feathered horizon,
+    /// and warps of 16-bit frames.  Run under `swift test --sanitize=address` and with
+    /// `MallocNanoZone=0 MallocGuardEdges=1 MallocScribble=1`; a clean pass also pins that
+    /// every concurrent answer is the one a lone computation gives.
+    func testConcurrentFullFrameMasksAlongsideOtherNativeWorkKeepTheHeapIntact() async throws {
+        guard ProcessInfo.processInfo.physicalMemory >= 16 << 30 else {
+            throw XCTSkip("needs memory for a dozen 24MB masks and 16-bit frames in flight")
+        }
+        let width = 6000, height = 4000
+        let wave = (0..<width).map { x in
+            Optional(2000 + Int(150 * sin(Double(x) / 400)))
+        }
+        nonisolated(unsafe) let mask = try XCTUnwrap(PixelatedImage.fromHorizonColumnY(
+          width: width, height: height, columnY: wave))
+        nonisolated(unsafe) let frame = try XCTUnwrap(PixelatedImage(mat: sixteenBitFrame(width: width, height: height,
+                                                                    seed: 3)))
+        nonisolated(unsafe) let small = try XCTUnwrap(PixelatedImage(mat: sixteenBitFrame(width: 3000, height: 2000,
+                                                                    seed: 9)))
+
+        let masks = 12
+        let expected = (0..<masks).map { variant in
+            StarAlignedHorizonMask.compute(from: mask, homographies: Self.a9_2Set(variant: variant))
+                .map(Self.bytes(of:))
+        }
+        XCTAssertTrue(expected.allSatisfy { $0 != nil })
+
+        let cache = StarAlignedHorizonMaskCache()
+        let rounds = 3
+        for _ in 0..<rounds {
+            let results = await withTaskGroup(of: (Int, [UInt8]?).self) { group -> [(Int, [UInt8]?)] in
+                for variant in 0..<masks {
+                    group.addTask {
+                        let result = await cache.mask(from: mask,
+                                                      homographies: Self.a9_2Set(variant: variant))
+                        return (variant, result.map { Self.bytes(of: $0) })
+                    }
+                }
+                for _ in 0..<4 {
+                    group.addTask {
+                        _ = await NativeWork.run { frame.downScaleTo(width: 1500, height: 1000) }
+                        return (-1, nil)
+                    }
+                    group.addTask {
+                        _ = await NativeWork.run { mask.raiseMaskBy(100) }
+                        return (-1, nil)
+                    }
+                    group.addTask {
+                        _ = await NativeWork.run { small.warped(with: Self.a9_2Frame611[0]) }
+                        return (-1, nil)
+                    }
+                }
+                return await group.reduce(into: []) { $0.append($1) }
+            }
+            for (variant, result) in results where variant >= 0 {
+                XCTAssertEqual(result, expected[variant],
+                               "variant \(variant) differs from the same mask computed alone")
+            }
+        }
     }
 }
