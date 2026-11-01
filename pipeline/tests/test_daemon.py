@@ -659,3 +659,13 @@ async def test_mute_is_persisted_reported_and_silences_announcements(rig: Rig) -
         assert rig.announcer.calls == [("landed", 5)]
     finally:
         await client.close()
+
+
+def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(monkeypatch: pytest.MonkeyPatch, rig: Rig) -> None:
+    from starpipe import daemon as daemon_mod
+
+    calls: list[int] = []
+    monkeypatch.setattr(daemon_mod.os, "_exit", calls.append)
+    assert daemon_mod.Daemon(rig.engine, rig.engine.config).exit is daemon_mod.hard_exit
+    daemon_mod.hard_exit(0)
+    assert calls == [0], "os._exit, not sys.exit: SystemExit would wait on non-daemon threads and hang"
