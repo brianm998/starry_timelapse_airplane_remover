@@ -30,9 +30,12 @@ name: Gherkin
 # steps of kotlin-client.yml's linux-package/windows-package/macos-signed jobs, and cli.yml's
 # ci-assets fetch for the GUI. Their cache keys are shared with those jobs.
 
+# A push to develop does NOT start it any more: the full matrix takes 3-4 h and a newer push cancelled the older run, so on a busy day
+# none finished. The starpipe daemon dispatches ONE full run a night (23:00 local, pipeline/src/starpipe/gherkin_nightly.py) when
+# a file this workflow's own `paths` list names changed since the last green full run. See gherkin/README.md, "When the full matrix runs".
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'gherkin/**'
       - 'test_data/**'
@@ -64,12 +67,16 @@ on:
         required: false
         default: ''
 
+# The run name tells a full run from a subset: the daemon counts only `Gherkin: full` (or a push, which was always full) as a
+# green full run, never `Gherkin: <features>`. Other events keep GitHub's own title (the PR title, the head commit message).
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Gherkin: {0}', inputs.features || 'full') || github.event.pull_request.title || github.event.head_commit.message }}
+
 concurrency:
   group: gherkin-${{ github.workflow }}-${{ github.ref }}
-  # a newer push to develop supersedes the older develop runs still going, so a burst of pushes does not queue several
-  # long runs; release tags have their own group and are never cancelled. The pipeline's develop watch skips cancelled
-  # runs, so the CI judge's baseline stays the last run that ended success or failure.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
+  # a newer push to a PR supersedes the older run still going; the nightly dispatch on the base branch and release pushes to main
+  # are never cancelled by a newer one. The pipeline's watch skips cancelled runs, so the CI judge's baseline stays the last
+  # run that ended success or failure.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ─── The matrix: which features each client runs ─────────────────────────────
