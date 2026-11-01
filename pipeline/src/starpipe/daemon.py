@@ -7,7 +7,10 @@ import json
 import logging
 import os
 import secrets
+import shutil
 import subprocess
+import sys
+import threading
 import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime
@@ -83,6 +86,8 @@ class Daemon:
         self.watch = watch.Watch()
         self._runtime: dict[str, object] = {}
         self.nightly_task: asyncio.Task[int] | None = None
+        self._update_lock = threading.Lock()
+        self.exit: Callable[[int], None] = sys.exit  # replaced in tests; SystemExit passes through supervise to asyncio.run
 
     # supervision ---------------------------------------------------------------------------------------------------
     def reconcile(self) -> None:
@@ -90,6 +95,7 @@ class Daemon:
         for s in self.db.running_stages():
             self.db.end_stage(s["id"], "interrupted", detail="daemon restarted")
         self.engine.parked.clear()
+        self.db.put("self_update_pending", None)  # a restart is how an update completes; whatever is still wanted is re-staged
 
     async def supervise(self, name: str, body: Callable[[], Awaitable[None]], delay: float = 5.0) -> None:
         while True:
@@ -110,6 +116,7 @@ class Daemon:
             await asyncio.to_thread(self.engine.close_due)
             await asyncio.to_thread(ship.watch_develop, self.engine)
             self.last_poll = time.time()
+            await self.update_step()
         except GitHubError as exc:
             self.last_error = f"github: {exc}"
             log.warning("poll failed: %s", exc)
@@ -163,26 +170,81 @@ class Daemon:
                 self.db.put("nightly_last_day", now.strftime("%Y-%m-%d"))
             await asyncio.sleep(60)
 
-    def auto_update_once(self, plist: Path, launchctl: selfupdate.Launchctl = selfupdate.real_launchctl) -> str | None:
-        """After a landing that changed pipeline/ (and only when idle), switch to a runtime built from develop's tip."""
-        wanted = self.db.get("self_update_wanted")
-        if not (self.config.auto_self_update and wanted) or self.db.running_stages():
+    def self_update_once(self, plist: Path | None = None, sync: selfupdate.Sync | None = None,
+                         test: Callable[[Path], tuple[bool, str]] | None = None) -> str | None:
+        """Notice newer pipeline/ code on origin/develop, stage and smoke-check it, then swap once nothing is running.
+
+        Returns None (nothing to do or not allowed now), "failed", "pending" (staged and good, waiting for stages to finish) or
+        "swapped" (the caller exits so launchd restarts the daemon on the new runtime). A staged version that fails its smoke check
+        is recorded against its sha and never retried; the running version stays."""
+        plist = plist or Path.home() / "Library" / "LaunchAgents" / f"{selfupdate.LABEL}.plist"
+        current = selfupdate.link("current")
+        if not self.config.auto_self_update or current is None:
+            return None  # off, or running from a checkout: never update a tree the owner is working in
+        if self.nightly_task and not self.nightly_task.done():
+            return None  # no staging, no swap: the nightly outlives a restart badly
+        if not self._update_lock.acquire(blocking=False):
             return None
         try:
-            selfupdate.update(self.engine.repo, f"origin/{self.config.base_branch}", plist,
-                              sessions=lambda: len(self.db.running_stages()), wait_s=0, launchctl=launchctl)
+            have = selfupdate.runtime_sha(current)
+            if have is None:
+                return None
+            try:
+                target = selfupdate.fetch_target(self.engine.repo, self.config)
+            except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
+                log.warning("self-update: fetch failed: %s", exc)
+                return None
+            failed = json.loads(self.db.get("self_update_failed") or "{}")
+            if selfupdate.pipeline_commits_behind(self.engine.repo, have, target) == 0:
+                self.db.put("self_update_pending", None)
+                self.db.put("self_update_failed", None)
+                return None
+            if failed.get("sha") == target:
+                self.db.put("self_update_pending", None)
+                return None
+            if self.db.get("self_update_pending") != target:
+                self.db.put("self_update_failed", None)  # a newer sha than the one that failed: it gets its own try
+                if not self._stage_update(target, sync or selfupdate.real_sync, test or selfupdate.smoke_check):
+                    return "failed"
+            if self.db.running_stages():
+                return "pending"
+            selfupdate.switch(selfupdate.runtime_dir(target), plist, restart=False)
+            self.db.event("self-update", None, old=have, new=target)
+            self.db.put("self_update_pending", None)
+            self.db.put("self_update_failed", None)
+            selfupdate.prune()
+            return "swapped"
+        finally:
+            self._update_lock.release()
+
+    def _stage_update(self, target: str, sync: selfupdate.Sync, test: Callable[[Path], tuple[bool, str]]) -> bool:
+        """Build `target` beside the running runtime and smoke-check it. On success mark the update pending (which holds new work)."""
+        try:
+            rt = selfupdate.build(self.engine.repo, target, sync)
+            ok, output = test(rt)
         except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
-            self.db.put("self_update_wanted", None)  # one try per landing: a broken build must not retry in a loop
-            self.engine.notifier.alert("self-update-failed", None, f"self-update to {wanted[:10]} failed: {exc}")
-            return f"failed: {exc}"
-        self.db.put("self_update_wanted", None)
-        return "updated"
+            ok, output = False, getattr(exc, "stderr", None) or str(exc)
+        if ok:
+            self.db.put("self_update_pending", target)
+            return True
+        shutil.rmtree(selfupdate.runtime_dir(target), ignore_errors=True)
+        output = str(output)[-800:]
+        self.db.put("self_update_failed", json.dumps({"sha": target, "output": output, "at": time.time()}))
+        self.db.put("self_update_pending", None)
+        self.db.event("self-update-failed", None, sha=target, output=output)
+        self.engine.notifier.alert("self-update-failed", None, f"self-update to {target[:10]} failed: {output}")
+        return False
+
+    async def update_step(self, plist: Path | None = None, sync: selfupdate.Sync | None = None,
+                          test: Callable[[Path], tuple[bool, str]] | None = None) -> None:
+        if await asyncio.to_thread(self.self_update_once, plist, sync, test) == "swapped":
+            log.info("self-update: swapped the runtime; exiting for launchd to restart on it")
+            self.exit(0)
 
     async def update_loop(self) -> None:
-        plist = Path.home() / "Library" / "LaunchAgents" / f"{selfupdate.LABEL}.plist"
         while True:
-            await asyncio.to_thread(self.auto_update_once, plist)
-            await asyncio.sleep(120)
+            await self.update_step()
+            await asyncio.sleep(30)
 
     def write_digest(self, now: float | None = None) -> Path:
         from .checks import ledger
@@ -256,10 +318,19 @@ class Daemon:
                     "activity": activity(self.db, t), "blocked_by": self.db.open_blockers(t.number)}
                    for t in self.db.tickets() if t.state not in ("landed", "closed", "cancelled")]
         return {"daemon": {"pid": os.getpid(), "since": self.started, "last_poll": self.last_poll,
-                           "error": self.last_error},
+                           "error": self.last_error or self.update_error()},
+                "self_update": {"pending": self.db.get("self_update_pending"), "failed": self.update_failure()},
                 "pause": self.db.get("pause"), "usage_pause_until": self.db.get("usage_pause_until"),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "tickets": tickets}
+
+    def update_failure(self) -> dict[str, object] | None:
+        raw = self.db.get("self_update_failed")
+        return cast("dict[str, object]", json.loads(raw)) if raw else None
+
+    def update_error(self) -> str:
+        f = self.update_failure()
+        return f"self-update to {str(f['sha'])[:10]} failed: {f['output']}" if f else ""
 
     def runtime(self) -> dict[str, object]:
         """The checkout the daemon runs from and how far behind origin/develop its pipeline/ is (cached 30 s)."""
@@ -267,15 +338,22 @@ class Daemon:
         if self._runtime and now - float(str(self._runtime["at"])) < 30:
             return self._runtime
         root = self.engine.repo
+        pinned = selfupdate.link("current")
+        have = selfupdate.runtime_sha(pinned) if pinned else None
+        if have:  # a pinned runtime is what is running: measure from it, not from the checkout's HEAD
+            target = gitutil.git(root, "rev-parse", f"origin/{self.config.base_branch}", check=False).strip()
+            behind = selfupdate.pipeline_commits_behind(root, have, target) if target else 0
+            self._runtime = {"sha": have[:7], "behind_develop": behind, "at": now}
+            return self._runtime
         sha = gitutil.git(root, "rev-parse", "--short", "HEAD", check=False).strip()
-        behind = gitutil.git(root, "rev-list", "--count", f"HEAD..origin/{self.config.base_branch}", "--",
-                             "pipeline", check=False).strip()
-        self._runtime = {"sha": sha, "behind_develop": int(behind or 0), "at": now}
+        behind_out = gitutil.git(root, "rev-list", "--count", f"HEAD..origin/{self.config.base_branch}", "--",
+                                 "pipeline", ":(exclude)pipeline/monitor", check=False).strip()
+        self._runtime = {"sha": sha, "behind_develop": int(behind_out or 0), "at": now}
         return self._runtime
 
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
-        base = self.status()
+        base = {k: v for k, v in self.status().items() if k != "self_update"}  # the monitor's contract is pinned by a fixture
         now = time.time()
         hv: dict[str, Any] = base["heavy"]  # type: ignore[assignment]
         lock_tickets = {str(h["ticket"]) for h in hv["holders"]} | {str(w["ticket"]) for w in hv["queue"]}
@@ -406,7 +484,7 @@ class Daemon:
             cur, prev = selfupdate.link("current"), selfupdate.link("previous")
             return web.json_response({"sessions": len(self.db.running_stages()), "pid": os.getpid(),
                                       "current": cur.name if cur else None, "previous": prev.name if prev else None,
-                                      "wanted": self.db.get("self_update_wanted")})
+                                      "pending": self.db.get("self_update_pending")})
 
         @r.get("/v1/nightly")
         async def nightly_status(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]

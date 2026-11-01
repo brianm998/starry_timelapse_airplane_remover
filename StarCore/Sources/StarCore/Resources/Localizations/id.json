@@ -1229,5 +1229,6 @@
   "settings_tab.gpu": "Penggunaan GPU",
   "settings_tab.alignment": "Penyelarasan",
   "settings_tab.horizon": "Horizon",
-  "settings_tab.memory": "Memori"
+  "settings_tab.memory": "Memori",
+  "ui.settings": "Pengaturan"
 }

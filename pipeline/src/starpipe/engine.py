@@ -117,8 +117,8 @@ class Engine:
 
     # claim ---------------------------------------------------------------------------------------------------------
     def claimable(self) -> Ticket | None:
-        if self.db.get("pause") in ("all", "claims"):
-            return None
+        if self.db.get("pause") in ("all", "claims") or self.db.get("self_update_pending"):
+            return None  # the second is the daemon waiting to swap to new code: nothing new starts, running stages finish
         active = len(self.db.tickets(ACTIVE_STATES))
         if active >= self.config.max_active:
             return None
@@ -148,6 +148,10 @@ class Engine:
         while (left := self._usage_paused_until() - self.clock()) > 0:
             await self.sleep(min(left, 60))
         self.db.put("usage_pause_until", None)
+
+    async def _wait_for_update_hold(self) -> None:
+        while self.db.get("self_update_pending"):
+            await self.sleep(5)
 
     def _fence(self, t: Ticket, stage: str) -> guards.Fence:
         return guards.Fence(Path(t.worktree or ""), worktrees.ticket_dir(t.number), home() / "build" / f"pipe-{t.number}",
@@ -196,6 +200,7 @@ class Engine:
         summary = ""
         while attempt <= 3:
             await self._wait_for_usage()
+            await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
             stage_id = self.db.begin_stage(t.number, stage, attempt, model)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
