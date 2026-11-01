@@ -46,7 +46,9 @@ class Config(BaseModel):
     test_data: str = ""  # shared dataset cache; empty: $STAR_TEST_DATA, else ~/.star-test-data
     quiet_start: str = "22:00"
     quiet_end: str = "07:00"
-    ci_blocking_wait_s: int = 3 * 3600
+    # Gherkin's matrix takes about 3 h (median 174, slowest 214 min, 2026-10-31): a job still running after this stops blocking, so the
+    # limit has to sit clear of a normal Gherkin run
+    ci_blocking_wait_s: int = 4 * 3600
     heavy_wait_report_s: float = 60.0
     api_port: int = 47231
     java_home: str = ""  # JDK 21 for star-desktop builds; empty: $JAVA_HOME, else the adapter's candidates

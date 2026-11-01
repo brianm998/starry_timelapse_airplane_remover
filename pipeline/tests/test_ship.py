@@ -269,7 +269,7 @@ def test_other_reds_block_only_when_new() -> None:
 def test_slow_jobs_stop_blocking_after_the_wait() -> None:
     jobs = [job("pr-gate", "l"), job("cli", "w", "in_progress", None)]
     assert judged(jobs, now=100).kind == "pending"
-    v = judged(jobs, now=4 * 3600)
+    v = judged(jobs, now=5 * 3600)
     assert v.kind == "pass" and [j.job for j in v.demoted] == ["w"]
 
 
@@ -285,7 +285,7 @@ def test_a_failure_in_a_run_that_never_finishes_stops_blocking_after_the_wait() 
     stuck = ci.Job("gherkin", "videoBackgroundIdentical", "completed", "failure", 7, run_done=False)
     base = {("gherkin", "videoBackgroundIdentical"): "success"}
     assert judged([job("pr-gate", "l"), stuck], base, now=3600).kind == "rerun"
-    v = judged([job("pr-gate", "l"), stuck], base, now=4 * 3600)
+    v = judged([job("pr-gate", "l"), stuck], base, now=5 * 3600)
     assert v.kind == "pass" and [j.job for j in v.demoted] == ["videoBackgroundIdentical"]
 
 
@@ -536,3 +536,15 @@ async def test_a_ticket_waiting_for_room_is_not_published_early_and_waits_as_rea
     await rig.engine._publish_when_room(ticket)  # pyright: ignore[reportPrivateUsage]
     assert len(waits) == 3 and waits[0] == 30, "it waited, and polled every 30 s"
     assert len(rig.gh.prs) == 1 and rig.state(2) == "ci"
+
+
+def test_a_normal_gherkin_run_still_blocks_and_only_a_longer_one_is_demoted() -> None:
+    """Gherkin takes about 3 h (slowest seen 214 min). With the old 3 h limit a batch could land with its matrix unfinished."""
+    from starpipe.config import Config
+
+    limit = Config().ci_blocking_wait_s
+    assert limit == 4 * 3600
+    running = [job("pr-gate", "l"), job("gherkin", "cli (macos-15) · autoHorizonJpeg", "in_progress", None)]
+    assert judged(running, now=3.6 * 3600, blocking_wait_s=limit).kind == "pending", "214 minutes in: still waiting for it"
+    v = judged(running, now=4.1 * 3600, blocking_wait_s=limit)
+    assert v.kind == "pass" and [j.workflow for j in v.demoted] == ["gherkin"]

@@ -96,7 +96,7 @@ def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str,
 
 
 def judge(jobs: list[Job], baseline: Baseline, *, now: float, head_pushed_at: float, settle_s: float = 90.0,
-          blocking_wait_s: float = 3 * 3600, reran: set[tuple[str, str]] | None = None,
+          blocking_wait_s: float = 4 * 3600, reran: set[tuple[str, str]] | None = None,
           infra: Callable[[Job], bool] = lambda j: (j.conclusion or "") in INFRA_CONCLUSIONS) -> Verdict:
     reran = reran or set()
     gate = [j for j in jobs if j.workflow == GATE]
