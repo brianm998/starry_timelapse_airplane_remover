@@ -2300,7 +2300,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 throw "frame \(frameIndex) couldn't original image"
             }
             Log.d("frame \(frameIndex) got orig image \(image.description)")
-            
+
 
             // ~214ms at 42MP; off the pool for the same reason.
             let subtractBase = image
