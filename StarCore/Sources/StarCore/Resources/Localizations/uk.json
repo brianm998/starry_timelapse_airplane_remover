@@ -1230,5 +1230,7 @@
   "settings_tab.alignment": "Вирівнювання",
   "settings_tab.horizon": "Горизонт",
   "settings_tab.memory": "Памʼять",
+  "ui.render_options_after_processing_title": "Виберіть налаштування відео",
+  "ui.use_these_settings": "Використати ці налаштування",
   "ui.settings": "Налаштування"
 }
