@@ -8,7 +8,7 @@ import StarCore
 /// `ProcessingHeadline` gives the processing modal, the steps are the modal's
 /// (`ImageSequenceViewModel.processingSteps`), and the frame count is the one under the
 /// modal's title.
-struct MenuBarStatus: Equatable {
+enum MenuBarStatus: Equatable {
 
     /// A processing run, as the modal shows it.
     struct Run: Equatable {
