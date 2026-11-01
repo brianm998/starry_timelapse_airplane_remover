@@ -7,6 +7,8 @@ import Foundation
 public struct Snapshot: Codable, Sendable, Equatable {
     public var daemon: DaemonInfo?
     public var pause: String?
+    /// Whether the daemon's spoken alerts are muted.
+    public var muted: Bool
     /// How many tickets may run at once (the owner's override, else config.toml).
     public var maxActive: Int
     public var usagePauseUntil: String?
@@ -24,7 +26,7 @@ public struct Snapshot: Codable, Sendable, Equatable {
     public var nightly: NightlyInfo?
 
     enum CodingKeys: String, CodingKey {
-        case daemon, pause, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
+        case daemon, pause, muted, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
         case usagePauseUntil = "usage_pause_until"
         case maxActive = "max_active"
         case interventionsWeek = "interventions_week"
