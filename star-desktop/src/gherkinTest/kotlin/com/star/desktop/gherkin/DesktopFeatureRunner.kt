@@ -24,7 +24,9 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -104,10 +106,14 @@ class DesktopFeatureRunner {
         StepAction.OPEN_COPIED to { t -> openCopiedSequence(t) },
         StepAction.OPEN_COPIED_NO_QUESTIONS to { t -> openCopiedSequence(t, askingTheStartupQuestions = false) },
         StepAction.CLICK_ID to { t -> clickId(t, args[0]) },
+        StepAction.COMMAND_CLICK_ID to { t -> clickWith(t, args[0], command = true) },
+        StepAction.RIGHT_CLICK_ID to { t -> clickWith(t, args[0], right = true) },
+        StepAction.PROCESSING_FINISHES to { t -> waitForProcessingToFinish(t) },
         StepAction.PRESS_KEY to { t -> pressKey(t, args[0]) },
         StepAction.DRAG_AROUND to { t -> dragAround(t, args[0]) },
         StepAction.CLICK_LABEL to { t -> clickLabel(t, args[0]) },
         StepAction.WAIT to { t -> waitSeconds(t, args[0].toInt()) },
+        StepAction.LARGE_WINDOW to { },   // the test host's window is large already (1400 by 1100 pixels)
         StepAction.ID_STILL_SAYS to { t -> expectStillSays(t, args[0], args[1]) },
         StepAction.ID_STOPS_SAYING to { t -> expectStopsSaying(t, args[0], args[1]) },
         StepAction.ID_SHOWN to { t -> expectShown(t, args[0], shown = true) },
@@ -366,6 +372,40 @@ class DesktopFeatureRunner {
             node.performSemanticsAction(SemanticsActions.OnClick)
         } else {
             node.performClick()
+        }
+    }
+
+    /** A click with the command (control off a Mac) key held, or a right click: by the pointer, which is what a cell reads them from. */
+    private fun clickWith(t: ComposeUiTest, id: String, command: Boolean = false, right: Boolean = false) {
+        waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
+        t.waitForIdle()
+        val mac = System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)
+        val modifier = if (mac) Key.MetaLeft else Key.CtrlLeft
+        // the key is held through the key scope (the mouse one has none), and the pointer events carry it
+        if (command) t.onRoot().performKeyInput { keyDown(modifier) }
+        try {
+            t.onAllNodes(hasTestTag(id))[0].performMouseInput { if (right) rightClick() else click() }
+        } finally {
+            if (command) t.onRoot().performKeyInput { keyUp(modifier) }
+        }
+        t.waitForIdle()
+    }
+
+    /**
+     * Waits for the run that has begun to end: the progress line says "<complete>/<total>/idle" with every frame complete, once it has said
+     * "running" (a run that has not begun reads the same, so the feature first sees the processing screen come up). The line is in the left panel
+     * of the edit and scrub screens, so the feature looks away from the processing screen (Preview) and to one of them first.
+     */
+    private fun waitForProcessingToFinish(t: ComposeUiTest) {
+        var sawRunning = false
+        var last = "(none)"
+        waitFor(t, "processing to finish", 20L * 60_000, { "(last progress: $last)" }) {
+            val state = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription) ?: return@waitFor false
+            last = state
+            val parts = state.split('/')
+            if (parts.size != 3) return@waitFor false
+            if (parts[2] == "running") sawRunning = true
+            sawRunning && parts[2] == "idle" && (parts[1].toIntOrNull() ?: 0) > 0 && parts[0] == parts[1]
         }
     }
 
