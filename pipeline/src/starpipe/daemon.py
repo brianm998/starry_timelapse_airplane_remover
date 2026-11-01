@@ -56,6 +56,8 @@ def activity(db: Database, t: Ticket, now: float | None = None) -> str:
     return t.state if t.state != "ready" else "ready to publish"
 
 
+LAND_NOW_STATES = ("ready", "ci", "landing")
+MAX_ACTIVE_CAP = 6
 GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
 
 
@@ -382,8 +384,9 @@ class Daemon:
                 continue
             stages = self.db.stages(t.number)
             question = self.db.open_question(t.number)
+            running = [s["model"] for s in stages if s["ended"] is None]  # the open stage's model, else none
             tickets.append({"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
-                            "group": group, "activity": activity(self.db, t, now), "blocked_by": self.db.open_blockers(t.number),
+                            "group": group, "model": running[-1] if running else None, "activity": activity(self.db, t, now), "blocked_by": self.db.open_blockers(t.number),
                             "pr_number": t.pr_number, "branch": t.branch, "worktree": t.worktree,
                             "park_reason": t.park_reason, "question": question["text"] if question else None,
                             "stages": [{k: s[k] for k in ("stage", "attempt", "model", "started", "ended", "lock_wait_s", "outcome")}
@@ -392,7 +395,7 @@ class Daemon:
         reds = self.db._all("SELECT COUNT(*) AS n FROM develop_baseline WHERE conclusion NOT IN ('success','skipped','neutral')")  # pyright: ignore[reportPrivateUsage]
         week = self.db._all("SELECT kind, COUNT(*) AS n FROM interventions WHERE at > ? GROUP BY kind", (now - 7 * 86400,))  # pyright: ignore[reportPrivateUsage]
         cursor = self.db._all("SELECT COALESCE(MAX(id),0) AS m FROM events")[0]["m"]  # pyright: ignore[reportPrivateUsage]
-        return {**base, "tickets": tickets, "groups": list(GROUPS), "runtime": {k: v for k, v in self.runtime().items() if k != "at"},
+        return {**base, "max_active": self.engine.max_active(), "tickets": tickets, "groups": list(GROUPS), "runtime": {k: v for k, v in self.runtime().items() if k != "at"},
                 "landing": {"paused": self.db.get("pause") in ("all", "landing"), "stop_line": self.db.get("stop_line")},
                 "develop": {"gate": {r["job"]: r["conclusion"] for r in gate}, "known_red": int(reds[0]["n"])},
                 "interventions_week": {r["kind"]: r["n"] for r in week}, "events_cursor": int(cursor), "now": now,
@@ -445,6 +448,7 @@ class Daemon:
             if stage not in RETRY_STATE:
                 raise web.HTTPBadRequest(text=f"stage must be one of {', '.join(RETRY_STATE)}")
             self.db.intervention(n, "retry", stage)
+            self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
             self.engine.parked.discard(n)
             self.engine._to_state(n, RETRY_STATE[stage])  # pyright: ignore[reportPrivateUsage]
         elif action == "cancel":
@@ -452,7 +456,18 @@ class Daemon:
             if task:
                 task.cancel()
             self.db.intervention(n, "cancel", t.state)
+            self.db.put(f"land_now:{n}", None)
             self.engine._to_state(n, "cancelled", str(body.get("reason") or "cancelled by the owner"))  # pyright: ignore[reportPrivateUsage]
+        elif action == "land-now":
+            if t.state not in LAND_NOW_STATES:
+                raise web.HTTPConflict(text=f"#{n} is {t.state}: land-now needs a ticket in {', '.join(LAND_NOW_STATES)}")
+            self.db.put(f"land_now:{n}", "1")
+            self.db.intervention(n, "land-now", t.state)
+            if t.pr_number:  # say so on the PR now; ship.pr_body repeats it on every later update
+                try:
+                    self.engine.gh.update_pr(t.pr_number, ship.pr_body(self.engine, t))
+                except (GitHubError, RuntimeError):
+                    pass
         elif action == "prio":
             prio = int(str(body["priority"]))
             self.db.set_fields(n, priority=prio)
@@ -551,6 +566,15 @@ class Daemon:
         async def pause(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)
             self.db.put("pause", str(body.get("scope") or "all"))
+            return web.json_response({"result": "ok"})
+
+        @r.post("/v1/settings")
+        async def settings(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            n = body.get("max_active")
+            if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= MAX_ACTIVE_CAP:
+                raise web.HTTPBadRequest(text=f"max_active must be an integer from 1 to {MAX_ACTIVE_CAP}")
+            self.db.put("max_active", str(n))  # lowering it never stops a running ticket, it only stops new claims
             return web.json_response({"result": "ok"})
 
         @r.post("/v1/resume")

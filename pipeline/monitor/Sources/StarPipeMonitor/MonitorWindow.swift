@@ -16,11 +16,7 @@ struct MonitorWindow: View {
                     TicketDetailView(store: store, ticket: ticket)
                         .id(ticket.number)
                 } else {
-                    ContentUnavailableView {
-                        Label("Select a ticket", systemImage: "shippingbox").scaledFont(.title2, weight: .bold)
-                    } description: {
-                        Text(store.lastError ?? "Everything the pipeline is doing is in the list.").scaledFont(.body)
-                    }
+                    OverviewView(store: store)
                 }
             }
         }
@@ -118,22 +114,32 @@ struct Sidebar: View {
     @Bindable var store: MonitorStore
 
     var body: some View {
-        List(selection: $store.selected) {
-            ForEach(store.snapshot?.groups ?? [], id: \.self) { group in
-                let rows = store.tickets(in: group)
-                if !rows.isEmpty {
-                    Section {
-                        ForEach(rows) { TicketRow(ticket: $0).tag($0.number) }
-                    } header: {
-                        Text(GroupTitle.title(group)).scaledFont(.body, weight: .semibold)
+        VStack(spacing: 0) {
+            Label("Overview", systemImage: "gauge.with.dots.needle.67percent")
+                .scaledFont(.body, weight: .semibold)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(store.selected == nil ? Color.accentColor.opacity(0.2) : Color.clear)
+                .contentShape(Rectangle())
+                .onTapGesture { store.selected = nil }
+            Divider()
+            List(selection: $store.selected) {
+                ForEach(store.snapshot?.groups ?? [], id: \.self) { group in
+                    let rows = store.tickets(in: group)
+                    if !rows.isEmpty {
+                        Section {
+                            ForEach(rows) { TicketRow(ticket: $0).tag($0.number) }
+                        } header: {
+                            Text(GroupTitle.title(group)).scaledFont(.body, weight: .semibold)
+                        }
                     }
                 }
             }
-        }
-        .overlay {
-            if store.snapshot?.tickets.isEmpty == true {
-                ContentUnavailableView {
-                    Label("No tickets in flight", systemImage: "tray").scaledFont(.title2, weight: .bold)
+            .overlay {
+                if store.snapshot?.tickets.isEmpty == true {
+                    ContentUnavailableView {
+                        Label("No tickets in flight", systemImage: "tray").scaledFont(.title2, weight: .bold)
+                    }
                 }
             }
         }
@@ -151,7 +157,13 @@ struct TicketRow: View {
                 Spacer()
                 Chip(text: ticket.state, color: stateColor(ticket.state))
             }
-            Text(ticket.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(2)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(ticket.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Spacer(minLength: 0)
+                if let model = ticket.model {
+                    Text(model).scaledFont(.caption2, monospaced: true).foregroundStyle(.tertiary)
+                }
+            }
         }
         .padding(.vertical, 2)
     }

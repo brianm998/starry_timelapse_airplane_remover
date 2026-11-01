@@ -1,14 +1,31 @@
 name: CLI Build
 
+# A change that only touches paths that cannot affect the star program does not start this workflow.
+# The same list is decided in pr-gate.yml's `changes` job: keep the two in step.
+# GitHub does not evaluate path filters for tag pushes, so release/* tags (and workflow_dispatch) run everything.
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - 'pipeline/**'
+      - 'plans/**'
+      - 'docs/**'
+      - '.claude/**'
+      - '**/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
     # release/* tags also trigger the workflow so the macos-signed-release job
     # (gated below with `if:`) runs. The standard per-platform smoke builds run
     # on tag pushes too, which is fine — they're cached and cheap.
     tags: ['release/*']
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - 'pipeline/**'
+      - 'plans/**'
+      - 'docs/**'
+      - '.claude/**'
+      - '**/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
 
 concurrency:

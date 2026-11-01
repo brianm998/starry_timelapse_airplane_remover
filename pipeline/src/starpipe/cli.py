@@ -141,7 +141,7 @@ def ticket_lint(file: Path) -> None:
     """Check a ticket body against plan §6.3 (FILE may be - for stdin)."""
     from . import tickets
 
-    result = tickets.lint(_read_body(file))
+    result = tickets.lint(_read_body(file), allow_fable=config_mod.load().allow_fable)
     for message in result.errors:
         click.echo(f"error    {message}")
     for message in result.warnings:
@@ -173,7 +173,8 @@ def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | Non
     try:
         number = tickets.file_ticket(GitHub(cfg), title, _read_body(body_file), blockers, priority, propose=propose,
                                      by=by or os.environ.get("STARPIPE_AGENT") or "interactive", force=force,
-                                     max_open=cfg.max_open_tickets, max_proposed=cfg.max_proposed)
+                                     max_open=cfg.max_open_tickets, max_proposed=cfg.max_proposed,
+                                     allow_fable=cfg.allow_fable)
     except tickets.FilingError as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"#{number} https://github.com/{cfg.owner}/{cfg.repo}/issues/{number}" + (" (proposed)" if propose else ""))
