@@ -331,3 +331,107 @@ final class FontScaleTests: XCTestCase {
         XCTAssertEqual(FontScale.clamped(0.1), FontScale.minimum)
     }
 }
+
+@MainActor
+final class UpdateTests: XCTestCase {
+    private func client() -> APIClient {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [StubProtocol.self]
+        return APIClient(config: APIConfig(baseURL: URL(string: "http://127.0.0.1:1")!, token: "tok"), session: URLSession(configuration: cfg))
+    }
+
+    private func answer(_ json: String) {
+        StubProtocol.handler = { _ in (200, Data(json.utf8)) }
+    }
+
+    /// A store whose "remembered sha" lives in a local box, like UserDefaults does in the app.
+    private func makeStore(sourceSHA: String?, remembered: Box = Box()) -> (MonitorStore, Box, Notices) {
+        let notices = Notices()
+        let store = MonitorStore(client: client(), sourceSHA: sourceSHA,
+                                 lastNotifiedUpdate: { remembered.sha }, setLastNotifiedUpdate: { remembered.sha = $0 })
+        store.onUpdate = { notices.alerts.append($0) }
+        return (store, remembered, notices)
+    }
+
+    final class Box { var sha: String? }
+    final class Notices { var alerts: [Alert] = [] }
+
+    func testNotifiesOncePerLatestShaWhenBehind() async throws {
+        let (store, remembered, notices) = makeStore(sourceSHA: "aaaa111")
+        answer(#"{"behind": 3, "latest": "bbbb222"}"#)
+        await store.checkForUpdate()
+        await store.checkForUpdate()  // the hourly check finds the same version: no second notice
+        XCTAssertEqual(notices.alerts.count, 1)
+        XCTAssertEqual(notices.alerts.first?.title, "Pipeline monitor update available")
+        XCTAssertEqual(notices.alerts.first?.body, "3 new commits — run `make -C pipeline/monitor app`")
+        XCTAssertEqual(remembered.sha, "bbbb222")
+        XCTAssertTrue(store.updateAvailable)
+
+        answer(#"{"behind": 4, "latest": "cccc333"}"#)  // develop moved on: announce again
+        await store.checkForUpdate()
+        XCTAssertEqual(notices.alerts.count, 2)
+        XCTAssertEqual(remembered.sha, "cccc333")
+
+        // a relaunch remembers what was announced
+        let (relaunched, _, again) = makeStore(sourceSHA: "aaaa111", remembered: remembered)
+        await relaunched.checkForUpdate()
+        XCTAssertTrue(again.alerts.isEmpty)
+        XCTAssertTrue(relaunched.updateAvailable)
+    }
+
+    func testOneNewCommitIsSingular() {
+        let n = MonitorUpdates.notification(for: MonitorUpdateInfo(behind: 1, latest: "x"), lastNotified: nil)
+        XCTAssertEqual(n?.alert.body, "1 new commit — run `make -C pipeline/monitor app`")
+    }
+
+    func testNeverNotifiesWhenUpToDateOrUnstamped() async throws {
+        let (current, _, currentNotices) = makeStore(sourceSHA: "aaaa111")
+        answer(#"{"behind": 0, "latest": "aaaa111"}"#)
+        await current.checkForUpdate()
+        XCTAssertTrue(currentNotices.alerts.isEmpty)
+        XCTAssertFalse(current.updateAvailable)
+
+        let (unknown, _, unknownNotices) = makeStore(sourceSHA: "aaaa111")
+        answer(#"{"behind": null, "latest": "bbbb222"}"#)
+        await unknown.checkForUpdate()
+        XCTAssertTrue(unknownNotices.alerts.isEmpty)
+        XCTAssertFalse(unknown.updateAvailable)
+
+        // an unstamped build (`swift run`) does not even ask, so it can never report an update
+        for sha in [nil, ""] {
+            let (unstamped, remembered, notices) = makeStore(sourceSHA: sha)
+            StubProtocol.handler = { _ in
+                XCTFail("an unstamped build must not call the daemon")
+                return (200, Data(#"{"behind": 5, "latest": "bbbb222"}"#.utf8))
+            }
+            await unstamped.checkForUpdate()
+            XCTAssertTrue(notices.alerts.isEmpty)
+            XCTAssertNil(remembered.sha)
+            XCTAssertFalse(unstamped.updateAvailable)
+        }
+    }
+
+    func testAnUpdateNoticeIsNotHeldByQuietHours() {
+        let alert = Alert(kind: .monitorUpdate, ticket: nil, title: "t", body: "b")
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let night = cal.date(from: DateComponents(year: 2026, month: 10, day: 31, hour: 23))!
+        XCTAssertTrue(Alerts.isQuiet(night, calendar: cal))
+        XCTAssertTrue(Alerts.shouldDeliver(alert, at: night, calendar: cal))
+    }
+
+    func testTheClientAsksForTheStampedShaAndDecodesBehindAndNull() async throws {
+        StubProtocol.handler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+            XCTAssertEqual(request.url?.path, "/v1/monitor-update")
+            XCTAssertEqual(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value, "abc123")
+            return (200, Data(#"{"behind": 2, "latest": "def456"}"#.utf8))
+        }
+        let info = try await client().monitorUpdate(sha: "abc123")
+        XCTAssertEqual(info, MonitorUpdateInfo(behind: 2, latest: "def456"))
+
+        answer(#"{"behind": null, "latest": null}"#)
+        let unknown = try await client().monitorUpdate(sha: "abc123")
+        XCTAssertEqual(unknown, MonitorUpdateInfo(behind: nil, latest: nil))
+    }
+}

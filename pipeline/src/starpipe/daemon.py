@@ -356,6 +356,22 @@ class Daemon:
         self._runtime = {"sha": sha, "behind_develop": int(behind_out or 0), "at": now}
         return self._runtime
 
+    def monitor_update(self, sha: str) -> dict[str, object]:
+        """How many commits under pipeline/monitor on origin/<base> the monitor build `sha` lacks, and the newest one.
+
+        An unknown sha (or one that cannot be a sha) answers behind null; so does a repo without origin/<base>."""
+        root, ref = self.engine.repo, f"origin/{self.config.base_branch}"
+        paths = ("--", "pipeline/monitor")
+        latest = gitutil.git(root, "rev-list", "-1", ref, *paths, check=False).strip() or None
+        known = re.fullmatch(r"[0-9a-fA-F]{4,40}", sha) is not None and subprocess.run(
+            ["git", "-C", str(root), "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True, check=False,
+        ).returncode == 0
+        behind: int | None = None
+        if known:
+            count = gitutil.git(root, "rev-list", "--count", f"{sha}..{ref}", *paths, check=False).strip()
+            behind = int(count) if count.isdigit() else None
+        return {"behind": behind, "latest": latest}
+
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
         base = {k: v for k, v in self.status().items() if k != "self_update"}  # the monitor's contract is pinned by a fixture
@@ -550,6 +566,10 @@ class Daemon:
         @r.get("/v1/snapshot")
         async def snapshot(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response(await asyncio.to_thread(self.snapshot))
+
+        @r.get("/v1/monitor-update")
+        async def monitor_update(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            return web.json_response(await asyncio.to_thread(self.monitor_update, req.query.get("sha", "")))
 
         @r.get("/v1/runtime")
         async def runtime_info(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]

@@ -3,6 +3,8 @@
 APP := StarPipeMonitor.app
 BIN := .build/release/StarPipeMonitor
 ID  := com.brianm998.starpipe.monitor
+# The commit this build was made from; the app asks the daemon whether develop has newer monitor code.
+SHA := $(shell git rev-parse HEAD)
 
 .PHONY: build test app run clean
 
@@ -16,7 +18,7 @@ app: build
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS
 	cp $(BIN) $(APP)/Contents/MacOS/StarPipeMonitor
-	sed 's/@ID@/$(ID)/' Info.plist.in > $(APP)/Contents/Info.plist
+	sed -e 's/@ID@/$(ID)/' -e 's/@SHA@/$(SHA)/' Info.plist.in > $(APP)/Contents/Info.plist
 	codesign --force --sign - $(APP)
 	@echo "built $(APP)"
 
