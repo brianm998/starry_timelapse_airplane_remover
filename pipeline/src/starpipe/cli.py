@@ -365,6 +365,13 @@ def cancel(number: int, reason: str) -> None:
     _post(f"/v1/tickets/{number}/cancel", {"reason": reason})
 
 
+@main.command("allow-opus")
+@click.argument("number", type=_num)
+def allow_opus(number: int) -> None:
+    """Let a ticket's own `model_<stage>: opus` choices apply (opus is otherwise never used)."""
+    _post(f"/v1/tickets/{number}/allow-opus", {})
+
+
 @main.command()
 @click.argument("number", type=_num)
 @click.argument("priority", type=click.Choice(["p0", "p1", "p2", "p3"]))

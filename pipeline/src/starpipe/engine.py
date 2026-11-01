@@ -211,6 +211,9 @@ class Engine:
             if key not in chosen:
                 continue
             bad = tickets.validate_choice(key, chosen[key], self.config.allow_fable)
+            if not bad and kind == "model" and chosen[key] == "opus" and not (
+                    self.config.allow_opus or self.db.get(f"opus_ok:{t.number}")):
+                bad = "opus is used only when the owner asks for it (monitor picker, `starpipe allow-opus`)"
             if bad:
                 self.db.event("stage-choice-ignored", t.number, stage=stage, attempt=attempt, key=key, value=chosen[key],
                               reason=bad)

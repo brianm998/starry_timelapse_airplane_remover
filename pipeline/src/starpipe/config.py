@@ -30,6 +30,9 @@ class Config(BaseModel):
     model: str = "sonnet"
     model_escalate: str = "sonnet"
     allow_fable: bool = False
+    # Opus only when the owner asks for it: a `model_<stage>: opus` in a ticket body is ignored unless the owner picked it in the
+    # monitor, ran `starpipe allow-opus <n>`, or sets this. Tickets filed by agent sessions had copied opus from the skill's example.
+    allow_opus: bool = False
 
     # What limits starting work is resources, not a count of tickets: LLM sessions running at once and measured CPU use (load.py).
     max_llm_sessions: int = 3

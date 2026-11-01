@@ -617,3 +617,21 @@ async def test_no_update_during_a_nightly_or_for_non_pipeline_changes(rig: Rig, 
 def test_with_no_pinned_runtime_nothing_updates(rig: Rig) -> None:
     d = Daemon(rig.engine, Config(remote="origin"), token="t")
     assert d.self_update_once(Path("/nonexistent.plist"), sync=noop_sync, test=ok_test) is None
+
+
+async def test_picking_opus_in_the_monitor_and_allow_opus_are_how_a_ticket_may_use_it(rig: Rig) -> None:
+    rig.gh.add_issue(8, "picked", author="someone", labels=())
+    rig.gh.add_issue(9, "not picked", author="someone", labels=())
+    rig.gh.add_issue(10, "later")
+    rig.engine.sync_issues()
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/enqueue", json={"numbers": [8], "models": {"develop": "opus"}}, headers=AUTH)
+        assert r.status == 200
+        r = await client.post("/v1/enqueue", json={"numbers": [9], "models": {"develop": "sonnet"}}, headers=AUTH)
+        assert r.status == 200
+        assert rig.db.get("opus_ok:8") == "1" and rig.db.get("opus_ok:9") is None
+        assert (await client.post("/v1/tickets/10/allow-opus", json={}, headers=AUTH)).status == 200
+        assert rig.db.get("opus_ok:10") == "1"
+    finally:
+        await client.close()
