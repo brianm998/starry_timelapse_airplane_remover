@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Tray
+import androidx.compose.ui.window.isTraySupported
 import com.star.desktop.domain.FrameStateCounts
 import com.star.desktop.domain.MenuBarStatus
 import com.star.desktop.domain.StepRateTracker
