@@ -1230,5 +1230,7 @@
   "settings_tab.alignment": "अलाइनमेंट",
   "settings_tab.horizon": "क्षितिज",
   "settings_tab.memory": "मेमोरी",
+  "ui.render_options_after_processing_title": "वीडियो सेटिंग चुनें",
+  "ui.use_these_settings": "इन सेटिंग का उपयोग करें",
   "ui.settings": "सेटिंग्स"
 }

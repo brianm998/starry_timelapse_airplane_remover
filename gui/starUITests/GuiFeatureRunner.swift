@@ -770,7 +770,15 @@ final class GuiFeatureRunner {
         try activateDefault("startup.removal.start")
         // A user who chose "don't ask again" skips this prompt; the run is simply already going then.
         let prompt = rendersVideo ? "prompt.pre.yes" : "prompt.pre.no"
-        if element(prompt).waitForExistence(timeout: 30) { element(prompt).click() }
+        if element(prompt).waitForExistence(timeout: 30) {
+            element(prompt).click()
+            // Yes leads to the render options, which "Use These Settings" confirms with what they start at.
+            if rendersVideo {
+                let confirm = element("prompt.options.confirm")
+                guard confirm.waitForExistence(timeout: 30) else { throw RunnerError("the render options did not appear after Yes") }
+                confirm.click()
+            }
+        }
 
         // XCUITest queries are answered by the app's own main thread, which is the thread the horizon overlays and previews keep busy:
         // measured, the runner's polling was about half of it, and a query that waits too long fails the test. So the long waits watch the

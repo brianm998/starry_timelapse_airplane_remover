@@ -303,14 +303,21 @@ struct BottomRightView: View {
               .sheet(isPresented: $viewModel.renderVideoSheetShowing) {
                   RenderVideoSheetView(isVisible: $viewModel.renderVideoSheetShowing,
                                        viewModel: viewModel,
-                                       autoStart: viewModel.renderVideoAutoStart)
+                                       autoStart: viewModel.renderVideoAutoStart,
+                                       autoChoice: viewModel.renderVideoAutoChoice)
                     .onDisappear {
                         // reset so a later manual open shows the choice view
                         viewModel.renderVideoAutoStart = false
+                        viewModel.renderVideoAutoChoice = nil
                     }
               }
               .sheet(isPresented: $viewModel.preProcessingRenderPromptShowing) {
-                  PreProcessingRenderPromptView()
+                  // Yes swaps the question for the render options inside this sheet, rather than dismissing one sheet and presenting another.
+                  if viewModel.preProcessingFlow.step == .choosingOptions {
+                      PreProcessingRenderOptionsView(initial: viewModel.initialRenderChoice)
+                  } else {
+                      PreProcessingRenderPromptView()
+                  }
               }
               .sheet(isPresented: $viewModel.postProcessingRenderPromptShowing) {
                   PostProcessingRenderPromptView()

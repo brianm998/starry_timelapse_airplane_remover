@@ -1230,5 +1230,7 @@
   "settings_tab.alignment": "অ্যালাইনমেন্ট",
   "settings_tab.horizon": "দিগন্ত",
   "settings_tab.memory": "মেমরি",
+  "ui.render_options_after_processing_title": "ভিডিও সেটিংস বেছে নিন",
+  "ui.use_these_settings": "এই সেটিংস ব্যবহার করুন",
   "ui.settings": "সেটিংস"
 }

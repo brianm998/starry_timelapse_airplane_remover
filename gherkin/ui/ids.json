@@ -26,6 +26,7 @@
     "processing.modal",
     "processing.overall",
     "processing.progress",
+    "prompt.options.confirm",
     "prompt.pre.no",
     "prompt.pre.yes",
     "render.cancel",

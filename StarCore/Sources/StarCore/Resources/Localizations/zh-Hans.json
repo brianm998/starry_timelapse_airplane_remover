@@ -1230,5 +1230,7 @@
   "settings_tab.alignment": "对齐",
   "settings_tab.horizon": "地平线",
   "settings_tab.memory": "内存",
+  "ui.render_options_after_processing_title": "选择视频设置",
+  "ui.use_these_settings": "使用这些设置",
   "ui.settings": "设置"
 }
