@@ -35,10 +35,13 @@ Generated (committed, never edit; each starts with `// @generated` and a `source
 
 * `gherkin/generated/datasets-{cli,mac-gui,desktop}.txt`: the `data:` datasets each client's features need; CI
   runs `test_data/fetch.sh $(cat …)` on exactly that list.
-* `gherkin/generated/features-{cli,mac-gui,desktop}.json`: the features each client runs, as a JSON array; CI builds its
-  (client, OS, feature) matrix from it. The `@ui` features (`uiXxx`) of the mac-gui and desktop legs are the exception:
-  they are a few clicks each and need no dataset, so they share ONE job per leg, the matrix entry `ui`, which expands to the
-  real list (`features` job in `gherkin.yml`) and runs them one after the other in a single build.
+* `gherkin/generated/features-{cli,mac-gui,desktop}.json`: the features each client runs, as a JSON array; CI deals them into
+  shards (the `features` job in `gherkin.yml`: cli 4, mac-gui 3, desktop 3, round-robin with the slow video features first) and
+  its matrix is (client, OS, shard). A shard job sets up and builds once (toolchain, MSVC on Windows, the validator, the trail
+  verifier, stard or Star.app), fetches the union of its features' datasets and runs its features one after the other; one job per
+  feature repeated all of that for every feature. The job name lists the shard's features, and each one still gets its own proof
+  and its own row in the job summary (below). The `@ui` features (`uiXxx`) of the mac-gui and desktop legs are one shard of their own,
+  the entry `ui`: a few clicks each, no dataset, no validator.
 
 Hand-written runners: `cli/Tests/GherkinTests/CliFeatureRunner.swift`,
 `gui/starUITests/GuiFeatureRunner.swift`,
@@ -196,11 +199,14 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
 `xcodebuild -only-testing:` matching nothing exits 0 having run nothing, so each CI leg also checks the
 log: `Executed N tests, with 0 failures` for xcodebuild (N is the number of features the job runs, and every one of them must
 show `test<Name>Feature` passed), `test<Name>Feature` passed for swift test, and `tests="1"` / `skipped="0"` in
-`build/test-results/gherkinTest/*.xml` for Gradle. A CI job runs one feature, or for the `ui` bundle every `@ui` feature, so the
-guard checks that exactly those tests ran. The Compose runner allows one feature per Gradle run, so the desktop `ui` job calls
+`build/test-results/gherkinTest/*.xml` for Gradle. A CI job runs a shard of features, so the guard checks that exactly those tests
+ran and that every one of them passed. For the cli and gui `gherkin/prove-xctest-features.sh <cli|gui> <log> <feature>...` does it: it
+checks every feature (not stopping at the first miss), prints an `::error::` naming each one that is not proved, and writes one pass/fail
+row per feature to the job summary. The Compose runner allows one feature per Gradle run, so the desktop jobs call
 `gherkin/run-desktop-features.sh`, which runs `gradlew` once per feature and applies the Gradle check to each one's XML; it runs
 every feature even after a failure, keeps each one's reports under `star-desktop/build/gherkin-each/<feature>/`, and a retry of
-it re-runs only the features that failed.
+it re-runs only the features that failed. `gherkin/summarize-desktop-features.sh` then turns its `PASSED` markers into the same
+per-feature summary rows and fails the job if a feature has none.
 
 ## Checking airplane and satellite removal
 
