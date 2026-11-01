@@ -147,6 +147,29 @@ with the fetch command if it is absent. A sequence is always **copied to a fresh
 directory** first: star derives its temp and output paths from the input directory's name, so processing a
 directory in place would pick up the last run's state.
 
+## When the full matrix runs
+
+The full matrix takes 3-4 hours, mostly waiting for GitHub's few macOS runners, so it does **not** run on every push to the base
+branch (a newer push used to cancel the older run, and on a busy day none finished). It runs:
+
+* **Nightly, 23:00 this Mac's local time**, dispatched by the starpipe daemon (`pipeline/src/starpipe/gherkin_nightly.py`,
+  `gherkin_nightly_enabled` / `gherkin_nightly_start` in the pipeline config), at most once a day. It dispatches a full run only when a
+  file matching `.github/workflows/gherkin.yml`'s own `on.pull_request.paths` list changed since the last green full run, or when
+  there has never been a green full run. It skips, and records why, when nothing relevant changed, when a full run is already queued or
+  running, or when the last full run (green or red) already tested the current tip. `starpipe status` shows the last decision.
+* On a **push to `main`** (releases), on a **pull request** that touches those paths, and on **`workflow_dispatch`**.
+
+Run by hand, on the base branch:
+
+```bash
+starpipe gherkin run [--force]                 # the nightly's decision now; --force skips the change gate
+gh workflow run gherkin.yml --ref develop      # a full run
+gh workflow run gherkin.yml --ref develop -f features=autoHorizonJpeg,selectiveHorizonTiff16   # a subset
+```
+
+The run name says which: `Gherkin: full` or `Gherkin: <features>`. A green subset run is **not** a green full run: the nightly's
+"last green full run" only counts `Gherkin: full` runs (and older push runs, which were always full).
+
 ## Running locally
 
 Each runner fails (never skips) on missing setup, and refuses a feature with no steps.
