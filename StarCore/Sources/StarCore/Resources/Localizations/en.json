@@ -1233,5 +1233,8 @@
   "ui.location_grant_message": "Star needs access to {0} to write its output beside {1}.",
   "ui.folder_access_prompt": "Star needs access to {0} to open this sequence. Choose that folder to continue.",
   "ui.folder_access_denied": "Star could not get access to {0}. It may have been moved or deleted, or access was not granted.",
-  "ui.folder_access_grant": "Allow Access"
+  "ui.folder_access_grant": "Allow Access",
+  "ui.render_options_after_processing_title": "Choose Video Settings",
+  "ui.use_these_settings": "Use These Settings",
+  "ui.settings": "Settings"
 }

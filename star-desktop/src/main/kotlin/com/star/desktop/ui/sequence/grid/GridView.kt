@@ -44,6 +44,7 @@ import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -164,6 +165,7 @@ private fun GridCell(
             .clip(StarShapes.gridCell)
             .background(bg)
             .then(borderMod)
+            .testTag("grid.cell.${index}")
             .frameCellClicks(vm, index, onDoubleClick = { vm.setCurrentIndex(index); vm.select(index); vm.setMode(InteractionMode.EDIT) })
             .padding(4.dp),
     ) {

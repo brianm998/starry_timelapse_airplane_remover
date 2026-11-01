@@ -1233,5 +1233,8 @@
   "ui.location_grant_message": "O Star precisa de acesso a {0} para gravar a saída ao lado de {1}.",
   "ui.folder_access_prompt": "O Star precisa de acesso a {0} para abrir esta sequência. Escolha essa pasta para continuar.",
   "ui.folder_access_denied": "O Star não conseguiu acessar {0}. A pasta pode ter sido movida ou excluída, ou o acesso não foi concedido.",
-  "ui.folder_access_grant": "Permitir acesso"
+  "ui.folder_access_grant": "Permitir acesso",
+  "ui.render_options_after_processing_title": "Escolher as configurações do vídeo",
+  "ui.use_these_settings": "Usar estas configurações",
+  "ui.settings": "Ajustes"
 }

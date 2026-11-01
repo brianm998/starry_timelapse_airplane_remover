@@ -1233,5 +1233,8 @@
   "ui.location_grant_message": "Star potřebuje přístup ke složce {0}, aby mohl zapsat výstup vedle {1}.",
   "ui.folder_access_prompt": "Star potřebuje přístup ke složce {0}, aby mohl otevřít tuto sekvenci. Pokračujte výběrem této složky.",
   "ui.folder_access_denied": "Star nezískal přístup ke složce {0}. Možná byla přesunuta nebo smazána, nebo přístup nebyl povolen.",
-  "ui.folder_access_grant": "Povolit přístup"
+  "ui.folder_access_grant": "Povolit přístup",
+  "ui.render_options_after_processing_title": "Vyberte nastavení videa",
+  "ui.use_these_settings": "Použít tato nastavení",
+  "ui.settings": "Nastavení"
 }

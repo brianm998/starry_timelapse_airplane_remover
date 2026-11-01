@@ -141,7 +141,7 @@ def ticket_lint(file: Path) -> None:
     """Check a ticket body against plan §6.3 (FILE may be - for stdin)."""
     from . import tickets
 
-    result = tickets.lint(_read_body(file))
+    result = tickets.lint(_read_body(file), allow_fable=config_mod.load().allow_fable)
     for message in result.errors:
         click.echo(f"error    {message}")
     for message in result.warnings:
@@ -173,7 +173,8 @@ def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | Non
     try:
         number = tickets.file_ticket(GitHub(cfg), title, _read_body(body_file), blockers, priority, propose=propose,
                                      by=by or os.environ.get("STARPIPE_AGENT") or "interactive", force=force,
-                                     max_open=cfg.max_open_tickets, max_proposed=cfg.max_proposed)
+                                     max_open=cfg.max_open_tickets, max_proposed=cfg.max_proposed,
+                                     allow_fable=cfg.allow_fable)
     except tickets.FilingError as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"#{number} https://github.com/{cfg.owner}/{cfg.repo}/issues/{number}" + (" (proposed)" if propose else ""))
@@ -265,6 +266,10 @@ def status(as_json: bool) -> None:
     if data.get("daemon"):
         d = data["daemon"]
         click.echo(f"daemon up, pid {d['pid']}" + (f"  last error: {d['error']}" if d.get("error") else ""))
+    res = data.get("resources")
+    if res:
+        click.echo(f"LLM sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
+                   + (f" · new sessions wait: {res['waiting']}" if res.get("waiting") else ""))
     if data.get("pause"):
         click.echo(f"PAUSED: {data['pause']}")
     if data.get("usage_pause_until"):
@@ -326,11 +331,45 @@ def retry(number: int, stage: str) -> None:
 
 
 @main.command()
+@click.option("--llm", type=int, default=None, help="Most LLM sessions running at once.")
+@click.option("--cpu", type=float, default=None, help="Do not start another session while CPU use is above this percent.")
+@click.option("--reset", is_flag=True, help="Go back to the values in config.toml.")
+def limits(llm: int | None, cpu: float | None, reset: bool) -> None:
+    """Show or change what limits starting work: LLM sessions at once, and CPU use (a runtime override of config.toml)."""
+    from . import client as client_mod
+
+    try:
+        client = _client()
+        res = client.call("POST", "/v1/limits", {"llm": llm, "cpu": cpu, "reset": reset}) if (llm or cpu or reset) \
+            else client.call("GET", "/v1/limits")
+    except (client_mod.DaemonDown, RuntimeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"LLM sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
+               + (" · overridden at runtime" if res["overridden"] else " · from config.toml")
+               + (f" · new sessions wait: {res['waiting']}" if res["waiting"] else ""))
+
+
+@main.command()
+@click.argument("numbers", nargs=-1, required=True, type=_num)
+def requeue(numbers: tuple[int, ...]) -> None:
+    """Move tickets from their own PR and CI onto the landing train (their PRs are closed; the next batch carries them)."""
+    for n in numbers:
+        _post(f"/v1/tickets/{n}/requeue", {})
+
+
+@main.command()
 @click.argument("number", type=_num)
 @click.argument("reason", required=False, default="")
 def cancel(number: int, reason: str) -> None:
     """Stop the ticket and keep its branch."""
     _post(f"/v1/tickets/{number}/cancel", {"reason": reason})
+
+
+@main.command("allow-opus")
+@click.argument("number", type=_num)
+def allow_opus(number: int) -> None:
+    """Let a ticket's own `model_<stage>: opus` choices apply (opus is otherwise never used)."""
+    _post(f"/v1/tickets/{number}/allow-opus", {})
 
 
 @main.command()
@@ -468,25 +507,34 @@ def _plist_path() -> Path:
 
 @daemon.command("install")
 def daemon_install() -> None:
-    """Write the launchd agent and load it (KeepAlive, starts at login)."""
-    from . import daemon as daemon_mod
+    """Pin a runtime at origin/<base branch>, write the launchd agent to run it, and load it (KeepAlive, starts at login).
 
-    checkout = daemon_mod.checkout_root(config_mod.load(), Path.cwd())
+    The daemon never runs from the main checkout (the owner's working tree): it runs from `~/.star-pipeline/runtime/current`, a
+    copy of pipeline/ at one commit, and updates itself when origin/develop has newer pipeline code. An existing `current` is
+    kept. The checkout is only read."""
+    from . import daemon as daemon_mod
     from . import selfupdate
 
-    # a pinned runtime if `self-update` has made one (launchd then follows its `current` symlink); else the main checkout, never a
-    # worktree that will be deleted
-    main_shim = checkout / "pipeline" / "bin" / "starpipe"
-    shim = (selfupdate.current_shim() if selfupdate.link("current") else
-            main_shim if main_shim.exists() else Path(__file__).resolve().parents[2] / "bin" / "starpipe")
+    cfg = config_mod.load()
+    checkout = daemon_mod.checkout_root(cfg, Path.cwd())
+    if selfupdate.link("current") is None:
+        try:
+            sha = selfupdate.fetch_target(checkout, cfg)
+            rt = selfupdate.build(checkout, sha, selfupdate.real_sync)
+        except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+            raise click.ClickException(f"could not build the runtime at origin/{cfg.base_branch}: {exc}") from exc
+    else:
+        rt = None
     template = (Path(__file__).resolve().parents[2] / "launchd" / f"{LABEL}.plist.in").read_text()
-    out = (template.replace("@SHIM@", str(shim)).replace("@CHECKOUT@", str(checkout))
+    out = (template.replace("@SHIM@", str(selfupdate.current_shim())).replace("@CHECKOUT@", str(checkout))
            .replace("@HOME@", str(config_mod.home())).replace("@PATH@", os.environ.get("PATH", "/usr/bin:/bin")))
     plistlib.loads(out.encode())  # refuse to write a malformed agent
     (config_mod.home() / "logs").mkdir(parents=True, exist_ok=True)
     _plist_path().parent.mkdir(parents=True, exist_ok=True)
     _plist_path().write_text(out)
-    subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", str(_plist_path())], check=False)
+    if rt is not None:
+        selfupdate.switch(rt, _plist_path(), restart=False)
+    selfupdate.real_launchctl(["bootstrap", f"gui/{os.getuid()}", str(_plist_path())])
     click.echo(f"installed {_plist_path()}")
 
 

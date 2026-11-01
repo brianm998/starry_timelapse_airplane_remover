@@ -1233,5 +1233,8 @@
   "ui.location_grant_message": "Star heeft toegang nodig tot {0} om de uitvoer naast {1} te schrijven.",
   "ui.folder_access_prompt": "Star heeft toegang nodig tot {0} om deze beeldreeks te openen. Kies die map om door te gaan.",
   "ui.folder_access_denied": "Star kreeg geen toegang tot {0}. De map is mogelijk verplaatst of verwijderd, of er is geen toegang verleend.",
-  "ui.folder_access_grant": "Toegang toestaan"
+  "ui.folder_access_grant": "Toegang toestaan",
+  "ui.render_options_after_processing_title": "Kies de video-instellingen",
+  "ui.use_these_settings": "Deze instellingen gebruiken",
+  "ui.settings": "Instellingen"
 }

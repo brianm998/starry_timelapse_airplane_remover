@@ -2,7 +2,7 @@ import Foundation
 
 /// Which snapshot transitions deserve a notification, and which of those get through quiet hours (plan §11).
 public struct Alert: Equatable, Sendable {
-    public enum Kind: String, Sendable { case needsInput, developRed, failed, daemonDown }
+    public enum Kind: String, Sendable { case needsInput, developRed, failed, daemonDown, monitorUpdate }
 
     public var kind: Kind
     public var ticket: Int?
@@ -42,6 +42,7 @@ public enum Alerts {
     }
 
     public static func shouldDeliver(_ alert: Alert, at date: Date, calendar: Calendar = .current) -> Bool {
-        alert.isPage || !isQuiet(date, calendar: calendar)
+        // An update notice is announced once per version, so it must not be spent on a quiet hour.
+        alert.isPage || alert.kind == .monitorUpdate || !isQuiet(date, calendar: calendar)
     }
 }

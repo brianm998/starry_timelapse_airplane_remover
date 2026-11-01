@@ -8,7 +8,7 @@ from starpipe import tickets
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.tickets import FilingError
 
-from .fakes import GOOD_BODY, FakeGitHub
+from .fakes import GOOD_BODY, FakeGitHub, accepted
 from .test_engine import Rig
 
 
@@ -130,3 +130,38 @@ async def test_a_followup_a_stage_files_is_a_proposal(tmp_path: Path) -> None:
     follow = next(i for i in rig.gh.issues.values() if i["title"] == "Rename the config key")
     assert {lab["name"] for lab in follow["labels"]} == {"pipe:filed-by-pipeline", "pipe:proposed"}
     assert "pipeline stage of #7" in follow["body"]
+
+
+async def test_a_ticket_the_pipeline_filed_is_closed_at_once_not_after_a_veto_window(tmp_path: Path) -> None:
+    """The pipeline files with the owner's token, so its tickets look owner-authored; the label says otherwise."""
+
+    rig = Rig(tmp_path)
+    rig.gh.add_issue(9, "regression on develop: x", labels=("pipeline", "pipe:filed-by-pipeline"))
+    rig.engine.sync_issues()
+    sha = __import__("subprocess").run(["git", "-C", str(rig.engine.repo), "rev-parse", "origin/develop"], capture_output=True,
+                                       text=True).stdout.strip()
+
+    def close(req: StageRequest) -> StageOutcome:
+        assert "accepted" in req.contract.close_ticket({"reason": "no-defect", "evidence": [sha]})
+        return accepted(req)
+
+    rig.agent.on("explore", close)
+    await rig.engine.drive(9)
+    assert rig.state(9) == "closed" and rig.gh.issues[9]["state"] == "closed"
+
+
+async def test_the_owners_own_ticket_still_waits_the_veto_window(tmp_path: Path) -> None:
+
+    rig = Rig(tmp_path)
+    rig.gh.add_issue(9, "mine")
+    rig.engine.sync_issues()
+    sha = __import__("subprocess").run(["git", "-C", str(rig.engine.repo), "rev-parse", "origin/develop"], capture_output=True,
+                                       text=True).stdout.strip()
+
+    def close(req: StageRequest) -> StageOutcome:
+        req.contract.close_ticket({"reason": "no-defect", "evidence": [sha]})
+        return accepted(req)
+
+    rig.agent.on("explore", close)
+    await rig.engine.drive(9)
+    assert rig.state(9) == "paused" and rig.gh.issues[9]["state"] == "open"

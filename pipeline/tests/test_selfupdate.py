@@ -14,7 +14,6 @@ from starpipe.daemon import Daemon
 
 from .fakes import sh
 from .test_engine import Rig
-from .test_ship import ready_ticket
 
 
 def make_pipeline_repo(tmp: Path, salt: str = "") -> tuple[Path, str]:
@@ -246,56 +245,7 @@ def test_record_start_is_a_no_op_before_any_runtime_exists() -> None:
     assert not (home() / "runtime").exists()
 
 
-# the daemon's side -------------------------------------------------------------------------------------------------
-async def test_a_landing_that_changes_pipeline_marks_the_daemon_for_an_update(tmp_path: Path) -> None:
-    rig = Rig(tmp_path)
-    ready_ticket(rig, 1, "thing.py", "x = 1\n", folder="pipeline/src")
-    await rig.engine.drive(1)
-    assert rig.state(1) == "landed" and rig.db.get("self_update_wanted")
-
-
-async def test_docs_and_monitor_only_landings_do_not(tmp_path: Path) -> None:
-    rig = Rig(tmp_path)
-    ready_ticket(rig, 1, "a.md", "x\n")
-    ready_ticket(rig, 2, "App.swift", "// x\n", folder="pipeline/monitor/Sources")
-    await rig.engine.drive(1)
-    await rig.engine.drive(2)
-    assert rig.state(1) == "landed" and rig.state(2) == "landed" and rig.db.get("self_update_wanted") is None
-
-
-def test_auto_update_is_off_unless_enabled_and_waits_for_idle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    rig = Rig(tmp_path)
-    calls: list[str] = []
-
-    def fake_update(*_a: object, **_k: object) -> None:
-        calls.append("update")
-
-    monkeypatch.setattr(selfupdate, "update", fake_update)
-    rig.db.put("self_update_wanted", "abc")
-    off = Daemon(rig.engine, Config(), token="t")
-    assert off.auto_update_once(tmp_path / "p.plist") is None and calls == []
-
-    on = Daemon(rig.engine, Config(auto_self_update=True), token="t")
-    rig.db.begin_stage(1, "develop", 1, "sonnet")  # a stage is mid-session: not idle
-    rig.gh.add_issue(1, "t")
-    assert on.auto_update_once(tmp_path / "p.plist") is None and calls == []
-    rig.db.end_stage(rig.db.running_stages()[0]["id"], "accepted")
-    assert on.auto_update_once(tmp_path / "p.plist") == "updated" and calls == ["update"]
-    assert rig.db.get("self_update_wanted") is None
-
-
-def test_a_failed_auto_update_pages_once_and_does_not_retry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    rig = Rig(tmp_path)
-
-    def boom(*_a: object, **_k: object) -> None:
-        raise RuntimeError("uv sync failed")
-
-    monkeypatch.setattr(selfupdate, "update", boom)
-    rig.db.put("self_update_wanted", "abcdef1234")
-    d = Daemon(rig.engine, Config(auto_self_update=True), token="t")
-    assert (d.auto_update_once(tmp_path / "p.plist") or "").startswith("failed")
-    assert rig.db.get("self_update_wanted") is None
-    assert any(t == "star pipeline: self-update-failed" for t, _ in rig.pages)
+# the daemon's side of self-update is in tests/test_daemon.py (self_update_once)
 
 
 async def test_the_runtime_endpoint_reports_running_sessions_and_the_pinned_runtimes(tmp_path: Path) -> None:
@@ -381,3 +331,32 @@ def test_only_the_current_and_previous_runtimes_are_kept(tmp_path: Path) -> None
     assert left == {runtimes[1].name, runtimes[2].name}
     assert selfupdate.link("current") == runtimes[2].resolve() and selfupdate.link("previous") == runtimes[1].resolve()
     assert selfupdate.prune() == []
+
+
+def test_a_target_that_lacks_the_running_commit_is_not_an_update(tmp_path: Path) -> None:
+    """Found live: the daemon ran the owner's unpushed pipeline commits, origin/develop moved on without them (tickets landing), and
+    the auto-update 'updated' the daemon to origin's tip: a downgrade that took the landing train away."""
+    import subprocess
+
+    def sh(*argv: str) -> str:
+        return subprocess.run(argv, cwd=tmp_path, check=True, capture_output=True, text=True).stdout.strip()
+
+    def commit(rel: str, text: str) -> str:
+        (tmp_path / "pipeline").mkdir(exist_ok=True)
+        (tmp_path / "pipeline" / rel).write_text(text)
+        sh("git", "add", "-A")
+        sh("git", "commit", "-q", "-m", rel)
+        return sh("git", "rev-parse", "HEAD")
+
+    sh("git", "init", "-q", "-b", "develop")
+    sh("git", "config", "user.email", "t@t")
+    sh("git", "config", "user.name", "t")
+    base = commit("a.py", "1")
+    sh("git", "checkout", "-q", "-b", "origin-side")
+    theirs = commit("b.py", "2")  # lands on origin/develop
+    sh("git", "checkout", "-q", "develop")
+    mine = commit("c.py", "3")  # the running code: local, not on origin
+    assert selfupdate.pipeline_commits_behind(tmp_path, base, theirs) == 1, "an ordinary update"
+    assert selfupdate.pipeline_commits_behind(tmp_path, mine, theirs) == 0, "diverged: the running code has commits the target lacks"
+    assert selfupdate.pipeline_commits_behind(tmp_path, theirs, base) == 0, "the target is older"
+    assert selfupdate.pipeline_commits_behind(tmp_path, "f" * 40, theirs) == 1, "an unknown running sha still counts as behind"

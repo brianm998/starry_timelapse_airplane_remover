@@ -4,7 +4,10 @@ import SwiftUI
 
 @main
 struct StarPipeMonitorApp: App {
-    @State private var store = MonitorStore()
+    @State private var store = MonitorStore(
+        sourceSHA: Bundle.main.object(forInfoDictionaryKey: "StarPipeSourceSHA") as? String,
+        lastNotifiedUpdate: { UserDefaults.standard.string(forKey: "lastNotifiedMonitorUpdate") },
+        setLastNotifiedUpdate: { UserDefaults.standard.set($0, forKey: "lastNotifiedMonitorUpdate") })
     @AppStorage("fontScale") private var fontScale = FontScale.default
     private let notifier = Notifier()
 
@@ -39,6 +42,7 @@ struct StarPipeMonitorApp: App {
     private func launch() async {
         notifier.requestAuthorization()
         store.onAlert = { notifier.deliver($0) }
+        store.onUpdate = { notifier.deliver($0) }
         do {
             store.start(client: APIClient(config: try APIConfig.load()))
         } catch {
@@ -52,8 +56,12 @@ struct MenuBarLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: store.needsAttention ? "exclamationmark.circle.fill" : "shippingbox")
+            Image(nsImage: StarIcon.menuBarImage(for: store.pipelineState))
             if store.needsYouCount > 0 { Text("\(store.needsYouCount)") }
+        }
+        // The label is always alive (the window is not), so it keeps the Dock icon in step with the menu bar star.
+        .onChange(of: store.pipelineState, initial: true) { _, state in
+            NSApp.applicationIconImage = StarIcon.dockImage(for: state)
         }
     }
 }

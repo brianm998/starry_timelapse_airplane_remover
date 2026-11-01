@@ -47,7 +47,10 @@ with the owner's GitHub token.
 <tests to add, or `none: <reason>`>
 ## Out of scope
 ## Pipeline
-(optional) model_develop: opus · effort_develop: high · gherkin: <feature> · skip_review: no
+(optional) effort_develop: high · gherkin: <feature> · skip_review: no
+(`model_<stage>` / `effort_<stage>` exist for explore, develop, fix, review, resolve, ci_fix and conflict; efforts: low, medium, high, xhigh, max)
+**Leave `model_<stage>` out.** Every stage runs sonnet by default, and the daemon ignores `model_<stage>: opus` unless the owner picked it in
+the monitor or ran `starpipe allow-opus <n>`. Never write opus into a ticket on your own: only when the owner has told you to.
 ```
 
 - Every acceptance criterion has a `check:`. A bug's tests say "fails without the fix"; `none:` for a bug needs a real

@@ -94,6 +94,9 @@ import kotlinx.coroutines.withContext
  * including ones the engine picks for itself (the keypoint divisor), and a setting put back to where it started has to be sent again once an
  * earlier edit of it has been applied. Clicking outside the sheet does nothing, and a change the engine refuses says why and leaves the sheet up.
  */
+/** The title colour of the tabs that are not selected: white on the grey track (the selected one stays black on its white pill). */
+internal val SETTINGS_TAB_UNSELECTED_TEXT = Color.White
+
 /**
  * The tabs of the sheet, in the order they are shown; it opens on the first. The gui's `SettingsTab` is the same list
  * (`gherkin/ui/vectors/constants.json`, `settingsTabs`, which a test on each side reads).
@@ -286,6 +289,7 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                 label = { localized(it.titleKey) },
                 onSelect = { tab = it },
                 tag = { it.testTag },
+                unselectedText = SETTINGS_TAB_UNSELECTED_TEXT,
             )
         }
 

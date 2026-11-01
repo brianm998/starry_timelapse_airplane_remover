@@ -169,6 +169,13 @@ enum CameraMotion: String, InstructionOption, Identifiable {
     }
 }
 
+/// The title colour of a settings tab: yellow when the control is disabled, else black on the selected tab's
+/// white pill and white on the grey track for the others.  The desktop client's `starPickerTextColor` does the same.
+func settingsTabTitleColor(isSelected: Bool, isEnabled: Bool) -> Color {
+    if !isEnabled { return .yellow }
+    return isSelected ? .black : .white
+}
+
 /// The tabs of the settings sheet, in the order they are shown.  The desktop client's `SettingsTab` is
 /// the same list (`gherkin/ui/vectors/constants.json`, `settingsTabs`, which a test on each side reads).
 enum SettingsTab: String, CaseIterable, Identifiable {
@@ -509,7 +516,7 @@ struct ProcessingSettingsView: View {
               // choices anyone makes first, then each group of tuning settings on its own.
               StarPicker(selection: $selectedTab) { tab, isEnabled in
                   Text(tab.titleText)
-                    .foregroundColor(isEnabled ? .black : .yellow)
+                    .foregroundColor(settingsTabTitleColor(isSelected: tab == selectedTab, isEnabled: isEnabled))
                     .accessibilityIdentifier(tab.accessibilityId)
               }
 

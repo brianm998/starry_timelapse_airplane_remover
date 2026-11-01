@@ -40,6 +40,7 @@ class GitHub:
         self.config = config
         self._run = runner
         self.base = f"repos/{config.owner}/{config.repo}"
+        self._jobs_cache: dict[tuple[int, str], list[dict[str, Any]]] = {}
 
     def api(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         args = ["api", "-X", method, f"{self.base}/{path}"]
@@ -79,6 +80,9 @@ class GitHub:
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.api("PATCH", f"issues/{number}", {"state": "closed", "state_reason": reason})
 
+    def set_body(self, number: int, body: str) -> None:
+        self.api("PATCH", f"issues/{number}", {"body": body})
+
     def comment(self, number: int, body: str) -> int:
         return int(self.api("POST", f"issues/{number}/comments", {"body": body})["id"])
 
@@ -105,6 +109,31 @@ class GitHub:
     def create_pr(self, title: str, body: str, head: str, base: str) -> dict[str, Any]:
         return self.api("POST", "pulls", {"title": title, "body": body, "head": head, "base": base})
 
+    def close_pr(self, number: int, comment: str = "") -> None:
+        if comment:
+            self.comment(number, comment)  # a PR's conversation is its issue's comments
+        self.api("PATCH", f"pulls/{number}", {"state": "closed"})
+
+    def cancel_runs(self, branch: str) -> int:
+        """Cancel the queued and running workflow runs of a branch: closing its PR does not, and a queued run for a closed PR still takes
+        its turn for GitHub's runners. Returns how many cancellations were requested."""
+        data: dict[str, Any] = self.api("GET", f"actions/runs?branch={branch}&per_page=30") or {}
+        cancelled = 0
+        for run in data.get("workflow_runs", []):
+            if run.get("status") in ("queued", "in_progress", "waiting", "pending"):
+                try:
+                    self.api("POST", f"actions/runs/{run['id']}/cancel")
+                    cancelled += 1
+                except GitHubError:
+                    pass  # it finished between the list and the cancel
+        return cancelled
+
+    def cancel_run(self, run_id: int) -> None:
+        try:
+            self.api("POST", f"actions/runs/{run_id}/cancel")
+        except GitHubError:
+            pass  # it finished between the list and the cancel
+
     def update_pr(self, number: int, body: str) -> None:
         self.api("PATCH", f"pulls/{number}", {"body": body})
 
@@ -120,9 +149,18 @@ class GitHub:
         data: dict[str, Any] = self.api("GET", f"actions/runs?{query}") or {}
         return data.get("workflow_runs", [])
 
-    def run_jobs(self, run_id: int) -> list[dict[str, Any]]:
+    def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
+        """A run's jobs. With a `version` (only for a completed run: its attempt and update time) the answer is remembered, since a
+        completed run does not change until it is rerun, which changes the version. This is most of the polling cost."""
+        if version is not None and (run_id, version) in self._jobs_cache:
+            return self._jobs_cache[(run_id, version)]
         data: dict[str, Any] = self.api("GET", f"actions/runs/{run_id}/jobs?per_page=100") or {}
-        return data.get("jobs", [])
+        jobs: list[dict[str, Any]] = data.get("jobs", [])
+        if version is not None:
+            if len(self._jobs_cache) > 2000:
+                self._jobs_cache.clear()
+            self._jobs_cache[(run_id, version)] = jobs
+        return jobs
 
     def rerun_failed(self, run_id: int) -> None:
         self.api("POST", f"actions/runs/{run_id}/rerun-failed-jobs")

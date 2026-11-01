@@ -256,10 +256,11 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 localized(if (info?.cleanMethodOverridden == true) "ui.processing_mode_current_custom" else "ui.processing_mode_current_default", modeName),
-                color = StarColors.white, fontSize = 11.sp,
+                color = StarColors.white, fontSize = 11.sp, modifier = Modifier.testTag("right.mode"),
             )
             androidx.compose.material3.OutlinedButton(
                 onClick = { showChangeMode = true },
+                modifier = Modifier.testTag("right.changemode"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
             ) { Text(localized("ui.change_mode"), fontSize = 11.sp) }
         }

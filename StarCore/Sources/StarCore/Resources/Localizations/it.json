@@ -1233,5 +1233,8 @@
   "ui.location_grant_message": "Star ha bisogno di accedere a {0} per scrivere l'output accanto a {1}.",
   "ui.folder_access_prompt": "Star ha bisogno di accedere a {0} per aprire questa sequenza. Scegli quella cartella per continuare.",
   "ui.folder_access_denied": "Star non è riuscito ad accedere a {0}. Potrebbe essere stata spostata o eliminata, oppure l'accesso non è stato concesso.",
-  "ui.folder_access_grant": "Consenti accesso"
+  "ui.folder_access_grant": "Consenti accesso",
+  "ui.render_options_after_processing_title": "Scegli le impostazioni del video",
+  "ui.use_these_settings": "Usa queste impostazioni",
+  "ui.settings": "Impostazioni"
 }
