@@ -66,7 +66,7 @@ final class ColorSubtractionTests: XCTestCase {
             make(UInt8.self, width: 2, height: 1, pixels: [1, 0, 0,   0, 0, 0]),
             fromImage: make(UInt16.self, width: 2, height: 1, pixels: [1000, 0, 0,   7, 0, 0])))
         XCTAssertEqual(mixed.bitsPerComponent, 16)
-        XCTAssertEqual(read(UInt16.self, mixed), [1000 - 257, 0, 0,   7, 0, 0])
+        XCTAssertEqual(read(UInt16.self, mixed), [743, 0, 0,   7, 0, 0] as [UInt16])
 
         // with a mask, the dropped side is exactly 0 and the kept side is the subtraction
         let mask = makeMask(width: 2, height: 1, values: [255, 0])
