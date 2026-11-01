@@ -1,5 +1,7 @@
 package com.star.desktop.ui.app
 
+import com.star.proto.VideoEncodeSettings
+
 /**
  * The question at the end of a run, "render a video now?" (macOS `handleProcessingDone`), and which run it is about.
  *
@@ -17,21 +19,31 @@ class RenderQuestion {
     private var ask = false
 
     /**
-     * Arm for run number [forRun]: [render] says yes, render at its end (answered in the first prompt), [ask] puts the question to the user
-     * there (the render prompts are not turned off). Neither is no question at all, which is the same as not arming.
+     * How the render at the end is to be done, as chosen in the prompt's options step, while armed to render. Read before [done], which
+     * drops it with the rest. null when nothing was chosen: the render then starts from the session's config.
      */
-    fun arm(forRun: Int, render: Boolean, ask: Boolean) {
+    var renderSettings: VideoEncodeSettings? = null
+        private set
+
+    /**
+     * Arm for run number [forRun]: [render] says yes, render at its end (answered in the first prompt), [ask] puts the question to the user
+     * there (the render prompts are not turned off). Neither is no question at all, which is the same as not arming. [settings] is how to
+     * render when [render] is set.
+     */
+    fun arm(forRun: Int, render: Boolean, ask: Boolean, settings: VideoEncodeSettings? = null) {
         if (!render && !ask) { disarm(); return }
         armedFor = forRun
         this.render = render
         this.ask = ask
+        renderSettings = settings.takeIf { render }
     }
 
-    /** The run stopped or failed, or the sequence closed: whatever was armed is dropped. */
+    /** The run stopped or failed, or the sequence closed: whatever was armed is dropped, the settings with it. */
     fun disarm() {
         armedFor = null
         render = false
         ask = false
+        renderSettings = null
     }
 
     /** A run ended cleanly, with [runsStarted] runs started so far: what to do about the question. Used up either way. */

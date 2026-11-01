@@ -551,6 +551,11 @@ class DesktopFeatureRunner {
         t.onNodeWithTag("startup.removal.start").performScrollTo().performClick()
         waitFor(t, "the render-after prompt", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("prompt.pre.no") }
         t.onNodeWithTag(if (rendersVideo) "prompt.pre.yes" else "prompt.pre.no").performClick()
+        if (rendersVideo) {
+            // Yes leads to the render options, which "Use These Settings" confirms with what they start at.
+            waitFor(t, "the render options", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("prompt.options.confirm") }
+            t.onNodeWithTag("prompt.options.confirm").performClick()
+        }
 
         // "<complete>/<total>/<running|idle>", set on the left panel's progress line. Finished: every frame complete and the run over.
         var last = "(none)"

@@ -1230,5 +1230,7 @@
   "settings_tab.alignment": "Uitlijning",
   "settings_tab.horizon": "Horizon",
   "settings_tab.memory": "Geheugen",
+  "ui.render_options_after_processing_title": "Kies de video-instellingen",
+  "ui.use_these_settings": "Deze instellingen gebruiken",
   "ui.settings": "Instellingen"
 }

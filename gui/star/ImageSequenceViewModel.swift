@@ -377,9 +377,18 @@ public final class ImageSequenceViewModel {
     // showing the settings/choice view.
     var renderVideoAutoStart = false
 
+    // what the user chose in the pre-processing prompt's options step, for the
+    // automatic render that `renderVideoAutoStart` asks for: the render sheet
+    // starts from it and not from the config.  Nil for any other render.
+    var renderVideoAutoChoice: RenderChoice?
+
     // controls the "render video after processing?" sheet shown before
     // processing begins.
     var preProcessingRenderPromptShowing = false
+
+    // which step of that sheet is showing (the question, or the render options
+    // after Yes), and the choice made there until the run ends.
+    var preProcessingFlow = PreProcessingRenderFlow()
 
     // controls the "processing complete, render video?" sheet shown after
     // processing finishes.
@@ -2815,8 +2824,10 @@ public final class ImageSequenceViewModel {
         // will call beginProcessing() once the user chooses.
         if userPreferences.skipRenderPromptAfterProcessing == true {
             autoRenderAfterProcessing = false
+            preProcessingFlow.reset()
             beginProcessing()
         } else {
+            preProcessingFlow.open()
             preProcessingRenderPromptShowing = true
         }
     }
@@ -2858,6 +2869,7 @@ public final class ImageSequenceViewModel {
         sequenceProgressModalShowing = false
         enterEditMode()
         autoRenderAfterProcessing = false
+        preProcessingFlow.reset()
         beginProcessing()
     }
 
@@ -2896,8 +2908,40 @@ public final class ImageSequenceViewModel {
             userPreferences.skipRenderPromptAfterProcessing = true
         }
         autoRenderAfterProcessing = autoRender
+        // An answer that is not a render at the end drops any choice held; one that is keeps what the options step chose.
+        if autoRender {
+            preProcessingFlow.finish()
+        } else {
+            preProcessingFlow.reset()
+        }
         preProcessingRenderPromptShowing = false
         beginProcessing()
+    }
+
+    // The pre-processing prompt's Yes: the render options come next, and nothing starts yet.
+    func chooseRenderOptions() {
+        preProcessingFlow.yes()
+    }
+
+    // Cancel in the render options: back to the question, with nothing started.
+    func cancelRenderOptions() {
+        preProcessingFlow.cancelOptions()
+    }
+
+    // "Use These Settings": process, and render with `choice` when it is done.
+    func confirmRenderOptions(_ choice: RenderChoice) {
+        guard let start = preProcessingFlow.confirm(choice) else { return }
+        confirmStartProcessing(autoRender: start.autoRender, dontAskAgain: start.dontAskAgain)
+    }
+
+    /// What the render options start from: the config's settings, settled on ones this ffmpeg has.
+    var initialRenderChoice: RenderChoice {
+        let configured = config.config()
+        return RenderChoice.settled(frameRate: configured.frameRate,
+                                    codec: configured.codec,
+                                    encoder: configured.encoder,
+                                    pixelFormat: configured.pixelFormat,
+                                    muxer: configured.muxer)
     }
 
     private func beginProcessing() {
@@ -2945,6 +2989,7 @@ public final class ImageSequenceViewModel {
         if autoRenderAfterProcessing {
             // user already said yes in the pre-prompt — render directly
             autoRenderAfterProcessing = false
+            renderVideoAutoChoice = preProcessingFlow.takeChoice()
             renderVideoAutoStart = true
             renderVideoSheetShowing = true
         } else if userPreferences.skipRenderPromptAfterProcessing != true {
@@ -2959,6 +3004,7 @@ public final class ImageSequenceViewModel {
     //              when false, the render sheet shows its settings/preview view.
     func confirmRenderAfterProcessing(autoStart: Bool) {
         postProcessingRenderPromptShowing = false
+        renderVideoAutoChoice = nil
         renderVideoAutoStart = autoStart
         renderVideoSheetShowing = true
     }

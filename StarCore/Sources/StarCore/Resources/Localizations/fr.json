@@ -1230,5 +1230,7 @@
   "settings_tab.alignment": "Alignement",
   "settings_tab.horizon": "Horizon",
   "settings_tab.memory": "Mémoire",
+  "ui.render_options_after_processing_title": "Choisir les réglages de la vidéo",
+  "ui.use_these_settings": "Utiliser ces réglages",
   "ui.settings": "Réglages"
 }

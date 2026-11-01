@@ -1230,5 +1230,7 @@
   "settings_tab.alignment": "การจัดวาง",
   "settings_tab.horizon": "เส้นขอบฟ้า",
   "settings_tab.memory": "หน่วยความจำ",
+  "ui.render_options_after_processing_title": "เลือกการตั้งค่าวิดีโอ",
+  "ui.use_these_settings": "ใช้การตั้งค่านี้",
   "ui.settings": "การตั้งค่า"
 }

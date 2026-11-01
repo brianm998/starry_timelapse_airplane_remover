@@ -1230,5 +1230,7 @@
   "settings_tab.alignment": "Wyrównanie",
   "settings_tab.horizon": "Horyzont",
   "settings_tab.memory": "Pamięć",
+  "ui.render_options_after_processing_title": "Wybierz ustawienia filmu",
+  "ui.use_these_settings": "Użyj tych ustawień",
   "ui.settings": "Ustawienia"
 }
