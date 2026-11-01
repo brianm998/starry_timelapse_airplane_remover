@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 
@@ -37,8 +38,9 @@ class Rig:
         async def sleep(s: float) -> None:
             self.slept.append(s)
             self.now += s
+            await asyncio.sleep(0)  # yield like the real sleep: a ticket polling for room must let the others run
 
-        self.engine = Engine(Config(remote="origin"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
+        self.engine = Engine(Config(remote="origin", landing_mode="single"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
                              Notifier(self.db, lambda t, x: self.pages.append((t, x))), "origin/develop",
                              clock=lambda: self.now, sleep=sleep,
                              negative_control=no_controls)
@@ -127,32 +129,18 @@ async def test_blockers_and_priority_decide_the_claim(rig: Rig) -> None:
     assert t and t.number == 1
 
 
-async def test_the_active_cap_holds_new_claims(rig: Rig) -> None:
-    for n in (1, 2, 3):
-        rig.gh.add_issue(n, f"t{n}")
-    rig.engine.sync_issues()
-    rig.db.set_state(1, "developing")
-    rig.db.set_state(2, "exploring")
-    assert rig.engine.claimable() is None
-
-
-async def test_the_db_max_active_override_decides_claims(rig: Rig) -> None:
-    for n in (1, 2, 3):
-        rig.gh.add_issue(n, f"t{n}")
-    rig.engine.sync_issues()
-    rig.db.set_state(1, "developing")
-    rig.db.set_state(2, "exploring")
-    assert rig.engine.max_active() == 2 and rig.engine.claimable() is None  # config.toml's default
-    rig.db.put("max_active", "3")
-    assert rig.engine.max_active() == 3
-    t = rig.engine.claimable()
-    assert t and t.number == 3
-    rig.db.put("max_active", "1")  # lowering it stops new claims; the running tickets stay as they are
-    assert rig.engine.claimable() is None and rig.state(1) == "developing" and rig.state(2) == "exploring"
-    rig.db.put("max_active", "junk")
-    assert rig.engine.max_active() == 2  # an unreadable override falls back to the file
-    rig.db.put("max_active", None)
+async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
+    assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
+    rig.db.put("max_active", "2")
     assert rig.engine.max_active() == 2
+    rig.db.put("max_active", "junk")
+    assert rig.engine.max_active() == rig.engine.config.max_llm_sessions  # an unreadable override falls back to the file
+    rig.db.put("max_active", "2")
+    rig.db.put("limit_llm", "5")  # `starpipe limits` is the more specific override
+    assert rig.engine.max_active() == 5
+    rig.db.put("limit_llm", None)
+    rig.db.put("max_active", None)
+    assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
 
 
 async def test_a_stage_without_a_result_climbs_the_ladder_then_parks(rig: Rig) -> None:
@@ -513,3 +501,27 @@ async def test_verification_does_not_block_the_event_loop(rig: Rig) -> None:
     await asyncio.gather(rig.engine._verify(ticket), ticker())  # pyright: ignore[reportPrivateUsage]
     assert waited_out == [False]
     assert rig.state(7) == "review"
+
+
+async def test_opus_in_a_ticket_body_is_ignored_unless_the_owner_asked_for_it(rig: Rig) -> None:
+    """Found live: tickets filed by agent sessions carried `model_develop: opus` copied from the skill's example, and ran on opus."""
+    rig.gh.add_issue(7, "t", body=piped("model_develop: opus · model_review: haiku"))
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t is not None
+    assert rig.engine._stage_choice(t, "develop", 1) == ("sonnet", "high"), "opus in the body does nothing"  # pyright: ignore[reportPrivateUsage]
+    assert rig.engine._stage_choice(t, "review", 1) == ("haiku", "high"), "other models are still honoured"  # pyright: ignore[reportPrivateUsage]
+    assert any(e["kind"] == "stage-choice-ignored" and e["data"]["value"] == "opus" for e in rig.db.events_since())
+
+    rig.db.put("opus_ok:7", "1")  # `starpipe allow-opus 7`, or picking opus in the monitor
+    assert rig.engine._stage_choice(t, "develop", 1) == ("opus", "high")  # pyright: ignore[reportPrivateUsage]
+    rig.db.put("opus_ok:7", None)
+    rig.engine.config.allow_opus = True
+    assert rig.engine._stage_choice(t, "develop", 1) == ("opus", "high")  # pyright: ignore[reportPrivateUsage]
+
+
+def test_the_defaults_are_sonnet_everywhere() -> None:
+    from starpipe.config import Config
+
+    cfg = Config()
+    assert (cfg.model, cfg.model_escalate, cfg.allow_opus) == ("sonnet", "sonnet", False)

@@ -53,6 +53,12 @@ struct GridCellView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     let frameIndex: Int
 
+    /// The keyboard's modifiers when the mouse went down on this cell, until the click that follows is handled.  The single-click handler
+    /// below is not called when the click ends: SwiftUI holds it back for the double-click interval to see whether a second click comes,
+    /// and a command-click or shift-click let go of the key well inside that, so reading the keyboard then found it up and every one of
+    /// them selected a single frame.
+    @State private var modifiersAtMouseDown: NSEvent.ModifierFlags?
+
     var imageWidth: CGFloat {
         CGFloat(viewModel.config.config().previewWidth) * viewModel.gridThumbnailScale
     }
@@ -172,6 +178,7 @@ struct GridCellView: View {
                 )
         )
         .onTapGesture(count: 2) {
+            modifiersAtMouseDown = nil
             viewModel.currentIndex = frameIndex
             viewModel.selectedFrameIndices = [frameIndex]
             viewModel.interactionMode = .edit
@@ -179,14 +186,21 @@ struct GridCellView: View {
         .onTapGesture {
             handleTap()
         }
+        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in
+            modifiersAtMouseDown = NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags
+        })
         .contextMenu {
             frameContextMenu
         }
         .environment(frameView)
+          // the id a UI test finds this cell by: the family "grid.cell.*" of gherkin/ui/ids.json, one per frame
+          .accessibilityIdentifier("grid.cell.\(frameIndex)")
     }
 
     private func handleTap() {
-        let mods = NSEvent.modifierFlags
+        // A click that did not come through the mouse (an accessibility press) has no mouse-down to have read them at.
+        let mods = modifiersAtMouseDown ?? NSEvent.modifierFlags
+        modifiersAtMouseDown = nil
         if mods.contains(.shift) {
             // Range-select from current anchor to this frame.
             let lo = min(viewModel.currentIndex, frameIndex)

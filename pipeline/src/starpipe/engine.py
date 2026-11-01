@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import gitutil, guards, negctl, ship, tickets, trust, worktrees
+from . import gitutil, guards, load, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
 from .checks import impact, ledger
 from .config import Config, home
@@ -63,7 +63,11 @@ class Engine:
     negative_control: Callable[[Path, str, list[str]], list[negctl.Control]] = negctl.run
     shim: str = ""
     parked: set[int] = field(default_factory=lambda: set[int]())
+    cpu: Callable[[], float] = lambda: 0.0  # the rolling CPU average; the daemon injects its meter
+    llm_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-start is one step
+    issue_memo: dict[int, tuple[str, bool, list[int]]] = field(default_factory=lambda: dict[int, tuple[str, bool, list[int]]]())
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
+    publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
 
     # intake --------------------------------------------------------------------------------------------------------
     def sync_issues(self) -> None:
@@ -72,13 +76,22 @@ class Engine:
         seen: set[int] = set()
         for issue in issues:
             n = int(issue["number"])
-            if not trust.may_run(issue, self.gh.timeline(n), self.config.owner):
+            stamp = str(issue.get("updated_at") or "")
+            memo = self.issue_memo.get(n)
+            if stamp and memo and memo[0] == stamp:  # nothing changed on the issue since: no timeline or dependency calls
+                allowed, blockers = memo[1], memo[2]
+            else:
+                allowed = trust.may_run(issue, self.gh.timeline(n), self.config.owner)
+                blockers = self.gh.blocked_by(n) if allowed else []
+                self.issue_memo[n] = (stamp, allowed, blockers)
+            if not allowed:
                 continue
             seen.add(n)
             labels = {lab["name"] for lab in issue.get("labels", [])}
+            if "pipe:filed-by-pipeline" in labels:
+                self.db.put(f"auto:{n}", "1")  # filed by the pipeline with the owner's token: not the owner's own ticket
             prio = min((PRIORITY[lab] for lab in labels if lab in PRIORITY), default=2)
-            if self.db.upsert_ticket(n, issue["title"], issue.get("body") or "", issue["user"]["login"], prio,
-                                     self.gh.blocked_by(n)):
+            if self.db.upsert_ticket(n, issue["title"], issue.get("body") or "", issue["user"]["login"], prio, blockers):
                 self._label(n, "queued")
         for t in self.db.tickets(("queued", *ACTIVE_STATES, "needs-input", "paused", "ready")):
             if t.number not in seen:
@@ -116,18 +129,32 @@ class Engine:
         return StageResult(False, reason=reason)
 
     # claim ---------------------------------------------------------------------------------------------------------
+    # limits ----------------------------------------------------------------------------------------------------------
+    def limits(self) -> tuple[int, float]:
+        """(max LLM sessions, CPU limit %): the owner's runtime override if set (`starpipe limits`), else the config."""
+        sessions, cpu = self.db.get("limit_llm") or self.db.get("max_active"), self.db.get("limit_cpu")  # max_active: the monitor's stepper
+        return (int(sessions) if sessions and sessions.isdigit() and int(sessions) >= 1 else self.config.max_llm_sessions,
+                float(cpu) if cpu else self.config.cpu_limit_pct)
+
     def max_active(self) -> int:
-        """How many tickets may run at once: the owner's db override from the monitor, else config.toml."""
-        raw = self.db.get("max_active")
-        if raw and raw.isdigit() and int(raw) >= 1:
-            return int(raw)
-        return self.config.max_active
+        """How many LLM sessions may run at once (what the monitor's concurrency control shows)."""
+        return self.limits()[0]
+
+    def llm_active(self) -> int:
+        """Sessions in the middle of work. One whose ticket is only waiting for the heavy lock is not generating anything."""
+        from . import heavy
+
+        waiting = {w.ticket for w in heavy.status().queue}
+        return len([s for s in self.db.running_stages() if str(s["ticket"]) not in waiting])
+
+    def llm_room(self) -> load.Room:
+        sessions, cpu_limit = self.limits()
+        return load.room(self.llm_active(), self.cpu(), sessions, cpu_limit)
 
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims") or self.db.get("self_update_pending"):
             return None  # the second is the daemon waiting to swap to new code: nothing new starts, running stages finish
-        active = len(self.db.tickets(ACTIVE_STATES))
-        if active >= self.max_active():
+        if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
             return None
         for t in self.db.tickets(("queued",)):  # ordered by priority then age
             if not self.db.open_blockers(t.number):
@@ -184,6 +211,9 @@ class Engine:
             if key not in chosen:
                 continue
             bad = tickets.validate_choice(key, chosen[key], self.config.allow_fable)
+            if not bad and kind == "model" and chosen[key] == "opus" and not (
+                    self.config.allow_opus or self.db.get(f"opus_ok:{t.number}")):
+                bad = "opus is used only when the owner asks for it (monitor picker, `starpipe allow-opus`)"
             if bad:
                 self.db.event("stage-choice-ignored", t.number, stage=stage, attempt=attempt, key=key, value=chosen[key],
                               reason=bad)
@@ -197,7 +227,7 @@ class Engine:
                           allow_resolve: bool = True) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            owner_filed=t.author.lower() == self.config.owner.lower())
+                            owner_filed=t.author.lower() == self.config.owner.lower() and not self.db.get(f"auto:{t.number}"))
         resume = None if fresh else self._last_session(t, stage)
         pending = self._undelivered_answer(t)
         if pending:
@@ -209,7 +239,7 @@ class Engine:
             await self._wait_for_usage()
             await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
-            stage_id = self.db.begin_stage(t.number, stage, attempt, model)
+            stage_id = await self._begin_when_room(t, stage, attempt, model)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
@@ -242,6 +272,18 @@ class Engine:
             resume = known if out.status == "timeout" else None
             attempt += 1
         return self.park(t, f"{stage}: no accepted result after 3 attempts. {summary}"), contract
+
+    async def _begin_when_room(self, t: Ticket, stage: str, attempt: int, model: str) -> int:
+        """Start a stage's session only while there is room: fewer than the limit of LLM sessions running and CPU not saturated.
+        Waits (and says why, in the ticket's activity line) instead of starting a session the machine cannot afford."""
+        while True:
+            async with self.llm_lock:
+                room = self.llm_room()
+                if room.ok:
+                    self.db.put(f"llm_wait:{t.number}", None)
+                    return self.db.begin_stage(t.number, stage, attempt, model)
+            self.db.put(f"llm_wait:{t.number}", room.reason)
+            await self.sleep(15)
 
     def _undelivered_answer(self, t: Ticket) -> dict[str, Any] | None:
         rows = self.db._all("SELECT * FROM questions WHERE ticket=? AND answer IS NOT NULL ORDER BY id DESC LIMIT 1",  # pyright: ignore[reportPrivateUsage]
@@ -322,8 +364,12 @@ class Engine:
                 if not await self._review(t):
                     return
             elif t.state == "ready":
-                if not await asyncio.to_thread(ship.publish, self, t):
+                if self.config.landing_mode == "batch":
+                    return  # the landing train (train.py) takes it from here
+                if not await self._publish_when_room(t):
                     return
+            elif t.state in ("ci", "landing") and self.db.batch_of(t.number) is not None:
+                return  # in a batch: the train owns it
             elif t.state == "ci":
                 if not await ship.run_ci(self, t):
                     return
@@ -332,6 +378,18 @@ class Engine:
                     return
             else:
                 return
+
+    async def _publish_when_room(self, t: Ticket) -> bool:
+        """PUBLISH, but only while fewer than `max_in_ci` tickets are in CI or landing. Several PRs at once queue for the same GitHub
+        runners and invalidate each other (each landing makes the others catch up and run CI again), so the rest wait here as `ready`."""
+        while True:
+            async with self.publish_lock:
+                cur = self.db.ticket(t.number)
+                if cur is None or cur.state != "ready":
+                    return False
+                if len(self.db.tickets(("ci", "landing"))) < self.config.max_in_ci:
+                    return await asyncio.to_thread(ship.publish, self, cur)
+            await self.sleep(30)
 
     async def _explore(self, t: Ticket) -> bool:
         result, _ = await self.model_stage(t, "explore", f"{self._ticket_text(t)}\n\nBase: {self.base_ref}")

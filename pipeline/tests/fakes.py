@@ -84,6 +84,11 @@ class FakeGitHub(GitHub):
         self.reruns: list[int] = []
         self.deleted: list[str] = []
         self.phantom = False
+        self.ci_hook: Callable[[str], Ci] | None = None  # the CI result for a commit, decided when it is asked for
+        self.closed_prs: list[tuple[int, str]] = []
+        self.develop_sha = "develop"
+        self.cancelled_branches: list[str] = []
+        self.cancelled_runs: list[int] = []
         self.run_ids: dict[tuple[str, str], int] = {}
         self.run_jobs_by_id: dict[int, list[dict[str, Any]]] = {}
         self.issues: dict[int, dict[str, Any]] = {}
@@ -161,6 +166,17 @@ class FakeGitHub(GitHub):
     def update_pr(self, number: int, body: str) -> None:
         self.prs[number]["body"] = body
 
+    def cancel_runs(self, branch: str) -> int:
+        self.cancelled_branches.append(branch)
+        return 1
+
+    def cancel_run(self, run_id: int) -> None:
+        self.cancelled_runs.append(run_id)
+
+    def close_pr(self, number: int, comment: str = "") -> None:
+        self.closed_prs.append((number, comment))
+        self.prs[number]["state"] = "closed"
+
     def pr(self, number: int) -> dict[str, Any]:
         pr = self.prs[number]
         return {**pr, "head": {"sha": self._head(pr["branch"])}}
@@ -172,7 +188,8 @@ class FakeGitHub(GitHub):
         if branch:
             generations = [("develop", self.develop_ci), *((f"develop~{n}", ci) for n, ci in enumerate(self.develop_history, 1))]
         else:
-            generations = [(sha or "", self.ci.get(sha or "", DEFAULT_CI))]
+            key = sha or ""
+            generations = [(key, self.ci_hook(key) if self.ci_hook else self.ci.get(key, DEFAULT_CI))]
         runs: list[dict[str, Any]] = []
         for key, jobs in generations:  # newest first, like the API
             for wf in dict.fromkeys(w for w, *_ in jobs):
@@ -180,14 +197,16 @@ class FakeGitHub(GitHub):
                 mine = [(j, st, c) for w, j, st, c in jobs if w == wf]
                 self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None}
                                                for j, st, c in mine]
+                done = all(st == "completed" for _, st, _ in mine)
                 conclusions = {c for _, _, c in mine}
                 # a run's own conclusion: cancelled when the runner cancelled all of it, as a newer push does
                 conclusion = ("cancelled" if conclusions == {"cancelled"} else "success" if conclusions == {"success"}
-                              else "failure")
-                runs.append({"id": run_id, "name": wf, "status": "completed", "conclusion": conclusion, "head_sha": key})
+                              else "failure") if done else None
+                runs.append({"id": run_id, "name": wf, "status": "completed" if done else "in_progress", "conclusion": conclusion,
+                             "head_sha": self.develop_sha if key == "develop" else key})
         return runs
 
-    def run_jobs(self, run_id: int) -> list[dict[str, Any]]:
+    def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
         return self.run_jobs_by_id.get(run_id, [])
 
     def rerun_failed(self, run_id: int) -> None:

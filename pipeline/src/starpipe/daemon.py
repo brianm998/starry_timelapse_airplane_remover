@@ -21,7 +21,7 @@ from typing import Any, cast
 from aiohttp import web
 
 from . import digest as digest_mod
-from . import gitutil, heavy, nightly, selfupdate, ship, tickets, trust, watch, worktrees
+from . import gitutil, heavy, load, nightly, selfupdate, ship, tickets, train, trust, watch, worktrees
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
@@ -41,7 +41,7 @@ def api_token() -> str:
     return path.read_text().strip()
 
 
-def activity(db: Database, t: Ticket, now: float | None = None) -> str:
+def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "batch") -> str:
     """The one-line "what is it doing" the CLI and monitor both show (computed here, never by a client)."""
     now = now or time.time()
     stages = db.stages(t.number)
@@ -51,13 +51,20 @@ def activity(db: Database, t: Ticket, now: float | None = None) -> str:
         return f"needs you · asked {int((now - q['asked_at']) / 60)}m ago" if q else "needs you"
     if t.state in ("failed", "cancelled", "closed", "paused") and t.park_reason:
         return f"{t.state} · {t.park_reason}"
+    wait = db.get(f"llm_wait:{t.number}")
+    if wait and t.state in ACTIVE_STATES and (last is None or last["ended"] is not None):
+        return f"{t.state} · waiting to start: {wait}"
     if last and last["ended"] is None:
         spent = int((now - last["started"]) / 60)
         return f"{t.state} · attempt {last['attempt']}/3 · {spent}m" + (
             f" (+{int(last['lock_wait_s'] / 60)}m lock wait)" if last["lock_wait_s"] >= 60 else "")
+    if t.state in ("ci", "landing") and (batch := db.batch_of(t.number)) is not None:
+        return f"CI · batch #{batch} ({len(db.batch_members(batch))} tickets together)"
     if t.state == "queued" and (blockers := db.open_blockers(t.number)):
         return "queued: " + ", ".join(f"#{b}" for b in blockers)
-    return t.state if t.state != "ready" else "ready to publish"
+    if t.state == "ready":
+        return "ready · waiting for the next batch" if mode == "batch" else "ready to publish"
+    return t.state
 
 
 LAND_NOW_STATES = ("ready", "ci", "landing")
@@ -93,9 +100,12 @@ class Daemon:
         self.watch = watch.Watch()
         self._runtime: dict[str, object] = {}
         self.nightly_task: asyncio.Task[int] | None = None
+        self.train = train.Train(engine)
+        self.cpu = load.CpuMeter(window_s=float(config.cpu_window_s))
+        engine.cpu = self.cpu.average
         self._update_lock = threading.Lock()
         self._blocker_titles: dict[int, str] = {}  # GitHub titles of blockers, fetched once per daemon
-        self.exit: Callable[[int], None] = sys.exit  # replaced in tests; SystemExit passes through supervise to asyncio.run
+        self.exit: Callable[[int], None] = hard_exit  # replaced in tests
 
     # supervision ---------------------------------------------------------------------------------------------------
     def reconcile(self) -> None:
@@ -312,6 +322,18 @@ class Daemon:
             await asyncio.to_thread(self.watch_once)
             await asyncio.sleep(30)
 
+    async def cpu_loop(self) -> None:
+        self.cpu.sample()  # psutil's first reading is meaningless; this primes it
+        while True:
+            await asyncio.sleep(5)
+            self.cpu.sample()
+
+    def resources(self) -> dict[str, object]:
+        sessions, cpu_limit = self.engine.limits()
+        room = self.engine.llm_room()
+        return {"llm_active": room.llm_active, "llm_max": sessions, "cpu_pct": round(room.cpu, 1), "cpu_limit": cpu_limit,
+                "waiting": room.reason, "overridden": bool(self.db.get("limit_llm") or self.db.get("limit_cpu"))}
+
     async def scheduler(self) -> None:
         while True:
             self.schedule_once()
@@ -323,12 +345,12 @@ class Daemon:
 
         hv = heavy.status()
         tickets = [{"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
-                    "activity": activity(self.db, t), "blocked_by": self.db.open_blockers(t.number)}
+                    "activity": activity(self.db, t, mode=self.config.landing_mode), "blocked_by": self.db.open_blockers(t.number)}
                    for t in self.db.tickets() if t.state not in ("landed", "closed", "cancelled")]
         return {"daemon": {"pid": os.getpid(), "since": self.started, "last_poll": self.last_poll,
                            "error": self.last_error or self.update_error()},
                 "self_update": {"pending": self.db.get("self_update_pending"), "failed": self.update_failure()},
-                "pause": self.db.get("pause"), "usage_pause_until": self.db.get("usage_pause_until"),
+                "resources": self.resources(), "pause": self.db.get("pause"), "usage_pause_until": self.db.get("usage_pause_until"),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "tickets": tickets}
 
@@ -391,7 +413,7 @@ class Daemon:
             question = self.db.open_question(t.number)
             running = [s["model"] for s in stages if s["ended"] is None]  # the open stage's model, else none
             tickets.append({"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
-                            "group": group, "model": running[-1] if running else None, "activity": activity(self.db, t, now), "blocked_by": self.db.open_blockers(t.number),
+                            "group": group, "model": running[-1] if running else None, "activity": activity(self.db, t, now, self.config.landing_mode), "blocked_by": self.db.open_blockers(t.number),
                             "pr_number": t.pr_number, "branch": t.branch, "worktree": t.worktree,
                             "park_reason": t.park_reason, "question": question["text"] if question else None,
                             "stages": [{k: s[k] for k in ("stage", "attempt", "model", "started", "ended", "lock_wait_s", "outcome")}
@@ -427,12 +449,24 @@ class Daemon:
             out.append(f"{time.strftime('%H:%M:%S', time.localtime(data['t']))} {data['type']}  {str(data['repr'])[:220]}")
         return out
 
+    def _close_pr_for_requeue(self, n: int) -> None:
+        t = self.db.ticket(n)
+        if t is None or t.state not in ("ci", "landing") or self.db.batch_of(n) is not None or not t.pr_number:
+            return
+        try:
+            self.engine.gh.close_pr(t.pr_number, "Moving this ticket onto the landing train: its changes will be in the next batch PR, "
+                                    "which runs one CI for several tickets.")
+            if t.branch:
+                self.engine.gh.cancel_runs(t.branch)  # closing the PR leaves its queued runs in the queue, ahead of everyone else's
+        except GitHubError:
+            pass  # it is requeued either way; an open stale PR is harmless
+
     def show(self, n: int) -> dict[str, object] | None:
         t = self.db.ticket(n)
         if t is None:
             return None
         return {"number": t.number, "title": t.title, "state": t.state, "priority": t.priority, "branch": t.branch,
-                "park_reason": t.park_reason, "plan": t.plan, "activity": activity(self.db, t),
+                "park_reason": t.park_reason, "plan": t.plan, "activity": activity(self.db, t, mode=self.config.landing_mode),
                 "stages": self.db.stages(n), "checks": self.db.checks(n), "question": self.db.open_question(n),
                 "blockers": [{"number": b, "title": self.blocker_title(b)} for b in self.db.open_blockers(n)]}
 
@@ -471,6 +505,9 @@ class Daemon:
             self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
             self.engine.parked.discard(n)
             self.engine._to_state(n, RETRY_STATE[stage])  # pyright: ignore[reportPrivateUsage]
+        elif action == "allow-opus":
+            self.db.put(f"opus_ok:{n}", "1")  # the ticket's own `model_<stage>: opus` choices now apply
+            self.db.intervention(n, "allow-opus", t.state)
         elif action == "cancel":
             task = self.tasks.get(n)
             if task:
@@ -478,6 +515,12 @@ class Daemon:
             self.db.intervention(n, "cancel", t.state)
             self.db.put(f"land_now:{n}", None)
             self.engine._to_state(n, "cancelled", str(body.get("reason") or "cancelled by the owner"))  # pyright: ignore[reportPrivateUsage]
+        elif action == "requeue":
+            if t.state not in ("ci", "landing") or self.db.batch_of(n) is not None:
+                raise web.HTTPConflict(text=f"#{n} is {t.state}: only a ticket in its own CI can be moved onto the train")
+            self.db.set_fields(n, pr_number=None)
+            self.db.intervention(n, "requeue", t.state)
+            self.engine._to_state(n, "ready")  # pyright: ignore[reportPrivateUsage]
         elif action == "land-now":
             if t.state not in LAND_NOW_STATES:
                 raise web.HTTPConflict(text=f"#{n} is {t.state}: land-now needs a ticket in {', '.join(LAND_NOW_STATES)}")
@@ -568,6 +611,8 @@ class Daemon:
                     if new_body != body:
                         self.engine.gh.set_body(n, new_body)
                     self.engine.gh.add_labels(n, [trust.PIPELINE_LABEL])
+                    if "opus" in models.values():
+                        self.db.put(f"opus_ok:{n}", "1")  # the owner picked it in the monitor: the one way opus is asked for
                     result = "labelled"
             except GitHubError as exc:
                 result = f"error: {exc}"
@@ -602,6 +647,29 @@ class Daemon:
         @r.get("/v1/snapshot")
         async def snapshot(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response(await asyncio.to_thread(self.snapshot))
+
+        @r.get("/v1/limits")
+        async def limits_get(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            return web.json_response(self.resources())
+
+        @r.post("/v1/limits")
+        async def limits_set(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            if body.get("reset"):
+                self.db.put("limit_llm", None)
+                self.db.put("limit_cpu", None)
+            if body.get("llm") is not None:
+                value = int(str(body["llm"]))
+                if not 1 <= value <= 32:
+                    raise web.HTTPBadRequest(text="llm must be between 1 and 32")
+                self.db.put("limit_llm", str(value))
+            if body.get("cpu") is not None:
+                pct = float(str(body["cpu"]))
+                if not 10 <= pct <= 100:
+                    raise web.HTTPBadRequest(text="cpu must be between 10 and 100")
+                self.db.put("limit_cpu", str(pct))
+            self.db.intervention(None, "limits")
+            return web.json_response(self.resources())
 
         @r.get("/v1/monitor-update")
         async def monitor_update(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
@@ -677,7 +745,10 @@ class Daemon:
         @r.post("/v1/tickets/{n}/{action}")
         async def act(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)
-            return web.json_response({"result": self.mutate(int(req.match_info["n"]), req.match_info["action"], body)})
+            n = int(req.match_info["n"])
+            if req.match_info["action"] == "requeue":
+                await asyncio.to_thread(self._close_pr_for_requeue, n)  # the GitHub call off the loop; the state change on it
+            return web.json_response({"result": self.mutate(n, req.match_info["action"], body)})
 
         @r.post("/v1/pause")
         async def pause(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
@@ -712,9 +783,20 @@ class Daemon:
         try:
             await asyncio.gather(self.supervise("poller", self.poller), self.supervise("scheduler", self.scheduler),
                                  self.supervise("watcher", self.watcher), self.supervise("nightly", self.nightly_loop),
-                                 self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop))
+                                 self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop),
+                                 self.supervise("train", self.train.run_forever), self.supervise("cpu", self.cpu_loop))
         finally:
             await runner.cleanup()
+
+
+def hard_exit(code: int) -> None:
+    """Leave now. `sys.exit` unwinds through asyncio and then waits on non-daemon threads (a running check, an SDK
+    subprocess pipe), so a self-update could log "exiting" and then hang with the server closed and launchd none the
+    wiser. State is all in the database, and `reconcile` picks up whatever was running."""
+    logging.shutdown()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
 
 
 def resolve_java_home(config: Config) -> str | None:

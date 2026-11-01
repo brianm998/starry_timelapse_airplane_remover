@@ -140,7 +140,7 @@ async def test_settings_stores_max_active_and_snapshot_reports_it(rig: Rig) -> N
     client, _ = await api(rig)
     try:
         snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
-        assert snap["max_active"] == 2
+        assert snap["max_active"] == rig.engine.config.max_llm_sessions
         assert (await client.post("/v1/settings", json={"max_active": 4}, headers=AUTH)).status == 200
         assert rig.db.get("max_active") == "4" and rig.engine.max_active() == 4
         snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
@@ -273,6 +273,26 @@ async def test_the_session_id_is_recorded_as_soon_as_it_is_known_so_a_kill_can_r
     assert rig.db.stages(7, "explore")[0]["session_id"] == "S-early"
 
 
+async def test_requeue_moves_a_ticket_in_its_own_ci_onto_the_train(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "ci")
+    rig.db.set_fields(7, pr_number=101)
+    rig.gh.prs[101] = {"number": 101, "title": "t", "body": "", "branch": "pipe/7-t", "merged": False, "mergeable": True,
+                       "merge_commit_sha": None}
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)
+        assert r.status == 200 and rig.state(7) == "ready"
+        t = rig.db.ticket(7)
+        assert t and t.pr_number is None
+        assert rig.gh.closed_prs and "landing train" in rig.gh.closed_prs[0][1]
+        assert [r["kind"] for r in rig.db._all("SELECT kind FROM interventions")] == ["requeue"]  # pyright: ignore[reportPrivateUsage]
+        assert (await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)).status == 409, "it is ready now, not in CI"
+    finally:
+        await client.close()
+
+
 def commit_under(repo: Path, rel: str, text: str) -> str:
     """Commit one file to the working clone's develop and publish it to the bare origin; return the new sha."""
     (repo / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -303,6 +323,20 @@ async def test_monitor_update_reports_commits_behind_under_pipeline_monitor_and_
         await client.close()
 
 
+async def test_requeue_refuses_a_ticket_that_is_already_in_a_batch(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "ci")
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(bid, 7, 0)
+    client, _ = await api(rig)
+    try:
+        assert (await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)).status == 409
+        assert rig.state(7) == "ci" and rig.gh.closed_prs == []
+    finally:
+        await client.close()
+
+
 async def test_monitor_update_is_zero_behind_when_up_to_date_and_ignores_other_paths(rig: Rig) -> None:
     repo = rig.engine.repo
     built = commit_under(repo, "pipeline/monitor/a.swift", "one\n")
@@ -311,6 +345,21 @@ async def test_monitor_update_is_zero_behind_when_up_to_date_and_ignores_other_p
     client, _ = await api(rig)
     try:
         assert await monitor_update(client, built) == {"behind": 0, "latest": built}
+    finally:
+        await client.close()
+
+
+async def test_requeue_also_cancels_the_ci_runs_of_the_pr_it_closes(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "ci")
+    rig.db.set_fields(7, pr_number=101, branch="pipe/7-t")
+    rig.gh.prs[101] = {"number": 101, "title": "t", "body": "", "branch": "pipe/7-t", "merged": False, "mergeable": True,
+                       "merge_commit_sha": None}
+    client, _ = await api(rig)
+    try:
+        assert (await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)).status == 200
+        assert rig.gh.cancelled_branches == ["pipe/7-t"]
     finally:
         await client.close()
 
@@ -612,3 +661,31 @@ async def test_no_update_during_a_nightly_or_for_non_pipeline_changes(rig: Rig, 
 def test_with_no_pinned_runtime_nothing_updates(rig: Rig) -> None:
     d = Daemon(rig.engine, Config(remote="origin"), token="t")
     assert d.self_update_once(Path("/nonexistent.plist"), sync=noop_sync, test=ok_test) is None
+
+
+async def test_picking_opus_in_the_monitor_and_allow_opus_are_how_a_ticket_may_use_it(rig: Rig) -> None:
+    rig.gh.add_issue(8, "picked", author="someone", labels=())
+    rig.gh.add_issue(9, "not picked", author="someone", labels=())
+    rig.gh.add_issue(10, "later")
+    rig.engine.sync_issues()
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/enqueue", json={"numbers": [8], "models": {"develop": "opus"}}, headers=AUTH)
+        assert r.status == 200
+        r = await client.post("/v1/enqueue", json={"numbers": [9], "models": {"develop": "sonnet"}}, headers=AUTH)
+        assert r.status == 200
+        assert rig.db.get("opus_ok:8") == "1" and rig.db.get("opus_ok:9") is None
+        assert (await client.post("/v1/tickets/10/allow-opus", json={}, headers=AUTH)).status == 200
+        assert rig.db.get("opus_ok:10") == "1"
+    finally:
+        await client.close()
+
+
+def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(monkeypatch: pytest.MonkeyPatch, rig: Rig) -> None:
+    from starpipe import daemon as daemon_mod
+
+    calls: list[int] = []
+    monkeypatch.setattr(daemon_mod.os, "_exit", calls.append)
+    assert daemon_mod.Daemon(rig.engine, rig.engine.config).exit is daemon_mod.hard_exit
+    daemon_mod.hard_exit(0)
+    assert calls == [0], "os._exit, not sys.exit: SystemExit would wait on non-daemon threads and hang"

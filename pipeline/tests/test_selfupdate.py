@@ -331,3 +331,32 @@ def test_only_the_current_and_previous_runtimes_are_kept(tmp_path: Path) -> None
     assert left == {runtimes[1].name, runtimes[2].name}
     assert selfupdate.link("current") == runtimes[2].resolve() and selfupdate.link("previous") == runtimes[1].resolve()
     assert selfupdate.prune() == []
+
+
+def test_a_target_that_lacks_the_running_commit_is_not_an_update(tmp_path: Path) -> None:
+    """Found live: the daemon ran the owner's unpushed pipeline commits, origin/develop moved on without them (tickets landing), and
+    the auto-update 'updated' the daemon to origin's tip: a downgrade that took the landing train away."""
+    import subprocess
+
+    def sh(*argv: str) -> str:
+        return subprocess.run(argv, cwd=tmp_path, check=True, capture_output=True, text=True).stdout.strip()
+
+    def commit(rel: str, text: str) -> str:
+        (tmp_path / "pipeline").mkdir(exist_ok=True)
+        (tmp_path / "pipeline" / rel).write_text(text)
+        sh("git", "add", "-A")
+        sh("git", "commit", "-q", "-m", rel)
+        return sh("git", "rev-parse", "HEAD")
+
+    sh("git", "init", "-q", "-b", "develop")
+    sh("git", "config", "user.email", "t@t")
+    sh("git", "config", "user.name", "t")
+    base = commit("a.py", "1")
+    sh("git", "checkout", "-q", "-b", "origin-side")
+    theirs = commit("b.py", "2")  # lands on origin/develop
+    sh("git", "checkout", "-q", "develop")
+    mine = commit("c.py", "3")  # the running code: local, not on origin
+    assert selfupdate.pipeline_commits_behind(tmp_path, base, theirs) == 1, "an ordinary update"
+    assert selfupdate.pipeline_commits_behind(tmp_path, mine, theirs) == 0, "diverged: the running code has commits the target lacks"
+    assert selfupdate.pipeline_commits_behind(tmp_path, theirs, base) == 0, "the target is older"
+    assert selfupdate.pipeline_commits_behind(tmp_path, "f" * 40, theirs) == 1, "an unknown running sha still counts as behind"

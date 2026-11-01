@@ -75,6 +75,9 @@ final class GuiFeatureRunner {
         .openCopied: { try $0.openCopiedSequence() },
         .openCopiedNoQuestions: { try $0.openCopiedSequence(askingTheStartupQuestions: false) },
         .clickId: { try $0.clickId($0.args[0]) },
+        .commandClickId: { try $0.clickId($0.args[0], how: .command) },
+        .rightClickId: { try $0.clickId($0.args[0], how: .right) },
+        .processingFinishes: { try $0.waitForProcessingToFinish() },
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
@@ -102,6 +105,11 @@ final class GuiFeatureRunner {
         .menuThere: { try $0.expectMenu($0.args[0], there: true) },
         .menuNotThere: { try $0.expectMenu($0.args[0], there: false) },
         .dragAround: { try $0.drag(around: $0.args[0]) },
+        .clickLabel: { try $0.click(label: $0.args[0]) },
+        .wait: { try $0.wait(seconds: Int($0.args[0]) ?? 0) },
+        .largeWindow: { try $0.makeWindowLarge() },
+        .idStillSays: { try $0.expectStillSays($0.args[0], text: $0.args[1]) },
+        .idStopsSaying: { try $0.expectStopsSaying($0.args[0], text: $0.args[1]) },
         .processedCopy: { try $0.makeProcessedCopy() },
         .openProcessed: { try $0.openProcessedCopy() },
         .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
@@ -199,6 +207,57 @@ final class GuiFeatureRunner {
         centre.withOffset(CGVector(dx: -12, dy: -12)).press(forDuration: 0.2, thenDragTo: centre.withOffset(CGVector(dx: 12, dy: 12)))
     }
 
+    /// Clicks the control that shows the catalogue's text for [key]: the one in the sheet when a sheet is up (what is behind it is still in the
+    /// tree), else the last one drawn. For the choices of a stock picker, whose rows carry no identifiers of their own.
+    private func click(label key: String, timeout: TimeInterval = 20) throws {
+        let text = try english(key)
+        let predicate = NSPredicate(format: "label == %@ OR title == %@", text, text)
+        let types: [XCUIElement.ElementType] = [.radioButton, .button, .checkBox, .menuItem, .staticText]
+        var found: XCUIElement?
+        try waitFor("a control labelled \"\(text)\"", timeout: timeout) {
+            let scopes: [XCUIElement] = self.app.sheets.firstMatch.exists ? [self.app.sheets.firstMatch] : [self.app.windows.firstMatch]
+            for scope in scopes {
+                for type in types {
+                    let matches = scope.descendants(matching: type).matching(predicate)
+                    if matches.count > 0 { found = matches.element(boundBy: matches.count - 1); return true }
+                }
+            }
+            // a context menu belongs to no window
+            let items = self.app.menuItems.matching(predicate)
+            if items.count > 0 { found = items.element(boundBy: items.count - 1); return true }
+            return false
+        }
+        found?.click()
+    }
+
+    /// Zooms the main window to what the screen allows: the grid in the window the app opens at (900 by 450 points) is one cell tall, with the
+    /// rest below the fold of a lazy list, where a cell that has not been built cannot be clicked.
+    private func makeWindowLarge() throws {
+        // the Window menu's Zoom (the window shows no title bar buttons of its own to a test)
+        let windowMenu = app.menuBars.menuBarItems[try english("ui.window")]
+        guard windowMenu.waitForExistence(timeout: 30) else { throw RunnerError("there is no Window menu\n\(app.debugDescription)") }
+        windowMenu.click()
+        let zoom = app.menuBars.menuItems["Zoom"]
+        guard zoom.waitForExistence(timeout: 10) else { throw RunnerError("the Window menu has no Zoom\n\(app.debugDescription)") }
+        zoom.click()
+        // the window takes a moment to arrive at its size
+        var size = app.windows.firstMatch.frame.size
+        var steady = 0
+        while steady < 3 {
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.5)
+            let now = app.windows.firstMatch.frame.size
+            steady = now == size ? steady + 1 : 0
+            size = now
+        }
+    }
+
+    /// Does nothing for [seconds], the app running. For what only shows after a timer in the app has gone off (a frame saved ten seconds after an
+    /// edit), which no condition can wait for: the feature says how long and then looks.
+    private func wait(seconds: Int) throws {
+        let end = Date().addingTimeInterval(TimeInterval(seconds))
+        try waitFor("\(seconds) seconds to pass", timeout: TimeInterval(seconds) + 10) { Date() >= end }
+    }
+
     /// Clicks the element; if it exists but cannot be hit (on a small display the sheet's lower buttons can sit below the
     /// screen's edge, as on hosted runners), presses Return instead, which is that button's default action.
     private func activateDefault(_ identifier: String, timeout: TimeInterval = 120) throws {
@@ -283,9 +342,15 @@ final class GuiFeatureRunner {
 
     /// Clicks the control once it can be hit: a control that is there for a moment while a screen is still being put up (the startup questions
     /// come up over the loading view) is not one to click, and a click on one that has gone fails the whole test.
-    private func clickId(_ identifier: String) throws {
+    private enum Click { case plain, command, right }
+
+    private func clickId(_ identifier: String, how: Click = .plain) throws {
         let e = element(identifier)
-        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { "\n\(self.app.debugDescription)" }) { e.exists && e.isHittable }
+        var scroller = Scroller()
+        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { "\n\(self.app.debugDescription)" }) {
+            if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
+            return e.exists && e.isHittable
+        }
         // ...and one that is still moving into place takes a click that is lost: wait until its frame has stopped changing
         var frame = e.frame
         var steady = 0
@@ -295,7 +360,43 @@ final class GuiFeatureRunner {
             steady = now == frame ? steady + 1 : 0
             frame = now
         }
-        e.click()
+        switch how {
+        case .plain: e.click()
+        case .command: XCUIElement.perform(withKeyModifiers: .command) { e.click() }
+        case .right: e.rightClick()
+        }
+    }
+
+    /// Waits for the run that has begun to end: the progress line says "<complete>/<total>/idle" with every frame complete, once it has said
+    /// "running" (a run that has not begun reads the same, so the feature first sees the processing screen come up). The line is in the left panel
+    /// of the edit and scrub screens, so the feature looks away from the processing screen (Preview) and to one of them first.
+    private func waitForProcessingToFinish() throws {
+        let progress = element("processing.progress")
+        var sawRunning = false
+        var last = "(none)"
+        try waitFor("processing to finish", timeout: 20 * 60, interval: 3, detail: { "(last progress: \(last))" }) {
+            guard progress.exists else { return false }
+            let state = progress.label
+            last = state
+            let parts = state.split(separator: "/").map(String.init)
+            guard parts.count == 3, let complete = Int(parts[0]), let total = Int(parts[1]) else { return false }
+            if parts[2] == "running" { sawRunning = true }
+            return sawRunning && parts[2] == "idle" && total > 0 && complete == total
+        }
+    }
+
+    /// How a scroll towards a control has gone so far: which way a positive distance scrolls (found out by whether the last step got closer).
+    private struct Scroller { var direction: CGFloat = 1; var lastGap: CGFloat? }
+
+    /// One step of scrolling the scroll view that holds the element, by how far it is from the middle of the view, for a control below (or above)
+    /// the fold of a panel in a small window; each step takes the app seconds to settle, so it is not taken in small ones.
+    private func scroll(towards element: XCUIElement, _ identifier: String, _ scroller: inout Scroller) {
+        let holder = app.scrollViews.containing(NSPredicate(format: "identifier == %@", identifier)).firstMatch
+        guard holder.exists else { return }
+        let gap = element.frame.midY - holder.frame.midY
+        if let last = scroller.lastGap, abs(gap) >= abs(last) { scroller.direction = -scroller.direction }
+        scroller.lastGap = gap
+        holder.scroll(byDeltaX: 0, deltaY: (gap > 0 ? -1 : 1) * scroller.direction * min(abs(gap), 300))
     }
 
     private func expectShown(_ identifier: String, shown: Bool) throws {
@@ -361,7 +462,24 @@ final class GuiFeatureRunner {
         try expectShown(identifier, shown: true)
         let e = element(identifier)
         func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
-        try waitFor("\(identifier) to say \"\(expected)\"", timeout: 20, detail: { "(it says \(texts()))" }) { texts().contains(expected) }
+        try waitFor("\(identifier) to say \"\(expected)\"", timeout: 90, detail: { "(it says \(texts()))" }) { texts().contains(expected) }
+    }
+
+    /// The element says [expected] now, with no waiting for it to: for a state that must have been there all along, which a check that waits
+    /// would let a frame pass by getting there late.
+    private func expectStillSays(_ identifier: String, text expected: String) throws {
+        let e = element(identifier)
+        guard e.exists else { throw RunnerError("\(identifier) is not shown\n\(app.debugDescription)") }
+        let texts = [e.label, e.title, (e.value as? String) ?? ""]
+        guard texts.contains(expected) else { throw RunnerError("\(identifier) does not say \"\(expected)\" (it says \(texts))") }
+    }
+
+    /// The element says something other than [text] before long: for a count that is to move from a value it is known to start on.
+    private func expectStopsSaying(_ identifier: String, text unwanted: String) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
+        try waitFor("\(identifier) to stop saying \"\(unwanted)\"", timeout: 90, detail: { "(it says \(texts()))" }) { !texts().contains(unwanted) }
     }
 
     /// The element's text is the catalogue's text for [key].

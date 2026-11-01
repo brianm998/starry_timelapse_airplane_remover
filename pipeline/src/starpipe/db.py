@@ -42,6 +42,7 @@ class Ticket:
     park_reason: str | None
     pr_number: int | None
     created_at: float
+    updated_at: float = 0.0
 
     @property
     def plan(self) -> dict[str, Any] | None:
@@ -51,7 +52,7 @@ class Ticket:
 def _ticket(row: sqlite3.Row) -> Ticket:
     return Ticket(row["number"], row["title"], row["body"], row["author"], row["state"], row["priority"],
                   json.loads(row["blocked_by"]), row["branch"], row["worktree"], row["plan_json"],
-                  row["park_reason"], row["pr_number"], row["created_at"])
+                  row["park_reason"], row["pr_number"], row["created_at"], row["updated_at"])
 
 
 class Database:
@@ -120,10 +121,13 @@ class Database:
                       blocked_by: list[int]) -> bool:
         """Insert a new ticket as queued, or refresh the issue's own fields. True when it was new."""
         now = self.clock()
-        exists = self.ticket(number) is not None
-        if exists:
-            self._exec("UPDATE tickets SET title=?, body=?, priority=?, blocked_by=?, updated_at=? WHERE number=?",
-                       (title, body, priority, json.dumps(blocked_by), now, number))
+        current = self.ticket(number)
+        exists = current is not None
+        if current is not None:
+            if (current.title, current.body, current.priority, current.blocked_by) != (title, body, priority, blocked_by):
+                # only a real change moves updated_at: this runs every poll, and "how long has it been in this state" reads it
+                self._exec("UPDATE tickets SET title=?, body=?, priority=?, blocked_by=?, updated_at=? WHERE number=?",
+                           (title, body, priority, json.dumps(blocked_by), now, number))
         else:
             self._exec("INSERT INTO tickets(number,title,body,author,priority,blocked_by,created_at,updated_at) "
                        "VALUES (?,?,?,?,?,?,?,?)", (number, title, body, author, priority, json.dumps(blocked_by), now, now))
@@ -141,6 +145,13 @@ class Database:
         else:
             rows = self._all("SELECT * FROM tickets ORDER BY priority, created_at")
         return [_ticket(r) for r in rows]
+
+    def state_since(self, number: int, state: str) -> float | None:
+        """When the ticket last entered `state`, from the event log (updated_at also moves for other reasons)."""
+        for row in self._all("SELECT at, data FROM events WHERE ticket=? AND kind='state' ORDER BY id DESC", (number,)):
+            if json.loads(row["data"]).get("state") == state:
+                return float(row["at"])
+        return None
 
     def set_state(self, number: int, state: str, reason: str | None = None) -> None:
         self._exec("UPDATE tickets SET state=?, park_reason=?, updated_at=? WHERE number=?",
@@ -229,6 +240,40 @@ class Database:
     def record_ci(self, ticket: int, sha: str, verdict: str, detail: dict[str, Any]) -> None:
         self._exec("INSERT INTO ci_runs(ticket,sha,verdict,detail,at) VALUES (?,?,?,?,?)",
                    (ticket, sha, verdict, json.dumps(detail), self.clock()))
+
+    # the landing train ----------------------------------------------------------------------------------------------
+    def batch_create(self, base_sha: str) -> int:
+        cur = self._exec("INSERT INTO batches(state,base_sha,created) VALUES ('building',?,?)", (base_sha, self.clock()))
+        assert cur.lastrowid is not None
+        return cur.lastrowid
+
+    def batch_update(self, batch: int, **fields: Any) -> None:
+        allowed = {"state", "branch", "pr_number", "head_sha", "ci_started", "ended", "note"}
+        assert set(fields) <= allowed, fields
+        cols = ", ".join(f"{k}=?" for k in fields)
+        self._exec(f"UPDATE batches SET {cols} WHERE id=?", (*fields.values(), batch))
+        if "state" in fields:
+            self.event("batch", None, batch=batch, state=fields["state"])
+
+    def batch(self, batch: int) -> dict[str, Any] | None:
+        rows = self._all("SELECT * FROM batches WHERE id=?", (batch,))
+        return dict(rows[0]) if rows else None
+
+    def active_batch(self) -> dict[str, Any] | None:
+        rows = self._all("SELECT * FROM batches WHERE state IN ('building','ci','landing') ORDER BY id DESC LIMIT 1")
+        return dict(rows[0]) if rows else None
+
+    def batch_add(self, batch: int, ticket: int, position: int) -> None:
+        self._exec("INSERT OR REPLACE INTO batch_members(batch,ticket,position) VALUES (?,?,?)", (batch, ticket, position))
+
+    def batch_members(self, batch: int) -> list[int]:
+        return [r["ticket"] for r in self._all("SELECT ticket FROM batch_members WHERE batch=? ORDER BY position", (batch,))]
+
+    def batch_of(self, ticket: int) -> int | None:
+        """The active batch (still building, in CI or landing) this ticket is in, if any."""
+        rows = self._all("SELECT b.id FROM batches b JOIN batch_members m ON m.batch=b.id "
+                         "WHERE m.ticket=? AND b.state IN ('building','ci','landing') ORDER BY b.id DESC LIMIT 1", (ticket,))
+        return int(rows[0]["id"]) if rows else None
 
     # nightly --------------------------------------------------------------------------------------------------------
     def nightly_begin(self, ref: str, sha: str) -> int:
