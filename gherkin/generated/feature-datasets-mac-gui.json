@@ -30,6 +30,7 @@
   "uiPainterOpensInEditMode": [],
   "uiRecentsRemove": [],
   "uiRemovalSelectiveChoice": [],
+  "uiReprocessNonContiguous": [],
   "uiSecondaryWindowToggles": [],
   "uiSecondaryWindowsNeedASequence": [],
   "uiSequenceWindowsGoWithIt": [],
